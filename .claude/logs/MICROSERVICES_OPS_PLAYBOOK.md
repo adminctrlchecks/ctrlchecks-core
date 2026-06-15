@@ -264,7 +264,9 @@ Use this table to record soak milestones. Update as each step passes.
 | notification-service | 100 | — | — | |
 | trigger-service | 5 | — | — | |
 | trigger-service | 100 | — | — | |
-| workflow-crud-service | 5 | — | — | |
+| workflow-crud-service | 5 | 2026-06-15 18:22 UTC | — | ENABLED=true, CANARY=5. Key mirrored. Worker + svc restarted. db:ok ✅ |
+| workflow-crud-service | 25 | — | — | Pending 48h soak at 5% |
+| workflow-crud-service | 50 | — | — | |
 | workflow-crud-service | 100 | — | — | |
 | credential gate flip | — | — | — | `VAULT_WRITES_DISABLED=true` |
 | workflow-crud gate flip | — | — | — | `LOCAL_WRITES_DISABLED=true` |

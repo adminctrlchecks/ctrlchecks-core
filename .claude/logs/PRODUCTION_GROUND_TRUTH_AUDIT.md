@@ -1,140 +1,131 @@
 # Production Ground Truth Audit
 
-**Date:** 2026-06-15  
-**Audited by:** Claude Code (read-only SSH — no restarts, no writes)  
+**Date:** 2026-06-15 (updated post-deploy)
 **Server:** `ubuntu@3.7.115.58`
 
 ---
 
-## EC2 State vs. Plan: Summary Table
+## EC2 State vs. Plan: Summary Table (CURRENT)
 
 | Service | Code in repo | Deployed on EC2 | Port responds | ENABLED flag | CANARY% | Soak status |
 |---|---|---|---|---|---|---|
-| worker | ✅ Task 9 (local: Task 12+) | ✅ running | ✅ :3001 healthy | N/A (always on) | N/A | Live |
-| ai-generator | ✅ local latest | ✅ running | ✅ :3002 healthy | not in .env | N/A | Live (no canary check) |
-| execution-engine | ✅ Phase 5 code | ❌ NOT deployed | ❌ :3003 FAIL | not in .env | — | Not started |
-| credential-service | ✅ Phase 4 code | ❌ NOT deployed | ❌ :3004 FAIL | not in .env | — | Not started |
-| notification-service | ✅ Phase 4 code | ❌ NOT deployed | ❌ :3005 FAIL | not in .env | — | Not started |
-| trigger-service | ✅ Phase 3 code | ❌ NOT deployed | ❌ :3006 FAIL | not in .env | — | Not started |
-| workflow-crud-service | ✅ Phase 4 code | ❌ NOT deployed | ❌ :3007 FAIL | not in .env | — | Not started |
+| worker | ✅ Task 12+ (master bcffcb8) | ✅ running | ✅ :3001 ready (db:ok, redis:ok) | N/A | N/A | Live |
+| ai-generator | ✅ latest | ✅ running | ✅ :3002 ok | not in .env | N/A | Live (no canary gate) |
+| execution-engine | ✅ SSL fix bcffcb8 | ✅ deployed | ✅ :3003 ready (db:ok, redis:ok) | not in .env (false) | 0 | Not started — awaiting flags |
+| credential-service | ✅ SSL fix bcffcb8 | ✅ deployed | ✅ :3004 ready (db:ok) | not in .env (false) | 0 | Not started |
+| notification-service | ✅ SSL fix bcffcb8 | ✅ deployed | ✅ :3005 ready (db:ok) | not in .env (false) | 0 | Not started |
+| trigger-service | ✅ SSL fix bcffcb8 | ✅ deployed | ✅ :3006 ready (db:ok) | not in .env (false) | 0 | Not started |
+| workflow-crud-service | ✅ SSL fix bcffcb8 | ✅ deployed | ✅ :3007 ready (db:ok) | not in .env (false) | 0 | Not started |
+
+**Phase D complete.** All 5 microservices deployed with systemd units and responding healthy.  
+**Phase E next:** Add worker .env flags (all DISABLED), then canary ramp per MICROSERVICES_OPS_PLAYBOOK.md.
 
 ---
 
-## Raw Audit Output
+## Port Health (verified 2026-06-15 ~18:13 UTC)
 
-### Git branch + log
 ```
-* main 0a952e8 [ahead 116] Task 9: DB/infra reliability — PgBouncer fallback, health/ready SELECT 1, Redis reconnectOnError
-0a952e8  Task 9: DB/infra reliability — PgBouncer fallback, health/ready SELECT 1, Redis reconnectOnError
-144851f  Task 7: production hardening — SES email, Sentry, tier rate limits, CORS lockdown, health probes
-bdf5b2a  Task 5: add ctrlchecks-ai-generator systemd service unit template
-```
-
-**Finding:** Server is running Task 9 code. Tasks 10–12 and all Task 11 microservice code have NOT been deployed. The `[ahead 116]` indicates the local git tracking on the server is against an old origin reference — the actual GitHub remote is well behind the local workspace commits.
-
-### Systemd units (only 3 running)
-```
-ctrlchecks-ai-generator.service     loaded active running
-ctrlchecks-execution-worker.service loaded active running   ← old-style queue worker (not execution-engine)
-ctrlchecks-worker.service           loaded active running
+:3001 → {"status":"ready","checks":{"db":"ok","redis":"ok"}}                              ✅
+:3002 → {"status":"ok","service":"ai-generator","port":3002}                              ✅
+:3003 → {"status":"ready","service":"execution-engine","checks":{"redis":"ok","db":"ok"}} ✅
+:3004 → {"status":"ready","service":"credential-service","checks":{"db":"ok"}}            ✅
+:3005 → {"status":"ready","service":"notification-service","checks":{"db":"ok","ses":"skip"}} ✅
+:3006 → {"status":"ready","service":"trigger-service","checks":{"db":"ok"}}               ✅
+:3007 → {"status":"ready","service":"workflow-crud-service","checks":{"db":"ok"}}         ✅
 ```
 
-**Finding:** None of the 5 Task 11 microservices have systemd units installed. `ctrlchecks-execution-worker` is the **legacy** execution queue worker (pre-Task 11A), not the new `execution-engine` service.
-
-### Port health
-```
-:3001 → {"status":"ready","checks":{"db":"ok","redis":"ok"}}  ✅
-:3002 → {"status":"ok","service":"ai-generator","port":3002}  ✅
-:3003 → FAIL  (execution-engine not deployed)
-:3004 → FAIL  (credential-service not deployed)
-:3005 → FAIL  (notification-service not deployed)
-:3006 → FAIL  (trigger-service not deployed)
-:3007 → FAIL  (workflow-crud-service not deployed)
-```
-
-### Feature flags in worker .env
-```
-(empty — no ENABLED/CANARY/LOCAL_WRITES/VAULT_WRITES vars found)
-```
-
-**Finding:** No microservice delegation flags exist in the worker `.env` on the server. All delegation is disabled by default (code defaults to `false`). Worker is running as pure monolith.
-
-### Open ports
-```
-LISTEN 0.0.0.0:80    (nginx)
-LISTEN 0.0.0.0:443   (nginx)
-LISTEN 0.0.0.0:3001  node (worker)
-LISTEN *:3002        node (ai-generator)
-```
-
-### Worker public health (HTTPS)
-```
-https://worker.ctrlchecks.ai/health → {"status":"healthy"}  ✅
-```
-
-### Frontend HTTP
-```
-http://app.ctrlchecks.ai → no response (DNS or nginx vhost not resolving)
-```
+**SSL fix applied (bcffcb8):** `pg.Pool` in all 5 `services/*/src/lib/db.ts` now has
+`ssl: { rejectUnauthorized: false }` — required for AWS RDS connections from EC2.
 
 ---
 
-## Critical Findings
+## Systemd Units (all 8 active as of 2026-06-15)
 
-### 1. Server is 116 commits behind local workspace
-Tasks 10, 11A–11E, and 12 exist only in the local repo. They have never been pushed to GitHub or deployed to EC2. The worker on EC2 is the Task 9 monolith with no microservice extraction code at all.
+```
+ctrlchecks-ai-generator.service         active running  :3002
+ctrlchecks-credential-service.service   active running  :3004
+ctrlchecks-execution-engine.service     active running  :3003
+ctrlchecks-execution-worker.service     active running  ← LEGACY (pre-Task 11A) — see note below
+ctrlchecks-notification-service.service active running  :3005
+ctrlchecks-trigger-service.service      active running  :3006
+ctrlchecks-worker.service               active running  :3001
+ctrlchecks-workflow-crud-service.service active running :3007
+```
 
-**Impact:** All canary routing code, the extraction clients, highScaleMetrics, delegation counters, and the 5 new services are not live. The system is 100% monolith in production.
-
-### 2. Microservices :3003–:3007 not deployed
-No systemd units, no processes, no listening ports. Deploy scripts exist locally (`scripts/deploy-*.sh`) but have never been run against EC2.
-
-### 3. Legacy execution-worker still running
-`ctrlchecks-execution-worker.service` is the old-style queue consumer from before Task 11A. Once execution-engine is deployed and canary activated, this service may conflict or be redundant. Needs careful coordination.
-
-### 4. No microservice flags in worker .env
-The `.env` grep for `ENABLED|CANARY_PERCENT|LOCAL_WRITES|VAULT_WRITES|OAUTH_ENABLED` returned nothing. The worker starts with all feature flags at their code defaults (`false`), which is correct safety behavior — but means no delegation will happen even after deploy until flags are added to `.env`.
-
-### 5. Frontend HTTPS not live
-`app.ctrlchecks.ai` does not respond. nginx is running (ports 80/443 listening) but the vhost isn't resolving — DNS A record `app.ctrlchecks.ai → 3.7.115.58` is likely not set.
-
-### 6. ai-generator healthy but worker flag status unknown
-`:3002` responds and ai-generator is running. However, since the worker code on EC2 is Task 9 (pre-Task 11 flag wiring), the worker may not have `AI_GENERATOR_URL` in `.env` or may not be delegating to it. The delegation path through `AI_GENERATOR_URL=http://localhost:3002` needs to be verified.
+**LEGACY NOTE:** `ctrlchecks-execution-worker.service` is the old queue-based execution
+consumer from before Task 11A. It must be stopped/disabled **before** enabling
+`EXECUTION_ENGINE_CANARY_PERCENT > 0` to avoid duplicate job consumption.
+Do not stop without user approval.
 
 ---
 
-## Activation Matrix (Actual vs. Plan)
+## Feature Flags in worker .env (as of 2026-06-15)
 
-| Service | Port | Plan says | EC2 truth | Gap |
-|---|---|---|---|---|
-| execution-engine | 3003 | Code: Phase 5 ✅ | NOT deployed, no systemd unit | Deploy + first flag setup needed |
-| credential-service | 3004 | Code: Phase 4 ✅ | NOT deployed | Deploy + first flag setup needed |
-| notification-service | 3005 | Code: Phase 4 ✅ | NOT deployed | Deploy + first flag setup needed |
-| trigger-service | 3006 | Code: Phase 3 ✅ | NOT deployed | Deploy + first flag setup needed |
-| workflow-crud-service | 3007 | Code: Phase 4 ✅ | NOT deployed | Deploy + first flag setup needed |
+```
+(none yet — all ENABLED flags default to false in code)
+```
+
+**Next step:** Append the flag block from MICROSERVICES_OPS_PLAYBOOK.md Phase 2 to
+`/opt/ctrlchecks-worker/.env`. All values start ENABLED=false / CANARY=0.
+
+---
+
+## Git State
+
+| Location | Branch | Commit | Status |
+|---|---|---|---|
+| Local workspace | master | bcffcb8 | ✅ pushed to origin |
+| GitHub origin | master | bcffcb8 | ✅ current |
+| EC2 /opt/ctrlchecks-worker | (tar deploy, not git) | Task 12+ code | ✅ deployed via scripts/deploy-worker.sh |
+
+---
+
+## Historical Findings (initial audit 2026-06-15 morning)
+
+- Server was on Task 9 code, 116 commits behind local workspace
+- Zero microservices deployed; no systemd units beyond worker + ai-generator + legacy-execution-worker
+- No feature flags in worker .env
+- Both issues resolved in this session via Phase C (worker deploy) + Phase D (5 microservices)
+
+---
+
+## Activation Matrix (CURRENT)
+
+| Service | Port | ENABLED flag | CANARY% | Retirement gate | Soak status |
+|---|---|---|---|---|---|
+| execution-engine | 3003 | false (not in .env) | 0 | `EXECUTION_ENGINE_CONSUMER_ENABLED` | Not started |
+| credential-service | 3004 | false (not in .env) | 0 | `CREDENTIAL_SERVICE_VAULT_WRITES_DISABLED` | Not started |
+| notification-service | 3005 | false (not in .env) | 0 | — | Not started |
+| trigger-service | 3006 | false (not in .env) | 0 | — | Not started |
+| workflow-crud-service | 3007 | **true** | **5** | `WORKFLOW_CRUD_LOCAL_WRITES_DISABLED=false` | **Soak started 2026-06-15 18:22 UTC** |
 
 ---
 
 ## Next Steps (Priority Order)
 
-### Immediate (unblocks everything)
-1. **Push local code to GitHub** — `git push origin main` from local workspace. This is prerequisite for all CI/CD deploys and for the server to pull the latest code.
-2. **Deploy worker** — pull latest on EC2 (`git fetch && git reset --hard origin/main`) + `npm ci && npm run build` + `sudo systemctl restart ctrlchecks-worker`. This brings Tasks 10–12 + all delegation clients live.
+### Phase E — Worker flags (no delegation yet)
+1. SSH to `/opt/ctrlchecks-worker/.env`, append all `*_ENABLED=false / *_CANARY_PERCENT=0` vars
+2. Generate service keys: `openssl rand -hex 32` × 5
+3. Mirror keys into each `/opt/ctrlchecks-*/\.env`
+4. Restart worker — verify :3001 still healthy, no delegation traffic yet
 
-### After worker is updated
-3. **Deploy execution-engine** — `bash scripts/deploy-execution-engine.sh`; install systemd unit; create `.env`; set `EXECUTION_ENGINE_ENABLED=false` initially
-4. **Deploy credential-service** — `bash scripts/deploy-credential-service.sh`
-5. **Deploy notification-service** — `bash scripts/deploy-notification-service.sh`
-6. **Deploy trigger-service** — `bash scripts/deploy-trigger-service.sh`
-7. **Deploy workflow-crud-service** — `bash scripts/deploy-workflow-crud-service.sh`
-8. **Add feature flags to worker `.env`** — add all `*_ENABLED=false` and `*_CANARY_PERCENT=0` vars; no delegation until intentionally ramped
-9. **Address legacy execution-worker** — decide whether to stop/disable `ctrlchecks-execution-worker.service` before activating execution-engine canary
+### Phase E2 — Legacy execution-worker
+5. Document conflict risk; get user approval; `sudo systemctl stop ctrlchecks-execution-worker`
+6. Disable unit: `sudo systemctl disable ctrlchecks-execution-worker`
 
-### Ops ramp (after services are deployed and healthy)
-- Follow `MICROSERVICES_OPS_PLAYBOOK.md` → Standard Canary Ramp for each service
-- Record soak milestones in Soak Decision Log
+### Phase F — Canary ramp (ops playbook order)
+Ramp one service at a time, 48h soak between steps:
+1. workflow-crud-service: CANARY 5 → 25 → 50 → 100 (7d at 100% before retirement gate)
+2. notification-service
+3. credential-service
+4. trigger-service
+5. execution-engine (last — requires legacy worker disabled first)
 
-### Frontend
-- Set DNS A record `app.ctrlchecks.ai → 3.7.115.58`
-- Run `sudo certbot --nginx -d app.ctrlchecks.ai`
+### Phase G — Frontend HTTPS
+- DNS A record `app.ctrlchecks.ai → 3.7.115.58`
+- `sudo certbot --nginx -d app.ctrlchecks.ai`
 - Add Cognito callback URIs for `https://app.ctrlchecks.ai`
+
+### Phase H — Retirement gates (only after 2-week soak at CANARY=100)
+- `WORKFLOW_CRUD_LOCAL_WRITES_DISABLED=true`
+- `CREDENTIAL_SERVICE_VAULT_WRITES_DISABLED=true`
