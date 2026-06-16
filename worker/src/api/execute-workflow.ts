@@ -18588,6 +18588,7 @@ export default async function executeWorkflowHandler(req: Request, res: Response
             'x-internal-form-execution': req.headers['x-internal-form-execution'],
             'x-internal-chat-execution': req.headers['x-internal-chat-execution'],
             'x-internal-webhook-execution': req.headers['x-internal-webhook-execution'],
+            'x-internal-trigger-execution': req.headers['x-internal-trigger-execution'],
           },
           authToken,
         },
@@ -18619,8 +18620,9 @@ export default async function executeWorkflowHandler(req: Request, res: Response
   const isInternalChatExecution = req.headers['x-internal-chat-execution'] === 'true';
   const isInternalWebhookExecution = req.headers['x-internal-webhook-execution'] === 'true';
   const isInternalEngineExecution = req.headers['x-internal-engine-execution'] === 'true';
-  const isInternalExecution = isInternalFormExecution || isInternalChatExecution || isInternalWebhookExecution || isInternalEngineExecution;
-  
+  const isInternalTriggerExecution = req.headers['x-internal-trigger-execution'] === 'true';
+  const isInternalExecution = isInternalFormExecution || isInternalChatExecution || isInternalWebhookExecution || isInternalEngineExecution || isInternalTriggerExecution;
+
   if (!isInternalExecution) {
     try {
       const { requireAuthenticatedUser } = await import('../core/utils/check-google-auth');
@@ -18629,9 +18631,10 @@ export default async function executeWorkflowHandler(req: Request, res: Response
       return res.status(401).json(authError);
     }
   } else {
-    const triggerType = isInternalFormExecution ? 'form-trigger' : 
-                       isInternalChatExecution ? 'chat-trigger' : 
-                       isInternalWebhookExecution ? 'webhook' : 'unknown';
+    const triggerType = isInternalFormExecution ? 'form-trigger' :
+                       isInternalChatExecution ? 'chat-trigger' :
+                       isInternalWebhookExecution ? 'webhook' :
+                       isInternalTriggerExecution ? 'trigger-service' : 'unknown';
     console.log(`[Execute Workflow] Bypassing Google OAuth for internal ${triggerType} execution`);
   }
 
