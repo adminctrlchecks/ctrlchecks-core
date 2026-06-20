@@ -562,6 +562,7 @@ app.post(
     windowMs: 60_000,
   }),
   tierRateLimit('execute'),
+  asyncHandler(authenticateUser),
   asyncHandler(executeWorkflowRoute)
 );
 
@@ -1420,7 +1421,7 @@ app.post('/api/workflows/:workflowId/configure', asyncHandler(configureWorkflowR
 console.log('⚙️  Configure Workflow API available at /api/workflows/:workflowId/configure');
 
 // Save Workflow (with validation and normalization)
-app.post('/api/save-workflow', asyncHandler(saveWorkflowRoute));
+app.post('/api/save-workflow', asyncHandler(authenticateUser), asyncHandler(saveWorkflowRoute));
 console.log('💾 Save Workflow API available at /api/save-workflow');
 
 // List Workflows (canary — try workflow-crud-service, fall back to DB)

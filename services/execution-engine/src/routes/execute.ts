@@ -67,7 +67,7 @@ router.post('/', async (req: Request, res: Response) => {
           executionId,
           workflowId,
           userId ?? null,
-          'queued',
+          'pending',
           'manual',
           JSON.stringify(input),
           JSON.stringify([]),

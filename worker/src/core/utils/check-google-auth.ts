@@ -9,6 +9,14 @@ import { ErrorCode, createError } from './error-codes';
  * Throws UNAUTHORIZED otherwise.
  */
 export async function requireAuthenticatedUser(req: Request): Promise<string> {
+  // Fast path: authenticateUser middleware (subscription-auth.ts) already resolved the user
+  // via the proven Cognito verifier + Admin API email lookup. Use it when available.
+  const preAuthed = (req as any).user as { id?: string; email?: string } | undefined;
+  if (preAuthed?.id) {
+    const canonicalId = await resolveCanonicalUserId(preAuthed.id, preAuthed.email || '').catch(() => preAuthed.id!);
+    return canonicalId;
+  }
+
   const db = getDbClient();
 
   const authHeader = req.headers.authorization;
