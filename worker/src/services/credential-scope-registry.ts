@@ -97,8 +97,26 @@ export function requiredScopesForProvider(provider: string, explicitScopes: stri
   return PROVIDER_REQUIRED_SCOPES[normalizeProvider(provider)] || [];
 }
 
+// Minimum scopes needed to execute a specific node type.
+// The preflight only checks these, so a Sheets-only credential isn't blocked by missing Gmail scopes.
+const NODE_REQUIRED_SCOPES: Record<string, string[]> = {
+  google_sheets:   ['https://www.googleapis.com/auth/spreadsheets'],
+  google_gmail:    ['https://www.googleapis.com/auth/gmail.send'],
+  gmail:           ['https://www.googleapis.com/auth/gmail.send'],
+  google_doc:      ['https://www.googleapis.com/auth/documents'],
+  google_docs:     ['https://www.googleapis.com/auth/documents'],
+  google_calendar: ['https://www.googleapis.com/auth/calendar.events'],
+  google_drive:    ['https://www.googleapis.com/auth/drive'],
+  google_contacts: ['https://www.googleapis.com/auth/contacts'],
+  google_tasks:    ['https://www.googleapis.com/auth/tasks'],
+  google_bigquery: ['https://www.googleapis.com/auth/bigquery'],
+  youtube:         ['https://www.googleapis.com/auth/youtube.force-ssl'],
+};
+
 export function credentialRequirementForNode(nodeType: string): { provider: string; requiredScopes: string[] } | null {
-  const provider = NODE_PROVIDER[nodeType.trim().toLowerCase()];
+  const key = nodeType.trim().toLowerCase();
+  const provider = NODE_PROVIDER[key];
   if (!provider) return null;
-  return { provider, requiredScopes: requiredScopesForProvider(provider) };
+  const requiredScopes = NODE_REQUIRED_SCOPES[key] ?? requiredScopesForProvider(provider);
+  return { provider, requiredScopes };
 }

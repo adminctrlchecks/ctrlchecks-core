@@ -18884,6 +18884,19 @@ export default async function executeWorkflowHandler(req: Request, res: Response
       nodes,
     });
     if (!credentialPreflight.ok) {
+      // Mark the execution as failed so the UI doesn't stay stuck at "waiting" forever.
+      // form-trigger.ts already set this execution to "running" before firing this request;
+      // without this update the record stays "running" (shown as "waiting") indefinitely.
+      if (providedExecutionId) {
+        const failureNames = credentialPreflight.failures
+          ?.map((f: any) => f.displayName || f.vaultKey || 'unknown')
+          .join(', ') || 'missing credentials';
+        await db.from('executions').update({
+          status: 'error',
+          finished_at: new Date().toISOString(),
+          error: `Credential preflight failed: ${failureNames}`,
+        }).eq('id', providedExecutionId).catch(() => {});
+      }
       return res.status(409).json({
         error: 'CredentialPreflightFailed',
         message: 'This workflow cannot run until the workflow owner reconnects the required accounts.',
@@ -19275,6 +19288,12 @@ export default async function executeWorkflowHandler(req: Request, res: Response
       // Try to acquire lock for resume
       const lockResult = await acquireExecutionLock(db, workflowId, executionId);
       if (!lockResult.acquired) {
+        // Mark as error so the execution doesn't stay stuck at "waiting/running" in the UI.
+        await db.from('executions').update({
+          status: 'error',
+          finished_at: new Date().toISOString(),
+          error: `Workflow locked by execution ${lockResult.existingExecutionId} — previous run may still be in progress`,
+        }).eq('id', executionId).catch(() => {});
         return res.status(409).json({
           code: ErrorCode.RUN_ALREADY_ACTIVE,
           error: 'Workflow already has an active execution',
