@@ -226,7 +226,10 @@ jobs:
         # Tests for all 4 service clients: trigger, crud, credential, execution-engine.
         # All 111 tests are mocked (no live service required).
         working-directory: ./worker
-        run: npm run test:microservices-delegation -- --forceExit
+        run: |
+          npx jest \
+            --runInBand --no-coverage --passWithNoTests --forceExit \
+            --testPathPattern "trigger-service-client|workflow-crud-service-client|credential-service-client|execution-engine-client"
 
   worker-test-fix-regressions:
     name: Worker Tests — FIX Regression Suite
