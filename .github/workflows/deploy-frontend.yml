@@ -74,23 +74,59 @@ jobs:
         working-directory: ./ctrl_checks
         run: npm ci
 
-      - name: Deploy to Vercel
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Verify secrets present
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          echo "VERCEL_ORG_ID length:     ${#VERCEL_ORG_ID}"
+          echo "VERCEL_PROJECT_ID length: ${#VERCEL_PROJECT_ID}"
+          echo "VERCEL_TOKEN length:      ${#VERCEL_TOKEN}"
+          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
+            echo "❌ One or more Vercel secrets are empty — check GitHub Secrets"
+            exit 1
+          fi
+          echo "✅ All Vercel secrets are set"
+
+      - name: Pull Vercel project config
+        working-directory: ./ctrl_checks
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: vercel pull --yes --environment=production --token=$VERCEL_TOKEN
+
+      - name: Build for production
+        working-directory: ./ctrl_checks
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: vercel build --prod --token=$VERCEL_TOKEN
+
+      - name: Deploy prebuilt to Vercel
         working-directory: ./ctrl_checks
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
-          npx vercel pull --yes --environment=production --token=$VERCEL_TOKEN
-          npx vercel build --prod --token=$VERCEL_TOKEN
-          npx vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN
+          DEPLOY_URL=$(vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN)
+          echo "✅ Deployed: $DEPLOY_URL"
+          echo "DEPLOY_URL=$DEPLOY_URL" >> $GITHUB_ENV
 
       - name: Smoke test
         run: |
           sleep 15
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ secrets.VITE_PUBLIC_BASE_URL || 'https://app.ctrlchecks.com' }}")
+          TARGET="${DEPLOY_URL:-https://app.ctrlchecks.com}"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$TARGET")
+          echo "Smoke test → $TARGET : HTTP $STATUS"
           if [ "$STATUS" = "200" ]; then
-            echo "✅ Frontend live: HTTP 200"
+            echo "✅ Frontend live"
           else
-            echo "⚠  Status $STATUS — check Vercel dashboard for deployment logs"
+            echo "⚠  Status $STATUS — check Vercel dashboard"
           fi
