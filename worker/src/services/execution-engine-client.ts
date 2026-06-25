@@ -16,6 +16,16 @@
  */
 
 import { incExecutionEngineDelegation } from '../middleware/highScaleMetrics';
+import { CircuitBreaker } from './circuit-breaker';
+import { logger } from '../core/logger';
+
+// Module-level singleton — resets naturally on process restart or jest.resetModules()
+const executionEngineBreaker = new CircuitBreaker(
+  'execution-engine',
+  5,   // windowSize
+  3,   // failureThreshold
+  60_000, // cooldownMs
+);
 
 export interface ExecuteRequest {
   workflowId: string;
@@ -43,9 +53,10 @@ function fnv1a(s: string): number {
 }
 
 /**
- * @deprecated Phase 5: execute-workflow.ts no longer calls isCanaryTarget() — all traffic
- * routes unconditionally when EXECUTION_ENGINE_ENABLED=true. Kept exported so existing
- * test suites compile without changes. Remove in Phase 6.
+ * Returns true when this executionId should be routed to the execution-engine canary.
+ * Routing is deterministic (fnv1a hash) so a given executionId always routes the same way.
+ * Phase 4: CANARY_PERCENT defaults to 33; set EXECUTION_ENGINE_CANARY_PERCENT=50 on server.
+ * Phase 5: set to 100 and remove monolith fallback.
  */
 export function isCanaryTarget(executionId: string): boolean {
   if (!isEnabled()) return false;
@@ -55,10 +66,6 @@ export function isCanaryTarget(executionId: string): boolean {
   return fnv1a(executionId) % 100 < pct;
 }
 
-/**
- * @deprecated Phase 5: CANARY_PERCENT is ignored by execute-workflow.ts once deployed.
- * Kept exported for tests. Remove in Phase 6.
- */
 export function getCanaryPercent(): number {
   const raw = process.env.EXECUTION_ENGINE_CANARY_PERCENT;
   if (!raw) return 33;
@@ -81,8 +88,10 @@ function getServiceKey(): string {
 /**
  * Delegate an execution to the execution-engine service.
  *
- * Returns null when:
- *   - EXECUTION_ENGINE_ENABLED is false (feature flag off — use monolith fallback)
+ * Returns null (monolith fallback) when:
+ *   - EXECUTION_ENGINE_ENABLED is false
+ *   - executionId is not in the canary cohort (fnv1a % 100 >= CANARY_PERCENT)
+ *   - The circuit breaker is OPEN (too many recent failures)
  *   - The remote service returns a non-2xx response
  *   - Any network error occurs
  *
@@ -91,7 +100,10 @@ function getServiceKey(): string {
 export async function delegateExecution(
   req: ExecuteRequest,
 ): Promise<ExecuteResponse | null> {
-  if (!isEnabled()) {
+  if (!isEnabled()) return null;
+  if (!isCanaryTarget(req.executionId)) return null;
+  if (!executionEngineBreaker.canAttempt()) {
+    logger.warnObj({ executionId: req.executionId }, 'execution-engine circuit OPEN — monolith fallback');
     return null;
   }
 
@@ -108,20 +120,18 @@ export async function delegateExecution(
     });
 
     if (!response.ok) {
-      console.warn(
-        `[execution-engine-client] Remote returned ${response.status} — falling back to monolith`,
-      );
+      logger.warn(`[execution-engine-client] Remote returned ${response.status} — falling back to monolith`);
+      executionEngineBreaker.recordFailure();
       incExecutionEngineDelegation('miss');
       return null;
     }
 
+    executionEngineBreaker.recordSuccess();
     incExecutionEngineDelegation('hit');
     return (await response.json()) as ExecuteResponse;
   } catch (err) {
-    console.warn(
-      '[execution-engine-client] Request failed — falling back to monolith:',
-      (err as Error).message,
-    );
+    logger.warn('[execution-engine-client] Request failed — falling back to monolith:', (err as Error).message);
+    executionEngineBreaker.recordFailure();
     incExecutionEngineDelegation('error');
     return null;
   }

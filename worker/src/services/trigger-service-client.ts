@@ -23,6 +23,10 @@
  */
 
 import { incTriggerServiceDelegation } from '../middleware/highScaleMetrics';
+import { CircuitBreaker } from './circuit-breaker';
+import { logger } from '../core/logger';
+
+const triggerBreaker = new CircuitBreaker('trigger-service', 5, 3, 60_000);
 
 // ── FNV-1a 32-bit hash — deterministic canary routing ────────────────────────
 
@@ -80,6 +84,10 @@ function serviceHeaders(workflowId?: string): Record<string, string> {
 
 async function servicePost<T>(path: string, workflowId: string, body: unknown): Promise<T | null> {
   if (!isTriggerServiceEnabled()) return null;
+  if (!triggerBreaker.canAttempt()) {
+    logger.warnObj({ path, workflowId }, 'trigger-service circuit OPEN — monolith fallback');
+    return null;
+  }
   try {
     const res = await fetch(`${getBaseUrl()}${path}`, {
       method: 'POST',
@@ -88,12 +96,15 @@ async function servicePost<T>(path: string, workflowId: string, body: unknown): 
       signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) {
+      triggerBreaker.recordFailure();
       incTriggerServiceDelegation('miss');
       return null;
     }
+    triggerBreaker.recordSuccess();
     incTriggerServiceDelegation('hit');
     return (await res.json()) as T;
   } catch {
+    triggerBreaker.recordFailure();
     incTriggerServiceDelegation('error');
     return null;
   }

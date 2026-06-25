@@ -22,6 +22,10 @@
  */
 
 import { incNotificationDelegation } from '../middleware/highScaleMetrics';
+import { CircuitBreaker } from './circuit-breaker';
+import { logger } from '../core/logger';
+
+const notificationBreaker = new CircuitBreaker('notification-service', 5, 3, 60_000);
 
 // ── FNV-1a 32-bit hash — deterministic canary routing ────────────────────────
 
@@ -74,6 +78,10 @@ function serviceHeaders(): Record<string, string> {
 
 async function servicePost<T>(path: string, userId: string, body: unknown): Promise<T | null> {
   if (!isNotificationServiceEnabled()) return null;
+  if (!notificationBreaker.canAttempt()) {
+    logger.warnObj({ path, userId }, 'notification-service circuit OPEN — monolith fallback');
+    return null;
+  }
   try {
     const res = await fetch(`${getBaseUrl()}${path}`, {
       method: 'POST',
@@ -82,12 +90,15 @@ async function servicePost<T>(path: string, userId: string, body: unknown): Prom
       signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) {
+      notificationBreaker.recordFailure();
       incNotificationDelegation('miss');
       return null;
     }
+    notificationBreaker.recordSuccess();
     incNotificationDelegation('hit');
     return (await res.json()) as T;
   } catch {
+    notificationBreaker.recordFailure();
     incNotificationDelegation('error');
     return null;
   }
