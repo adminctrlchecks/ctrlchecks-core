@@ -1,6 +1,10 @@
 /**
+ * CI-EXCLUDED — Intentionally red (documents a known bug, not a regression).
+ * Excluded via --testPathIgnorePatterns "log-output-merge" in ci.yml.
+ * TODO: Open GitHub issue for this known bug and add the issue number here.
+ *
  * Bug Condition Exploration Tests for log_output Merge Terminal Fix
- * 
+ *
  * These tests MUST FAIL on unfixed code to confirm the bug exists.
  * DO NOT fix the code when tests fail — the failures are the evidence.
  * 

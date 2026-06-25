@@ -1,4 +1,8 @@
 /**
+ * CI-EXCLUDED — Intentionally red (documents a known bug, not a regression).
+ * Excluded via --testPathIgnorePatterns "bug-condition" in ci.yml.
+ * TODO: Open GitHub issue for this known bug and add the issue number here.
+ *
  * Bug Condition Exploration Tests
  *
  * These tests MUST FAIL on unfixed code — failure confirms the bugs exist.

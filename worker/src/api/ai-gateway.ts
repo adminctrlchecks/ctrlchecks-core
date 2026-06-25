@@ -172,7 +172,7 @@ async function initializeAIServices() {
   }
 }
 
-initializeAIServices().catch(console.error);
+initializeAIServices().catch((err) => logger.error('AI Gateway init failed:', err));
 
 // ==================== CHICHU CHATBOT ====================
 router.post('/chatbot/message', async (req: Request, res: Response) => {

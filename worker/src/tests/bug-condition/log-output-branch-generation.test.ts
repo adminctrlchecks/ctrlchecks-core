@@ -1,4 +1,8 @@
 /**
+ * CI-EXCLUDED — Intentionally red (documents a known bug, not a regression).
+ * Excluded via --testPathIgnorePatterns "branch-generation" in ci.yml.
+ * TODO: Open GitHub issue for this known bug and add the issue number here.
+ *
  * Bug Condition Exploration Tests — AI Workflow Log Output Branch Generation Fix
  *
  * These tests MUST FAIL on unfixed code — failure confirms the bug exists.

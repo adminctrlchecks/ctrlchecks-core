@@ -1,4 +1,8 @@
 /**
+ * CI-EXCLUDED — Intentionally red (documents a known bug, not a regression).
+ * Excluded via --testPathIgnorePatterns "fillmode" in ci.yml.
+ * TODO: Open GitHub issue for this known bug and add the issue number here.
+ *
  * Bug Condition Exploration Test — AI Pre-Build Value Persistence Fix
  *
  * Task 1: Write bug condition exploration test
