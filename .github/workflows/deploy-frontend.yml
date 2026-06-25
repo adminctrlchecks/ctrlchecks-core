@@ -18,6 +18,7 @@ on:
     paths:
       - 'ctrl_checks/**'
       - '!ctrl_checks/**/*.md'
+      - '.github/workflows/deploy-frontend.yml'
   workflow_dispatch:
     inputs:
       force_deploy:
