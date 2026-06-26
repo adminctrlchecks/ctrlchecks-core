@@ -95,7 +95,7 @@ jobs:
       - name: Smoke test
         run: |
           sleep 20
-          TARGET="${DEPLOY_URL:-https://app.ctrlchecks.com}"
+          TARGET="${DEPLOY_URL:-https://app.ctrlchecks.ai}"
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$TARGET")
           echo "Smoke test: $TARGET -> HTTP $STATUS"
           if [ "$STATUS" = "200" ]; then

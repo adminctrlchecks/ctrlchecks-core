@@ -8,7 +8,7 @@
 # Key: ~/.ssh/id_ed25519  (installed on server 2026-06-26)
 #
 # Target: root@187.127.185.105 /opt/ctrlchecks-worker
-# Domain: https://worker.ctrlchecks.com
+# Domain: https://worker.ctrlchecks.ai
 #
 # Deploys dist/ via tar+scp — no git dependency on server.
 # Preserves /opt/ctrlchecks-worker/.env on the server.
@@ -33,7 +33,7 @@ SCP_CMD="scp $SSH_OPTS"
 SSH_CMD="ssh $SSH_OPTS"
 
 echo "▶ Deploying to $SERVER_USER@$SERVER_HOST:$SERVER_PATH"
-echo "  Domain: https://worker.ctrlchecks.com"
+echo "  Domain: https://worker.ctrlchecks.ai"
 echo ""
 
 echo "▶ Type-checking worker…"
@@ -107,4 +107,4 @@ REMOTE
 
 echo ""
 echo "✅ Worker deployed and healthy on :3001"
-echo "   https://worker.ctrlchecks.com/health/live"
+echo "   https://worker.ctrlchecks.ai/health/live"

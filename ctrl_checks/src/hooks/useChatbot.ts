@@ -94,7 +94,7 @@ export async function askChatbot(message: string): Promise<ChatbotResponse> {
 
         return {
           content:
-            "Sorry, I'm having trouble connecting right now. Please try again in a moment, or feel free to contact our support team at support@ctrlchecks.com.",
+            "Sorry, I'm having trouble connecting right now. Please try again in a moment, or feel free to contact our support team at support@ctrlchecks.ai.",
           suggestions: ["Try again", "Contact support"],
         };
       }

@@ -15,7 +15,7 @@ const openApiSpec = {
     contact: { email: 'helloclaude21@gmail.com' },
   },
   servers: [
-    { url: 'https://worker.ctrlchecks.com', description: 'Production (Hostinger)' },
+    { url: 'https://worker.ctrlchecks.ai', description: 'Production (Hostinger)' },
     { url: 'http://localhost:3001', description: 'Local development' },
   ],
   components: {

@@ -136,8 +136,8 @@ export default function Privacy() {
               If you have questions about this Privacy Policy, please contact us at:
             </p>
             <p className="mt-2">
-              <strong>Email:</strong> privacy@ctrlchecks.com<br />
-              <strong>Website:</strong> <Link to="/" className="text-primary hover:underline">ctrlchecks.com</Link>
+              <strong>Email:</strong> privacy@ctrlchecks.ai<br />
+              <strong>Website:</strong> <Link to="/" className="text-primary hover:underline">ctrlchecks.ai</Link>
             </p>
           </section>
         </div>

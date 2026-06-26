@@ -109,7 +109,7 @@ export default function Terms() {
           <section>
             <h2 className="mb-3 text-2xl font-semibold">11. Contact</h2>
             <p>
-              Questions about these terms can be sent to <strong>legal@ctrlchecks.com</strong>.
+              Questions about these terms can be sent to <strong>legal@ctrlchecks.ai</strong>.
             </p>
           </section>
         </div>

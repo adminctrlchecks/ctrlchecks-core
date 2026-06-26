@@ -2,14 +2,14 @@
  * E2E: workflow execution golden path + error badge smoke test.
  *
  * Requires:
- *   E2E_BASE_URL  — deployed frontend (default: https://app.ctrlchecks.com)
- *   E2E_API_URL   — worker API        (default: https://worker.ctrlchecks.com)
+ *   E2E_BASE_URL  — deployed frontend (default: https://app.ctrlchecks.ai)
+ *   E2E_API_URL   — worker API        (default: https://worker.ctrlchecks.ai)
  *   E2E_EMAIL     — test Cognito user email
  *   E2E_PASSWORD  — test Cognito user password
  *   E2E_WORKFLOW_ID — existing saved workflow to open (must belong to the test user)
  *
  * Run only on live/staging after deploy:
- *   E2E_BASE_URL=https://app.ctrlchecks.com E2E_EMAIL=... E2E_PASSWORD=... E2E_WORKFLOW_ID=... npx playwright test
+ *   E2E_BASE_URL=https://app.ctrlchecks.ai E2E_EMAIL=... E2E_PASSWORD=... E2E_WORKFLOW_ID=... npx playwright test
  */
 
 import { test, expect } from '@playwright/test';
@@ -17,7 +17,7 @@ import { test, expect } from '@playwright/test';
 const EMAIL = process.env.E2E_EMAIL ?? '';
 const PASSWORD = process.env.E2E_PASSWORD ?? '';
 const WORKFLOW_ID = process.env.E2E_WORKFLOW_ID ?? '';
-const API_URL = process.env.E2E_API_URL || 'https://worker.ctrlchecks.com';
+const API_URL = process.env.E2E_API_URL || 'https://worker.ctrlchecks.ai';
 
 test.describe('workflow execute', () => {
   test.skip(!EMAIL || !PASSWORD || !WORKFLOW_ID, 'E2E_EMAIL, E2E_PASSWORD, E2E_WORKFLOW_ID must be set');

@@ -143,7 +143,7 @@ function getFallbackKnowledge(): KnowledgeBase {
     ],
     escalation: {
       triggers: ["enterprise pricing", "custom pricing", "security audit", "compliance", "talk to sales"],
-      response: "I'd love to help, but for detailed information about that, I think it's best if you speak directly with our team. Please contact our sales team at sales@ctrlchecks.com!",
+      response: "I'd love to help, but for detailed information about that, I think it's best if you speak directly with our team. Please contact our sales team at sales@ctrlchecks.ai!",
     },
     personality: {
       tone: "friendly, helpful, professional, approachable",
@@ -162,9 +162,9 @@ function getFallbackKnowledge(): KnowledgeBase {
       cta_phrases: ["Ready to get started?", "Want to try it out?"],
     },
     contact: {
-      support_email: "support@ctrlchecks.com",
-      sales_email: "sales@ctrlchecks.com",
-      website: "https://ctrlchecks.com",
+      support_email: "support@ctrlchecks.ai",
+      sales_email: "sales@ctrlchecks.ai",
+      website: "https://ctrlchecks.ai",
     },
   };
 }
@@ -384,7 +384,7 @@ export default async function chatbotHandler(req: Request, res: Response) {
     logger.error("Chatbot error:", error);
     return res.status(500).json({
       content:
-        "Sorry, I'm having trouble responding right now. Please try again or contact our support team at support@ctrlchecks.com.",
+        "Sorry, I'm having trouble responding right now. Please try again or contact our support team at support@ctrlchecks.ai.",
       suggestions: [],
     });
   }

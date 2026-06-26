@@ -5,7 +5,7 @@ name: Deploy Worker
 #   - workflow_dispatch for manual deploys / hotfixes
 #
 # Target: root@187.127.185.105 /opt/ctrlchecks-worker (Hostinger KVM4)
-# Domain: https://worker.ctrlchecks.com
+# Domain: https://worker.ctrlchecks.ai
 #
 # Deploy strategy:
 #   1. Build dist/ in CI.

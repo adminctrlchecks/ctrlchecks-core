@@ -17,7 +17,7 @@
 ## Test plan
 - [ ] `npm run type-check` passes locally
 - [ ] `npm run lint` passes locally
-- [ ] Live verification ran on `https://worker.ctrlchecks.com/health/live` after deploy
+- [ ] Live verification ran on `https://worker.ctrlchecks.ai/health/live` after deploy
 
 ## Notes for reviewer
 <!-- Anything unusual, risky, or worth calling out. -->

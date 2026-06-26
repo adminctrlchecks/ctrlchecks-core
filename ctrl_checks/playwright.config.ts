@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const BASE_URL = process.env.E2E_BASE_URL || 'https://app.ctrlchecks.com';
-const API_URL = process.env.E2E_API_URL || 'https://worker.ctrlchecks.com';
+const BASE_URL = process.env.E2E_BASE_URL || 'https://app.ctrlchecks.ai';
+const API_URL = process.env.E2E_API_URL || 'https://worker.ctrlchecks.ai';
 
 export default defineConfig({
   testDir: './e2e',
