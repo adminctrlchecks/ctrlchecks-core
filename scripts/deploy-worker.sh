@@ -4,9 +4,8 @@
 # Usage (from repo root):
 #   bash scripts/deploy-worker.sh
 #
-# Requires sshpass for password-based SSH to Hostinger.
-# Pass the server password via DEPLOY_PASS env var (do NOT hardcode here):
-#   DEPLOY_PASS="<password>" bash scripts/deploy-worker.sh
+# Uses SSH key authentication — no password needed.
+# Key: ~/.ssh/id_ed25519  (installed on server 2026-06-26)
 #
 # Target: root@187.127.185.105 /opt/ctrlchecks-worker
 # Domain: https://worker.ctrlchecks.com
@@ -21,28 +20,17 @@ WORKER_DIR="$REPO_ROOT/worker"
 SERVER_USER="root"
 SERVER_HOST="187.127.185.105"
 SERVER_PATH="/opt/ctrlchecks-worker"
+SSH_KEY="${DEPLOY_KEY:-$HOME/.ssh/id_ed25519}"
 
-# Password auth via sshpass — never hardcoded here.
-# Set DEPLOY_PASS in the environment before running this script.
-if [[ -z "${DEPLOY_PASS:-}" ]]; then
-  echo "❌ DEPLOY_PASS env var not set." >&2
-  echo "   Run: DEPLOY_PASS='<password>' bash scripts/deploy-worker.sh" >&2
+if [[ ! -f "$SSH_KEY" ]]; then
+  echo "❌ SSH key not found at $SSH_KEY" >&2
+  echo "   Override with: DEPLOY_KEY=/path/to/key bash scripts/deploy-worker.sh" >&2
   exit 1
 fi
 
-# Verify sshpass is available
-if ! command -v sshpass &>/dev/null; then
-  echo "❌ sshpass not found. Install it:" >&2
-  echo "   Ubuntu/Debian: sudo apt-get install sshpass" >&2
-  echo "   macOS:         brew install hudochenkov/sshpass/sshpass" >&2
-  echo "   Git Bash (Windows): use the Python deploy alternative below" >&2
-  exit 1
-fi
-
-SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=15"
-SCP_CMD="sshpass -e scp $SSH_OPTS"
-SSH_CMD="sshpass -e ssh $SSH_OPTS"
-export SSHPASS="$DEPLOY_PASS"
+SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=15 -i $SSH_KEY"
+SCP_CMD="scp $SSH_OPTS"
+SSH_CMD="ssh $SSH_OPTS"
 
 echo "▶ Deploying to $SERVER_USER@$SERVER_HOST:$SERVER_PATH"
 echo "  Domain: https://worker.ctrlchecks.com"
