@@ -100,24 +100,24 @@ jobs:
             dist/ package.json package-lock.json prisma/ public/
           echo "Package size: $(du -sh /tmp/worker-deploy.tar.gz | cut -f1)"
 
-      - name: Install sshpass
-        run: sudo apt-get install -y sshpass
+      - name: Configure SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$SERVER_HOST" >> ~/.ssh/known_hosts 2>/dev/null
 
       - name: Upload package to server
-        env:
-          SSHPASS: ${{ secrets.DEPLOY_PASS }}
         run: |
-          sshpass -e scp \
+          scp -i ~/.ssh/deploy_key \
             -o StrictHostKeyChecking=no \
             -o ConnectTimeout=15 \
             /tmp/worker-deploy.tar.gz \
             "$SERVER_USER@$SERVER_HOST:/tmp/worker-deploy.tar.gz"
 
       - name: Deploy on server
-        env:
-          SSHPASS: ${{ secrets.DEPLOY_PASS }}
         run: |
-          sshpass -e ssh \
+          ssh -i ~/.ssh/deploy_key \
             -o StrictHostKeyChecking=no \
             -o ConnectTimeout=15 \
             "$SERVER_USER@$SERVER_HOST" bash << 'REMOTE'
@@ -151,12 +151,10 @@ jobs:
           REMOTE
 
       - name: Health-check retry loop (5 × 10s)
-        env:
-          SSHPASS: ${{ secrets.DEPLOY_PASS }}
         run: |
           for attempt in 1 2 3 4 5; do
             echo "Health check attempt $attempt/5..."
-            CODE=$(sshpass -e ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+            CODE=$(ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
               "$SERVER_USER@$SERVER_HOST" \
               "curl -s -o /dev/null -w '%{http_code}' http://localhost:3001/health/live" 2>/dev/null || echo "000")
             echo "  HTTP $CODE"
@@ -174,11 +172,9 @@ jobs:
 
       - name: Rollback on health-check failure
         if: failure()
-        env:
-          SSHPASS: ${{ secrets.DEPLOY_PASS }}
         run: |
           echo "── Rolling back to previous dist.bak/ ───────────────────────"
-          sshpass -e ssh -o StrictHostKeyChecking=no -o ConnectTimeout=15 \
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o ConnectTimeout=15 \
             "$SERVER_USER@$SERVER_HOST" bash << 'ROLLBACK'
           set -euo pipefail
           TARGET=/opt/ctrlchecks-worker
