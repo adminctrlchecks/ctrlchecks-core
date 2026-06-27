@@ -41,6 +41,7 @@ import {
   type SelectedWorkflowIntelligence,
 } from '../../core/utils/selected-workflow-intelligence';
 import type { FieldRelevanceResult } from '../../core/types/unified-node-contract';
+import { resolveFieldOwnershipPolicy } from '../../core/utils/field-ownership-policy';
 
 export interface ComprehensiveNodeQuestion {
   id: string;
@@ -175,13 +176,17 @@ function addMissingInputSchemaQuestionsForOwnership(
       const key = `${node.id}_${fieldName}`;
       if (byKey.has(key)) continue;
       const fieldDef = inputSchema[fieldName] as any;
-      const vaultMeta = getCredentialVaultMetaForField(nodeType, fieldName);
-      const credentialOwned = !!vaultMeta || isCredentialOwnership(fieldName, fieldDef);
+      const ownershipPolicy = resolveFieldOwnershipPolicy(nodeType, fieldName, config);
+      const vaultMeta =
+        ownershipPolicy?.ownership === 'credential'
+          ? getCredentialVaultMetaForField(nodeType, fieldName)
+          : undefined;
+      const credentialOwned = ownershipPolicy?.ownership === 'credential';
       const policy = fieldPolicy.fields[fieldName];
       const fillMode = fieldDef?.fillMode?.default;
       const isAiOwned = fillMode === 'runtime_ai' || fillMode === 'buildtime_ai_once';
       if (!credentialOwned && policy?.active === false && !isAiOwned) continue;
-      const mode = resolveEffectiveFieldFillMode(fieldName, inputSchema, config);
+      const mode = ownershipPolicy?.fillMode ?? resolveEffectiveFieldFillMode(fieldName, inputSchema, config);
       const hasExplicitFillMode = config._fillMode?.[fieldName] !== undefined;
       const valueIsEmpty = isEmptyValue(config[fieldName]);
 
@@ -277,11 +282,12 @@ function annotateQuestionsForOwnershipUi(
     const config = (node.data?.config || {}) as Record<string, any>;
 
     const fieldDef = inputSchema?.[q.fieldName];
-    const vaultMeta = getCredentialVaultMetaForField(nodeType, q.fieldName);
-    const isCredentialRow =
-      q.category === 'credential' ||
-      !!vaultMeta ||
-      (!!fieldDef && isCredentialOwnership(q.fieldName, fieldDef));
+    const policy = resolveFieldOwnershipPolicy(nodeType, q.fieldName, config);
+    const vaultMeta =
+      policy?.ownership === 'credential'
+        ? getCredentialVaultMetaForField(nodeType, q.fieldName)
+        : undefined;
+    const isCredentialRow = policy?.ownership === 'credential';
 
     if (isCredentialRow) {
       next.category = 'credential';
@@ -311,17 +317,16 @@ function annotateQuestionsForOwnershipUi(
       next.ownershipUiMode = 'selectable';
       return next;
     }
-    if (fieldDef?.ownership) {
-      next.ownershipClass = fieldDef.ownership;
+    if (policy?.ownership) {
+      next.ownershipClass = policy.ownership;
     }
     if (fieldDef?.role) {
       next.role = fieldDef.role;
     }
-    const fillMeta = fieldDef?.fillMode;
-    if (fillMeta) {
-      next.fillModeDefault = fillMeta.default;
-      next.supportsRuntimeAI = fillMeta.supportsRuntimeAI !== false;
-      next.supportsBuildtimeAI = fillMeta.supportsBuildtimeAI !== false;
+    if (policy) {
+      next.fillModeDefault = policy.fillMode;
+      next.supportsRuntimeAI = policy.supportsRuntimeAI;
+      next.supportsBuildtimeAI = policy.supportsBuildtimeAI;
     }
 
     // Structural fields still need ownership choice (User vs AI); attach-inputs coerces invalid modes.
@@ -330,7 +335,7 @@ function annotateQuestionsForOwnershipUi(
       next.ownershipLockReason = undefined;
     }
 
-    const mode = resolveEffectiveFieldFillMode(q.fieldName, inputSchema, config);
+    const mode = policy?.fillMode ?? resolveEffectiveFieldFillMode(q.fieldName, inputSchema, config);
     const val = config[q.fieldName];
 
     // runtime_ai: stored workflow keeps this empty by design; show runtime badge, not "prefilled".
@@ -460,11 +465,12 @@ export function generateComprehensiveNodeQuestions(
     if (inputSchema) {
       for (const q of nodeQuestions) {
         const fieldDef = (inputSchema as any)[q.fieldName];
-        const fillMeta = fieldDef?.fillMode;
-        if (fillMeta) {
-          q.fillModeDefault = fillMeta.default;
-          q.supportsRuntimeAI = fillMeta.supportsRuntimeAI !== false;
-          q.supportsBuildtimeAI = fillMeta.supportsBuildtimeAI !== false;
+        const policy = resolveFieldOwnershipPolicy(nodeType, q.fieldName, config);
+        if (policy) {
+          q.fillModeDefault = policy.fillMode;
+          q.supportsRuntimeAI = policy.supportsRuntimeAI;
+          q.supportsBuildtimeAI = policy.supportsBuildtimeAI;
+          q.ownershipClass = policy.ownership;
         }
         if (fieldDef?.role) {
           q.role = fieldDef.role;
@@ -648,17 +654,15 @@ function generateCredentialQuestions(
   const requiredFields = schema.configSchema.required || [];
   const optionalFields = Object.keys(schema.configSchema.optional || {});
   const allFields = [...requiredFields, ...optionalFields];
-  const unifiedDef = unifiedNodeRegistry.get(nodeType);
   const fieldIsCredentialOwned = (fieldName: string): boolean => {
-    const fd = unifiedDef?.inputSchema?.[fieldName];
-    if (!fd) return false;
-    return isCredentialOwnership(fieldName, fd);
+    return resolveFieldOwnershipPolicy(nodeType, fieldName, config)?.ownership === 'credential';
   };
 
   // ✅ ENHANCED: Check if node supports multiple credential types (API Key + OAuth)
-  const hasApiKey = allFields.some(f => f.toLowerCase() === 'apikey' || f.toLowerCase() === 'api_key');
-  const hasAccessToken = allFields.some(f => f.toLowerCase() === 'accesstoken' || f.toLowerCase() === 'access_token');
-  const hasCredentialId = allFields.some(f => f.toLowerCase() === 'credentialid' || f.toLowerCase() === 'credential_id');
+  const credentialOwnedFields = allFields.filter(fieldIsCredentialOwned);
+  const hasApiKey = credentialOwnedFields.some(f => f.toLowerCase() === 'apikey' || f.toLowerCase() === 'api_key');
+  const hasAccessToken = credentialOwnedFields.some(f => f.toLowerCase() === 'accesstoken' || f.toLowerCase() === 'access_token');
+  const hasCredentialId = credentialOwnedFields.some(f => f.toLowerCase() === 'credentialid' || f.toLowerCase() === 'credential_id');
 
   // ✅ CRITICAL: If node supports both API Key and OAuth, ask for credential type first
   if ((hasApiKey && hasAccessToken) || (hasApiKey && hasCredentialId) || (hasAccessToken && hasCredentialId)) {
@@ -779,44 +783,20 @@ function generateCredentialQuestions(
     // ✅ IMPORTANT: Some nodes (especially triggers) have boolean flags that contain "auth"
     // e.g. form.requireAuthentication (boolean). These are NOT credentials and should not
     // generate "connection" questions.
-    const optionalSchema: any = (schema.configSchema as any).optional || {};
-    const fieldSchema = optionalSchema[fieldName];
-    const fieldType = fieldSchema?.type;
-    if (fieldType === 'boolean') {
-      continue;
-    }
+    const policy = resolveFieldOwnershipPolicy(nodeType, fieldName, config);
 
     // Explicitly exclude known non-credential fields that include auth-like words
     // (keeps heuristic credential detection accurate)
-    if (fieldLower === 'requireauthentication' || fieldLower === 'authenticationrequired') {
-      continue;
-    }
+    if (policy?.ownership !== 'credential') continue;
 
     // ✅ CRITICAL: Exclude known configuration fields that are NOT credentials
     // These fields contain credential-like words but are actually configuration
     // NOTE: URLs are now treated as credentials (baseUrl, apiUrl, endpoint, etc.)
     // Only specific URL types (webhook, callback, redirect) remain as configuration
     // ✅ SPECIAL: Gmail "to" field is handled as credential with dropdown (excluded from this check)
-    const isConfigurationField = 
-      // NOTE: webhook URLs are credential-like in many integrations.
-      // Do not hard-exclude them here; rely on registry ownership classification instead.
-      fieldLower === 'callbackurl' || fieldLower === 'callback_url' || // OAuth callback URL is configuration
-      fieldLower === 'redirecturl' || fieldLower === 'redirect_url' || // OAuth redirect URL is configuration
-      fieldLower.includes('message') || // Message fields are not credentials
-      fieldLower.includes('channel') || // Channel fields are not credentials
-      fieldLower.includes('text') || // Text fields are not credentials
-      fieldLower.includes('subject') || // Subject fields are not credentials
-      fieldLower.includes('body') || // Body fields are not credentials
-      (fieldLower.includes('to') && nodeType !== 'google_gmail') || // To fields are not credentials (except Gmail)
-      fieldLower.includes('from'); // From fields are not credentials
-    
-    if (isConfigurationField) {
-      continue; // Skip configuration fields - they should be asked as configuration questions, not credentials
-    }
-
-    const unifiedField = unifiedNodeRegistry.get(nodeType)?.inputSchema?.[fieldName];
-    const vaultMeta = getCredentialVaultMetaForField(nodeType, fieldName);
-    const isCredentialField = !!vaultMeta || (!!unifiedField && isCredentialOwnership(fieldName, unifiedField));
+    // If the unified node registry explicitly marks this field as user-owned value (e.g. Slack
+    // webhookUrl), trust that over the connector registry's vault meta — skip credential treatment.
+    const isCredentialField = policy.ownership === 'credential';
 
     if (isCredentialField) {
       // ✅ CRITICAL: Skip if we've already seen this field (prevent duplicates)
@@ -972,7 +952,14 @@ function generateCredentialQuestions(
   }
 
   const primaryCredential = getPrimaryCredentialFieldForNode(nodeType);
-  if (primaryCredential && !seenFieldNames.has(primaryCredential.fieldName)) {
+  const primaryCredentialPolicy = primaryCredential
+    ? resolveFieldOwnershipPolicy(nodeType, primaryCredential.fieldName, config)
+    : undefined;
+  if (
+    primaryCredential &&
+    primaryCredentialPolicy?.ownership === 'credential' &&
+    !seenFieldNames.has(primaryCredential.fieldName)
+  ) {
     const existingQuestion = questions.find((q) => q.fieldName === primaryCredential.fieldName);
     const existingValue = config[primaryCredential.fieldName];
     if (!existingQuestion && isEmptyValue(existingValue)) {

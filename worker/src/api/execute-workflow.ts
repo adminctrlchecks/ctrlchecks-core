@@ -513,6 +513,10 @@ function mergeRuntimeCredentials(config: Record<string, unknown>, credentials: R
     ['access_token', 'accessToken'],
     ['accessToken', 'access_token'],
     ['api_key', 'apiKey'],
+    ['accessToken', 'token'],
+    ['access_token', 'token'],
+    ['bot_token', 'botToken'],
+    ['botToken', 'accessToken'],
     ['apiKey', 'api_key'],
     ['bearerToken', 'accessToken'],
     ['token', 'accessToken'],
@@ -13827,6 +13831,11 @@ export async function executeNodeLegacy(
     case 'slack_message': {
       // Slack Message node - supports rich formatting and blocks
       let webhookUrl = getStringProperty(config, 'webhookUrl', '');
+      let botToken =
+        getStringProperty(config, 'botToken', '') ||
+        getStringProperty(config, 'accessToken', '') ||
+        getStringProperty(config, 'access_token', '') ||
+        getStringProperty(config, 'token', '');
       const channel = getStringProperty(config, 'channel', '');
       const username = getStringProperty(config, 'username', 'CtrlChecks Bot');
       const iconEmoji = getStringProperty(config, 'iconEmoji', ':zap:');
@@ -13844,12 +13853,13 @@ export async function executeNodeLegacy(
         });
         const parsed = parseCredentialValue(stored);
         webhookUrl = parsed.webhookUrl || parsed.url || parsed.value || stored || '';
+        botToken = botToken || parsed.botToken || parsed.bot_token || parsed.accessToken || parsed.access_token || parsed.token || '';
       }
 
-      if (!webhookUrl) {
+      if (!webhookUrl && !botToken) {
         return {
           ...inputObj,
-          _error: 'Slack Message node: Webhook URL is required',
+          _error: 'Slack Message node: Webhook URL or Slack OAuth bot token is required',
         };
       }
 
@@ -13917,6 +13927,45 @@ export async function executeNodeLegacy(
         }
         if (blocks.length > 0) {
           payload.blocks = blocks;
+        }
+
+        if (botToken && !webhookUrl) {
+          if (!resolvedChannel) {
+            return {
+              ...inputObj,
+              _error: 'Slack Message node: channel is required when using Slack OAuth bot token',
+            };
+          }
+
+          const response = await fetch('https://slack.com/api/chat.postMessage', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${botToken}`,
+              'Content-Type': 'application/json; charset=utf-8',
+            },
+            body: JSON.stringify(payload),
+          });
+
+          const responseBody = await response.text();
+          let slackResult: any = null;
+          try {
+            slackResult = responseBody ? JSON.parse(responseBody) : null;
+          } catch {
+            slackResult = null;
+          }
+          if (!response.ok || slackResult?.ok === false) {
+            throw new Error(`Slack API error: ${response.status} ${response.statusText} - ${slackResult?.error || responseBody}`);
+          }
+
+          return {
+            id: slackResult?.ts || 'unknown',
+            status: 'sent' as const,
+            provider: 'slack',
+            ok: true,
+            channel: slackResult?.channel || resolvedChannel,
+            ts: slackResult?.ts,
+            message: resolvedMessage || 'Message sent successfully',
+          };
         }
 
         // Send to Slack webhook

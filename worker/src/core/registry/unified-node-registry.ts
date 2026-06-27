@@ -520,9 +520,9 @@ export class UnifiedNodeRegistry implements INodeRegistry {
       const hasRuntimeContract = !!declarativeField.runtimeContract;
       if (!hasRuntimeContract) continue;
 
+      // Runtime contracts augment the post-override field; override fill-mode policy must win.
       inputSchema[fieldName] = {
         ...existingField,
-        ...(declarativeField.fillMode ? { fillMode: declarativeField.fillMode } : {}),
         ...(declarativeField.runtimeContract ? { runtimeContract: declarativeField.runtimeContract } : {}),
       };
     }

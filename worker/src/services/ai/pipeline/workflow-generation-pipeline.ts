@@ -276,6 +276,7 @@ export class WorkflowGenerationPipeline {
         workflow: finalWorkflow,
         buildManifest: finalizerResult.buildManifest,
         fieldOwnershipMap: finalizerResult.fieldOwnershipMap,
+        fieldOwnershipPolicyMap: finalizerResult.fieldOwnershipPolicyMap,
         validationIssues: finalizerResult.validationIssues,
         stageTrace,
       };

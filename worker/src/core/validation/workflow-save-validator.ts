@@ -687,7 +687,24 @@ export function normalizeWorkflowForSave(
     return Array.isArray(c) && c.length > 0;
   });
   const switchReconcileMigKey = 'reconciled_switch_graph';
-  if (!configOnly && hasSwitchWithCases && !alreadyAppliedSet.has(switchReconcileMigKey)) {
+  // Only reconcile switch graphs when branches are NOT already wired.
+  // Calling reconcileWorkflow on an already-wired branching workflow strips the user's
+  // downstream nodes (e.g. log_output on each branch) — reconcile is a repair tool only.
+  const switchNeedsReconcile = hasSwitchWithCases && finalNodes.some(n => {
+    const t = n.data?.type || n.type;
+    if (t !== 'switch') return false;
+    const cfg = (n.data?.config || {}) as Record<string, unknown>;
+    const cases = cfg.cases;
+    if (!Array.isArray(cases) || cases.length === 0) return false;
+    const caseValues = (cases as any[]).map((c: any) =>
+      typeof c === 'string' ? c.trim() : String(c?.value ?? '').trim()
+    ).filter(Boolean);
+    const outgoing = finalEdges.filter(e => e.source === n.id);
+    const wiredHandles = new Set(outgoing.map(e => String(e.sourceHandle || '').trim()).filter(Boolean));
+    // Needs reconcile only if at least one case has no matching outgoing edge.
+    return caseValues.some(v => !wiredHandles.has(v));
+  });
+  if (!configOnly && switchNeedsReconcile && !alreadyAppliedSet.has(switchReconcileMigKey)) {
     try {
       const wf: Workflow = { nodes: finalNodes as any, edges: finalEdges as any };
       const rec = unifiedGraphOrchestrator.reconcileWorkflow(wf);

@@ -354,6 +354,7 @@ export default async function confirmCapabilityWorkflow(req: AuthenticatedReques
       missingCredentials: missingCredentials.map((c) => c.vaultKey || c.displayName || c.provider),
       discoveredCredentials: missingCredentials,
       fieldOwnershipMap: foResult.fieldOwnershipMap,
+      fieldOwnershipPolicyMap: foResult.fieldOwnershipPolicyMap,
       propertyPopulationSummary: ppResult.propertyPopulationSummary,
       comprehensiveQuestions,
       correlationId,

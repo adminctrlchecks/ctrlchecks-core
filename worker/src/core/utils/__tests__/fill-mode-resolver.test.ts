@@ -79,6 +79,7 @@ describe('fill-mode-resolver', () => {
     const schema: any = {
       conditions: {
         type: 'array',
+        runtimeContract: { aiGeneratable: true },
         fillMode: {
           default: 'buildtime_ai_once',
           supportsRuntimeAI: false,

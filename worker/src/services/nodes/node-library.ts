@@ -2222,7 +2222,7 @@ export class NodeLibrary {
           values: {
             type: 'array',
             description: 'Data to write/append (for write/append operations)',
-            fillMode: { default: 'runtime_ai', supportsRuntimeAI: true, supportsBuildtimeAI: true },
+            fillMode: { default: 'manual_static', supportsRuntimeAI: false, supportsBuildtimeAI: true },
             runtimeContract: {
               aiGeneratable: true,
               requiredWhen: [
@@ -2538,7 +2538,7 @@ export class NodeLibrary {
             description: 'Variable value (supports template expressions like {{input.field}})',
             examples: ['Hello World', '{{input.name}}', '{{$json.data}}'],
             default: '',
-            fillMode: { default: 'runtime_ai', supportsRuntimeAI: true, supportsBuildtimeAI: true },
+            fillMode: { default: 'manual_static', supportsRuntimeAI: false, supportsBuildtimeAI: true },
           },
           // Legacy support: also accept 'values' array format
           values: {
@@ -4111,7 +4111,7 @@ export class NodeLibrary {
         'slack webhook', 'slack bot', 'slack api', 'slack integration'
       ],
       configSchema: {
-        required: ['webhookUrl'],
+        required: ['message'],
         optional: {
           webhookUrl: {
             type: 'string',
@@ -7199,6 +7199,7 @@ export class NodeLibrary {
             type: 'expression',
             description: 'Variable value',
             examples: ['{{$json.name}}', 'defaultValue'],
+            fillMode: { default: 'manual_static', supportsRuntimeAI: false, supportsBuildtimeAI: true },
           },
         },
       },
@@ -7233,12 +7234,12 @@ export class NodeLibrary {
             description: 'Math operation: add, subtract, multiply, divide, etc.',
             examples: ['add', 'subtract', 'multiply', 'divide'],
           },
-          a: {
+          value1: {
             type: 'number',
             description: 'First number',
             examples: [10, '{{$json.value1}}'],
           },
-          b: {
+          value2: {
             type: 'number',
             description: 'Second number',
             examples: [5, '{{$json.value2}}'],

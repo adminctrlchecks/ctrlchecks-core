@@ -126,6 +126,7 @@ export interface AiPipelineOutput {
   requiredCredentials: CredentialRequirement[];
   missingCredentials: CredentialRequirement[];
   fieldOwnershipMap: FieldOwnershipMap;
+  fieldOwnershipPolicyMap: import('../../core/utils/field-ownership-policy').FieldOwnershipPolicyMap;
   propertyPopulationSummary: Record<string, string[]>;
   capabilityOptions?: CapabilityOptionStep[];
   appliedCapabilitySelectionsByStep?: Record<string, string[]>;
@@ -683,6 +684,7 @@ export class AiFirstPipeline {
         requiredCredentials,
         missingCredentials,
         fieldOwnershipMap: foResult.fieldOwnershipMap,
+        fieldOwnershipPolicyMap: foResult.fieldOwnershipPolicyMap,
         propertyPopulationSummary: ppResult.propertyPopulationSummary,
         capabilityOptions: csResult.steps,
         appliedCapabilitySelectionsByStep: appliedCapabilitySelections.byStep,

@@ -234,6 +234,7 @@ export default async function saveWorkflowHandler(req: Request, res: Response) {
       ? baseWorkflowData
       : {
           ...baseWorkflowData,
+          confirmed: true,
           setup_completed: true,
           setup_stage: 'complete',
           setup_completed_at: new Date().toISOString(),

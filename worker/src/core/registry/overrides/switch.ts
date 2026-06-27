@@ -41,7 +41,9 @@ export function overrideSwitch(
     expression: def.inputSchema.expression
       ? {
           ...def.inputSchema.expression,
-          type: def.inputSchema.expression.type === 'string' ? 'expression' : def.inputSchema.expression.type,
+          // Keep type as 'string' — converting to 'expression' breaks guaranteeInputForSchema
+          // (isTypeCompatible does not handle 'expression', needFill fires and clears the value)
+          type: 'string',
           fillMode: {
             default: 'buildtime_ai_once',
             supportsRuntimeAI: false,

@@ -110,6 +110,11 @@ import {
     type FieldDesc,
 } from '@/lib/wizard-field-ownership';
 import { buildGenerateWorkflowCreateBody, type WizardSelectedVariationMeta } from '@/lib/wizard-generate-body';
+import {
+    applyFieldOwnershipPoliciesToQuestions,
+    synthesizeFieldOwnershipQuestions,
+    type FieldOwnershipPolicyMap,
+} from '@/lib/field-ownership-policy';
 
 /**
  * Ensures proper state transitions before setting workflow blueprint.
@@ -293,6 +298,7 @@ interface RefinementResult {
     }>;
     validationIssues?: Array<{ severity: string; description: string }>;
     fieldOwnershipMap?: Record<string, Record<string, string>>;
+    fieldOwnershipPolicyMap?: FieldOwnershipPolicyMap;
 }
 
 interface CapabilityOptionStep {
@@ -700,6 +706,7 @@ export function AutonomousAgentWizard() {
         credentialWizardView?: { rows: any[]; groups: any[] },
         /** Field ownership map from pipeline response: nodeId ? fieldName ? FieldFillMode. */
         fieldOwnershipMap?: Record<string, Record<string, string>>,
+        fieldOwnershipPolicyMap?: FieldOwnershipPolicyMap,
     } | null>(null);
     // Credential status panel ? shown after save when credentials are missing (friendly, not error)
     type CredentialEntry = { vaultKey: string; displayName: string; nodeId: string; satisfied: boolean; required: boolean };
@@ -2784,6 +2791,7 @@ export function AutonomousAgentWizard() {
                                 credentialStatuses: data.credentialStatuses,
                                 credentialWizardView: data.credentialWizardView,
                                 fieldOwnershipMap: data.fieldOwnershipMap || undefined,
+                                fieldOwnershipPolicyMap: data.fieldOwnershipPolicyMap || undefined,
                             });
 
                             // Bug A fix: pipeline backend has completed ? set pipelineReady flag.
@@ -2793,12 +2801,9 @@ export function AutonomousAgentWizard() {
                             if (comprehensiveQuestions.length > 0 || discoveredCreds.length > 0) {
                                 // Questions exist ? show questions UI and wait for user to submit answers.
                                 // The 'refining' overlay is skipped; user goes directly to field-ownership.
-                                setAllQuestions(comprehensiveQuestions.map((q: any) => {
+                                const baseQuestions = comprehensiveQuestions.map((q: any) => {
                                     const fieldName = String(q.fieldName || '').trim() || 'credential';
                                     const isCredentialQ = q.category === 'credential' || q.ownershipClass === 'credential';
-                                    // Augment fillModeDefault from fieldOwnershipMap if not already set.
-                                    const fom = data.fieldOwnershipMap as Record<string, Record<string, string>> | undefined;
-                                    const fomFillMode = fom?.[q.nodeId]?.[fieldName];
                                     return {
                                         ...q,
                                         questionType: isCredentialQ ? 'credential' : (q.category || 'input'),
@@ -2806,60 +2811,27 @@ export function AutonomousAgentWizard() {
                                         fieldName,
                                         label: q.text || q.label || `${q.nodeLabel} - ${fieldName}`,
                                         isVaultCredential: isCredentialQ,
-                                        fillModeDefault: q.fillModeDefault || fomFillMode || undefined,
                                     };
-                                }));
-                                setStep('field-ownership');
-                            } else if (data.fieldOwnershipMap && typeof data.fieldOwnershipMap === 'object' && Object.keys(data.fieldOwnershipMap).length > 0) {
-                                // Bug B fix: no comprehensiveQuestions but fieldOwnershipMap is non-empty ? synthesize field rows.
-                                const fom = data.fieldOwnershipMap as Record<string, Record<string, string>>;
-                                console.log(`[Frontend] Synthesizing field rows from fieldOwnershipMap (AI-first path, ${Object.keys(fom).length} nodes)`);
-                                const nodeMap = new Map<string, any>();
-                                (normalized.nodes as any[]).forEach((node: any) => {
-                                    if (node?.id) nodeMap.set(String(node.id), node);
                                 });
-                                const synthesized: any[] = [];
-                                let askOrder = 1;
-                                for (const [nodeId, fields] of Object.entries(fom)) {
-                                    const node = nodeMap.get(nodeId);
-                                    const nodeType = String(node?.type || nodeId);
-                                    const nodeLabel = String(node?.data?.label || node?.data?.name || nodeType);
-                                    for (const [fieldName, fillMode] of Object.entries(fields)) {
-                                        const fillModeStr = String(fillMode || 'manual_static');
-                                        const isCredField = fillModeStr === 'manual_static' &&
-                                            (fieldName.toLowerCase().includes('key') ||
-                                             fieldName.toLowerCase().includes('token') ||
-                                             fieldName.toLowerCase().includes('secret') ||
-                                             fieldName.toLowerCase().includes('password') ||
-                                             fieldName.toLowerCase().includes('credential'));
-                                        synthesized.push({
-                                            questionType: 'input',
-                                            id: `fom_${nodeId}_${fieldName}`,
-                                            nodeId,
-                                            nodeType,
-                                            nodeLabel,
-                                            fieldName,
-                                            label: fieldName.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').trim(),
-                                            text: fieldName.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').trim(),
-                                            type: isCredField ? 'password' : 'text',
-                                            category: isCredField ? 'credential' : 'configuration',
-                                            ownershipClass: isCredField ? 'credential' : 'value',
-                                            required: false,
-                                            askOrder: askOrder++,
-                                            fillModeDefault: fillModeStr as 'manual_static' | 'runtime_ai' | 'buildtime_ai_once',
-                                            supportsRuntimeAI: fillModeStr === 'runtime_ai',
-                                            supportsBuildtimeAI: fillModeStr === 'buildtime_ai_once' || fillModeStr === 'runtime_ai',
-                                            ownershipUiMode: isCredField ? 'locked' : 'selectable',
-                                            isVaultCredential: false,
-                                        });
-                                    }
-                                }
-                                setAllQuestions(synthesized);
+                                setAllQuestions(applyFieldOwnershipPoliciesToQuestions(
+                                    baseQuestions,
+                                    data.fieldOwnershipMap,
+                                    data.fieldOwnershipPolicyMap,
+                                ));
                                 setStep('field-ownership');
                             } else {
-                                // No questions ? user has nothing to answer, proceed directly.
-                                setQuestionsAnswered(true);
-                                setStep('complete');
+                                const synthesized = synthesizeFieldOwnershipQuestions(
+                                    normalized.nodes,
+                                    data.fieldOwnershipMap,
+                                    data.fieldOwnershipPolicyMap,
+                                );
+                                if (synthesized.length > 0) {
+                                    setAllQuestions(synthesized);
+                                    setStep('field-ownership');
+                                } else {
+                                    setQuestionsAnswered(true);
+                                    setStep('complete');
+                                }
                             }
                             return;
                         }
@@ -4082,6 +4054,7 @@ export function AutonomousAgentWizard() {
                         credentialStatuses: update.credentialStatuses,
                         credentialWizardView: update.credentialWizardView,
                         fieldOwnershipMap: update.fieldOwnershipMap || undefined,
+                        fieldOwnershipPolicyMap: update.fieldOwnershipPolicyMap || undefined,
                     });
 
                     let combinedQuestions: any[] = [];
@@ -4110,17 +4083,7 @@ export function AutonomousAgentWizard() {
                         console.log(
                             `[Frontend] Using ${comprehensiveQuestions.length} comprehensive questions from backend`
                         );
-                        // Build a lookup from fieldOwnershipMap for fillModeDefault augmentation.
-                        const fomLookup: Record<string, string> = {};
-                        const fom = update.fieldOwnershipMap as Record<string, Record<string, string>> | undefined;
-                        if (fom && typeof fom === 'object') {
-                            for (const [nodeId, fields] of Object.entries(fom)) {
-                                for (const [fieldName, fillMode] of Object.entries(fields)) {
-                                    fomLookup[`${nodeId}::${fieldName}`] = fillMode;
-                                }
-                            }
-                        }
-                        combinedQuestions = comprehensiveQuestions.map((q: any) => {
+                        const baseQuestions = comprehensiveQuestions.map((q: any) => {
                             const isCredentialQ = q.category === 'credential' || q.ownershipClass === 'credential';
                             const matchedCred = isCredentialQ ? discoveredCredByNodeId.get(q.nodeId) : undefined;
                             // Keep registry field names (e.g. webhookUrl) for unlock_/mode_/cred_ attach-inputs keys.
@@ -4137,9 +4100,6 @@ export function AutonomousAgentWizard() {
                                             ...matchedCred,
                                         }
                                       : q.credential;
-                            // Augment fillModeDefault from fieldOwnershipMap if not already set on the question.
-                            const fomFillMode = fomLookup[`${q.nodeId}::${fieldName}`];
-                            const fillModeDefault = q.fillModeDefault || fomFillMode || undefined;
                             return {
                                 ...q,
                                 questionType: isCredentialQ ? 'credential' : (q.category || 'input'),
@@ -4148,9 +4108,13 @@ export function AutonomousAgentWizard() {
                                 label: q.text || q.label || `${q.nodeLabel} - ${fieldName}`,
                                 credential: isCredentialQ ? credMeta : q.credential,
                                 isVaultCredential: isCredentialQ,
-                                fillModeDefault,
                             };
                         });
+                        combinedQuestions = applyFieldOwnershipPoliciesToQuestions(
+                            baseQuestions,
+                            update.fieldOwnershipMap,
+                            update.fieldOwnershipPolicyMap,
+                        );
 
                         if (nonOAuthDiscoveredCreds.length > 0) {
                             nonOAuthDiscoveredCreds.forEach((cred: any, idx: number) => {
@@ -4194,50 +4158,12 @@ export function AutonomousAgentWizard() {
                                 });
                             });
                         }
-                        // Bug B fix: synthesize field rows from fieldOwnershipMap when comprehensiveQuestions is absent.
-                        // This ensures the Field Ownership step renders actual fields instead of the empty state.
-                        const fom = update.fieldOwnershipMap as Record<string, Record<string, string>> | undefined;
-                        if (fom && typeof fom === 'object' && Object.keys(fom).length > 0 && combinedQuestions.length === 0) {
-                            console.log(`[Frontend] Synthesizing field rows from fieldOwnershipMap (${Object.keys(fom).length} nodes)`);
-                            const nodeMap = new Map<string, any>();
-                            (workflowNodes as any[]).forEach((node: any) => {
-                                if (node?.id) nodeMap.set(String(node.id), node);
-                            });
-                            let askOrder = 1;
-                            for (const [nodeId, fields] of Object.entries(fom)) {
-                                const node = nodeMap.get(nodeId);
-                                const nodeType = String(node?.type || nodeId);
-                                const nodeLabel = String(node?.data?.label || node?.data?.name || nodeType);
-                                for (const [fieldName, fillMode] of Object.entries(fields)) {
-                                    const fillModeStr = String(fillMode || 'manual_static');
-                                    const isCredField = fillModeStr === 'manual_static' &&
-                                        (fieldName.toLowerCase().includes('key') ||
-                                         fieldName.toLowerCase().includes('token') ||
-                                         fieldName.toLowerCase().includes('secret') ||
-                                         fieldName.toLowerCase().includes('password') ||
-                                         fieldName.toLowerCase().includes('credential'));
-                                    combinedQuestions.push({
-                                        questionType: 'input',
-                                        id: `fom_${nodeId}_${fieldName}`,
-                                        nodeId,
-                                        nodeType,
-                                        nodeLabel,
-                                        fieldName,
-                                        label: fieldName.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').trim(),
-                                        text: fieldName.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').trim(),
-                                        type: isCredField ? 'password' : 'text',
-                                        category: isCredField ? 'credential' : 'configuration',
-                                        ownershipClass: isCredField ? 'credential' : 'value',
-                                        required: false,
-                                        askOrder: askOrder++,
-                                        fillModeDefault: fillModeStr as 'manual_static' | 'runtime_ai' | 'buildtime_ai_once',
-                                        supportsRuntimeAI: fillModeStr === 'runtime_ai',
-                                        supportsBuildtimeAI: fillModeStr === 'buildtime_ai_once' || fillModeStr === 'runtime_ai',
-                                        ownershipUiMode: isCredField ? 'locked' : 'selectable',
-                                        isVaultCredential: false,
-                                    });
-                                }
-                            }
+                        if (combinedQuestions.length === 0) {
+                            combinedQuestions.push(...synthesizeFieldOwnershipQuestions(
+                                workflowNodes,
+                                update.fieldOwnershipMap,
+                                update.fieldOwnershipPolicyMap,
+                            ));
                         }
                         if (nonOAuthDiscoveredCreds.length > 0) {
                             nonOAuthDiscoveredCreds.forEach((cred: any, idx: number) => {
@@ -5657,17 +5583,16 @@ export function AutonomousAgentWizard() {
                 credentialStatuses: data.credentialStatuses,
                 credentialWizardView: data.credentialWizardView,
                 fieldOwnershipMap: data.fieldOwnershipMap ?? undefined,
+                fieldOwnershipPolicyMap: data.fieldOwnershipPolicyMap ?? undefined,
             });
 
             setBuildingLogs((prev) => [...prev, 'Workflow generated successfully!']);
 
             if (comprehensiveQuestions.length > 0 || discoveredCreds.length > 0) {
                 // Wire questions into the field-ownership step
-                const fom = data.fieldOwnershipMap as Record<string, Record<string, string>> | undefined;
-                setAllQuestions(comprehensiveQuestions.map((q: any) => {
+                const baseQuestions = comprehensiveQuestions.map((q: any) => {
                     const fieldName = String(q.fieldName || '').trim() || 'credential';
                     const isCredentialQ = q.category === 'credential' || q.ownershipClass === 'credential';
-                    const fomFillMode = fom?.[q.nodeId]?.[fieldName];
                     return {
                         ...q,
                         questionType: isCredentialQ ? 'credential' : (q.category || 'input'),
@@ -5675,53 +5600,27 @@ export function AutonomousAgentWizard() {
                         fieldName,
                         label: q.text || q.label || `${q.nodeLabel} - ${fieldName}`,
                         isVaultCredential: isCredentialQ,
-                        fillModeDefault: q.fillModeDefault || fomFillMode || undefined,
                     };
-                }));
-                setStep('field-ownership');
-            } else if (data.fieldOwnershipMap && Object.keys(data.fieldOwnershipMap).length > 0) {
-                // No questions but fieldOwnershipMap exists — synthesize rows
-                const fom = data.fieldOwnershipMap as Record<string, Record<string, string>>;
-                const nodeMap = new Map<string, any>();
-                (normalized.nodes as any[]).forEach((n: any) => { if (n?.id) nodeMap.set(String(n.id), n); });
-                const synthesized: any[] = [];
-                let askOrder = 1;
-                for (const [nodeId, fields] of Object.entries(fom)) {
-                    const node = nodeMap.get(nodeId);
-                    const nodeType = String(node?.type || nodeId);
-                    const nodeLabel = String(node?.data?.label || node?.data?.name || nodeType);
-                    for (const [fieldName, fillMode] of Object.entries(fields)) {
-                        const fillModeStr = String(fillMode || 'manual_static');
-                        const isCredField = fillModeStr === 'manual_static' &&
-                            (fieldName.toLowerCase().includes('key') ||
-                             fieldName.toLowerCase().includes('token') ||
-                             fieldName.toLowerCase().includes('secret') ||
-                             fieldName.toLowerCase().includes('password'));
-                        synthesized.push({
-                            questionType: 'input',
-                            id: `fom_${nodeId}_${fieldName}`,
-                            nodeId, nodeType, nodeLabel, fieldName,
-                            label: fieldName.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').trim(),
-                            text: fieldName.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').trim(),
-                            type: isCredField ? 'password' : 'text',
-                            category: isCredField ? 'credential' : 'configuration',
-                            ownershipClass: isCredField ? 'credential' : 'value',
-                            required: false,
-                            askOrder: askOrder++,
-                            fillModeDefault: fillModeStr as 'manual_static' | 'runtime_ai' | 'buildtime_ai_once',
-                            supportsRuntimeAI: fillModeStr === 'runtime_ai',
-                            supportsBuildtimeAI: fillModeStr === 'buildtime_ai_once' || fillModeStr === 'runtime_ai',
-                            ownershipUiMode: isCredField ? 'locked' : 'selectable',
-                            isVaultCredential: false,
-                        });
-                    }
-                }
-                setAllQuestions(synthesized);
+                });
+                setAllQuestions(applyFieldOwnershipPoliciesToQuestions(
+                    baseQuestions,
+                    data.fieldOwnershipMap,
+                    data.fieldOwnershipPolicyMap,
+                ));
                 setStep('field-ownership');
             } else {
-                // No questions at all — go straight to complete
-                setQuestionsAnswered(true);
-                setStep('complete');
+                const synthesized = synthesizeFieldOwnershipQuestions(
+                    normalized.nodes,
+                    data.fieldOwnershipMap,
+                    data.fieldOwnershipPolicyMap,
+                );
+                if (synthesized.length > 0) {
+                    setAllQuestions(synthesized);
+                    setStep('field-ownership');
+                } else {
+                    setQuestionsAnswered(true);
+                    setStep('complete');
+                }
             }
         } catch (err: any) {
             toast({ title: 'Backend Generation Failed', description: err.message, variant: 'destructive' });

@@ -11,6 +11,7 @@
 import type { Workflow, WorkflowSummaryV2 } from './ai-types';
 import type { FieldFillMode, FieldOwnershipClass } from './unified-node-contract';
 import type { WorkflowBuildManifestV1 } from './workflow-build-manifest';
+import type { FieldOwnershipPolicyMap } from '../utils/field-ownership-policy';
 import type { CapabilityOptionStep } from '../../services/ai/stages/capability-selection-stage';
 import type { StructuredIntent } from '../../services/ai/stages/intent-stage';
 import type { SelectedNode, ValidationIssue } from '../../services/ai/system-prompt-builder';
@@ -148,6 +149,8 @@ export interface Stage3Output {
   buildManifest: WorkflowBuildManifestV1;
   /** nodeId → fieldName → ownership entry for every field of every node. */
   fieldOwnershipMap: FieldOwnershipMap;
+  /** Additive registry-resolved policy contract for ownership UIs. */
+  fieldOwnershipPolicyMap: FieldOwnershipPolicyMap;
   /** Warning-severity issues only — hard errors block delivery. */
   validationIssues: ValidationIssue[];
   stageTrace: StageTrace[];

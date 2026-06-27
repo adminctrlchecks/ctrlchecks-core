@@ -340,7 +340,7 @@ export class BackendFinalizer {
       buildManifest,
     });
 
-    // Build typed FieldOwnershipMap for Stage3Output
+    // Build the legacy typed map for Stage3Output. Rich policy is additive.
     const fieldOwnershipMap: FieldOwnershipMap = {};
     for (const [nodeId, fields] of Object.entries(foResult.fieldOwnershipMap)) {
       fieldOwnershipMap[nodeId] = {};
@@ -367,6 +367,7 @@ export class BackendFinalizer {
       workflow: workflowWithMetadata,
       buildManifest,
       fieldOwnershipMap,
+      fieldOwnershipPolicyMap: foResult.fieldOwnershipPolicyMap,
       validationIssues: vsResult.validationIssues,
       stageTrace,
     };

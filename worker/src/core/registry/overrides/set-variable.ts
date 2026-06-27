@@ -1,6 +1,5 @@
 import type { UnifiedNodeDefinition } from '../../types/unified-node-contract';
 import type { NodeSchema } from '../../../services/nodes/node-library';
-import { executeViaLegacyExecutor } from '../unified-node-registry-legacy-adapter';
 
 function resolveJsonTemplates(template: string, json: Record<string, any>): string {
   return template.replace(/\{\{\s*\$json\.([a-zA-Z0-9_.]+)\s*\}\}/g, (_, path) => {
@@ -13,23 +12,23 @@ function resolveJsonTemplates(template: string, json: Record<string, any>): stri
 
 export function overrideSetVariable(
   def: UnifiedNodeDefinition,
-  schema: NodeSchema
+  _schema: NodeSchema
 ): UnifiedNodeDefinition {
   return {
     ...def,
     execute: async (context) => {
       const cfg = context.config as Record<string, any>;
+      const rawInput = (
+        context.rawInput &&
+        typeof context.rawInput === 'object' &&
+        !Array.isArray(context.rawInput)
+      ) ? (context.rawInput as Record<string, any>) : {};
+      const inputObj = (context.inputs as Record<string, any>) ?? {};
+      const keepSource = cfg.keepSource === true || cfg.keepSource === 'true';
 
       // Handle values as [{name, value}] array (UI format)
       if (Array.isArray(cfg.values) && cfg.values.length > 0) {
-        const rawInput = (
-          context.rawInput &&
-          typeof context.rawInput === 'object' &&
-          !Array.isArray(context.rawInput)
-        ) ? (context.rawInput as Record<string, any>) : {};
-        const inputObj = (context.inputs as Record<string, any>) ?? {};
-
-        const result: Record<string, any> = { ...inputObj };
+        const result: Record<string, any> = keepSource ? { ...inputObj } : {};
         for (const entry of cfg.values) {
           const varName = String(entry?.name ?? '');
           if (!varName) continue;
@@ -41,8 +40,16 @@ export function overrideSetVariable(
         return { success: true, output: result };
       }
 
-      // Fallback: legacy format (config.name + config.value single pair)
-      return await executeViaLegacyExecutor({ context, schema });
+      const varName = String(cfg.name ?? '');
+      if (!varName) {
+        return { success: false, error: { code: 'SET_VARIABLE_CONFIG_INVALID', message: 'name is required' } };
+      }
+
+      const rawValue = cfg.value ?? '';
+      const value = typeof rawValue === 'string'
+        ? resolveJsonTemplates(rawValue, rawInput)
+        : rawValue;
+      return { success: true, output: { ...(keepSource ? inputObj : {}), [varName]: value } };
     },
   };
 }

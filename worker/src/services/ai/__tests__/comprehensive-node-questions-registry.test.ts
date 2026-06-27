@@ -2,7 +2,7 @@ import { generateComprehensiveNodeQuestions } from '../comprehensive-node-questi
 import type { Workflow } from '../../../core/types/ai-types';
 
 describe('generateComprehensiveNodeQuestions + registry helpCategory', () => {
-  it('asks for apiKey on openai_gpt via registry credential ownership (strict credential help categories)', () => {
+  it('does not synthesize an apiKey when openai_gpt registry has no apiKey input', () => {
     const wf: Workflow = {
       nodes: [
         {
@@ -20,8 +20,7 @@ describe('generateComprehensiveNodeQuestions + registry helpCategory', () => {
     };
     const { questions } = generateComprehensiveNodeQuestions(wf, {}, { categories: ['credential'] });
     const apiKeyQ = questions.find((q) => q.fieldName.toLowerCase() === 'apikey' || q.fieldName === 'apiKey');
-    expect(apiKeyQ).toBeDefined();
-    expect(apiKeyQ?.category).toBe('credential');
+    expect(apiKeyQ).toBeUndefined();
   });
 
   it('does not treat spreadsheetId on google_sheets as a credential question (spreadsheet_id is value ownership)', () => {
@@ -47,7 +46,7 @@ describe('generateComprehensiveNodeQuestions + registry helpCategory', () => {
     expect(spreadsheetQ).toBeUndefined();
   });
 
-  it('treats webhookUrl as credential (vault) for slack_webhook when empty', () => {
+  it('does not let connector vault metadata override slack_webhook value ownership', () => {
     const wf: Workflow = {
       nodes: [
         {
@@ -65,7 +64,6 @@ describe('generateComprehensiveNodeQuestions + registry helpCategory', () => {
     };
     const { questions } = generateComprehensiveNodeQuestions(wf, {}, { categories: ['credential'] });
     const webhookQ = questions.find((q) => q.fieldName === 'webhookUrl');
-    expect(webhookQ).toBeDefined();
-    expect(webhookQ?.category).toBe('credential');
+    expect(webhookQ).toBeUndefined();
   });
 });

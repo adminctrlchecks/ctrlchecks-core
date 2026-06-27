@@ -1,31 +1,27 @@
 /**
- * Field Ownership Stage — AI-First Pipeline (Stage 10)
+ * Field Ownership Stage - resolves AI/user ownership through registry policy.
  *
- * Walks workflow.nodes, reads each node's inputSchema from the registry,
- * and extracts fillMode.default per field to build a fieldOwnershipMap.
- *
- * This stage never fails — worst case returns an empty map.
- *
- * Requirements: 2.7
+ * This stage never fails; unknown nodes are omitted from both maps.
  */
 
 import { unifiedNodeRegistry } from '../../../core/registry/unified-node-registry';
 import { logger } from '../../../core/logger';
 import type { Workflow } from '../../../core/types/ai-types';
 import type { FieldFillMode } from '../../../core/types/unified-node-contract';
+import {
+  resolveFieldOwnershipPolicy,
+  type FieldOwnershipPolicyMap,
+} from '../../../core/utils/field-ownership-policy';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-/** nodeId → fieldName → FieldFillMode */
+/** Legacy compatibility map: nodeId -> fieldName -> effective fill mode. */
 export type FieldOwnershipMap = Record<string, Record<string, FieldFillMode>>;
 
 export interface FieldOwnershipStageResult {
   ok: true;
   fieldOwnershipMap: FieldOwnershipMap;
+  fieldOwnershipPolicyMap: FieldOwnershipPolicyMap;
   durationMs: number;
 }
-
-// ─── Field Ownership Stage ────────────────────────────────────────────────────
 
 export async function runFieldOwnershipStage(
   workflow: Workflow,
@@ -40,57 +36,47 @@ export async function runFieldOwnershipStage(
   });
 
   const fieldOwnershipMap: FieldOwnershipMap = {};
+  const fieldOwnershipPolicyMap: FieldOwnershipPolicyMap = {};
 
   for (const node of workflow.nodes) {
     const nodeType = (node.data as any)?.type || node.type;
-    const def = unifiedNodeRegistry.get(nodeType);
-    const inputSchema = def?.inputSchema;
-
+    const inputSchema = unifiedNodeRegistry.get(nodeType)?.inputSchema;
     if (!inputSchema) continue;
-
-    const nodeFields: Record<string, FieldFillMode> = {};
-    for (const [fieldName, fieldDef] of Object.entries(inputSchema)) {
-      const fillMode: FieldFillMode = (fieldDef as any)?.fillMode?.default ?? 'manual_static';
-      nodeFields[fieldName] = fillMode;
-    }
-
-    if (Object.keys(nodeFields).length > 0) {
-      fieldOwnershipMap[node.id] = nodeFields;
-    }
-  }
-
-  // ── Sync _fillMode into node configs ─────────────────────────────────────
-  // Write registry-derived fill modes into each node's config._fillMode so the
-  // UI toggle reflects the correct mode for every field. Preserves any entries
-  // already stamped by property-population-stage.ts or plan-driven-workflow-builder.ts.
-  for (const node of workflow.nodes) {
-    const nodeId = node.id;
-    const nodeFields = fieldOwnershipMap[nodeId];
-    if (!nodeFields) continue;
 
     const config =
       node.data?.config && typeof node.data.config === 'object'
         ? (node.data.config as Record<string, any>)
         : {};
+    const nodeModes: Record<string, FieldFillMode> = {};
+    const nodePolicies: FieldOwnershipPolicyMap[string] = {};
 
-    const existing: Record<string, string> =
+    for (const fieldName of Object.keys(inputSchema)) {
+      const policy = resolveFieldOwnershipPolicy(nodeType, fieldName, config);
+      if (!policy) continue;
+      nodeModes[fieldName] = policy.fillMode;
+      nodePolicies[fieldName] = policy;
+    }
+
+    if (Object.keys(nodeModes).length === 0) continue;
+
+    fieldOwnershipMap[node.id] = nodeModes;
+    fieldOwnershipPolicyMap[node.id] = nodePolicies;
+
+    const normalizedFillModes: Record<string, string> =
       typeof config._fillMode === 'object' && config._fillMode !== null
         ? { ...(config._fillMode as Record<string, string>) }
         : {};
-
-    for (const [fieldName, fillMode] of Object.entries(nodeFields)) {
-      // Only stamp when not already set by a prior stage — prior stage wins
-      if (existing[fieldName] === undefined) {
-        existing[fieldName] = fillMode;
-      }
+    for (const [fieldName, fillMode] of Object.entries(nodeModes)) {
+      normalizedFillModes[fieldName] = fillMode;
     }
-
-    node.data.config = { ...config, _fillMode: existing };
+    node.data.config = { ...config, _fillMode: normalizedFillModes };
   }
-  // ─────────────────────────────────────────────────────────────────────────
 
   const durationMs = Date.now() - startedAt;
-  const totalFields = Object.values(fieldOwnershipMap).reduce((sum, fields) => sum + Object.keys(fields).length, 0);
+  const totalFields = Object.values(fieldOwnershipMap).reduce(
+    (sum, fields) => sum + Object.keys(fields).length,
+    0,
+  );
 
   logger.info({
     event: 'ai_pipeline_stage_end',
@@ -100,5 +86,10 @@ export async function runFieldOwnershipStage(
     durationMs,
   });
 
-  return { ok: true, fieldOwnershipMap, durationMs };
+  return {
+    ok: true,
+    fieldOwnershipMap,
+    fieldOwnershipPolicyMap,
+    durationMs,
+  };
 }

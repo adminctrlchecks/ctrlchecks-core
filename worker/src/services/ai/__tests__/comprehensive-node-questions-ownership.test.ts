@@ -31,7 +31,7 @@ describe('generateComprehensiveNodeQuestions Field Ownership annotations', () =>
     expect(messageQ?.aiFilledAtBuildTime).toBeUndefined();
   });
 
-  it('marks slack webhookUrl as unlockable credential until _ownershipUnlock is set', () => {
+  it('keeps slack webhookUrl as a selectable registry value', () => {
     const wf: Workflow = {
       nodes: [
         {
@@ -53,13 +53,14 @@ describe('generateComprehensiveNodeQuestions Field Ownership annotations', () =>
     const { questions } = generateComprehensiveNodeQuestions(wf, {}, { mode: 'full_configuration' });
     const hookQ = questions.find((q) => q.nodeId === 'n_slack' && q.fieldName === 'webhookUrl');
     expect(hookQ).toBeDefined();
-    expect(hookQ?.ownershipClass).toBe('credential');
-    expect(hookQ?.ownershipUiMode).toBe('locked');
-    expect(hookQ?.isUnlockableCredential).toBe(true);
-    expect(hookQ?.ownershipLockReason).toBe('credential_locked_until_unlock');
+    expect(hookQ?.category).toBe('configuration');
+    expect(hookQ?.ownershipClass).toBe('value');
+    expect(hookQ?.ownershipUiMode).toBe('selectable');
+    expect(hookQ?.isUnlockableCredential).toBeUndefined();
+    expect(hookQ?.credential).toBeUndefined();
   });
 
-  it('slack webhookUrl becomes selectable when config._ownershipUnlock.webhookUrl is true', () => {
+  it('does not let connector unlock metadata change slack webhookUrl ownership', () => {
     const wf: Workflow = {
       nodes: [
         {
@@ -82,7 +83,8 @@ describe('generateComprehensiveNodeQuestions Field Ownership annotations', () =>
     const { questions } = generateComprehensiveNodeQuestions(wf, {}, { mode: 'full_configuration' });
     const hookQ = questions.find((q) => q.nodeId === 'n_slack' && q.fieldName === 'webhookUrl');
     expect(hookQ?.ownershipUiMode).toBe('selectable');
-    expect(hookQ?.isUnlockableCredential).toBe(false);
+    expect(hookQ?.ownershipClass).toBe('value');
+    expect(hookQ?.isUnlockableCredential).toBeUndefined();
   });
 
   it('merges all registry inputSchema fields for a node (slack_message)', () => {
@@ -108,7 +110,7 @@ describe('generateComprehensiveNodeQuestions Field Ownership annotations', () =>
     }
   });
 
-  it('tags slack webhookUrl credential question with vaultKey slack for wizard filtering', () => {
+  it('does not create a slack webhookUrl credential question from connector metadata', () => {
     const wf: Workflow = {
       nodes: [
         {
@@ -126,12 +128,10 @@ describe('generateComprehensiveNodeQuestions Field Ownership annotations', () =>
     };
     const { questions } = generateComprehensiveNodeQuestions(wf, {}, { categories: ['credential'] });
     const cq = questions.find((q) => q.nodeId === 'n_slack' && q.fieldName === 'webhookUrl');
-    expect(cq?.category).toBe('credential');
-    expect(cq?.credential?.vaultKey).toBe('slack');
-    expect(cq?.credential?.credentialId).toBe('slack');
+    expect(cq).toBeUndefined();
   });
 
-  it('marks credential category questions as locked vault_or_oauth', () => {
+  it('does not let connector API-key metadata override registry value ownership', () => {
     const wf: Workflow = {
       nodes: [
         {
@@ -149,9 +149,7 @@ describe('generateComprehensiveNodeQuestions Field Ownership annotations', () =>
     };
     const { questions } = generateComprehensiveNodeQuestions(wf, {}, { mode: 'full_configuration' });
     const cred = questions.find((q) => q.category === 'credential' && q.fieldName.toLowerCase().includes('api'));
-    expect(cred).toBeDefined();
-    expect(cred?.ownershipUiMode).toBe('locked');
-    expect(cred?.ownershipLockReason).toBe('vault_or_oauth');
+    expect(cred).toBeUndefined();
   });
 
   it('marks ai_filled metadata but keeps selectable when buildtime_ai_once and value present (runtime-capable field)', () => {

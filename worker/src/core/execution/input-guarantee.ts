@@ -56,6 +56,8 @@ function getValueType(v: unknown): string {
 function isTypeCompatible(actual: string, expected: string): boolean {
   if (actual === expected) return true;
   if (expected === 'string') return true;
+  // 'expression' is a string-valued template field — treat it as compatible with any string value
+  if (expected === 'expression') return true;
   if (expected === 'number' && (actual === 'string' || actual === 'number')) return true;
   if (expected === 'boolean' && (actual === 'string' || actual === 'number' || actual === 'boolean')) return true;
   if (expected === 'object' && actual === 'object') return true;

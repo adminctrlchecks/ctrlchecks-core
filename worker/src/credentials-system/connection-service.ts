@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { queryAsService } from '../core/database/db-pool';
 import { decryptJson, encryptJson, maskSecrets } from './secret-crypto';
 import { credentialTypeDefinitions, getCredentialType } from './credential-type-registry';
-import type { ConnectionRecord, CredentialTypeDefinition, DecryptedConnection } from './types';
+import type { AuthType, ConnectionRecord, CredentialTypeDefinition, DecryptedConnection } from './types';
 
 export class ConnectionApiError extends Error {
   statusCode: number;
@@ -56,6 +56,14 @@ function normalizeCredentialPayload(
   const normalized = { ...credentials, token };
   delete (normalized as Record<string, unknown>).apiKey;
   return normalized;
+}
+
+function shouldRefreshConnection(connection: DecryptedConnection, definition: CredentialTypeDefinition): boolean {
+  if (!definition.refresh?.enabled || !definition.oauth2 || !connection.expiresAt) return false;
+  const expiresAtMs = new Date(connection.expiresAt).getTime();
+  if (!Number.isFinite(expiresAtMs)) return false;
+  const refreshBeforeMs = Math.max(0, definition.refresh.refreshBeforeSeconds || 0) * 1000;
+  return expiresAtMs <= Date.now() + refreshBeforeMs;
 }
 
 export class ConnectionService {
@@ -124,6 +132,40 @@ export class ConnectionService {
          updated_at DESC NULLS LAST
        LIMIT 1`,
       [userId, credentialTypeId],
+    );
+    return rows[0] ? mapConnection(rows[0]) : null;
+  }
+
+  async findCanonicalConnectionByProvider(
+    userId: string,
+    provider: string,
+    authTypes?: AuthType[],
+  ): Promise<ConnectionRecord | null> {
+    const normalizedProvider = provider.trim().toLowerCase();
+    if (!normalizedProvider) return null;
+
+    const params: unknown[] = [userId, normalizedProvider];
+    let authTypeFilter = '';
+    if (authTypes?.length) {
+      params.push(authTypes);
+      authTypeFilter = `AND auth_type = ANY($3::text[])`;
+    }
+
+    const rows = await queryAsService(
+      `SELECT id, user_id, name, credential_type_id, provider, auth_type, status, metadata,
+              expires_at, revoked_at, replaced_by_connection_id, external_account_id,
+              external_account_email, last_tested_at, last_used_at, created_at, updated_at
+       FROM connections
+       WHERE user_id = $1
+         AND provider = $2
+         AND status = 'active'
+         AND (expires_at IS NULL OR expires_at > NOW())
+         ${authTypeFilter}
+       ORDER BY
+         last_used_at DESC NULLS LAST,
+         updated_at DESC NULLS LAST
+       LIMIT 1`,
+      params,
     );
     return rows[0] ? mapConnection(rows[0]) : null;
   }
@@ -337,6 +379,10 @@ export class ConnectionService {
     const connection = await this.getDecryptedConnection(userId, id);
     const definition = getCredentialType(connection.credentialTypeId);
     if (!definition?.testRequest) return { ok: true, status: 200, message: 'No test request configured' };
+    if (shouldRefreshConnection(connection, definition)) {
+      const { oauthService } = await import('./oauth-service');
+      await oauthService.refreshConnection(userId, id);
+    }
     if (connection.status === 'error') {
       await queryAsService(
         `UPDATE connections SET status = 'active', updated_at = NOW() WHERE user_id = $1 AND id = $2`,
@@ -345,7 +391,8 @@ export class ConnectionService {
     }
 
     const { AuthInjectionEngine } = await import('./execution-auth');
-    const request = await new AuthInjectionEngine(this).injectIntoRequest(
+    const authInjection = new AuthInjectionEngine(this);
+    const request = await authInjection.injectIntoRequest(
       { userId, nodeId: 'connection-test', nodeType: 'connection-test', connectionId: id },
       {
         method: definition.testRequest.method,
@@ -356,12 +403,29 @@ export class ConnectionService {
       },
     );
     let response: Response;
+    const executeTestRequest = (runtimeRequest: typeof request) => fetch(runtimeRequest.url, {
+      method: runtimeRequest.method,
+      headers: runtimeRequest.headers,
+      body: runtimeRequest.body ? JSON.stringify(runtimeRequest.body) : undefined,
+    });
+
     try {
-      response = await fetch(request.url, {
-        method: request.method,
-        headers: request.headers,
-        body: request.body ? JSON.stringify(request.body) : undefined,
-      });
+      response = await executeTestRequest(request);
+      if ((response.status === 401 || response.status === 403) && definition.refresh?.enabled && definition.oauth2) {
+        const { oauthService } = await import('./oauth-service');
+        await oauthService.refreshConnection(userId, id);
+        const refreshedRequest = await authInjection.injectIntoRequest(
+          { userId, nodeId: 'connection-test', nodeType: 'connection-test', connectionId: id },
+          {
+            method: definition.testRequest.method,
+            url: definition.testRequest.url,
+            headers: definition.testRequest.headers,
+            query: definition.testRequest.query,
+            body: definition.testRequest.body,
+          },
+        );
+        response = await executeTestRequest(refreshedRequest);
+      }
     } catch {
       if (definition.id === 'openai_api_key') {
         return { ok: false, status: 503, message: 'OpenAI could not be reached.' };

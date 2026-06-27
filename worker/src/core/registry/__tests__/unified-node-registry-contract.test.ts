@@ -234,3 +234,16 @@ describe('buildNodeCatalogText — catalog contract', () => {
     expect(bad).toHaveLength(0);
   });
 });
+
+describe('registry override precedence', () => {
+  it('keeps override fill-mode policy when declarative runtime metadata is attached', () => {
+    const conditions = unifiedNodeRegistry.get('if_else')?.inputSchema.conditions;
+
+    expect(conditions?.fillMode).toEqual({
+      default: 'buildtime_ai_once',
+      supportsRuntimeAI: false,
+      supportsBuildtimeAI: true,
+    });
+    expect(conditions?.runtimeContract?.aiGeneratable).toBe(true);
+  });
+});

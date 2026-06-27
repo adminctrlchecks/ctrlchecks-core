@@ -77,7 +77,7 @@ describe('NodeSchemaRegistry', () => {
           type: 'slack_message',
           config: {
             channel: '#general',
-            text: 'Hello'
+            message: 'Hello'
           }
         }
       };

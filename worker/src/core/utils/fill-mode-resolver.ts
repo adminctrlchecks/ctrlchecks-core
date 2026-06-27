@@ -1,6 +1,10 @@
 import { FieldFillMode, NodeInputSchema } from '../types/unified-node-contract';
 import { isCredentialOwnership } from './field-ownership';
 
+export function isAiOwnedFillMode(mode: FieldFillMode): boolean {
+  return mode === 'runtime_ai' || mode === 'buildtime_ai_once';
+}
+
 export function resolveEffectiveFieldFillMode(
   fieldName: string,
   inputSchema?: NodeInputSchema,
@@ -41,9 +45,6 @@ export function resolveEffectiveFieldFillMode(
       if (!unlocked && (candidate === 'runtime_ai' || candidate === 'buildtime_ai_once')) {
         return (fieldDef.fillMode?.default as FieldFillMode | undefined) ?? 'manual_static';
       }
-    }
-    if (candidate === 'runtime_ai' && fieldDef?.runtimeContract?.aiGeneratable === true) {
-      return candidate;
     }
     return coerceFieldFillModeByPolicy(fieldName, candidate, inputSchema, config).mode;
   }

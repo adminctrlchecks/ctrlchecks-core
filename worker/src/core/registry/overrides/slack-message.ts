@@ -105,6 +105,19 @@ export function overrideSlackMessage(
   return {
     ...def,
     inputSchema,
+    requiredInputs: (def.requiredInputs || []).filter((field) => field !== 'webhookUrl'),
+    credentialSchema: {
+      requirements: [
+        {
+          provider: 'slack',
+          category: 'oauth',
+          required: false,
+          description: 'Slack OAuth bot token for chat.postMessage. Alternatively provide webhookUrl for Incoming Webhooks.',
+          credentialTypeId: 'slack_oauth2',
+        },
+      ],
+      credentialFields: Array.from(new Set([...(def.credentialSchema?.credentialFields || []), 'accessToken', 'botToken'])),
+    },
     tags: Array.from(
       new Set([...(def.tags || []), 'communication', 'output', 'slack'])
     ),

@@ -57,6 +57,62 @@ function compactTaskPayload(payload: Record<string, unknown>): Record<string, un
   );
 }
 
+function firstNonEmptyString(...values: unknown[]): string {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  }
+  return '';
+}
+
+function nested(obj: unknown, path: string): unknown {
+  if (!obj || typeof obj !== 'object') return undefined;
+  let current: unknown = obj;
+  for (const part of path.split('.')) {
+    if (current === undefined || current === null) return undefined;
+    current = (current as Record<string, unknown>)[part];
+  }
+  return current;
+}
+
+function resolveTaskId(inputs: Record<string, any>, context: { rawInput?: unknown; upstreamOutputs?: Map<string, any> }): string {
+  const configured = firstNonEmptyString(inputs.taskId);
+  if (configured && !configured.includes('{{')) return configured;
+
+  const candidates: unknown[] = [
+    inputs.id,
+    inputs.data?.id,
+    inputs.data?.[0]?.data?.id,
+    inputs.task?.id,
+    nested(context.rawInput, 'id'),
+    nested(context.rawInput, 'data.id'),
+    nested(context.rawInput, 'data.0.data.id'),
+    nested(context.rawInput, 'task.id'),
+  ];
+
+  context.upstreamOutputs?.forEach((output) => {
+    candidates.push(
+      nested(output, 'id'),
+      nested(output, 'data.id'),
+      nested(output, 'data.0.data.id'),
+      nested(output, 'output.data.id'),
+    );
+  });
+
+  return firstNonEmptyString(...candidates);
+}
+
+function withGoogleTasksCompletionFields(payload: Record<string, unknown>): Record<string, unknown> {
+  const status = typeof payload.status === 'string' ? payload.status.trim() : '';
+  if (status === 'completed' && !payload.completed) {
+    return { ...payload, completed: new Date().toISOString() };
+  }
+  if (status === 'needsAction') {
+    return { ...payload, completed: null };
+  }
+  return payload;
+}
+
 export function overrideGoogleTasks(
   def: UnifiedNodeDefinition,
   _schema: NodeSchema,
@@ -102,12 +158,13 @@ export function overrideGoogleTasks(
       const operation = String(inputs.operation || 'read');
       const taskListId = encodeURIComponent(String(inputs.taskListId || '@default'));
       try {
-        const accessToken = await getGoogleTokenForContext(context, ['https://www.googleapis.com/auth/tasks']);
-        let output: any;
-        let acknowledgementStatus: 'parsed' | 'empty_success' | 'parse_failed' | 'not_required' = 'not_required';
-        if (operation === 'read') {
-          if (inputs.taskId) {
-            output = await googleApiRequest(`https://tasks.googleapis.com/tasks/v1/lists/${taskListId}/tasks/${encodeURIComponent(String(inputs.taskId))}`, accessToken);
+      const accessToken = await getGoogleTokenForContext(context, ['https://www.googleapis.com/auth/tasks']);
+      let output: any;
+      let acknowledgementStatus: 'parsed' | 'empty_success' | 'parse_failed' | 'not_required' = 'not_required';
+      if (operation === 'read') {
+          const taskId = resolveTaskId(inputs, context);
+          if (taskId) {
+            output = await googleApiRequest(`https://tasks.googleapis.com/tasks/v1/lists/${taskListId}/tasks/${encodeURIComponent(taskId)}`, accessToken);
           } else {
             output = await googleApiRequest(`https://tasks.googleapis.com/tasks/v1/lists/${taskListId}/tasks`, accessToken);
           }
@@ -120,18 +177,26 @@ export function overrideGoogleTasks(
             body: JSON.stringify(compactTaskPayload({ title: inputs.title, notes: inputs.notes, due })),
           });
         } else if (operation === 'update') {
-          if (!inputs.taskId) throw new Error('taskId is required for update');
+          const taskId = resolveTaskId(inputs, context);
+          if (!taskId) throw new Error('taskId is required for update');
           const due = toGoogleTasksDueDate(inputs.due ?? inputs.dueDate);
-          output = await googleApiRequest(`https://tasks.googleapis.com/tasks/v1/lists/${taskListId}/tasks/${encodeURIComponent(String(inputs.taskId))}`, accessToken, {
+          const payload = withGoogleTasksCompletionFields(compactTaskPayload({
+            title: inputs.title,
+            notes: inputs.notes,
+            due,
+            status: inputs.status,
+          }));
+          output = await googleApiRequest(`https://tasks.googleapis.com/tasks/v1/lists/${taskListId}/tasks/${encodeURIComponent(taskId)}`, accessToken, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(compactTaskPayload({ title: inputs.title, notes: inputs.notes, due, status: inputs.status })),
+            body: JSON.stringify(payload),
           });
         } else if (operation === 'delete') {
-          if (!inputs.taskId) throw new Error('taskId is required for delete');
-          const deleteAck = await googleApiRequestWithAcknowledgement(`https://tasks.googleapis.com/tasks/v1/lists/${taskListId}/tasks/${encodeURIComponent(String(inputs.taskId))}`, accessToken, { method: 'DELETE' });
+          const taskId = resolveTaskId(inputs, context);
+          if (!taskId) throw new Error('taskId is required for delete');
+          const deleteAck = await googleApiRequestWithAcknowledgement(`https://tasks.googleapis.com/tasks/v1/lists/${taskListId}/tasks/${encodeURIComponent(taskId)}`, accessToken, { method: 'DELETE' });
           acknowledgementStatus = deleteAck.acknowledgementStatus;
-          output = { deleted: true, taskId: inputs.taskId };
+          output = { deleted: true, taskId };
         } else {
           throw new Error(`Unsupported Google Tasks operation: ${operation}`);
         }

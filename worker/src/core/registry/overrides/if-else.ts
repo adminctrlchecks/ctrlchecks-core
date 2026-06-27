@@ -10,7 +10,7 @@
 import type { UnifiedNodeDefinition, NodeExecutionResult, NodeInputSchema } from '../../types/unified-node-contract';
 import type { NodeSchema } from '../../../services/nodes/node-library';
 import { executeViaLegacyExecutor } from '../unified-node-registry-legacy-adapter';
-import { resolveEffectiveFieldFillMode } from '../../utils/fill-mode-resolver';
+import { isAiOwnedFillMode, resolveEffectiveFieldFillMode } from '../../utils/fill-mode-resolver';
 import {
   normalizeIfElseConfig,
   validateCanonicalIfElseConditions,
@@ -62,8 +62,10 @@ export function overrideIfElse(def: UnifiedNodeDefinition, schema: NodeSchema): 
       const mode = resolveEffectiveFieldFillMode('conditions', inputSchema, normalizedConfig);
       const cond = normalizedConfig.conditions;
       const empty = cond === undefined || cond === null || (Array.isArray(cond) && cond.length === 0);
-      if (mode !== 'runtime_ai' && empty) {
-        extraErrors.push("If/Else: 'conditions' must be set unless fill mode is runtime_ai");
+      // Allow buildtime_ai_once with empty conditions — AI fill is still pending; only block
+      // when the user explicitly owns the field (manual_static) and hasn't provided a value.
+      if (!isAiOwnedFillMode(mode) && empty) {
+        extraErrors.push("If/Else: 'conditions' must be set unless fill mode is AI-owned");
       }
       if (!empty) {
         extraErrors.push(...validateCanonicalIfElseConditions(cond));

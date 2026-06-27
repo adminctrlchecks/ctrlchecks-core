@@ -24,6 +24,14 @@ function frontendOrigin(returnTo?: string | null): string {
   return process.env.FRONTEND_URL || process.env.CORS_ORIGIN || 'http://localhost:8080';
 }
 
+function canFallbackToWorkerConnectionStore(body: Record<string, unknown> | undefined): boolean {
+  if (!body) return false;
+  const authType = typeof body?.authType === 'string' ? body.authType.toLowerCase() : '';
+  if (authType) return authType !== 'oauth2';
+  const credentialTypeId = typeof body.credentialTypeId === 'string' ? body.credentialTypeId.toLowerCase() : '';
+  return !!credentialTypeId && !credentialTypeId.endsWith('_oauth2');
+}
+
 function oauthCallbackHtml(input: {
   type: 'oauth-success' | 'oauth-error';
   connectionId?: string;
@@ -92,7 +100,7 @@ export async function createConnectionHandler(req: Request, res: Response) {
       }).catch(() => {});
       return res.status(201).json({ connection: remote, source: 'credential-service' });
     }
-    if (isCredentialVaultWritesDisabled()) {
+    if (isCredentialVaultWritesDisabled() && !canFallbackToWorkerConnectionStore(req.body)) {
       return res.status(503).json({ error: 'Credential service unavailable', code: 'CREDENTIAL_SERVICE_UNAVAILABLE' });
     }
     logger.warn('[createConnectionHandler] Credential-service fallback for user:', uid);
@@ -172,17 +180,26 @@ export async function testConnectionHandler(req: Request, res: Response) {
   const uid = userId(req);
   const { id } = req.params;
 
-  const { shouldUseCredentialService, testConnectionRemote, isCredentialVaultWritesDisabled } = await import('../services/credential-service-client');
+  const { shouldUseCredentialService, testConnectionRemote } = await import('../services/credential-service-client');
   if (shouldUseCredentialService(uid)) {
     const remote = await testConnectionRemote(uid, id);
-    if (remote !== null) return res.json({ ...remote, source: 'credential-service' });
-    if (isCredentialVaultWritesDisabled()) {
-      return res.status(503).json({ error: 'Credential service unavailable', code: 'CREDENTIAL_SERVICE_UNAVAILABLE' });
+    if (remote !== null) {
+      if (remote.success === false && remote.expired === true) {
+        logger.warn('[testConnectionHandler] Credential-service reported expired; trying local refresh-aware fallback for user:', uid);
+      } else {
+        return res.json({ ...remote, source: 'credential-service' });
+      }
     }
     logger.warn('[testConnectionHandler] Credential-service fallback for user:', uid);
   }
 
-  res.json(await connectionService.testConnection(uid, id));
+  const local = await connectionService.testConnection(uid, id);
+  res.json({
+    ...local,
+    success: local.ok,
+    expired: false,
+    source: 'worker-local',
+  });
 }
 
 export async function oauthStartHandler(req: Request, res: Response) {

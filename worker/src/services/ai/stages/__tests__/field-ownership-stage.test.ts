@@ -144,6 +144,36 @@ describe('runFieldOwnershipStage', () => {
     expect(config._fillMode.to).toBe('manual_static');
   });
 
+  it('normalizes unsupported runtime ownership and returns rich policy metadata', async () => {
+    mockRegistryGet.mockReturnValue({
+      inputSchema: {
+        rules: {
+          ownership: 'structural',
+          fillMode: {
+            default: 'buildtime_ai_once',
+            supportsRuntimeAI: false,
+            supportsBuildtimeAI: true,
+          },
+        },
+      },
+    });
+    const node = makeNode('n1', 'generic_branch', {
+      _fillMode: { rules: 'runtime_ai' },
+    });
+
+    const result = await runFieldOwnershipStage({ nodes: [node], edges: [] });
+
+    expect(result.fieldOwnershipMap.n1.rules).toBe('buildtime_ai_once');
+    expect(result.fieldOwnershipPolicyMap.n1.rules).toMatchObject({
+      fillMode: 'buildtime_ai_once',
+      mode: 'ai_built',
+      ownership: 'structural',
+      supportsRuntimeAI: false,
+      supportsBuildtimeAI: true,
+    });
+    expect((node.data.config as any)._fillMode.rules).toBe('buildtime_ai_once');
+  });
+
   it('reads node type from data.type when present (data.type takes priority over node.type)', async () => {
     mockRegistryGet.mockReturnValue({
       inputSchema: { channel: { fillMode: { default: 'manual_static' } } },
