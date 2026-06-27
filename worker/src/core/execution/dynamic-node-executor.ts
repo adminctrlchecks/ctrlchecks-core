@@ -178,7 +178,7 @@ export function looksPlaceholderLikeValue(value: unknown): boolean {
   return (
     t.includes('process the workflow') ||
     t.includes('using the configured nodes') ||
-    t.includes('placeholder') ||
+    /\bplaceholder\b/.test(t) ||
     t.includes('lorem ipsum') ||
     t === 'generated message' ||
     t.includes('generated manually') ||

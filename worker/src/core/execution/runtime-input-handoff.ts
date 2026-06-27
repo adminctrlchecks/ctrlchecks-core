@@ -207,6 +207,11 @@ export function validateRuntimeInputHandoff(params: {
       if (isRuntimeEmptyValue(providerValue)) {
         if (params.operationContract && fieldAllowsEmptyValue(params.operationContract, fieldName)) {
           handoffStatus = 'accepted_empty_provider_default';
+        } else if (source === 'deterministic_runtime') {
+          // deterministic_runtime values are runtime fallbacks (e.g. narrative text picked from
+          // upstream output). The node's own execute() re-derives them via getAuthoritativeInputs,
+          // so a missing providerConfig entry is not a hard failure — just an audit note.
+          handoffStatus = 'accepted_empty_provider_default';
         } else {
           handoffStatus = 'missing';
           blockedReason = `Runtime handoff failed: ${fieldName} was resolved from ${source || ownership} but was not delivered to provider.`;
