@@ -7477,10 +7477,7 @@ export async function executeNodeLegacy(
       const dataJson = getStringProperty(config, 'data', '[]');
 
       if (!spreadsheetId) {
-        return {
-          ...inputObj,
-          _error: 'Google Sheets node: Spreadsheet ID is required',
-        };
+        throw new Error('Google Sheets node: Spreadsheet ID is required');
       }
 
       // ✅ REFACTORED: Google Sheets with typed resolution
@@ -7543,10 +7540,7 @@ export async function executeNodeLegacy(
             ? 'Please ensure the workflow owner has connected their Google account in settings. If you\'re running someone else\'s workflow, you need to either: 1) Have the workflow owner connect their Google account, or 2) Transfer the workflow ownership to your account.'
             : 'Please connect a Google account in settings.';
           
-          return {
-            ...inputObj,
-            _error: `Google Sheets: OAuth token not found. ${ownerMessage} ${currentUserMessage} ${solutionMessage}`,
-          };
+          throw new Error(`Google Sheets: OAuth token not found. ${ownerMessage} ${currentUserMessage} ${solutionMessage}`);
         }
 
         // Build the API URL
@@ -7706,10 +7700,7 @@ export async function executeNodeLegacy(
           });
 
           if (data.length === 0) {
-            return {
-              ...inputObj,
-              _error: 'Google Sheets node: No values provided for write/append/update operation',
-            };
+            throw new Error('Google Sheets node: No values provided for write/append/update operation');
           }
 
           const method = operation === 'append' ? 'POST' : 'PUT';
@@ -7766,28 +7757,15 @@ export async function executeNodeLegacy(
             appendedValues: result.updates?.updatedData?.values,
           };
         } else {
-          return {
-            ...inputObj,
-            _error: `Google Sheets node: Unsupported operation: ${operation}`,
-          };
+          throw new Error(`Google Sheets node: Unsupported operation: ${operation}`);
         }
       } catch (error) {
-        // Only log unexpected errors, not configuration/auth issues
         const errorMessage = error instanceof Error ? error.message : 'Google Sheets operation failed';
         const isConfigError = errorMessage.includes('credentials') || errorMessage.includes('authenticate') || errorMessage.includes('OAuth');
-        
         if (!isConfigError) {
           logger.error('Google Sheets error:', error);
         }
-        
-        // ✅ CLEAN OUTPUT: Don't include config values in error output
-        // Only include error message and input data, not config values like spreadsheetId, operation, outputFormat
-        return {
-          ...inputObj,
-          _error: `Google Sheets node: ${errorMessage}`,
-          // Explicitly exclude config values from output
-          // Config values like spreadsheetId, operation, outputFormat should not appear in output JSON
-        };
+        throw new Error(errorMessage.startsWith('Google Sheets') ? errorMessage : `Google Sheets node: ${errorMessage}`);
       }
     }
 

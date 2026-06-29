@@ -1185,7 +1185,7 @@ Log to LIVE-TEST-RESULTS.md. Stop after gate report. Wait for approval before Ph
 | B4-12 | 4F | Medium | switch `expression` field `type:"expression"` causes type-mismatch in guaranteeInputForSchema — fixed in switch.ts + input-guarantee.ts | ✅ FIXED 2026-06-27 |
 | B4-13 | 4G | Low | workflow-auto-repair.test.ts + integration.test.ts compile errors (WorkflowNode type drift) | Open — test maintenance |
 | B4-14 | 4G | Low | registry-frontend-parity.test.ts requires frontend file at /opt/ctrl_checks/ (monorepo env assumption) | Open — CI-only |
-| B5-1 | 5.4 | Medium | google_sheets node swallows Google API 4xx errors — returns status=success with _error in output; UI cannot show error badge | Open |
+| B5-1 | 5.4 | Medium | google_sheets node swallows Google API 4xx errors — returns status=success with _error in output; UI cannot show error badge | ✅ FIXED 2026-06-29 — all _error returns converted to throw; catch re-throws |
 | B5-2 | 5-nested | High | save-workflow reconcileWorkflow call stripped branch nodes on every save — fixed: skip reconcile when all case handles already wired | ✅ FIXED 2026-06-27 |
 
 ---
