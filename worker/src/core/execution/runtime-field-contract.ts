@@ -80,6 +80,12 @@ export function isRuntimeEmptyValue(value: unknown): boolean {
     if (/^https?:\/\//i.test(trimmed)) {
       return /\{\{[^}]+\}\}/i.test(trimmed);
     }
+    // Long strings (>150 chars) are never unfilled placeholder markers — they are real content.
+    // AI-generated summaries describing "placeholder data" or "JSONPlaceholder API" must not
+    // be classified as empty/placeholder just because they contain the word "placeholder".
+    if (trimmed.length > 150) {
+      return /\{\{[^}]+\}\}/.test(trimmed);
+    }
     return PLACEHOLDER_TEXT_RE.test(trimmed);
   }
   if (Array.isArray(value)) return value.length === 0;

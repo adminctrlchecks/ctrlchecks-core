@@ -175,6 +175,10 @@ export function looksPlaceholderLikeValue(value: unknown): boolean {
     return true;
   // Handlebars/template references the AI sometimes generates instead of actual values
   if (/\{\{[^}]+\}\}/.test(value)) return true;
+  // Long strings (>150 chars) are never placeholder markers — real placeholders are short
+  // labels. AI-generated summaries that discuss "placeholder data" or "JSONPlaceholder API"
+  // must not be discarded as if they were unfilled template slots.
+  if (t.length > 150) return false;
   return (
     t.includes('process the workflow') ||
     t.includes('using the configured nodes') ||
