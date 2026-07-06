@@ -22,6 +22,7 @@ import { runInSandbox } from '../core/utils/sandbox-executor';
 import { resolveNodeType } from '../core/utils/node-type-resolver-util';
 import { getMemoryManager } from '../memory';
 import { ErrorCode } from '../core/utils/error-codes';
+import { recordAuditEvent } from '../core/audit/audit-log-service';
 // Enterprise Architecture - Multi-tier state management
 import { PersistentLayer } from '../services/workflow-executor/persistent-layer';
 import { CentralExecutionState } from '../services/workflow-executor/central-execution-state';
@@ -18659,10 +18660,11 @@ export default async function executeWorkflowHandler(req: Request, res: Response
   const isInternalTriggerExecution = req.headers['x-internal-trigger-execution'] === 'true';
   const isInternalExecution = isInternalFormExecution || isInternalChatExecution || isInternalWebhookExecution || isInternalEngineExecution || isInternalTriggerExecution;
 
+  let authenticatedUserId: string | undefined;
   if (!isInternalExecution) {
     try {
       const { requireAuthenticatedUser } = await import('../core/utils/check-google-auth');
-      await requireAuthenticatedUser(req);
+      authenticatedUserId = await requireAuthenticatedUser(req);
     } catch (authError: any) {
       return res.status(401).json(authError);
     }
@@ -18783,6 +18785,31 @@ export default async function executeWorkflowHandler(req: Request, res: Response
         message: workflowError?.message || 'The specified workflow could not be found.',
         workflowId 
       });
+    }
+
+    // ✅ AUTHORIZATION GUARD: a user-initiated execution must own the workflow.
+    // Internal trigger executions (webhook/chat/form/engine/trigger-service) are
+    // a separate, already-trusted call path and are exempt — see isInternalExecution above.
+    if (!isInternalExecution && authenticatedUserId && workflow.user_id && workflow.user_id !== authenticatedUserId) {
+      const requesterRole = (req as any).user?.role;
+      if (requesterRole !== 'admin') {
+        logger.warn(`[ExecuteWorkflow] 🚫 Ownership check failed - user ${authenticatedUserId} attempted to execute workflow ${workflowId} owned by ${workflow.user_id}`);
+        recordAuditEvent({
+          actorUserId: authenticatedUserId,
+          action: 'workflow.execution.failed',
+          status: 'failure',
+          resourceType: 'workflow',
+          resourceId: workflowId,
+          ipAddress: req.ip,
+          userAgent: req.get('User-Agent'),
+          metadata: { reason: 'not_workflow_owner' },
+        });
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: 'You do not have permission to execute this workflow.',
+          code: 'NOT_WORKFLOW_OWNER',
+        });
+      }
     }
 
     // ✅ EXECUTION GUARD: Workflow must be confirmed before execution
@@ -19496,7 +19523,14 @@ export default async function executeWorkflowHandler(req: Request, res: Response
           input,
           trigger: 'manual',
         });
-        
+        recordAuditEvent({
+          actorUserId: currentUserId || authenticatedUserId,
+          action: 'workflow.execution.started',
+          resourceType: 'workflow',
+          resourceId: workflowId,
+          metadata: { executionId },
+        });
+
         // ✅ OPTIMISTIC: Log warnings as execution events (non-blocking)
         if (warnings.length > 0) {
           for (const warning of warnings) {
@@ -21116,6 +21150,14 @@ export default async function executeWorkflowHandler(req: Request, res: Response
         durationMs,
         nodesExecuted: logs.length,
       });
+      recordAuditEvent({
+        actorUserId: currentUserId || authenticatedUserId,
+        action: 'workflow.execution.failed',
+        status: 'failure',
+        resourceType: 'workflow',
+        resourceId: workflowId,
+        metadata: { executionId, error: errorMessage, durationMs },
+      });
 
       if (config.reliability?.dlqMandatoryRouting) {
         try {
@@ -21156,6 +21198,13 @@ export default async function executeWorkflowHandler(req: Request, res: Response
         durationMs,
         nodesExecuted: logs.length,
         success: true,
+      });
+      recordAuditEvent({
+        actorUserId: currentUserId || authenticatedUserId,
+        action: 'workflow.execution.finished',
+        resourceType: 'workflow',
+        resourceId: workflowId,
+        metadata: { executionId, durationMs, nodesExecuted: logs.length },
       });
     }
 
@@ -21302,6 +21351,14 @@ export default async function executeWorkflowHandler(req: Request, res: Response
         await logExecutionEvent(db, executionId, workflowId, 'RUN_FAILED', {
           error: errorMessage,
           fatal: true,
+        });
+        recordAuditEvent({
+          actorUserId: currentUserId || authenticatedUserId,
+          action: 'workflow.execution.failed',
+          status: 'failure',
+          resourceType: 'workflow',
+          resourceId: workflowId,
+          metadata: { executionId, error: errorMessage, fatal: true },
         });
         await logExecutionEvent(db, executionId, workflowId, 'LOCK_RELEASED', {
           workflowId,

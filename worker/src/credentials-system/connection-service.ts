@@ -3,6 +3,14 @@ import { queryAsService } from '../core/database/db-pool';
 import { decryptJson, encryptJson, maskSecrets } from './secret-crypto';
 import { credentialTypeDefinitions, getCredentialType } from './credential-type-registry';
 import type { AuthType, ConnectionRecord, CredentialTypeDefinition, DecryptedConnection } from './types';
+import { recordAuditEvent, type AuditAction } from '../core/audit/audit-log-service';
+
+const CONNECTION_AUDIT_ACTION_MAP: Record<string, AuditAction> = {
+  'connection.created': 'credential.created',
+  'connection.updated': 'credential.updated',
+  'connection.deleted': 'credential.deleted',
+  'connection.tested': 'credential.tested',
+};
 
 export class ConnectionApiError extends Error {
   statusCode: number;
@@ -466,13 +474,13 @@ export class ConnectionService {
   }
 
   private async audit(userId: string, connectionId: string, action: string, details: Record<string, unknown>): Promise<void> {
-    await queryAsService(
-      `INSERT INTO workflow_execution_logs (
-         id, workflow_id, execution_id, correlation_id, node_id, node_name, event, level, metadata, created_at
-       )
-       VALUES ($1, 'credentials', $2, $2, $3, 'Credential System', $4, 'info', $5::jsonb, NOW())`,
-      [randomUUID(), connectionId, userId, action, JSON.stringify({ connectionId, userId, ...details })],
-    ).catch(() => {});
+    await recordAuditEvent({
+      actorUserId: userId,
+      action: CONNECTION_AUDIT_ACTION_MAP[action] || 'credential.updated',
+      resourceType: 'credential_connection',
+      resourceId: connectionId,
+      metadata: details,
+    });
   }
 }
 

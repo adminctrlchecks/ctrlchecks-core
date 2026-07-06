@@ -9,7 +9,7 @@
  * If rejected: allows tool replacement or workflow regeneration.
  */
 
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { workflowConfirmationManager, WorkflowState } from '../services/ai/workflow-confirmation-manager';
 import { toolSubstitutionEngine } from '../services/ai/tool-substitution-engine';
 import { getDbClient } from '../core/database/aws-db-client';
@@ -19,6 +19,8 @@ import { pendingCredentialStore } from '../services/ai/pending-credential-store'
 import { credentialInjector } from '../services/ai/credential-injector';
 import { buildSyncedGraphPayload } from './workflow-graph-state';
 import { logger } from '../core/logger';
+import { recordAuditEvent } from '../core/audit/audit-log-service';
+import type { AuthenticatedRequest } from '../core/middleware/subscription-auth';
 
 interface ConfirmRequest {
   workflowId: string;
@@ -272,7 +274,7 @@ async function updateWorkflowStateInDatabase(
  * POST /api/workflow/confirm
  * Confirm workflow and continue pipeline execution
  */
-export async function confirmWorkflow(req: Request, res: Response) {
+export async function confirmWorkflow(req: AuthenticatedRequest, res: Response) {
   try {
     const { workflowId, approved, toolOverrides, nodeOverrides, feedback } = req.body as ConfirmRequest;
 
@@ -292,6 +294,38 @@ export async function confirmWorkflow(req: Request, res: Response) {
 
     logger.info(`[WorkflowConfirm] Processing confirmation for workflow ${workflowId}, approved: ${approved}`);
 
+    // Get user ID from the authenticateUser middleware (route requires it — see index.ts)
+    const supabaseClient = getDbClient();
+    const userId = req.user?.id;
+
+    // ✅ AUTHORIZATION GUARD: only the workflow's owner (or an admin) may confirm/reject it.
+    // Previously this route had no auth requirement at all — anyone who knew a workflowId
+    // could confirm or reject it.
+    const { data: ownerRow } = await supabaseClient
+      .from('workflows')
+      .select('user_id')
+      .eq('id', workflowId)
+      .maybeSingle();
+    if (ownerRow?.user_id && userId && ownerRow.user_id !== userId && req.user?.role !== 'admin') {
+      logger.warn(`[WorkflowConfirm] 🚫 Ownership check failed - user ${userId} attempted to confirm workflow ${workflowId} owned by ${ownerRow.user_id}`);
+      recordAuditEvent({
+        actorUserId: userId,
+        actorRole: req.user?.role,
+        action: approved ? 'workflow.confirmed' : 'workflow.rejected',
+        status: 'failure',
+        resourceType: 'workflow',
+        resourceId: workflowId,
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent'),
+        metadata: { reason: 'not_workflow_owner' },
+      });
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'You do not have permission to confirm or reject this workflow.',
+        code: 'NOT_WORKFLOW_OWNER',
+      });
+    }
+
     // Get confirmation request
     const confirmationRequest = workflowConfirmationManager.getConfirmationRequest(workflowId);
     if (!confirmationRequest) {
@@ -300,11 +334,6 @@ export async function confirmWorkflow(req: Request, res: Response) {
         message: `No confirmation request found for workflow ID: ${workflowId}`,
       });
     }
-
-    // Get user ID from auth
-    const supabaseClient = getDbClient();
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    const userId = user?.id;
 
     // Apply overrides if provided
     let workflow = confirmationRequest.workflow;
@@ -374,6 +403,16 @@ export async function confirmWorkflow(req: Request, res: Response) {
         workflow,
         userId
       );
+
+      recordAuditEvent({
+        actorUserId: userId,
+        actorRole: req.user?.role,
+        action: 'workflow.rejected',
+        resourceType: 'workflow',
+        resourceId: workflowId,
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent'),
+      });
 
       return res.json({
         success: true,
@@ -448,6 +487,15 @@ export async function confirmWorkflow(req: Request, res: Response) {
       logger.error(`[WorkflowConfirm] Error setting confirmed flag:`, confirmError);
     } else {
       logger.info(`[WorkflowConfirm] ✅ Set confirmed=true for workflow ${workflowId}`);
+      recordAuditEvent({
+        actorUserId: userId,
+        actorRole: req.user?.role,
+        action: 'workflow.confirmed',
+        resourceType: 'workflow',
+        resourceId: workflowId,
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent'),
+      });
     }
 
     logger.info(`[WorkflowConfirm] ✅ Workflow ${workflowId} confirmed successfully`);
@@ -477,7 +525,7 @@ export async function confirmWorkflow(req: Request, res: Response) {
  * POST /api/workflow/reject
  * Reject workflow (alias for confirm with approved=false)
  */
-export async function rejectWorkflow(req: Request, res: Response) {
+export async function rejectWorkflow(req: AuthenticatedRequest, res: Response) {
   // Reject is just confirm with approved=false
   return confirmWorkflow(req, res);
 }
@@ -485,7 +533,7 @@ export async function rejectWorkflow(req: Request, res: Response) {
 /**
  * Default export for Express route
  */
-export default async function workflowConfirmHandler(req: Request, res: Response) {
+export default async function workflowConfirmHandler(req: AuthenticatedRequest, res: Response) {
   // Route based on path
   if (req.path.includes('/reject')) {
     return rejectWorkflow(req, res);
