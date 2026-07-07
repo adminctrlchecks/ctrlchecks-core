@@ -18658,7 +18658,8 @@ export default async function executeWorkflowHandler(req: Request, res: Response
   const isInternalWebhookExecution = req.headers['x-internal-webhook-execution'] === 'true';
   const isInternalEngineExecution = req.headers['x-internal-engine-execution'] === 'true';
   const isInternalTriggerExecution = req.headers['x-internal-trigger-execution'] === 'true';
-  const isInternalExecution = isInternalFormExecution || isInternalChatExecution || isInternalWebhookExecution || isInternalEngineExecution || isInternalTriggerExecution;
+  const isInternalApprovalExecution = req.headers['x-internal-approval-execution'] === 'true';
+  const isInternalExecution = isInternalFormExecution || isInternalChatExecution || isInternalWebhookExecution || isInternalEngineExecution || isInternalTriggerExecution || isInternalApprovalExecution;
 
   let authenticatedUserId: string | undefined;
   if (!isInternalExecution) {
@@ -20392,6 +20393,97 @@ export default async function executeWorkflowHandler(req: Request, res: Response
             formNodeId: node.id,
             formUrl,
           });
+        }
+
+        // Per-action human approval gate — opt-in, config-driven, applies to any node type.
+        // Mirrors the form-node pause above: set status='waiting', release the lock, return early.
+        // Unlike a form, an 'approved' decision falls through to normal execution below rather
+        // than skipping it — the node still needs to actually run once approved.
+        {
+          const approvalGate = (node.data?.config as any)?.approvalGate;
+          if (approvalGate?.enabled) {
+            const { getApprovalDecision, isApprovalThresholdMet, createPendingApproval } = await import('../services/execution/node-approval-service');
+            const decision = await getApprovalDecision(executionId!, node.id);
+
+            if (decision === 'rejected') {
+              logger.warn(`[NodeApproval] Execution ${executionId} halted — node ${node.id} was rejected`);
+              return res.status(200).json({
+                success: false,
+                status: 'failed',
+                executionId,
+                message: 'Workflow halted — a required approval was rejected.',
+                rejectedNodeId: node.id,
+              });
+            }
+
+            if (decision !== 'approved' && isApprovalThresholdMet(approvalGate, (node.data?.config as any) || {}, nodeInput)) {
+              logger.info(`[NodeApproval] Node ${node.id} requires approval, pausing execution ${executionId}...`);
+
+              const approval = await createPendingApproval({
+                executionId: executionId!,
+                workflowId: workflowId!,
+                nodeId: node.id,
+                userId: workflow.user_id,
+                preview: { nodeId: node.id, nodeType, config: node.data?.config || {}, input: nodeInput },
+              });
+
+              if (executionId) {
+                await db.from('executions').update({
+                  status: 'waiting',
+                  trigger: 'approval',
+                  waiting_for_node_id: node.id,
+                }).eq('id', executionId);
+
+                const { error: logError } = await db.from('executions').update({ logs }).eq('id', executionId);
+                if (logError) {
+                  logger.error('[NodeApproval] Failed to update execution logs:', logError);
+                }
+              }
+
+              if (executionId && workflowId) {
+                try {
+                  const { releaseExecutionLock } = await import('../services/execution/execution-lock');
+                  await releaseExecutionLock(db, workflowId, executionId);
+                } catch (lockError) {
+                  logger.error('[NodeApproval] Failed to release execution lock:', lockError);
+                }
+              }
+
+              try {
+                const { recordAuditEvent } = await import('../core/audit/audit-log-service');
+                recordAuditEvent({
+                  actorUserId: workflow.user_id,
+                  action: 'workflow.node_approval.requested',
+                  resourceType: 'workflow_node',
+                  resourceId: node.id,
+                  metadata: { executionId, workflowId, approvalId: approval.id },
+                });
+              } catch { /* non-fatal */ }
+
+              try {
+                const { sendApprovalNeededNotification } = await import('../services/notifications/dispatch-execution-notifications');
+                sendApprovalNeededNotification(workflow.user_id, {
+                  workflowId: workflowId!,
+                  executionId: executionId!,
+                  nodeId: node.id,
+                  approvalId: approval.id,
+                  preview: approval.preview,
+                });
+              } catch (notifyError) {
+                logger.error('[NodeApproval] Failed to dispatch approval notification (non-fatal):', notifyError);
+              }
+
+              return res.status(202).json({
+                success: true,
+                status: 'waiting',
+                reason: 'approval',
+                executionId,
+                approvalId: approval.id,
+                message: 'Workflow paused — waiting for human approval on a sensitive step.',
+              });
+            }
+            // else: decision === 'approved', or threshold not met — fall through to normal execution.
+          }
         }
 
         // ✅ CRITICAL: Initialize retryAttempt before try block for catch block scope

@@ -17,7 +17,10 @@ export type AuditAction =
   | 'workflow.execution.failed'
   | 'workflow.confirmed'
   | 'workflow.rejected'
-  | 'security.event';
+  | 'security.event'
+  | 'workflow.node_approval.requested'
+  | 'workflow.node_approval.approved'
+  | 'workflow.node_approval.rejected';
 
 export interface AuditEventInput {
   actorUserId?: string | null;

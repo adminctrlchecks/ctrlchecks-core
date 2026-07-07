@@ -37,3 +37,17 @@ export async function sendInAppExecutionFailed(
     link: null,
   }).catch(() => { /* fire-and-forget */ });
 }
+
+export async function sendInAppApprovalNeeded(
+  userId: string,
+  workflowName: string,
+  approvalId: string,
+): Promise<void> {
+  if (!shouldUseNotificationService(userId)) return;
+  await sendInAppRemote(userId, {
+    title: `Approval needed — "${workflowName}"`,
+    message: 'A workflow step is paused, waiting for your approval before it continues.',
+    type: 'approval_needed',
+    link: `/approvals/${approvalId}`,
+  }).catch(() => { /* fire-and-forget */ });
+}

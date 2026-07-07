@@ -3048,6 +3048,11 @@ export default function PropertiesPanel({
                   )}
                 </>
               )}
+
+              <ApprovalGateSection
+                config={(selectedNode.data.config as Record<string, unknown>) || {}}
+                onChange={(patch) => updateNodeConfig(selectedNode.id, patch)}
+              />
             </div>
           </ScrollArea>
 
@@ -3094,6 +3099,89 @@ export default function PropertiesPanel({
           </div>
         </SheetContent>
       </Sheet>
+    </div>
+  );
+}
+
+interface ApprovalGateConfig {
+  enabled?: boolean;
+  thresholdField?: string;
+  thresholdOperator?: '>' | '>=' | '<' | '<=';
+  thresholdValue?: number;
+}
+
+/**
+ * Generic, node-type-agnostic "require human approval before this step runs" toggle.
+ * Appears for every node regardless of type — opt-in, off by default, so it never
+ * adds friction to a normal workflow. See worker/src/services/execution/node-approval-service.ts
+ * for the matching execution-time gate.
+ */
+function ApprovalGateSection({
+  config,
+  onChange,
+}: {
+  config: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const gate: ApprovalGateConfig = (config.approvalGate as ApprovalGateConfig) || {};
+
+  const update = (patch: Partial<ApprovalGateConfig>) => {
+    onChange({ approvalGate: { ...gate, ...patch } });
+  };
+
+  return (
+    <div className="mt-4 rounded-md border border-border/40 bg-muted/10 p-3 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="space-y-0.5">
+          <h3 className="text-xs font-medium uppercase text-muted-foreground/70">Approval</h3>
+          <p className="text-xs text-muted-foreground/70">Require a human to approve before this step runs</p>
+        </div>
+        <Switch
+          checked={!!gate.enabled}
+          onCheckedChange={(checked) => update({ enabled: checked })}
+        />
+      </div>
+
+      {gate.enabled && (
+        <div className="space-y-2 pt-1">
+          <Label className="text-xs text-muted-foreground">
+            Only require approval when (optional — leave blank to always require approval)
+          </Label>
+          <div className="grid grid-cols-3 gap-2">
+            <Input
+              placeholder="field, e.g. amount"
+              value={gate.thresholdField || ''}
+              onChange={(e) => update({ thresholdField: e.target.value })}
+              className="h-8 text-xs"
+              onMouseDown={(e) => e.stopPropagation()}
+              onFocus={(e) => e.stopPropagation()}
+            />
+            <Select
+              value={gate.thresholdOperator || ''}
+              onValueChange={(value) => update({ thresholdOperator: value as ApprovalGateConfig['thresholdOperator'] })}
+            >
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder="operator" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value=">">greater than</SelectItem>
+                <SelectItem value=">=">greater or equal</SelectItem>
+                <SelectItem value="<">less than</SelectItem>
+                <SelectItem value="<=">less or equal</SelectItem>
+              </SelectContent>
+            </Select>
+            <Input
+              type="number"
+              placeholder="value"
+              value={gate.thresholdValue ?? ''}
+              onChange={(e) => update({ thresholdValue: e.target.value === '' ? undefined : Number(e.target.value) })}
+              className="h-8 text-xs"
+              onMouseDown={(e) => e.stopPropagation()}
+              onFocus={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

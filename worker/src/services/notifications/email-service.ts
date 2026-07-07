@@ -154,6 +154,43 @@ export async function sendExecutionFailed(
   );
 }
 
+export async function sendApprovalNeeded(
+  userId: string,
+  workflowName: string,
+  executionId: string,
+  approvalId: string
+): Promise<void> {
+  if (!isNotificationsEnabled() || !getFromEmail()) return;
+
+  const email = await resolveUserEmail(userId);
+  if (!email) return;
+
+  if (shouldUseNotificationService(userId)) {
+    const result = await sendEmailRemote(userId, {
+      templateId: 'approval_needed',
+      data: { workflowName, executionId, approvalId },
+      to: email,
+    });
+    if (result !== null) return;
+    console.warn('[EmailService] notification-service fallback for user:', userId);
+  }
+
+  const safeWorkflowName = workflowName.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const approvalUrl = `https://app.ctrlchecks.ai/approvals/${approvalId}`;
+
+  const subject = `⏸ Approval needed — "${safeWorkflowName}"`;
+  const html = `
+    <h2>A workflow step needs your approval</h2>
+    <p><strong>Workflow:</strong> ${safeWorkflowName}</p>
+    <p>Execution has paused at a sensitive step and is waiting for you to approve or reject it before continuing.</p>
+    <p><a href="${approvalUrl}">Review and respond →</a></p>
+  `;
+
+  await sendRaw(email, subject, html).catch((err) =>
+    console.error('[EmailService] sendApprovalNeeded error:', err)
+  );
+}
+
 // sendWelcomeEmail has no userId — canary routing not applicable; always local.
 export async function sendWelcomeEmail(email: string, name: string): Promise<void> {
   if (!getFromEmail()) return;

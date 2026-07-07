@@ -25,6 +25,7 @@ const WorkflowCreationChoice = lazy(() => import("./pages/WorkflowCreationChoice
 const AIWorkflowBuilder = lazy(() => import("./pages/AIWorkflowBuilder"));
 const Executions = lazy(() => import("./pages/Executions"));
 const ExecutionDetail = lazy(() => import("./pages/ExecutionDetail"));
+const Approvals = lazy(() => import("./pages/Approvals"));
 const Templates = lazy(() => import("./pages/Templates"));
 const TemplatesManager = lazy(() => import("./pages/admin/TemplatesManager"));
 const TemplateEditor = lazy(() => import("./pages/admin/TemplateEditor"));
@@ -124,6 +125,8 @@ const App = () => (
                   <Route path="/workflow/:id" element={<WorkflowBuilder />} />
                   <Route path="/executions" element={<Executions />} />
                   <Route path="/execution/:id" element={<ExecutionDetail />} />
+                  <Route path="/approvals" element={<Approvals />} />
+                  <Route path="/approvals/:id" element={<Approvals />} />
                   <Route path="/profile" element={<Profile />} />
                   <Route path="/settings/profile" element={<Profile />} />
                   <Route path="/subscriptions" element={<Subscriptions />} />

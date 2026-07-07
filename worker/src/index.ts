@@ -179,6 +179,7 @@ import getMissingItemsRoute from './api/workflows-missing-items';
 import configureWorkflowRoute from './api/workflows-configure';
 import { docsRouter } from './api/docs';
 import { confirmWorkflow, rejectWorkflow } from './api/workflow-confirm';
+import { listApprovals, respondToApproval } from './api/execution-node-approvals';
 import { substituteTools, getAvailableSubstitutions } from './api/tool-substitute';
 import { serveChatbotPage } from './api/chatbot-page';
 import { handleChatbotMessage } from './api/chatbot-message';
@@ -1572,6 +1573,10 @@ console.log('🔧 Field Mode Toggle API available at PATCH /api/workflows/:id/no
 // Workflow Confirmation API
 app.post('/api/workflow/confirm', asyncHandler(authenticateUser), asyncHandler(confirmWorkflow));
 app.post('/api/workflow/reject', asyncHandler(authenticateUser), asyncHandler(rejectWorkflow));
+
+// Per-action human approval on sensitive workflow steps
+app.get('/api/execution-node-approvals', asyncHandler(authenticateUser), asyncHandler(listApprovals));
+app.post('/api/execution-node-approvals/:id/respond', asyncHandler(authenticateUser), asyncHandler(respondToApproval));
 console.log('✅ Workflow Confirmation API available at /api/workflow/confirm and /api/workflow/reject');
 
 // Workflow Credentials API (pending credential store for Continue Workflow flow)
