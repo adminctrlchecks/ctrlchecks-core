@@ -157,6 +157,7 @@ export async function saveWorkflow(input: SaveWorkflowInput): Promise<SaveResult
       ...baseData,
       id: randomUUID(),
       created_at: now,
+      confirmed: true,
       setup_completed: true,
       setup_stage: 'complete',
       setup_completed_at: now,
