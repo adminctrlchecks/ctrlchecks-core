@@ -94,7 +94,8 @@ export const INTEGRATION_LOGO_MAP: Record<string, string> = {
 
   // Misc
   contentful:       '/integrations-logos/Contentful.svg',
-  wordpress:        '/integrations-logos/WooCommerce.svg',
+  // wordpress: no logo asset yet — falls back to the node's lucide icon (Globe).
+  // Do NOT map it to another brand's mark.
 };
 
 /** Returns the logo path for a given node type, or undefined if none exists. */

@@ -12338,7 +12338,7 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     label: 'WordPress',
     category: 'cms',
     icon: 'Globe',
-    description: 'Create and manage WordPress posts and pages via REST API.',
+    description: 'Create, read, update, and delete WordPress posts via the REST API.',
     defaultConfig: {
       operation: 'get_posts',
       status: 'publish',
@@ -12394,15 +12394,6 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
         label: 'Post ID',
         type: 'text',
         placeholder: '{{$json.id}}',
-        visibleIf: { field: 'operation', equals: 'update_post' },
-        helpText: 'ID of the post to update or delete. Required for update_post and delete_post.',
-      },
-      {
-        key: 'postId',
-        label: 'Post ID',
-        type: 'text',
-        placeholder: '{{$json.id}}',
-        visibleIf: { field: 'operation', equals: 'delete_post' },
         helpText: 'ID of the post to update or delete. Required for update_post and delete_post.',
       },
       {

@@ -276,7 +276,7 @@ export const NODE_LAYMAN_DESCRIPTIONS: Record<string, string> = {
   chargebee:       "Manages subscriptions, invoices, and customers in Chargebee billing",
   typeform:        "Reads responses submitted to your Typeform surveys and forms",
   google_forms:    "Reads responses submitted to a Google Form",
-  wordpress:       "Creates or updates posts, pages, and media in a WordPress site",
+  wordpress:       "Creates, reads, updates, or deletes blog posts on your WordPress site",
   contentful:      "Reads or creates content entries in your Contentful headless CMS",
   zendesk:         "Creates or updates support tickets and reads customer data in Zendesk",
   calendly:        "Reads scheduled meetings, event types, or user info from Calendly",
