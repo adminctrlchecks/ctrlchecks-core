@@ -9778,7 +9778,7 @@ return {
     // This ensures we use the same input fields that resolveTargetHandle expects
     const defaultInputs: Record<string, string[]> = {
         // AI Nodes
-        'ai_agent': ['userInput', 'chat_model', 'memory', 'tool'],
+        'ai_agent': ['userInput'],
         'openai_gpt': ['prompt', 'model', 'temperature', 'maxTokens'],
         'anthropic_claude': ['prompt', 'model', 'temperature', 'maxTokens'],
         'google_gemini': ['prompt', 'model', 'temperature', 'maxTokens'],
@@ -10560,15 +10560,6 @@ return {
       
       // AI Agent special cases
       if (targetType === 'ai_agent') {
-        if (sourceType === 'chat_model') {
-          return { outputField: 'config', inputField: 'chat_model', targetHandle: 'chat_model' };
-        }
-        if (sourceType === 'memory') {
-          return { outputField: 'memory', inputField: 'memory', targetHandle: 'memory' };
-        }
-        if (sourceType === 'tool') {
-          return { outputField: 'tool', inputField: 'tool', targetHandle: 'tool' };
-        }
         // Text Formatter to AI Agent: map formatted text string to userInput (LEFT SIDE PORT)
         // Text Formatter outputs: { data: "formatted string", formatted: "formatted string" }
         // Always connect to left-side userInput port, not right side
@@ -10914,84 +10905,6 @@ return {
 
       return { outputField, inputField };
     };
-    
-    // First, ensure all AI Agent nodes have Chat Model nodes connected
-    const aiAgentNodes = finalNodes.filter(n => n.type === 'ai_agent');
-    const existingChatModelNodes = finalNodes.filter(n => n.type === 'chat_model');
-    
-    for (const aiAgentNode of aiAgentNodes) {
-      // Check if this AI Agent already has a Chat Model connected
-      const hasChatModel = edges.some(e => 
-        e.target === aiAgentNode.id && 
-        finalNodes.find(n => n.id === e.source)?.type === 'chat_model'
-      );
-      
-      if (!hasChatModel) {
-        // ✅ DEFAULT: Create a Chat Model node configured with Ollama (running on AWS)
-        // This is the default AI provider - users can change to Google/OpenAI/Claude if needed
-        // Ensure position exists with defaults
-        const aiAgentPosition = aiAgentNode.position || { x: 100, y: 100 };
-        const chatModelNode: WorkflowNode = {
-          id: randomUUID(),
-          type: 'chat_model',
-          position: { 
-            x: aiAgentPosition.x - 200, 
-            y: aiAgentPosition.y 
-          },
-          data: {
-            type: 'chat_model',
-            label: 'Ollama (qwen2.5:14b-instruct-q4_K_M)',
-            category: 'ai',
-            config: {
-              provider: 'gemini',
-              model: 'qwen2.5:14b-instruct-q4_K_M',
-              // No API key needed - Ollama is configured via OLLAMA_HOST environment variable
-              prompt: 'You are a helpful AI assistant that provides accurate and useful responses.',
-              temperature: 0.7,
-              maxTokens: 2000,
-            },
-          },
-        };
-        
-        finalNodes.push(chatModelNode);
-        
-        // ✅ SCHEMA-AWARE HANDLE RESOLUTION: Connect Chat Model to AI Agent's chat_model port
-        // Resolve handles using schema-aware helpers
-        const resolvedSourceHandle = this.resolveSourceHandle(chatModelNode, 'config');
-        const resolvedTargetHandle = this.resolveTargetHandle(aiAgentNode, 'chat_model');
-        
-        // Validate handles exist in schemas
-        const chatModelOutputs = this.getNodeOutputFields('chat_model');
-        const aiAgentInputs = this.getNodeInputFields('ai_agent');
-        
-        if (!chatModelOutputs.includes(resolvedSourceHandle)) {
-          console.warn(`⚠️  Chat model source handle '${resolvedSourceHandle}' not found. Available: ${chatModelOutputs.join(', ')}`);
-        }
-        
-        if (!aiAgentInputs.includes(resolvedTargetHandle)) {
-          console.warn(`⚠️  AI agent target handle '${resolvedTargetHandle}' not found. Available: ${aiAgentInputs.join(', ')}`);
-        }
-        
-        // ✅ CRITICAL: Use handle registry to ensure valid React handle IDs
-        const { sourceHandle, targetHandle } = validateAndFixEdgeHandles(
-          'chat_model',
-          'ai_agent',
-          resolvedSourceHandle,
-          resolvedTargetHandle
-        );
-        
-        const chatModelEdge: WorkflowEdge = {
-          id: randomUUID(),
-          source: chatModelNode.id,
-          target: aiAgentNode.id,
-          type: 'chat_model',
-          sourceHandle,
-          targetHandle,
-        };
-        edges.push(chatModelEdge);
-        console.log(`✅ Connected chat_model → ai_agent (schema-aware, handles: ${sourceHandle} → ${targetHandle})`);
-      }
-    }
     
     // PRIORITY 1 FIX: Use structure connections if available, otherwise fall back to sequential
     const isTriggerNode = (n: WorkflowNode) => {

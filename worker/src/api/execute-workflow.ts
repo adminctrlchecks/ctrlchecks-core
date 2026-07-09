@@ -482,16 +482,22 @@ async function collectConnectionRefIdsWithFallback(
     const { unifiedNodeRegistry } = await import('../core/registry/unified-node-registry');
     const nodeType = String((node.data as any)?.type || node.type || '');
     const definition = unifiedNodeRegistry.get(nodeType);
-    const requirements = definition?.credentialSchema?.requirements ?? [];
+    const requirements = (definition?.credentialSchema?.requirements ?? []) as Array<{
+      credentialTypeId?: string;
+      credentialTypeIds?: string[];
+    }>;
     const credentialTypeIds = Array.from(new Set(
       requirements
-        .map((r) => r.credentialTypeId)
+        .flatMap((r) => [r.credentialTypeId, ...(r.credentialTypeIds || [])])
         .filter((id): id is string => typeof id === 'string' && id.length > 0)
     ));
-    // Only auto-select when there's exactly one required credential type
-    if (credentialTypeIds.length === 1) {
-      const connection = await connectionService.findCanonicalConnection(ownerUserId, credentialTypeIds[0]);
-      if (connection) return [connection.id];
+    // Auto-select the user's canonical saved connection when the node declares a clear
+    // credential contract, including compatibility aliases such as Contentful -> Bearer Token.
+    if (credentialTypeIds.length > 0) {
+      for (const credentialTypeId of credentialTypeIds) {
+        const connection = await connectionService.findCanonicalConnection(ownerUserId, credentialTypeId);
+        if (connection) return [connection.id];
+      }
     }
   } catch {
     // fall through — don't block execution on registry lookup failure
@@ -554,15 +560,40 @@ async function injectSelectedConnectionCredentials(params: {
   userId?: string;
   currentUserId?: string;
 }): Promise<{ config: Record<string, unknown>; error?: string }> {
-  const ownerUserId = params.userId || params.currentUserId;
+  const ownerUserIds = Array.from(new Set(
+    [params.currentUserId, params.userId]
+      .map((id) => String(id || '').trim())
+      .filter(Boolean),
+  ));
+  const ownerUserId = ownerUserIds[0];
   const connectionIds = await collectConnectionRefIdsWithFallback(params.node, params.config, ownerUserId);
-  if (!ownerUserId || connectionIds.length === 0) return { config: params.config };
+  if (connectionIds.length > 0 && ownerUserIds.length === 0) {
+    return {
+      config: params.config,
+      error: 'Selected connection cannot be resolved without an authenticated workflow owner.',
+    };
+  }
+  if (connectionIds.length === 0) return { config: params.config };
 
   const acceptedCredentialTypes = await getAcceptedCredentialTypesForNode(params.node);
   let nextConfig = { ...params.config };
   for (const connectionId of connectionIds) {
     try {
-      const connection = await connectionService.getDecryptedConnection(ownerUserId, connectionId);
+      let connection: Awaited<ReturnType<typeof connectionService.getDecryptedConnection>> | null = null;
+      let resolvedOwnerUserId = ownerUserId;
+      let lastLookupError: unknown;
+      for (const candidateUserId of ownerUserIds) {
+        try {
+          connection = await connectionService.getDecryptedConnection(candidateUserId, connectionId);
+          resolvedOwnerUserId = candidateUserId;
+          break;
+        } catch (error) {
+          lastLookupError = error;
+        }
+      }
+      if (!connection) {
+        throw lastLookupError instanceof Error ? lastLookupError : new Error('Connection not found');
+      }
       if (acceptedCredentialTypes.size > 0 && !acceptedCredentialTypes.has(connection.credentialTypeId)) {
         return {
           config: nextConfig,
@@ -573,7 +604,7 @@ async function injectSelectedConnectionCredentials(params: {
         return { config: nextConfig, error: `Connection "${connection.name}" is not active. Please reconnect before executing this workflow.` };
       }
       nextConfig = mergeRuntimeCredentials(nextConfig, connection.credentials);
-      await connectionService.markUsed(ownerUserId, connectionId);
+      await connectionService.markUsed(resolvedOwnerUserId, connectionId);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to resolve selected connection';
       // Stale/wrong ref — try auto-selecting the canonical connection for this node instead
@@ -582,21 +613,28 @@ async function injectSelectedConnectionCredentials(params: {
         const { unifiedNodeRegistry } = await import('../core/registry/unified-node-registry');
         const nodeType = String((params.node.data as any)?.type || params.node.type || '');
         const definition = unifiedNodeRegistry.get(nodeType);
-        const requirements = (definition?.credentialSchema?.requirements ?? []) as Array<{ credentialTypeId?: string }>;
-        const credTypeIds = requirements
-          .map((r) => r.credentialTypeId)
-          .filter((id): id is string => typeof id === 'string' && id.length > 0);
-        if (credTypeIds.length === 1 && ownerUserId) {
-          const fallback = await connectionService.findCanonicalConnection(ownerUserId, credTypeIds[0]);
-          if (fallback) {
-            const conn = await connectionService.getDecryptedConnection(ownerUserId, fallback.id);
-            if (conn.status === 'active') {
-              nextConfig = mergeRuntimeCredentials(nextConfig, conn.credentials);
-              await connectionService.markUsed(ownerUserId, fallback.id);
-              continue;
+        const requirements = (definition?.credentialSchema?.requirements ?? []) as Array<{ credentialTypeId?: string; credentialTypeIds?: string[] }>;
+        const fallbackTypeIds = Array.from(new Set([
+          ...requirements.flatMap((r) => [r.credentialTypeId, ...(r.credentialTypeIds || [])]),
+          ...Array.from(acceptedCredentialTypes),
+        ].filter((id): id is string => typeof id === 'string' && id.length > 0)));
+        let fallbackResolved = false;
+        for (const fallbackCredentialTypeId of fallbackTypeIds) {
+          for (const candidateUserId of ownerUserIds) {
+            const fallback = await connectionService.findCanonicalConnection(candidateUserId, fallbackCredentialTypeId);
+            if (fallback) {
+              const conn = await connectionService.getDecryptedConnection(candidateUserId, fallback.id);
+              if (conn.status === 'active') {
+                nextConfig = mergeRuntimeCredentials(nextConfig, conn.credentials);
+                await connectionService.markUsed(candidateUserId, fallback.id);
+                fallbackResolved = true;
+                break;
+              }
             }
           }
+          if (fallbackResolved) break;
         }
+        if (fallbackResolved) continue;
       } catch {
         // auto-selection also failed — fall through to error
       }
@@ -3939,220 +3977,6 @@ export async function executeNodeLegacy(
       }
     }
 
-    case 'oauth2_auth': {
-      try {
-        const provider = getStringProperty(config, 'provider', '');
-        if (!provider) {
-          return {
-            success: false,
-            error: 'OAuth2 provider is required',
-          };
-        }
-
-        const action = getStringProperty(config, 'action', 'getToken');
-
-        // Get user ID from function parameters
-        const effectiveUserId = currentUserId || userId;
-
-        if (!effectiveUserId) {
-          return {
-            success: false,
-            error: 'User ID is required for OAuth2 authentication',
-          };
-        }
-
-        // Try to get OAuth tokens via unified resolver (oauth_table → credential_vault → user_credentials)
-        let tokenData: any = null;
-
-        const knownOAuthProviders = ['google','linkedin','github','facebook','notion','twitter','instagram','whatsapp','zoho','salesforce'];
-        if (knownOAuthProviders.includes(provider)) {
-          const { resolveOAuthTokenString } = await import('../shared/credential-resolver');
-          const resolved = await resolveOAuthTokenString(provider as any, [effectiveUserId]);
-          if (resolved) tokenData = { access_token: resolved };
-        } else {
-          const credential = await retrieveRuntimeCredentialObject({
-            userId,
-            currentUserId,
-            workflowId,
-            nodeId: node.id,
-            nodeType: type,
-            keys: [provider, 'oauth2'],
-          });
-
-          if (credential) {
-            tokenData = {
-              access_token: credential.access_token || credential.accessToken || credential.value,
-              refresh_token: credential.refresh_token || credential.refreshToken,
-              expires_at: credential.expires_at || credential.expiresAt,
-              token_type: credential.token_type || credential.tokenType || 'Bearer',
-              scope: credential.scope,
-            };
-          }
-        }
-
-        if (!tokenData || !tokenData.access_token) {
-          return {
-            success: false,
-            error: `OAuth2 credentials for ${provider} not found. Please authenticate first.`,
-          };
-        }
-
-        if (action === 'getToken') {
-          // Check if token is expired or about to expire (within 5 minutes)
-          let accessToken = decryptToken(tokenData.access_token);
-          const refreshToken = tokenData.refresh_token ? decryptToken(tokenData.refresh_token) : undefined;
-          let needsRefresh = false;
-
-          if (tokenData.expires_at) {
-            const expiresAt = new Date(tokenData.expires_at);
-            const now = new Date();
-            const fiveMinutesFromNow = new Date(now.getTime() + 5 * 60 * 1000);
-
-            if (expiresAt <= fiveMinutesFromNow && tokenData.refresh_token) {
-              needsRefresh = true;
-            }
-          }
-
-          // If token needs refresh and we have refresh token, try to refresh
-          if (needsRefresh && tokenData.refresh_token) {
-            // Token refresh logic would go here
-            // For now, we'll return the existing token and note that it may be expired
-            logger.warn(`[OAuth2 Auth] Token for ${provider} may be expired, but refresh not implemented yet`);
-          }
-
-          return {
-            success: true,
-            accessToken,
-            refreshToken,
-            expiresIn: tokenData.expires_at 
-              ? Math.max(0, Math.floor((new Date(tokenData.expires_at).getTime() - Date.now()) / 1000))
-              : undefined,
-            tokenType: tokenData.token_type || 'Bearer',
-            scope: tokenData.scope || undefined,
-          };
-        } else if (action === 'refresh') {
-          // Token refresh implementation
-          // This would require calling the OAuth2 provider's token endpoint
-          // For now, return an error indicating it needs to be implemented
-          return {
-            success: false,
-            error: 'Token refresh is not yet implemented. Please re-authenticate.',
-          };
-        } else if (action === 'startFlow') {
-          // OAuth flow initiation
-          // This typically requires redirecting the user to the provider's authorization URL
-          // For now, return an error indicating it must be done via UI
-          return {
-            success: false,
-            error: 'OAuth flow must be started via the UI. Please use the "Connect" button in the node configuration.',
-          };
-        } else {
-          return {
-            success: false,
-            error: `Unknown action: ${action}`,
-          };
-        }
-      } catch (error: any) {
-        return {
-          success: false,
-          error: error.message || 'Failed to get OAuth2 token',
-        };
-      }
-    }
-
-    case 'api_key_auth': {
-      try {
-        const apiKeyName = getStringProperty(config, 'apiKeyName', '');
-        if (!apiKeyName) {
-          return {
-            success: false,
-            error: 'API key name is required',
-          };
-        }
-
-        // Get user ID from function parameters
-        const effectiveUserId = currentUserId || userId;
-
-        // Try to get API key from credential_vault first
-        let apiKey: string | null = null;
-
-        if (effectiveUserId) {
-          const stored = await retrieveDashboardCredential({
-            userId,
-            currentUserId,
-            workflowId,
-            nodeId: node.id,
-            nodeType: type,
-            key: apiKeyName,
-          });
-          const parsed = parseCredentialValue(stored);
-          apiKey = parsed.apiKey || parsed.apiToken || parsed.key || parsed.token || parsed.value || stored;
-        }
-
-        // If not found by the specific key, try the generic API-key vault entry.
-        if (!apiKey) {
-          const credential = await retrieveRuntimeCredentialObject({
-            userId,
-            currentUserId,
-            workflowId,
-            nodeId: node.id,
-            nodeType: type,
-            keys: ['apikey', 'api_key'],
-          });
-          apiKey = pickCredentialValue(credential, ['api_key', 'apiKey', 'key', apiKeyName, 'token']);
-        }
-
-        // If still not found, try workflow-level credential_vault
-        if (!apiKey && effectiveUserId) {
-          const { data: workflowVaultCredential } = await db
-            .from('credential_vault')
-            .select('encrypted_value, metadata')
-            .eq('user_id', effectiveUserId)
-            .eq('workflow_id', workflowId)
-            .eq('key', apiKeyName)
-            .eq('type', 'api_key')
-            .single();
-
-          if (workflowVaultCredential && workflowVaultCredential.encrypted_value) {
-            // Use CredentialVault service to retrieve (handles decryption automatically)
-            try {
-              const { getCredentialVault } = await import('../services/credential-vault');
-              const vault = getCredentialVault();
-              const retrievedKey = await vault.retrieve(
-                { userId: effectiveUserId, workflowId: workflowId },
-                apiKeyName
-              );
-              if (retrievedKey) {
-                apiKey = retrievedKey;
-              }
-            } catch (vaultError) {
-              // If vault retrieval fails, try using the encrypted value directly (might be plain text in dev)
-              logger.warn('[API Key Auth] Failed to retrieve from vault, trying encrypted value as-is');
-              apiKey = workflowVaultCredential.encrypted_value;
-            }
-          }
-        }
-
-        if (!apiKey) {
-          return {
-            success: false,
-            error: `API key '${apiKeyName}' not found. Please add it in credentials.`,
-          };
-        }
-
-        return {
-          success: true,
-          apiKey,
-          apiKeyName,
-        };
-      } catch (error: any) {
-        return {
-          success: false,
-          error: error.message || 'Failed to get API key',
-        };
-      }
-    }
-
     case 'read_binary_file': {
       // ✅ Read Binary File node
       // Config: { filePath: string }
@@ -6516,9 +6340,8 @@ export async function executeNodeLegacy(
     }
 
     case 'ai_agent': {
-      // AI Agent node with port-specific inputs
-      // Input structure: { chat_model: {...}, memory: {...}, tool: {...}, userInput: {...} }
-      
+      // AI Agent node. Input structure: { userInput: {...} }
+
       // CRITICAL: Detect chatbot workflow at runtime by checking workflow structure
       // Get all nodes from the workflow to check if there's a chat_trigger
       let isChatbotWorkflow = false;
@@ -6563,7 +6386,6 @@ export async function executeNodeLegacy(
       }
       
       const systemPrompt = configSystemPrompt || defaultSystemPrompt;
-      const mode = getStringProperty(config, 'mode', 'chat');
       const temperature = parseFloat(getStringProperty(config, 'temperature', '0.7')) || 0.7;
       const maxTokens = parseInt(getStringProperty(config, 'maxTokens', '2000'), 10) || 2000;
       const topP = parseFloat(getStringProperty(config, 'topP', '1.0')) || 1.0;
@@ -6573,13 +6395,7 @@ export async function executeNodeLegacy(
       const retryCount = parseInt(getStringProperty(config, 'retryCount', '3'), 10) || 3;
       const outputFormat = getStringProperty(config, 'outputFormat', 'text');
       const includeReasoning = getStringProperty(config, 'includeReasoning', 'false') === 'true';
-      const enableMemory = getStringProperty(config, 'enableMemory', 'true') !== 'false';
-      const enableTools = getStringProperty(config, 'enableTools', 'true') !== 'false';
-      
-      // Extract port-specific inputs from inputObj
-      const chatModelConfig = (inputObj as any)?.chat_model || {};
-      const memoryData = (inputObj as any)?.memory;
-      const toolData = (inputObj as any)?.tool || (inputObj as any)?.tools;
+
       let userInput = (inputObj as any)?.userInput || (inputObj as any)?.input || inputObj;
       
       // CRITICAL: For chatbot workflows, extract the message text from the userInput object
@@ -6641,17 +6457,11 @@ export async function executeNodeLegacy(
         userInput = typeof userInput === 'object' ? JSON.stringify(userInput) : String(userInput);
       }
       
-      // Default to Gemini (GEMINI_API_KEY)
-      let provider: 'openai' | 'claude' | 'gemini' | 'ollama' = 'gemini';
-      let model = 'gemini-3.5-flash';
-      let apiKey: string | undefined;
-      if (chatModelConfig.provider) {
-        provider = chatModelConfig.provider as any;
-      } else if (chatModelConfig.model) {
-        provider = LLMAdapter.detectProvider(chatModelConfig.model);
-      }
-      model = chatModelConfig.model || getStringProperty(config, 'model', 'gemini-3.5-flash');
-      apiKey = chatModelConfig.apiKey || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY || process.env.GEMINI_API_KEY;
+      // Model is selected via the node's `model` field; provider is inferred from the model name.
+      // Defaults to Gemini (GEMINI_API_KEY) when the model name doesn't match another provider.
+      const model = getStringProperty(config, 'model', 'gemini-3.5-flash');
+      const provider: 'openai' | 'claude' | 'gemini' | 'ollama' = LLMAdapter.detectProvider(model);
+      let apiKey: string | undefined = process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY || process.env.GEMINI_API_KEY;
       const geminiResolvedForAgent = provider === 'gemini'
         ? await resolveGeminiApiKeyForNode({ node, config, userId, currentUserId })
         : null;
@@ -6673,27 +6483,7 @@ export async function executeNodeLegacy(
         ? resolveWithSchema(systemPrompt, execContext, 'string') as string
         : String(resolveTypedValue(systemPrompt, execContext));
       messages.push({ role: 'system', content: resolvedSystemPrompt });
-      
-      // Add memory context if available
-      if (enableMemory && memoryData) {
-        if (Array.isArray(memoryData.messages)) {
-          // Add conversation history
-          memoryData.messages.forEach((msg: any) => {
-            if (msg.role && msg.content) {
-              messages.push({
-                role: msg.role as 'user' | 'assistant',
-                content: msg.content
-              });
-            }
-          });
-        } else if (memoryData.context) {
-          messages.push({
-            role: 'system',
-            content: `Previous context: ${JSON.stringify(memoryData.context)}`
-          });
-        }
-      }
-      
+
       // Add user input - should already be extracted to just the message text
       // Log what we're sending to help debug
       logger.info(`[AI Agent] Final userInput before sending to LLM:`, 
@@ -6763,26 +6553,14 @@ export async function executeNodeLegacy(
         }).catch(() => {});
       }
       
-      // Process tool calls if enabled and tools are available
-      let usedTools: any[] = [];
-      let finalResponse = response.content;
-      
-      if (enableTools && toolData) {
-        // Simple tool execution - in a full implementation, this would parse tool calls from response
-        // and execute them, then continue the conversation
-        if (Array.isArray(toolData)) {
-          usedTools = toolData;
-        } else if (toolData.tools) {
-          usedTools = Array.isArray(toolData.tools) ? toolData.tools : [];
-        }
-      }
-      
+      const finalResponse = response.content;
+
       // Format output based on outputFormat
       let formattedOutput: any = {
         response_text: finalResponse,
         response_json: null,
         confidence_score: 0.8, // Default confidence
-        used_tools: usedTools,
+        used_tools: [],
         memory_written: false,
         error_flag: false,
         error_message: null,
@@ -6813,22 +6591,11 @@ export async function executeNodeLegacy(
       if (includeReasoning) {
         formattedOutput.reasoning = {
           steps: 1,
-          mode,
           provider,
           model: response.model,
         };
       }
-      
-      // Store in memory if enabled
-      if (enableMemory && memoryData && memoryData.sessionId) {
-        try {
-          // In a full implementation, this would use the memory service
-          formattedOutput.memory_written = true;
-        } catch (error) {
-          logger.error('Failed to write memory:', error);
-        }
-      }
-      
+
       // CRITICAL: Auto-send AI agent response to chat UI if this is a chatbot workflow
       if (isChatbotWorkflow) {
         try {
@@ -17754,6 +17521,30 @@ export async function executeNodeLegacy(
         const authHeader = `Bearer ${accessToken}`;
         logger.info(`[contentful] operation=${operation} spaceId=${spaceId}`);
 
+        const parseEntryPayload = (): { ok: true; payload: unknown } | { ok: false; error: unknown } => {
+          try {
+            const parsed = JSON.parse(fields);
+            const payload =
+              parsed &&
+              typeof parsed === 'object' &&
+              !Array.isArray(parsed) &&
+              Object.prototype.hasOwnProperty.call(parsed, 'fields')
+                ? parsed
+                : { fields: parsed };
+            return { ok: true, payload };
+          } catch {
+            return { ok: false, error: { message: 'Invalid JSON in fields', status: 0 } };
+          }
+        };
+
+        const getCurrentEntryVersion = async (): Promise<number | null> => {
+          const current = await fetch(`${base}/${entryId}`, { method: 'GET', headers: { Authorization: authHeader } });
+          if (!current.ok) return null;
+          const currentData = await current.json().catch(() => null) as any;
+          const version = currentData?.sys?.version;
+          return typeof version === 'number' ? version : null;
+        };
+
         let response: any;
         if (operation === 'get_entries') {
           const url = contentType?.trim() ? `${base}?content_type=${contentType}` : base;
@@ -17761,15 +17552,19 @@ export async function executeNodeLegacy(
         } else if (operation === 'get_entry') {
           response = await fetch(`${base}/${entryId}`, { method: 'GET', headers: { Authorization: authHeader } });
         } else if (operation === 'create_entry') {
-          let parsedFields: unknown;
-          try { parsedFields = JSON.parse(fields); } catch { return { success: false, data: {}, error: { message: 'Invalid JSON in fields', status: 0 } }; }
-          response = await fetch(base, { method: 'POST', headers: { Authorization: authHeader, 'Content-Type': 'application/vnd.contentful.management.v1+json', 'X-Contentful-Content-Type': contentType }, body: JSON.stringify(parsedFields) });
+          const parsed = parseEntryPayload();
+          if (!parsed.ok) return { success: false, data: {}, error: parsed.error };
+          response = await fetch(base, { method: 'POST', headers: { Authorization: authHeader, 'Content-Type': 'application/vnd.contentful.management.v1+json', 'X-Contentful-Content-Type': contentType }, body: JSON.stringify(parsed.payload) });
         } else if (operation === 'update_entry') {
-          let parsedFields: unknown;
-          try { parsedFields = JSON.parse(fields); } catch { return { success: false, data: {}, error: { message: 'Invalid JSON in fields', status: 0 } }; }
-          response = await fetch(`${base}/${entryId}`, { method: 'PUT', headers: { Authorization: authHeader, 'Content-Type': 'application/vnd.contentful.management.v1+json' }, body: JSON.stringify(parsedFields) });
+          const parsed = parseEntryPayload();
+          if (!parsed.ok) return { success: false, data: {}, error: parsed.error };
+          const version = await getCurrentEntryVersion();
+          if (!version) return { success: false, data: {}, error: { message: 'Unable to load current Contentful entry version before update', status: 0 } };
+          response = await fetch(`${base}/${entryId}`, { method: 'PUT', headers: { Authorization: authHeader, 'Content-Type': 'application/vnd.contentful.management.v1+json', 'X-Contentful-Version': String(version) }, body: JSON.stringify(parsed.payload) });
         } else if (operation === 'delete_entry') {
-          response = await fetch(`${base}/${entryId}`, { method: 'DELETE', headers: { Authorization: authHeader } });
+          const version = await getCurrentEntryVersion();
+          if (!version) return { success: false, data: {}, error: { message: 'Unable to load current Contentful entry version before delete', status: 0 } };
+          response = await fetch(`${base}/${entryId}`, { method: 'DELETE', headers: { Authorization: authHeader, 'X-Contentful-Version': String(version) } });
         } else {
           return { success: false, data: {}, error: { message: `Unsupported operation: ${operation}`, status: 400 } };
         }
@@ -19690,7 +19485,12 @@ export default async function executeWorkflowHandler(req: Request, res: Response
       nodes.map((n) => ({
         id: n.id,
         type: String(n.data?.type || n.type || ''),
-        data: { label: n.data?.label, config: n.data?.config },
+        data: {
+          label: n.data?.label,
+          config: n.data?.config,
+          connectionRefs: (n.data as any)?.connectionRefs,
+          connectionId: (n.data as any)?.connectionId,
+        },
       })),
     );
     if (!configCheck.valid) {

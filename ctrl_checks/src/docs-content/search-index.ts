@@ -51,8 +51,6 @@ export async function loadDocsSearchIndex(): Promise<DocsSearchIndexItem[]> {
     import('./search/queue_consume').then((mod) => mod.queueConsumeSearchIndex),
     import('./search/cache_get').then((mod) => mod.cacheGetSearchIndex),
     import('./search/cache_set').then((mod) => mod.cacheSetSearchIndex),
-    import('./search/oauth2_auth').then((mod) => mod.oauth2AuthSearchIndex),
-    import('./search/api_key_auth').then((mod) => mod.apiKeyAuthSearchIndex),
     import('./search/ai_agent').then((mod) => mod.aiAgentSearchIndex),
     import('./search/ai_chat_model').then((mod) => mod.aiChatModelSearchIndex),
     import('./search/slack_message').then((mod) => mod.slackMessageSearchIndex),

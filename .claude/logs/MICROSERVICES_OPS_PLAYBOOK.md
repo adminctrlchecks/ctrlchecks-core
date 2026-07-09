@@ -1,6 +1,6 @@
 # CtrlChecks — Microservices Ops Playbook
 
-**Updated:** 2026-06-15  
+**Updated:** 2026-06-20 (T10 FULL PASS — FIX-1/2/3 deployed)  
 **Purpose:** Unified soak + canary ramp + rollback runbook for all 5 extracted services.  
 **Server:** `ubuntu@3.7.115.58` — PEM: `Guide/Worker/ctrlchecks-backend.pem`
 
@@ -12,7 +12,7 @@
 
 | Service | Port | ENABLED var | CANARY var | Retirement gate | Soak required |
 |---|---|---|---|---|---|
-| execution-engine | 3003 | `EXECUTION_ENGINE_ENABLED` | `EXECUTION_ENGINE_CANARY_PERCENT` | Phase 6 removes internal route | 7 days at CANARY=100 before Phase 6 |
+| execution-engine | 3003 | `EXECUTION_ENGINE_ENABLED` | `EXECUTION_ENGINE_CANARY_PERCENT` | Phase 6 removes internal route | 7 days at CANARY=100 before Phase 6. **Pre-req: set EXECUTION_ENGINE_CONSUMER_ENABLED=true in engine .env + restart engine** |
 | credential-service | 3004 | `CREDENTIAL_SERVICE_ENABLED` | `CREDENTIAL_SERVICE_CANARY_PERCENT` | `CREDENTIAL_SERVICE_VAULT_WRITES_DISABLED` | 14 days at CANARY=100 before gate flip |
 | notification-service | 3005 | `NOTIFICATION_SERVICE_ENABLED` | `NOTIFICATION_SERVICE_CANARY_PERCENT` | — | 7 days at CANARY=100 |
 | trigger-service | 3006 | `TRIGGER_SERVICE_ENABLED` | `TRIGGER_SERVICE_CANARY_PERCENT` | — | 7 days at CANARY=100 |
@@ -69,6 +69,13 @@ curl -s http://localhost:3001/metrics | grep workflow_crud_delegation_total
 **Next code phase:** Phase 6 — move executor into engine; remove `/api/internal/engine-execute` (blocked on 7-day soak at CANARY=100)  
 **Contract:** `docs/engineering/execution-engine-contract.md`  
 **Completion doc:** `.claude/logs/TASK11A_PHASE5_SOAK.md`
+
+**Queue design (verified 2026-06-16):**
+- Legacy worker (`ctrlchecks-execution-worker`) consumes: `workflow:execution:queue`
+- Execution-engine consumer reads: `workflow:execution:engine-queue`
+- **SEPARATE queues — no double-consumption risk.** Legacy worker stop is cleanup only, NOT a blocker for execution-engine canary.
+- **Pre-req before first canary:** set `EXECUTION_ENGINE_CONSUMER_ENABLED=true` in `/opt/ctrlchecks-execution-engine/.env` + restart engine service (not worker). Currently `false`.
+- Both queues empty (0 jobs) as of 2026-06-16.
 
 ```bash
 # Health
@@ -256,17 +263,15 @@ Use this table to record soak milestones. Update as each step passes.
 
 | Service | CANARY% | Date started | Date passed | Notes |
 |---|---|---|---|---|
-| execution-engine | 5 | — | — | |
-| execution-engine | 100 | — | — | |
-| credential-service | 5 | — | — | |
-| credential-service | 100 | — | — | |
-| notification-service | 5 | — | — | |
-| notification-service | 100 | — | — | |
-| trigger-service | 5 | — | — | |
-| trigger-service | 100 | — | — | |
-| workflow-crud-service | 5 | 2026-06-15 18:22 UTC | — | ENABLED=true, CANARY=5. Key mirrored. Worker + svc restarted. db:ok ✅ |
-| workflow-crud-service | 25 | — | — | Pending 48h soak at 5% |
-| workflow-crud-service | 50 | — | — | |
-| workflow-crud-service | 100 | — | — | |
-| credential gate flip | — | — | — | `VAULT_WRITES_DISABLED=true` |
-| workflow-crud gate flip | — | — | — | `LOCAL_WRITES_DISABLED=true` |
+| workflow-crud-service | 5 | 2026-06-15 18:22 UTC | 2026-06-16 | Task-gated, one session |
+| workflow-crud-service | 25 | 2026-06-16 | 2026-06-16 | Task-gated |
+| workflow-crud-service | 50 | 2026-06-16 | 2026-06-16 | Task-gated |
+| workflow-crud-service | 100 | 2026-06-16 | soak ongoing | Write-only delegation. db:ok ✅. Read bypass (accepted). |
+| workflow-crud gate flip | 2026-06-20 | 2026-06-20 | ✅ | `LOCAL_WRITES_DISABLED=true` — kill test PASS |
+| notification-service | 5→100 | 2026-06-16 | soak ongoing | Task-gated. FIX-3B also wires direct dispatch in execute-workflow.ts |
+| notification-service | GATE | — | — | No retirement gate — fallback removal via code PR after soak |
+| credential-service | 5→100 | 2026-06-16 | soak ongoing | Task-gated. OAuth bypass accepted. |
+| credential gate flip | 2026-06-20 | 2026-06-20 | ✅ | `VAULT_WRITES_DISABLED=true` — kill test PASS (503 confirmed in browser) |
+| trigger-service | 5→100 | 2026-06-16 | soak ongoing | Task-gated. Auth header bug fixed 286989e. |
+| execution-engine | consumer | 2026-06-16 | 2026-06-16 | CONSUMER_ENABLED=true set; legacy execution-worker stopped+disabled |
+| execution-engine | 100 | 2026-06-16 | soak ongoing | Binary 100% (Phase 5 removed canary check). T10 execution path verified. |

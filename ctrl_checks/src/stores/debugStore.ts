@@ -1,13 +1,26 @@
 import { create } from 'zustand';
 import { WorkflowNode } from './workflowStore';
 
+export interface StructuredDebugError {
+  code?: string;
+  error?: string;
+  message?: string;
+  hint?: string;
+  details?: Record<string, unknown>;
+  success?: boolean;
+  status?: number;
+  [key: string]: unknown;
+}
+
+export type DebugNodeError = string | StructuredDebugError;
+
 export interface DebugNodeState {
   nodeId: string;
   lastInput: unknown;
   lastOutput: unknown;
   executionStatus: 'idle' | 'running' | 'success' | 'error';
   executionTime?: number;
-  error?: string;
+  error?: DebugNodeError;
   logs?: string[];
   preferredView?: 'tree' | 'json' | 'table' | 'schema';
 }
@@ -31,7 +44,7 @@ interface DebugState {
   closeDebug: () => void;
   setNodeInput: (nodeId: string, input: unknown) => void;
   setNodeOutput: (nodeId: string, output: unknown, executionTime?: number) => void;
-  setNodeStatus: (nodeId: string, status: DebugNodeState['executionStatus'], error?: string) => void;
+  setNodeStatus: (nodeId: string, status: DebugNodeState['executionStatus'], error?: DebugNodeError) => void;
   propagateNodeOutput: (nodeId: string, nodes: WorkflowNode[], edges: DebugEdge[]) => void;
   clearNodeState: (nodeId: string) => void;
   getNodeState: (nodeId: string) => DebugNodeState | undefined;
@@ -138,7 +151,7 @@ export const useDebugStore = create<DebugState>((set, get) => ({
     }));
   },
 
-  setNodeStatus: (nodeId: string, status: DebugNodeState['executionStatus'], error?: string) => {
+  setNodeStatus: (nodeId: string, status: DebugNodeState['executionStatus'], error?: DebugNodeError) => {
     set((state) => ({
       nodeStates: {
         ...state.nodeStates,

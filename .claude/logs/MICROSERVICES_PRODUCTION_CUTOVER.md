@@ -19,8 +19,8 @@ Each box must be checked before the corresponding retirement gate can be flipped
 - [ ] Grafana alerts configured and green for ≥48h
 - [ ] `ctrlchecks-workflow-crud-service` systemd unit installed and enabled on EC2
 - [ ] Branch on EC2 standardized to `main` (not `main-repair`)
-- [ ] `app.ctrlchecks.ai` HTTPS live (DNS A record + Certbot)
-- [ ] Cognito callback URIs include `https://app.ctrlchecks.ai/*`
+- [ ] Frontend live on Vercel `https://www.ctrlchecks.ai` — Vercel env vars set (`VITE_API_URL=https://worker.ctrlchecks.ai`) + redeploy
+- [ ] Cognito callback URIs include `https://www.ctrlchecks.ai` (Cognito hosted UI → allowed callbacks)
 
 ### Per-Service Soaks (CODE: all done ✅ | OPS: pending)
 
@@ -122,7 +122,7 @@ echo "$EXEC" | jq '{status:.status, executionId:.executionId}'
 # Check metric: curl -s http://localhost:3001/metrics | grep execution_engine_delegation_total
 
 echo "=== 7. Connect OAuth credential (credential service) ==="
-# Manual check: visit https://app.ctrlchecks.ai/connections → connect Google
+# Manual check: visit https://www.ctrlchecks.ai/connections → connect Google
 # Verify: curl -s http://localhost:3004/metrics | grep credential_operations_total
 
 echo "=== 8. Webhook trigger (trigger service) ==="

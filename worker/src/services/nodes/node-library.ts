@@ -33,6 +33,12 @@ export interface NodeSchema {
   // ✅ Node Capability Registry: Data type capabilities
   nodeCapability?: NodeCapability; // Explicit capability definition
   operationContracts?: NodeOperationContract[];
+  /**
+   * Internal/legacy-only node: kept registered for backward compatibility with
+   * existing saved workflows, but excluded from AI workflow generation and the
+   * frontend node palette. Excluded from getAllSchemas() unless includeInternal=true.
+   */
+  internalOnly?: boolean;
 }
 
 export interface ConfigSchema {
@@ -797,10 +803,18 @@ export class NodeLibrary {
   }
 
   /**
-   * Get all schemas
+   * Get all schemas.
+   *
+   * By default excludes `internalOnly` schemas (legacy/deprecated nodes kept only so
+   * existing saved workflows keep executing). This means AI workflow generation,
+   * keyword matchers, planners, and capability registries never select them.
+   *
+   * Pass `includeInternal=true` only from execution infrastructure (unified registry,
+   * alias resolver, contract export) that must know every registered type.
    */
-  getAllSchemas(): NodeSchema[] {
-    return Array.from(this.schemas.values());
+  getAllSchemas(includeInternal = false): NodeSchema[] {
+    const all = Array.from(this.schemas.values());
+    return includeInternal ? all : all.filter((s) => !s.internalOnly);
   }
 
   /**
@@ -809,7 +823,9 @@ export class NodeLibrary {
    * Used for strict validation and LLM enum constraints
    */
   getAllCanonicalTypes(): string[] {
-    const allSchemas = this.getAllSchemas();
+    // Include internal-only schemas: validation must keep recognizing legacy types
+    // (ollama, chat_model, memory, tool) present in existing saved workflows.
+    const allSchemas = this.getAllSchemas(true);
     const canonicalTypes: string[] = [];
     
     // ✅ PERMANENT: NO aliases in canonical types list
@@ -1202,9 +1218,7 @@ export class NodeLibrary {
     this.addSchema(this.createQueueConsumeSchema());
     this.addSchema(this.createCacheGetSchema());
     this.addSchema(this.createCacheSetSchema());
-    this.addSchema(this.createOAuth2AuthSchema());
-    this.addSchema(this.createApiKeyAuthSchema());
-    schemaCount += 15;
+    schemaCount += 13;
 
     // AI Nodes
     this.addSchema(this.createAiAgentSchema());
@@ -3943,164 +3957,6 @@ export class NodeLibrary {
     };
   }
 
-  private createOAuth2AuthSchema(): NodeSchema {
-    return {
-      type: 'oauth2_auth',
-      label: 'OAuth2 Auth',
-      category: 'auth',
-      description: 'Handles OAuth2 authentication and provides access tokens',
-      configSchema: {
-        required: ['provider'],
-        optional: {
-          provider: {
-            type: 'string',
-            description: 'OAuth2 provider (google, github, etc.)',
-            options: [
-              { label: 'Google', value: 'google' },
-              { label: 'GitHub', value: 'github' },
-              { label: 'Custom', value: 'custom' },
-            ],
-          },
-          authUrl: {
-            type: 'string',
-            description: 'Authorization URL (for custom provider)',
-          },
-          tokenUrl: {
-            type: 'string',
-            description: 'Token URL (for custom provider)',
-          },
-          clientId: {
-            type: 'string',
-            description: 'Client ID',
-          },
-          clientSecret: {
-            type: 'string',
-            description: 'Client Secret',
-          },
-          scope: {
-            type: 'string',
-            description: 'OAuth scopes',
-          },
-          action: {
-            type: 'string',
-            description: 'Action: getToken, refresh, or startFlow',
-            default: 'getToken',
-            options: [
-              { label: 'Get Token', value: 'getToken' },
-              { label: 'Refresh Token', value: 'refresh' },
-              { label: 'Start OAuth Flow', value: 'startFlow' },
-            ],
-          },
-        },
-      },
-      aiSelectionCriteria: {
-        whenToUse: [
-          'Need to authenticate with OAuth2 APIs',
-          'Managing access tokens',
-        ],
-        whenNotToUse: [
-          'For API keys, use API Key Auth',
-          'If you have long-lived tokens',
-        ],
-        keywords: [
-          'oauth', 'oauth2', 'oauth auth', 'oauth authentication',
-          'oauth token', 'oauth access token', 'oauth2 auth',
-          'oauth2 authentication', 'oauth2 token', 'oauth api',
-          'oauth integration', 'oauth connect', 'oauth authorize'
-        ],
-        useCases: ['Google APIs', 'GitHub API', 'Salesforce'],
-        intentDescription: 'OAuth2 authentication node that handles OAuth2 authentication flows and manages access tokens. Authenticates with OAuth2-protected APIs, manages token refresh, and provides access tokens for API calls. Used for Google APIs, GitHub API, Salesforce, and other OAuth2-protected services.',
-        intentCategories: ['authentication', 'oauth2', 'token_management', 'api_authentication'],
-      },
-      commonPatterns: [
-        {
-          name: 'google_oauth',
-          description: 'Get Google access token',
-          config: { provider: 'google', action: 'getToken' },
-        },
-      ],
-      validationRules: [],
-      outputType: 'object',
-      outputSchema: {
-        success: { type: 'boolean' },
-        accessToken: { type: 'string', optional: true },
-        refreshToken: { type: 'string', optional: true },
-        expiresIn: { type: 'number', optional: true },
-      },
-      schemaVersion: '1.0.0',
-      keywords: [
-        'oauth', 'oauth2', 'oauth auth', 'oauth authentication',
-        'oauth token', 'oauth access token', 'oauth2 auth',
-        'oauth2 authentication', 'oauth2 token', 'oauth api',
-        'oauth integration', 'oauth connect', 'oauth authorize'
-      ],
-      providers: ['oauth2'],
-    };
-  }
-
-  private createApiKeyAuthSchema(): NodeSchema {
-    return {
-      type: 'api_key_auth',
-      label: 'API Key Auth',
-      category: 'auth',
-      description: 'Provides an API key for authentication',
-      configSchema: {
-        required: ['apiKeyName'],
-        optional: {
-          apiKeyName: {
-            type: 'string',
-            description: 'Name of the stored API key',
-            examples: ['openai', 'stripe'],
-          },
-        },
-      },
-      aiSelectionCriteria: {
-        whenToUse: [
-          'Need to authenticate with API key',
-          'Simple authentication',
-        ],
-        whenNotToUse: [
-          'For OAuth2, use OAuth2 Auth',
-          'If key needs to be rotated frequently',
-        ],
-        keywords: [
-          'api key', 'apikey', 'api key auth', 'api key authentication',
-          'api key token', 'api key node', 'key api', 'api key integration',
-          'api key connect', 'api key auth node', 'api key authentication node'
-        ],
-        useCases: ['OpenAI API', 'Stripe API'],
-        intentDescription: 'API key authentication node that provides API keys for authenticating with services that use API key-based authentication. Retrieves stored API keys and provides them for API calls. Used for OpenAI API, Stripe API, and other services that use simple API key authentication.',
-        intentCategories: ['authentication', 'api_key', 'simple_auth', 'api_authentication'],
-      },
-      commonPatterns: [
-        {
-          name: 'get_openai_key',
-          description: 'Get OpenAI API key',
-          config: { apiKeyName: 'openai' },
-        },
-      ],
-      validationRules: [
-        {
-          field: 'apiKeyName',
-          validator: (v) => typeof v === 'string' && v.length > 0,
-          errorMessage: 'API key name required',
-        },
-      ],
-      outputType: 'object',
-      outputSchema: {
-        success: { type: 'boolean' },
-        apiKey: { type: 'string' },
-      },
-      schemaVersion: '1.0.0',
-      keywords: [
-        'api key', 'apikey', 'api key auth', 'api key authentication',
-        'api key token', 'api key node', 'key api', 'api key integration',
-        'api key connect', 'api key auth node', 'api key authentication node'
-      ],
-      providers: ['apikey'],
-    };
-  }
-
   // ============================================
   // OUTPUT NODES
   // ============================================
@@ -5177,14 +5033,6 @@ export class NodeLibrary {
             description: 'LLM model selection',
             default: 'gemini-3.5-flash',
             examples: ['gemini-3.5-flash', 'gemini-3.1-pro-preview', 'claude-3-5-sonnet', 'gpt-4o'],
-          },
-          memory: {
-            type: 'object',
-            description: 'Optional memory configuration (disabled by default)',
-          },
-          tool: {
-            type: 'object',
-            description: 'Optional tool configuration (disabled by default)',
           },
         },
       },
@@ -7775,6 +7623,8 @@ export class NodeLibrary {
       label: 'AI Chat (Gemini)',
       category: 'ai',
       description: 'AI chat completion using Gemini 3.5 Flash (default LLM)',
+      // Legacy alias of ai_chat_model — kept for existing workflows only.
+      internalOnly: true,
       configSchema: {
         required: ['prompt'],
         optional: {
@@ -7808,7 +7658,7 @@ export class NodeLibrary {
       commonPatterns: [],
       validationRules: [],
       capabilities: ['ai.chat', 'ai.completion'],
-      providers: ['google'],
+      providers: ['gemini'],
       keywords: [
         'ollama', 'ollama ai', 'ollama model', 'ollama chat',
         'ollama llm', 'ai chat', 'ai model', 'llm chat'
@@ -7911,6 +7761,8 @@ export class NodeLibrary {
       label: 'Chat Model',
       category: 'ai',
       description: 'Chat model connector for AI Agent node (uses Gemini 3.5 Flash by default)',
+      // Config-passthrough stub for the removed ai_agent chat_model port — legacy workflows only.
+      internalOnly: true,
       configSchema: {
         required: [],
         optional: {
@@ -7945,6 +7797,8 @@ export class NodeLibrary {
       label: 'Memory',
       category: 'ai',
       description: 'Memory storage for AI Agent context',
+      // Support node for the removed ai_agent memory port — legacy workflows only.
+      internalOnly: true,
       configSchema: {
         required: [],
         optional: {
@@ -7978,6 +7832,8 @@ export class NodeLibrary {
       label: 'Tool',
       category: 'ai',
       description: 'Tool connector for AI Agent to use external functions',
+      // Support node for the removed ai_agent tool port — legacy workflows only.
+      internalOnly: true,
       configSchema: {
         required: ['toolName'],
         optional: {
@@ -12141,7 +11997,7 @@ export class NodeLibrary {
             ],
           },
           spaceId: { type: 'string', description: 'Contentful space ID', default: '' },
-          accessToken: { type: 'string', description: 'Contentful CMA personal access token', default: '' },
+          accessToken: { type: 'string', description: 'Contentful CMA personal access token; authorize it for the target organization/space', default: '' },
           environment: { type: 'string', description: 'Contentful environment', default: 'master' },
           contentType: { type: 'string', description: 'Content type ID', default: '' },
           entryId: { type: 'string', description: 'Entry ID', default: '' },

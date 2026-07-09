@@ -1451,6 +1451,11 @@ Example: https://api.calendly.com/event_types/ABCDEFGH`,
       spaceId: `What this field is: Your Contentful space ID — identifies your content workspace.
 Where to find it: Contentful Dashboard → Settings → General Settings → Space ID.
 Example: abcd1234efgh`,
+      accessToken: `What this field is: A Contentful CMA personal access token used for Content Management API calls.
+Where to find it: Contentful -> Settings -> CMA tokens -> Create personal access token.
+Important: After creating the token, click Authorize on the token row and grant access to the target organization/space.
+Troubleshooting: OrganizationAccessGrantRequired means the token is valid but not authorized for that organization/space.
+Example: CFPAT-...`,
       contentTypeId: `What this field is: The content type to work with.
 Example: blogPost or product or author`,
     },

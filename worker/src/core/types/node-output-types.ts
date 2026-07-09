@@ -64,8 +64,6 @@ const GENERIC_OBJECT_OUTPUT_NODE_TYPES = [
   'queue_consume',
   'cache_get',
   'cache_set',
-  'oauth2_auth',
-  'api_key_auth',
   'hubspot',
   'airtable',
   'notion',

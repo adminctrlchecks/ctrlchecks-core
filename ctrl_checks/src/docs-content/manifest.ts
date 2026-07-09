@@ -302,20 +302,6 @@ export const nodeDocManifest = [
     "logoUrl": "/icons/nodes/cache_set.svg"
   },
   {
-    "slug": "oauth2_auth",
-    "displayName": "OAuth2 Auth",
-    "category": "Utility",
-    "description": "Handles OAuth2 authentication and provides access tokens Use this node when a workflow needs oauth2 auth behavior with schema-driven inputs from the CtrlChecks node registry.",
-    "logoUrl": "/icons/nodes/oauth2_auth.svg"
-  },
-  {
-    "slug": "api_key_auth",
-    "displayName": "API Key Auth",
-    "category": "Utility",
-    "description": "Provides an API key for authentication Use this node when a workflow needs api key auth behavior with schema-driven inputs from the CtrlChecks node registry.",
-    "logoUrl": "/icons/nodes/api_key_auth.svg"
-  },
-  {
     "slug": "ai_agent",
     "displayName": "AI Agent",
     "category": "AI",

@@ -5,6 +5,10 @@ import { ChevronRight, ChevronDown, Copy, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { GuidedStatusCard } from '@/components/ui/guided-status-card';
+import { mapWorkflowIssueToGuidance, type GuidedStatusContent } from '@/lib/workflow-guidance';
+import { getAIGuidance } from '@/lib/ai-error-guidance';
+import type { DebugNodeError, StructuredDebugError } from '@/stores/debugStore';
 
 interface JsonKey {
   path: string;
@@ -135,10 +139,36 @@ interface OutputPanelProps {
   outputData: unknown;
   executionTime?: number;
   status?: 'idle' | 'running' | 'success' | 'error';
-  error?: string;
+  error?: DebugNodeError;
   nodeId?: string | null;
+  nodeType?: string;
   preferredView?: 'tree' | 'json' | 'table' | 'schema';
   onViewChange?: (view: 'tree' | 'json' | 'table' | 'schema') => void;
+}
+
+function isStructuredDebugError(error: DebugNodeError | undefined): error is StructuredDebugError {
+  return Boolean(error && typeof error === 'object' && !Array.isArray(error));
+}
+
+function getStructuredErrorMessage(error: StructuredDebugError): string {
+  return (
+    (typeof error.message === 'string' && error.message) ||
+    (typeof error.error === 'string' && error.error) ||
+    'Execution failed'
+  );
+}
+
+function shouldFetchAIGuidance(error: StructuredDebugError): boolean {
+  const statusCode = typeof error.status === 'number' ? error.status : 0;
+  return error.success === false || statusCode >= 500;
+}
+
+function formatTechnicalDetails(error: StructuredDebugError): string {
+  try {
+    return JSON.stringify(error, null, 2);
+  } catch {
+    return getStructuredErrorMessage(error);
+  }
 }
 
 export default function OutputPanel({
@@ -147,11 +177,55 @@ export default function OutputPanel({
   status = 'idle',
   error,
   nodeId,
+  nodeType,
   preferredView,
   onViewChange,
 }: OutputPanelProps) {
   const { toast } = useToast();
   const [copiedPath, setCopiedPath] = useState<string | null>(null);
+  const [aiGuidance, setAiGuidance] = useState<GuidedStatusContent | null>(null);
+  const [guidanceLoading, setGuidanceLoading] = useState(false);
+  const structuredError = isStructuredDebugError(error) ? error : null;
+  const needsAIGuidance = Boolean(structuredError && shouldFetchAIGuidance(structuredError));
+  const staticGuidance = useMemo(
+    () => (structuredError && !needsAIGuidance ? mapWorkflowIssueToGuidance(structuredError) : null),
+    [structuredError, needsAIGuidance]
+  );
+  const guidedError = needsAIGuidance ? aiGuidance : staticGuidance;
+  const isGuidanceLoading = needsAIGuidance && (guidanceLoading || !guidedError);
+  const technicalDetails = structuredError ? formatTechnicalDetails(structuredError) : '';
+
+  useEffect(() => {
+    if (!structuredError || !needsAIGuidance) {
+      setAiGuidance(null);
+      setGuidanceLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setAiGuidance(null);
+    setGuidanceLoading(true);
+
+    getAIGuidance(
+      {
+        code: typeof structuredError.code === 'string' ? structuredError.code : undefined,
+        message: getStructuredErrorMessage(structuredError),
+        hint: typeof structuredError.hint === 'string' ? structuredError.hint : undefined,
+        details: structuredError.details,
+      },
+      { nodeType }
+    )
+      .then((guidance) => {
+        if (!cancelled) setAiGuidance(guidance);
+      })
+      .finally(() => {
+        if (!cancelled) setGuidanceLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [structuredError, needsAIGuidance, nodeType]);
   
   // Match Node-RED style debugging: default to raw JSON, with Tree/Table/Schema
   // available when the user explicitly wants another projection.
@@ -631,7 +705,43 @@ export default function OutputPanel({
           </div>
         </div>
         
-        {error && (
+        {structuredError && status === 'error' && (
+          <div className="px-4 py-3 space-y-3 border-b border-border bg-muted/10">
+            {guidedError ? (
+              <GuidedStatusCard
+                title={guidedError.title}
+                description={guidedError.description}
+                resolution={guidedError.resolution}
+                details={guidedError.details}
+                missingItems={guidedError.missingItems}
+                nextSteps={guidedError.nextSteps}
+                tone={guidedError.tone}
+              />
+            ) : isGuidanceLoading ? (
+              <GuidedStatusCard
+                title="Preparing guidance"
+                description="Reading the execution error and turning it into the next useful step."
+                tone="attention"
+              />
+            ) : (
+              <GuidedStatusCard
+                title="Execution needs attention"
+                description={getStructuredErrorMessage(structuredError)}
+                tone="attention"
+              />
+            )}
+            <details className="rounded-md border border-border/50 bg-background/60 px-3 py-2 text-xs">
+              <summary className="cursor-pointer select-none font-medium text-muted-foreground hover:text-foreground">
+                Technical details
+              </summary>
+              <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] text-muted-foreground">
+                {technicalDetails}
+              </pre>
+            </details>
+          </div>
+        )}
+
+        {typeof error === 'string' && (
           <div className="px-4 py-3 bg-destructive/10 border-b border-border">
             <p className="text-sm text-destructive font-mono">{error}</p>
           </div>

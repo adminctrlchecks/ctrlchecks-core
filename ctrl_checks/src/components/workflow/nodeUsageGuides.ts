@@ -2009,25 +2009,20 @@ Output: {
   },
 
   ollama: {
-    overview: 'Interact with Ollama server to run large language models locally. Run models on your own infrastructure without API costs. Perfect for privacy-sensitive applications or when you want full control over the AI models. Requires Ollama server to be running.',
-    inputs: ['serverUrl', 'model', 'prompt', 'temperature'],
-    outputs: ['response', 'model', 'done'],
-    example: `Server URL: http://localhost:11434
-Model: llama2
-Prompt: "Explain quantum computing in simple terms"
+    overview: 'AI chat completion using Gemini 3.5 Flash, the platform\'s default LLM. Send a prompt and get a text response back — no setup or API key required.',
+    inputs: ['prompt', 'temperature'],
+    outputs: ['response_text', 'response', 'text'],
+    example: `Prompt: "Explain quantum computing in simple terms"
 Temperature: 0.7
 
 Output: {
-  response: "Quantum computing uses quantum mechanics...",
-  model: "llama2",
-  done: true
+  response_text: "Quantum computing uses quantum mechanics...",
 }`,
     tips: [
-      'Install Ollama from ollama.ai first',
-      'Pull models: ollama pull llama2',
-      'Default port is 11434',
-      'Free to use but requires your own compute',
-      'Great for local development and testing',
+      'Uses the platform\'s built-in Gemini 3.5 Flash model — no API key needed',
+      'Lower temperature (0.0-0.5) for factual, consistent answers',
+      'Higher temperature (0.7-1.2) for creative, varied answers',
+      'For more control (system prompt, response format), use the AI Chat Model node instead',
     ],
   },
 

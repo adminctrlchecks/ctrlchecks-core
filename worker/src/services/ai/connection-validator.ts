@@ -213,9 +213,6 @@ export class ConnectionValidator {
       'ai_agent': {
         fields: {
           'userInput': { type: 'string', required: false },
-          'chat_model': { type: 'object', required: true },
-          'memory': { type: 'object', required: false },
-          'tool': { type: 'object', required: false },
         },
       },
       'http_request': {
@@ -343,43 +340,6 @@ export class ConnectionValidator {
 
     // Special handling for AI Agent nodes
     if (targetType === 'ai_agent') {
-      // Check if this is a chat_model connection
-      if (sourceType === 'chat_model') {
-        if (edge.targetHandle !== 'chat_model' && edge.type !== 'chat_model') {
-          warnings.push(`AI Agent requires chat_model connection. Consider using targetHandle='chat_model'`);
-        }
-        return {
-          valid: true,
-          errors: [],
-          warnings,
-          dataContract: {
-            sourceNode: sourceNode.id,
-            sourceField: 'config',
-            sourceType: 'object',
-            targetNode: targetNode.id,
-            targetField: 'chat_model',
-            targetType: 'object',
-          },
-        };
-      }
-
-      // Check if this is a memory or tool connection
-      if (sourceType === 'memory' || sourceType === 'tool') {
-        return {
-          valid: true,
-          errors: [],
-          warnings: [],
-          dataContract: {
-            sourceNode: sourceNode.id,
-            sourceField: sourceType,
-            sourceType: 'object',
-            targetNode: targetNode.id,
-            targetField: sourceType,
-            targetType: 'object',
-          },
-        };
-      }
-
       // Default: map to userInput
       if (!sourceOutputSchema.fields[outputField]) {
         // Try to find a suitable output field
@@ -412,12 +372,6 @@ export class ConnectionValidator {
       if (!this.areTypesCompatible(sourceFieldType, targetFieldType)) {
         errors.push(`Type mismatch: ${sourceType}.${outputField} (${sourceFieldType}) → ${targetType}.${inputField} (${targetFieldType})`);
       }
-    }
-
-    // Check required fields for AI Agent
-    if (targetType === 'ai_agent') {
-      // Check if chat_model is connected (required)
-      // This is checked at workflow level, not connection level
     }
 
     return {

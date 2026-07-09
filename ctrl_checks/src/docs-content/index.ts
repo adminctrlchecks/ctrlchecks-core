@@ -41,8 +41,6 @@ import { queuePushDoc } from './nodes/queue_push.doc';
 import { queueConsumeDoc } from './nodes/queue_consume.doc';
 import { cacheGetDoc } from './nodes/cache_get.doc';
 import { cacheSetDoc } from './nodes/cache_set.doc';
-import { oauth2AuthDoc } from './nodes/oauth2_auth.doc';
-import { apiKeyAuthDoc } from './nodes/api_key_auth.doc';
 import { aiAgentDoc } from './nodes/ai_agent.doc';
 import { aiChatModelDoc } from './nodes/ai_chat_model.doc';
 import { slackMessageDoc } from './nodes/slack_message.doc';
@@ -197,8 +195,6 @@ export const allNodes: NodeDoc[] = [
   queueConsumeDoc,
   cacheGetDoc,
   cacheSetDoc,
-  oauth2AuthDoc,
-  apiKeyAuthDoc,
   aiAgentDoc,
   aiChatModelDoc,
   slackMessageDoc,

@@ -162,31 +162,6 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
     }
   },
   ollama: {
-    serverUrl: {
-      title: 'How to set Ollama Server URL?',
-      steps: [
-        'This is the base URL of your Ollama server.',
-        '',
-        'Common value:',
-        '• http://localhost:11434',
-        '',
-        'Tip: Make sure the server is running and reachable.'
-      ],
-      example: 'http://localhost:11434'
-    },
-    model: {
-      title: 'How to choose Model?',
-      steps: [
-        'Choose a model installed on your Ollama server.',
-        '',
-        'Examples:',
-        '• qwen2.5:14b-instruct-q4_K_M',
-        '• qwen2.5-coder:7b-instruct-q4_K_M',
-        '',
-        'Tip: Pull models on the server first (e.g., ollama pull qwen2.5:14b-instruct-q4_K_M).'
-      ],
-      example: 'qwen2.5:14b-instruct-q4_K_M'
-    },
     prompt: {
       title: 'How to write Prompt?',
       steps: [

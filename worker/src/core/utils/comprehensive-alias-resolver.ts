@@ -946,35 +946,6 @@ export const COMPREHENSIVE_NODE_ALIAS_REGISTRY: Record<string, string[]> = {
   ],
 
   // ============================================
-  // AUTHENTICATION NODES
-  // ============================================
-  'oauth2_auth': [
-    'oauth',
-    'oauth2',
-    'auth',
-    'authentication',
-    'token',
-    'oauth2 auth',
-    'oauth authentication',
-    'oauth token',
-    'oauth2 token',
-    'oauth login',
-    'oauth authorize',
-  ],
-
-  'api_key_auth': [
-    'apikey',
-    'api key',
-    'auth',
-    'key',
-    'api key auth',
-    'key auth',
-    'api authentication',
-    'api token',
-    'bearer token',
-  ],
-
-  // ============================================
   // LOGGING NODES
   // ============================================
   'log_output': [

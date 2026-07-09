@@ -1,24 +1,40 @@
 # Production Ground Truth Audit
 
-**Date:** 2026-06-15 (updated post-deploy)
+**Date:** 2026-06-20 (updated post T10 FULL PASS)
 **Server:** `ubuntu@3.7.115.58`
 
 ---
 
-## EC2 State vs. Plan: Summary Table (CURRENT)
+## T10 Smoke Test Results (2026-06-20)
+
+| # | Test | Result |
+|---|---|---|
+| 1 | Manual trigger → execute workflow | PASS |
+| 2 | Scheduled trigger | PASS |
+| 3 | Form trigger → if_else → Gmail (~9.36s) | PASS |
+| 4 | if_else condition routing | PASS |
+| 5 | WS 101 live updates (not 3s poll) | PASS |
+| 6 | In-app notification after success | PASS |
+
+**Commits:** `9824f4c` FIX-1 · `b161de2` FIX-2 · `15cc5a4` FIX-3  
+See `MICROSERVICES_CUTOVER_COMPLETE.md` for full bug list and accepted gaps.
+
+---
+
+## EC2 State vs. Plan: Summary Table (2026-06-20)
 
 | Service | Code in repo | Deployed on EC2 | Port responds | ENABLED flag | CANARY% | Soak status |
 |---|---|---|---|---|---|---|
-| worker | ✅ Task 12+ (master bcffcb8) | ✅ running | ✅ :3001 ready (db:ok, redis:ok) | N/A | N/A | Live |
-| ai-generator | ✅ latest | ✅ running | ✅ :3002 ok | not in .env | N/A | Live (no canary gate) |
-| execution-engine | ✅ SSL fix bcffcb8 | ✅ deployed | ✅ :3003 ready (db:ok, redis:ok) | not in .env (false) | 0 | Not started — awaiting flags |
-| credential-service | ✅ SSL fix bcffcb8 | ✅ deployed | ✅ :3004 ready (db:ok) | not in .env (false) | 0 | Not started |
-| notification-service | ✅ SSL fix bcffcb8 | ✅ deployed | ✅ :3005 ready (db:ok) | not in .env (false) | 0 | Not started |
-| trigger-service | ✅ SSL fix bcffcb8 | ✅ deployed | ✅ :3006 ready (db:ok) | not in .env (false) | 0 | Not started |
-| workflow-crud-service | ✅ SSL fix bcffcb8 | ✅ deployed | ✅ :3007 ready (db:ok) | not in .env (false) | 0 | Not started |
+| worker | ✅ 15cc5a4 | ✅ running | ✅ :3001 ready (db:ok, redis:ok) | N/A | N/A | Live |
+| ai-generator | ✅ latest | ✅ running | ✅ :3002 ok | N/A | 100 | Live (direct delegation) |
+| execution-engine | ✅ deployed | ✅ running | ✅ :3003 ready (db:ok, redis:ok) | **true** | **100** | Since 2026-06-16 (task-gated). CONSUMER_ENABLED=true in engine .env. Legacy execution-worker stopped+disabled. |
+| credential-service | ✅ deployed | ✅ running | ✅ :3004 ready (db:ok) | **true** | **100** | Since 2026-06-16 (task-gated). OAuth connections bypass canary (accepted gap). |
+| notification-service | ✅ deployed | ✅ running | ✅ :3005 ready (db:ok) | **true** | **100** | Since 2026-06-16. FIX-3B also wires notifications in execute-workflow.ts directly. |
+| trigger-service | ✅ deployed | ✅ running | ✅ :3006 ready (db:ok) | **true** | **100** | Since 2026-06-16. Auth header bug fixed (286989e). |
+| workflow-crud-service | ✅ deployed | ✅ running | ✅ :3007 ready (db:ok) | **true** | **100** | Since 2026-06-16 (task-gated). Write-only delegation (reads use db-proxy passthrough). |
 
-**Phase D complete.** All 5 microservices deployed with systemd units and responding healthy.  
-**Phase E next:** Add worker .env flags (all DISABLED), then canary ramp per MICROSERVICES_OPS_PLAYBOOK.md.
+**T10 FULL PASS (2026-06-20).** All 6 smoke items pass: form→if_else→Gmail, WS live updates, in-app notifications.  
+**T9 retirement gates PENDING.** `WORKFLOW_CRUD_LOCAL_WRITES_DISABLED` and `CREDENTIAL_SERVICE_VAULT_WRITES_DISABLED` not yet flipped — require stable soak verification + `approve task T9`.
 
 ---
 
@@ -74,9 +90,9 @@ Do not stop without user approval.
 
 | Location | Branch | Commit | Status |
 |---|---|---|---|
-| Local workspace | master | bcffcb8 | ✅ pushed to origin |
-| GitHub origin | master | bcffcb8 | ✅ current |
-| EC2 /opt/ctrlchecks-worker | (tar deploy, not git) | Task 12+ code | ✅ deployed via scripts/deploy-worker.sh |
+| Local workspace | master | 15cc5a4 | ✅ FIX-3 (WS + notifications) |
+| GitHub origin | master | 15cc5a4 | ✅ current |
+| EC2 /opt/ctrlchecks-worker | (tar deploy, not git) | 15cc5a4 | ✅ deployed via scripts/deploy-worker.sh |
 
 ---
 
@@ -89,15 +105,15 @@ Do not stop without user approval.
 
 ---
 
-## Activation Matrix (CURRENT)
+## Activation Matrix (2026-06-20 — T9 COMPLETE)
 
-| Service | Port | ENABLED flag | CANARY% | Retirement gate | Soak status |
+| Service | Port | ENABLED flag | CANARY% | Retirement gate | Gate status |
 |---|---|---|---|---|---|
-| execution-engine | 3003 | false (not in .env) | 0 | `EXECUTION_ENGINE_CONSUMER_ENABLED` | Not started |
-| credential-service | 3004 | false (not in .env) | 0 | `CREDENTIAL_SERVICE_VAULT_WRITES_DISABLED` | Not started |
-| notification-service | 3005 | false (not in .env) | 0 | — | Not started |
-| trigger-service | 3006 | false (not in .env) | 0 | — | Not started |
-| workflow-crud-service | 3007 | **true** | **5** | `WORKFLOW_CRUD_LOCAL_WRITES_DISABLED=false` | **Soak started 2026-06-15 18:22 UTC** |
+| execution-engine | 3003 | **true** | **100** | Phase 6 code removal (future PR) | N/A |
+| credential-service | 3004 | **true** | **100** | `CREDENTIAL_SERVICE_VAULT_WRITES_DISABLED` | ✅ **true** — flipped 2026-06-20, kill test PASS |
+| notification-service | 3005 | **true** | **100** | — | N/A |
+| trigger-service | 3006 | **true** | **100** | — | N/A |
+| workflow-crud-service | 3007 | **true** | **100** | `WORKFLOW_CRUD_LOCAL_WRITES_DISABLED` | ✅ **true** — flipped 2026-06-20, kill test PASS |
 
 ---
 
@@ -121,10 +137,12 @@ Ramp one service at a time, 48h soak between steps:
 4. trigger-service
 5. execution-engine (last — requires legacy worker disabled first)
 
-### Phase G — Frontend HTTPS
-- DNS A record `app.ctrlchecks.ai → 3.7.115.58`
-- `sudo certbot --nginx -d app.ctrlchecks.ai`
-- Add Cognito callback URIs for `https://app.ctrlchecks.ai`
+### Phase G — Frontend (Vercel, NOT EC2 nginx)
+- Frontend is live on **Vercel** at `https://www.ctrlchecks.ai` (GoDaddy → Vercel, already connected)
+- EC2 nginx frontend vhost is unused — no Certbot on EC2 needed
+- **User action (Vercel dashboard):** set `VITE_API_URL=https://worker.ctrlchecks.ai`, `VITE_PUBLIC_BASE_URL=https://www.ctrlchecks.ai` + other Cognito vars; redeploy
+- **User action (AWS Cognito):** add `https://www.ctrlchecks.ai` to allowed callback + sign-out URLs
+- Worker CORS already allows `https://www.ctrlchecks.ai` and `https://ctrlchecks.ai` (hardcoded in `cors.ts`)
 
 ### Phase H — Retirement gates (only after 2-week soak at CANARY=100)
 - `WORKFLOW_CRUD_LOCAL_WRITES_DISABLED=true`

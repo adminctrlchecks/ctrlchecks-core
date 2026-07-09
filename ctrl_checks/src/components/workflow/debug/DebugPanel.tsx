@@ -1,6 +1,6 @@
 ﻿import { useEffect, useCallback, useState, useMemo, useRef, Suspense, lazy } from 'react';
 import { DndContext, DragEndEvent } from '@dnd-kit/core';
-import { useDebugStore } from '@/stores/debugStore';
+import { useDebugStore, type StructuredDebugError } from '@/stores/debugStore';
 import { useWorkflowStore } from '@/stores/workflowStore';
 import { useExpressionDropStore } from '@/stores/expressionDropStore';
 import InputPanel from './InputPanel';
@@ -16,6 +16,29 @@ import { useToast } from '@/hooks/use-toast';
 
 interface DebugPanelProps {
   onClose?: () => void;
+}
+
+function toErrorRecord(payload: unknown, fallback: string, status?: number): StructuredDebugError {
+  if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+    return { ...(payload as Record<string, unknown>), status };
+  }
+
+  return {
+    error: fallback,
+    message: fallback,
+    status,
+    details: payload === undefined ? undefined : { raw: payload },
+  };
+}
+
+function getDebugErrorDescription(error: StructuredDebugError | string | undefined, fallback = 'Execution failed'): string {
+  if (!error) return fallback;
+  if (typeof error === 'string') return error;
+  return (
+    (typeof error.message === 'string' && error.message) ||
+    (typeof error.error === 'string' && error.error) ||
+    fallback
+  );
 }
 
 export default function DebugPanel({ onClose }: DebugPanelProps) {
@@ -189,8 +212,15 @@ export default function DebugPanel({ onClose }: DebugPanelProps) {
       });
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Execute node failed' }));
-        throw new Error(error.error || error.message || 'Execute node failed');
+        const errorPayload = await response.json().catch(() => ({ error: 'Execute node failed' }));
+        const structuredError = toErrorRecord(errorPayload, 'Execute node failed', response.status);
+        setNodeStatus(debugNodeId, 'error', structuredError);
+        toast({
+          title: 'Execution Failed',
+          description: getDebugErrorDescription(structuredError),
+          variant: 'destructive',
+        });
+        return;
       }
 
       const data = await response.json();
@@ -204,10 +234,11 @@ export default function DebugPanel({ onClose }: DebugPanelProps) {
           description: `Executed in ${data.executionTime}ms`,
         });
       } else {
-        setNodeStatus(debugNodeId, 'error', data.error || 'Execution failed');
+        const structuredError = toErrorRecord(data, 'Execution failed');
+        setNodeStatus(debugNodeId, 'error', structuredError);
         toast({
           title: 'Execution Failed',
-          description: data.error || 'Unknown error',
+          description: getDebugErrorDescription(structuredError, 'Unknown error'),
           variant: 'destructive',
         });
       }
@@ -277,6 +308,7 @@ export default function DebugPanel({ onClose }: DebugPanelProps) {
                   onClose={undefined}
                   debugMode={true}
                   debugInputData={inputData}
+                  debugError={nodeState?.executionStatus === 'error' ? nodeState?.error : undefined}
                 />
               </Suspense>
             </div>
@@ -289,6 +321,7 @@ export default function DebugPanel({ onClose }: DebugPanelProps) {
                 status={nodeState?.executionStatus}
                 error={nodeState?.error}
                 nodeId={debugNodeId}
+                nodeType={debugNode.data.type}
                 preferredView={nodeState?.preferredView}
                 onViewChange={(view) => debugNodeId && setPreferredView(debugNodeId, view)}
               />
@@ -299,4 +332,3 @@ export default function DebugPanel({ onClose }: DebugPanelProps) {
     </div>
   );
 }
-

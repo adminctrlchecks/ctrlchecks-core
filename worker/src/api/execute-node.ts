@@ -152,7 +152,16 @@ export default async function executeNodeHandler(req: Request, res: Response) {
     // ✅ PRE-EXECUTION: Validate this node's config before running
     const { validateWorkflowConfig } = await import('../core/utils/pre-execution-validator');
     const configCheck = validateWorkflowConfig([
-      { id: node.id, type: nodeType, data: { label: node.data.label, config: node.data.config as Record<string, any> } },
+      {
+        id: node.id,
+        type: nodeType,
+        data: {
+          label: node.data.label,
+          config: node.data.config as Record<string, any>,
+          connectionRefs: (node.data as any).connectionRefs,
+          connectionId: (node.data as any).connectionId,
+        },
+      },
     ]);
     if (!configCheck.valid) {
       return res.status(400).json({
@@ -208,6 +217,36 @@ export default async function executeNodeHandler(req: Request, res: Response) {
     // This prevents placeholder values and config fields from appearing in output JSON
     const { cleanOutputFromConfig } = await import('../core/utils/placeholder-filter');
     const cleanedOutput = cleanOutputFromConfig(output, node.data.config || {});
+
+    if (
+      cleanedOutput &&
+      typeof cleanedOutput === 'object' &&
+      !Array.isArray(cleanedOutput) &&
+      (
+        (cleanedOutput as Record<string, unknown>)._validationError ||
+        (cleanedOutput as Record<string, unknown>)._validationErrors ||
+        (cleanedOutput as Record<string, unknown>)._connectionError
+      )
+    ) {
+      nodeOutputs.clear();
+      return res.status(400).json({
+        success: false,
+        code: (cleanedOutput as Record<string, unknown>)._connectionError
+          ? 'CONNECTION_SETUP_REQUIRED'
+          : 'MISSING_REQUIRED_INPUTS',
+        error: String((cleanedOutput as Record<string, unknown>)._error || 'Node setup is incomplete'),
+        message: 'This node needs setup before it can run.',
+        hint: 'Open the Properties panel and complete the highlighted connection or required fields.',
+        details: {
+          validationErrors: (cleanedOutput as Record<string, unknown>)._validationErrors || [],
+          output: cleanedOutput,
+        },
+        executionTime,
+        nodeId,
+        nodeType,
+        runId,
+      });
+    }
     
     // Clear cache after execution
     nodeOutputs.clear();

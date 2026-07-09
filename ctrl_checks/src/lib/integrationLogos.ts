@@ -93,6 +93,7 @@ export const INTEGRATION_LOGO_MAP: Record<string, string> = {
   sendgrid:         '/integrations-logos/Sendgrid.svg',
 
   // Misc
+  contentful:       '/integrations-logos/Contentful.svg',
   wordpress:        '/integrations-logos/WooCommerce.svg',
 };
 

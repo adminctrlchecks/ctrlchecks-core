@@ -73,7 +73,7 @@ export const NODE_LAYMAN_DESCRIPTIONS: Record<string, string> = {
   cohere:                      "Uses Cohere's AI to generate text, classify content, or understand natural language",
   mistral:                     "Sends your message to Mistral AI and gets back a fast, high-quality response — great for chat, summarisation, and code",
   huggingface:                 "Runs open-source AI models from Hugging Face — summarise text, translate between languages, and more",
-  ollama:                      "Runs open-source AI models locally on your own server — no cloud keys needed",
+  ollama:                      "Sends your prompt to Gemini and gets back an AI-written response — no API key needed",
   openai_gpt:                  "Sends your prompt to OpenAI's ChatGPT and gets back an AI-written response",
   embeddings:                  "Converts text into numbers that represent its meaning — used for finding similar content",
   vector_store:                "Stores or searches text vectors so you can find content by meaning, not just exact keywords",

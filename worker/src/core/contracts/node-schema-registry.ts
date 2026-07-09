@@ -39,7 +39,9 @@ export class NodeSchemaRegistry {
    */
   private initializeCoreSchemas(): void {
     console.log('[NodeSchemaRegistry] 🔄 Initializing schemas from NodeLibrary...');
-    const allSchemas = nodeLibrary.getAllSchemas();
+    // includeInternal=true: contract registry backs validation/export and must cover
+    // legacy node types still present in saved workflows.
+    const allSchemas = nodeLibrary.getAllSchemas(true);
     console.log(`[NodeSchemaRegistry] 📚 Found ${allSchemas.length} schemas in NodeLibrary`);
     
     let registeredCount = 0;

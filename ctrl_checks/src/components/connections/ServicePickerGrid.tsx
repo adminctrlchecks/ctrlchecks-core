@@ -17,6 +17,7 @@ const CATEGORIES: Record<string, string[]> = {
   'Databases':           ['postgresql', 'mysql', 'firebase', 'redis'],
   'File Transfer':       ['ftp', 'sftp'],
   'AI & Data':           ['openai', 'anthropic', 'pinecone', 'qdrant', 'cohere', 'huggingface', 'mistral'],
+  'Content & CMS':       ['contentful', 'wordpress'],
   'Payments & Business': ['stripe', 'paypal', 'quickbooks', 'xero', 'shopify', 'woocommerce', 'typeform'],
 };
 

@@ -146,7 +146,7 @@ describe('validateWorkflowConfig', () => {
     expect(result.issues[0].nodeLabel).toBe('mystery_node');
   });
 
-  test('blocking intelligence error (severity=error) makes result invalid', () => {
+  test('intelligence error is reported as advisory and does not block execution readiness', () => {
     mockGet.mockReturnValue(makeDef());
     mockIntelligence.mockReturnValue([
       {
@@ -161,9 +161,49 @@ describe('validateWorkflowConfig', () => {
     const result = validateWorkflowConfig([
       { id: 'n1', type: 'google_sheets', data: { config: { prompt: 'ok' } } },
     ]);
-    expect(result.valid).toBe(false);
+    expect(result.valid).toBe(true);
     expect(result.validationIssues).toHaveLength(1);
     expect(result.issues).toHaveLength(0); // config itself was fine
+  });
+
+  test('selected connection satisfies required credential-owned fields during setup validation', () => {
+    const validateInputs = jest.fn((config) => ({
+      valid: Boolean(config.operation && config.spaceId && config.accessToken),
+      errors: config.accessToken ? [] : ["Required field 'accessToken' is missing or empty"],
+    }));
+    mockGet.mockReturnValue(
+      makeDef({
+        label: 'Contentful',
+        inputSchema: {
+          operation: { description: 'Contentful action', required: true },
+          spaceId: { description: 'Contentful space ID', required: true },
+          accessToken: {
+            description: 'Contentful CMA personal access token',
+            required: true,
+            ownership: 'credential',
+          },
+        },
+        validateInputs,
+      }),
+    );
+
+    const result = validateWorkflowConfig([
+      {
+        id: 'contentful-1',
+        type: 'contentful',
+        data: {
+          label: 'Contentful',
+          config: { operation: 'get_entries', spaceId: 'p7twiul9by90', accessToken: '' },
+          connectionRefs: { bearer_token: 'conn-123' },
+        },
+      },
+    ]);
+
+    expect(result.valid).toBe(true);
+    expect(result.missingInputs).toHaveLength(0);
+    expect(validateInputs).toHaveBeenCalledWith(
+      expect.objectContaining({ accessToken: '__selected_connection__' }),
+    );
   });
 
   test('non-blocking intelligence warning (severity=warning) does not affect valid', () => {

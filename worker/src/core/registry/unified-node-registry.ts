@@ -433,7 +433,10 @@ export class UnifiedNodeRegistry implements INodeRegistry {
    * This bridges the old system to the new unified contract
    */
   private initializeFromNodeLibrary(): void {
-    const allSchemas = nodeLibrary.getAllSchemas();
+    // includeInternal=true: execution registry must register EVERY type, including
+    // internal-only legacy nodes (ollama, chat_model, memory, tool), so existing
+    // saved workflows keep executing.
+    const allSchemas = nodeLibrary.getAllSchemas(true);
     const failedSchemas: string[] = [];
     
     for (const schema of allSchemas) {
@@ -1068,7 +1071,15 @@ export class UnifiedNodeRegistry implements INodeRegistry {
    * Used to enrich every node's credentialSchema.requirements with the right
    * credentialTypeId so the Properties panel shows the correct connection picker.
    */
-  private static readonly PROVIDER_CREDENTIAL_MAP: Record<string, { credentialTypeId: string; label: string; authType: 'oauth2' | 'api_key' | 'bearer_token' | 'basic_auth' }> = {
+  private static readonly PROVIDER_CREDENTIAL_MAP: Record<
+    string,
+    {
+      credentialTypeId: string;
+      label: string;
+      authType: 'oauth2' | 'api_key' | 'bearer_token' | 'basic_auth';
+      compatibleCredentialTypeIds?: string[];
+    }
+  > = {
     // AI
     gemini:        { credentialTypeId: 'gemini_api_key',       label: 'Gemini API Key',          authType: 'api_key' },
     openai:        { credentialTypeId: 'openai_api_key',       label: 'OpenAI API Key',           authType: 'bearer_token' },
@@ -1127,6 +1138,7 @@ export class UnifiedNodeRegistry implements INodeRegistry {
     typeform:      { credentialTypeId: 'typeform_token',       label: 'Typeform Token',           authType: 'bearer_token' },
     calendly:      { credentialTypeId: 'calendly_api',         label: 'Calendly API Key',         authType: 'bearer_token' },
     xero:          { credentialTypeId: 'xero_oauth2',          label: 'Xero Connection',          authType: 'oauth2' },
+    contentful:    { credentialTypeId: 'contentful_cma_token', label: 'Contentful CMA Personal Access Token', authType: 'bearer_token', compatibleCredentialTypeIds: ['contentful_cma_token', 'bearer_token'] },
     // Cloud / infra
     aws:           { credentialTypeId: 'aws_s3_api_key',       label: 'AWS Credentials',          authType: 'api_key' },
     cloudflare:    { credentialTypeId: 'cloudflare_api_key',   label: 'Cloudflare API Key',       authType: 'bearer_token' },
@@ -1155,6 +1167,11 @@ export class UnifiedNodeRegistry implements INodeRegistry {
       return {
         ...req,
         credentialTypeId: mapping.credentialTypeId,
+        credentialTypeIds: Array.from(new Set([
+          mapping.credentialTypeId,
+          ...(mapping.compatibleCredentialTypeIds || []),
+          ...(req.credentialTypeIds || []),
+        ])),
         authType: req.authType ?? mapping.authType,
         label: req.label ?? mapping.label,
       };

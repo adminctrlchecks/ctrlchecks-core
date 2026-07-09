@@ -69,6 +69,7 @@ const PROVIDER_COLORS: Record<string, string> = {
   vercel:         'bg-gray-100 text-gray-900',
   jenkins:        'bg-red-100 text-red-600',
   odoo:           'bg-purple-100 text-purple-600',
+  contentful:     'bg-orange-100 text-orange-600',
 };
 
 const PROVIDER_INITIALS: Record<string, string> = {
@@ -86,6 +87,7 @@ const PROVIDER_INITIALS: Record<string, string> = {
   activecampaign: 'AC', zendesk: 'Zd', calendly: 'Ca', mailgun: 'Mg',
   bitbucket: 'Bb', ftp: 'FTP', sftp: 'SFTP',
   gemini: 'Gm', vercel: 'Vc', jenkins: 'Jk', odoo: 'Od',
+  contentful: 'Cf',
 };
 
 const PROVIDER_LOGO_ALIASES: Record<string, string> = {

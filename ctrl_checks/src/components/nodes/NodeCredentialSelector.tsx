@@ -20,23 +20,32 @@ interface Props {
   credentialTypeIds?: string[];
   /** Providers this node accepts when the backend contract exposes provider-level requirements */
   providers?: string[];
+  /** Provider logo to show when a generic credential type is used for a specific integration */
+  logoProvider?: string;
   /** Currently selected connection ID */
   value?: string;
   onChange: (connectionId: string) => void;
   label?: string;
 }
 
-function SelectedItem({ connection }: { connection: ConnectionRecord }) {
+function SelectedItem({ connection, logoProvider }: { connection: ConnectionRecord; logoProvider?: string }) {
   return (
     <div className="flex flex-1 items-center gap-2 min-w-0">
-      <ProviderLogo provider={connection.provider} size={20} className="shrink-0" />
+      <ProviderLogo provider={logoProvider || connection.provider} size={20} className="shrink-0" />
       <span className="flex-1 truncate text-sm font-medium min-w-0">{connection.name}</span>
       <ConnectionStatusBadge status={connection.status} className="shrink-0" />
     </div>
   );
 }
 
-export function NodeCredentialSelector({ credentialTypeIds = [], providers = [], value, onChange, label = 'Connection' }: Props) {
+export function NodeCredentialSelector({
+  credentialTypeIds = [],
+  providers = [],
+  logoProvider,
+  value,
+  onChange,
+  label = 'Connection',
+}: Props) {
   const { data: allConnections = [] } = useConnections();
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTypeId, setModalTypeId] = useState<string | undefined>();
@@ -49,6 +58,7 @@ export function NodeCredentialSelector({ credentialTypeIds = [], providers = [],
   });
   const selected = compatible.find((c) => c.id === value);
   const preferredTypeId = credentialTypeIds[0] || compatible[0]?.credentialTypeId;
+  const displayProvider = logoProvider || providers[0];
 
   function openAddModal(typeId?: string) {
     setModalTypeId(typeId);
@@ -89,7 +99,7 @@ export function NodeCredentialSelector({ credentialTypeIds = [], providers = [],
               className="w-full flex items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm hover:bg-accent/50 transition-colors"
             >
               {selected ? (
-                <SelectedItem connection={selected} />
+                <SelectedItem connection={selected} logoProvider={displayProvider} />
               ) : (
                 <span className="text-muted-foreground">Select a connection…</span>
               )}
@@ -103,7 +113,7 @@ export function NodeCredentialSelector({ credentialTypeIds = [], providers = [],
                 onSelect={() => onChange(conn.id)}
                 className="flex items-center gap-2 cursor-pointer"
               >
-                <ProviderLogo provider={conn.provider} size={20} />
+                <ProviderLogo provider={displayProvider || conn.provider} size={20} />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{conn.name}</p>
                 </div>

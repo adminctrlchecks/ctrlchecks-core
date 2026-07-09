@@ -10,7 +10,7 @@
   },
   "servers": [
     {
-      "url": "https://worker.ctrlchecks.com",
+      "url": "https://worker.ctrlchecks.ai",
       "description": "Production (Hostinger)"
     },
     {

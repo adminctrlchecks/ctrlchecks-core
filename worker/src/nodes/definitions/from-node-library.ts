@@ -196,7 +196,8 @@ function toNodeDefinition(schema: NodeSchema): NodeDefinition {
 
 export function registerNodeDefinitionsFromNodeLibrary(): void {
   const lib = new NodeLibrary();
-  const schemas = lib.getAllSchemas();
+  // includeInternal=true: legacy node types must stay registered for existing workflows.
+  const schemas = lib.getAllSchemas(true);
 
   for (const schema of schemas) {
     if (!schema?.type) continue;

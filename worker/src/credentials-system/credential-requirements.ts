@@ -118,6 +118,7 @@ function fallbackCredentialTypeIds(requirement: NodeCredentialRequirement): stri
     if (description.includes('basic') || description.includes('password')) return ['basic_auth'];
     return ['bearer_token'];
   }
+  if (provider === 'contentful') return ['contentful_cma_token', 'bearer_token'];
   if (basicProviders.has(provider)) return ['basic_auth'];
   if (apiKeyProviders.has(provider)) return ['api_key'];
   if (bearerProviders.has(provider)) return ['bearer_token'];
