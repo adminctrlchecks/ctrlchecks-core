@@ -70,6 +70,7 @@ const PROVIDER_COLORS: Record<string, string> = {
   jenkins:        'bg-red-100 text-red-600',
   odoo:           'bg-purple-100 text-purple-600',
   contentful:     'bg-orange-100 text-orange-600',
+  wordpress:      'bg-sky-100 text-sky-700',
 };
 
 const PROVIDER_INITIALS: Record<string, string> = {
@@ -88,6 +89,7 @@ const PROVIDER_INITIALS: Record<string, string> = {
   bitbucket: 'Bb', ftp: 'FTP', sftp: 'SFTP',
   gemini: 'Gm', vercel: 'Vc', jenkins: 'Jk', odoo: 'Od',
   contentful: 'Cf',
+  wordpress: 'WP',
 };
 
 const PROVIDER_LOGO_ALIASES: Record<string, string> = {

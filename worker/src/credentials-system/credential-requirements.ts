@@ -119,6 +119,7 @@ function fallbackCredentialTypeIds(requirement: NodeCredentialRequirement): stri
     return ['bearer_token'];
   }
   if (provider === 'contentful') return ['contentful_cma_token', 'bearer_token'];
+  if (provider === 'wordpress') return ['wordpress_app_password', 'basic_auth'];
   if (basicProviders.has(provider)) return ['basic_auth'];
   if (apiKeyProviders.has(provider)) return ['api_key'];
   if (bearerProviders.has(provider)) return ['bearer_token'];
