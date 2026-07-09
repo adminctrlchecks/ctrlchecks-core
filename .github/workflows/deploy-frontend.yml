@@ -97,11 +97,17 @@ jobs:
       - name: Smoke test
         run: |
           sleep 20
-          TARGET="${DEPLOY_URL:-https://app.ctrlchecks.ai}"
+          # DEPLOY_URL is the CLI's last output line and is not always a clean URL —
+          # only use it when it looks like one, otherwise test the production domain.
+          case "$DEPLOY_URL" in
+            https://*) TARGET="$DEPLOY_URL" ;;
+            *) TARGET="https://www.ctrlchecks.ai" ;;
+          esac
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$TARGET")
           echo "Smoke test: $TARGET -> HTTP $STATUS"
           if [ "$STATUS" = "200" ]; then
             echo "Frontend live"
           else
             echo "Status $STATUS - check Vercel dashboard"
+            exit 1
           fi
