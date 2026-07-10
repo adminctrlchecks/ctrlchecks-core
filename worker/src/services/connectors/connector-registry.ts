@@ -669,20 +669,18 @@ export class ConnectorRegistry {
         'email.send',
         'outlook.send',
         'microsoft.mail',
-        'email.read',
-        'outlook.read',
       ],
       keywords: ['outlook', 'microsoft outlook', 'outlook email', 'send via outlook'],
       credentialContract: {
         provider: 'microsoft',
         type: 'oauth',
-        scopes: ['https://graph.microsoft.com/Mail.Send', 'https://graph.microsoft.com/Mail.Read'],
+        scopes: ['offline_access', 'https://graph.microsoft.com/User.Read', 'https://graph.microsoft.com/Mail.Send'],
         vaultKey: 'microsoft',
         displayName: 'Microsoft OAuth (Outlook)',
         required: true,
       },
       nodeTypes: ['outlook'],
-      description: 'Send/receive emails via Outlook API using OAuth',
+      description: 'Send emails via Microsoft Graph using Microsoft OAuth',
     });
 
     // ============================================

@@ -19,12 +19,9 @@ export const PROVIDER_REQUIRED_SCOPES: Record<string, string[]> = {
   ],
   sheets: ['https://www.googleapis.com/auth/spreadsheets'],
   microsoft: [
-    'https://graph.microsoft.com/User.Read',
-    'https://graph.microsoft.com/Mail.ReadWrite',
-    'https://graph.microsoft.com/Calendars.ReadWrite',
-    'https://graph.microsoft.com/Team.ReadBasic.All',
-    'https://graph.microsoft.com/Channel.ReadBasic.All',
     'offline_access',
+    'https://graph.microsoft.com/User.Read',
+    'https://graph.microsoft.com/Mail.Send',
   ],
   twitter: ['tweet.read', 'tweet.write', 'users.read', 'offline.access'],
   whatsapp: ['business_management', 'whatsapp_business_management', 'whatsapp_business_messaging'],
@@ -111,6 +108,7 @@ const NODE_REQUIRED_SCOPES: Record<string, string[]> = {
   google_tasks:    ['https://www.googleapis.com/auth/tasks'],
   google_bigquery: ['https://www.googleapis.com/auth/bigquery'],
   youtube:         ['https://www.googleapis.com/auth/youtube.force-ssl'],
+  outlook:         ['offline_access', 'https://graph.microsoft.com/User.Read', 'https://graph.microsoft.com/Mail.Send'],
 };
 
 export function credentialRequirementForNode(nodeType: string): { provider: string; requiredScopes: string[] } | null {

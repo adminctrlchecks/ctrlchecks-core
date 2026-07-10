@@ -9804,7 +9804,7 @@ return {
         'whatsapp_cloud': ['resource', 'operation', 'phoneNumberId', 'to', 'text'],
         'twilio': ['to', 'message', 'from'],
         'microsoft_teams': ['webhookUrl', 'message'],
-        'outlook': ['operation', 'to', 'subject', 'body', 'from'],
+        'outlook': ['operation', 'to', 'subject', 'body'],
         
         // CRM & Integration
         'hubspot': ['resource', 'operation', 'apiKey', 'accessToken', 'credentialId', 'id', 'objectId', 'properties', 'searchQuery', 'limit', 'after'],

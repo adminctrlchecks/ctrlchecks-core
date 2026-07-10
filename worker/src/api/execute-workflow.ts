@@ -16710,7 +16710,7 @@ export async function executeNodeLegacy(
         ? (resolveWithSchema(body, execContext, 'string') as string)
         : String(resolveTypedValue(body, execContext));
 
-      // Token from config.accessToken or vault key "microsoft"
+      // Token from selected Microsoft connection, with config.accessToken retained for legacy injected configs.
       let accessToken = getStringProperty(config, 'accessToken', '');
       if (!accessToken) {
         try {
@@ -16731,7 +16731,7 @@ export async function executeNodeLegacy(
       }
 
       if (!accessToken) {
-        return { ...inputObj, _error: 'Outlook: access token not found. Connect Microsoft or provide accessToken.' };
+        return { ...inputObj, _error: 'Outlook: access token not found. Connect Microsoft or select a Microsoft Connection.' };
       }
 
       try {

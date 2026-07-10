@@ -116,8 +116,8 @@ export const nodeDocManifest = [
     "slug": "outlook",
     "displayName": "Outlook",
     "category": "Communication",
-    "description": "Send/receive emails via Microsoft Outlook API (OAuth) Use this node when a workflow needs outlook behavior with schema-driven inputs from the CtrlChecks node registry.",
-    "logoUrl": "/icons/nodes/outlook.svg"
+    "description": "Send emails via Microsoft Outlook using Microsoft Graph OAuth. Use this node when a workflow needs Outlook email sending with a Microsoft Connection.",
+    "logoUrl": "/integrations-logos/Outlook.svg"
   },
   {
     "slug": "salesforce",

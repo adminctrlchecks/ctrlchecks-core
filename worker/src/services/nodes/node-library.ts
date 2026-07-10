@@ -4482,13 +4482,11 @@ export class NodeLibrary {
       type: 'outlook',
       label: 'Outlook',
       category: 'microsoft',
-      description: 'Send/receive emails via Microsoft Outlook API (OAuth)',
+      description: 'Send emails via Microsoft Outlook using Microsoft Graph OAuth.',
       capabilities: [
         'email.send',
         'outlook.send',
         'microsoft.mail',
-        'email.read',
-        'outlook.read',
       ],
       providers: ['microsoft'],
       keywords: [
@@ -4501,58 +4499,83 @@ export class NodeLibrary {
         optional: {
           operation: {
             type: 'string',
-            description: 'Outlook operation type',
-            default: 'send',
-            examples: ['send', 'list', 'get', 'search'],
+            description: 'Outlook operation to perform',
+            default: 'send_email',
+            examples: ['send_email'],
+            options: [{ label: 'Send Email', value: 'send_email' }],
           },
           to: {
             type: 'string',
-            description: 'Recipient email address (required for send operation)',
+            description: 'Recipient email address(es), comma-separated. Required for Send Email.',
             examples: ['recipient@example.com', '{{$json.email}}'],
+            requiredIf: { field: 'operation', equals: 'send_email' },
+            visibleIf: { field: 'operation', equals: 'send_email' },
+            fillMode: { default: 'runtime_ai', supportsRuntimeAI: true, supportsBuildtimeAI: true },
+            runtimeContract: {
+              aiGeneratable: true,
+              requiredWhen: [{ field: 'operation', equals: 'send_email' }],
+              validation: { format: 'email_list' },
+              repair: ['extract_email'],
+            },
           },
           subject: {
             type: 'string',
-            description: 'Email subject (required for send operation)',
+            description: 'Email subject. Required for Send Email.',
             examples: ['Hello', '{{$json.subject}}'],
+            requiredIf: { field: 'operation', equals: 'send_email' },
+            visibleIf: { field: 'operation', equals: 'send_email' },
+            fillMode: { default: 'runtime_ai', supportsRuntimeAI: true, supportsBuildtimeAI: true },
+            runtimeContract: {
+              aiGeneratable: true,
+              requiredWhen: [{ field: 'operation', equals: 'send_email' }],
+              validation: { format: 'non_empty' },
+              repair: ['derive_title'],
+            },
           },
           body: {
             type: 'string',
-            description: 'Email body content (required for send operation)',
+            description: 'Plain-text email body. Required for Send Email.',
             examples: ['Email content', '{{$json.message}}'],
-          },
-          from: {
-            type: 'string',
-            description: 'Sender email address (optional - uses OAuth account if not provided)',
-            examples: ['your-email@outlook.com'],
-          },
-          // Credential fields (for credential discovery and injection)
-          accessToken: {
-            type: 'string',
-            description: 'OAuth2 Access Token for Outlook (if using OAuth authentication)',
-            examples: ['your-outlook-oauth-token'],
-          },
-          credentialId: {
-            type: 'string',
-            description: 'ID of the stored credential to use',
-            examples: ['microsoft_oauth_123'],
-          },
-          messageId: {
-            type: 'string',
-            description: 'Outlook message ID (required for get operation)',
-            examples: ['abc123def456'],
-          },
-          query: {
-            type: 'string',
-            description: 'Outlook search query (for list/search operations)',
-            examples: ['from:example@outlook.com', 'subject:important'],
-          },
-          maxResults: {
-            type: 'number',
-            description: 'Maximum number of results (for list/search)',
-            default: 10,
+            requiredIf: { field: 'operation', equals: 'send_email' },
+            visibleIf: { field: 'operation', equals: 'send_email' },
+            fillMode: { default: 'runtime_ai', supportsRuntimeAI: true, supportsBuildtimeAI: true },
+            runtimeContract: {
+              aiGeneratable: true,
+              requiredWhen: [{ field: 'operation', equals: 'send_email' }],
+              validation: { format: 'non_empty' },
+              repair: ['derive_body'],
+            },
           },
         },
       },
+      operationContracts: [
+        {
+          operation: 'send_email',
+          label: 'Send Email',
+          requiredFields: ['operation', 'to', 'subject', 'body'],
+          optionalFields: [],
+          forbiddenFields: ['from', 'accessToken', 'credentialId', 'messageId', 'query', 'maxResults'],
+          emptyValuePolicy: {
+            to: 'invalid',
+            subject: 'invalid',
+            body: 'invalid',
+          },
+          fieldSourcePolicy: {
+            to: { credentialForbidden: true },
+            subject: { credentialForbidden: true },
+            body: { credentialForbidden: true },
+          },
+          runtimeAiPolicy: {
+            to: { allowed: true, required: true },
+            subject: { allowed: true, required: true },
+            body: { allowed: true, required: true },
+          },
+          credentialProviders: ['microsoft'],
+          outputFields: ['default'],
+          legacyAliases: ['send'],
+          status: 'implemented',
+        },
+      ],
       aiSelectionCriteria: {
         whenToUse: [
           'User mentions Outlook email',
@@ -4569,12 +4592,24 @@ export class NodeLibrary {
           'microsoft email', 'outlook notification', 'outlook integration', 'outlook api'
         ],
         useCases: ['Outlook email sending', 'Microsoft email integration'],
-        // ✅ ROOT-LEVEL: Semantic intent description for AI understanding
-        intentDescription: 'Microsoft Outlook email integration that sends, reads, and manages emails via Outlook API using OAuth authentication. Performs email operations like sending emails, reading messages, searching emails, and managing Outlook inbox. Used for Outlook email automation and Microsoft email integration.',
+        intentDescription: 'Microsoft Outlook email integration that sends email through Microsoft Graph using a saved Microsoft OAuth connection.',
         intentCategories: ['email', 'outlook', 'microsoft', 'communication', 'oauth'],
       },
-      commonPatterns: [],
-      validationRules: [],
+      commonPatterns: [
+        {
+          name: 'send_email',
+          description: 'Send an email from the connected Microsoft account',
+          config: {
+            operation: 'send_email',
+            to: 'recipient@example.com',
+            subject: 'Hello',
+            body: 'Email content',
+          },
+        },
+      ],
+      validationRules: [
+        { field: 'operation', validator: (v: any) => ['send_email', 'send'].includes(v), errorMessage: 'Outlook operation must be send_email' },
+      ],
     };
   }
 

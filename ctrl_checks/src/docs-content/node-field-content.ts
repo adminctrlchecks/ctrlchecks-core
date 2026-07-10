@@ -135,21 +135,16 @@ Example: 10 for the first 10 results. Leave blank for up to 100.`,
   },
 
   outlook: {
-    send: {
-      to: `What this field is: Who receives this email.
-How to fill it: One email address, or multiple separated by semicolons.
+    send_email: {
+      to: `What this field is: Who receives this Outlook email.
+How to fill it: One email address, or multiple addresses separated by commas.
 Example: client@company.com
-Multiple: alice@x.com; bob@y.com; carol@z.com
-Tip: Use {{$json.email}} to pull from an earlier step.`,
+Multiple: alice@example.com, bob@example.com
+Tip: Use {{$json.email}} to pull a recipient from an earlier step.`,
       subject: `What this field is: The email subject line.
 Example: Invoice #{{$json.invoiceNumber}} from Acme Corp`,
-      body: `What this field is: The full email body content.
+      body: `What this field is: The plain-text email body sent through Microsoft Graph.
 Example: Dear {{$json.name}}, please find your invoice attached. Total due: \${{$json.amount}}.`,
-    },
-    get: {
-      messageId: `What this field is: The unique ID of an Outlook email.
-Where to find it: Run an Outlook List or Search operation first — the output includes a messageId for each email.
-Tip: Use {{$json.messageId}} from the previous step.`,
     },
   },
 

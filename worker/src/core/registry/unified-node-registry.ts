@@ -1237,6 +1237,14 @@ export class UnifiedNodeRegistry implements INodeRegistry {
             authType: mapping.authType,
             label: mapping.label,
           };
+          if (schema.type === 'outlook') {
+            syntheticReq.scopes = [
+              'offline_access',
+              'https://graph.microsoft.com/User.Read',
+              'https://graph.microsoft.com/Mail.Send',
+            ];
+            syntheticReq.requiredScopes = syntheticReq.scopes;
+          }
           return enrichCredentialSchema({ requirements: [syntheticReq], credentialFields: [] });
         }
       }
@@ -1502,7 +1510,7 @@ export class UnifiedNodeRegistry implements INodeRegistry {
   } {
     const def = this.get(nodeType);
     const reqs = def?.credentialSchema?.requirements ?? [];
-    const scopesFromSchema = reqs.flatMap((r) => r.scopes || []);
+    const scopesFromSchema = reqs.flatMap((r) => r.requiredScopes || r.scopes || []);
     const hasSchemaCreds =
       reqs.length > 0 || (def?.credentialSchema?.credentialFields?.length ?? 0) > 0;
 
@@ -1566,6 +1574,16 @@ export class UnifiedNodeRegistry implements INodeRegistry {
       if (t.includes('sheet')) return ['https://www.googleapis.com/auth/spreadsheets'];
       if (t.includes('drive')) return ['https://www.googleapis.com/auth/drive'];
       if (t.includes('calendar')) return ['https://www.googleapis.com/auth/calendar'];
+      return [];
+    }
+    if (provider === 'microsoft' || t === 'outlook') {
+      if (t === 'outlook') {
+        return [
+          'offline_access',
+          'https://graph.microsoft.com/User.Read',
+          'https://graph.microsoft.com/Mail.Send',
+        ];
+      }
       return [];
     }
     if (t === 'linkedin') return ['openid', 'profile', 'email', 'w_member_social'];

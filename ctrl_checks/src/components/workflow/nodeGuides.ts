@@ -5249,6 +5249,44 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       example: 'Task completed successfully'
     }
   },
+  outlook: {
+    operation: {
+      title: 'How to choose Operation?',
+      steps: [
+        'Choose Send Email.',
+        'Outlook currently sends email through Microsoft Graph sendMail.',
+        'Only Send Email is available in the Outlook operation dropdown.'
+      ],
+      example: 'send_email'
+    },
+    to: {
+      title: 'How to set To?',
+      steps: [
+        'Enter one recipient email address, or comma-separated addresses for multiple recipients.',
+        'Use workflow values such as {{$json.email}} when the recipient comes from an earlier step.',
+        'Do not put Microsoft tokens or connection details here; the Microsoft connection is selected separately.'
+      ],
+      example: 'customer@example.com'
+    },
+    subject: {
+      title: 'How to write Subject?',
+      steps: [
+        'Enter the email subject line.',
+        'Use workflow values such as {{$json.subject}} when another node prepared the subject.',
+        'Keep it clear and short so recipients can scan it in Outlook.'
+      ],
+      example: 'Weekly report'
+    },
+    body: {
+      title: 'How to write Body?',
+      steps: [
+        'Enter the plain-text message body.',
+        'Use workflow values such as {{$json.message}} or {{$json.digest}} for dynamic content.',
+        'The current Outlook executor sends this value as Text content through Microsoft Graph.'
+      ],
+      example: 'Your report is ready.'
+    }
+  },
   salesforce: {
     instanceUrl: {
       title: 'Salesforce Instance URL – Step-by-Step',

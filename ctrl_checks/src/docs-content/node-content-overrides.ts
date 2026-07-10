@@ -169,34 +169,14 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
   },
 
   outlook: {
-    send: {
-      description: 'Send an email via Microsoft Outlook.',
-      outputExample: { id: 'AAMkAGI...', subject: 'Meeting Tomorrow', sentDateTime: '2025-01-15T09:00:00Z' },
-      outputDescription: 'id: Outlook message ID. subject: Subject of the sent email. sentDateTime: ISO timestamp when it was sent.',
+    send_email: {
+      description: 'Send a plain-text email from the connected Microsoft Outlook mailbox through Microsoft Graph.',
+      outputExample: { success: true },
+      outputDescription: 'success: true when Microsoft Graph accepts the sendMail request. The Graph sendMail endpoint returns an empty 202 response, so this node does not expose a message ID.',
       usageExample: {
-        scenario: 'Send a daily digest email to your team via Outlook',
-        inputValues: { toRecipients: 'team@company.com', subject: 'Daily Digest — {{$now}}', body: '{{$json.digestContent}}' },
-        expectedOutput: 'The email is sent. `{{$json.id}}` can be used to track the message.',
-      },
-    },
-    list: {
-      description: 'List emails from an Outlook mailbox folder.',
-      outputExample: { value: [{ id: 'AAMkAGI...', subject: 'Re: Project Update', from: { emailAddress: { address: 'colleague@company.com' } } }] },
-      outputDescription: 'value: Array of email objects. Each has id, subject, from (with address), and more.',
-      usageExample: {
-        scenario: 'Retrieve unread emails from a specific Outlook folder',
-        inputValues: { folder: 'Inbox', filter: 'isRead eq false', top: '20' },
-        expectedOutput: 'Returns up to 20 unread emails. Process each with the Get operation to read the full body.',
-      },
-    },
-    get: {
-      description: 'Fetch a specific Outlook email by its message ID.',
-      outputExample: { id: 'AAMkAGI...', subject: 'Contract Terms', body: { content: 'Please review the attached contract.' }, receivedDateTime: '2025-01-14T15:00:00Z' },
-      outputDescription: 'id: Outlook message ID. subject: Email subject. body.content: Full email body HTML or text. receivedDateTime: When the email was received.',
-      usageExample: {
-        scenario: 'Read each email returned from an Outlook List operation',
-        inputValues: { messageId: '{{$json.id}}' },
-        expectedOutput: 'Full message with body content. Use `{{$json.body.content}}` downstream.',
+        scenario: 'Send a daily digest email through Outlook',
+        inputValues: { to: 'team@company.com', subject: 'Daily Digest', body: '{{$json.digestContent}}' },
+        expectedOutput: 'The email is submitted to Microsoft Graph from the connected Microsoft account and the node returns success: true.',
       },
     },
   },

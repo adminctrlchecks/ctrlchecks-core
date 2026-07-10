@@ -985,10 +985,10 @@ export const credentialSteps: Record<string, CredentialGuide> = {
       'Give it a name (e.g. CtrlChecks Email) → set Redirect URI to: http://localhost:3001/api/oauth/microsoft/callback → Register.',
       'Copy the Application (client) ID and Directory (tenant) ID.',
       'Go to Certificates & Secrets → New client secret → Add. Copy the secret VALUE immediately.',
-      'Go to API permissions → Add a permission → Microsoft Graph → Delegated → add Mail.ReadWrite and Mail.Send.',
-      'In CtrlChecks → left menu → Connections → Add Connection → Outlook → enter Client ID, Secret, and Tenant ID → Connect with Microsoft → authorize.',
+      'Go to API permissions → Add a permission → Microsoft Graph → Delegated → add User.Read and Mail.Send. CtrlChecks also requests offline_access during OAuth so it can refresh the connection.',
+      'In CtrlChecks → left menu → Connections → Add Connection → Microsoft Connection → enter Client ID, Secret, and Tenant ID → Connect with Microsoft → authorize.',
     ],
-    docsUrl: 'https://docs.microsoft.com/en-us/graph/api/resources/mail-api-overview',
+    docsUrl: 'https://learn.microsoft.com/en-us/graph/permissions-reference',
   },
 
   // ─── Oracle Database ──────────────────────────────────────────

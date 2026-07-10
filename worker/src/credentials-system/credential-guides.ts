@@ -272,7 +272,7 @@ export const specificGuides: Record<string, GuideOverride> = {
   // ─── Microsoft ────────────────────────────────────────────────────────────────
 
   microsoft_oauth2: {
-    summary: 'Connect your Microsoft / Office 365 account with OAuth for Outlook email, Teams, OneDrive, and Calendar access.',
+    summary: 'Connect your Microsoft account with OAuth so CtrlChecks can send Outlook email through Microsoft Graph.',
     prerequisites: [
       'A Microsoft account (personal or work/school) at login.microsoftonline.com.',
       'For work accounts: your IT admin may need to grant consent for the CtrlChecks app in Azure AD.',
@@ -280,14 +280,14 @@ export const specificGuides: Record<string, GuideOverride> = {
     steps: [
       'Click "Connect Microsoft" below.',
       'Sign in with your Microsoft account.',
-      'Review the requested permissions (Mail, Calendar, Teams, Files) and click Accept.',
+      'Review the requested permissions (User.Read and Mail.Send, plus offline_access for refresh) and click Accept.',
       'Return to CtrlChecks — the connection will appear as active.',
     ],
     troubleshooting: [
       'Error "Need admin approval" — your organization requires an IT admin to approve CtrlChecks in Azure AD → Enterprise Applications. Ask your admin to grant tenant-wide consent.',
       'Redirect URI mismatch — if self-hosting, ensure MICROSOFT_CLIENT_ID and GENERIC_MICROSOFT_OAUTH_REDIRECT_URI are set in your worker .env.',
     ],
-    docsUrl: 'https://learn.microsoft.com/graph/auth/',
+    docsUrl: 'https://learn.microsoft.com/graph/permissions-reference#mail-permissions',
   },
 
   // ─── Slack ────────────────────────────────────────────────────────────────────

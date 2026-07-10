@@ -365,13 +365,7 @@
       "operation",
       "to",
       "subject",
-      "body",
-      "from",
-      "accessToken",
-      "credentialId",
-      "messageId",
-      "query",
-      "maxResults"
+      "body"
     ],
     "credentialType": null,
     "capabilities": []

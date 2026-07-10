@@ -319,10 +319,7 @@ export const credentialTypeDefinitions: CredentialTypeDefinition[] = addCredenti
     requiredScopes: [
       'offline_access',
       'https://graph.microsoft.com/User.Read',
-      'https://graph.microsoft.com/Mail.ReadWrite',
-      'https://graph.microsoft.com/Calendars.ReadWrite',
-      'https://graph.microsoft.com/Team.ReadBasic.All',
-      'https://graph.microsoft.com/Channel.ReadBasic.All',
+      'https://graph.microsoft.com/Mail.Send',
     ],
     inputFields: [],
     form: { layout: 'stacked', oauthButtonLabel: 'Connect Microsoft', testLabel: 'Test Microsoft' },
@@ -340,10 +337,7 @@ export const credentialTypeDefinitions: CredentialTypeDefinition[] = addCredenti
       defaultScopes: [
         'offline_access',
         'https://graph.microsoft.com/User.Read',
-        'https://graph.microsoft.com/Mail.ReadWrite',
-        'https://graph.microsoft.com/Calendars.ReadWrite',
-        'https://graph.microsoft.com/Team.ReadBasic.All',
-        'https://graph.microsoft.com/Channel.ReadBasic.All',
+        'https://graph.microsoft.com/Mail.Send',
       ],
       scopeSeparator: ' ',
       accessType: 'offline',
