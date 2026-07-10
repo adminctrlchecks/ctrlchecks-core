@@ -544,6 +544,7 @@ function mergeRuntimeCredentials(config: Record<string, unknown>, credentials: R
     ['username', 'email'],             // Jira: vault 'username' (email) → node 'email'
     ['password', 'apiToken'],          // Jira: vault 'password' (API token) → node 'apiToken'
     ['domain', 'baseUrl'],             // Jira: vault 'domain' → node 'baseUrl' (https:// added at runtime)
+    ['apiBaseUrl', 'baseUrl'],          // Mailgun: optional custom API base URL
   ];
   for (const [from, to] of aliases) {
     // Also treat '' as unset: schema defaults (apiKey: '', token: '') must not block injection
@@ -4817,14 +4818,23 @@ export async function executeNodeLegacy(
     }
 
     case 'mailgun': {
-      // ✅ Mailgun node — send transactional emails via Mailgun REST API
+      // Mailgun node: send transactional emails via the Messages API.
       let domain = (getStringProperty(config, 'domain', '') || '').trim();
       let apiKey = (getStringProperty(config, 'apiKey', '') || '').trim();
+      let region = (getStringProperty(config, 'region', '') || '').trim().toLowerCase();
+      let configuredBaseUrl = (getStringProperty(config, 'baseUrl', '') || '').trim().replace(/\/+$/, '');
+      if (configuredBaseUrl && !/^https?:\/\//i.test(configuredBaseUrl)) configuredBaseUrl = '';
       let from = (getStringProperty(config, 'from', '') || '').trim();
       const to = (getStringProperty(config, 'to', '') || '').trim();
       const subject = (getStringProperty(config, 'subject', '') || '').trim();
       const text = (getStringProperty(config, 'text', '') || '').trim();
       const html = (getStringProperty(config, 'html', '') || '').trim();
+      const cc = (getStringProperty(config, 'cc', '') || '').trim();
+      const bcc = (getStringProperty(config, 'bcc', '') || '').trim();
+      const replyTo = (getStringProperty(config, 'replyTo', '') || '').trim();
+      const tags = (getStringProperty(config, 'tags', '') || '').trim();
+      const template = (getStringProperty(config, 'template', '') || '').trim();
+      const templateVariablesRaw = config.templateVariables;
 
       if (!domain || !apiKey || !from) {
         const stored = await retrieveDashboardCredential({
@@ -4838,6 +4848,9 @@ export async function executeNodeLegacy(
         const parsed = parseCredentialValue(stored);
         domain = domain || parsed.domain || '';
         apiKey = apiKey || parsed.apiKey || parsed.key || parsed.value || stored || '';
+        region = region || parsed.region || 'us';
+        configuredBaseUrl = configuredBaseUrl || String(parsed.baseUrl || parsed.apiBaseUrl || '').trim().replace(/\/+$/, '');
+        if (configuredBaseUrl && !/^https?:\/\//i.test(configuredBaseUrl)) configuredBaseUrl = '';
         from = from || parsed.from || parsed.fromEmail || '';
       }
 
@@ -4853,24 +4866,58 @@ export async function executeNodeLegacy(
       if (!to) {
         return { ...inputObj, _error: 'Mailgun: to email is required' };
       }
+      if (!text && !html && !template) {
+        return { ...inputObj, _error: 'Mailgun: text, html, or template is required' };
+      }
 
       try {
-        const url = `https://api.mailgun.net/v3/${encodeURIComponent(domain)}/messages`;
+        const apiBaseUrl = configuredBaseUrl || ((region || 'us') === 'eu' ? 'https://api.eu.mailgun.net' : 'https://api.mailgun.net');
+        const url = `${apiBaseUrl}/v3/${encodeURIComponent(domain)}/messages`;
         const formData = new URLSearchParams({ from, to });
         if (subject) formData.append('subject', subject);
         if (text) formData.append('text', text);
         if (html) formData.append('html', html);
+        if (cc) formData.append('cc', cc);
+        if (bcc) formData.append('bcc', bcc);
+        if (replyTo) formData.append('h:Reply-To', replyTo);
+        if (template) formData.append('template', template);
+        if (templateVariablesRaw !== undefined && templateVariablesRaw !== null && templateVariablesRaw !== '') {
+          let templateVariables = templateVariablesRaw;
+          if (typeof templateVariablesRaw === 'string') {
+            try {
+              templateVariables = JSON.parse(templateVariablesRaw);
+            } catch {
+              return { ...inputObj, _error: 'Mailgun: templateVariables must be a JSON object' };
+            }
+          }
+          if (!templateVariables || typeof templateVariables !== 'object' || Array.isArray(templateVariables)) {
+            return { ...inputObj, _error: 'Mailgun: templateVariables must be a JSON object' };
+          }
+          formData.append('t:variables', JSON.stringify(templateVariables));
+        }
+        for (const tag of tags.split(',').map((value) => value.trim()).filter(Boolean)) {
+          formData.append('o:tag', tag);
+        }
 
         const basic = Buffer.from(`api:${apiKey}`).toString('base64');
-        const resp = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Basic ${basic}`,
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: formData,
-        });
-        const data = await resp.json().catch(() => null);
+        let resp: Awaited<ReturnType<typeof fetch>> | null = null;
+        let data: unknown = null;
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          resp = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Basic ${basic}`,
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: formData,
+          });
+          data = await resp.json().catch(() => null);
+          if (!([429, 500, 502, 503, 504].includes(resp.status)) || attempt === 2) break;
+          await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+        }
+        if (!resp) {
+          return { ...inputObj, _error: 'Mailgun send failed: no response from API' };
+        }
         if (!resp.ok) {
           return { ...inputObj, _error: `Mailgun send failed (${resp.status}): ${(data as any)?.message || 'Unknown error'}`, _errorDetails: data };
         }

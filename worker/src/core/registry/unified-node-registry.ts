@@ -722,6 +722,7 @@ export class UnifiedNodeRegistry implements INodeRegistry {
           fillMode: (optionalField as any)?.fillMode ?? getDefaultFillMode(fieldName, type),
           role: inferRole(fieldName, type),
           essentialForExecution: inferEssentialForExecution(true, fieldName),
+          ownership: (optionalField as any)?.ownership,
           fieldIntelligence: (optionalField as any)?.fieldIntelligence,
           runtimeContract: (optionalField as any)?.runtimeContract,
           ...(ui ? { ui } : {}),
@@ -745,6 +746,7 @@ export class UnifiedNodeRegistry implements INodeRegistry {
             fillMode: (fieldDef as any).fillMode ?? getDefaultFillMode(fieldName, type),
             role: inferRole(fieldName, type),
             essentialForExecution: inferEssentialForExecution(false, fieldName),
+            ownership: (fieldDef as any).ownership,
             fieldIntelligence: (fieldDef as any).fieldIntelligence,
             runtimeContract: (fieldDef as any).runtimeContract,
             ...(ui ? { ui } : {}),
@@ -758,7 +760,7 @@ export class UnifiedNodeRegistry implements INodeRegistry {
       const fd = inputSchema[fieldName];
       const meta = inferFieldHelpMetadata(schema.type, fieldName, fd.type);
       fd.helpCategory = meta.helpCategory;
-      fd.ownership = classifyFieldOwnership(fieldName, fd);
+      fd.ownership = fd.ownership ?? classifyFieldOwnership(fieldName, fd);
       if (meta.docsUrl) {
         fd.docsUrl = meta.docsUrl;
       }
@@ -1103,7 +1105,7 @@ export class UnifiedNodeRegistry implements INodeRegistry {
     twilio:        { credentialTypeId: 'twilio_api_key',       label: 'Twilio API Key',           authType: 'basic_auth' },
     sendgrid:      { credentialTypeId: 'sendgrid_api_key',     label: 'SendGrid API Key',         authType: 'bearer_token' },
     smtp:          { credentialTypeId: 'smtp_credentials',     label: 'SMTP Account',             authType: 'basic_auth' },
-    mailgun:       { credentialTypeId: 'mailgun_api',          label: 'Mailgun API Key',          authType: 'api_key' },
+    mailgun:       { credentialTypeId: 'mailgun_api',          label: 'Mailgun API Key',          authType: 'basic_auth' },
     mailchimp:     { credentialTypeId: 'mailchimp_api_key',    label: 'Mailchimp API Key',        authType: 'api_key' },
     activecampaign:{ credentialTypeId: 'activecampaign_api',   label: 'ActiveCampaign API Key',   authType: 'api_key' },
     // Project management
@@ -1250,12 +1252,29 @@ export class UnifiedNodeRegistry implements INodeRegistry {
       });
     }
 
-    const enrichedRequirements = this.enrichRequirementsWithCredentialType(requirements, provider);
+      const enrichedRequirements = this.enrichRequirementsWithCredentialType(requirements, provider);
+      const dedupedRequirements: NodeCredentialRequirement[] = [];
+      const seenRequirementKeys = new Set<string>();
+      for (const req of enrichedRequirements) {
+        const key = req.credentialTypeId || `${req.provider}:${req.category}`;
+        const existing = dedupedRequirements.find((candidate) => (candidate.credentialTypeId || `${candidate.provider}:${candidate.category}`) === key);
+        if (existing) {
+          existing.required = existing.required || req.required;
+          if (req.category === 'api_key') {
+            existing.category = req.category;
+            existing.description = req.description;
+          }
+          continue;
+        }
+        if (seenRequirementKeys.has(key)) continue;
+        seenRequirementKeys.add(key);
+        dedupedRequirements.push(req);
+      }
 
-    return enrichCredentialSchema({
-      requirements: enrichedRequirements,
-      credentialFields,
-    });
+      return enrichCredentialSchema({
+        requirements: dedupedRequirements,
+        credentialFields,
+      });
   }
 
   private mergeCredentialSchema(

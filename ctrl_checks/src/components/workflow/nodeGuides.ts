@@ -73,6 +73,63 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       example: '[{"filename":"report.pdf","content":"{{input.pdfBase64}}","contentType":"application/pdf"}]'
     }
   },
+  mailgun: {
+    from: {
+      title: 'How to set From Email?',
+      steps: [
+        'Use an email address on the sending domain saved in your Mailgun connection.',
+        'Open Mailgun -> Sending -> Domains to confirm the domain is verified.',
+        'For sandbox domains, Mailgun can send only to authorized recipients.',
+        'Example: noreply@mg.yourdomain.com'
+      ],
+      example: 'noreply@mg.yourdomain.com'
+    },
+    to: {
+      title: 'How to set To Email?',
+      steps: [
+        'Enter one recipient email address, or comma-separated addresses for multiple recipients.',
+        'Use workflow values such as {{input.email}} when the recipient comes from an earlier step.',
+        'For sandbox domains, add the recipient as an authorized recipient in Mailgun before testing.'
+      ],
+      example: 'customer@example.com'
+    },
+    text: {
+      title: 'How to write Plain Text?',
+      steps: [
+        'Provide the plain text body of the email.',
+        'Mailgun requires at least one of Text, HTML, or Template.',
+        'Use workflow values such as {{input.name}} or {{input.resetUrl}} for personalization.'
+      ],
+      example: 'Hi {{input.name}}, your order {{input.orderId}} has shipped.'
+    },
+    html: {
+      title: 'How to write HTML?',
+      steps: [
+        'Provide HTML content for email clients that support rich formatting.',
+        'Mailgun requires at least one of Text, HTML, or Template.',
+        'Keep dynamic values escaped or trusted before placing them in HTML.'
+      ],
+      example: '<p>Hi {{input.name}}, click <a href="{{input.resetUrl}}">here</a>.</p>'
+    },
+    template: {
+      title: 'How to use a Mailgun Template?',
+      steps: [
+        'Create or find the stored template in Mailgun -> Sending -> Templates.',
+        'Enter the exact template name in this field.',
+        'Add Template Variables as a JSON object whose keys match the template variables.'
+      ],
+      example: 'welcome_email'
+    },
+    templateVariables: {
+      title: 'How to set Template Variables?',
+      steps: [
+        'Enter a JSON object sent to Mailgun as t:variables.',
+        'Use keys that match the variables used in the stored Mailgun template.',
+        'Use workflow values when variables come from earlier steps.'
+      ],
+      example: '{"name":"Ada","resetUrl":"{{input.resetUrl}}"}'
+    }
+  },
   google_gemini: {
     apiKey: {
       title: 'Gemini AI Studio API Key – Step-by-Step',

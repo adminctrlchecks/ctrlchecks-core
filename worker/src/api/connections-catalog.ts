@@ -250,9 +250,10 @@ const FIELD_OVERRIDES: Record<string, ConnectionCredentialField[]> = {
     { name: 'botToken', label: 'Bot Token', type: 'password', required: true, helpCategory: 'generic_token', docsUrl: 'https://core.telegram.org/bots/features#botfather' },
   ],
   mailgun: [
-    { name: 'domain', label: 'Domain',     type: 'text',     required: true, helpCategory: 'base_url' },
-    { name: 'apiKey',  label: 'API Key',   type: 'password', required: true, helpCategory: 'api_key',      docsUrl: 'https://app.mailgun.com/settings/api_security' },
-    { name: 'from',    label: 'From Email',type: 'text',     required: true, helpCategory: 'email_address' },
+    { name: 'apiKey', label: 'Private API Key', type: 'password', required: true, helpCategory: 'api_key', docsUrl: 'https://app.mailgun.com/settings/api_security' },
+    { name: 'domain', label: 'Sending Domain',  type: 'text',     required: true, helpCategory: 'base_url' },
+    { name: 'region', label: 'Region',          type: 'text',     required: true, helpCategory: 'none' },
+    { name: 'from',   label: 'Default From Email', type: 'text',  required: false, helpCategory: 'email_address' },
   ],
   sendgrid: [
     { name: 'apiKey', label: 'API Key',    type: 'password', required: true, helpCategory: 'api_key',      docsUrl: 'https://app.sendgrid.com/settings/api_keys' },

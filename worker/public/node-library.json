@@ -2453,8 +2453,6 @@
       "result"
     ],
     "requiredConfig": [
-      "domain",
-      "apiKey",
       "from",
       "to"
     ],
@@ -2466,7 +2464,13 @@
       "to",
       "subject",
       "text",
-      "html"
+      "html",
+      "cc",
+      "bcc",
+      "replyTo",
+      "tags",
+      "template",
+      "templateVariables"
     ],
     "credentialType": null,
     "capabilities": []

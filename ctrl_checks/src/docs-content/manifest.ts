@@ -725,8 +725,8 @@ export const nodeDocManifest = [
     "slug": "mailgun",
     "displayName": "Mailgun",
     "category": "Communication",
-    "description": "Send transactional emails using the Mailgun API. Use this node when a workflow needs mailgun behavior with schema-driven inputs from the CtrlChecks node registry.",
-    "logoUrl": "/icons/nodes/mailgun.svg"
+    "description": "Send transactional emails through Mailgun using a saved API key, sending domain, and region.",
+    "logoUrl": "/integrations-logos/Mailgun.svg"
   },
   {
     "slug": "sendgrid",

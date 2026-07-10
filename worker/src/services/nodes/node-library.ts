@@ -70,6 +70,8 @@ export interface ConfigField {
     supportsRuntimeAI?: boolean;
     supportsBuildtimeAI?: boolean;
   };
+  /** Explicit ownership override for fields managed by Connections instead of the node panel. */
+  ownership?: 'structural' | 'value' | 'credential';
   /**
    * Optional explicit field intelligence. When omitted, UnifiedNodeRegistry
    * infers conservative runtime/default/risk metadata for every field.
@@ -8671,9 +8673,9 @@ export class NodeLibrary {
       type: 'mailgun',
       label: 'Mailgun',
       category: 'output',
-      description: 'Send transactional emails using the Mailgun API.',
+      description: 'Send transactional emails through Mailgun using a saved API key, sending domain, and region.',
       configSchema: {
-        required: ['domain', 'apiKey', 'from', 'to'],
+        required: ['from', 'to'],
         optional: {
           operation: {
             type: 'string',
@@ -8683,13 +8685,15 @@ export class NodeLibrary {
           },
           domain: {
             type: 'string',
-            description: 'Mailgun sending domain',
+            description: 'Mailgun sending domain saved on the selected Mailgun connection',
             examples: ['mg.yourdomain.com', 'sandbox.mailgun.org'],
+            ownership: 'credential',
           },
           apiKey: {
             type: 'string',
-            description: 'Mailgun Private API Key',
+            description: 'Mailgun Private API Key saved on the selected Mailgun connection',
             examples: ['key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'],
+            ownership: 'credential',
           },
           from: {
             type: 'string',
@@ -8716,8 +8720,66 @@ export class NodeLibrary {
             description: 'HTML body of the email (overrides plain text for HTML clients)',
             examples: ['<p>Your message</p>', '{{$json.htmlBody}}'],
           },
+          cc: {
+            type: 'string',
+            description: 'CC recipient email address(es), comma-separated',
+            examples: ['manager@example.com', '{{$json.cc}}'],
+          },
+          bcc: {
+            type: 'string',
+            description: 'BCC recipient email address(es), comma-separated',
+            examples: ['audit@example.com', '{{$json.bcc}}'],
+          },
+          replyTo: {
+            type: 'string',
+            description: 'Reply-To email address for recipient replies',
+            examples: ['support@mg.yourdomain.com', '{{$json.replyTo}}'],
+          },
+          tags: {
+            type: 'string',
+            description: 'Mailgun message tags, comma-separated. Sent as o:tag values.',
+            examples: ['welcome,onboarding', '{{$json.tags}}'],
+          },
+          template: {
+            type: 'string',
+            description: 'Optional Mailgun stored template name. If set, the template provides message content.',
+            examples: ['welcome_email', '{{$json.templateName}}'],
+          },
+          templateVariables: {
+            type: 'object',
+            description: 'JSON object of variables for the Mailgun template, sent as t:variables.',
+            examples: [{ name: 'Ada', resetUrl: 'https://example.com/reset' }, '{{$json.templateVariables}}'],
+          },
         },
       },
+      operationContracts: [
+        {
+          operation: 'send_email',
+          label: 'Send Email',
+          requiredFields: ['from', 'to'],
+          optionalFields: ['operation', 'subject', 'text', 'html', 'cc', 'bcc', 'replyTo', 'tags', 'template', 'templateVariables'],
+          providerDefaultFields: [],
+          credentialProviders: ['mailgun'],
+          outputFields: ['default'],
+          status: 'implemented',
+          payloadGroups: [{ name: 'message_content', anyOf: ['text', 'html', 'template'], required: true }],
+          fieldSourcePolicy: {
+            to: { credentialForbidden: true },
+            cc: { credentialForbidden: true },
+            bcc: { credentialForbidden: true },
+            replyTo: { credentialForbidden: true },
+            subject: { credentialForbidden: true },
+            text: { credentialForbidden: true },
+            html: { credentialForbidden: true },
+            templateVariables: { credentialForbidden: true },
+          },
+          runtimeAiPolicy: {
+            text: { allowed: true },
+            html: { allowed: true },
+            subject: { allowed: true },
+          },
+        },
+      ],
       aiSelectionCriteria: {
         whenToUse: [
           'User wants to send email via Mailgun',
@@ -8733,7 +8795,7 @@ export class NodeLibrary {
           'mailgun transactional', 'mailgun message', 'send via mailgun',
         ],
         useCases: ['Transactional emails', 'Notification emails', 'Welcome emails'],
-        intentDescription: 'Send transactional emails via the Mailgun REST API. Supports plain text and HTML bodies.',
+        intentDescription: 'Send transactional emails via the Mailgun REST API. Supports plain text, HTML, CC/BCC, Reply-To, tags, and stored templates.',
         intentCategories: ['mailgun', 'email', 'transactional_email', 'communication'],
       },
       commonPatterns: [
@@ -8742,7 +8804,6 @@ export class NodeLibrary {
           description: 'Send a plain text email',
           config: {
             operation: 'send_email',
-            domain: 'mg.yourdomain.com',
             from: 'noreply@mg.yourdomain.com',
             to: 'recipient@example.com',
             subject: 'Hello!',
@@ -8751,16 +8812,6 @@ export class NodeLibrary {
         },
       ],
       validationRules: [
-        {
-          field: 'domain',
-          validator: (value: unknown) => typeof value === 'string' && value.length > 0,
-          errorMessage: 'Mailgun domain is required',
-        },
-        {
-          field: 'apiKey',
-          validator: (value: unknown) => typeof value === 'string' && value.length > 0,
-          errorMessage: 'Mailgun API key is required',
-        },
         {
           field: 'to',
           validator: (value: unknown) => typeof value === 'string' && value.length > 0,
@@ -8777,6 +8828,7 @@ export class NodeLibrary {
         success: { type: 'boolean' },
         messageId: { type: 'string' },
         message: { type: 'string' },
+        mailgun: { type: 'object' },
         error: { type: 'object' },
       },
       capabilities: ['email.send', 'mailgun.send', 'transactional_email', 'terminal'],
@@ -8785,7 +8837,7 @@ export class NodeLibrary {
         'mailgun', 'mailgun email', 'mailgun send', 'mailgun api',
         'mailgun transactional', 'send via mailgun',
       ],
-      schemaVersion: '1.0.0',
+      schemaVersion: '1.1.0',
     };
   }
 

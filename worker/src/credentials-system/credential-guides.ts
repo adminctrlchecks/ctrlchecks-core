@@ -1110,6 +1110,13 @@ export const specificGuides: Record<string, GuideOverride> = {
         whereToFind: 'Check your Mailgun account dashboard URL: app.mailgun.com = US; eu.mailgun.com = EU.',
         notes: ['Using the wrong region will result in authentication errors.'],
       },
+      from: {
+        label: 'Default From Email',
+        description: 'Optional sender address CtrlChecks can use when the Mailgun node From field is blank.',
+        whereToFind: 'Use an address on your verified Mailgun sending domain.',
+        example: 'noreply@mg.yourcompany.com',
+        notes: ['The node-level From Email field can override this per message.'],
+      },
     },
     docsUrl: 'https://documentation.mailgun.com/docs/mailgun/api-reference/authentication',
   },

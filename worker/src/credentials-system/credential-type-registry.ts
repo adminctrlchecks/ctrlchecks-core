@@ -2372,9 +2372,10 @@ export const credentialTypeDefinitions: CredentialTypeDefinition[] = addCredenti
     displayName: 'Mailgun API Key',
     authType: 'basic_auth',
     inputFields: [
-      { name: 'apiKey', label: 'API Key', type: 'password', required: true, secret: true, helpText: 'From Mailgun → Settings → API Keys (starts with key-)' },
-      { name: 'domain', label: 'Sending Domain', type: 'text', required: true, placeholder: 'mg.yourdomain.com' },
-      { name: 'region', label: 'Region', type: 'select', required: true, defaultValue: 'us', options: [{ label: 'US', value: 'us' }, { label: 'EU', value: 'eu' }] },
+      { name: 'apiKey', label: 'Private API Key', type: 'password', required: true, secret: true, helpText: 'Mailgun private sending API key from Account Settings -> API Keys. It usually starts with key-; do not use the public validation key.' },
+      { name: 'domain', label: 'Sending Domain', type: 'text', required: true, placeholder: 'mg.yourdomain.com', helpText: 'Verified Mailgun sending domain from Sending -> Domains. Sandbox domains can send only to authorized recipients.' },
+      { name: 'region', label: 'Region', type: 'select', required: true, defaultValue: 'us', options: [{ label: 'US (api.mailgun.net)', value: 'us' }, { label: 'EU (api.eu.mailgun.net)', value: 'eu' }] },
+      { name: 'from', label: 'Default From Email', type: 'text', required: false, placeholder: 'noreply@mg.yourdomain.com', helpText: 'Optional default sender. The Mailgun node can override this per message with its From field.' },
     ],
     form: { layout: 'stacked', submitLabel: 'Save Credentials', testLabel: 'Test Mailgun' },
     validation: { requiredFields: ['apiKey', 'domain'] },

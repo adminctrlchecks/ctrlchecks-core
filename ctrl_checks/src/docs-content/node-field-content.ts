@@ -328,10 +328,6 @@ Example: your32characterauthtokenhere1234`,
 
   mailgun: {
     send_email: {
-      domain: `What this field is: Your verified Mailgun sending domain — the domain name you have set up and verified with Mailgun.
-Where to find it: Log in to mailgun.com → Sending → Domains. Copy the domain name shown there.
-Example: mg.yourcompany.com
-Note: This is NOT your full email address — just the domain part. You must complete DNS verification for this domain before emails will send.`,
       from: `What this field is: The email address that will appear as the sender.
 Important: Must use your verified Mailgun domain.
 Example: noreply@mg.yourcompany.com or support@mg.yourcompany.com`,
@@ -339,13 +335,36 @@ Example: noreply@mg.yourcompany.com or support@mg.yourcompany.com`,
 Example: customer@example.com
 Tip: Use {{$json.email}} from a form or database step.`,
       subject: `What this field is: The email subject line.
-Example: Your account has been activated — welcome to {{$json.companyName}}!`,
+Example: Your account has been activated - welcome to {{$json.companyName}}!`,
+      text: `What this field is: The plain text email body.
+Mailgun requires at least one of text, html, or template.
+Tip: Use {{$json.message}} when the content comes from an earlier step.`,
+      html: `What this field is: The HTML email body.
+Mailgun requires at least one of text, html, or template.
+Example: <p>Hello {{$json.name}}</p>`,
+      cc: `What this field is: Optional CC recipient email addresses.
+Use comma-separated values for multiple recipients.`,
+      bcc: `What this field is: Optional BCC recipient email addresses.
+Use comma-separated values for multiple recipients.`,
+      replyTo: `What this field is: Optional Reply-To email address for replies.
+Example: support@mg.yourcompany.com`,
+      tags: `What this field is: Optional Mailgun tags for message tracking.
+Use comma-separated values such as welcome,onboarding.`,
+      template: `What this field is: Optional Mailgun stored template name.
+If set, the template can provide the message content.`,
+      templateVariables: `What this field is: JSON variables passed to a Mailgun stored template.
+Example: {"name":"{{$json.name}}","resetUrl":"{{$json.resetUrl}}"}`,
     },
     '*': {
       apiKey: `What this field is: Your Mailgun API Key that gives CtrlChecks permission to send emails.
-Where to find it: mailgun.com → Settings → API Keys → Private API Key.
+Where to find it: mailgun.com -> Settings -> API Keys -> Private API Key.
 It starts with key- and is a long string of letters and numbers.
-Keep it secret — do not share or publish it.`,
+Keep it secret - do not share or publish it.`,
+      domain: `What this field is: Your verified Mailgun sending domain saved in the Mailgun connection.
+Where to find it: mailgun.com -> Sending -> Domains.
+Example: mg.yourcompany.com`,
+      region: `What this field is: The Mailgun API region saved in the Mailgun connection.
+Use US for api.mailgun.net or EU for api.eu.mailgun.net.`,
     },
   },
 

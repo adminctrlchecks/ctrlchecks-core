@@ -390,12 +390,12 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
   mailgun: {
     default: {
       description: 'Send a transactional email via Mailgun.',
-      outputExample: { id: '<20250115.abc123@mg.example.com>', message: 'Queued. Thank you.' },
-      outputDescription: 'id: Mailgun message ID for tracking. message: Confirmation from Mailgun.',
+      outputExample: { success: true, messageId: '<20250115.abc123@mg.example.com>', message: 'Queued. Thank you.' },
+      outputDescription: 'success: true when Mailgun accepts the message. messageId: Mailgun message ID for tracking. message: Confirmation from Mailgun.',
       usageExample: {
         scenario: 'Send a password reset email using Mailgun',
         inputValues: { from: 'noreply@yourapp.com', to: '{{$json.email}}', subject: 'Reset your password', html: '<p>Click <a href="{{$json.resetUrl}}">here</a> to reset your password. Link expires in 1 hour.</p>' },
-        expectedOutput: 'Email is queued by Mailgun. Track delivery in the Mailgun logs using `{{$json.id}}`.',
+        expectedOutput: 'Email is queued by Mailgun. Track delivery in the Mailgun logs using `{{$json.messageId}}`.',
       },
     },
   },
