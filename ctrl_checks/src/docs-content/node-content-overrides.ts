@@ -229,9 +229,9 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
 
   log_output: {
     default: {
-      description: 'Write a log message to the CtrlChecks execution log for debugging and monitoring.',
-      outputExample: { logged: true, message: 'Processing user u_123', level: 'info', timestamp: '2025-01-15T10:00:00Z' },
-      outputDescription: 'logged: true if the log was written successfully. message: The exact message that was logged. level: Log level used (info, warn, error). timestamp: When the log was written.',
+      description: 'Write a log message to the CtrlChecks execution log for debugging and monitoring. This is a terminal node — it cannot connect to further downstream nodes.',
+      outputExample: { message: 'Processed 42 rows from orders_table' },
+      outputDescription: 'message: The resolved log text, with any {{...}} template expressions substituted — this is the entire output value (a plain string, not an object with separate fields). Because log_output is a terminal node with no outgoing edges, this value is not forwarded to any further node; it is recorded in the execution history only.',
       usageExample: {
         scenario: 'Log progress checkpoints in a long-running data pipeline',
         inputValues: { message: 'Processed {{$json.rowCount}} rows from {{$json.tableName}}', level: 'info' },

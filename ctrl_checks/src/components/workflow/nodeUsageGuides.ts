@@ -834,9 +834,9 @@ Creates new order record from workflow data.`,
   },
 
   log_output: {
-    overview: 'Log data for debugging and monitoring. View logs in the execution history.',
+    overview: 'Log data for debugging and monitoring. View logs in the execution history. This is a terminal node — it cannot connect to further downstream nodes.',
     inputs: ['any data'],
-    outputs: ['logged (passes input through)'],
+    outputs: ['the resolved log message (string)'],
     example: `Message: "Processing order: {{input.orderId}}"
 Level: info
 
@@ -844,7 +844,7 @@ Appears in execution logs:
 [INFO] Processing order: 12345
 
 Useful for debugging workflow flow.`,
-    tips: ['Use different levels for filtering', 'Data passes through to next node', 'Check execution history for logs'],
+    tips: ['Use different levels for filtering', 'This node is terminal — it does not forward data to further nodes', 'Check execution history for logs'],
   },
 
   llm_chain: {

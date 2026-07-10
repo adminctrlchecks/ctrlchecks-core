@@ -3,9 +3,9 @@ import type { NodeDoc } from '../types';
 export const logOutputDoc: NodeDoc = {
   "slug": "log_output",
   "displayName": "Log Output",
-  "category": "Communication",
+  "category": "Utility",
   "logoUrl": "/icons/nodes/log_output.svg",
-  "description": "Log data to console or file",
+  "description": "Log data to console or file. This is a terminal node — it cannot connect to further downstream nodes.",
   "credentialType": "None",
   "credentialSetupSteps": [
     "This node does not need a saved account connection.",
@@ -38,19 +38,16 @@ export const logOutputDoc: NodeDoc = {
               "name": "Message",
               "internalKey": "message",
               "type": "textarea",
-              "required": true,
+              "required": false,
               "description": "Log message",
               "helpText": "What this field is: Log message.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: Hello {{$json.name}}.\nTip: Use {{$json.message}} when this value comes from an earlier step.",
               "placeholder": "Hello {{$json.name}}"
             }
           ],
           "outputExample": {
-            "logged": true,
-            "message": "Processing user u_123",
-            "level": "info",
-            "timestamp": "2025-01-15T10:00:00Z"
+            "message": "Processing user u_123"
           },
-          "outputDescription": "logged: true if the log was written successfully. message: The exact message that was logged. level: Log level used (info, warn, error). timestamp: When the log was written.",
+          "outputDescription": "message: The resolved log text, with any {{...}} template expressions substituted — this is the entire output value (a plain string, not an object with separate fields). Because log_output is a terminal node with no outgoing edges, this value is not forwarded to any further node; it is recorded in the execution history only.",
           "usageExample": {
             "scenario": "Log progress checkpoints in a long-running data pipeline",
             "inputValues": {

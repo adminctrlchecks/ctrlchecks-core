@@ -332,7 +332,7 @@ export const nodeDocManifest = [
   {
     "slug": "log_output",
     "displayName": "Log Output",
-    "category": "Communication",
+    "category": "Utility",
     "description": "Log data to console or file Use this node when a workflow needs log output behavior with schema-driven inputs from the CtrlChecks node registry.",
     "logoUrl": "/icons/nodes/log_output.svg"
   },

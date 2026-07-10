@@ -3265,7 +3265,7 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     description: 'Log output',
     defaultConfig: {},
     configFields: [
-      { key: 'message', label: 'Log Message', type: 'textarea', placeholder: 'Debug: {{input}}', required: true, helpText: 'Message to log. Supports template expressions like {{input}} to include data from previous nodes. Use this for debugging workflows and monitoring execution. Examples: "Processing user: {{input.userId}}", "Data received: {{input}}"' },
+      { key: 'message', label: 'Log Message', type: 'textarea', placeholder: 'Debug: {{input}}', required: false, helpText: 'Message to log. Supports template expressions like {{input}} to include data from previous nodes. Use this for debugging workflows and monitoring execution. Examples: "Processing user: {{input.userId}}", "Data received: {{input}}"' },
       { key: 'level', label: 'Log Level', type: 'select', options: [
         { label: 'Info', value: 'info' },
         { label: 'Warning', value: 'warn' },
