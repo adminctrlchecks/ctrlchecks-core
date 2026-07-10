@@ -127,6 +127,8 @@ export async function listConnections(): Promise<ConnectionRecord[]> {
 export async function createConnection(input: {
   name: string;
   credentialTypeId: string;
+  provider?: string;
+  authType?: AuthType;
   credentials: Record<string, unknown>;
   metadata?: Record<string, unknown>;
 }): Promise<ConnectionRecord> {

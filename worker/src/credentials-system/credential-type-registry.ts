@@ -54,6 +54,7 @@ const providerDocsUrls: Record<string, string> = {
   cohere: 'https://docs.cohere.com/',
   contentful: 'https://www.contentful.com/developers/docs/references/content-management-api/',
   discord: 'https://discord.com/developers/docs/intro',
+  discord_webhook: 'https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks',
   dropbox: 'https://www.dropbox.com/developers/documentation',
   facebook: 'https://developers.facebook.com/docs/facebook-login/',
   firebase: 'https://firebase.google.com/docs/projects/api-keys',
@@ -1049,7 +1050,7 @@ export const credentialTypeDefinitions: CredentialTypeDefinition[] = addCredenti
   // ─── Discord ─────────────────────────────────────────────────────────────────
   {
     id: 'discord_webhook',
-    provider: 'discord',
+    provider: 'discord_webhook',
     displayName: 'Discord Webhook URL',
     authType: 'api_key',
     inputFields: [
@@ -1062,7 +1063,7 @@ export const credentialTypeDefinitions: CredentialTypeDefinition[] = addCredenti
         helpText: 'Discord Server -> Channel Settings -> Integrations -> Webhooks -> Copy Webhook URL',
       },
     ],
-    form: { layout: 'stacked', submitLabel: 'Save Webhook', testLabel: 'Test Discord' },
+    form: { layout: 'stacked', submitLabel: 'Save Webhook', testLabel: 'Test Discord Webhook' },
     validation: { requiredFields: ['webhookUrl'] },
     injection: [{ target: 'header', name: 'X-Discord-Webhook', valueTemplate: '{{webhookUrl}}' }],
     refresh: { enabled: false, refreshBeforeSeconds: 0 },

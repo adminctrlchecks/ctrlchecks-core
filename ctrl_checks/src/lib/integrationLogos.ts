@@ -16,6 +16,7 @@ export const INTEGRATION_LOGO_MAP: Record<string, string> = {
   twitter:          '/integrations-logos/Twitter.svg',
   youtube:          '/integrations-logos/Youtube.svg',
   discord:          '/integrations-logos/Discord.svg',
+  discord_webhook:  '/integrations-logos/Discord.svg',
   telegram:         '/integrations-logos/Telegram.svg',
   whatsapp:         '/integrations-logos/Whatsapp-Cloude.svg',
   whatsapp_cloud:   '/integrations-logos/Whatsapp-Cloude.svg',

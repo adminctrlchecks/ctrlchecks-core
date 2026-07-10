@@ -34,6 +34,7 @@ describe('INTEGRATION_LOGO_MAP', () => {
 describe('getIntegrationLogo', () => {
   it('returns the mapped logo for exact node type keys', () => {
     expect(getIntegrationLogo('github')).toBe('/integrations-logos/Github.svg');
+    expect(getIntegrationLogo('discord_webhook')).toBe('/integrations-logos/Discord.svg');
     expect(getIntegrationLogo('google_calendar')).toBe('/integrations-logos/Google-Calender.svg');
     expect(getIntegrationLogo('aws_s3')).toBe('/integrations-logos/AWS-S3.svg');
   });
