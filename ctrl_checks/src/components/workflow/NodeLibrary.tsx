@@ -15,6 +15,7 @@ import { NODE_CATEGORIES, NODE_TYPES, NodeTypeDefinition } from './nodeTypes';
 import { cn } from '@/lib/utils';
 import { nodeSchemaService, type NodeDefinition } from '@/services/nodeSchemaService';
 import { BACKEND_SUPPORTED_NODE_TYPES } from './backendSupportedNodeTypes';
+import { getIntegrationLogo } from '@/lib/integrationLogos';
 
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   Play, Webhook, Clock, Globe, Brain, Sparkles, Gem, Link, GitBranch,
@@ -64,6 +65,10 @@ function normalizeBackendCategory(category: string): NodeTypeDefinition['categor
   return aliases[category] || (category as NodeTypeDefinition['category']);
 }
 
+// Legacy/internal-only node types: still execute and render in existing workflows,
+// but never offered for new placements. Mirrors `internalOnly` in the worker's node-library.
+const HIDDEN_NODE_TYPES = new Set(['ollama', 'chat_model', 'memory', 'tool']);
+
 function backendSchemaToNodeType(definition: NodeDefinition): NodeTypeDefinition {
   return {
     type: definition.type,
@@ -86,7 +91,9 @@ export default function NodeLibrary({ onDragStart, onClose }: NodeLibraryProps) 
     nodeSchemaService.fetchAllSchemas()
       .then((schemas) => {
         if (cancelled) return;
-        setSchemaNodes(schemas.map(backendSchemaToNodeType));
+        // Internal/legacy-only nodes (hidden) still render in existing workflows,
+        // but are not offered in the palette for new placements.
+        setSchemaNodes(schemas.filter((schema) => !schema.hidden).map(backendSchemaToNodeType));
       })
       .catch((error) => {
         console.error('[NodeLibrary] Falling back to static backend-supported node list:', error);
@@ -107,7 +114,11 @@ export default function NodeLibrary({ onDragStart, onClose }: NodeLibraryProps) 
   };
 
   const sourceNodes = useMemo(
-    () => schemaNodes || NODE_TYPES.filter((node) => BACKEND_SUPPORTED_NODE_TYPES.has(node.type)),
+    () =>
+      schemaNodes ||
+      NODE_TYPES.filter(
+        (node) => BACKEND_SUPPORTED_NODE_TYPES.has(node.type) && !HIDDEN_NODE_TYPES.has(node.type),
+      ),
     [schemaNodes],
   );
 
@@ -221,6 +232,7 @@ export default function NodeLibrary({ onDragStart, onClose }: NodeLibraryProps) 
                     <div className="space-y-0.5">
                       {nodes.map((node) => {
                         const IconComponent = iconMap[node.icon] || Box;
+                        const logoSrc = getIntegrationLogo(node.type);
                         return (
                           <div
                             key={node.type}
@@ -234,9 +246,13 @@ export default function NodeLibrary({ onDragStart, onClose }: NodeLibraryProps) 
                           >
                             <div
                               className="flex h-6 w-6 items-center justify-center rounded flex-shrink-0 mt-0.5"
-                              style={{ backgroundColor: category.color + '15', color: category.color }}
+                              style={{ backgroundColor: logoSrc ? '#fff' : category.color + '15', color: category.color }}
                             >
-                              <IconComponent className="h-3 w-3" />
+                              {logoSrc ? (
+                                <img src={logoSrc} alt={node.label} className="h-4 w-4 object-contain" />
+                              ) : (
+                                <IconComponent className="h-3 w-3" />
+                              )}
                             </div>
                             <div className="flex-1 min-w-0 pt-0.5">
                               <div className="text-xs font-medium text-foreground/90 truncate leading-tight">

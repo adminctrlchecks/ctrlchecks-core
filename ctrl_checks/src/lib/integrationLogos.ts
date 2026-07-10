@@ -16,6 +16,7 @@ export const INTEGRATION_LOGO_MAP: Record<string, string> = {
   twitter:          '/integrations-logos/Twitter.svg',
   youtube:          '/integrations-logos/Youtube.svg',
   discord:          '/integrations-logos/Discord.svg',
+  discord_webhook:  '/integrations-logos/Discord.svg',
   telegram:         '/integrations-logos/Telegram.svg',
   whatsapp:         '/integrations-logos/Whatsapp-Cloude.svg',
   whatsapp_cloud:   '/integrations-logos/Whatsapp-Cloude.svg',
@@ -91,9 +92,11 @@ export const INTEGRATION_LOGO_MAP: Record<string, string> = {
   slack:            '/integrations-logos/Slack.svg',
   twilio:           '/integrations-logos/Twilio.svg',
   sendgrid:         '/integrations-logos/Sendgrid.svg',
+  amazon_ses:       '/integrations-logos/Amazon-SES.svg',
 
   // Misc
-  wordpress:        '/integrations-logos/WooCommerce.svg',
+  contentful:       '/integrations-logos/Contentful.svg',
+  wordpress:        '/integrations-logos/WordPress.svg',
 };
 
 /** Returns the logo path for a given node type, or undefined if none exists. */

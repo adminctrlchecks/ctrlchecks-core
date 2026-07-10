@@ -172,3 +172,6 @@ Thumbs.db
 # ── Claude logs are NOT in standard logs/ — allow .claude/logs/ ───────────────
 !.claude/
 !.claude/logs/
+
+# HubSpot config file
+hubspot.config.yml

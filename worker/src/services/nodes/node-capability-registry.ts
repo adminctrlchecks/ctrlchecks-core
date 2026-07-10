@@ -86,8 +86,10 @@ export class NodeCapabilityRegistry {
       return;
     }
     
-    const allSchemas = libraryInstance.getAllSchemas();
-    
+    // includeInternal=true: keyed capability lookups must work for legacy node types
+    // (ollama, chat_model, memory, tool) still present in saved workflows.
+    const allSchemas = libraryInstance.getAllSchemas(true);
+
     for (const schema of allSchemas) {
       const nodeType = schema.type;
       const capability = this.getCapabilityFromSchema(nodeType, schema);

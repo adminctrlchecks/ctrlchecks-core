@@ -127,7 +127,6 @@ describe('NODE_TYPES — metadata shape contract', () => {
  * Do NOT add new types here without registering a tracking item.
  */
 const KNOWN_NODE_TYPES_GAPS = new Set([
-  'api_key_auth',      // auth utility node — needs UI metadata
   'cache_get',         // caching node — needs UI metadata
   'cache_set',         // caching node — needs UI metadata
   'db',                // generic DB alias — needs UI metadata
@@ -136,7 +135,6 @@ const KNOWN_NODE_TYPES_GAPS = new Set([
   // 'execute_workflow' — closed Task 6
   // 'instagram_trigger'— closed Task 6
   'lightricks',        // media AI — needs UI metadata
-  'oauth2_auth',       // auth utility — needs UI metadata
   'outlook',           // email provider — needs UI metadata
   // 'parallel'         — closed Task 6
   'queue_consume',     // messaging — needs UI metadata

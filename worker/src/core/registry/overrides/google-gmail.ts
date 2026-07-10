@@ -360,6 +360,9 @@ async function executeGmailSend(context: NodeExecutionContext, schema: NodeSchem
       to: recipient,
       subject: subjectFinal,
       body: bodyFinal,
+      from: String(configWithResolvedInputs.from ?? '').trim(),
+      cc: String(configWithResolvedInputs.cc ?? '').trim(),
+      bcc: String(configWithResolvedInputs.bcc ?? '').trim(),
     });
     results.push({ to: recipient, success: r.success, messageId: r.messageId, error: r.error });
   }
@@ -390,7 +393,7 @@ export function overrideGoogleGmail(def: UnifiedNodeDefinition, schema: NodeSche
       operation: 'send',
       label: 'Send Email',
       requiredFields: ['operation', 'recipientSource', 'subject', 'body'],
-      optionalFields: ['recipientEmails', 'spreadsheetId', 'sheetName', 'range', 'useAiRecipientMapping'],
+      optionalFields: ['recipientEmails', 'cc', 'bcc', 'from', 'spreadsheetId', 'sheetName', 'range', 'useAiRecipientMapping'],
       providerDefaultFields: ['range'],
       emptyValuePolicy: { range: 'provider_default', spreadsheetId: 'optional', sheetName: 'optional' },
       credentialProviders: ['google'],
@@ -456,6 +459,7 @@ export function overrideGoogleGmail(def: UnifiedNodeDefinition, schema: NodeSche
     recipientSource: baseSchema.recipientSource
       ? {
           ...baseSchema.recipientSource,
+          ui: { ...(baseSchema.recipientSource as any).ui, visibleIf: { field: 'operation', equals: 'send' } },
           ownership: 'structural',
           fillMode: {
             default: 'manual_static',
@@ -467,6 +471,7 @@ export function overrideGoogleGmail(def: UnifiedNodeDefinition, schema: NodeSche
     recipientEmails: baseSchema.recipientEmails
       ? {
           ...baseSchema.recipientEmails,
+          ui: { ...(baseSchema.recipientEmails as any).ui, visibleIf: { field: 'operation', equals: 'send' } },
           ownership: 'value',
           fillMode: {
             default: 'manual_static',
@@ -479,6 +484,7 @@ export function overrideGoogleGmail(def: UnifiedNodeDefinition, schema: NodeSche
     spreadsheetId: baseSchema.spreadsheetId
       ? {
           ...baseSchema.spreadsheetId,
+          ui: { ...(baseSchema.spreadsheetId as any).ui, visibleIf: { field: 'recipientSource', equals: 'extract_from_sheet' } },
           ownership: 'structural',
           fillMode: {
             default: 'manual_static',
@@ -487,9 +493,22 @@ export function overrideGoogleGmail(def: UnifiedNodeDefinition, schema: NodeSche
           },
         }
       : baseSchema.spreadsheetId,
+    sheetName: baseSchema.sheetName
+      ? {
+          ...baseSchema.sheetName,
+          ui: { ...(baseSchema.sheetName as any).ui, visibleIf: { field: 'recipientSource', equals: 'extract_from_sheet' } },
+          ownership: 'structural',
+          fillMode: {
+            default: 'manual_static',
+            supportsRuntimeAI: false,
+            supportsBuildtimeAI: false,
+          },
+        }
+      : baseSchema.sheetName,
     range: baseSchema.range
       ? {
           ...baseSchema.range,
+          ui: { ...(baseSchema.range as any).ui, visibleIf: { field: 'recipientSource', equals: 'extract_from_sheet' } },
           ownership: 'structural',
           fillMode: {
             default: 'manual_static',
@@ -498,9 +517,22 @@ export function overrideGoogleGmail(def: UnifiedNodeDefinition, schema: NodeSche
           },
         }
       : baseSchema.range,
+    useAiRecipientMapping: baseSchema.useAiRecipientMapping
+      ? {
+          ...baseSchema.useAiRecipientMapping,
+          ui: { ...(baseSchema.useAiRecipientMapping as any).ui, visibleIf: { field: 'recipientSource', equals: 'extract_from_sheet' } },
+          ownership: 'structural',
+          fillMode: {
+            default: 'manual_static',
+            supportsRuntimeAI: false,
+            supportsBuildtimeAI: false,
+          },
+        }
+      : baseSchema.useAiRecipientMapping,
     subject: baseSchema.subject
       ? {
           ...baseSchema.subject,
+          ui: { ...(baseSchema.subject as any).ui, visibleIf: { field: 'operation', equals: 'send' } },
           ownership: 'value',
           fillMode: {
             default: 'manual_static',
@@ -515,6 +547,7 @@ export function overrideGoogleGmail(def: UnifiedNodeDefinition, schema: NodeSche
     body: baseSchema.body
       ? {
           ...baseSchema.body,
+          ui: { ...(baseSchema.body as any).ui, visibleIf: { field: 'operation', equals: 'send' } },
           ownership: 'value',
           fillMode: {
             default: 'manual_static',
@@ -526,9 +559,36 @@ export function overrideGoogleGmail(def: UnifiedNodeDefinition, schema: NodeSche
           essentialForExecution: true,
         }
       : baseSchema.body,
+    cc: baseSchema.cc
+      ? {
+          ...baseSchema.cc,
+          ui: { ...(baseSchema.cc as any).ui, visibleIf: { field: 'operation', equals: 'send' } },
+          ownership: 'value',
+          fillMode: {
+            default: 'manual_static',
+            supportsRuntimeAI: true,
+            supportsBuildtimeAI: true,
+          },
+          role: 'recipient',
+        }
+      : baseSchema.cc,
+    bcc: baseSchema.bcc
+      ? {
+          ...baseSchema.bcc,
+          ui: { ...(baseSchema.bcc as any).ui, visibleIf: { field: 'operation', equals: 'send' } },
+          ownership: 'value',
+          fillMode: {
+            default: 'manual_static',
+            supportsRuntimeAI: true,
+            supportsBuildtimeAI: true,
+          },
+          role: 'recipient',
+        }
+      : baseSchema.bcc,
     from: baseSchema.from
       ? {
           ...baseSchema.from,
+          ui: { ...(baseSchema.from as any).ui, visibleIf: { field: 'operation', equals: 'send' } },
           ownership: 'value',
           fillMode: {
             default: 'manual_static',
@@ -540,6 +600,7 @@ export function overrideGoogleGmail(def: UnifiedNodeDefinition, schema: NodeSche
     messageId: baseSchema.messageId
       ? {
           ...baseSchema.messageId,
+          ui: { ...(baseSchema.messageId as any).ui, visibleIf: { field: 'operation', equals: 'get' } },
           ownership: 'value',
           fillMode: {
             default: 'manual_static',
@@ -551,6 +612,7 @@ export function overrideGoogleGmail(def: UnifiedNodeDefinition, schema: NodeSche
     query: baseSchema.query
       ? {
           ...baseSchema.query,
+          ui: { ...(baseSchema.query as any).ui, visibleIf: { field: 'operation', equals: ['list', 'search'] } },
           ownership: 'value',
           fillMode: {
             default: 'manual_static',
@@ -559,6 +621,18 @@ export function overrideGoogleGmail(def: UnifiedNodeDefinition, schema: NodeSche
           },
         }
       : baseSchema.query,
+    maxResults: baseSchema.maxResults
+      ? {
+          ...baseSchema.maxResults,
+          ui: { ...(baseSchema.maxResults as any).ui, visibleIf: { field: 'operation', equals: ['list', 'search'] } },
+          ownership: 'structural',
+          fillMode: {
+            default: 'manual_static',
+            supportsRuntimeAI: false,
+            supportsBuildtimeAI: false,
+          },
+        }
+      : baseSchema.maxResults,
   };
   return {
     ...def,

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { connectionService } from '../credentials-system/connection-service';
+import { getCredentialType } from '../credentials-system/credential-type-registry';
 import { authInjectionEngine } from '../credentials-system/execution-auth';
 import type { CredentialAuthRequest } from '../credentials-system/execution-auth-middleware';
 import { nodeRegistryService } from '../credentials-system/node-registry-service';
@@ -81,6 +82,9 @@ export async function listConnectionsHandler(req: Request, res: Response) {
 
 export async function createConnectionHandler(req: Request, res: Response) {
   const uid = userId(req);
+  const credentialDefinition = typeof req.body.credentialTypeId === 'string'
+    ? getCredentialType(req.body.credentialTypeId)
+    : undefined;
 
   // Canary: delegate to credential-service if enabled for this user
   const { shouldUseCredentialService, createConnectionRemote, isCredentialVaultWritesDisabled } = await import('../services/credential-service-client');
@@ -88,8 +92,8 @@ export async function createConnectionHandler(req: Request, res: Response) {
     const remote = await createConnectionRemote(uid, {
       name: req.body.name,
       credentialTypeId: req.body.credentialTypeId,
-      provider: req.body.provider || req.body.credentialTypeId?.split('_')[0] || '',
-      authType: req.body.authType || 'oauth2',
+      provider: req.body.provider || credentialDefinition?.provider || req.body.credentialTypeId?.split('_')[0] || '',
+      authType: req.body.authType || credentialDefinition?.authType || 'oauth2',
       credentials: req.body.credentials || {},
       metadata: req.body.metadata || {},
     });

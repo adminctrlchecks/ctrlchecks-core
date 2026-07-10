@@ -10,35 +10,8 @@ export function overrideAiAgent(def: UnifiedNodeDefinition, schema: NodeSchema):
     description: 'User input or prompt for the AI agent',
     required: false,
   };
-  const chatModelDef = nextInputSchema.chat_model || {
-    type: 'object',
-    description: 'Optional chat model configuration',
-    required: false,
-  };
-  const memoryDef = nextInputSchema.memory || {
-    type: 'object',
-    description: 'Optional memory context',
-    required: false,
-  };
-  const toolDef = nextInputSchema.tool || {
-    type: 'object',
-    description: 'Optional tool context',
-    required: false,
-  };
 
   nextInputSchema.userInput = { ...userInputDef, required: false };
-  nextInputSchema.chat_model = {
-    ...chatModelDef,
-    required: false,
-    default: (chatModelDef as any).default || { provider: 'gemini', model: 'gemini-3.5-flash' },
-    fillMode: {
-      default: 'buildtime_ai_once' as const,
-      supportsRuntimeAI: false,
-      supportsBuildtimeAI: true,
-    },
-  };
-  nextInputSchema.memory = { ...memoryDef, required: false };
-  nextInputSchema.tool = { ...toolDef, required: false };
 
   return {
     ...def,
@@ -63,20 +36,11 @@ export function overrideAiAgent(def: UnifiedNodeDefinition, schema: NodeSchema):
       const mergedInputs = {
         ...authoritativeInputs,
         userInput: resolvedUserInput,
-        chat_model: authoritativeInputs.chat_model || context.config?.chat_model || { provider: 'gemini', model: 'gemini-3.5-flash' },
-      };
-
-      // Keep memory/tool optional and disabled by default to avoid missing-field failures.
-      const mergedConfig = {
-        ...context.config,
-        enableMemory: context.config?.enableMemory ?? false,
-        enableTools: context.config?.enableTools ?? false,
       };
 
       return await executeViaLegacyExecutor({
         context: {
           ...context,
-          config: mergedConfig,
           inputs: mergedInputs,
         },
         schema,

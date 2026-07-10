@@ -53,6 +53,8 @@ const SECRET_VALUE_KEYS = [
   'accessToken',
   'authToken',
   'botToken',
+  'webhookUrl',
+  'headerName',
   'appPassword',
   'password',
   'url',

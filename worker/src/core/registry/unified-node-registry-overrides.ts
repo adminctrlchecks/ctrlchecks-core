@@ -52,6 +52,7 @@ import { overrideIntercom } from './overrides/intercom';
 import { overrideEmail } from './overrides/email';
 import { overrideTelegram } from './overrides/telegram';
 import { overrideDiscord } from './overrides/discord';
+import { overrideDiscordWebhook } from './overrides/discord-webhook';
 import { overrideExecuteWorkflow } from './overrides/execute-workflow';
 import { overrideJavascript } from './overrides/javascript';
 import { overrideTextSummarizer } from './overrides/text-summarizer';
@@ -84,8 +85,6 @@ import { overrideQueuePush } from './overrides/queue-push';
 import { overrideQueueConsume } from './overrides/queue-consume';
 import { overrideCacheGet } from './overrides/cache-get';
 import { overrideCacheSet } from './overrides/cache-set';
-import { overrideOauth2Auth } from './overrides/oauth2-auth';
-import { overrideApiKeyAuth } from './overrides/api-key-auth';
 import { overrideReadBinaryFile } from './overrides/read-binary-file';
 import { overrideWriteBinaryFile } from './overrides/write-binary-file';
 import { overridePostgresql } from './overrides/postgresql';
@@ -205,6 +204,7 @@ const overridesByType: Record<string, OverrideFn> = {
   email: overrideEmail,
   telegram: overrideTelegram,
   discord: overrideDiscord,
+  discord_webhook: overrideDiscordWebhook,
   execute_workflow: overrideExecuteWorkflow,
   javascript: overrideJavascript,
   text_summarizer: overrideTextSummarizer,
@@ -242,9 +242,7 @@ const overridesByType: Record<string, OverrideFn> = {
   queue_consume: overrideQueueConsume,
   cache_get: overrideCacheGet,
   cache_set: overrideCacheSet,
-  // ✅ BATCH 8: Auth & File
-  oauth2_auth: overrideOauth2Auth,
-  api_key_auth: overrideApiKeyAuth,
+  // ✅ BATCH 8: File
   read_binary_file: overrideReadBinaryFile,
   write_binary_file: overrideWriteBinaryFile,
   // ✅ BATCH 9: Database

@@ -77,8 +77,11 @@ export class UnifiedNodeRegistry implements INodeRegistry {
    * All resolution goes through this map — no external resolver files needed.
    */
   private readonly ALIAS_MAP: Record<string, string> = {
-    // ── Email (must resolve to google_gmail, never ollama) ──────────────────
-    'email': 'google_gmail',
+    // ── Email (generic phrases resolve to google_gmail, never ollama).
+    // 'email' itself is NOT listed here: it is a registered canonical type
+    // (the standalone SMTP node), and resolveAlias returns registered types
+    // before consulting this map. Listing it would desync the direct
+    // ALIAS_MAP lookups (isUtilityNode, getBuildValueContext) from resolveAlias.
     'mail': 'google_gmail',
     'gmail': 'google_gmail',
     'send_email': 'google_gmail',
@@ -433,7 +436,10 @@ export class UnifiedNodeRegistry implements INodeRegistry {
    * This bridges the old system to the new unified contract
    */
   private initializeFromNodeLibrary(): void {
-    const allSchemas = nodeLibrary.getAllSchemas();
+    // includeInternal=true: execution registry must register EVERY type, including
+    // internal-only legacy nodes (ollama, chat_model, memory, tool), so existing
+    // saved workflows keep executing.
+    const allSchemas = nodeLibrary.getAllSchemas(true);
     const failedSchemas: string[] = [];
     
     for (const schema of allSchemas) {
@@ -1068,7 +1074,15 @@ export class UnifiedNodeRegistry implements INodeRegistry {
    * Used to enrich every node's credentialSchema.requirements with the right
    * credentialTypeId so the Properties panel shows the correct connection picker.
    */
-  private static readonly PROVIDER_CREDENTIAL_MAP: Record<string, { credentialTypeId: string; label: string; authType: 'oauth2' | 'api_key' | 'bearer_token' | 'basic_auth' }> = {
+  private static readonly PROVIDER_CREDENTIAL_MAP: Record<
+    string,
+    {
+      credentialTypeId: string;
+      label: string;
+      authType: 'oauth2' | 'api_key' | 'bearer_token' | 'basic_auth';
+      compatibleCredentialTypeIds?: string[];
+    }
+  > = {
     // AI
     gemini:        { credentialTypeId: 'gemini_api_key',       label: 'Gemini API Key',          authType: 'api_key' },
     openai:        { credentialTypeId: 'openai_api_key',       label: 'OpenAI API Key',           authType: 'bearer_token' },
@@ -1088,6 +1102,7 @@ export class UnifiedNodeRegistry implements INodeRegistry {
     whatsapp:      { credentialTypeId: 'whatsapp_api_key',     label: 'WhatsApp API Key',         authType: 'bearer_token' },
     twilio:        { credentialTypeId: 'twilio_api_key',       label: 'Twilio API Key',           authType: 'basic_auth' },
     sendgrid:      { credentialTypeId: 'sendgrid_api_key',     label: 'SendGrid API Key',         authType: 'bearer_token' },
+    smtp:          { credentialTypeId: 'smtp_credentials',     label: 'SMTP Account',             authType: 'basic_auth' },
     mailgun:       { credentialTypeId: 'mailgun_api',          label: 'Mailgun API Key',          authType: 'api_key' },
     mailchimp:     { credentialTypeId: 'mailchimp_api_key',    label: 'Mailchimp API Key',        authType: 'api_key' },
     activecampaign:{ credentialTypeId: 'activecampaign_api',   label: 'ActiveCampaign API Key',   authType: 'api_key' },
@@ -1127,8 +1142,10 @@ export class UnifiedNodeRegistry implements INodeRegistry {
     typeform:      { credentialTypeId: 'typeform_token',       label: 'Typeform Token',           authType: 'bearer_token' },
     calendly:      { credentialTypeId: 'calendly_api',         label: 'Calendly API Key',         authType: 'bearer_token' },
     xero:          { credentialTypeId: 'xero_oauth2',          label: 'Xero Connection',          authType: 'oauth2' },
+    contentful:    { credentialTypeId: 'contentful_cma_token', label: 'Contentful CMA Personal Access Token', authType: 'bearer_token', compatibleCredentialTypeIds: ['contentful_cma_token', 'bearer_token'] },
     // Cloud / infra
     aws:           { credentialTypeId: 'aws_s3_api_key',       label: 'AWS Credentials',          authType: 'api_key' },
+    amazon_ses:    { credentialTypeId: 'amazon_ses_access_key', label: 'Amazon SES Access Key',    authType: 'api_key', compatibleCredentialTypeIds: ['amazon_ses_access_key', 'aws_s3_api_key'] },
     cloudflare:    { credentialTypeId: 'cloudflare_api_key',   label: 'Cloudflare API Key',       authType: 'bearer_token' },
     dropbox:       { credentialTypeId: 'dropbox_oauth2',       label: 'Dropbox Connection',       authType: 'oauth2' },
     microsoft:     { credentialTypeId: 'microsoft_oauth2',     label: 'Microsoft Connection',     authType: 'oauth2' },
@@ -1155,6 +1172,11 @@ export class UnifiedNodeRegistry implements INodeRegistry {
       return {
         ...req,
         credentialTypeId: mapping.credentialTypeId,
+        credentialTypeIds: Array.from(new Set([
+          mapping.credentialTypeId,
+          ...(mapping.compatibleCredentialTypeIds || []),
+          ...(req.credentialTypeIds || []),
+        ])),
         authType: req.authType ?? mapping.authType,
         label: req.label ?? mapping.label,
       };
@@ -1206,6 +1228,10 @@ export class UnifiedNodeRegistry implements INodeRegistry {
             required: false,
             description: `${mapping.label} connection`,
             credentialTypeId: mapping.credentialTypeId,
+            credentialTypeIds: Array.from(new Set([
+              mapping.credentialTypeId,
+              ...(mapping.compatibleCredentialTypeIds || []),
+            ])),
             authType: mapping.authType,
             label: mapping.label,
           };

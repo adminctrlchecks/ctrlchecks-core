@@ -94,6 +94,8 @@ export function NewConnectionModal({ open, onOpenChange, preselectedCredentialTy
       await createMut.mutateAsync({
         name: connectionName || `My ${selectedType.displayName}`,
         credentialTypeId: selectedType.id,
+        provider: selectedType.provider,
+        authType: selectedType.authType,
         credentials,
       });
       toast({ title: 'Connection saved', description: `${connectionName} is ready to use.` });

@@ -83,6 +83,19 @@ const _subscriptionCache = new Map<string, { value: any; expiry: number }>();
 const _roleDbCache = new Map<string, { value: string | null; expiry: number }>();
 const AUTH_CACHE_TTL_MS = 30_000;
 
+// authenticateUser runs on every API call, not just login — throttle the
+// auth.login audit write so we get one row per session window instead of
+// one per request.
+const _authAuditThrottle = new Map<string, number>();
+const AUTH_AUDIT_THROTTLE_MS = 15 * 60_000;
+
+function shouldRecordLoginAudit(userId: string): boolean {
+  const nextAllowed = _authAuditThrottle.get(userId) || 0;
+  if (Date.now() < nextAllowed) return false;
+  _authAuditThrottle.set(userId, Date.now() + AUTH_AUDIT_THROTTLE_MS);
+  return true;
+}
+
 // DB calls here use the pool-level circuit breaker in db-pool.ts.
 // These wrappers only add caching and graceful fallback to default values.
 
@@ -141,6 +154,7 @@ import {
   trimUserSessions,
   upsertSession,
 } from './session-repository';
+import { recordAuditEvent } from '../audit/audit-log-service';
 
 export interface AuthenticatedRequest extends Request {
   user?: {
@@ -226,6 +240,13 @@ export const authenticateUser = async (req: AuthenticatedRequest, res: Response,
     }
 
     if (!user) {
+      recordAuditEvent({
+        action: 'auth.login_failed',
+        status: 'failure',
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent'),
+        metadata: { path: req.path, reason: 'invalid_or_expired_token' },
+      });
       return res.status(401).json({
         error: 'Unauthorized',
         message: 'Invalid or expired token',
@@ -303,34 +324,52 @@ export const authenticateUser = async (req: AuthenticatedRequest, res: Response,
     
     // Log successful authentication for audit trail
     console.log(`[Auth] User authenticated: ${req.user.email} (${req.user.role}) - ${req.method} ${req.path}`);
-    
+    if (shouldRecordLoginAudit(req.user.id)) {
+      recordAuditEvent({
+        actorUserId: req.user.id,
+        actorEmail: req.user.email,
+        actorRole: req.user.role,
+        action: 'auth.login',
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent'),
+        metadata: { path: req.path, method: req.method },
+      });
+    }
+
     next();
   } catch (error: any) {
     console.error('[Auth] Authentication error:', error);
-    
+    recordAuditEvent({
+      action: 'auth.login_failed',
+      status: 'failure',
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent'),
+      metadata: { path: req.path, reason: error?.name || 'unknown_error' },
+    });
+
     // Enhanced error responses based on error type
     if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({ 
-        error: 'Token Expired', 
+      return res.status(401).json({
+        error: 'Token Expired',
         message: 'Your session has expired. Please log in again.',
         code: 'TOKEN_EXPIRED'
       });
     } else if (error.name === 'JsonWebTokenError') {
-      return res.status(401).json({ 
-        error: 'Invalid Token', 
+      return res.status(401).json({
+        error: 'Invalid Token',
         message: 'Authentication token is malformed.',
         code: 'MALFORMED_TOKEN'
       });
     } else if (error.name === 'NotBeforeError') {
-      return res.status(401).json({ 
-        error: 'Token Not Active', 
+      return res.status(401).json({
+        error: 'Token Not Active',
         message: 'Authentication token is not yet valid.',
         code: 'TOKEN_NOT_ACTIVE'
       });
     }
-    
-    return res.status(500).json({ 
-      error: 'Internal Server Error', 
+
+    return res.status(500).json({
+      error: 'Internal Server Error',
       message: 'Authentication service unavailable',
       code: 'AUTH_SERVICE_ERROR'
     });

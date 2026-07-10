@@ -8,6 +8,7 @@
 import { Request, Response } from 'express';
 import { nodeDefinitionRegistry } from '../core/types/node-definition';
 import { unifiedNodeRegistry } from '../core/registry/unified-node-registry';
+import { nodeLibrary } from '../services/nodes/node-library';
 import { getOperationContractsForNode } from '../core/operations/operation-contract-resolver';
 import { resolveFieldPolicyForNode } from '../core/operations/field-policy-resolver';
 import type { UnifiedNodeDefinition } from '../core/types/unified-node-contract';
@@ -66,16 +67,18 @@ function filterSelectOptionsByContract(inputSchema: Record<string, any>, contrac
 }
 
 function serializeNodeDefinition(definition: any) {
+  const unifiedDefinition = unifiedNodeRegistry.get(definition.type) as UnifiedNodeDefinition | undefined;
+  const policyDefinition = unifiedDefinition || definition;
   const contracts = implementedContracts(definition.type);
   const inputSchema = filterSelectOptionsByContract(definition.inputSchema || {}, contracts);
-  const defaultConfig = definition.defaultConfig?.() || {};
+  const defaultConfig = policyDefinition.defaultConfig?.() || definition.defaultInputs?.() || {};
   const operationFieldPolicies = contracts.map((contract) => {
     const config = {
       ...defaultConfig,
       resource: contract.resource ?? defaultConfig.resource,
       operation: contract.operation,
     };
-    const policy = resolveFieldPolicyForNode(definition, config);
+    const policy = resolveFieldPolicyForNode(policyDefinition, config);
     return {
       resource: contract.resource,
       operation: contract.operation,
@@ -106,6 +109,9 @@ function serializeNodeDefinition(definition: any) {
     incomingPorts: definition.incomingPorts,
     isBranching: definition.isBranching,
     defaultInputs: definition.defaultInputs(),
+    // Internal/legacy-only nodes stay executable and render existing workflows,
+    // but the palette hides them so users can't add new instances.
+    hidden: nodeLibrary.getSchema(definition.type)?.internalOnly === true,
   };
 }
 

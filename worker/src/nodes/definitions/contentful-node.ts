@@ -47,7 +47,7 @@ export const contentfulNodeDefinition: NodeDefinition = {
     },
     accessToken: {
       type: 'string',
-      description: 'Contentful CMA personal access token — sensitive, never logged',
+      description: 'Contentful CMA personal access token; authorize it for the target organization/space. Sensitive, never logged',
       required: true,
       default: '',
     },
@@ -145,6 +145,33 @@ export const contentfulNodeDefinition: NodeDefinition = {
     console.log(`[contentful] operation=${operation} spaceId=${spaceId}`);
 
     try {
+      const parseEntryPayload = (): { ok: true; payload: unknown } | { ok: false; error: unknown } => {
+        try {
+          const parsed = JSON.parse(fields);
+          const payload =
+            parsed &&
+            typeof parsed === 'object' &&
+            !Array.isArray(parsed) &&
+            Object.prototype.hasOwnProperty.call(parsed, 'fields')
+              ? parsed
+              : { fields: parsed };
+          return { ok: true, payload };
+        } catch {
+          return { ok: false, error: { message: 'Invalid JSON in fields', status: 0 } };
+        }
+      };
+
+      const getCurrentEntryVersion = async (): Promise<number | null> => {
+        const current = await fetch(`${base}/${entryId}`, {
+          method: 'GET',
+          headers: { 'Authorization': authHeader },
+        });
+        if (!current.ok) return null;
+        const currentData = await current.json().catch(() => null) as any;
+        const version = currentData?.sys?.version;
+        return typeof version === 'number' ? version : null;
+      };
+
       let response: Response;
 
       if (operation === 'get_entries') {
@@ -159,12 +186,8 @@ export const contentfulNodeDefinition: NodeDefinition = {
           headers: { 'Authorization': authHeader },
         });
       } else if (operation === 'create_entry') {
-        let parsedFields: unknown;
-        try {
-          parsedFields = JSON.parse(fields);
-        } catch {
-          return { success: false, data: {}, error: { message: 'Invalid JSON in fields', status: 0 } };
-        }
+        const parsed = parseEntryPayload();
+        if (!parsed.ok) return { success: false, data: {}, error: parsed.error };
         response = await fetch(base, {
           method: 'POST',
           headers: {
@@ -172,28 +195,33 @@ export const contentfulNodeDefinition: NodeDefinition = {
             'Content-Type': 'application/vnd.contentful.management.v1+json',
             'X-Contentful-Content-Type': contentType,
           },
-          body: JSON.stringify(parsedFields),
+          body: JSON.stringify(parsed.payload),
         });
       } else if (operation === 'update_entry') {
-        let parsedFields: unknown;
-        try {
-          parsedFields = JSON.parse(fields);
-        } catch {
-          return { success: false, data: {}, error: { message: 'Invalid JSON in fields', status: 0 } };
+        const parsed = parseEntryPayload();
+        if (!parsed.ok) return { success: false, data: {}, error: parsed.error };
+        const version = await getCurrentEntryVersion();
+        if (!version) {
+          return { success: false, data: {}, error: { message: 'Unable to load current Contentful entry version before update', status: 0 } };
         }
         response = await fetch(`${base}/${entryId}`, {
           method: 'PUT',
           headers: {
             'Authorization': authHeader,
             'Content-Type': 'application/vnd.contentful.management.v1+json',
+            'X-Contentful-Version': String(version),
           },
-          body: JSON.stringify(parsedFields),
+          body: JSON.stringify(parsed.payload),
         });
       } else {
         // delete_entry
+        const version = await getCurrentEntryVersion();
+        if (!version) {
+          return { success: false, data: {}, error: { message: 'Unable to load current Contentful entry version before delete', status: 0 } };
+        }
         response = await fetch(`${base}/${entryId}`, {
           method: 'DELETE',
-          headers: { 'Authorization': authHeader },
+          headers: { 'Authorization': authHeader, 'X-Contentful-Version': String(version) },
         });
       }
 

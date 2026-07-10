@@ -277,30 +277,6 @@ export const NODE_EXECUTION_STUBS: Record<string, {
   },
   
   // ============================================
-  // AUTH NODES
-  // ============================================
-  
-  oauth2_auth: {
-    canonicalType: 'oauth2_auth',
-    execute: async (ctx) => {
-      // TODO: Migrate from execute-workflow.ts:1701-1839
-      throw new Error('[STUB] oauth2_auth execution not migrated. See execute-workflow.ts:1701');
-    },
-    legacyLocation: { file: 'worker/src/api/execute-workflow.ts', line: 1701 },
-    migrationStatus: 'pending',
-  },
-  
-  api_key_auth: {
-    canonicalType: 'api_key_auth',
-    execute: async (ctx) => {
-      // TODO: Migrate from execute-workflow.ts:1840-1971
-      throw new Error('[STUB] api_key_auth execution not migrated. See execute-workflow.ts:1840');
-    },
-    legacyLocation: { file: 'worker/src/api/execute-workflow.ts', line: 1840 },
-    migrationStatus: 'pending',
-  },
-  
-  // ============================================
   // FILE NODES
   // ============================================
   

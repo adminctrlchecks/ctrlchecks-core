@@ -80,9 +80,11 @@ jobs:
 
       # Single-command deploy: Vercel builds on its own servers using the
       # project's rootDirectory (ctrl_checks) and env vars from Vercel dashboard.
-      # This avoids local `vercel build` path-nesting issues with rootDirectory.
+      # Must run from the repo root (NOT ./ctrl_checks) — the Vercel project's
+      # Root Directory setting is already "ctrl_checks", resolved relative to
+      # the CLI's cwd. Running this from inside ./ctrl_checks doubles the path
+      # to ctrl_checks/ctrl_checks, which doesn't exist (exit code 3).
       - name: Deploy to Vercel
-        working-directory: ./ctrl_checks
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -95,11 +97,17 @@ jobs:
       - name: Smoke test
         run: |
           sleep 20
-          TARGET="${DEPLOY_URL:-https://app.ctrlchecks.ai}"
+          # DEPLOY_URL is the CLI's last output line and is not always a clean URL —
+          # only use it when it looks like one, otherwise test the production domain.
+          case "$DEPLOY_URL" in
+            https://*) TARGET="$DEPLOY_URL" ;;
+            *) TARGET="https://www.ctrlchecks.ai" ;;
+          esac
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$TARGET")
           echo "Smoke test: $TARGET -> HTTP $STATUS"
           if [ "$STATUS" = "200" ]; then
             echo "Frontend live"
           else
             echo "Status $STATUS - check Vercel dashboard"
+            exit 1
           fi

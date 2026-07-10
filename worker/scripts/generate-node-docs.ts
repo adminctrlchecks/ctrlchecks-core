@@ -154,7 +154,7 @@ const CREDENTIAL_TYPE_MAP: Record<string, string> = {
   slack_message: 'Slack Credential',
   slack_webhook: 'Slack Credential',
   discord: 'Discord Bot Token',
-  discord_webhook: 'Discord Bot Token',
+  discord_webhook: 'Discord Webhook URL',
   telegram: 'Telegram Bot Token',
   twitter: 'Twitter API Key',
   linkedin: 'LinkedIn OAuth',
@@ -170,7 +170,7 @@ const CREDENTIAL_TYPE_MAP: Record<string, string> = {
   twilio: 'Twilio Credential',
   mailgun: 'Mailgun API Key',
   sendgrid: 'SendGrid API Key',
-  amazon_ses: 'AWS Credential',
+  amazon_ses: 'Amazon SES Access Key',
   email: 'SMTP Credential',
   // Data
   google_sheets2: 'Google Credential',

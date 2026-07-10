@@ -1320,9 +1320,11 @@ export class IntentAwarePlanner {
         const promptLower = ((selectedStructuredPrompt || '') + ' ' + (originalPrompt || '')).toLowerCase();
 
         if (promptLower.includes('email') || promptLower.includes('gmail') || promptLower.includes('mail') || promptLower.includes('send')) {
-          // Delegate to registry — 'email'/'gmail' → 'google_gmail'
+          // Generic email intent goes to Gmail. Resolve via the 'gmail' alias —
+          // 'email' is itself a canonical type (the standalone SMTP node) and
+          // resolving it would route generic requests to SMTP instead.
           const { unifiedNodeRegistry } = await import('../../core/registry/unified-node-registry');
-          outputNodeType = unifiedNodeRegistry.resolveAlias('email') ?? 'google_gmail';
+          outputNodeType = unifiedNodeRegistry.resolveAlias('gmail') ?? 'google_gmail';
         } else if (promptLower.includes('slack') || promptLower.includes('message')) {
           if (explicitNodeTypes) {
             const { nodeCapabilityRegistryDSL } = await import('./node-capability-registry-dsl');

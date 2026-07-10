@@ -33,6 +33,12 @@ export interface NodeSchema {
   // ✅ Node Capability Registry: Data type capabilities
   nodeCapability?: NodeCapability; // Explicit capability definition
   operationContracts?: NodeOperationContract[];
+  /**
+   * Internal/legacy-only node: kept registered for backward compatibility with
+   * existing saved workflows, but excluded from AI workflow generation and the
+   * frontend node palette. Excluded from getAllSchemas() unless includeInternal=true.
+   */
+  internalOnly?: boolean;
 }
 
 export interface ConfigSchema {
@@ -797,10 +803,18 @@ export class NodeLibrary {
   }
 
   /**
-   * Get all schemas
+   * Get all schemas.
+   *
+   * By default excludes `internalOnly` schemas (legacy/deprecated nodes kept only so
+   * existing saved workflows keep executing). This means AI workflow generation,
+   * keyword matchers, planners, and capability registries never select them.
+   *
+   * Pass `includeInternal=true` only from execution infrastructure (unified registry,
+   * alias resolver, contract export) that must know every registered type.
    */
-  getAllSchemas(): NodeSchema[] {
-    return Array.from(this.schemas.values());
+  getAllSchemas(includeInternal = false): NodeSchema[] {
+    const all = Array.from(this.schemas.values());
+    return includeInternal ? all : all.filter((s) => !s.internalOnly);
   }
 
   /**
@@ -809,7 +823,9 @@ export class NodeLibrary {
    * Used for strict validation and LLM enum constraints
    */
   getAllCanonicalTypes(): string[] {
-    const allSchemas = this.getAllSchemas();
+    // Include internal-only schemas: validation must keep recognizing legacy types
+    // (ollama, chat_model, memory, tool) present in existing saved workflows.
+    const allSchemas = this.getAllSchemas(true);
     const canonicalTypes: string[] = [];
     
     // ✅ PERMANENT: NO aliases in canonical types list
@@ -1202,9 +1218,7 @@ export class NodeLibrary {
     this.addSchema(this.createQueueConsumeSchema());
     this.addSchema(this.createCacheGetSchema());
     this.addSchema(this.createCacheSetSchema());
-    this.addSchema(this.createOAuth2AuthSchema());
-    this.addSchema(this.createApiKeyAuthSchema());
-    schemaCount += 15;
+    schemaCount += 13;
 
     // AI Nodes
     this.addSchema(this.createAiAgentSchema());
@@ -3943,164 +3957,6 @@ export class NodeLibrary {
     };
   }
 
-  private createOAuth2AuthSchema(): NodeSchema {
-    return {
-      type: 'oauth2_auth',
-      label: 'OAuth2 Auth',
-      category: 'auth',
-      description: 'Handles OAuth2 authentication and provides access tokens',
-      configSchema: {
-        required: ['provider'],
-        optional: {
-          provider: {
-            type: 'string',
-            description: 'OAuth2 provider (google, github, etc.)',
-            options: [
-              { label: 'Google', value: 'google' },
-              { label: 'GitHub', value: 'github' },
-              { label: 'Custom', value: 'custom' },
-            ],
-          },
-          authUrl: {
-            type: 'string',
-            description: 'Authorization URL (for custom provider)',
-          },
-          tokenUrl: {
-            type: 'string',
-            description: 'Token URL (for custom provider)',
-          },
-          clientId: {
-            type: 'string',
-            description: 'Client ID',
-          },
-          clientSecret: {
-            type: 'string',
-            description: 'Client Secret',
-          },
-          scope: {
-            type: 'string',
-            description: 'OAuth scopes',
-          },
-          action: {
-            type: 'string',
-            description: 'Action: getToken, refresh, or startFlow',
-            default: 'getToken',
-            options: [
-              { label: 'Get Token', value: 'getToken' },
-              { label: 'Refresh Token', value: 'refresh' },
-              { label: 'Start OAuth Flow', value: 'startFlow' },
-            ],
-          },
-        },
-      },
-      aiSelectionCriteria: {
-        whenToUse: [
-          'Need to authenticate with OAuth2 APIs',
-          'Managing access tokens',
-        ],
-        whenNotToUse: [
-          'For API keys, use API Key Auth',
-          'If you have long-lived tokens',
-        ],
-        keywords: [
-          'oauth', 'oauth2', 'oauth auth', 'oauth authentication',
-          'oauth token', 'oauth access token', 'oauth2 auth',
-          'oauth2 authentication', 'oauth2 token', 'oauth api',
-          'oauth integration', 'oauth connect', 'oauth authorize'
-        ],
-        useCases: ['Google APIs', 'GitHub API', 'Salesforce'],
-        intentDescription: 'OAuth2 authentication node that handles OAuth2 authentication flows and manages access tokens. Authenticates with OAuth2-protected APIs, manages token refresh, and provides access tokens for API calls. Used for Google APIs, GitHub API, Salesforce, and other OAuth2-protected services.',
-        intentCategories: ['authentication', 'oauth2', 'token_management', 'api_authentication'],
-      },
-      commonPatterns: [
-        {
-          name: 'google_oauth',
-          description: 'Get Google access token',
-          config: { provider: 'google', action: 'getToken' },
-        },
-      ],
-      validationRules: [],
-      outputType: 'object',
-      outputSchema: {
-        success: { type: 'boolean' },
-        accessToken: { type: 'string', optional: true },
-        refreshToken: { type: 'string', optional: true },
-        expiresIn: { type: 'number', optional: true },
-      },
-      schemaVersion: '1.0.0',
-      keywords: [
-        'oauth', 'oauth2', 'oauth auth', 'oauth authentication',
-        'oauth token', 'oauth access token', 'oauth2 auth',
-        'oauth2 authentication', 'oauth2 token', 'oauth api',
-        'oauth integration', 'oauth connect', 'oauth authorize'
-      ],
-      providers: ['oauth2'],
-    };
-  }
-
-  private createApiKeyAuthSchema(): NodeSchema {
-    return {
-      type: 'api_key_auth',
-      label: 'API Key Auth',
-      category: 'auth',
-      description: 'Provides an API key for authentication',
-      configSchema: {
-        required: ['apiKeyName'],
-        optional: {
-          apiKeyName: {
-            type: 'string',
-            description: 'Name of the stored API key',
-            examples: ['openai', 'stripe'],
-          },
-        },
-      },
-      aiSelectionCriteria: {
-        whenToUse: [
-          'Need to authenticate with API key',
-          'Simple authentication',
-        ],
-        whenNotToUse: [
-          'For OAuth2, use OAuth2 Auth',
-          'If key needs to be rotated frequently',
-        ],
-        keywords: [
-          'api key', 'apikey', 'api key auth', 'api key authentication',
-          'api key token', 'api key node', 'key api', 'api key integration',
-          'api key connect', 'api key auth node', 'api key authentication node'
-        ],
-        useCases: ['OpenAI API', 'Stripe API'],
-        intentDescription: 'API key authentication node that provides API keys for authenticating with services that use API key-based authentication. Retrieves stored API keys and provides them for API calls. Used for OpenAI API, Stripe API, and other services that use simple API key authentication.',
-        intentCategories: ['authentication', 'api_key', 'simple_auth', 'api_authentication'],
-      },
-      commonPatterns: [
-        {
-          name: 'get_openai_key',
-          description: 'Get OpenAI API key',
-          config: { apiKeyName: 'openai' },
-        },
-      ],
-      validationRules: [
-        {
-          field: 'apiKeyName',
-          validator: (v) => typeof v === 'string' && v.length > 0,
-          errorMessage: 'API key name required',
-        },
-      ],
-      outputType: 'object',
-      outputSchema: {
-        success: { type: 'boolean' },
-        apiKey: { type: 'string' },
-      },
-      schemaVersion: '1.0.0',
-      keywords: [
-        'api key', 'apikey', 'api key auth', 'api key authentication',
-        'api key token', 'api key node', 'key api', 'api key integration',
-        'api key connect', 'api key auth node', 'api key authentication node'
-      ],
-      providers: ['apikey'],
-    };
-  }
-
   // ============================================
   // OUTPUT NODES
   // ============================================
@@ -4340,6 +4196,7 @@ export class NodeLibrary {
             examples: ['Hello', '{{$json.subject}}'],
             // ✅ This is a configurable input field
             requiredIf: { field: 'operation', equals: 'send' },
+            visibleIf: { field: 'operation', equals: 'send' },
             fillMode: { default: 'runtime_ai', supportsRuntimeAI: true, supportsBuildtimeAI: true },
             runtimeContract: {
               aiGeneratable: true,
@@ -4354,6 +4211,7 @@ export class NodeLibrary {
             examples: ['Email content', '{{$json.message}}'],
             // ✅ This is a configurable input field
             requiredIf: { field: 'operation', equals: 'send' },
+            visibleIf: { field: 'operation', equals: 'send' },
             fillMode: { default: 'runtime_ai', supportsRuntimeAI: true, supportsBuildtimeAI: true },
             runtimeContract: {
               aiGeneratable: true,
@@ -4363,10 +4221,37 @@ export class NodeLibrary {
             },
           },
           // ✅ CRITICAL: from is NOT a configurable input - OAuth account is used
+          cc: {
+            type: 'string',
+            description: 'Optional CC recipient email address(es), comma- or newline-separated',
+            examples: ['manager@example.com', 'manager@example.com, audit@example.com'],
+            visibleIf: { field: 'operation', equals: 'send' },
+            fillMode: { default: 'manual_static', supportsRuntimeAI: true, supportsBuildtimeAI: true },
+            runtimeContract: {
+              aiGeneratable: true,
+              requiredWhen: [],
+              validation: { format: 'email_list', allowEmpty: true },
+              repair: ['clear_invalid_optional'],
+            },
+          },
+          bcc: {
+            type: 'string',
+            description: 'Optional BCC recipient email address(es), comma- or newline-separated',
+            examples: ['archive@example.com'],
+            visibleIf: { field: 'operation', equals: 'send' },
+            fillMode: { default: 'manual_static', supportsRuntimeAI: true, supportsBuildtimeAI: true },
+            runtimeContract: {
+              aiGeneratable: true,
+              requiredWhen: [],
+              validation: { format: 'email_list', allowEmpty: true },
+              repair: ['clear_invalid_optional'],
+            },
+          },
           from: {
             type: 'string',
-            description: 'Sender email address (optional - uses OAuth account if not provided)',
+            description: 'Optional sender address or configured Gmail alias. Leave blank to use the connected Google account.',
             examples: ['your-email@gmail.com'],
+            visibleIf: { field: 'operation', equals: 'send' },
             // ✅ This is a runtime field, NOT a configurable input
             // OAuth credentials handled separately
           },
@@ -4377,6 +4262,7 @@ export class NodeLibrary {
             examples: ['abc123def456'],
             // ✅ This is a runtime field, NOT a configurable input
             requiredIf: { field: 'operation', equals: 'get' },
+            visibleIf: { field: 'operation', equals: 'get' },
           },
           query: {
             type: 'string',
@@ -4384,11 +4270,13 @@ export class NodeLibrary {
             examples: ['from:example@gmail.com', 'subject:important'],
             // ✅ This is a runtime field, NOT a configurable input
             requiredIf: { field: 'operation', equals: 'search' },
+            visibleIf: { field: 'operation', equals: ['list', 'search'] },
           },
           maxResults: {
             type: 'number',
             description: 'Maximum number of results (for list/search)',
             default: 10,
+            visibleIf: { field: 'operation', equals: ['list', 'search'] },
             // ✅ This is a runtime field, NOT a configurable input
           },
         },
@@ -4474,9 +4362,9 @@ export class NodeLibrary {
   private createEmailSchema(): NodeSchema {
     return {
       type: 'email',
-      label: 'Email',
+      label: 'Send Email (SMTP)',
       category: 'output',
-      description: 'Send emails via SMTP',
+      description: 'Send emails through your own SMTP server or mail relay',
       // NodeResolver: Capability metadata (generic email, not Gmail)
       capabilities: [
         'email.send',
@@ -4484,9 +4372,8 @@ export class NodeLibrary {
       ],
       providers: ['smtp'],
       keywords: [
-        'email', 'email node', 'smtp email', 'email smtp',
-        'send email', 'email send', 'smtp send', 'email mail',
-        'email notification', 'email message', 'smtp mail', 'email via smtp'
+        'smtp', 'smtp email', 'email smtp', 'smtp send',
+        'smtp mail', 'email via smtp', 'smtp server', 'mail relay'
       ],
       configSchema: {
         required: ['to', 'subject', 'text'],
@@ -4509,20 +4396,25 @@ export class NodeLibrary {
             type: 'string',
             description: 'Email body (HTML)',
           },
+          from: {
+            type: 'string',
+            description: 'Sender email address (defaults to the SMTP username from the connection)',
+            examples: ['noreply@example.com'],
+          },
         },
       },
       aiSelectionCriteria: {
         whenToUse: [
-          'User mentions email notifications',
-          'Email communication needed',
+          'User explicitly asks to send email through their own SMTP server or mail relay',
+          'Gmail/Outlook OAuth is not available for the sender account',
         ],
         whenNotToUse: [
+          'Generic "send an email" requests without an SMTP mention (use google_gmail)',
           'Other notification channels',
         ],
         keywords: [
-          'email', 'email node', 'smtp email', 'email smtp',
-          'send email', 'email send', 'smtp send', 'email mail',
-          'email notification', 'email message', 'smtp mail', 'email via smtp'
+          'smtp', 'smtp email', 'email smtp', 'smtp send',
+          'smtp mail', 'email via smtp', 'smtp server', 'mail relay'
         ],
         useCases: ['Email notifications', 'Reports', 'Alerts'],
         // ✅ ROOT-LEVEL: Semantic intent description for AI understanding
@@ -5177,14 +5069,6 @@ export class NodeLibrary {
             description: 'LLM model selection',
             default: 'gemini-3.5-flash',
             examples: ['gemini-3.5-flash', 'gemini-3.1-pro-preview', 'claude-3-5-sonnet', 'gpt-4o'],
-          },
-          memory: {
-            type: 'object',
-            description: 'Optional memory configuration (disabled by default)',
-          },
-          tool: {
-            type: 'object',
-            description: 'Optional tool configuration (disabled by default)',
           },
         },
       },
@@ -6802,13 +6686,13 @@ export class NodeLibrary {
       type: 'discord',
       label: 'Discord',
       category: 'output',
-      description: 'Send messages to Discord channels or users via Discord Bot API',
+      description: 'Send messages to Discord channels via a Discord bot token',
       configSchema: {
-        required: ['message'],
+        required: ['channelId', 'message'],
         optional: {
           channelId: {
             type: 'string',
-            description: 'Discord channel ID (required for Bot Token mode)',
+            description: 'Discord channel ID where the bot should post the message',
             examples: ['123456789012345678'],
           },
           message: {
@@ -6817,35 +6701,26 @@ export class NodeLibrary {
             examples: ['Hello from workflow!'],
             fillMode: { default: 'buildtime_ai_once', supportsRuntimeAI: true, supportsBuildtimeAI: true },
           },
-          botToken: {
-            type: 'string',
-            description: 'Discord bot token (stored as credential)',
-          },
-          webhookUrl: {
-            type: 'string',
-            description: 'Discord webhook URL — alternative to Bot Token, no channelId needed',
-            examples: ['https://discord.com/api/webhooks/...'],
-          },
         },
       },
       aiSelectionCriteria: {
-        whenToUse: ['User mentions Discord notifications', 'Send messages to Discord channels'],
-        whenNotToUse: ['Slack notifications (use slack_message)', 'Email notifications (use email/google_gmail)'],
+        whenToUse: ['User mentions Discord bot messages', 'Send messages to a Discord channel using a bot token'],
+        whenNotToUse: ['Simple Discord incoming webhook notifications (use discord_webhook)', 'Slack notifications (use slack_message)', 'Email notifications (use email/google_gmail)'],
         keywords: [
           'discord', 'discord message', 'discord channel', 'discord server',
-          'discord webhook', 'discord bot', 'discord api', 'discord integration'
+          'discord bot', 'discord api', 'discord integration'
         ],
         useCases: ['Discord notifications', 'Team communication via Discord'],
-        intentDescription: 'Discord integration node that sends messages to Discord channels or users via Discord Bot API. Sends text messages, notifications, and alerts to Discord channels. Used for Discord notifications, team communication via Discord, and Discord-based workflow automation.',
+        intentDescription: 'Discord bot node that sends text messages to Discord channels via the Bot API. Use it when a workspace has a Discord app/bot installed and you know the target channel ID.',
         intentCategories: ['communication', 'discord', 'notification', 'team_collaboration', 'chat_message'],
       },
       commonPatterns: [],
       validationRules: [],
       capabilities: ['notification.send', 'discord.send', 'message.send'],
-      providers: ['discord', 'discord_webhook'],
+      providers: ['discord'],
       keywords: [
         'discord', 'discord message', 'discord channel', 'discord server',
-        'discord webhook', 'discord bot', 'discord api', 'discord integration'
+        'discord bot', 'discord api', 'discord integration'
       ],
     };
   }
@@ -7775,6 +7650,8 @@ export class NodeLibrary {
       label: 'AI Chat (Gemini)',
       category: 'ai',
       description: 'AI chat completion using Gemini 3.5 Flash (default LLM)',
+      // Legacy alias of ai_chat_model — kept for existing workflows only.
+      internalOnly: true,
       configSchema: {
         required: ['prompt'],
         optional: {
@@ -7808,7 +7685,7 @@ export class NodeLibrary {
       commonPatterns: [],
       validationRules: [],
       capabilities: ['ai.chat', 'ai.completion'],
-      providers: ['google'],
+      providers: ['gemini'],
       keywords: [
         'ollama', 'ollama ai', 'ollama model', 'ollama chat',
         'ollama llm', 'ai chat', 'ai model', 'llm chat'
@@ -7911,6 +7788,8 @@ export class NodeLibrary {
       label: 'Chat Model',
       category: 'ai',
       description: 'Chat model connector for AI Agent node (uses Gemini 3.5 Flash by default)',
+      // Config-passthrough stub for the removed ai_agent chat_model port — legacy workflows only.
+      internalOnly: true,
       configSchema: {
         required: [],
         optional: {
@@ -7945,6 +7824,8 @@ export class NodeLibrary {
       label: 'Memory',
       category: 'ai',
       description: 'Memory storage for AI Agent context',
+      // Support node for the removed ai_agent memory port — legacy workflows only.
+      internalOnly: true,
       configSchema: {
         required: [],
         optional: {
@@ -7978,6 +7859,8 @@ export class NodeLibrary {
       label: 'Tool',
       category: 'ai',
       description: 'Tool connector for AI Agent to use external functions',
+      // Support node for the removed ai_agent tool port — legacy workflows only.
+      internalOnly: true,
       configSchema: {
         required: ['toolName'],
         optional: {
@@ -8554,25 +8437,30 @@ export class NodeLibrary {
       type: 'discord_webhook',
       label: 'Discord Webhook',
       category: 'output',
-      description: 'Send messages via Discord webhook',
+      description: 'Send messages to a Discord channel via an incoming webhook URL',
       configSchema: {
-        required: ['webhookUrl', 'message'],
+        required: ['message'],
         optional: {
-          webhookUrl: {
-            type: 'string',
-            description: 'Discord webhook URL',
-            examples: ['https://discord.com/api/webhooks/...'],
-          },
           message: {
             type: 'string',
             description: 'Message text',
             examples: ['{{$json.message}}'],
           },
+          username: {
+            type: 'string',
+            description: 'Optional sender name override for this webhook message',
+            examples: ['CtrlChecks Bot'],
+          },
+          avatarUrl: {
+            type: 'string',
+            description: 'Optional sender avatar URL override for this webhook message',
+            examples: ['https://example.com/avatar.png'],
+          },
         },
       },
       aiSelectionCriteria: {
         whenToUse: ['Discord webhook notifications', 'Simple Discord messages'],
-        whenNotToUse: ['Complex Discord operations (use discord)'],
+        whenNotToUse: ['Bot-token Discord API operations that require a channel ID or bot identity (use discord)'],
         keywords: [
           'discord webhook', 'discord webhook node', 'webhook discord', 'discord webhook message',
           'discord webhook send', 'send discord webhook', 'discord webhook notification',
@@ -9021,7 +8909,7 @@ export class NodeLibrary {
       category: 'output',
       description: 'Send emails through Amazon Simple Email Service (SES)',
       configSchema: {
-        required: ['recipients', 'subject', 'body'],
+        required: ['recipients', 'fromAddress'],
         optional: {
           // Email content
           recipients: {
@@ -9034,19 +8922,23 @@ export class NodeLibrary {
           },
           subject: {
             type: 'string',
-            description: 'Email subject line',
+            description: 'Email subject line (required when not using an AWS SES template)',
             examples: ['Order Confirmation', '{{$json.subject}}'],
+            requiredIf: { field: 'useTemplate', equals: false },
+            visibleIf: { field: 'useTemplate', equals: false },
           },
           body: {
             type: 'string',
-            description: 'Email body content (HTML or plain text)',
+            description: 'Email body content (HTML and plain text are both sent from this value when not using a template)',
             examples: ['Hello {{$json.name}}, your order is confirmed.'],
+            requiredIf: { field: 'useTemplate', equals: false },
+            visibleIf: { field: 'useTemplate', equals: false },
           },
 
           // Template support
           useTemplate: {
             type: 'boolean',
-            description: 'Use AWS SES template instead of raw email',
+            description: 'Use an existing AWS SES template instead of the Subject and Body fields',
             default: false,
           },
           templateName: {
@@ -9054,6 +8946,7 @@ export class NodeLibrary {
             description: 'AWS SES template name (required if useTemplate is true)',
             examples: ['OrderConfirmation', 'WelcomeEmail'],
             requiredIf: { field: 'useTemplate', equals: true },
+            visibleIf: { field: 'useTemplate', equals: true },
           },
           templateData: {
             type: 'object',
@@ -9123,6 +9016,44 @@ export class NodeLibrary {
         error: { type: 'string' },
         timestamp: { type: 'string' },
       },
+      operationContracts: [
+        {
+          operation: 'default',
+          label: 'Send Email',
+          requiredFields: ['recipients', 'fromAddress'],
+          optionalFields: [
+            'subject',
+            'body',
+            'useTemplate',
+            'templateName',
+            'templateData',
+            'replyToAddresses',
+            'attachments',
+            'awsRegion',
+            'configurationSetName',
+            'tags',
+            'returnPath',
+          ],
+          conditionallyRequiredFields: [
+            { field: 'subject', when: { useTemplate: false } },
+            { field: 'body', when: { useTemplate: false } },
+            { field: 'templateName', when: { useTemplate: true } },
+          ],
+          emptyValuePolicy: {
+            awsRegion: 'provider_default',
+            replyToAddresses: 'optional',
+            attachments: 'optional',
+            configurationSetName: 'optional',
+            tags: 'optional',
+            returnPath: 'optional',
+            templateData: 'optional',
+          },
+          providerDefaultFields: ['awsRegion'],
+          credentialProviders: ['amazon_ses'],
+          outputFields: ['success', 'messageId', 'recipientCount', 'failedRecipients', 'error', 'timestamp'],
+          status: 'implemented',
+        },
+      ],
       aiSelectionCriteria: {
         whenToUse: [
           'User wants to send emails from workflow',
@@ -9195,23 +9126,13 @@ export class NodeLibrary {
           errorMessage: 'At least one recipient (To, Cc, or Bcc) is required',
         },
         {
-          field: 'subject',
-          validator: (value) => typeof value === 'string' && value.trim().length > 0,
-          errorMessage: 'Subject must be a non-empty string',
-        },
-        {
-          field: 'body',
-          validator: (value) => typeof value === 'string' && value.trim().length > 0,
-          errorMessage: 'Body must be a non-empty string',
-        },
-        {
           field: 'fromAddress',
           validator: (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
           errorMessage: 'From address must be a valid email address',
         },
       ],
       capabilities: ['email.send', 'ses.send', 'aws.email', 'transactional_email', 'terminal'],
-      providers: ['aws'],
+      providers: ['amazon_ses'],
       keywords: [
         'email', 'ses', 'send', 'notification', 'aws', 'mail',
         'amazon ses', 'amazon email', 'aws email', 'ses send',
@@ -12151,7 +12072,7 @@ export class NodeLibrary {
             ],
           },
           spaceId: { type: 'string', description: 'Contentful space ID', default: '' },
-          accessToken: { type: 'string', description: 'Contentful CMA personal access token', default: '' },
+          accessToken: { type: 'string', description: 'Contentful CMA personal access token; authorize it for the target organization/space', default: '' },
           environment: { type: 'string', description: 'Contentful environment', default: 'master' },
           contentType: { type: 'string', description: 'Content type ID', default: '' },
           entryId: { type: 'string', description: 'Entry ID', default: '' },

@@ -30,12 +30,14 @@ const PROVIDER_CATEGORIES: Record<string, string[]> = {
   'Databases':           ['postgresql', 'mysql', 'firebase', 'redis'],
   'File Transfer':       ['ftp', 'sftp'],
   'AI & Data':           ['openai', 'anthropic', 'pinecone', 'qdrant', 'cohere', 'huggingface', 'mistral'],
+  'Content & CMS':       ['contentful', 'wordpress'],
   'Payments & Business': ['stripe', 'paypal', 'quickbooks', 'xero', 'shopify', 'woocommerce', 'typeform'],
 };
 
 const CATEGORY_ORDER = [
   'Google Suite', 'Microsoft Suite', 'Social Media', 'Project Management', 'CRM & Sales',
-  'Communication', 'Cloud & DevOps', 'Databases', 'File Transfer', 'AI & Data', 'Payments & Business', 'Other',
+  'Communication', 'Cloud & DevOps', 'Databases', 'File Transfer', 'AI & Data', 'Content & CMS',
+  'Payments & Business', 'Other',
 ];
 
 function categoryFor(provider: string): string {

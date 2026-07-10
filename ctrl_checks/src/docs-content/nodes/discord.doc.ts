@@ -4,8 +4,8 @@ export const discordDoc: NodeDoc = {
   "slug": "discord",
   "displayName": "Discord",
   "category": "Communication",
-  "logoUrl": "/icons/nodes/discord.svg",
-  "description": "Send messages to Discord channels or users via Discord Bot API",
+  "logoUrl": "/integrations-logos/Discord.svg",
+  "description": "Send messages to Discord channels via a Discord bot token",
   "credentialType": "Discord Bot Token",
   "credentialSetupSteps": [
     "What this is: The Discord connection lets CtrlChecks access your Discord account safely without putting secrets in workflow fields.",
@@ -30,8 +30,8 @@ export const discordDoc: NodeDoc = {
               "name": "Channel Id",
               "internalKey": "channelId",
               "type": "string",
-              "required": false,
-              "description": "Discord channel ID (required for Bot Token mode)",
+              "required": true,
+              "description": "Discord channel ID where the bot should post the message",
               "helpText": "What this field is: The unique ID of the Discord channel where the message will be posted.\nWhere to find it:\n  Step 1: Open Discord → User Settings (gear icon at bottom left) → Advanced → turn on \"Developer Mode\".\n  Step 2: Right-click the channel name → Copy ID.\nThe ID is a 17–19 digit number.\nExample: 1234567890123456789",
               "placeholder": "123456789012345678",
               "example": "123456789012345678"
@@ -45,25 +45,6 @@ export const discordDoc: NodeDoc = {
               "helpText": "What this field is: Message text to send.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: Hello from workflow!.\nTip: Use {{$json.message}} when this value comes from an earlier step.",
               "placeholder": "Hello from workflow!",
               "example": "Hello from workflow!"
-            },
-            {
-              "name": "Bot Token",
-              "internalKey": "botToken",
-              "type": "string",
-              "required": false,
-              "description": "Discord bot token (stored as credential)",
-              "helpText": "What this field is: Discord bot token.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: token_....\nTip: Use {{$json.botToken}} when this value comes from an earlier step.",
-              "placeholder": "token_..."
-            },
-            {
-              "name": "Webhook Url",
-              "internalKey": "webhookUrl",
-              "type": "url",
-              "required": false,
-              "description": "Discord webhook URL — alternative to Bot Token, no channelId needed",
-              "helpText": "What this field is: The web address for Discord webhook URL — alternative to Bot Token, no channelId needed.\nHow to fill it: Paste the full URL, including https:// when it is an external service.\nExample: https://discord.com/api/webhooks/....\nTip: Use {{$json.webhookUrl}} when the URL comes from an earlier step.",
-              "placeholder": "https://discord.com/api/webhooks/...",
-              "example": "https://discord.com/api/webhooks/..."
             }
           ],
           "outputExample": {
@@ -77,7 +58,7 @@ export const discordDoc: NodeDoc = {
             "scenario": "Post CI/CD build status to a #ci-notifications Discord channel",
             "inputValues": {
               "channelId": "{{$env.DISCORD_CI_CHANNEL_ID}}",
-              "content": "{{$json.status === \"pass\" ? \"✅\" : \"❌\"}} Build #{{$json.buildNumber}} — {{$json.status}}"
+              "message": "{{$json.status === \"pass\" ? \"✅\" : \"❌\"}} Build #{{$json.buildNumber}} — {{$json.status}}"
             },
             "expectedOutput": "Message appears in the Discord channel. Use `{{$json.id}}` to track or edit the message."
           },

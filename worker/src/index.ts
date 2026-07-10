@@ -106,8 +106,11 @@ try {
   try {
     const aliasTests: Array<{ alias: string; expectedCanonical: string }> = [
       { alias: 'gmail', expectedCanonical: 'google_gmail' },
-      { alias: 'email', expectedCanonical: 'google_gmail' },
+      { alias: 'send_email', expectedCanonical: 'google_gmail' },
       { alias: 'mail', expectedCanonical: 'google_gmail' },
+      // 'email' is a registered canonical type (standalone SMTP node), not an alias
+      { alias: 'email', expectedCanonical: 'email' },
+      { alias: 'smtp', expectedCanonical: 'email' },
     ];
 
     for (const { alias, expectedCanonical } of aliasTests) {
@@ -179,6 +182,7 @@ import getMissingItemsRoute from './api/workflows-missing-items';
 import configureWorkflowRoute from './api/workflows-configure';
 import { docsRouter } from './api/docs';
 import { confirmWorkflow, rejectWorkflow } from './api/workflow-confirm';
+import { listApprovals, respondToApproval } from './api/execution-node-approvals';
 import { substituteTools, getAvailableSubstitutions } from './api/tool-substitute';
 import { serveChatbotPage } from './api/chatbot-page';
 import { handleChatbotMessage } from './api/chatbot-message';
@@ -245,6 +249,7 @@ import {
 } from './api/ai-wallet';
 import { securityHeaders, subscriptionRateLimit, validateSubscriptionInput, developmentModeHeaders, requestLogger } from './core/middleware/security';
 import { authenticateUser, requireAdmin, optionalAuth, requireRole, requireSubscriptionPlan } from './core/middleware/subscription-auth';
+import { requirePermission } from './core/auth/permissions';
 import { subscriptionLogger, paymentLogger, adminLogger } from './core/middleware/subscription-logging';
 import { checkWorkflowLimitEndpoint, requireWorkflowCapacityForAi } from './core/middleware/workflow-limits';
 import { geminiWalletContextMiddleware } from './core/middleware/gemini-wallet-context-middleware';
@@ -830,17 +835,38 @@ app.get('/api/auth/validate',
 );
 
 // Admin-only audit and security endpoints
-app.get('/api/admin/audit-trail', 
+app.get('/api/admin/audit-trail',
   adminLogger('get-audit-trail'),
-  asyncHandler(authenticateUser), 
-  requireAdmin, 
+  asyncHandler(authenticateUser),
+  requirePermission('admin:audit:view'),
   asyncHandler(getAuditTrailEndpoint)
 );
-app.get('/api/admin/security-events', 
+app.get('/api/admin/security-events',
   adminLogger('get-security-events'),
-  asyncHandler(authenticateUser), 
-  requireAdmin, 
+  asyncHandler(authenticateUser),
+  requirePermission('admin:security:view'),
   asyncHandler(getSecurityEventsEndpoint)
+);
+
+// Centralized audit log (durable — see core/audit/audit-log-service.ts)
+app.get('/api/admin/audit-logs',
+  adminLogger('get-audit-logs'),
+  asyncHandler(authenticateUser),
+  requirePermission('admin:audit:view'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { queryAuditLogs } = await import('./core/audit/audit-log-service');
+    const { userId, action, resourceType, from, to, limit, offset } = req.query;
+    const result = await queryAuditLogs({
+      userId: userId as string | undefined,
+      action: action as string | undefined,
+      resourceType: resourceType as string | undefined,
+      from: from as string | undefined,
+      to: to as string | undefined,
+      limit: limit ? parseInt(limit as string, 10) : undefined,
+      offset: offset ? parseInt(offset as string, 10) : undefined,
+    });
+    res.json({ success: true, ...result });
+  })
 );
 
 // DLQ Admin API
@@ -1553,8 +1579,12 @@ app.patch('/api/workflows/:id/nodes/:nodeId/field-mode', asyncHandler(patchWorkf
 console.log('🔧 Field Mode Toggle API available at PATCH /api/workflows/:id/nodes/:nodeId/field-mode');
 
 // Workflow Confirmation API
-app.post('/api/workflow/confirm', asyncHandler(confirmWorkflow));
-app.post('/api/workflow/reject', asyncHandler(rejectWorkflow));
+app.post('/api/workflow/confirm', asyncHandler(authenticateUser), asyncHandler(confirmWorkflow));
+app.post('/api/workflow/reject', asyncHandler(authenticateUser), asyncHandler(rejectWorkflow));
+
+// Per-action human approval on sensitive workflow steps
+app.get('/api/execution-node-approvals', asyncHandler(authenticateUser), asyncHandler(listApprovals));
+app.post('/api/execution-node-approvals/:id/respond', asyncHandler(authenticateUser), asyncHandler(respondToApproval));
 console.log('✅ Workflow Confirmation API available at /api/workflow/confirm and /api/workflow/reject');
 
 // Workflow Credentials API (pending credential store for Continue Workflow flow)

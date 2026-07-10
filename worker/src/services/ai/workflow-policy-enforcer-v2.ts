@@ -339,7 +339,7 @@ export class WorkflowPolicyEnforcerV2 {
     
     // Special cases
     if (nodeType === 'ai_agent') {
-      return ['userInput', 'chat_model', 'memory', 'tool', 'input', 'inputData', 'data'];
+      return ['userInput', 'input', 'inputData', 'data'];
     }
     
     return defaults;

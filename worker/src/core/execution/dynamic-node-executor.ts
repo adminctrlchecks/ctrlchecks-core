@@ -63,6 +63,7 @@ import {
 import { config as runtimeConfig } from '../config';
 import { verifyAndRepairNodeOutput } from '../../services/ai/ai-output-verifier';
 import { Sentry } from '../sentry';
+import { connectionService } from '../../credentials-system/connection-service';
 
 /** Stable nodeOutputs cache keys — see `worker/docs/OBSERVABILITY_CONTRACT.md`. */
 export const EXECUTION_OBSERVABILITY_KEYS = {
@@ -88,6 +89,192 @@ const INTEGRATION_METADATA_KEYS = new Set<string>([
   'executionId', 'executionTime', 'durationMs', 'timestamp',
   'createdAt', 'updatedAt', 'startedAt', 'finishedAt',
 ]);
+
+function applySelectedConnectionValidationPlaceholders(
+  nodeType: string,
+  node: WorkflowNode,
+  config: Record<string, any>,
+): Record<string, any> {
+  const refs = {
+    ...(((config as any).connectionRefs || {}) as Record<string, unknown>),
+    ...(((node.data as any)?.connectionRefs || {}) as Record<string, unknown>),
+  };
+  const hasSelectedConnection =
+    Object.values(refs).some((value) => typeof value === 'string' && value.trim().length > 0) ||
+    (typeof (config as any).connectionId === 'string' && (config as any).connectionId.trim().length > 0) ||
+    (typeof (node.data as any)?.connectionId === 'string' && (node.data as any).connectionId.trim().length > 0);
+
+  if (!hasSelectedConnection) return config;
+
+  const definition = unifiedNodeRegistry.get(nodeType);
+  const credentialFields = new Set<string>(definition?.credentialSchema?.credentialFields || []);
+  for (const [fieldName, spec] of Object.entries(definition?.inputSchema || {})) {
+    if ((spec as NodeInputField | undefined)?.ownership === 'credential') credentialFields.add(fieldName);
+  }
+  if (credentialFields.size === 0) return config;
+
+  const validationConfig = { ...config };
+  for (const fieldName of credentialFields) {
+    const current = validationConfig[fieldName];
+    if (current === undefined || current === null || (typeof current === 'string' && current.trim() === '')) {
+      validationConfig[fieldName] = '__selected_connection__';
+    }
+  }
+  return validationConfig;
+}
+
+function getAcceptedCredentialTypeIds(definition: UnifiedNodeDefinition): string[] {
+  return Array.from(new Set(
+    (definition.credentialSchema?.requirements || [])
+      .flatMap((requirement) => [
+        requirement.credentialTypeId,
+        ...(requirement.credentialTypeIds || []),
+      ])
+      .filter((id): id is string => typeof id === 'string' && id.trim().length > 0)
+  ));
+}
+
+function collectSelectedConnectionIds(
+  node: WorkflowNode,
+  config: Record<string, any>,
+  definition: UnifiedNodeDefinition,
+): string[] {
+  const refs = {
+    ...(((config as any).connectionRefs || {}) as Record<string, unknown>),
+    ...(((node.data as any)?.connectionRefs || {}) as Record<string, unknown>),
+  };
+  const candidateKeys = new Set<string>();
+  for (const requirement of definition.credentialSchema?.requirements || []) {
+    if (requirement.credentialTypeId) candidateKeys.add(requirement.credentialTypeId);
+    for (const typeId of requirement.credentialTypeIds || []) candidateKeys.add(typeId);
+    if (requirement.provider) {
+      candidateKeys.add(requirement.provider);
+      candidateKeys.add(`${requirement.provider}_oauth2`);
+      candidateKeys.add(`${requirement.provider}_api_key`);
+      candidateKeys.add(`${requirement.provider}_token`);
+    }
+  }
+
+  const selected = new Set<string>();
+  for (const key of candidateKeys) {
+    const value = refs[key];
+    if (typeof value === 'string' && value.trim()) selected.add(value.trim());
+  }
+  for (const value of Object.values(refs)) {
+    if (typeof value === 'string' && value.trim()) selected.add(value.trim());
+  }
+  const directId = (config as any).connectionId || (node.data as any)?.connectionId;
+  if (typeof directId === 'string' && directId.trim()) selected.add(directId.trim());
+  return Array.from(selected);
+}
+
+function mergeConnectionCredentialsIntoConfig(
+  config: Record<string, any>,
+  credentials: Record<string, unknown>,
+): Record<string, any> {
+  const next = { ...config };
+  for (const [key, value] of Object.entries(credentials)) {
+    if (value !== undefined && value !== null && value !== '' && (next[key] === undefined || next[key] === '')) {
+      next[key] = value;
+    }
+  }
+
+  const aliases: Array<[string, string]> = [
+    ['token', 'accessToken'],
+    ['token', 'apiKey'],
+    ['token', 'botToken'],
+    ['accessToken', 'access_token'],
+    ['access_token', 'accessToken'],
+    ['accessToken', 'token'],
+    ['access_token', 'token'],
+    ['bearerToken', 'accessToken'],
+    ['apiKey', 'api_key'],
+    ['api_key', 'apiKey'],
+    ['apiToken', 'apiKey'],
+    ['apiToken', 'token'],
+    ['secretKey', 'apiKey'],
+    ['apiKey', 'secretKey'],
+    ['authToken', 'token'],
+  ];
+  for (const [from, to] of aliases) {
+    if ((next[to] === undefined || next[to] === '') && credentials[from] !== undefined && credentials[from] !== null && credentials[from] !== '') {
+      next[to] = credentials[from];
+    }
+  }
+  return next;
+}
+
+async function injectDynamicConnectionCredentials(params: {
+  node: WorkflowNode;
+  config: Record<string, any>;
+  definition: UnifiedNodeDefinition;
+  userId?: string;
+  currentUserId?: string;
+}): Promise<{ config: Record<string, any>; error?: string }> {
+  const ownerUserIds = Array.from(new Set(
+    [params.currentUserId, params.userId]
+      .map((id) => String(id || '').trim())
+      .filter(Boolean)
+  ));
+  const acceptedCredentialTypeIds = getAcceptedCredentialTypeIds(params.definition);
+  let connectionIds = collectSelectedConnectionIds(params.node, params.config, params.definition);
+
+  if (connectionIds.length === 0 && ownerUserIds.length > 0 && acceptedCredentialTypeIds.length > 0) {
+    for (const ownerUserId of ownerUserIds) {
+      for (const credentialTypeId of acceptedCredentialTypeIds) {
+        const canonical = await connectionService.findCanonicalConnection(ownerUserId, credentialTypeId).catch(() => null);
+        if (canonical) {
+          connectionIds = [canonical.id];
+          break;
+        }
+      }
+      if (connectionIds.length > 0) break;
+    }
+  }
+
+  if (connectionIds.length === 0) return { config: params.config };
+  if (ownerUserIds.length === 0) {
+    return {
+      config: params.config,
+      error: 'Selected connection cannot be resolved without an authenticated workflow owner.',
+    };
+  }
+
+  let nextConfig = { ...params.config };
+  for (const connectionId of connectionIds) {
+    let resolved = false;
+    let lastMessage = 'Connection not found';
+
+    for (const ownerUserId of ownerUserIds) {
+      try {
+        const connection = await connectionService.getDecryptedConnection(ownerUserId, connectionId);
+        if (
+          acceptedCredentialTypeIds.length > 0 &&
+          !acceptedCredentialTypeIds.includes(connection.credentialTypeId)
+        ) {
+          lastMessage = `Connection "${connection.name}" is a ${connection.credentialTypeId} credential, but this node requires ${acceptedCredentialTypeIds.join(', ')}.`;
+          continue;
+        }
+        if (connection.status !== 'active') {
+          lastMessage = `Connection "${connection.name}" is not active. Please reconnect before executing this workflow.`;
+          continue;
+        }
+        nextConfig = mergeConnectionCredentialsIntoConfig(nextConfig, connection.credentials);
+        await connectionService.markUsed(ownerUserId, connection.id);
+        resolved = true;
+        break;
+      } catch (error) {
+        lastMessage = error instanceof Error ? error.message : 'Unable to resolve selected connection';
+      }
+    }
+
+    if (!resolved) {
+      return { config: nextConfig, error: `Selected connection is not available for this workflow owner: ${lastMessage}` };
+    }
+  }
+
+  return { config: nextConfig };
+}
 
 /** Split an upstream payload into business data (usable as content) and integration metadata (structural identifiers). */
 function separateUpstreamContext(payload: unknown): {
@@ -481,7 +668,22 @@ export async function executeNodeDynamically(context: DynamicExecutionContext): 
 
   // Step 3: Migrate config to current schema version (backward compatibility)
   let config = node.data?.config || {};
-  const migratedConfig = unifiedNodeRegistry.migrateConfig(nodeType, config);
+  let migratedConfig = unifiedNodeRegistry.migrateConfig(nodeType, config);
+  const dynamicCredentialInjection = await injectDynamicConnectionCredentials({
+    node,
+    config: migratedConfig,
+    definition,
+    userId,
+    currentUserId,
+  });
+  migratedConfig = dynamicCredentialInjection.config;
+  if (dynamicCredentialInjection.error) {
+    return {
+      _error: dynamicCredentialInjection.error,
+      _connectionError: true,
+      _nodeType: nodeType,
+    };
+  }
   config = migratedConfig;
 
   // Derive effective fill modes for each input field from registry metadata and
@@ -553,7 +755,8 @@ export async function executeNodeDynamically(context: DynamicExecutionContext): 
     }
 
   // Step 4: Validate config against node schema
-  const validation = unifiedNodeRegistry.validateConfig(nodeType, config);
+  const validationConfig = applySelectedConnectionValidationPlaceholders(nodeType, node, config);
+  const validation = unifiedNodeRegistry.validateConfig(nodeType, validationConfig);
   if (!validation.valid) {
     console.error(`[DynamicExecutor] ❌ Config validation failed for ${nodeType}:`, validation.errors);
     // Single-path strict mode (no env override path).

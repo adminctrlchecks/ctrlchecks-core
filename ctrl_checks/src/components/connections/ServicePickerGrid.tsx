@@ -12,11 +12,12 @@ const CATEGORIES: Record<string, string[]> = {
   'Social Media':        ['twitter', 'facebook', 'instagram', 'linkedin'],
   'Project Management':  ['notion', 'asana', 'jira', 'clickup', 'monday', 'linear', 'trello'],
   'CRM & Sales':         ['hubspot', 'salesforce', 'pipedrive', 'zoho', 'airtable', 'freshdesk', 'intercom', 'zendesk', 'activecampaign'],
-  'Communication':       ['slack', 'discord', 'telegram', 'whatsapp', 'twilio', 'sendgrid', 'mailchimp', 'mailgun', 'calendly', 'zoom'],
+  'Communication':       ['slack', 'discord', 'discord_webhook', 'telegram', 'whatsapp', 'twilio', 'sendgrid', 'mailchimp', 'mailgun', 'calendly', 'zoom'],
   'Cloud & DevOps':      ['aws', 'github', 'gitlab', 'bitbucket', 'cloudflare', 'dropbox', 'supabase', 'mongodb'],
   'Databases':           ['postgresql', 'mysql', 'firebase', 'redis'],
   'File Transfer':       ['ftp', 'sftp'],
   'AI & Data':           ['openai', 'anthropic', 'pinecone', 'qdrant', 'cohere', 'huggingface', 'mistral'],
+  'Content & CMS':       ['contentful', 'wordpress'],
   'Payments & Business': ['stripe', 'paypal', 'quickbooks', 'xero', 'shopify', 'woocommerce', 'typeform'],
 };
 
@@ -25,6 +26,14 @@ function categoryFor(provider: string): string {
     if (providers.includes(provider)) return cat;
   }
   return 'Other';
+}
+
+const PROVIDER_LABELS: Record<string, string> = {
+  discord_webhook: 'Discord Webhook',
+};
+
+function providerLabel(type: CredentialTypeDefinition): string {
+  return PROVIDER_LABELS[type.provider] ?? type.provider.charAt(0).toUpperCase() + type.provider.slice(1);
 }
 
 interface Props {
@@ -89,7 +98,7 @@ export function ServicePickerGrid({ onSelect, connectedTypeIds = new Set() }: Pr
               {items.map((t) => {
                 const comingSoon = isComingSoonProvider(t.provider);
                 const alreadyConnected = connectedTypeIds.has(t.id);
-                const providerName = t.provider.charAt(0).toUpperCase() + t.provider.slice(1);
+                const providerName = providerLabel(t);
 
                 return (
                   <button

@@ -116,14 +116,8 @@ export async function invalidateAllSessions(req: AuthenticatedRequest, res: Resp
  * Get audit trail (admin only)
  */
 export async function getAuditTrailEndpoint(req: AuthenticatedRequest, res: Response) {
+  // Access control is enforced by requirePermission('admin:audit:view') at the route level (index.ts).
   try {
-    if (!req.user || req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        error: 'Admin access required'
-      });
-    }
-
     const {
       limit = '100',
       userId,
@@ -165,14 +159,8 @@ export async function getAuditTrailEndpoint(req: AuthenticatedRequest, res: Resp
  * Get security events (admin only)
  */
 export async function getSecurityEventsEndpoint(req: AuthenticatedRequest, res: Response) {
+  // Access control is enforced by requirePermission('admin:security:view') at the route level (index.ts).
   try {
-    if (!req.user || req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        error: 'Admin access required'
-      });
-    }
-
     const { limit = '100' } = req.query;
     const securityEvents = getSecurityEvents(parseInt(limit as string, 10));
 

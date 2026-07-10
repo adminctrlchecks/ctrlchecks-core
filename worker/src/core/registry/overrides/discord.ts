@@ -14,6 +14,17 @@ export function overrideDiscord(
 ): UnifiedNodeDefinition {
   return {
     ...def,
+    description: 'Send messages to Discord channels via a Discord bot token',
+    requiredInputs: ['channelId', 'message'],
+    operationContracts: [{
+      operation: 'default',
+      label: 'Send Bot Message',
+      requiredFields: ['channelId', 'message'],
+      optionalFields: [],
+      credentialProviders: ['discord'],
+      outputFields: ['success', 'discord'],
+      status: 'implemented',
+    }],
     credentialSchema: {
       requirements: [{
         provider: 'discord',

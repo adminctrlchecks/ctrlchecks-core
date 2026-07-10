@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { config } from '../config';
 import { AuthenticatedRequest } from './subscription-auth';
+import { recordAuditEvent } from '../audit/audit-log-service';
 
 /**
  * Security event types for audit logging
@@ -46,6 +47,20 @@ export const logSecurityEvent = (event: Omit<SecurityEvent, 'timestamp'>) => {
   if (event.severity === 'critical' && config.isProduction) {
     // TODO: Integrate with external security monitoring service
     console.error('[CRITICAL SECURITY EVENT]', securityEvent);
+  }
+
+  // Persist high/critical events durably — the in-memory buffer above is
+  // capped at 1000 entries and lost on every restart.
+  if (event.severity === 'high' || event.severity === 'critical') {
+    recordAuditEvent({
+      actorUserId: event.userId,
+      action: 'security.event',
+      status: 'failure',
+      resourceType: event.eventType,
+      ipAddress: event.ipAddress,
+      userAgent: event.userAgent,
+      metadata: { severity: event.severity, path: event.path, method: event.method, details: event.details },
+    });
   }
 };
 

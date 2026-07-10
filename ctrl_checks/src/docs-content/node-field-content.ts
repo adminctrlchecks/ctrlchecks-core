@@ -93,9 +93,17 @@ How to fill it: Write a short, clear subject.
 Example: Your order #12345 has shipped!
 Tip: Use {{$json.orderNumber}} to include data from an earlier step. Example: Your order #{{$json.orderId}} has been confirmed.`,
       body: `What this field is: The full email content — everything the recipient reads after opening.
-How to fill it: Type the email text. You can use HTML for formatting (bold, links, etc.).
+How to fill it: Type plain text. Line breaks are kept.
 Example: Hi {{$json.name}}, thank you for your purchase! Your order will arrive in 3–5 business days.
 Tip: Anything inside {{ }} is replaced with real data from an earlier step. Example: {{$json.name}} becomes "Alice".`,
+      cc: `What this field is: Optional visible copied recipients.
+How to fill it: Type one email address, or multiple addresses separated with commas, semicolons, or new lines.
+Example: manager@example.com, audit@example.com
+Leave blank when no CC recipients are needed.`,
+      bcc: `What this field is: Optional hidden copied recipients.
+How to fill it: Type one email address, or multiple addresses separated with commas, semicolons, or new lines.
+Example: archive@example.com
+Leave blank when no BCC recipients are needed.`,
     },
     get: {
       messageId: `What this field is: The unique ID of a specific Gmail email you want to fetch.
@@ -380,7 +388,7 @@ Where to find it:
   Step 2: Right-click the channel name → Copy ID.
 The ID is a 17–19 digit number.
 Example: 1234567890123456789`,
-      content: `What this field is: The message text to post in the Discord channel.
+      message: `What this field is: The message text to post in the Discord channel.
 Example: New order from {{$json.customerName}} - Total: \${{$json.amount}}. Order ID: {{$json.orderId}}.
 Formatting: **bold**, *italic*, \`code\`, and standard Discord markdown all work.`,
     },
@@ -393,10 +401,9 @@ Keep it absolutely secret — anyone with this token can control your bot.`,
 
   discord_webhook: {
     '*': {
-      webhookUrl: `What this field is: A special URL that lets CtrlChecks post messages to a specific Discord channel without needing a bot.
-Where to find it: In Discord → right-click the channel → Edit Channel → Integrations → Webhooks → New Webhook → Copy Webhook URL.
-Example: https://discord.com/api/webhooks/1234567890/xxxx...
-Note: Keep this URL private — anyone with it can post to your channel.`,
+      message: `What this field is: The message text to post in the Discord channel through the selected webhook connection.
+Example: New order from {{$json.customerName}} - Total: \${{$json.amount}}. Order ID: {{$json.orderId}}.
+Formatting: **bold**, *italic*, \`code\`, and standard Discord markdown all work.`,
     },
   },
 
@@ -1451,6 +1458,11 @@ Example: https://api.calendly.com/event_types/ABCDEFGH`,
       spaceId: `What this field is: Your Contentful space ID — identifies your content workspace.
 Where to find it: Contentful Dashboard → Settings → General Settings → Space ID.
 Example: abcd1234efgh`,
+      accessToken: `What this field is: A Contentful CMA personal access token used for Content Management API calls.
+Where to find it: Contentful -> Settings -> CMA tokens -> Create personal access token.
+Important: After creating the token, click Authorize on the token row and grant access to the target organization/space.
+Troubleshooting: OrganizationAccessGrantRequired means the token is valid but not authorized for that organization/space.
+Example: CFPAT-...`,
       contentTypeId: `What this field is: The content type to work with.
 Example: blogPost or product or author`,
     },

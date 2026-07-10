@@ -4,18 +4,18 @@ export const googleGmailDoc: NodeDoc = {
   "slug": "google_gmail",
   "displayName": "Gmail",
   "category": "Communication",
-  "logoUrl": "/icons/nodes/google_gmail.svg",
-  "description": "Send/receive emails via Gmail API (OAuth)",
+  "logoUrl": "/integrations-logos/Gmail.svg",
+  "description": "Send, list, get, and search Gmail messages via Google OAuth.",
   "credentialType": "Gmail OAuth",
   "credentialSetupSteps": [
     "What this is: The Gmail connection lets CtrlChecks access your Gmail account safely without putting secrets in workflow fields.",
-    "Where to start: Gmail account settings or developer settings.",
-    "How to connect: In CtrlChecks, open Connections -> Add Connection -> Gmail, then sign in or paste the secret value requested there.",
-    "Example: the token format shown by Gmail.",
-    "Important: Treat tokens, passwords, API keys, and client secrets like bank passwords. Store them in Connections, not in regular workflow fields.",
-    "Test it: Save the connection, run a simple Gmail step, and confirm CtrlChecks can reach the account."
+    "Where to start: In CtrlChecks, open Connections -> Add Connection -> Google.",
+    "How to connect: Sign in with Google and grant the Gmail permissions requested for sending and reading messages.",
+    "Scopes used: Gmail send is required for Send Email. Gmail readonly is required for List, Get, and Search.",
+    "Important: OAuth tokens are stored in Connections and are not workflow fields. Do not paste Google tokens, client secrets, or passwords into the node.",
+    "Test it: Save the connection, run a simple Gmail List or Send step, and confirm CtrlChecks can reach the account."
   ],
-  "credentialDocsUrl": "https://console.cloud.google.com/apis/credentials",
+  "credentialDocsUrl": "https://developers.google.com/gmail/api/auth/scopes",
   "resources": [
     {
       "name": "Operations",
@@ -52,16 +52,36 @@ export const googleGmailDoc: NodeDoc = {
               "type": "textarea",
               "required": true,
               "description": "Email body content (required for send operation)",
-              "helpText": "What this field is: The full email content the recipient reads after opening the message.\nHow to fill it: Type the email text. You can use simple HTML tags for formatting when needed.\nExample: Hi {{$json.name}}, thank you for your purchase. Your order will arrive in 3 to 5 business days.\nTip: Use values like {{$json.name}} from an earlier step to personalize the email.",
+              "helpText": "What this field is: The full email content the recipient reads after opening the message.\nHow to fill it: Type plain text. Line breaks are kept.\nExample: Hi {{$json.name}}, thank you for your purchase. Your order will arrive in 3 to 5 business days.\nTip: Use values like {{$json.name}} from an earlier step to personalize the email.",
               "placeholder": "Email content",
               "example": "Email content"
+            },
+            {
+              "name": "CC",
+              "internalKey": "cc",
+              "type": "email",
+              "required": false,
+              "description": "Optional CC recipient email address(es), comma- or newline-separated.",
+              "helpText": "What this field is: Extra visible recipients copied on the email.\nHow to fill it: Type one email address, or multiple separated with commas.\nExample: manager@example.com, audit@example.com\nLeave blank if no CC recipients are needed.",
+              "placeholder": "manager@example.com",
+              "example": "manager@example.com"
+            },
+            {
+              "name": "BCC",
+              "internalKey": "bcc",
+              "type": "email",
+              "required": false,
+              "description": "Optional BCC recipient email address(es), comma- or newline-separated.",
+              "helpText": "What this field is: Hidden copy recipients. Other recipients will not see these addresses.\nHow to fill it: Type one email address, or multiple separated with commas.\nExample: archive@example.com\nLeave blank if no BCC recipients are needed.",
+              "placeholder": "archive@example.com",
+              "example": "archive@example.com"
             },
             {
               "name": "From",
               "internalKey": "from",
               "type": "string",
               "required": false,
-              "description": "Sender email address (optional - uses OAuth account if not provided)",
+              "description": "Optional sender address or configured Gmail alias. Leave blank to use the connected Google account.",
               "helpText": "What this field is: The email address that will appear as the sender.\nHow to fill it: Use your Gmail address or a Gmail alias you have set up.\nExample: alice@gmail.com or orders@yourcompany.com\nLeave blank to use your primary Gmail address automatically.",
               "placeholder": "your-email@gmail.com",
               "example": "your-email@gmail.com"

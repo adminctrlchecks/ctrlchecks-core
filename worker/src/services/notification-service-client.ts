@@ -107,7 +107,7 @@ async function servicePost<T>(path: string, userId: string, body: unknown): Prom
 // ── Notification payload types ────────────────────────────────────────────────
 
 export interface EmailNotificationPayload {
-  templateId: 'execution_completed' | 'execution_failed' | 'welcome';
+  templateId: 'execution_completed' | 'execution_failed' | 'welcome' | 'approval_needed';
   data: Record<string, string>;
   to?: string;
 }

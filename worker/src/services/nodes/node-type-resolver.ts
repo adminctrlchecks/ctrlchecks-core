@@ -148,10 +148,6 @@ const NODE_TYPE_ALIASES: Record<string, string[]> = {
   'cache_get': ['cache', 'get', 'retrieve', 'redis', 'cache get', 'get cache', 'retrieve cache', 'fetch cache', 'read cache', 'cache read'],
   'cache_set': ['cache', 'set', 'store', 'redis', 'cache set', 'set cache', 'store cache', 'write cache', 'cache write', 'save cache'],
   
-  // Authentication
-  'oauth2_auth': ['oauth', 'oauth2', 'auth', 'authentication', 'token', 'oauth2_auth', 'oauth authentication', 'oauth token', 'oauth2 token', 'oauth login', 'oauth authorize'],
-  'api_key_auth': ['apikey', 'api key', 'auth', 'key', 'api key auth', 'key auth', 'api authentication', 'api token', 'bearer token'],
-  
   // Logging
   // Include common LLM-generated variants like "logger"
   'log_output': ['log', 'logger', 'debug', 'audit', 'monitor', 'log_output', 'logging', 'log data', 'write log', 'console log', 'output log', 'debug log'],

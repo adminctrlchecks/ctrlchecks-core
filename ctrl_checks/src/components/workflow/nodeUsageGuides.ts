@@ -774,18 +774,18 @@ Sends personalized order confirmation.`,
     tips: ['Requires RESEND_API_KEY secret', 'Use HTML for rich emails', 'Use {{input.x}} for personalization'],
   },
   email: {
-    overview: 'Send emails via SMTP. Use for notifications, alerts, and reports.',
-    inputs: ['to', 'subject', 'text', 'html (optional)'],
-    outputs: ['status', 'message_id'],
+    overview: 'Send emails through your own SMTP server or mail relay. Use for notifications, alerts, and reports when Gmail/Outlook OAuth is not an option.',
+    inputs: ['to', 'subject', 'text', 'html (optional)', 'from (optional)'],
+    outputs: ['success', 'messageId', 'accepted', 'rejected'],
     example: `To: user@example.com
 Subject: "Order Confirmed"
 Text: "Thanks for your purchase!"
 
 Sends a notification email.`,
     tips: [
-      'SMTP settings are configured in system settings',
-      'Use text for plain emails, HTML for rich formatting',
-      'Validate recipient addresses before sending',
+      'Save your SMTP host, port, username, and password as an SMTP Account connection',
+      'Gmail/Outlook personal accounts need an app password, not the login password',
+      'Use text for plain emails, add html for rich formatting',
     ],
   },
 
@@ -803,16 +803,15 @@ Sends formatted alert to Slack channel.`,
   },
 
   discord_webhook: {
-    overview: 'Send messages to Discord channels via webhook. Great for notifications and alerts.',
-    inputs: ['webhookUrl', 'content', 'username (optional)', 'avatarUrl (optional)'],
+    overview: 'Send messages to Discord channels via a selected webhook connection. Great for notifications and alerts.',
+    inputs: ['message', 'username (optional)', 'avatarUrl (optional)'],
     outputs: ['message_id'],
-    example: `Webhook URL: https://discord.com/api/webhooks/...
-Message: "✅ Workflow completed successfully!"
+    example: `Message: "✅ Workflow completed successfully!"
 Username: "Alert Bot"
 
 Sends message to Discord channel.`,
     tips: [
-      'Create webhook in Discord channel settings',
+      'Save the Discord webhook URL as a Connection',
       'Customize username and avatar per message',
       'Supports markdown formatting',
     ],
@@ -1078,10 +1077,10 @@ Output: {
 
   google_gmail: {
     overview: 'Send, list, get, or search Gmail messages. Automate email operations in your workflows.',
-    inputs: ['to, subject, body (for send)', 'messageId (for get)', 'query (for search)'],
+    inputs: ['recipientEmails, subject, body (for send)', 'cc, bcc, from (optional for send)', 'messageId (for get)', 'query and maxResults (for list/search)'],
     outputs: ['messageId and threadId (send)', 'messages array (list/search)', 'full message (get)'],
     example: `Operation: Send Email
-To: recipient@example.com
+Recipient Emails: recipient@example.com
 Subject: "Workflow Notification"
 Body: "Your workflow completed successfully!"
 
@@ -1099,6 +1098,7 @@ Output: [
   {id: "message_id_2"}
 ]`,
     tips: [
+      'Connect Google OAuth in Connections; do not paste tokens into workflow fields',
       'Gmail search syntax: from:, subject:, is:unread, has:attachment',
       'Message IDs returned when listing/searching',
       'Body is plain text only',
@@ -2009,25 +2009,20 @@ Output: {
   },
 
   ollama: {
-    overview: 'Interact with Ollama server to run large language models locally. Run models on your own infrastructure without API costs. Perfect for privacy-sensitive applications or when you want full control over the AI models. Requires Ollama server to be running.',
-    inputs: ['serverUrl', 'model', 'prompt', 'temperature'],
-    outputs: ['response', 'model', 'done'],
-    example: `Server URL: http://localhost:11434
-Model: llama2
-Prompt: "Explain quantum computing in simple terms"
+    overview: 'AI chat completion using Gemini 3.5 Flash, the platform\'s default LLM. Send a prompt and get a text response back — no setup or API key required.',
+    inputs: ['prompt', 'temperature'],
+    outputs: ['response_text', 'response', 'text'],
+    example: `Prompt: "Explain quantum computing in simple terms"
 Temperature: 0.7
 
 Output: {
-  response: "Quantum computing uses quantum mechanics...",
-  model: "llama2",
-  done: true
+  response_text: "Quantum computing uses quantum mechanics...",
 }`,
     tips: [
-      'Install Ollama from ollama.ai first',
-      'Pull models: ollama pull llama2',
-      'Default port is 11434',
-      'Free to use but requires your own compute',
-      'Great for local development and testing',
+      'Uses the platform\'s built-in Gemini 3.5 Flash model — no API key needed',
+      'Lower temperature (0.0-0.5) for factual, consistent answers',
+      'Higher temperature (0.7-1.2) for creative, varied answers',
+      'For more control (system prompt, response format), use the AI Chat Model node instead',
     ],
   },
 

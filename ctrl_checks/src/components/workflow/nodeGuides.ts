@@ -12,6 +12,67 @@ export type FieldKey = string;
 
 // Guide data structure: nodeType -> fieldKey -> guide
 export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
+  amazon_ses: {
+    recipients: {
+      title: 'How to set Recipients?',
+      steps: [
+        'Enter a JSON object with to, cc, and bcc arrays.',
+        'At least one recipient is required across those arrays.',
+        'Example: {"to":["customer@example.com"],"cc":["ops@example.com"]}',
+        'Use workflow values such as {{input.email}} when the address comes from an earlier step.'
+      ],
+      example: '{"to":["customer@example.com"]}'
+    },
+    fromAddress: {
+      title: 'How to set From Address?',
+      url: 'https://docs.aws.amazon.com/ses/latest/dg/verify-addresses-and-domains.html',
+      steps: [
+        'Use an email address or domain identity verified in Amazon SES.',
+        'Open AWS Console -> Amazon SES -> Verified identities in the same region as this node.',
+        'Copy the exact sender address, for example notifications@yourdomain.com.',
+        'SES sandbox accounts can send only to verified recipients until production access is approved.'
+      ],
+      example: 'notifications@yourdomain.com'
+    },
+    awsRegion: {
+      title: 'How to choose AWS Region?',
+      steps: [
+        'Choose the region where your SES identities, templates, and configuration sets exist.',
+        'The node defaults to us-east-1 when no region is set.',
+        'If your saved Amazon SES connection includes a region, leave this field at the matching value or override it deliberately.'
+      ],
+      example: 'us-east-1'
+    },
+    templateName: {
+      title: 'How to use Template Name?',
+      url: 'https://docs.aws.amazon.com/ses/latest/dg/send-personalized-email-api.html',
+      steps: [
+        'Turn on Use AWS SES Template.',
+        'Open AWS Console -> Amazon SES -> Email templates in the selected region.',
+        'Copy the exact template name.',
+        'Fill Template Data with the variables used by that template.'
+      ],
+      example: 'OrderConfirmation'
+    },
+    templateData: {
+      title: 'How to set Template Data?',
+      steps: [
+        'Enter a JSON object whose keys match the variables in the SES template.',
+        'Example: {"name":"Ada","orderId":"12345"}',
+        'Use workflow values such as {{$json.name}} or {{input.orderId}} when values come from earlier steps.'
+      ],
+      example: '{"name":"Ada","orderId":"12345"}'
+    },
+    attachments: {
+      title: 'How to add Attachments?',
+      steps: [
+        'Enter a JSON array of attachment objects.',
+        'Each item needs filename, base64 content, and contentType.',
+        'SES sends attachments through a raw MIME email and enforces the total message size limit.'
+      ],
+      example: '[{"filename":"report.pdf","content":"{{input.pdfBase64}}","contentType":"application/pdf"}]'
+    }
+  },
   google_gemini: {
     apiKey: {
       title: 'Gemini AI Studio API Key – Step-by-Step',
@@ -162,31 +223,6 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
     }
   },
   ollama: {
-    serverUrl: {
-      title: 'How to set Ollama Server URL?',
-      steps: [
-        'This is the base URL of your Ollama server.',
-        '',
-        'Common value:',
-        '• http://localhost:11434',
-        '',
-        'Tip: Make sure the server is running and reachable.'
-      ],
-      example: 'http://localhost:11434'
-    },
-    model: {
-      title: 'How to choose Model?',
-      steps: [
-        'Choose a model installed on your Ollama server.',
-        '',
-        'Examples:',
-        '• qwen2.5:14b-instruct-q4_K_M',
-        '• qwen2.5-coder:7b-instruct-q4_K_M',
-        '',
-        'Tip: Pull models on the server first (e.g., ollama pull qwen2.5:14b-instruct-q4_K_M).'
-      ],
-      example: 'qwen2.5:14b-instruct-q4_K_M'
-    },
     prompt: {
       title: 'How to write Prompt?',
       steps: [
@@ -3859,6 +3895,19 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         '• Search Messages – Use when this node should find emails matching a search. Fill Search Query (and optionally Max Results).'
       ]
     },
+    recipientEmails: {
+      title: 'How to set Recipient Emails?',
+      steps: [
+        'Recipient Emails is the To list for Send Email.',
+        '',
+        'Manual entry: Type one email address, or multiple addresses separated with commas, semicolons, or new lines.',
+        '',
+        'From previous data: Use a value such as {{$json.email}} when an earlier step provides the recipient address.',
+        '',
+        'For sheet-driven sends, choose Extract from sheet in Recipient Source and leave this field empty.'
+      ],
+      example: 'alice@example.com, bob@example.com'
+    },
     to: {
       title: 'How to get To?',
       steps: [
@@ -3873,6 +3922,39 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         'Format: Must be a valid email (name@domain.com). No spaces.'
       ],
       example: 'recipient@example.com'
+    },
+    cc: {
+      title: 'How to set CC?',
+      steps: [
+        'CC is optional and only used for Send Email.',
+        '',
+        'Use it for visible copied recipients. Enter one email address, or multiple addresses separated with commas, semicolons, or new lines.',
+        '',
+        'Leave it blank if no copied recipients are needed.'
+      ],
+      example: 'manager@example.com'
+    },
+    bcc: {
+      title: 'How to set BCC?',
+      steps: [
+        'BCC is optional and only used for Send Email.',
+        '',
+        'Use it for hidden copied recipients. Enter one email address, or multiple addresses separated with commas, semicolons, or new lines.',
+        '',
+        'Leave it blank if no hidden recipients are needed.'
+      ],
+      example: 'archive@example.com'
+    },
+    from: {
+      title: 'How to set From?',
+      steps: [
+        'From is optional and only used for Send Email.',
+        '',
+        'Leave it blank to send from the connected Google account.',
+        '',
+        'Only enter a sender address when it is a Gmail alias configured on that account. Gmail may reject unverified sender aliases.'
+      ],
+      example: 'orders@example.com'
     },
     subject: {
       title: 'How to get Subject?',
@@ -3898,7 +3980,7 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         '',
         'Option 3: Template with placeholders – Mix fixed text and dynamic values, e.g. "Hi {{input.name}}, your request #{{input.id}} has been received."',
         '',
-        'Plain text vs HTML: Use plain text unless your platform has a separate HTML body option.'
+        'This Gmail node currently sends text/plain messages. Do not rely on HTML rendering in this field.'
       ],
       example: 'Your workflow completed successfully.'
     },
@@ -8005,18 +8087,7 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
     }
   },
   discord_webhook: {
-    webhookUrl: {
-      title: 'How to get Discord Webhook URL?',
-      steps: [
-        'Go to your Discord server → Server Settings → Integrations → Webhooks.',
-        'Create a webhook or select an existing one.',
-        '',
-        'Choose the channel and click "Copy Webhook URL".',
-        'Paste it into this field.'
-      ],
-      example: 'https://discord.com/api/webhooks/...'
-    },
-    content: {
+    message: {
       title: 'How to write Message?',
       steps: [
         'Message is the text posted to the channel.',

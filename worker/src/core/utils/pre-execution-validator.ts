@@ -49,7 +49,16 @@ const SKIP_TYPES = new Set([
  * @param nodes  Array of workflow node objects ({ id, type, data: { config } })
  */
 export function validateWorkflowConfig(
-  nodes: Array<{ id: string; type: string; data?: { label?: string; config?: Record<string, any> } }>,
+  nodes: Array<{
+    id: string;
+    type: string;
+    data?: {
+      label?: string;
+      config?: Record<string, any>;
+      connectionRefs?: Record<string, any>;
+      connectionId?: string;
+    };
+  }>,
 ): ConfigValidationResult {
   const issues: ConfigIssue[] = [];
 
@@ -63,7 +72,30 @@ export function validateWorkflowConfig(
     const config = node.data?.config ?? {};
     const nodeLabel = node.data?.label || def.label || nodeType;
 
-    const { valid, errors } = def.validateInputs(config);
+    const refs = {
+      ...(((config as any).connectionRefs || {}) as Record<string, unknown>),
+      ...((node.data?.connectionRefs || {}) as Record<string, unknown>),
+    };
+    const hasSelectedConnection =
+      Object.values(refs).some((value) => typeof value === 'string' && value.trim().length > 0) ||
+      (typeof (config as any).connectionId === 'string' && (config as any).connectionId.trim().length > 0) ||
+      (typeof node.data?.connectionId === 'string' && node.data.connectionId.trim().length > 0);
+
+    const validationConfig = { ...config };
+    if (hasSelectedConnection) {
+      const credentialFields = new Set<string>(def.credentialSchema?.credentialFields || []);
+      for (const [fieldName, spec] of Object.entries(def.inputSchema || {})) {
+        if (spec?.ownership === 'credential') credentialFields.add(fieldName);
+      }
+      for (const fieldName of credentialFields) {
+        const current = validationConfig[fieldName];
+        if (current === undefined || current === null || (typeof current === 'string' && current.trim() === '')) {
+          validationConfig[fieldName] = '__selected_connection__';
+        }
+      }
+    }
+
+    const { valid, errors } = def.validateInputs(validationConfig);
     if (valid) continue;
 
     // Map each error string back to a MissingField using the inputSchema for labels

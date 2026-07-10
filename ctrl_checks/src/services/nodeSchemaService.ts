@@ -73,6 +73,8 @@ export interface NodeDefinition {
   isBranching: boolean;
   defaultInputs: Record<string, any>;
   version?: number;
+  /** Internal/legacy-only node: renders and executes in existing workflows, but hidden from the palette. */
+  hidden?: boolean;
 }
 
 export interface InputFieldSchema {

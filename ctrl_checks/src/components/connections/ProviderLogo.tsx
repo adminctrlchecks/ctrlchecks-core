@@ -24,6 +24,7 @@ const PROVIDER_COLORS: Record<string, string> = {
   freshdesk:   'bg-green-100 text-green-600',
   intercom:    'bg-blue-100 text-blue-600',
   discord:     'bg-indigo-100 text-indigo-600',
+  discord_webhook: 'bg-indigo-100 text-indigo-600',
   telegram:    'bg-sky-100 text-sky-500',
   whatsapp:    'bg-green-100 text-green-600',
   twilio:      'bg-red-100 text-red-600',
@@ -69,13 +70,15 @@ const PROVIDER_COLORS: Record<string, string> = {
   vercel:         'bg-gray-100 text-gray-900',
   jenkins:        'bg-red-100 text-red-600',
   odoo:           'bg-purple-100 text-purple-600',
+  contentful:     'bg-orange-100 text-orange-600',
+  wordpress:      'bg-sky-100 text-sky-700',
 };
 
 const PROVIDER_INITIALS: Record<string, string> = {
   google: 'G', microsoft: 'M', slack: 'S', github: 'GH', gitlab: 'GL',
   notion: 'N', asana: 'A', jira: 'J', clickup: 'CU', monday: 'Mo',
   linear: 'L', trello: 'Tr', hubspot: 'Hs', salesforce: 'SF', pipedrive: 'PD',
-  zoho: 'Z', airtable: 'At', freshdesk: 'Fd', intercom: 'In', discord: 'Di',
+  zoho: 'Z', airtable: 'At', freshdesk: 'Fd', intercom: 'In', discord: 'Di', discord_webhook: 'Di',
   telegram: 'Tg', whatsapp: 'WA', twilio: 'Tw', sendgrid: 'SG', mailchimp: 'Mc',
   aws: 'AWS', cloudflare: 'CF', dropbox: 'Db', supabase: 'Sb', mongodb: 'Mg',
   openai: 'AI', anthropic: 'An', pinecone: 'Pc', qdrant: 'Qd', cohere: 'Co',
@@ -86,6 +89,8 @@ const PROVIDER_INITIALS: Record<string, string> = {
   activecampaign: 'AC', zendesk: 'Zd', calendly: 'Ca', mailgun: 'Mg',
   bitbucket: 'Bb', ftp: 'FTP', sftp: 'SFTP',
   gemini: 'Gm', vercel: 'Vc', jenkins: 'Jk', odoo: 'Od',
+  contentful: 'Cf',
+  wordpress: 'WP',
 };
 
 const PROVIDER_LOGO_ALIASES: Record<string, string> = {
@@ -97,6 +102,7 @@ const PROVIDER_LOGO_ALIASES: Record<string, string> = {
   mongodb: 'mongodb',
   zoho: 'zoho',
   activecampaign: 'activecampaign',
+  discord_webhook: 'discord',
   gemini: 'google_gemini',
   jenkins: 'jenkins',
 };

@@ -4,9 +4,9 @@ export const discordWebhookDoc: NodeDoc = {
   "slug": "discord_webhook",
   "displayName": "Discord Webhook",
   "category": "Communication",
-  "logoUrl": "/icons/nodes/discord_webhook.svg",
-  "description": "Send messages via Discord webhook",
-  "credentialType": "Discord Bot Token",
+  "logoUrl": "/integrations-logos/Discord.svg",
+  "description": "Send messages to a Discord channel via an incoming webhook URL",
+  "credentialType": "Discord Webhook URL",
   "credentialSetupSteps": [
     "What this is: The Discord Webhook connection lets CtrlChecks access your Discord Webhook account safely without putting secrets in workflow fields.",
     "Where to start: Discord Webhook account settings or developer settings.",
@@ -19,23 +19,13 @@ export const discordWebhookDoc: NodeDoc = {
   "resources": [
     {
       "name": "Configuration",
-      "description": "Discord Webhook is configured directly with input fields.",
+      "description": "Discord Webhook uses a saved webhook URL connection plus message fields.",
       "operations": [
         {
           "name": "Execute",
           "value": "default",
           "description": "Send a message to a Discord channel using a Webhook URL — no bot required.",
           "fields": [
-            {
-              "name": "Webhook Url",
-              "internalKey": "webhookUrl",
-              "type": "url",
-              "required": true,
-              "description": "Discord webhook URL",
-              "helpText": "What this field is: A special URL that lets CtrlChecks post messages to a specific Discord channel without needing a bot.\nWhere to find it: In Discord → right-click the channel → Edit Channel → Integrations → Webhooks → New Webhook → Copy Webhook URL.\nExample: https://discord.com/api/webhooks/1234567890/xxxx...\nNote: Keep this URL private — anyone with it can post to your channel.",
-              "placeholder": "https://discord.com/api/webhooks/...",
-              "example": "https://discord.com/api/webhooks/..."
-            },
             {
               "name": "Message",
               "internalKey": "message",
@@ -55,8 +45,7 @@ export const discordWebhookDoc: NodeDoc = {
           "usageExample": {
             "scenario": "Post GitHub commit notifications to a Discord channel",
             "inputValues": {
-              "webhookUrl": "{{$env.DISCORD_WEBHOOK_URL}}",
-              "content": "📦 New commit by {{$json.author}}: {{$json.message}}\n{{$json.url}}"
+              "message": "📦 New commit by {{$json.author}}: {{$json.message}}\n{{$json.url}}"
             },
             "expectedOutput": "Message appears in the Discord channel. No bot setup required — just the webhook URL."
           },

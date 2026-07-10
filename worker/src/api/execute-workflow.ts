@@ -22,6 +22,7 @@ import { runInSandbox } from '../core/utils/sandbox-executor';
 import { resolveNodeType } from '../core/utils/node-type-resolver-util';
 import { getMemoryManager } from '../memory';
 import { ErrorCode } from '../core/utils/error-codes';
+import { recordAuditEvent } from '../core/audit/audit-log-service';
 // Enterprise Architecture - Multi-tier state management
 import { PersistentLayer } from '../services/workflow-executor/persistent-layer';
 import { CentralExecutionState } from '../services/workflow-executor/central-execution-state';
@@ -481,16 +482,22 @@ async function collectConnectionRefIdsWithFallback(
     const { unifiedNodeRegistry } = await import('../core/registry/unified-node-registry');
     const nodeType = String((node.data as any)?.type || node.type || '');
     const definition = unifiedNodeRegistry.get(nodeType);
-    const requirements = definition?.credentialSchema?.requirements ?? [];
+    const requirements = (definition?.credentialSchema?.requirements ?? []) as Array<{
+      credentialTypeId?: string;
+      credentialTypeIds?: string[];
+    }>;
     const credentialTypeIds = Array.from(new Set(
       requirements
-        .map((r) => r.credentialTypeId)
+        .flatMap((r) => [r.credentialTypeId, ...(r.credentialTypeIds || [])])
         .filter((id): id is string => typeof id === 'string' && id.length > 0)
     ));
-    // Only auto-select when there's exactly one required credential type
-    if (credentialTypeIds.length === 1) {
-      const connection = await connectionService.findCanonicalConnection(ownerUserId, credentialTypeIds[0]);
-      if (connection) return [connection.id];
+    // Auto-select the user's canonical saved connection when the node declares a clear
+    // credential contract, including compatibility aliases such as Contentful -> Bearer Token.
+    if (credentialTypeIds.length > 0) {
+      for (const credentialTypeId of credentialTypeIds) {
+        const connection = await connectionService.findCanonicalConnection(ownerUserId, credentialTypeId);
+        if (connection) return [connection.id];
+      }
     }
   } catch {
     // fall through — don't block execution on registry lookup failure
@@ -553,15 +560,40 @@ async function injectSelectedConnectionCredentials(params: {
   userId?: string;
   currentUserId?: string;
 }): Promise<{ config: Record<string, unknown>; error?: string }> {
-  const ownerUserId = params.userId || params.currentUserId;
+  const ownerUserIds = Array.from(new Set(
+    [params.currentUserId, params.userId]
+      .map((id) => String(id || '').trim())
+      .filter(Boolean),
+  ));
+  const ownerUserId = ownerUserIds[0];
   const connectionIds = await collectConnectionRefIdsWithFallback(params.node, params.config, ownerUserId);
-  if (!ownerUserId || connectionIds.length === 0) return { config: params.config };
+  if (connectionIds.length > 0 && ownerUserIds.length === 0) {
+    return {
+      config: params.config,
+      error: 'Selected connection cannot be resolved without an authenticated workflow owner.',
+    };
+  }
+  if (connectionIds.length === 0) return { config: params.config };
 
   const acceptedCredentialTypes = await getAcceptedCredentialTypesForNode(params.node);
   let nextConfig = { ...params.config };
   for (const connectionId of connectionIds) {
     try {
-      const connection = await connectionService.getDecryptedConnection(ownerUserId, connectionId);
+      let connection: Awaited<ReturnType<typeof connectionService.getDecryptedConnection>> | null = null;
+      let resolvedOwnerUserId = ownerUserId;
+      let lastLookupError: unknown;
+      for (const candidateUserId of ownerUserIds) {
+        try {
+          connection = await connectionService.getDecryptedConnection(candidateUserId, connectionId);
+          resolvedOwnerUserId = candidateUserId;
+          break;
+        } catch (error) {
+          lastLookupError = error;
+        }
+      }
+      if (!connection) {
+        throw lastLookupError instanceof Error ? lastLookupError : new Error('Connection not found');
+      }
       if (acceptedCredentialTypes.size > 0 && !acceptedCredentialTypes.has(connection.credentialTypeId)) {
         return {
           config: nextConfig,
@@ -572,7 +604,7 @@ async function injectSelectedConnectionCredentials(params: {
         return { config: nextConfig, error: `Connection "${connection.name}" is not active. Please reconnect before executing this workflow.` };
       }
       nextConfig = mergeRuntimeCredentials(nextConfig, connection.credentials);
-      await connectionService.markUsed(ownerUserId, connectionId);
+      await connectionService.markUsed(resolvedOwnerUserId, connectionId);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to resolve selected connection';
       // Stale/wrong ref — try auto-selecting the canonical connection for this node instead
@@ -581,21 +613,28 @@ async function injectSelectedConnectionCredentials(params: {
         const { unifiedNodeRegistry } = await import('../core/registry/unified-node-registry');
         const nodeType = String((params.node.data as any)?.type || params.node.type || '');
         const definition = unifiedNodeRegistry.get(nodeType);
-        const requirements = (definition?.credentialSchema?.requirements ?? []) as Array<{ credentialTypeId?: string }>;
-        const credTypeIds = requirements
-          .map((r) => r.credentialTypeId)
-          .filter((id): id is string => typeof id === 'string' && id.length > 0);
-        if (credTypeIds.length === 1 && ownerUserId) {
-          const fallback = await connectionService.findCanonicalConnection(ownerUserId, credTypeIds[0]);
-          if (fallback) {
-            const conn = await connectionService.getDecryptedConnection(ownerUserId, fallback.id);
-            if (conn.status === 'active') {
-              nextConfig = mergeRuntimeCredentials(nextConfig, conn.credentials);
-              await connectionService.markUsed(ownerUserId, fallback.id);
-              continue;
+        const requirements = (definition?.credentialSchema?.requirements ?? []) as Array<{ credentialTypeId?: string; credentialTypeIds?: string[] }>;
+        const fallbackTypeIds = Array.from(new Set([
+          ...requirements.flatMap((r) => [r.credentialTypeId, ...(r.credentialTypeIds || [])]),
+          ...Array.from(acceptedCredentialTypes),
+        ].filter((id): id is string => typeof id === 'string' && id.length > 0)));
+        let fallbackResolved = false;
+        for (const fallbackCredentialTypeId of fallbackTypeIds) {
+          for (const candidateUserId of ownerUserIds) {
+            const fallback = await connectionService.findCanonicalConnection(candidateUserId, fallbackCredentialTypeId);
+            if (fallback) {
+              const conn = await connectionService.getDecryptedConnection(candidateUserId, fallback.id);
+              if (conn.status === 'active') {
+                nextConfig = mergeRuntimeCredentials(nextConfig, conn.credentials);
+                await connectionService.markUsed(candidateUserId, fallback.id);
+                fallbackResolved = true;
+                break;
+              }
             }
           }
+          if (fallbackResolved) break;
         }
+        if (fallbackResolved) continue;
       } catch {
         // auto-selection also failed — fall through to error
       }
@@ -948,9 +987,20 @@ async function getAWSCredentials(
   workflowId: string,
   nodeId: string,
   userId?: string,
-  currentUserId?: string
+  currentUserId?: string,
+  config?: Record<string, any>
 ): Promise<AWSCredentials> {
   try {
+    // Connection selected in the node panel is merged into config before dispatch
+    // (mergeRuntimeCredentials aliases apiKey→awsAccessKeyId, secretKey→awsSecretAccessKey),
+    // so config-injected keys take precedence — they honor the user's node-level selection.
+    if (config) {
+      const configCredentials = validateAWSCredentialsStructure(config);
+      if (configCredentials) {
+        return configCredentials;
+      }
+    }
+
     const vaultCredential = await retrieveRuntimeCredentialObject({
       userId,
       currentUserId,
@@ -969,8 +1019,8 @@ async function getAWSCredentials(
 
     // No credentials found
     throw new Error(
-      'AWS credentials not found. Please configure AWS credentials for this workflow. ' +
-      'Go to Workflow Settings > Credentials and add your AWS access key ID and secret access key.'
+      'AWS credentials not found. Please add an AWS connection (access key ID + secret access key) ' +
+      'on the Connections page and select it on this node.'
     );
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error retrieving credentials';
@@ -992,9 +1042,15 @@ function validateAWSCredentialsStructure(credentials: any): AWSCredentials | nul
     return null;
   }
 
-  // Extract credentials from encrypted storage
-  const accessKeyId = credentials.access_key_id || credentials.accessKeyId;
-  const secretAccessKey = credentials.secret_access_key || credentials.secretAccessKey;
+  // Extract credentials from encrypted storage. Accepts every shape in the chain:
+  // vault/legacy (access_key_id), connection type aws_s3_api_key (apiKey/secretKey),
+  // and config-injected aliases (awsAccessKeyId/awsSecretAccessKey).
+  const accessKeyId =
+    credentials.access_key_id || credentials.accessKeyId ||
+    credentials.awsAccessKeyId || credentials.apiKey;
+  const secretAccessKey =
+    credentials.secret_access_key || credentials.secretAccessKey ||
+    credentials.awsSecretAccessKey || credentials.secretKey;
   const region = credentials.region || 'us-east-1';
 
   if (!accessKeyId || !secretAccessKey) {
@@ -1096,17 +1152,10 @@ function validateAWSCredentials(credentials: AWSCredentials): { valid: boolean; 
     );
   }
 
-  // Validate region
-  const validRegions = [
-    'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2',
-    'eu-west-1', 'eu-west-2', 'eu-west-3', 'eu-central-1',
-    'ap-southeast-1', 'ap-southeast-2', 'ap-northeast-1', 'ap-northeast-2',
-    'ca-central-1', 'sa-east-1', 'ap-south-1', 'ap-northeast-3',
-  ];
-
+  // Validate region format (e.g. us-east-1, eu-north-1, ap-southeast-3)
   const region = credentials.region || 'us-east-1';
-  if (!validRegions.includes(region)) {
-    errors.push(`Invalid AWS region: ${region}. Must be one of: ${validRegions.join(', ')}`);
+  if (!AWS_REGION_PATTERN.test(region)) {
+    errors.push(`Invalid AWS region: ${region}. Expected a region code like us-east-1 or eu-west-1`);
   }
 
   return {
@@ -1122,30 +1171,24 @@ function validateAWSCredentials(credentials: AWSCredentials): { valid: boolean; 
  * Requirements: 4.2, 4.4
  */
 
+/** Matches AWS region codes like us-east-1, eu-north-1, ap-southeast-3, us-gov-west-1 */
+const AWS_REGION_PATTERN = /^[a-z]{2,3}(-[a-z]+)+-\d$/;
+
 /**
  * Task 7.1: Resolve AWS region configuration
- * 
+ *
  * Accept awsRegion from config, apply default region if not specified,
- * validate region is valid AWS region, and return resolved region.
- * 
+ * validate the region format, and return resolved region.
+ *
  * @param awsRegion - AWS region from config (optional)
  * @returns Resolved AWS region
  * Requirements: 4.2, 4.4
  */
 function resolveAWSRegion(awsRegion?: string): string {
-  // List of valid AWS regions
-  const validRegions = [
-    'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2',
-    'eu-west-1', 'eu-west-2', 'eu-west-3', 'eu-central-1',
-    'ap-southeast-1', 'ap-southeast-2', 'ap-northeast-1', 'ap-northeast-2',
-    'ca-central-1', 'sa-east-1', 'ap-south-1', 'ap-northeast-3',
-  ];
-
   // Apply default region if not specified
-  const region = awsRegion || 'us-east-1';
+  const region = (awsRegion || 'us-east-1').trim();
 
-  // Validate region is valid AWS region
-  if (!validRegions.includes(region)) {
+  if (!AWS_REGION_PATTERN.test(region)) {
     logger.warn(`[AmazonSES] Invalid region '${region}', using default 'us-east-1'`);
     return 'us-east-1';
   }
@@ -1155,30 +1198,22 @@ function resolveAWSRegion(awsRegion?: string): string {
 
 /**
  * Task 7.2: Validate AWS region
- * 
- * Check region against list of valid AWS regions and return validation result
- * with error if invalid.
- * 
+ *
+ * Check the region format and return validation result with error if invalid.
+ *
  * @param region - AWS region to validate
  * @returns Validation result with error if invalid
  * Requirements: 4.2
  */
 function validateAWSRegion(region?: string): { valid: boolean; error?: string } {
-  const validRegions = [
-    'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2',
-    'eu-west-1', 'eu-west-2', 'eu-west-3', 'eu-central-1',
-    'ap-southeast-1', 'ap-southeast-2', 'ap-northeast-1', 'ap-northeast-2',
-    'ca-central-1', 'sa-east-1', 'ap-south-1', 'ap-northeast-3',
-  ];
-
   if (!region) {
     return { valid: true }; // No region specified, will use default
   }
 
-  if (!validRegions.includes(region)) {
+  if (!AWS_REGION_PATTERN.test(region.trim())) {
     return {
       valid: false,
-      error: `Invalid AWS region: ${region}. Must be one of: ${validRegions.join(', ')}`,
+      error: `Invalid AWS region: ${region}. Expected a region code like us-east-1 or eu-west-1`,
     };
   }
 
@@ -1635,7 +1670,7 @@ export function processAttachments(attachments: any[]): {
  */
 export function validateAttachmentSize(
   attachments: Array<{ filename: string; content: Buffer; contentType: string }>,
-  emailContent: { subject: string; body: string }
+  emailContent: { subject: string; body?: string; html?: string; text?: string }
 ): {
   valid: boolean;
   errors: string[];
@@ -1646,7 +1681,11 @@ export function validateAttachmentSize(
   const AWS_SES_LIMIT = 40 * 1024 * 1024; // 40MB in bytes
 
   // Calculate email content size (rough estimate)
-  const contentSize = (emailContent.subject || '').length + (emailContent.body || '').length;
+  const contentSize =
+    (emailContent.subject || '').length +
+    (emailContent.body || '').length +
+    (emailContent.html || '').length +
+    (emailContent.text || '').length;
 
   // Calculate total size with attachments
   let totalSize = contentSize;
@@ -1856,27 +1895,70 @@ export async function sendEmailViaSES(
   error?: string;
 }> {
   try {
-    const { SendEmailCommand } = require('@aws-sdk/client-ses');
-
-    // Build AWS SES command
-    const command = new SendEmailCommand({
-      Source: emailMessage.source,
-      Destination: emailMessage.destination,
-      Message: emailMessage.message,
-      ReplyToAddresses: emailMessage.replyToAddresses,
-      ConfigurationSetName: emailMessage.configurationSetName,
-      Tags: emailMessage.tags,
-      ReturnPath: emailMessage.returnPath,
-    });
-
-    // Send email
-    const response = await sesClient.send(command);
-
-    // Calculate recipient count
     const recipientCount =
       (emailMessage.destination.toAddresses?.length || 0) +
       (emailMessage.destination.ccAddresses?.length || 0) +
       (emailMessage.destination.bccAddresses?.length || 0);
+
+    const sesTags = Array.isArray(emailMessage.tags)
+      ? emailMessage.tags.map((tag: { name: string; value: string }) => ({ Name: tag.name, Value: tag.value }))
+      : undefined;
+
+    // Attachments require a raw MIME message — the SendEmail API cannot carry them
+    if (Array.isArray(emailMessage.attachments) && emailMessage.attachments.length > 0) {
+      const { SendRawEmailCommand } = require('@aws-sdk/client-ses');
+      const allDestinations = [
+        ...(emailMessage.destination.toAddresses || []),
+        ...(emailMessage.destination.ccAddresses || []),
+        ...(emailMessage.destination.bccAddresses || []),
+      ];
+      const command = new SendRawEmailCommand({
+        Source: emailMessage.source,
+        Destinations: allDestinations,
+        RawMessage: { Data: Buffer.from(buildRawEmailMime(emailMessage), 'utf8') },
+        ...(emailMessage.configurationSetName ? { ConfigurationSetName: emailMessage.configurationSetName } : {}),
+        ...(sesTags && sesTags.length > 0 ? { Tags: sesTags } : {}),
+      });
+      const response = await sesClient.send(command);
+      return {
+        success: true,
+        messageId: response.MessageId,
+        recipientCount: allDestinations.length,
+      };
+    }
+
+    const { SendEmailCommand } = require('@aws-sdk/client-ses');
+
+    // Build AWS SES command (SDK requires PascalCase field names)
+    const command = new SendEmailCommand({
+      Source: emailMessage.source,
+      Destination: {
+        ToAddresses: emailMessage.destination.toAddresses || [],
+        ...(emailMessage.destination.ccAddresses?.length ? { CcAddresses: emailMessage.destination.ccAddresses } : {}),
+        ...(emailMessage.destination.bccAddresses?.length ? { BccAddresses: emailMessage.destination.bccAddresses } : {}),
+      },
+      Message: {
+        Subject: {
+          Data: emailMessage.message.subject.data,
+          Charset: emailMessage.message.subject.charset || 'UTF-8',
+        },
+        Body: {
+          ...(emailMessage.message.body.html
+            ? { Html: { Data: emailMessage.message.body.html.data, Charset: emailMessage.message.body.html.charset || 'UTF-8' } }
+            : {}),
+          ...(emailMessage.message.body.text
+            ? { Text: { Data: emailMessage.message.body.text.data, Charset: emailMessage.message.body.text.charset || 'UTF-8' } }
+            : {}),
+        },
+      },
+      ...(emailMessage.replyToAddresses?.length ? { ReplyToAddresses: emailMessage.replyToAddresses } : {}),
+      ...(emailMessage.configurationSetName ? { ConfigurationSetName: emailMessage.configurationSetName } : {}),
+      ...(sesTags && sesTags.length > 0 ? { Tags: sesTags } : {}),
+      ...(emailMessage.returnPath ? { ReturnPath: emailMessage.returnPath } : {}),
+    });
+
+    // Send email
+    const response = await sesClient.send(command);
 
     return {
       success: true,
@@ -1893,6 +1975,91 @@ export async function sendEmailViaSES(
       error: errorMessage,
     };
   }
+}
+
+/** Strip CR/LF so user-supplied values cannot inject extra MIME headers */
+function sanitizeMimeHeaderValue(value: string): string {
+  return String(value || '').replace(/[\r\n]+/g, ' ').trim();
+}
+
+/** RFC 2047 encoded-word — safe for any UTF-8 subject */
+function encodeMimeWord(value: string): string {
+  const sanitized = sanitizeMimeHeaderValue(value);
+  if (/^[\x20-\x7e]*$/.test(sanitized)) return sanitized;
+  return `=?UTF-8?B?${Buffer.from(sanitized, 'utf8').toString('base64')}?=`;
+}
+
+/** Fold base64 into 76-char lines per RFC 2045 */
+function foldBase64(base64: string): string {
+  return base64.replace(/.{76}/g, '$&\r\n');
+}
+
+/**
+ * Build a raw RFC 5322 MIME message (multipart/mixed with a multipart/alternative
+ * body part) so SES can deliver attachments via SendRawEmail.
+ */
+export function buildRawEmailMime(emailMessage: {
+  source: string;
+  destination: { toAddresses: string[]; ccAddresses?: string[]; bccAddresses?: string[] };
+  message: {
+    subject: { data: string; charset: string };
+    body: { html?: { data: string; charset: string }; text?: { data: string; charset: string } };
+  };
+  replyToAddresses?: string[];
+  attachments?: Array<{ filename: string; content: Buffer; contentType: string }>;
+}): string {
+  const mixedBoundary = `mixed-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  const altBoundary = `alt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  const lines: string[] = [];
+
+  lines.push(`From: ${sanitizeMimeHeaderValue(emailMessage.source)}`);
+  lines.push(`To: ${(emailMessage.destination.toAddresses || []).map(sanitizeMimeHeaderValue).join(', ')}`);
+  if (emailMessage.destination.ccAddresses?.length) {
+    lines.push(`Cc: ${emailMessage.destination.ccAddresses.map(sanitizeMimeHeaderValue).join(', ')}`);
+  }
+  // Bcc recipients are passed via SendRawEmail Destinations, never as a header
+  if (emailMessage.replyToAddresses?.length) {
+    lines.push(`Reply-To: ${emailMessage.replyToAddresses.map(sanitizeMimeHeaderValue).join(', ')}`);
+  }
+  lines.push(`Subject: ${encodeMimeWord(emailMessage.message.subject.data)}`);
+  lines.push('MIME-Version: 1.0');
+  lines.push(`Content-Type: multipart/mixed; boundary="${mixedBoundary}"`);
+  lines.push('');
+
+  // Body: multipart/alternative (text + html)
+  lines.push(`--${mixedBoundary}`);
+  lines.push(`Content-Type: multipart/alternative; boundary="${altBoundary}"`);
+  lines.push('');
+  if (emailMessage.message.body.text) {
+    lines.push(`--${altBoundary}`);
+    lines.push('Content-Type: text/plain; charset=UTF-8');
+    lines.push('Content-Transfer-Encoding: base64');
+    lines.push('');
+    lines.push(foldBase64(Buffer.from(emailMessage.message.body.text.data, 'utf8').toString('base64')));
+  }
+  if (emailMessage.message.body.html) {
+    lines.push(`--${altBoundary}`);
+    lines.push('Content-Type: text/html; charset=UTF-8');
+    lines.push('Content-Transfer-Encoding: base64');
+    lines.push('');
+    lines.push(foldBase64(Buffer.from(emailMessage.message.body.html.data, 'utf8').toString('base64')));
+  }
+  lines.push(`--${altBoundary}--`);
+  lines.push('');
+
+  for (const attachment of emailMessage.attachments || []) {
+    const safeFilename = sanitizeMimeHeaderValue(attachment.filename).replace(/"/g, "'");
+    lines.push(`--${mixedBoundary}`);
+    lines.push(`Content-Type: ${sanitizeMimeHeaderValue(attachment.contentType)}; name="${safeFilename}"`);
+    lines.push('Content-Transfer-Encoding: base64');
+    lines.push(`Content-Disposition: attachment; filename="${safeFilename}"`);
+    lines.push('');
+    lines.push(foldBase64(attachment.content.toString('base64')));
+  }
+  lines.push(`--${mixedBoundary}--`);
+  lines.push('');
+
+  return lines.join('\r\n');
 }
 
 /**
@@ -2216,8 +2383,8 @@ export function validateAmazonSesConfig(config: Record<string, any>): {
     errors.push('From address is required');
   }
 
-  // Validate subject and body
-  if (!config.subject || typeof config.subject !== 'string' || !config.subject.trim()) {
+  // Validate subject and body for raw email mode. AWS SES templates provide these parts.
+  if (!config.useTemplate && (!config.subject || typeof config.subject !== 'string' || !config.subject.trim())) {
     errors.push('Subject is required and must be a non-empty string');
   }
 
@@ -3934,220 +4101,6 @@ export async function executeNodeLegacy(
         return {
           success: false,
           error: error.message || 'Failed to set value in cache',
-        };
-      }
-    }
-
-    case 'oauth2_auth': {
-      try {
-        const provider = getStringProperty(config, 'provider', '');
-        if (!provider) {
-          return {
-            success: false,
-            error: 'OAuth2 provider is required',
-          };
-        }
-
-        const action = getStringProperty(config, 'action', 'getToken');
-
-        // Get user ID from function parameters
-        const effectiveUserId = currentUserId || userId;
-
-        if (!effectiveUserId) {
-          return {
-            success: false,
-            error: 'User ID is required for OAuth2 authentication',
-          };
-        }
-
-        // Try to get OAuth tokens via unified resolver (oauth_table → credential_vault → user_credentials)
-        let tokenData: any = null;
-
-        const knownOAuthProviders = ['google','linkedin','github','facebook','notion','twitter','instagram','whatsapp','zoho','salesforce'];
-        if (knownOAuthProviders.includes(provider)) {
-          const { resolveOAuthTokenString } = await import('../shared/credential-resolver');
-          const resolved = await resolveOAuthTokenString(provider as any, [effectiveUserId]);
-          if (resolved) tokenData = { access_token: resolved };
-        } else {
-          const credential = await retrieveRuntimeCredentialObject({
-            userId,
-            currentUserId,
-            workflowId,
-            nodeId: node.id,
-            nodeType: type,
-            keys: [provider, 'oauth2'],
-          });
-
-          if (credential) {
-            tokenData = {
-              access_token: credential.access_token || credential.accessToken || credential.value,
-              refresh_token: credential.refresh_token || credential.refreshToken,
-              expires_at: credential.expires_at || credential.expiresAt,
-              token_type: credential.token_type || credential.tokenType || 'Bearer',
-              scope: credential.scope,
-            };
-          }
-        }
-
-        if (!tokenData || !tokenData.access_token) {
-          return {
-            success: false,
-            error: `OAuth2 credentials for ${provider} not found. Please authenticate first.`,
-          };
-        }
-
-        if (action === 'getToken') {
-          // Check if token is expired or about to expire (within 5 minutes)
-          let accessToken = decryptToken(tokenData.access_token);
-          const refreshToken = tokenData.refresh_token ? decryptToken(tokenData.refresh_token) : undefined;
-          let needsRefresh = false;
-
-          if (tokenData.expires_at) {
-            const expiresAt = new Date(tokenData.expires_at);
-            const now = new Date();
-            const fiveMinutesFromNow = new Date(now.getTime() + 5 * 60 * 1000);
-
-            if (expiresAt <= fiveMinutesFromNow && tokenData.refresh_token) {
-              needsRefresh = true;
-            }
-          }
-
-          // If token needs refresh and we have refresh token, try to refresh
-          if (needsRefresh && tokenData.refresh_token) {
-            // Token refresh logic would go here
-            // For now, we'll return the existing token and note that it may be expired
-            logger.warn(`[OAuth2 Auth] Token for ${provider} may be expired, but refresh not implemented yet`);
-          }
-
-          return {
-            success: true,
-            accessToken,
-            refreshToken,
-            expiresIn: tokenData.expires_at 
-              ? Math.max(0, Math.floor((new Date(tokenData.expires_at).getTime() - Date.now()) / 1000))
-              : undefined,
-            tokenType: tokenData.token_type || 'Bearer',
-            scope: tokenData.scope || undefined,
-          };
-        } else if (action === 'refresh') {
-          // Token refresh implementation
-          // This would require calling the OAuth2 provider's token endpoint
-          // For now, return an error indicating it needs to be implemented
-          return {
-            success: false,
-            error: 'Token refresh is not yet implemented. Please re-authenticate.',
-          };
-        } else if (action === 'startFlow') {
-          // OAuth flow initiation
-          // This typically requires redirecting the user to the provider's authorization URL
-          // For now, return an error indicating it must be done via UI
-          return {
-            success: false,
-            error: 'OAuth flow must be started via the UI. Please use the "Connect" button in the node configuration.',
-          };
-        } else {
-          return {
-            success: false,
-            error: `Unknown action: ${action}`,
-          };
-        }
-      } catch (error: any) {
-        return {
-          success: false,
-          error: error.message || 'Failed to get OAuth2 token',
-        };
-      }
-    }
-
-    case 'api_key_auth': {
-      try {
-        const apiKeyName = getStringProperty(config, 'apiKeyName', '');
-        if (!apiKeyName) {
-          return {
-            success: false,
-            error: 'API key name is required',
-          };
-        }
-
-        // Get user ID from function parameters
-        const effectiveUserId = currentUserId || userId;
-
-        // Try to get API key from credential_vault first
-        let apiKey: string | null = null;
-
-        if (effectiveUserId) {
-          const stored = await retrieveDashboardCredential({
-            userId,
-            currentUserId,
-            workflowId,
-            nodeId: node.id,
-            nodeType: type,
-            key: apiKeyName,
-          });
-          const parsed = parseCredentialValue(stored);
-          apiKey = parsed.apiKey || parsed.apiToken || parsed.key || parsed.token || parsed.value || stored;
-        }
-
-        // If not found by the specific key, try the generic API-key vault entry.
-        if (!apiKey) {
-          const credential = await retrieveRuntimeCredentialObject({
-            userId,
-            currentUserId,
-            workflowId,
-            nodeId: node.id,
-            nodeType: type,
-            keys: ['apikey', 'api_key'],
-          });
-          apiKey = pickCredentialValue(credential, ['api_key', 'apiKey', 'key', apiKeyName, 'token']);
-        }
-
-        // If still not found, try workflow-level credential_vault
-        if (!apiKey && effectiveUserId) {
-          const { data: workflowVaultCredential } = await db
-            .from('credential_vault')
-            .select('encrypted_value, metadata')
-            .eq('user_id', effectiveUserId)
-            .eq('workflow_id', workflowId)
-            .eq('key', apiKeyName)
-            .eq('type', 'api_key')
-            .single();
-
-          if (workflowVaultCredential && workflowVaultCredential.encrypted_value) {
-            // Use CredentialVault service to retrieve (handles decryption automatically)
-            try {
-              const { getCredentialVault } = await import('../services/credential-vault');
-              const vault = getCredentialVault();
-              const retrievedKey = await vault.retrieve(
-                { userId: effectiveUserId, workflowId: workflowId },
-                apiKeyName
-              );
-              if (retrievedKey) {
-                apiKey = retrievedKey;
-              }
-            } catch (vaultError) {
-              // If vault retrieval fails, try using the encrypted value directly (might be plain text in dev)
-              logger.warn('[API Key Auth] Failed to retrieve from vault, trying encrypted value as-is');
-              apiKey = workflowVaultCredential.encrypted_value;
-            }
-          }
-        }
-
-        if (!apiKey) {
-          return {
-            success: false,
-            error: `API key '${apiKeyName}' not found. Please add it in credentials.`,
-          };
-        }
-
-        return {
-          success: true,
-          apiKey,
-          apiKeyName,
-        };
-      } catch (error: any) {
-        return {
-          success: false,
-          error: error.message || 'Failed to get API key',
         };
       }
     }
@@ -6515,9 +6468,8 @@ export async function executeNodeLegacy(
     }
 
     case 'ai_agent': {
-      // AI Agent node with port-specific inputs
-      // Input structure: { chat_model: {...}, memory: {...}, tool: {...}, userInput: {...} }
-      
+      // AI Agent node. Input structure: { userInput: {...} }
+
       // CRITICAL: Detect chatbot workflow at runtime by checking workflow structure
       // Get all nodes from the workflow to check if there's a chat_trigger
       let isChatbotWorkflow = false;
@@ -6562,7 +6514,6 @@ export async function executeNodeLegacy(
       }
       
       const systemPrompt = configSystemPrompt || defaultSystemPrompt;
-      const mode = getStringProperty(config, 'mode', 'chat');
       const temperature = parseFloat(getStringProperty(config, 'temperature', '0.7')) || 0.7;
       const maxTokens = parseInt(getStringProperty(config, 'maxTokens', '2000'), 10) || 2000;
       const topP = parseFloat(getStringProperty(config, 'topP', '1.0')) || 1.0;
@@ -6572,13 +6523,7 @@ export async function executeNodeLegacy(
       const retryCount = parseInt(getStringProperty(config, 'retryCount', '3'), 10) || 3;
       const outputFormat = getStringProperty(config, 'outputFormat', 'text');
       const includeReasoning = getStringProperty(config, 'includeReasoning', 'false') === 'true';
-      const enableMemory = getStringProperty(config, 'enableMemory', 'true') !== 'false';
-      const enableTools = getStringProperty(config, 'enableTools', 'true') !== 'false';
-      
-      // Extract port-specific inputs from inputObj
-      const chatModelConfig = (inputObj as any)?.chat_model || {};
-      const memoryData = (inputObj as any)?.memory;
-      const toolData = (inputObj as any)?.tool || (inputObj as any)?.tools;
+
       let userInput = (inputObj as any)?.userInput || (inputObj as any)?.input || inputObj;
       
       // CRITICAL: For chatbot workflows, extract the message text from the userInput object
@@ -6640,17 +6585,11 @@ export async function executeNodeLegacy(
         userInput = typeof userInput === 'object' ? JSON.stringify(userInput) : String(userInput);
       }
       
-      // Default to Gemini (GEMINI_API_KEY)
-      let provider: 'openai' | 'claude' | 'gemini' | 'ollama' = 'gemini';
-      let model = 'gemini-3.5-flash';
-      let apiKey: string | undefined;
-      if (chatModelConfig.provider) {
-        provider = chatModelConfig.provider as any;
-      } else if (chatModelConfig.model) {
-        provider = LLMAdapter.detectProvider(chatModelConfig.model);
-      }
-      model = chatModelConfig.model || getStringProperty(config, 'model', 'gemini-3.5-flash');
-      apiKey = chatModelConfig.apiKey || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY || process.env.GEMINI_API_KEY;
+      // Model is selected via the node's `model` field; provider is inferred from the model name.
+      // Defaults to Gemini (GEMINI_API_KEY) when the model name doesn't match another provider.
+      const model = getStringProperty(config, 'model', 'gemini-3.5-flash');
+      const provider: 'openai' | 'claude' | 'gemini' | 'ollama' = LLMAdapter.detectProvider(model);
+      let apiKey: string | undefined = process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY || process.env.GEMINI_API_KEY;
       const geminiResolvedForAgent = provider === 'gemini'
         ? await resolveGeminiApiKeyForNode({ node, config, userId, currentUserId })
         : null;
@@ -6672,27 +6611,7 @@ export async function executeNodeLegacy(
         ? resolveWithSchema(systemPrompt, execContext, 'string') as string
         : String(resolveTypedValue(systemPrompt, execContext));
       messages.push({ role: 'system', content: resolvedSystemPrompt });
-      
-      // Add memory context if available
-      if (enableMemory && memoryData) {
-        if (Array.isArray(memoryData.messages)) {
-          // Add conversation history
-          memoryData.messages.forEach((msg: any) => {
-            if (msg.role && msg.content) {
-              messages.push({
-                role: msg.role as 'user' | 'assistant',
-                content: msg.content
-              });
-            }
-          });
-        } else if (memoryData.context) {
-          messages.push({
-            role: 'system',
-            content: `Previous context: ${JSON.stringify(memoryData.context)}`
-          });
-        }
-      }
-      
+
       // Add user input - should already be extracted to just the message text
       // Log what we're sending to help debug
       logger.info(`[AI Agent] Final userInput before sending to LLM:`, 
@@ -6762,26 +6681,14 @@ export async function executeNodeLegacy(
         }).catch(() => {});
       }
       
-      // Process tool calls if enabled and tools are available
-      let usedTools: any[] = [];
-      let finalResponse = response.content;
-      
-      if (enableTools && toolData) {
-        // Simple tool execution - in a full implementation, this would parse tool calls from response
-        // and execute them, then continue the conversation
-        if (Array.isArray(toolData)) {
-          usedTools = toolData;
-        } else if (toolData.tools) {
-          usedTools = Array.isArray(toolData.tools) ? toolData.tools : [];
-        }
-      }
-      
+      const finalResponse = response.content;
+
       // Format output based on outputFormat
       let formattedOutput: any = {
         response_text: finalResponse,
         response_json: null,
         confidence_score: 0.8, // Default confidence
-        used_tools: usedTools,
+        used_tools: [],
         memory_written: false,
         error_flag: false,
         error_message: null,
@@ -6812,22 +6719,11 @@ export async function executeNodeLegacy(
       if (includeReasoning) {
         formattedOutput.reasoning = {
           steps: 1,
-          mode,
           provider,
           model: response.model,
         };
       }
-      
-      // Store in memory if enabled
-      if (enableMemory && memoryData && memoryData.sessionId) {
-        try {
-          // In a full implementation, this would use the memory service
-          formattedOutput.memory_written = true;
-        } catch (error) {
-          logger.error('Failed to write memory:', error);
-        }
-      }
-      
+
       // CRITICAL: Auto-send AI agent response to chat UI if this is a chatbot workflow
       if (isChatbotWorkflow) {
         try {
@@ -13580,6 +13476,9 @@ export async function executeNodeLegacy(
       const recipientEmails = getStringProperty(config, 'recipientEmails', '');
       const subject = getStringProperty(config, 'subject', '');
       const body = getStringProperty(config, 'body', '');
+      const from = getStringProperty(config, 'from', '');
+      const cc = getStringProperty(config, 'cc', '');
+      const bcc = getStringProperty(config, 'bcc', '');
       const messageId = getStringProperty(config, 'messageId', '');
       const query = getStringProperty(config, 'query', '');
       const maxResults = parseInt(getStringProperty(config, 'maxResults', '10'), 10) || 10;
@@ -13598,6 +13497,15 @@ export async function executeNodeLegacy(
       const resolvedBody = typeof resolveWithSchema(body, execContext, 'string') === 'string'
         ? resolveWithSchema(body, execContext, 'string') as string
         : String(resolveTypedValue(body, execContext));
+      const resolvedFrom = from ? (typeof resolveWithSchema(from, execContext, 'string') === 'string'
+        ? resolveWithSchema(from, execContext, 'string') as string
+        : String(resolveTypedValue(from, execContext))) : '';
+      const resolvedCc = cc ? (typeof resolveWithSchema(cc, execContext, 'string') === 'string'
+        ? resolveWithSchema(cc, execContext, 'string') as string
+        : String(resolveTypedValue(cc, execContext))) : '';
+      const resolvedBcc = bcc ? (typeof resolveWithSchema(bcc, execContext, 'string') === 'string'
+        ? resolveWithSchema(bcc, execContext, 'string') as string
+        : String(resolveTypedValue(bcc, execContext))) : '';
       const resolvedMessageId = messageId ? (typeof resolveWithSchema(messageId, execContext, 'string') === 'string'
         ? resolveWithSchema(messageId, execContext, 'string') as string
         : String(resolveTypedValue(messageId, execContext))) : '';
@@ -13683,6 +13591,9 @@ export async function executeNodeLegacy(
             to: sendTo,
             subject: resolvedSubject,
             body: resolvedBody,
+            from: resolvedFrom,
+            cc: resolvedCc,
+            bcc: resolvedBcc,
           });
           
           if (!sendResult.success) {
@@ -14142,7 +14053,7 @@ export async function executeNodeLegacy(
     }
 
     case 'discord': {
-      // Discord node — supports both Bot API (botToken + channelId) and Webhook (webhookUrl)
+      // Discord bot node: Bot Token credential + channelId.
       const channelId = getStringProperty(config, 'channelId', '');
       const message = getStringProperty(config, 'message', '');
       if (!message) {
@@ -14178,10 +14089,6 @@ export async function executeNodeLegacy(
       // Strip "Bot " prefix if user accidentally included it in the stored token
       const botToken = rawBotToken.startsWith('Bot ') ? rawBotToken.slice(4).trim() : rawBotToken.trim();
 
-      // Webhook URL fallback: injected via mergeRuntimeCredentials from discord_webhook connections
-      const webhookUrl = getStringProperty(config, 'webhookUrl', '') || getStringProperty(config, 'headerName', '');
-
-      // Path 1: Bot API (requires botToken + channelId)
       if (botToken && resolvedChannelId) {
         try {
           const resp = await fetch(`https://discord.com/api/v10/channels/${encodeURIComponent(resolvedChannelId)}/messages`, {
@@ -14203,33 +14110,6 @@ export async function executeNodeLegacy(
         }
       }
 
-      // Path 2: Webhook API (requires webhookUrl, no channelId needed)
-      if (webhookUrl && webhookUrl.startsWith('https://discord.com/api/webhooks/')) {
-        try {
-          const resp = await fetch(webhookUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: resolvedMessage }),
-          });
-          const text = await resp.text().catch(() => '');
-          if (!resp.ok) {
-            return { ...inputObj, _error: `Discord webhook send failed (${resp.status})`, _errorDetails: text };
-          }
-          // Discord webhook returns 204 No Content on success (empty body by design)
-          return {
-            ...inputObj,
-            success: true,
-            sent: true,
-            message: resolvedMessage,
-            discord: { status: resp.status, delivered: true, mode: 'webhook' },
-          };
-        } catch (error) {
-          const msg = error instanceof Error ? error.message : String(error);
-          return { ...inputObj, _error: `Discord webhook error: ${msg}` };
-        }
-      }
-
-      // Neither path available
       if (!botToken) {
         return { ...inputObj, _error: 'Discord: Connect a Discord Bot Token credential, then select it in the Properties Panel.' };
       }
@@ -14239,6 +14119,8 @@ export async function executeNodeLegacy(
     case 'discord_webhook': {
       let webhookUrl = getStringProperty(config, 'webhookUrl', '') || getStringProperty(config, 'headerName', '');
       const message = getStringProperty(config, 'message', '') || getStringProperty(config, 'content', '');
+      const username = getStringProperty(config, 'username', '');
+      const avatarUrl = getStringProperty(config, 'avatarUrl', '');
 
       if (!webhookUrl) {
         const stored = await retrieveDashboardCredential({
@@ -14263,12 +14145,25 @@ export async function executeNodeLegacy(
       const resolvedMessage = typeof resolveWithSchema(message, execContext, 'string') === 'string'
         ? (resolveWithSchema(message, execContext, 'string') as string)
         : String(resolveTypedValue(message, execContext));
+      const resolvedUsername = username
+        ? (typeof resolveWithSchema(username, execContext, 'string') === 'string'
+            ? (resolveWithSchema(username, execContext, 'string') as string)
+            : String(resolveTypedValue(username, execContext)))
+        : '';
+      const resolvedAvatarUrl = avatarUrl
+        ? (typeof resolveWithSchema(avatarUrl, execContext, 'string') === 'string'
+            ? (resolveWithSchema(avatarUrl, execContext, 'string') as string)
+            : String(resolveTypedValue(avatarUrl, execContext)))
+        : '';
+      const payload: Record<string, string> = { content: resolvedMessage };
+      if (resolvedUsername) payload.username = resolvedUsername;
+      if (resolvedAvatarUrl) payload.avatar_url = resolvedAvatarUrl;
 
       try {
         const resp = await fetch(resolvedWebhookUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: resolvedMessage }),
+          body: JSON.stringify(payload),
         });
         const text = await resp.text().catch(() => '');
         if (!resp.ok) {
@@ -17038,7 +16933,7 @@ export async function executeNodeLegacy(
       // Uses new Task 4, 5, 6 functions for recipient processing, attachment handling, and email sending
       try {
         // Phase 1: Get AWS credentials
-        const credentials = await getAWSCredentials(db, workflowId, node.id, userId, currentUserId);
+        const credentials = await getAWSCredentials(db, workflowId, node.id, userId, currentUserId, config);
         if (!credentials) {
           return {
             ...inputObj,
@@ -17061,7 +16956,7 @@ export async function executeNodeLegacy(
         const resolvedConfig = await resolveEmailTemplates(config, nodeOutputs);
 
         // Phase 3.5: Resolve and validate AWS region (Task 7.1, 7.2)
-        const regionValidation = validateAWSRegion(resolvedConfig.awsRegion);
+        const regionValidation = validateAWSRegion(resolvedConfig.awsRegion || credentials.region);
         if (!regionValidation.valid) {
           return {
             ...inputObj,
@@ -17069,7 +16964,7 @@ export async function executeNodeLegacy(
             success: false,
           };
         }
-        const resolvedRegion = resolveAWSRegion(resolvedConfig.awsRegion);
+        const resolvedRegion = resolveAWSRegion(resolvedConfig.awsRegion || credentials.region);
 
         // Phase 4: Initialize AWS SES client
         const sesClient = initializeAWSSESClient(credentials, resolvedRegion);
@@ -17753,6 +17648,30 @@ export async function executeNodeLegacy(
         const authHeader = `Bearer ${accessToken}`;
         logger.info(`[contentful] operation=${operation} spaceId=${spaceId}`);
 
+        const parseEntryPayload = (): { ok: true; payload: unknown } | { ok: false; error: unknown } => {
+          try {
+            const parsed = JSON.parse(fields);
+            const payload =
+              parsed &&
+              typeof parsed === 'object' &&
+              !Array.isArray(parsed) &&
+              Object.prototype.hasOwnProperty.call(parsed, 'fields')
+                ? parsed
+                : { fields: parsed };
+            return { ok: true, payload };
+          } catch {
+            return { ok: false, error: { message: 'Invalid JSON in fields', status: 0 } };
+          }
+        };
+
+        const getCurrentEntryVersion = async (): Promise<number | null> => {
+          const current = await fetch(`${base}/${entryId}`, { method: 'GET', headers: { Authorization: authHeader } });
+          if (!current.ok) return null;
+          const currentData = await current.json().catch(() => null) as any;
+          const version = currentData?.sys?.version;
+          return typeof version === 'number' ? version : null;
+        };
+
         let response: any;
         if (operation === 'get_entries') {
           const url = contentType?.trim() ? `${base}?content_type=${contentType}` : base;
@@ -17760,15 +17679,19 @@ export async function executeNodeLegacy(
         } else if (operation === 'get_entry') {
           response = await fetch(`${base}/${entryId}`, { method: 'GET', headers: { Authorization: authHeader } });
         } else if (operation === 'create_entry') {
-          let parsedFields: unknown;
-          try { parsedFields = JSON.parse(fields); } catch { return { success: false, data: {}, error: { message: 'Invalid JSON in fields', status: 0 } }; }
-          response = await fetch(base, { method: 'POST', headers: { Authorization: authHeader, 'Content-Type': 'application/vnd.contentful.management.v1+json', 'X-Contentful-Content-Type': contentType }, body: JSON.stringify(parsedFields) });
+          const parsed = parseEntryPayload();
+          if (!parsed.ok) return { success: false, data: {}, error: parsed.error };
+          response = await fetch(base, { method: 'POST', headers: { Authorization: authHeader, 'Content-Type': 'application/vnd.contentful.management.v1+json', 'X-Contentful-Content-Type': contentType }, body: JSON.stringify(parsed.payload) });
         } else if (operation === 'update_entry') {
-          let parsedFields: unknown;
-          try { parsedFields = JSON.parse(fields); } catch { return { success: false, data: {}, error: { message: 'Invalid JSON in fields', status: 0 } }; }
-          response = await fetch(`${base}/${entryId}`, { method: 'PUT', headers: { Authorization: authHeader, 'Content-Type': 'application/vnd.contentful.management.v1+json' }, body: JSON.stringify(parsedFields) });
+          const parsed = parseEntryPayload();
+          if (!parsed.ok) return { success: false, data: {}, error: parsed.error };
+          const version = await getCurrentEntryVersion();
+          if (!version) return { success: false, data: {}, error: { message: 'Unable to load current Contentful entry version before update', status: 0 } };
+          response = await fetch(`${base}/${entryId}`, { method: 'PUT', headers: { Authorization: authHeader, 'Content-Type': 'application/vnd.contentful.management.v1+json', 'X-Contentful-Version': String(version) }, body: JSON.stringify(parsed.payload) });
         } else if (operation === 'delete_entry') {
-          response = await fetch(`${base}/${entryId}`, { method: 'DELETE', headers: { Authorization: authHeader } });
+          const version = await getCurrentEntryVersion();
+          if (!version) return { success: false, data: {}, error: { message: 'Unable to load current Contentful entry version before delete', status: 0 } };
+          response = await fetch(`${base}/${entryId}`, { method: 'DELETE', headers: { Authorization: authHeader, 'X-Contentful-Version': String(version) } });
         } else {
           return { success: false, data: {}, error: { message: `Unsupported operation: ${operation}`, status: 400 } };
         }
@@ -18657,12 +18580,14 @@ export default async function executeWorkflowHandler(req: Request, res: Response
   const isInternalWebhookExecution = req.headers['x-internal-webhook-execution'] === 'true';
   const isInternalEngineExecution = req.headers['x-internal-engine-execution'] === 'true';
   const isInternalTriggerExecution = req.headers['x-internal-trigger-execution'] === 'true';
-  const isInternalExecution = isInternalFormExecution || isInternalChatExecution || isInternalWebhookExecution || isInternalEngineExecution || isInternalTriggerExecution;
+  const isInternalApprovalExecution = req.headers['x-internal-approval-execution'] === 'true';
+  const isInternalExecution = isInternalFormExecution || isInternalChatExecution || isInternalWebhookExecution || isInternalEngineExecution || isInternalTriggerExecution || isInternalApprovalExecution;
 
+  let authenticatedUserId: string | undefined;
   if (!isInternalExecution) {
     try {
       const { requireAuthenticatedUser } = await import('../core/utils/check-google-auth');
-      await requireAuthenticatedUser(req);
+      authenticatedUserId = await requireAuthenticatedUser(req);
     } catch (authError: any) {
       return res.status(401).json(authError);
     }
@@ -18783,6 +18708,31 @@ export default async function executeWorkflowHandler(req: Request, res: Response
         message: workflowError?.message || 'The specified workflow could not be found.',
         workflowId 
       });
+    }
+
+    // ✅ AUTHORIZATION GUARD: a user-initiated execution must own the workflow.
+    // Internal trigger executions (webhook/chat/form/engine/trigger-service) are
+    // a separate, already-trusted call path and are exempt — see isInternalExecution above.
+    if (!isInternalExecution && authenticatedUserId && workflow.user_id && workflow.user_id !== authenticatedUserId) {
+      const requesterRole = (req as any).user?.role;
+      if (requesterRole !== 'admin') {
+        logger.warn(`[ExecuteWorkflow] 🚫 Ownership check failed - user ${authenticatedUserId} attempted to execute workflow ${workflowId} owned by ${workflow.user_id}`);
+        recordAuditEvent({
+          actorUserId: authenticatedUserId,
+          action: 'workflow.execution.failed',
+          status: 'failure',
+          resourceType: 'workflow',
+          resourceId: workflowId,
+          ipAddress: req.ip,
+          userAgent: req.get('User-Agent'),
+          metadata: { reason: 'not_workflow_owner' },
+        });
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: 'You do not have permission to execute this workflow.',
+          code: 'NOT_WORKFLOW_OWNER',
+        });
+      }
     }
 
     // ✅ EXECUTION GUARD: Workflow must be confirmed before execution
@@ -19496,7 +19446,14 @@ export default async function executeWorkflowHandler(req: Request, res: Response
           input,
           trigger: 'manual',
         });
-        
+        recordAuditEvent({
+          actorUserId: currentUserId || authenticatedUserId,
+          action: 'workflow.execution.started',
+          resourceType: 'workflow',
+          resourceId: workflowId,
+          metadata: { executionId },
+        });
+
         // ✅ OPTIMISTIC: Log warnings as execution events (non-blocking)
         if (warnings.length > 0) {
           for (const warning of warnings) {
@@ -19655,7 +19612,12 @@ export default async function executeWorkflowHandler(req: Request, res: Response
       nodes.map((n) => ({
         id: n.id,
         type: String(n.data?.type || n.type || ''),
-        data: { label: n.data?.label, config: n.data?.config },
+        data: {
+          label: n.data?.label,
+          config: n.data?.config,
+          connectionRefs: (n.data as any)?.connectionRefs,
+          connectionId: (n.data as any)?.connectionId,
+        },
       })),
     );
     if (!configCheck.valid) {
@@ -20358,6 +20320,97 @@ export default async function executeWorkflowHandler(req: Request, res: Response
             formNodeId: node.id,
             formUrl,
           });
+        }
+
+        // Per-action human approval gate — opt-in, config-driven, applies to any node type.
+        // Mirrors the form-node pause above: set status='waiting', release the lock, return early.
+        // Unlike a form, an 'approved' decision falls through to normal execution below rather
+        // than skipping it — the node still needs to actually run once approved.
+        {
+          const approvalGate = (node.data?.config as any)?.approvalGate;
+          if (approvalGate?.enabled) {
+            const { getApprovalDecision, isApprovalThresholdMet, createPendingApproval } = await import('../services/execution/node-approval-service');
+            const decision = await getApprovalDecision(executionId!, node.id);
+
+            if (decision === 'rejected') {
+              logger.warn(`[NodeApproval] Execution ${executionId} halted — node ${node.id} was rejected`);
+              return res.status(200).json({
+                success: false,
+                status: 'failed',
+                executionId,
+                message: 'Workflow halted — a required approval was rejected.',
+                rejectedNodeId: node.id,
+              });
+            }
+
+            if (decision !== 'approved' && isApprovalThresholdMet(approvalGate, (node.data?.config as any) || {}, nodeInput)) {
+              logger.info(`[NodeApproval] Node ${node.id} requires approval, pausing execution ${executionId}...`);
+
+              const approval = await createPendingApproval({
+                executionId: executionId!,
+                workflowId: workflowId!,
+                nodeId: node.id,
+                userId: workflow.user_id,
+                preview: { nodeId: node.id, nodeType, config: node.data?.config || {}, input: nodeInput },
+              });
+
+              if (executionId) {
+                await db.from('executions').update({
+                  status: 'waiting',
+                  trigger: 'approval',
+                  waiting_for_node_id: node.id,
+                }).eq('id', executionId);
+
+                const { error: logError } = await db.from('executions').update({ logs }).eq('id', executionId);
+                if (logError) {
+                  logger.error('[NodeApproval] Failed to update execution logs:', logError);
+                }
+              }
+
+              if (executionId && workflowId) {
+                try {
+                  const { releaseExecutionLock } = await import('../services/execution/execution-lock');
+                  await releaseExecutionLock(db, workflowId, executionId);
+                } catch (lockError) {
+                  logger.error('[NodeApproval] Failed to release execution lock:', lockError);
+                }
+              }
+
+              try {
+                const { recordAuditEvent } = await import('../core/audit/audit-log-service');
+                recordAuditEvent({
+                  actorUserId: workflow.user_id,
+                  action: 'workflow.node_approval.requested',
+                  resourceType: 'workflow_node',
+                  resourceId: node.id,
+                  metadata: { executionId, workflowId, approvalId: approval.id },
+                });
+              } catch { /* non-fatal */ }
+
+              try {
+                const { sendApprovalNeededNotification } = await import('../services/notifications/dispatch-execution-notifications');
+                sendApprovalNeededNotification(workflow.user_id, {
+                  workflowId: workflowId!,
+                  executionId: executionId!,
+                  nodeId: node.id,
+                  approvalId: approval.id,
+                  preview: approval.preview,
+                });
+              } catch (notifyError) {
+                logger.error('[NodeApproval] Failed to dispatch approval notification (non-fatal):', notifyError);
+              }
+
+              return res.status(202).json({
+                success: true,
+                status: 'waiting',
+                reason: 'approval',
+                executionId,
+                approvalId: approval.id,
+                message: 'Workflow paused — waiting for human approval on a sensitive step.',
+              });
+            }
+            // else: decision === 'approved', or threshold not met — fall through to normal execution.
+          }
         }
 
         // ✅ CRITICAL: Initialize retryAttempt before try block for catch block scope
@@ -21116,6 +21169,14 @@ export default async function executeWorkflowHandler(req: Request, res: Response
         durationMs,
         nodesExecuted: logs.length,
       });
+      recordAuditEvent({
+        actorUserId: currentUserId || authenticatedUserId,
+        action: 'workflow.execution.failed',
+        status: 'failure',
+        resourceType: 'workflow',
+        resourceId: workflowId,
+        metadata: { executionId, error: errorMessage, durationMs },
+      });
 
       if (config.reliability?.dlqMandatoryRouting) {
         try {
@@ -21156,6 +21217,13 @@ export default async function executeWorkflowHandler(req: Request, res: Response
         durationMs,
         nodesExecuted: logs.length,
         success: true,
+      });
+      recordAuditEvent({
+        actorUserId: currentUserId || authenticatedUserId,
+        action: 'workflow.execution.finished',
+        resourceType: 'workflow',
+        resourceId: workflowId,
+        metadata: { executionId, durationMs, nodesExecuted: logs.length },
       });
     }
 
@@ -21302,6 +21370,14 @@ export default async function executeWorkflowHandler(req: Request, res: Response
         await logExecutionEvent(db, executionId, workflowId, 'RUN_FAILED', {
           error: errorMessage,
           fatal: true,
+        });
+        recordAuditEvent({
+          actorUserId: currentUserId || authenticatedUserId,
+          action: 'workflow.execution.failed',
+          status: 'failure',
+          resourceType: 'workflow',
+          resourceId: workflowId,
+          metadata: { executionId, error: errorMessage, fatal: true },
         });
         await logExecutionEvent(db, executionId, workflowId, 'LOCK_RELEASED', {
           workflowId,

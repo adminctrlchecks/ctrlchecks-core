@@ -1,5 +1,6 @@
 ﻿import { useWorkflowStore } from '@/stores/workflowStore';
 import { useState, useCallback, useEffect, useRef, useMemo, Suspense, lazy, type ReactNode } from 'react';
+import type { DebugNodeError } from '@/stores/debugStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { getNodeDefinition, ConfigField } from './nodeTypes';
 import { NODE_USAGE_GUIDES } from './nodeUsageGuides';
@@ -125,6 +126,7 @@ interface PropertiesPanelProps {
   onClose?: () => void;
   debugMode?: boolean;
   debugInputData?: unknown;
+  debugError?: DebugNodeError;
   lastResolvedInputs?: Record<
     string,
     Record<string, { value: unknown; source?: 'static_config' | 'template' | 'deterministic_runtime' | 'runtime_ai'; executionId: string; startedAt: string }>
@@ -142,10 +144,107 @@ type ViewMode = 'properties' | 'ai-editor';
 
 const PROPERTIES_PANEL_WIDTH = 360;
 
+function toDebugRecord(error: DebugNodeError | undefined): Record<string, unknown> | null {
+  return error && typeof error === 'object' && !Array.isArray(error)
+    ? error as Record<string, unknown>
+    : null;
+}
+
+function normalizeFieldMatchValue(value: unknown): string {
+  return typeof value === 'string'
+    ? value.toLowerCase().replace(/[^a-z0-9]+/g, '').trim()
+    : '';
+}
+
+function getDebugString(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+function resolveMissingFieldKey(
+  missingField: Record<string, unknown>,
+  inputSchema: Record<string, any>
+): string | null {
+  const schemaKeys = Object.keys(inputSchema);
+  const fieldName = getDebugString(missingField.fieldName);
+  if (fieldName && Object.prototype.hasOwnProperty.call(inputSchema, fieldName)) {
+    return fieldName;
+  }
+
+  const candidates = [
+    missingField.fieldName,
+    missingField.friendlyLabel,
+    missingField.description,
+  ].map(normalizeFieldMatchValue).filter(Boolean);
+
+  let bestMatch: { key: string; score: number } | null = null;
+  for (const key of schemaKeys) {
+    const normalizedKey = normalizeFieldMatchValue(key);
+    const normalizedDescription = normalizeFieldMatchValue(inputSchema[key]?.description);
+    const score = candidates.reduce((currentScore, candidate) => {
+      if (candidate === normalizedKey) return Math.max(currentScore, 4);
+      if (normalizedDescription && candidate === normalizedDescription) return Math.max(currentScore, 3);
+      if (normalizedKey && (candidate.includes(normalizedKey) || normalizedKey.includes(candidate))) {
+        return Math.max(currentScore, 2);
+      }
+      if (
+        normalizedDescription &&
+        (candidate.includes(normalizedDescription) || normalizedDescription.includes(candidate))
+      ) {
+        return Math.max(currentScore, 1);
+      }
+      return currentScore;
+    }, 0);
+
+    if (score > 0 && (!bestMatch || score > bestMatch.score)) {
+      bestMatch = { key, score };
+    }
+  }
+
+  return bestMatch?.key ?? null;
+}
+
+function buildDebugValidationErrors(
+  debugError: DebugNodeError | undefined,
+  selectedNodeId: string | undefined,
+  backendSchema: NodeDefinition | null
+): Record<string, string> {
+  const errorRecord = toDebugRecord(debugError);
+  const details = errorRecord?.details;
+  if (!details || typeof details !== 'object' || Array.isArray(details) || !backendSchema) return {};
+
+  const inputSchema = (backendSchema.inputSchema || {}) as Record<string, any>;
+  const issues = Array.isArray((details as Record<string, unknown>).issues)
+    ? (details as Record<string, unknown>).issues as unknown[]
+    : [];
+
+  const errors: Record<string, string> = {};
+  for (const issue of issues) {
+    if (!issue || typeof issue !== 'object' || Array.isArray(issue)) continue;
+    const issueRecord = issue as Record<string, unknown>;
+    const issueNodeId = getDebugString(issueRecord.nodeId);
+    if (selectedNodeId && issueNodeId && issueNodeId !== selectedNodeId) continue;
+
+    const missingFields = Array.isArray(issueRecord.missingFields) ? issueRecord.missingFields : [];
+    for (const missingField of missingFields) {
+      if (!missingField || typeof missingField !== 'object' || Array.isArray(missingField)) continue;
+      const fieldRecord = missingField as Record<string, unknown>;
+      const fieldKey = resolveMissingFieldKey(fieldRecord, inputSchema);
+      if (!fieldKey) continue;
+
+      const friendlyLabel = getDebugString(fieldRecord.friendlyLabel) || fieldKey;
+      const description = getDebugString(fieldRecord.description);
+      errors[fieldKey] = description || `${friendlyLabel} is required`;
+    }
+  }
+
+  return errors;
+}
+
 export default function PropertiesPanel({
   onClose,
   debugMode = false,
   debugInputData,
+  debugError,
   lastResolvedInputs = {},
 }: PropertiesPanelProps) {
   const {
@@ -254,6 +353,18 @@ export default function PropertiesPanel({
       return errorsMap;
     },
     []
+  );
+
+  const debugValidationErrors = useMemo(
+    () => debugMode
+      ? buildDebugValidationErrors(debugError, selectedNode?.id, backendSchema)
+      : {},
+    [debugMode, debugError, selectedNode?.id, backendSchema]
+  );
+
+  const effectiveValidationErrors = useMemo(
+    () => ({ ...validationErrors, ...debugValidationErrors }),
+    [validationErrors, debugValidationErrors]
   );
 
   // If/Else editor mode: allow either modern ConditionBuilder or raw JSON editing
@@ -1091,21 +1202,22 @@ export default function PropertiesPanel({
   );
 
   const handleConnectionRefChange = useCallback(
-    (credentialKey: string, connectionId: string) => {
+    (credentialKey: string, connectionId: string, aliases: string[] = []) => {
       if (!selectedNodeId || !selectedNode) return;
       const currentRefs = (
         (selectedNode.data.connectionRefs as Record<string, string> | undefined) ||
         ((selectedNode.data.config || {}) as Record<string, any>).connectionRefs ||
         {}
       ) as Record<string, string>;
+      const nextRefs = { ...currentRefs };
+      for (const key of Array.from(new Set([credentialKey, ...aliases])).filter(Boolean)) {
+        nextRefs[key] = connectionId;
+      }
       const updatedNode = {
         ...selectedNode,
         data: {
           ...selectedNode.data,
-          connectionRefs: {
-            ...currentRefs,
-            [credentialKey]: connectionId,
-          },
+          connectionRefs: nextRefs,
         },
       };
       setNodes(nodes.map((node) => (node.id === selectedNodeId ? updatedNode : node)));
@@ -1644,7 +1756,7 @@ export default function PropertiesPanel({
     : null;
 
   // Use schema-based configFields if available, otherwise use legacy
-  const nodeDefinition = backendSchema && schemaConfigFields
+  const nodeDefinitionRaw = backendSchema && schemaConfigFields
     ? {
         ...legacyNodeDefinition,
         configFields: schemaConfigFields,
@@ -1652,6 +1764,17 @@ export default function PropertiesPanel({
         _schemaDriven: true,
       }
     : legacyNodeDefinition;
+
+  // Universal guard: never render two fields for the same config key. Duplicate keys
+  // (e.g. one declaration per operation with different visibleIf) collapse to the first.
+  const nodeDefinition = nodeDefinitionRaw?.configFields
+    ? {
+        ...nodeDefinitionRaw,
+        configFields: nodeDefinitionRaw.configFields.filter(
+          (field, idx, arr) => arr.findIndex((f) => f.key === field.key) === idx
+        ),
+      }
+    : nodeDefinitionRaw;
 
   // Log schema-driven status
   if (backendSchema && schemaConfigFields) {
@@ -2665,8 +2788,19 @@ export default function PropertiesPanel({
                                       key={`${refKey}-${requirement.category || 'credential'}`}
                                       credentialTypeIds={credentialTypeIds}
                                       providers={providers}
+                                      logoProvider={requirement.provider}
                                       value={value}
-                                      onChange={(connectionId) => handleConnectionRefChange(refKey, connectionId)}
+                                      onChange={(connectionId) => handleConnectionRefChange(
+                                        refKey,
+                                        connectionId,
+                                        [
+                                          ...credentialTypeIds,
+                                          requirement.provider,
+                                          `${requirement.provider}_oauth2`,
+                                          `${requirement.provider}_api_key`,
+                                          `${requirement.provider}_token`,
+                                        ].filter(Boolean)
+                                      )}
                                       label={requirement.label || `${String(requirement.provider || refKey).replace(/_/g, ' ')} connection`}
                                     />
                                   );
@@ -2725,12 +2859,14 @@ export default function PropertiesPanel({
                             if (!shouldShowFieldForContext(selectedNode.data.type, field.key, contextualNodeConfig)) return null;
 
                             // ✅ Systematic UI: visibleIf (optional), then requiredIf (hide + required when true)
+                            // Evaluated for both schema-driven and legacy nodes so nodeTypes.ts
+                            // conditions work even when the backend schema is unavailable.
                             let effectiveRequired = field.required;
                             // fieldConditionActive: true = condition met (field is active/required),
                             // false = condition not met (field shown but dimmed/optional)
                             let fieldConditionActive = true;
-                            if (backendSchema) {
-                              const ui = (backendSchema.inputSchema as any)?.[field.key]?.ui;
+                            {
+                              const ui = (backendSchema?.inputSchema as any)?.[field.key]?.ui;
                               const currentConfig = selectedNode.data.config || {};
                               const visibleIf =
                                 (ui?.visibleIf as { field: string; equals: unknown } | undefined) ||
@@ -2784,7 +2920,7 @@ export default function PropertiesPanel({
                             const fieldHelpTitle = resolvedFieldHelp?.title || `How to ${helpVerb} ${field.label}?`;
 
                             // ✅ SCHEMA-DRIVEN UI: Get validation error for this field
-                            const fieldError = validationErrors[field.key];
+                            const fieldError = effectiveValidationErrors[field.key];
 
                             // ── Per-field on/off toggle ──────────────────────────────────────────
                             const nodeConfig = (selectedNode.data.config || {}) as Record<string, unknown>;
@@ -3072,6 +3208,11 @@ export default function PropertiesPanel({
                   )}
                 </>
               )}
+
+              <ApprovalGateSection
+                config={(selectedNode.data.config as Record<string, unknown>) || {}}
+                onChange={(patch) => updateNodeConfig(selectedNode.id, patch)}
+              />
             </div>
           </ScrollArea>
 
@@ -3118,6 +3259,89 @@ export default function PropertiesPanel({
           </div>
         </SheetContent>
       </Sheet>
+    </div>
+  );
+}
+
+interface ApprovalGateConfig {
+  enabled?: boolean;
+  thresholdField?: string;
+  thresholdOperator?: '>' | '>=' | '<' | '<=';
+  thresholdValue?: number;
+}
+
+/**
+ * Generic, node-type-agnostic "require human approval before this step runs" toggle.
+ * Appears for every node regardless of type — opt-in, off by default, so it never
+ * adds friction to a normal workflow. See worker/src/services/execution/node-approval-service.ts
+ * for the matching execution-time gate.
+ */
+function ApprovalGateSection({
+  config,
+  onChange,
+}: {
+  config: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const gate: ApprovalGateConfig = (config.approvalGate as ApprovalGateConfig) || {};
+
+  const update = (patch: Partial<ApprovalGateConfig>) => {
+    onChange({ approvalGate: { ...gate, ...patch } });
+  };
+
+  return (
+    <div className="mt-4 rounded-md border border-border/40 bg-muted/10 p-3 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="space-y-0.5">
+          <h3 className="text-xs font-medium uppercase text-muted-foreground/70">Approval</h3>
+          <p className="text-xs text-muted-foreground/70">Require a human to approve before this step runs</p>
+        </div>
+        <Switch
+          checked={!!gate.enabled}
+          onCheckedChange={(checked) => update({ enabled: checked })}
+        />
+      </div>
+
+      {gate.enabled && (
+        <div className="space-y-2 pt-1">
+          <Label className="text-xs text-muted-foreground">
+            Only require approval when (optional — leave blank to always require approval)
+          </Label>
+          <div className="grid grid-cols-3 gap-2">
+            <Input
+              placeholder="field, e.g. amount"
+              value={gate.thresholdField || ''}
+              onChange={(e) => update({ thresholdField: e.target.value })}
+              className="h-8 text-xs"
+              onMouseDown={(e) => e.stopPropagation()}
+              onFocus={(e) => e.stopPropagation()}
+            />
+            <Select
+              value={gate.thresholdOperator || ''}
+              onValueChange={(value) => update({ thresholdOperator: value as ApprovalGateConfig['thresholdOperator'] })}
+            >
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder="operator" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value=">">greater than</SelectItem>
+                <SelectItem value=">=">greater or equal</SelectItem>
+                <SelectItem value="<">less than</SelectItem>
+                <SelectItem value="<=">less or equal</SelectItem>
+              </SelectContent>
+            </Select>
+            <Input
+              type="number"
+              placeholder="value"
+              value={gate.thresholdValue ?? ''}
+              onChange={(e) => update({ thresholdValue: e.target.value === '' ? undefined : Number(e.target.value) })}
+              className="h-8 text-xs"
+              onMouseDown={(e) => e.stopPropagation()}
+              onFocus={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

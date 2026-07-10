@@ -1,711 +1,401 @@
-GET  /api/ai/models - List available models
-  GET  /api/ai/metrics - AI performance metrics
+> nodemon --watch src --exec "ts-node src/index.ts"
 
-📚 Training API Endpoints:
-  GET  /api/training/stats - Training dataset statistics     
-  GET  /api/training/categories - Available workflow categories
-  GET  /api/training/workflows - Get workflows by category   
-  POST /api/training/similar - Find similar workflows        
-  GET  /api/training/examples - Get training examples for few-shot learning
-  GET  /api/training/usage - Get training usage metrics      
-  POST /api/training/reload - Reload training dataset (hot reload)
+[nodemon] 3.1.14
+[nodemon] to restart at any time, enter `rs`
+[nodemon] watching path(s): src\**\*
+[nodemon] watching extensions: js,mjs,cjs,json
+[nodemon] starting `ts-node src/index.ts`
+[env-loader] Loaded C:\Users\user\Desktop\ctrlchecks-hostinger\services\ai-generator\.env
+Error: listen EADDRINUSE: address already in use :::3002
+    at Server.setupListenHandle [as _listen2] (node:net:1948:16)
+    at listenInCluster (node:net:2005:12)
+    at Server.listen (node:net:2110:7)
+    at app.listen (C:\Users\user\Desktop\ctrlchecks-hostinger\services\ai-generator\node_modules\express\lib\application.js:635:24)
+    at Object.<anonymous> (C:\Users\user\Desktop\ctrlchecks-hostinger\services\ai-generator\src\index.ts:71:5)
+    at Module._compile (node:internal/modules/cjs/loader:1812:14)
+    at Module.m._compile (C:\Users\user\Desktop\ctrlchecks-hostinger\services\ai-generator\node_modules\ts-node\src\index.ts:1618:23)
+    at node:internal/modules/cjs/loader:1943:10
+    at Object.require.extensions.<computed> [as .ts] (C:\Users\user\Desktop\ctrlchecks-hostinger\services\ai-generator\node_modules\ts-node\src\index.ts:1621:12)
+    at Module.load (node:internal/modules/cjs/loader:1533:32) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3002
+}
+[nodemon] app crashed - waiting for file changes before starting...
 
-🤖 AI Gateway Endpoints:
-  POST /api/ai/chatbot/message - Chichu chatbot
-  POST /api/ai/editor/suggest-improvements - Workflow node suggestions
-  POST /api/ai/builder/generate-from-prompt - Generate workflow from prompt
-  POST /api/ai/ollama/generate - Direct Gemini generation (legacy path)
-  GET  /api/ai/metrics - Performance metrics
 
-============================================================ 
-✅ Backend ready to accept connections!
-============================================================ 
+> ctrlchecks-notification-service@0.1.0 dev
+> nodemon --watch src --exec "ts-node src/index.ts"
 
-[ServerStartup] 🔵 Starting scheduler services...
-Redis Client Connected
-[ServerStartup] ⏭️  Skipping scheduler + watchdog startup beccause DATABASE_URL is unreachable
-Connected to Redis at redis://127.0.0.1:6379
-[WsRedisBridge] ✅ Active — replica 30240-gnfsag, channel: ws:exec:events
-[2026-06-30 18:28:02.673 +0530] INFO: request completed
-    req: {
-      "id": "77775604-49f6-4d2d-a2e5-83f5b70e1a46",
-      "method": "OPTIONS",
-      "url": "/api/auth/status",
-      "query": {},
-      "params": {},
-      "headers": {
-        "host": "localhost:3001",
-        "connection": "keep-alive",
-        "accept": "*/*",
-        "access-control-request-method": "GET",
-        "access-control-request-headers": "authorization",   
-        "origin": "http://localhost:8080",
-        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
-        "sec-fetch-mode": "cors",
-        "sec-fetch-site": "same-site",
-        "sec-fetch-dest": "empty",
-        "referer": "http://localhost:8080/",
-        "accept-encoding": "gzip, deflate, br, zstd",        
-        "accept-language": "en-US,en;q=0.9,te;q=0.8"
-      },
-      "remoteAddress": "127.0.0.1",
-      "remotePort": 52511
-    }
-    requestId: "77775604-49f6-4d2d-a2e5-83f5b70e1a46"        
-    res: {
-      "statusCode": 204,
-      "headers": {
-        "x-request-id": "77775604-49f6-4d2d-a2e5-83f5b70e1a46",
-        "origin-agent-cluster": "?1",
-        "x-content-type-options": "nosniff",
-        "x-dns-prefetch-control": "off",
-        "x-download-options": "noopen",
-        "x-permitted-cross-domain-policies": "none",
-        "access-control-allow-origin": "http://localhost:8080",
-        "vary": "Origin",
-        "access-control-allow-headers": "authorization, x-client-info, apikey, content-type, accept, x-requested-with, x-stream-progress, x-idempotency-key",
-        "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-        "access-control-allow-credentials": "true"
-      }
-    }
-    responseTime: 1
-[RedisGetCache] miss /api/auth/status:3583c2db48d93e038c549c7f6527862ceac2b8a4fbe00cdb2aa943c715252664
-[Request] GET /health - 200 - 6484ms - anonymous
-[Request] GET /health - 200 - 1ms - anonymous
-[2026-06-30 18:28:09.570 +0530] INFO: request completed
-    req: {
-      "id": "e8d80198-9ec3-43de-8339-92b3a6293ea5",
-      "method": "OPTIONS",
-      "url": "/api/db/workflows?select=id%2C+cron_expression&filter_setup_completed=true&notnull_cron_expression=true",   
-      "query": {
-        "select": "id, cron_expression",
-        "filter_setup_completed": "true",
-        "notnull_cron_expression": "true"
-      },
-      "params": {},
-      "headers": {
-        "host": "localhost:3001",
-        "connection": "keep-alive",
-        "accept": "*/*",
-        "access-control-request-method": "GET",
-        "access-control-request-headers": "authorization,content-type",
-        "origin": "http://localhost:8080",
-        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
-        "sec-fetch-mode": "cors",
-        "sec-fetch-site": "same-site",
-        "sec-fetch-dest": "empty",
-        "referer": "http://localhost:8080/",
-        "accept-encoding": "gzip, deflate, br, zstd",        
-        "accept-language": "en-US,en;q=0.9,te;q=0.8"
-      },
-      "remoteAddress": "127.0.0.1",
-      "remotePort": 60072
-    }
-    requestId: "e8d80198-9ec3-43de-8339-92b3a6293ea5"        
-    res: {
-      "statusCode": 204,
-      "headers": {
-        "x-request-id": "e8d80198-9ec3-43de-8339-92b3a6293ea5",
-        "origin-agent-cluster": "?1",
-        "x-content-type-options": "nosniff",
-        "x-dns-prefetch-control": "off",
-        "x-download-options": "noopen",
-        "x-permitted-cross-domain-policies": "none",
-        "access-control-allow-origin": "http://localhost:8080",
-        "vary": "Origin",
-        "access-control-allow-headers": "authorization, x-client-info, apikey, content-type, accept, x-requested-with, x-stream-progress, x-idempotency-key",
-        "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-        "access-control-allow-credentials": "true"
-      }
-    }
-    responseTime: 3
-[2026-06-30 18:28:09.575 +0530] INFO: request completed
-    req: {
-      "id": "3dd4f87b-d5ee-436f-b93c-882eea43da54",
-      "method": "OPTIONS",
-      "url": "/api/db/workflows?order_col=updated_at&order_dir=DESC&limit=6&filter_setup_completed=true",
-      "query": {
-        "order_col": "updated_at",
-        "order_dir": "DESC",
-        "limit": "6",
-        "filter_setup_completed": "true"
-      },
-      "params": {},
-      "headers": {
-        "host": "localhost:3001",
-        "connection": "keep-alive",
-        "accept": "*/*",
-        "access-control-request-method": "GET",
-        "access-control-request-headers": "authorization,content-type",
-        "origin": "http://localhost:8080",
-        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
-        "sec-fetch-mode": "cors",
-        "sec-fetch-site": "same-site",
-        "sec-fetch-dest": "empty",
-        "referer": "http://localhost:8080/",
-        "accept-encoding": "gzip, deflate, br, zstd",        
-        "accept-language": "en-US,en;q=0.9,te;q=0.8"
-      },
-      "remoteAddress": "127.0.0.1",
-      "remotePort": 51851
-    }
-    requestId: "3dd4f87b-d5ee-436f-b93c-882eea43da54"        
-    res: {
-      "statusCode": 204,
-      "headers": {
-        "x-request-id": "3dd4f87b-d5ee-436f-b93c-882eea43da54",
-        "origin-agent-cluster": "?1",
-        "x-content-type-options": "nosniff",
-        "x-dns-prefetch-control": "off",
-        "x-download-options": "noopen",
-        "x-permitted-cross-domain-policies": "none",
-        "access-control-allow-origin": "http://localhost:8080",
-        "vary": "Origin",
-        "access-control-allow-headers": "authorization, x-client-info, apikey, content-type, accept, x-requested-with, x-stream-progress, x-idempotency-key",
-        "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-        "access-control-allow-credentials": "true"
-      }
-    }
-    responseTime: 1
-[2026-06-30 18:28:09.579 +0530] INFO: request completed      
-    req: {
-      "id": "69c61c7e-40f1-4dad-bc20-2acc107ea047",
-      "method": "OPTIONS",
-      "url": "/api/db/workflows?select=id&limit=0&count=exact&filter_setup_completed=true",
-      "query": {
-        "select": "id",
-        "limit": "0",
-        "count": "exact",
-        "filter_setup_completed": "true"
-      },
-      "params": {},
-      "headers": {
-        "host": "localhost:3001",
-        "connection": "keep-alive",
-        "accept": "*/*",
-        "access-control-request-method": "GET",
-        "access-control-request-headers": "authorization,content-type",
-        "origin": "http://localhost:8080",
-        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
-        "sec-fetch-mode": "cors",
-        "sec-fetch-site": "same-site",
-        "sec-fetch-dest": "empty",
-        "referer": "http://localhost:8080/",
-        "accept-encoding": "gzip, deflate, br, zstd",        
-        "accept-language": "en-US,en;q=0.9,te;q=0.8"
-      },
-      "remoteAddress": "127.0.0.1",
-      "remotePort": 55457
-    }
-    requestId: "69c61c7e-40f1-4dad-bc20-2acc107ea047"        
-    res: {
-      "statusCode": 204,
-      "headers": {
-        "x-request-id": "69c61c7e-40f1-4dad-bc20-2acc107ea047",
-        "origin-agent-cluster": "?1",
-        "x-content-type-options": "nosniff",
-        "x-dns-prefetch-control": "off",
-        "x-download-options": "noopen",
-        "x-permitted-cross-domain-policies": "none",
-        "access-control-allow-origin": "http://localhost:8080",
-        "vary": "Origin",
-        "access-control-allow-headers": "authorization, x-client-info, apikey, content-type, accept, x-requested-with, x-stream-progress, x-idempotency-key",
-        "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-        "access-control-allow-credentials": "true"
-      }
-    }
-    responseTime: 2
-[2026-06-30 18:28:09.584 +0530] INFO: request completed      
-    req: {
-      "id": "26c5abba-5daf-4d86-b187-960b93ea09b0",
-      "method": "OPTIONS",
-      "url": "/api/db/user_roles?select=role&filter_user_id=d1f3dd1a-2081-7056-9577-8ef4e3a8082a",
-      "query": {
-        "select": "role",
-        "filter_user_id": "d1f3dd1a-2081-7056-9577-8ef4e3a8082a"
-      },
-      "params": {},
-      "headers": {
-        "host": "localhost:3001",
-        "connection": "keep-alive",
-        "accept": "*/*",
-        "access-control-request-method": "GET",
-        "access-control-request-headers": "authorization,content-type",
-        "origin": "http://localhost:8080",
-        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
-        "sec-fetch-mode": "cors",
-        "sec-fetch-site": "same-site",
-        "sec-fetch-dest": "empty",
-        "referer": "http://localhost:8080/",
-        "accept-encoding": "gzip, deflate, br, zstd",        
-        "accept-language": "en-US,en;q=0.9,te;q=0.8"
-      },
-      "remoteAddress": "127.0.0.1",
-      "remotePort": 54160
-    }
-    requestId: "26c5abba-5daf-4d86-b187-960b93ea09b0"        
-    res: {
-      "statusCode": 204,
-      "headers": {
-        "x-request-id": "26c5abba-5daf-4d86-b187-960b93ea09b0",
-        "origin-agent-cluster": "?1",
-        "x-content-type-options": "nosniff",
-        "x-dns-prefetch-control": "off",
-        "x-download-options": "noopen",
-        "x-permitted-cross-domain-policies": "none",
-        "access-control-allow-origin": "http://localhost:8080",
-        "vary": "Origin",
-        "access-control-allow-headers": "authorization, x-client-info, apikey, content-type, accept, x-requested-with, x-stream-progress, x-idempotency-key",
-        "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-        "access-control-allow-credentials": "true"
-      }
-    }
-    responseTime: 2
-[2026-06-30 18:28:09.596 +0530] INFO: request aborted
-    req: {
-      "id": "a41a308e-8588-4de3-94f0-428a67b913c2",
-      "method": "GET",
-      "url": "/api/auth/status",
-      "query": {},
-      "params": {},
-      "headers": {
-        "host": "localhost:3001",
-        "connection": "keep-alive",
-        "sec-ch-ua-platform": "\"Windows\"",
-        "authorization": "Bearer eyJraWQiOiJSN2x5WWNsNHI4TmlGLzlHd1NFbVZLTTBhSjl4bE5LYW9SL0tEY1ErMDFzPSIsImFsZyI6IlJTMjU2In0.eyJzdWIiOiJkMWYzZGQxYS0yMDgxLTcwNTYtOTU3Ny04ZWY0ZTNhODA4MmEiLCJjb2duaXRvOmdyb3VwcyI6WyJhcC1zb3V0aC0xX2FUWXZTWWZscV9Hb29nbGUiXSwiaXNzIjoiaHR0cHM6Ly9jb2duaXRvLWlkcC5hcC1zb3V0aC0xLmFtYXpvbmF3cy5jb20vYXAtc291dGgtMV9hVFl2U1lmbHEiLCJ2ZXJzaW9uIjoyLCJjbGllbnRfaWQiOiIzaXN0czVoOGExbW1jczhhcmU1bjFwaTVtOCIsIm9yaWdpbl9qdGkiOiJiYjdmZGM2Zi1mNjg3LTRhZjMtOTVmYS00YjE0NmU2ZjJhN2EiLCJ0b2tlbl91c2UiOiJhY2Nlc3MiLCJzY29wZSI6Im9wZW5pZCBwcm9maWxlIGVtYWlsIiwiYXV0aF90aW1lIjoxNzgyODIyODg2LCJleHAiOjE3ODI4MjY0ODYsImlhdCI6MTc4MjgyMjg4NiwianRpIjoiZmEyZjNjZDEtMTI3NS00NzU2LTg5OGMtY2E4MTg0NTU4MTBmIiwidXNlcm5hbWUiOiJnb29nbGVfMTExMDI1OTM0MjU5ODQ4MTAxODMyIn0.fvwwZ1y4SZ2CJM241FG2yh6V_KAFIEfR5wxQjLUq733PIE2U__yasUfy0MmSW9kpzeARJoQ8hgw2Jru9_mAq8_214TZ3PFGRDzpI_FSEW5i1FqR5WtV5QM-5XXbEM1z2LyhJn30Gwm9goUgvrx3cXkRkvHBkjsrGQlrHcdICDT7Zpf7na2lwWIJ7imV1KnzjlV5qluNLT9zzLWpxiLImvy7_pvew71wYjktPb1aZrl0zJWm8CuT3iqxyBdIRuulivZ3kkXZ73tuY7B8UvCXeGm1Fx_OQc04npVg4VY303wEhPbZG-ptaVG8UUgRpFSDTKaFBnhXgGZUFdPoCk8H_rA", 
-        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
-        "sec-ch-ua": "\"Google Chrome\";v=\"149\", \"Chromium\";v=\"149\", \"Not)A;Brand\";v=\"24\"",
-        "sec-ch-ua-mobile": "?0",
-        "accept": "*/*",
-        "origin": "http://localhost:8080",
-        "sec-fetch-site": "same-site",
-        "sec-fetch-mode": "cors",
-        "sec-fetch-dest": "empty",
-        "referer": "http://localhost:8080/",
-        "accept-encoding": "gzip, deflate, br, zstd",        
-        "accept-language": "en-US,en;q=0.9,te;q=0.8"
-      },
-      "remoteAddress": "127.0.0.1",
-      "remotePort": 52511
-    }
-    requestId: "a41a308e-8588-4de3-94f0-428a67b913c2"        
-    res: {
-      "statusCode": null,
-      "headers": {
-        "x-request-id": "a41a308e-8588-4de3-94f0-428a67b913c2",
-        "origin-agent-cluster": "?1",
-        "x-content-type-options": "nosniff",
-        "x-dns-prefetch-control": "off",
-        "x-download-options": "noopen",
-        "x-permitted-cross-domain-policies": "none",
-        "access-control-allow-origin": "http://localhost:8080",
-        "vary": "Origin",
-        "access-control-allow-headers": "authorization, x-client-info, apikey, content-type, accept, x-requested-with, x-stream-progress, x-idempotency-key",
-        "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-        "access-control-allow-credentials": "true",
-        "x-ratelimit-limit": "100",
-        "x-ratelimit-remaining": "99",
-        "x-cache": "MISS",
-        "content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://checkout.razorpay.com https://js.razorpay.com; style-src 'self' 'unsafe-inline' https://checkout.razorpay.com; img-src 'self' data: https:; connect-src 'self' https://api.razorpay.com https://checkout.razorpay.com; frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com; font-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self' https://api.razorpay.com",
-        "x-frame-options": "SAMEORIGIN",
-        "referrer-policy": "strict-origin-when-cross-origin",
-        "x-xss-protection": "1; mode=block",
-        "permissions-policy": "payment=self, camera=(), microphone=(), geolocation=()",
-        "x-development-mode": "true",
-        "x-test-pricing": "enabled",
-        "x-trace-id": "473683606efc4d308cf8d82ff7831859",    
-        "traceparent": "00-473683606efc4d308cf8d82ff7831859-ebf1033dca5142df-01"
-      }
-    }
-    responseTime: 6921
-[RedisGetCache] miss /api/auth/status:3583c2db48d93e038c549c7f6527862ceac2b8a4fbe00cdb2aa943c715252664
-[DB] Circuit opened — DB unreachable, fast-failing for 30s: 
-[Auth] User authenticated: vusalashivakumar@gmail.com (user) - GET /api/db/workflows
-[Security] DATA_ACCESS: Request failed with status 503 - 127.0.0.1 - GET /api/db/workflows
-[2026-06-30 18:28:10.445 +0530] INFO: request errored
-    req: {
-      "id": "dbac87db-262f-4a68-8f7a-ff45663d6768",
-      "method": "GET",
-      "url": "/api/db/workflows?select=id&limit=0&count=exact&filter_setup_completed=true",
-      "query": {
-        "select": "id",
-        "limit": "0",
-        "count": "exact",
-        "filter_setup_completed": "true"
-      },
-      "params": {},
-      "headers": {
-        "host": "localhost:3001",
-        "connection": "keep-alive",
-        "sec-ch-ua-platform": "\"Windows\"",
-        "authorization": "Bearer eyJraWQiOiJSN2x5WWNsNHI4TmlGLzlHd1NFbVZLTTBhSjl4bE5LYW9SL0tEY1ErMDFzPSIsImFsZyI6IlJTMjU2In0.eyJzdWIiOiJkMWYzZGQxYS0yMDgxLTcwNTYtOTU3Ny04ZWY0ZTNhODA4MmEiLCJjb2duaXRvOmdyb3VwcyI6WyJhcC1zb3V0aC0xX2FUWXZTWWZscV9Hb29nbGUiXSwiaXNzIjoiaHR0cHM6Ly9jb2duaXRvLWlkcC5hcC1zb3V0aC0xLmFtYXpvbmF3cy5jb20vYXAtc291dGgtMV9hVFl2U1lmbHEiLCJ2ZXJzaW9uIjoyLCJjbGllbnRfaWQiOiIzaXN0czVoOGExbW1jczhhcmU1bjFwaTVtOCIsIm9yaWdpbl9qdGkiOiJiYjdmZGM2Zi1mNjg3LTRhZjMtOTVmYS00YjE0NmU2ZjJhN2EiLCJ0b2tlbl91c2UiOiJhY2Nlc3MiLCJzY29wZSI6Im9wZW5pZCBwcm9maWxlIGVtYWlsIiwiYXV0aF90aW1lIjoxNzgyODIyODg2LCJleHAiOjE3ODI4MjY0ODYsImlhdCI6MTc4MjgyMjg4NiwianRpIjoiZmEyZjNjZDEtMTI3NS00NzU2LTg5OGMtY2E4MTg0NTU4MTBmIiwidXNlcm5hbWUiOiJnb29nbGVfMTExMDI1OTM0MjU5ODQ4MTAxODMyIn0.fvwwZ1y4SZ2CJM241FG2yh6V_KAFIEfR5wxQjLUq733PIE2U__yasUfy0MmSW9kpzeARJoQ8hgw2Jru9_mAq8_214TZ3PFGRDzpI_FSEW5i1FqR5WtV5QM-5XXbEM1z2LyhJn30Gwm9goUgvrx3cXkRkvHBkjsrGQlrHcdICDT7Zpf7na2lwWIJ7imV1KnzjlV5qluNLT9zzLWpxiLImvy7_pvew71wYjktPb1aZrl0zJWm8CuT3iqxyBdIRuulivZ3kkXZ73tuY7B8UvCXeGm1Fx_OQc04npVg4VY303wEhPbZG-ptaVG8UUgRpFSDTKaFBnhXgGZUFdPoCk8H_rA", 
-        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
-        "sec-ch-ua": "\"Google Chrome\";v=\"149\", \"Chromium\";v=\"149\", \"Not)A;Brand\";v=\"24\"",
-        "content-type": "application/json",
-        "sec-ch-ua-mobile": "?0",
-        "accept": "*/*",
-        "origin": "http://localhost:8080",
-        "sec-fetch-site": "same-site",
-        "sec-fetch-mode": "cors",
-        "sec-fetch-dest": "empty",
-        "referer": "http://localhost:8080/",
-        "accept-encoding": "gzip, deflate, br, zstd",        
-        "accept-language": "en-US,en;q=0.9,te;q=0.8"
-      },
-      "remoteAddress": "127.0.0.1",
-      "remotePort": 55457
-    }
-    requestId: "dbac87db-262f-4a68-8f7a-ff45663d6768"        
-    res: {
-      "statusCode": 503,
-      "headers": {
-        "x-request-id": "dbac87db-262f-4a68-8f7a-ff45663d6768",
-        "origin-agent-cluster": "?1",
-        "x-content-type-options": "nosniff",
-        "x-dns-prefetch-control": "off",
-        "x-download-options": "noopen",
-        "x-permitted-cross-domain-policies": "none",
-        "access-control-allow-origin": "http://localhost:8080",
-        "vary": "Origin",
-        "access-control-allow-headers": "authorization, x-client-info, apikey, content-type, accept, x-requested-with, x-stream-progress, x-idempotency-key",
-        "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-        "access-control-allow-credentials": "true",
-        "x-ratelimit-limit": "100",
-        "x-ratelimit-remaining": "95",
-        "content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://checkout.razorpay.com https://js.razorpay.com; style-src 'self' 'unsafe-inline' https://checkout.razorpay.com; img-src 'self' data: https:; connect-src 'self' https://api.razorpay.com https://checkout.razorpay.com; frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com; font-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self' https://api.razorpay.com",
-        "x-frame-options": "SAMEORIGIN",
-        "referrer-policy": "strict-origin-when-cross-origin",
-        "x-xss-protection": "1; mode=block",
-        "permissions-policy": "payment=self, camera=(), microphone=(), geolocation=()",
-        "x-development-mode": "true",
-        "x-test-pricing": "enabled",
-        "x-trace-id": "195c711c2f6a4c8bae6680c53d8678f6",    
-        "traceparent": "00-195c711c2f6a4c8bae6680c53d8678f6-74d1a51401d347e1-01",
-        "content-type": "application/json; charset=utf-8",   
-        "content-length": "92",
-        "etag": "W/\"5c-edxU1KVKqcqodU2yz3WtCjjvdLU\""       
-      }
-    }
-    responseTime: 827
-    err: {
-      "type": "Error",
-      "message": "failed with status code 503",
-      "stack":
-          Error: failed with status code 503
-              at onResFinished (C:\Users\user\Desktop\ctrlchecks-hostinger\worker\node_modules\pino-http\logger.js:115:39)
-              at ServerResponse.onResponseComplete (C:\Users\user\Desktop\ctrlchecks-hostinger\worker\node_modules\pino-http\logger.js:178:14)
-              at ServerResponse.emit (node:events:520:35)    
-              at ServerResponse.emit (node:domain:489:12)    
-              at onFinish (node:_http_outgoing:1026:10)      
-              at callback (node:internal/streams/writable:764:21)
-              at afterWrite (node:internal/streams/writable:708:5)
-              at afterWriteTick (node:internal/streams/writable:694:10)
-              at processTicksAndRejections (node:internal/process/task_queues:89:21)
-    }
-[Auth] User authenticated: vusalashivakumar@gmail.com (user) - GET /api/db/workflows
-[Security] DATA_ACCESS: Request failed with status 503 - 127.0.0.1 - GET /api/db/workflows
-[Auth] User authenticated: vusalashivakumar@gmail.com (user) - GET /api/auth/status
-[Request] GET /api/auth/status - 200 - 967ms - vusalashivakumar@gmail.com
-[2026-06-30 18:28:10.608 +0530] INFO: request errored        
-    req: {
-      "id": "68ba9f3f-8224-463f-98e5-821003a6095a",
-      "method": "GET",
-      "url": "/api/db/workflows?order_col=updated_at&order_dir=DESC&limit=6&filter_setup_completed=true",
-      "query": {
-        "order_col": "updated_at",
-        "order_dir": "DESC",
-        "limit": "6",
-        "filter_setup_completed": "true"
-      },
-      "params": {},
-      "headers": {
-        "host": "localhost:3001",
-        "connection": "keep-alive",
-        "sec-ch-ua-platform": "\"Windows\"",
-        "authorization": "Bearer eyJraWQiOiJSN2x5WWNsNHI4TmlGLzlHd1NFbVZLTTBhSjl4bE5LYW9SL0tEY1ErMDFzPSIsImFsZyI6IlJTMjU2In0.eyJzdWIiOiJkMWYzZGQxYS0yMDgxLTcwNTYtOTU3Ny04ZWY0ZTNhODA4MmEiLCJjb2duaXRvOmdyb3VwcyI6WyJhcC1zb3V0aC0xX2FUWXZTWWZscV9Hb29nbGUiXSwiaXNzIjoiaHR0cHM6Ly9jb2duaXRvLWlkcC5hcC1zb3V0aC0xLmFtYXpvbmF3cy5jb20vYXAtc291dGgtMV9hVFl2U1lmbHEiLCJ2ZXJzaW9uIjoyLCJjbGllbnRfaWQiOiIzaXN0czVoOGExbW1jczhhcmU1bjFwaTVtOCIsIm9yaWdpbl9qdGkiOiJiYjdmZGM2Zi1mNjg3LTRhZjMtOTVmYS00YjE0NmU2ZjJhN2EiLCJ0b2tlbl91c2UiOiJhY2Nlc3MiLCJzY29wZSI6Im9wZW5pZCBwcm9maWxlIGVtYWlsIiwiYXV0aF90aW1lIjoxNzgyODIyODg2LCJleHAiOjE3ODI4MjY0ODYsImlhdCI6MTc4MjgyMjg4NiwianRpIjoiZmEyZjNjZDEtMTI3NS00NzU2LTg5OGMtY2E4MTg0NTU4MTBmIiwidXNlcm5hbWUiOiJnb29nbGVfMTExMDI1OTM0MjU5ODQ4MTAxODMyIn0.fvwwZ1y4SZ2CJM241FG2yh6V_KAFIEfR5wxQjLUq733PIE2U__yasUfy0MmSW9kpzeARJoQ8hgw2Jru9_mAq8_214TZ3PFGRDzpI_FSEW5i1FqR5WtV5QM-5XXbEM1z2LyhJn30Gwm9goUgvrx3cXkRkvHBkjsrGQlrHcdICDT7Zpf7na2lwWIJ7imV1KnzjlV5qluNLT9zzLWpxiLImvy7_pvew71wYjktPb1aZrl0zJWm8CuT3iqxyBdIRuulivZ3kkXZ73tuY7B8UvCXeGm1Fx_OQc04npVg4VY303wEhPbZG-ptaVG8UUgRpFSDTKaFBnhXgGZUFdPoCk8H_rA", 
-        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
-        "sec-ch-ua": "\"Google Chrome\";v=\"149\", \"Chromium\";v=\"149\", \"Not)A;Brand\";v=\"24\"",
-        "content-type": "application/json",
-        "sec-ch-ua-mobile": "?0",
-        "accept": "*/*",
-        "origin": "http://localhost:8080",
-        "sec-fetch-site": "same-site",
-        "sec-fetch-mode": "cors",
-        "sec-fetch-dest": "empty",
-        "referer": "http://localhost:8080/",
-        "accept-encoding": "gzip, deflate, br, zstd",        
-        "accept-language": "en-US,en;q=0.9,te;q=0.8"
-      },
-      "remoteAddress": "127.0.0.1",
-      "remotePort": 51851
-    }
-    requestId: "68ba9f3f-8224-463f-98e5-821003a6095a"        
-    res: {
-      "statusCode": 503,
-      "headers": {
-        "x-request-id": "68ba9f3f-8224-463f-98e5-821003a6095a",
-        "origin-agent-cluster": "?1",
-        "x-content-type-options": "nosniff",
-        "x-dns-prefetch-control": "off",
-        "x-download-options": "noopen",
-        "x-permitted-cross-domain-policies": "none",
-        "access-control-allow-origin": "http://localhost:8080",
-        "vary": "Origin",
-        "access-control-allow-headers": "authorization, x-client-info, apikey, content-type, accept, x-requested-with, x-stream-progress, x-idempotency-key",
-        "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-        "access-control-allow-credentials": "true",
-        "x-ratelimit-limit": "100",
-        "x-ratelimit-remaining": "96",
-        "content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://checkout.razorpay.com https://js.razorpay.com; style-src 'self' 'unsafe-inline' https://checkout.razorpay.com; img-src 'self' data: https:; connect-src 'self' https://api.razorpay.com https://checkout.razorpay.com; frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com; font-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self' https://api.razorpay.com",
-        "x-frame-options": "SAMEORIGIN",
-        "referrer-policy": "strict-origin-when-cross-origin",
-        "x-xss-protection": "1; mode=block",
-        "permissions-policy": "payment=self, camera=(), microphone=(), geolocation=()",
-        "x-development-mode": "true",
-        "x-test-pricing": "enabled",
-        "x-trace-id": "7dc8d3aa008642c1a800bb60ff2fc993",    
-        "traceparent": "00-7dc8d3aa008642c1a800bb60ff2fc993-df6f1f038ddb42f1-01",
-        "content-type": "application/json; charset=utf-8",   
-        "content-length": "92",
-        "etag": "W/\"5c-edxU1KVKqcqodU2yz3WtCjjvdLU\""       
-      }
-    }
-    responseTime: 993
-    err: {
-      "type": "Error",
-      "message": "failed with status code 503",
-      "stack":
-          Error: failed with status code 503
-              at onResFinished (C:\Users\user\Desktop\ctrlchecks-hostinger\worker\node_modules\pino-http\logger.js:115:39)
-              at ServerResponse.onResponseComplete (C:\Users\user\Desktop\ctrlchecks-hostinger\worker\node_modules\pino-http\logger.js:178:14)
-              at ServerResponse.emit (node:events:520:35)    
-              at ServerResponse.emit (node:domain:489:12)    
-              at onFinish (node:_http_outgoing:1026:10)      
-              at callback (node:internal/streams/writable:764:21)
-              at afterWrite (node:internal/streams/writable:708:5)
-              at afterWriteTick (node:internal/streams/writable:694:10)
-              at processTicksAndRejections (node:internal/process/task_queues:89:21)
-    }
-[2026-06-30 18:28:10.620 +0530] INFO: request completed      
-    req: {
-      "id": "e49aa85d-e139-468b-af67-dc990eda5701",
-      "method": "GET",
-      "url": "/api/auth/status",
-      "query": {},
-      "params": {},
-      "headers": {
-        "host": "localhost:3001",
-        "connection": "keep-alive",
-        "sec-ch-ua-platform": "\"Windows\"",
-        "authorization": "Bearer eyJraWQiOiJSN2x5WWNsNHI4TmlGLzlHd1NFbVZLTTBhSjl4bE5LYW9SL0tEY1ErMDFzPSIsImFsZyI6IlJTMjU2In0.eyJzdWIiOiJkMWYzZGQxYS0yMDgxLTcwNTYtOTU3Ny04ZWY0ZTNhODA4MmEiLCJjb2duaXRvOmdyb3VwcyI6WyJhcC1zb3V0aC0xX2FUWXZTWWZscV9Hb29nbGUiXSwiaXNzIjoiaHR0cHM6Ly9jb2duaXRvLWlkcC5hcC1zb3V0aC0xLmFtYXpvbmF3cy5jb20vYXAtc291dGgtMV9hVFl2U1lmbHEiLCJ2ZXJzaW9uIjoyLCJjbGllbnRfaWQiOiIzaXN0czVoOGExbW1jczhhcmU1bjFwaTVtOCIsIm9yaWdpbl9qdGkiOiJiYjdmZGM2Zi1mNjg3LTRhZjMtOTVmYS00YjE0NmU2ZjJhN2EiLCJ0b2tlbl91c2UiOiJhY2Nlc3MiLCJzY29wZSI6Im9wZW5pZCBwcm9maWxlIGVtYWlsIiwiYXV0aF90aW1lIjoxNzgyODIyODg2LCJleHAiOjE3ODI4MjY0ODYsImlhdCI6MTc4MjgyMjg4NiwianRpIjoiZmEyZjNjZDEtMTI3NS00NzU2LTg5OGMtY2E4MTg0NTU4MTBmIiwidXNlcm5hbWUiOiJnb29nbGVfMTExMDI1OTM0MjU5ODQ4MTAxODMyIn0.fvwwZ1y4SZ2CJM241FG2yh6V_KAFIEfR5wxQjLUq733PIE2U__yasUfy0MmSW9kpzeARJoQ8hgw2Jru9_mAq8_214TZ3PFGRDzpI_FSEW5i1FqR5WtV5QM-5XXbEM1z2LyhJn30Gwm9goUgvrx3cXkRkvHBkjsrGQlrHcdICDT7Zpf7na2lwWIJ7imV1KnzjlV5qluNLT9zzLWpxiLImvy7_pvew71wYjktPb1aZrl0zJWm8CuT3iqxyBdIRuulivZ3kkXZ73tuY7B8UvCXeGm1Fx_OQc04npVg4VY303wEhPbZG-ptaVG8UUgRpFSDTKaFBnhXgGZUFdPoCk8H_rA", 
-        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
-        "sec-ch-ua": "\"Google Chrome\";v=\"149\", \"Chromium\";v=\"149\", \"Not)A;Brand\";v=\"24\"",
-        "sec-ch-ua-mobile": "?0",
-        "accept": "*/*",
-        "origin": "http://localhost:8080",
-        "sec-fetch-site": "same-site",
-        "sec-fetch-mode": "cors",
-        "sec-fetch-dest": "empty",
-        "referer": "http://localhost:8080/",
-        "accept-encoding": "gzip, deflate, br, zstd",        
-        "accept-language": "en-US,en;q=0.9,te;q=0.8"
-      },
-      "remoteAddress": "127.0.0.1",
-      "remotePort": 54220
-    }
-    requestId: "e49aa85d-e139-468b-af67-dc990eda5701"        
-    res: {
-      "statusCode": 200,
-      "headers": {
-        "x-request-id": "e49aa85d-e139-468b-af67-dc990eda5701",
-        "origin-agent-cluster": "?1",
-        "x-content-type-options": "nosniff",
-        "x-dns-prefetch-control": "off",
-        "x-download-options": "noopen",
-        "x-permitted-cross-domain-policies": "none",
-        "access-control-allow-origin": "http://localhost:8080",
-        "vary": "Origin",
-        "access-control-allow-headers": "authorization, x-client-info, apikey, content-type, accept, x-requested-with, x-stream-progress, x-idempotency-key",
-        "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-        "access-control-allow-credentials": "true",
-        "x-ratelimit-limit": "100",
-        "x-ratelimit-remaining": "99",
-        "x-cache": "MISS",
-        "content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://checkout.razorpay.com https://js.razorpay.com; style-src 'self' 'unsafe-inline' https://checkout.razorpay.com; img-src 'self' data: https:; connect-src 'self' https://api.razorpay.com https://checkout.razorpay.com; frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com; font-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self' https://api.razorpay.com",
-        "x-frame-options": "SAMEORIGIN",
-        "referrer-policy": "strict-origin-when-cross-origin",
-        "x-xss-protection": "1; mode=block",
-        "permissions-policy": "payment=self, camera=(), microphone=(), geolocation=()",
-        "x-development-mode": "true",
-        "x-test-pricing": "enabled",
-        "x-trace-id": "a09b02f0a1de423abc6ba4cb17dcf5f9",    
-        "traceparent": "00-a09b02f0a1de423abc6ba4cb17dcf5f9-3cdf1a5096694d1b-01",
-        "content-type": "application/json; charset=utf-8",   
-        "content-length": "51",
-        "etag": "W/\"33-HyPJfwKakOxJhexEYwbLmGzCwb4\""       
-      }
-    }
-    responseTime: 1080
-[Auth] User authenticated: vusalashivakumar@gmail.com (user) - GET /api/db/user_roles
-[Security] DATA_ACCESS: Request failed with status 503 - 127.0.0.1 - GET /api/db/user_roles
-[Auth] User authenticated: vusalashivakumar@gmail.com (user) - GET /api/db/workflows
-[Security] DATA_ACCESS: Request failed with status 503 - 127.0.0.1 - GET /api/db/workflows
-[Auth] User authenticated: vusalashivakumar@gmail.com (user) - GET /api/auth/status
-[Request] GET /api/auth/status - 200 - 7951ms - vusalashivakumar@gmail.com
-[2026-06-30 18:28:10.633 +0530] INFO: request errored
-    req: {
-      "id": "400d3f54-13c3-414d-809a-f14474bb1cda",
-      "method": "GET",
-      "url": "/api/db/user_roles?select=role&filter_user_id=d1f3dd1a-2081-7056-9577-8ef4e3a8082a",
-      "query": {
-        "select": "role",
-        "filter_user_id": "d1f3dd1a-2081-7056-9577-8ef4e3a8082a"
-      },
-      "params": {},
-      "headers": {
-        "host": "localhost:3001",
-        "connection": "keep-alive",
-        "sec-ch-ua-platform": "\"Windows\"",
-        "authorization": "Bearer eyJraWQiOiJSN2x5WWNsNHI4TmlGLzlHd1NFbVZLTTBhSjl4bE5LYW9SL0tEY1ErMDFzPSIsImFsZyI6IlJTMjU2In0.eyJzdWIiOiJkMWYzZGQxYS0yMDgxLTcwNTYtOTU3Ny04ZWY0ZTNhODA4MmEiLCJjb2duaXRvOmdyb3VwcyI6WyJhcC1zb3V0aC0xX2FUWXZTWWZscV9Hb29nbGUiXSwiaXNzIjoiaHR0cHM6Ly9jb2duaXRvLWlkcC5hcC1zb3V0aC0xLmFtYXpvbmF3cy5jb20vYXAtc291dGgtMV9hVFl2U1lmbHEiLCJ2ZXJzaW9uIjoyLCJjbGllbnRfaWQiOiIzaXN0czVoOGExbW1jczhhcmU1bjFwaTVtOCIsIm9yaWdpbl9qdGkiOiJiYjdmZGM2Zi1mNjg3LTRhZjMtOTVmYS00YjE0NmU2ZjJhN2EiLCJ0b2tlbl91c2UiOiJhY2Nlc3MiLCJzY29wZSI6Im9wZW5pZCBwcm9maWxlIGVtYWlsIiwiYXV0aF90aW1lIjoxNzgyODIyODg2LCJleHAiOjE3ODI4MjY0ODYsImlhdCI6MTc4MjgyMjg4NiwianRpIjoiZmEyZjNjZDEtMTI3NS00NzU2LTg5OGMtY2E4MTg0NTU4MTBmIiwidXNlcm5hbWUiOiJnb29nbGVfMTExMDI1OTM0MjU5ODQ4MTAxODMyIn0.fvwwZ1y4SZ2CJM241FG2yh6V_KAFIEfR5wxQjLUq733PIE2U__yasUfy0MmSW9kpzeARJoQ8hgw2Jru9_mAq8_214TZ3PFGRDzpI_FSEW5i1FqR5WtV5QM-5XXbEM1z2LyhJn30Gwm9goUgvrx3cXkRkvHBkjsrGQlrHcdICDT7Zpf7na2lwWIJ7imV1KnzjlV5qluNLT9zzLWpxiLImvy7_pvew71wYjktPb1aZrl0zJWm8CuT3iqxyBdIRuulivZ3kkXZ73tuY7B8UvCXeGm1Fx_OQc04npVg4VY303wEhPbZG-ptaVG8UUgRpFSDTKaFBnhXgGZUFdPoCk8H_rA", 
-        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
-        "sec-ch-ua": "\"Google Chrome\";v=\"149\", \"Chromium\";v=\"149\", \"Not)A;Brand\";v=\"24\"",
-        "content-type": "application/json",
-        "sec-ch-ua-mobile": "?0",
-        "accept": "*/*",
-        "origin": "http://localhost:8080",
-        "sec-fetch-site": "same-site",
-        "sec-fetch-mode": "cors",
-        "sec-fetch-dest": "empty",
-        "referer": "http://localhost:8080/",
-        "accept-encoding": "gzip, deflate, br, zstd",        
-        "accept-language": "en-US,en;q=0.9,te;q=0.8"
-      },
-      "remoteAddress": "127.0.0.1",
-      "remotePort": 54160
-    }
-    requestId: "400d3f54-13c3-414d-809a-f14474bb1cda"        
-    res: {
-      "statusCode": 503,
-      "headers": {
-        "x-request-id": "400d3f54-13c3-414d-809a-f14474bb1cda",
-        "origin-agent-cluster": "?1",
-        "x-content-type-options": "nosniff",
-        "x-dns-prefetch-control": "off",
-        "x-download-options": "noopen",
-        "x-permitted-cross-domain-policies": "none",
-        "access-control-allow-origin": "http://localhost:8080",
-        "vary": "Origin",
-        "access-control-allow-headers": "authorization, x-client-info, apikey, content-type, accept, x-requested-with, x-stream-progress, x-idempotency-key",
-        "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-        "access-control-allow-credentials": "true",
-        "x-ratelimit-limit": "100",
-        "x-ratelimit-remaining": "98",
-        "content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://checkout.razorpay.com https://js.razorpay.com; style-src 'self' 'unsafe-inline' https://checkout.razorpay.com; img-src 'self' data: https:; connect-src 'self' https://api.razorpay.com https://checkout.razorpay.com; frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com; font-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self' https://api.razorpay.com",
-        "x-frame-options": "SAMEORIGIN",
-        "referrer-policy": "strict-origin-when-cross-origin",
-        "x-xss-protection": "1; mode=block",
-        "permissions-policy": "payment=self, camera=(), microphone=(), geolocation=()",
-        "x-development-mode": "true",
-        "x-test-pricing": "enabled",
-        "x-trace-id": "ccf840c5da494b3ea1ad9dc212c22dd8",    
-        "traceparent": "00-ccf840c5da494b3ea1ad9dc212c22dd8-a604c08cb45b4c42-01",
-        "content-type": "application/json; charset=utf-8",   
-        "content-length": "92",
-        "etag": "W/\"5c-edxU1KVKqcqodU2yz3WtCjjvdLU\""       
-      }
-    }
-    responseTime: 1043
-    err: {
-      "type": "Error",
-      "message": "failed with status code 503",
-      "stack":
-          Error: failed with status code 503
-              at onResFinished (C:\Users\user\Desktop\ctrlchecks-hostinger\worker\node_modules\pino-http\logger.js:115:39)
-              at ServerResponse.onResponseComplete (C:\Users\user\Desktop\ctrlchecks-hostinger\worker\node_modules\pino-http\logger.js:178:14)
-              at ServerResponse.emit (node:events:520:35)    
-              at ServerResponse.emit (node:domain:489:12)    
-              at onFinish (node:_http_outgoing:1026:10)      
-              at callback (node:internal/streams/writable:764:21)
-              at afterWrite (node:internal/streams/writable:708:5)
-              at afterWriteTick (node:internal/streams/writable:694:10)
-              at processTicksAndRejections (node:internal/process/task_queues:89:21)
-    }
-[2026-06-30 18:28:10.644 +0530] INFO: request errored        
-    req: {
-      "id": "574584f1-a581-40d6-baba-3a02a69d7326",
-      "method": "GET",
-      "url": "/api/db/workflows?select=id%2C+cron_expression&filter_setup_completed=true&notnull_cron_expression=true",   
-      "query": {
-        "select": "id, cron_expression",
-        "filter_setup_completed": "true",
-        "notnull_cron_expression": "true"
-      },
-      "params": {},
-      "headers": {
-        "host": "localhost:3001",
-        "connection": "keep-alive",
-        "sec-ch-ua-platform": "\"Windows\"",
-        "authorization": "Bearer eyJraWQiOiJSN2x5WWNsNHI4TmlGLzlHd1NFbVZLTTBhSjl4bE5LYW9SL0tEY1ErMDFzPSIsImFsZyI6IlJTMjU2In0.eyJzdWIiOiJkMWYzZGQxYS0yMDgxLTcwNTYtOTU3Ny04ZWY0ZTNhODA4MmEiLCJjb2duaXRvOmdyb3VwcyI6WyJhcC1zb3V0aC0xX2FUWXZTWWZscV9Hb29nbGUiXSwiaXNzIjoiaHR0cHM6Ly9jb2duaXRvLWlkcC5hcC1zb3V0aC0xLmFtYXpvbmF3cy5jb20vYXAtc291dGgtMV9hVFl2U1lmbHEiLCJ2ZXJzaW9uIjoyLCJjbGllbnRfaWQiOiIzaXN0czVoOGExbW1jczhhcmU1bjFwaTVtOCIsIm9yaWdpbl9qdGkiOiJiYjdmZGM2Zi1mNjg3LTRhZjMtOTVmYS00YjE0NmU2ZjJhN2EiLCJ0b2tlbl91c2UiOiJhY2Nlc3MiLCJzY29wZSI6Im9wZW5pZCBwcm9maWxlIGVtYWlsIiwiYXV0aF90aW1lIjoxNzgyODIyODg2LCJleHAiOjE3ODI4MjY0ODYsImlhdCI6MTc4MjgyMjg4NiwianRpIjoiZmEyZjNjZDEtMTI3NS00NzU2LTg5OGMtY2E4MTg0NTU4MTBmIiwidXNlcm5hbWUiOiJnb29nbGVfMTExMDI1OTM0MjU5ODQ4MTAxODMyIn0.fvwwZ1y4SZ2CJM241FG2yh6V_KAFIEfR5wxQjLUq733PIE2U__yasUfy0MmSW9kpzeARJoQ8hgw2Jru9_mAq8_214TZ3PFGRDzpI_FSEW5i1FqR5WtV5QM-5XXbEM1z2LyhJn30Gwm9goUgvrx3cXkRkvHBkjsrGQlrHcdICDT7Zpf7na2lwWIJ7imV1KnzjlV5qluNLT9zzLWpxiLImvy7_pvew71wYjktPb1aZrl0zJWm8CuT3iqxyBdIRuulivZ3kkXZ73tuY7B8UvCXeGm1Fx_OQc04npVg4VY303wEhPbZG-ptaVG8UUgRpFSDTKaFBnhXgGZUFdPoCk8H_rA", 
-        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
-        "sec-ch-ua": "\"Google Chrome\";v=\"149\", \"Chromium\";v=\"149\", \"Not)A;Brand\";v=\"24\"",
-        "content-type": "application/json",
-        "sec-ch-ua-mobile": "?0",
-        "accept": "*/*",
-        "origin": "http://localhost:8080",
-        "sec-fetch-site": "same-site",
-        "sec-fetch-mode": "cors",
-        "sec-fetch-dest": "empty",
-        "referer": "http://localhost:8080/",
-        "accept-encoding": "gzip, deflate, br, zstd",        
-        "accept-language": "en-US,en;q=0.9,te;q=0.8"
-      },
-      "remoteAddress": "127.0.0.1",
-      "remotePort": 60072
-    }
-    requestId: "574584f1-a581-40d6-baba-3a02a69d7326"        
-    res: {
-      "statusCode": 503,
-      "headers": {
-        "x-request-id": "574584f1-a581-40d6-baba-3a02a69d7326",
-        "origin-agent-cluster": "?1",
-        "x-content-type-options": "nosniff",
-        "x-dns-prefetch-control": "off",
-        "x-download-options": "noopen",
-        "x-permitted-cross-domain-policies": "none",
-        "access-control-allow-origin": "http://localhost:8080",
-        "vary": "Origin",
-        "access-control-allow-headers": "authorization, x-client-info, apikey, content-type, accept, x-requested-with, x-stream-progress, x-idempotency-key",
-        "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-        "access-control-allow-credentials": "true",
-        "x-ratelimit-limit": "100",
-        "x-ratelimit-remaining": "97",
-        "content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://checkout.razorpay.com https://js.razorpay.com; style-src 'self' 'unsafe-inline' https://checkout.razorpay.com; img-src 'self' data: https:; connect-src 'self' https://api.razorpay.com https://checkout.razorpay.com; frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com; font-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self' https://api.razorpay.com",
-        "x-frame-options": "SAMEORIGIN",
-        "referrer-policy": "strict-origin-when-cross-origin",
-        "x-xss-protection": "1; mode=block",
-        "permissions-policy": "payment=self, camera=(), microphone=(), geolocation=()",
-        "x-development-mode": "true",
-        "x-test-pricing": "enabled",
-        "x-trace-id": "43e9397d06f74ec583bccaca2ccfaf02",    
-        "traceparent": "00-43e9397d06f74ec583bccaca2ccfaf02-c226f179244a4bb9-01",
-        "content-type": "application/json; charset=utf-8",   
-        "content-length": "92",
-        "etag": "W/\"5c-edxU1KVKqcqodU2yz3WtCjjvdLU\""       
-      }
-    }
-    responseTime: 1031
-    err: {
-      "type": "Error",
-      "message": "failed with status code 503",
-      "stack":
-          Error: failed with status code 503
-              at onResFinished (C:\Users\user\Desktop\ctrlchecks-hostinger\worker\node_modules\pino-http\logger.js:115:39)
-              at ServerResponse.onResponseComplete (C:\Users\user\Desktop\ctrlchecks-hostinger\worker\node_modules\pino-http\logger.js:178:14)
-              at ServerResponse.emit (node:events:520:35)    
-              at ServerResponse.emit (node:domain:489:12)    
-              at onFinish (node:_http_outgoing:1026:10)      
-              at callback (node:internal/streams/writable:764:21)
-              at afterWrite (node:internal/streams/writable:708:5)
-              at afterWriteTick (node:internal/streams/writable:694:10)
-              at processTicksAndRejections (node:internal/process/task_queues:89:21)
-    }
+[nodemon] 3.1.14
+[nodemon] to restart at any time, enter `rs`
+[nodemon] watching path(s): src\**\*
+[nodemon] watching extensions: js,mjs,cjs,json
+[nodemon] starting `ts-node src/index.ts`
+[env-loader] Loaded C:\Users\user\Desktop\ctrlchecks-hostinger\services\notification-service\.env
+Error: listen EADDRINUSE: address already in use 127.0.0.1:3005
+    at Server.setupListenHandle [as _listen2] (node:net:1948:16)
+    at listenInCluster (node:net:2005:12)
+    at node:net:2214:7
+    at processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '127.0.0.1',
+  port: 3005
+}
+[nodemon] app crashed - waiting for file changes before starting...
+
+> ctrlchecks-credential-service@0.1.0 dev
+> nodemon --watch src --exec "ts-node src/index.ts"
+
+[nodemon] 3.1.14
+[nodemon] to restart at any time, enter `rs`
+[nodemon] watching path(s): src\**\*
+[nodemon] watching extensions: js,mjs,cjs,json
+[nodemon] starting `ts-node src/index.ts`
+[env-loader] Loaded C:\Users\user\Desktop\ctrlchecks-hostinger\services\credential-service\.env
+Error: listen EADDRINUSE: address already in use 127.0.0.1:3004
+    at Server.setupListenHandle [as _listen2] (node:net:1948:16)
+    at listenInCluster (node:net:2005:12)
+    at node:net:2214:7
+    at processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '127.0.0.1',
+  port: 3004
+}
+[nodemon] app crashed - waiting for file changes before starting...
+
+
+
+> ctrlchecks-execution-engine@0.1.0 dev
+> nodemon --watch src --exec "ts-node src/index.ts"
+
+[nodemon] 3.1.14
+[nodemon] to restart at any time, enter `rs`
+[nodemon] watching path(s): src\**\*
+[nodemon] watching extensions: js,mjs,cjs,json
+[nodemon] starting `ts-node src/index.ts`
+[env-loader] Loaded C:\Users\user\Desktop\ctrlchecks-hostinger\services\execution-engine\.env
+Error: listen EADDRINUSE: address already in use 127.0.0.1:3003
+    at Server.setupListenHandle [as _listen2] (node:net:1948:16)
+    at listenInCluster (node:net:2005:12)
+    at node:net:2214:7
+    at processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '127.0.0.1',
+  port: 3003
+}
+[nodemon] app crashed - waiting for file changes before starting...
+
+
+> ctrlchecks-workflow-crud-service@0.1.0 dev
+> nodemon --watch src --exec "ts-node src/index.ts"
+
+[nodemon] 3.1.14
+[nodemon] to restart at any time, enter `rs`
+[nodemon] watching path(s): src\**\*
+[nodemon] watching extensions: js,mjs,cjs,json
+[nodemon] starting `ts-node src/index.ts`
+[env-loader] Loaded C:\Users\user\Desktop\ctrlchecks-hostinger\services\workflow-crud-service\.env
+Error: listen EADDRINUSE: address already in use 127.0.0.1:3007
+    at Server.setupListenHandle [as _listen2] (node:net:1948:16)
+    at listenInCluster (node:net:2005:12)
+    at node:net:2214:7
+    at processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '127.0.0.1',
+  port: 3007
+}
+[nodemon] app crashed - waiting for file changes before starting
+
+> ctrlchecks-trigger-service@0.1.0 dev
+> nodemon --watch src --exec "ts-node src/index.ts"
+
+[nodemon] 3.1.14
+[nodemon] to restart at any time, enter `rs`
+[nodemon] watching path(s): src\**\*Overview
+
+Copy page
+
+Contentful’s Content Management API (CMA) helps you manage content in your spaces. To learn more about how to model your content, read our modeling guide.
+
+NOTE: You can use the CMA to deliver and manage content, but you shouldn’t use it to deliver large amounts of content and instead use the Content Delivery API. The structure of responses from the CMA differs from the CDA as GET responses retrieve the entirety of items (i.e. all localized and unpublished content).
+
+Note: For EU data residency customers, the Base URL is https://api.eu.contentful.com.
+Basic API information
+API Base URL https://api.contentful.com This is a read/write API
+
+Authentication
+You access the API securely via HTTPS, and it will be available to clients authenticating with an access token.
+
+Learn about authenticating to the CMA and get your access token from the developer center.
+
+Resource IDs
+When creating resources, you can specify an ID or let the API generate a random ID for you. If you choose an ID yourself it must adhere to the following rules:
+
+It has a length between 1 and 64 characters.
+
+It only includes alphanumeric characters, dots ., hyphens - or underscores _.
+
+Represented as a regular expression, this is /^[a-zA-Z0-9-_.]{1,64}$/.
+
+Updating content
+Contentful doesn’t merge changes made to content, so when updating content, you need to send the entire body of an entry. If you update content with a subset of properties, you will lose all existing properties not included in that update.
+
+You should always update resources in the following order:
+
+Fetch current resource.
+
+Make changes to the current resource.
+
+Update the resource by passing the changed resource along with current version number.
+
+This way no unseen changes are overridden and unexpected conflicts are unlikely to occur.
+
+Note: You can’t update any of the sys property fields, including sys.id.
+
+Updating and version locking
+Contentful uses optimistic locking. When updating an existing resource, you need to specify its current version with the X-Contentful-Version HTTP header (this header is automatically set when using our official client libraries). Contentful compares this version with the current version stored to ensure that a client doesn’t overwrite a resource that has since been updated. If the version changed in-between, Contentful would reject the update.
+
+API rate limits
+API Rate limits specify the number of requests a client can make to Contentful APIs in a specific time frame. Every request counts against a per second rate limit.
+
+By default the Contentful Management API enforces rate limits of 7 requests per second. Higher rate limits may apply depending on your current plan.
+
+The following table lists all headers returned in every response by the Content Management API which give a client information on rate limiting:
+
+Header	Description
+X-Contentful-RateLimit-Second-Limit	The maximum amount of requests which can be made in a second.
+X-Contentful-RateLimit-Second-Remaining	The remaining amount of requests which can be made until the next secondly reset.
+X-Contentful-RateLimit-Reset	The number of seconds until the next request can be made.
+Here is a part of a Contentful Management API response example showing the headers for rate limiting:
+
+X-Contentful-RateLimit-Reset: 0
+X-Contentful-RateLimit-Second-Limit: 7
+X-Contentful-RateLimit-Second-Remaining: 9
+
+
+When a client gets rate limited, the API responds with the 429 Too Many Requests HTTP status code and sets the value X-Contentful-RateLimit-Reset header to an integer specifying the time before the limit resets and another request will be accepted. As the client is rate limited per second, the header will return 1, which means the next second.
+
+Examples:
+
+The current rate limits for a client are the default 7 per second.
+
+Example 1
+
+Client: 5 requests in 1 second
+
+HTTP/1.1 2xx
+X-Contentful-RateLimit-Reset: 0
+
+
+Meaning: not rate limited. More requests are allowed.
+
+Example 2
+
+Client: 11 requests in 1 second
+
+HTTP/1.1 429
+X-Contentful-RateLimit-Reset: 1
+
+
+Meaning: wait 1 second before making more requests.
+
+Example 3
+
+Client: 9000 requests in 15 minutes, 9000 requests in following 15 minutes, 9000 requests in following 15 minutes, 9000 requests in following 15 minutes
+
+HTTP/1.1 429
+X-Contentful-RateLimit-Reset: 900
+
+
+Meaning: wait 15 minutes before making more requests (which frees up 9000 requests - 15 minutes later 9000 requests get freed up and so on).
+
+Common Resource Attributes
+Every resource returned by the API includes a sys property. The sys object contains system managed and resource dependent information. At minimum sys defines the sys.type property.
+
+During entity creation, the value of sys.id is either automatically generated or can be specified in the URL (e.g. /environments/master/entries/my-custom-id) of the initial PUT request. The only entity which always uses generated sys.id values is spaces.
+
+Note: sys metadata fields can not be changed programmatically.
+
+The sys.id property is defined for every resource that is not a collection. For example, a Space resource will have a sys.type and sys.id:
+
+{
+  "sys": {
+    "type": "Space",
+    "id": "yadj1kx9rmg0"
+  }
+}
+
+
+Field	Type	Description	Applies to
+sys.type	String	Type of a resource.	All
+sys.linkType	String	Type of an entity the link is referring to.	Links
+sys.id	String	Unique ID of a resource.	All except arrays
+sys.space	Link	Link to a resource’s space.	Entries, assets, content types
+sys.environment	Link	Link to a resource’s environment.	Entries, assets, content types
+sys.contentType	Link	Link to an entry’s content type.	Entries
+sys.publishedCounter	Integer	Number of times a resource was published.	Entries, assets, content types
+sys.publishedVersion	Integer	Published version of a resource.	Entries, assets, content types
+sys.version	Integer	Current version of a resource.	Entries, assets, content types
+sys.firstPublishedAt	Date	Date and time a resource was published for the first time.	Entries, assets, content types
+sys.createdAt	Date	Date and time a resource was generated in the system.	Entries, assets, content types
+sys.createdBy	Link	Link to creating a user.	Entries, assets, content types
+sys.publishedAt	Date	Date and time a resource was published after an update.	Entries, assets, content types
+sys.publishedBy	Link	Link to publishing a user.	Entries, assets, content types
+sys.updatedAt	Date	Date and time a resource was updated in the system.	Entries, assets, content types
+sys.updatedBy	Link	Link to updating a user.	Entries, assets, content types
+Sys properties - difference in meaning in Contentful APIs
+
+Some of sys properties, while having the same label, render different kinds of data depending on the API. Please see the descriptions of these properties per API in the table below:
+
+Property name per API			
+CMA	CDA	CPA	Description
+firstPublishedAt	createdAt	-	Date and time a resource was published for the first time.
+publishedAt	updatedAt	-	Date and time a resource was published after an update.
+createdAt	-	createdAt	Date and time a resource was generated in the system.
+updatedAt	-	updatedAt	Date and time a resource was updated in the system.
+Date and time format
+Date and time must be formatted according to ISO 8601.
+
+Important: When setting time, ensure to indicate timezone. With no timezone specified, UTC+0 is applied as a default one.
+
+The table below displays the supported date and time formatting:
+
+Data type	Format	Examples
+Date only	”YYYY-MM-DD"	"2015-11-06”
+Date + time	”YYYY-MM-DDThh:mm:ss"	
+"YYYY-MM-DDThh:mm:ss.sss"	"2015-11-06T09:45”	
+Date + time + timezone	”YYYY-MM-DDThh:mm:ssZ"	
+"YYYY-MM-DDThh:mm:ss±[hh:mm]"	"2015-11-06T09:45:27Z"	
+"2015-11-06T09:45:27+00:00"		
+"2015-11-06T09:45:27-08:00”		
+Collection resources and pagination
+Contentful returns collections of resources in a wrapper object that contains extra information useful for paginating over large result sets:
+
+{
+  "sys": { "type": "Array" },
+  "skip": 0,
+  "limit": 100,
+  "total": 1256,
+  "items": [ /* 100 individual resources */ ]
+}
+
+
+In the above example, a client retrieves the next 100 resources by repeating the same request, changing the skip query parameter to 100. You can use the order parameter when paging through larger result sets to keep ordering predictable. For example, order=sys.createdAt will order results by the time the resource was first published.
+
+Cursor pagination
+Overview
+Cursor pagination is an approach to paginating datasets in Contentful APIs. Unlike traditional offset-based pagination, which uses skip and limit parameters, cursor-based pagination uses opaque cursor tokens and dedicated next/prev links to mark the position in the dataset. This can dramatically improve performance, especially for datasets with large numbers of items.
+
+How cursor pagination works
+Initial Request:
+Add the query parameter cursor=true to your API request, e.g.
+
+GET /spaces/:space_id/entries?cursor=true
+
+
+The response contains:
+
+items: The current page of resources.
+pages: Contains next (and optionally prev) URLs for paginating forward and backward.
+Paginate forward:
+Use the pages.next URL from the previous response for the next page request:
+
+GET /spaces/:space_id/entries?pageNext={cursor_token}
+
+
+Continue this process until the next link is omitted, which means you’ve reached the end of the dataset.
+
+Paginate backward: If the response contains a pages.prev link, you can fetch previous pages:
+
+GET /spaces/:space_id/entries?pagePrev={cursor_token}
+
+
+Consistency: All query parameters used in the initial request apart from limit are locked and encoded in the cursor token. They cannot be changed between pages.
+
+The limit parameter can be updated, and the new value will be persisted for subsequent pages until it’s updated again.
+
+GET /spaces/:space_id/entries?pageNext={cursor_token}&limit={limit}
+
+
+This can be useful when you need to adjust the page size, for example, if a page size (in bytes) exceeds the response limit.
+
+Total count: The response does not include a total count or a skip property. This is a key feature for performance, as the API avoids costly full counts on large datasets.
+
+Example response
+{
+  "sys": { "type": "Array" },
+  "limit": 100,
+  "items": [ ... ],
+  "pages": {
+    "next": "/spaces/:space_id/entries?pageNext=cursor_token",
+    "prev": "/spaces/:space_id/entries?pagePrev=cursor_token"
+  }
+}
+
+
+Advantages
+Considerable performance improvements, particularly for large datasets.
+If your environment contains 10s of thousands of entries or assets, consider switching to cursor pagination, it can make requests to fetch lists of entries or assets of such an environment much faster.
+
+If you don’t paginate at all, particularly when working with CDA and you don’t need the total property from the response, we highly recommend using requests with cursor=true.
+
+Limitations
+The “total” property is not included in the API responses. Make sure you don’t rely on it in your workflow prior to making the switch.
+Enablement and access
+The feature is currently available in the CMA, CPA and CDA.
+API versioning
+All API requests should specify a Content-Type header of application/vnd.contentful.management.v1+json.
+
+If not specified, Contentful will route your request to the latest version of the API. This could break clients which expect the outdated API version. To be certain, always specify the Content-Type header.
+[nodemon] watching extensions: js,mjs,cjs,json
+[nodemon] starting `ts-node src/index.ts`
+[env-loader] Loaded C:\Users\user\Desktop\ctrlchecks-hostinger\services\trigger-service\.env
+Error: listen EADDRINUSE: address already in use 127.0.0.1:3006
+    at Server.setupListenHandle [as _listen2] (node:net:1948:16)
+    at listenInCluster (node:net:2005:12)
+    at node:net:2214:7
+    at processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '127.0.0.1',
+  port: 3006
+}
+[nodemon] app crashed - waiting for file changes before starting...
+
+
+it showing like this 
+
+🔍 Environment Debug: Object
+endpoints.ts:94 App Configuration: Object
+client.ts:69 🌐 API Client initialized with base URL: http://localhost:3001
+workflowScheduler.ts:336 [Scheduler] Stopping all schedulers (0 active)
+workflowScheduler.ts:351 [Scheduler] ✅ All schedulers stopped
+client.ts:119 ✅ Backend connection established
+:3001/api/db/workflows?order_col=updated_at&order_dir=DESC&limit=6&filter_setup_completed=true:1  Failed to load resource: the server responded with a status of 503 (Service Unavailable)
+installHook.js:1 Error loading workflows: Object
+overrideMethod @ installHook.js:1
+:3001/api/db/workflows?select=id&limit=0&count=exact&filter_setup_completed=true:1  Failed to load resource: the server responded with a status of 503 (Service Unavailable)
+installHook.js:1 Error loading stats: Object
+overrideMethod @ installHook.js:1
+:3001/api/db/user_roles?select=role&filter_user_id=d1f3dd1a-2081-7056-9577-8ef4e3a8082a:1  Failed to load resource: the server responded with a status of 503 (Service Unavailable)
+installHook.js:1 Error getting user role: Object
+overrideMethod @ installHook.js:1
+general.js:205 [LaunchDarkly] LaunchDarkly client initialized
+workflowScheduler.ts:336 [Scheduler] Stopping all schedulers (0 active)
+workflowScheduler.ts:351 [Scheduler] ✅ All schedulers stopped
+:3001/api/db/workflows?select=id%2C+cron_expression&filter_setup_completed=true&notnull_cron_expression=true:1  Failed to load resource: the server responded with a status of 503 (Service Unavailable)
+installHook.js:1 Error loading scheduled workflows: Object
+overrideMethod @ installHook.js:1
+selection.3fa02834.js:382 Download the Apollo DevTools for a better development experience: https://chrome.google.com/webstore/detail/apollo-client-developer-t/jdkknkkbebbapilgoeccciglkfbmbnfm

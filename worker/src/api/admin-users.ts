@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { getDbClient } from '../core/database/aws-db-client';
 import { logger } from '../core/logger';
+import { recordAuditEvent } from '../core/audit/audit-log-service';
 
 type AppRole = 'admin' | 'moderator' | 'user';
 type WorkflowStatus = 'active' | 'inactive';
@@ -362,6 +363,17 @@ export default async function adminUsersHandler(req: Request, res: Response) {
         if (banError) {
           throw banError;
         }
+
+        recordAuditEvent({
+          actorUserId: auth.requester.id,
+          actorEmail: auth.requester.email,
+          actorRole: 'admin',
+          action: body.suspended ? 'admin.user.suspended' : 'admin.user.reinstated',
+          resourceType: 'user',
+          resourceId: userId,
+          ipAddress: req.ip,
+          userAgent: req.get('User-Agent'),
+        });
       }
 
       let updatedRole: AppRole | undefined;
@@ -370,6 +382,12 @@ export default async function adminUsersHandler(req: Request, res: Response) {
         if (!validRoles.includes(requestedRole)) {
           return res.status(400).json({ error: 'role must be one of: admin, moderator, user' });
         }
+
+        const { data: previousRoleRows } = await db
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', userId);
+        const previousRoles = ((previousRoleRows || []) as any[]).map((row) => row.role);
 
         const { error: deleteRolesError } = await db
           .from('user_roles')
@@ -389,6 +407,18 @@ export default async function adminUsersHandler(req: Request, res: Response) {
         }
 
         updatedRole = roleData.role as AppRole;
+
+        recordAuditEvent({
+          actorUserId: auth.requester.id,
+          actorEmail: auth.requester.email,
+          actorRole: 'admin',
+          action: 'admin.user.role_changed',
+          resourceType: 'user',
+          resourceId: userId,
+          ipAddress: req.ip,
+          userAgent: req.get('User-Agent'),
+          metadata: { previousRoles, newRole: updatedRole },
+        });
       }
 
       return res.json({
@@ -407,6 +437,17 @@ export default async function adminUsersHandler(req: Request, res: Response) {
       if (error) {
         throw error;
       }
+
+      recordAuditEvent({
+        actorUserId: auth.requester.id,
+        actorEmail: auth.requester.email,
+        actorRole: 'admin',
+        action: 'admin.user.deleted',
+        resourceType: 'user',
+        resourceId: userId,
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent'),
+      });
 
       return res.json({ success: true });
     }
