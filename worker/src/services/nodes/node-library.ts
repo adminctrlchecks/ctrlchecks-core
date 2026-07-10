@@ -8877,7 +8877,7 @@ export class NodeLibrary {
       category: 'output',
       description: 'Send emails through Amazon Simple Email Service (SES)',
       configSchema: {
-        required: ['recipients', 'subject', 'body'],
+        required: ['recipients', 'fromAddress'],
         optional: {
           // Email content
           recipients: {
@@ -8890,19 +8890,23 @@ export class NodeLibrary {
           },
           subject: {
             type: 'string',
-            description: 'Email subject line',
+            description: 'Email subject line (required when not using an AWS SES template)',
             examples: ['Order Confirmation', '{{$json.subject}}'],
+            requiredIf: { field: 'useTemplate', equals: false },
+            visibleIf: { field: 'useTemplate', equals: false },
           },
           body: {
             type: 'string',
-            description: 'Email body content (HTML or plain text)',
+            description: 'Email body content (HTML and plain text are both sent from this value when not using a template)',
             examples: ['Hello {{$json.name}}, your order is confirmed.'],
+            requiredIf: { field: 'useTemplate', equals: false },
+            visibleIf: { field: 'useTemplate', equals: false },
           },
 
           // Template support
           useTemplate: {
             type: 'boolean',
-            description: 'Use AWS SES template instead of raw email',
+            description: 'Use an existing AWS SES template instead of the Subject and Body fields',
             default: false,
           },
           templateName: {
@@ -8910,6 +8914,7 @@ export class NodeLibrary {
             description: 'AWS SES template name (required if useTemplate is true)',
             examples: ['OrderConfirmation', 'WelcomeEmail'],
             requiredIf: { field: 'useTemplate', equals: true },
+            visibleIf: { field: 'useTemplate', equals: true },
           },
           templateData: {
             type: 'object',
@@ -8979,6 +8984,44 @@ export class NodeLibrary {
         error: { type: 'string' },
         timestamp: { type: 'string' },
       },
+      operationContracts: [
+        {
+          operation: 'default',
+          label: 'Send Email',
+          requiredFields: ['recipients', 'fromAddress'],
+          optionalFields: [
+            'subject',
+            'body',
+            'useTemplate',
+            'templateName',
+            'templateData',
+            'replyToAddresses',
+            'attachments',
+            'awsRegion',
+            'configurationSetName',
+            'tags',
+            'returnPath',
+          ],
+          conditionallyRequiredFields: [
+            { field: 'subject', when: { useTemplate: false } },
+            { field: 'body', when: { useTemplate: false } },
+            { field: 'templateName', when: { useTemplate: true } },
+          ],
+          emptyValuePolicy: {
+            awsRegion: 'provider_default',
+            replyToAddresses: 'optional',
+            attachments: 'optional',
+            configurationSetName: 'optional',
+            tags: 'optional',
+            returnPath: 'optional',
+            templateData: 'optional',
+          },
+          providerDefaultFields: ['awsRegion'],
+          credentialProviders: ['amazon_ses'],
+          outputFields: ['success', 'messageId', 'recipientCount', 'failedRecipients', 'error', 'timestamp'],
+          status: 'implemented',
+        },
+      ],
       aiSelectionCriteria: {
         whenToUse: [
           'User wants to send emails from workflow',
@@ -9051,23 +9094,13 @@ export class NodeLibrary {
           errorMessage: 'At least one recipient (To, Cc, or Bcc) is required',
         },
         {
-          field: 'subject',
-          validator: (value) => typeof value === 'string' && value.trim().length > 0,
-          errorMessage: 'Subject must be a non-empty string',
-        },
-        {
-          field: 'body',
-          validator: (value) => typeof value === 'string' && value.trim().length > 0,
-          errorMessage: 'Body must be a non-empty string',
-        },
-        {
           field: 'fromAddress',
           validator: (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
           errorMessage: 'From address must be a valid email address',
         },
       ],
       capabilities: ['email.send', 'ses.send', 'aws.email', 'transactional_email', 'terminal'],
-      providers: ['aws'],
+      providers: ['amazon_ses'],
       keywords: [
         'email', 'ses', 'send', 'notification', 'aws', 'mail',
         'amazon ses', 'amazon email', 'aws email', 'ses send',

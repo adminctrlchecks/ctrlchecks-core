@@ -1141,6 +1141,7 @@ export class UnifiedNodeRegistry implements INodeRegistry {
     contentful:    { credentialTypeId: 'contentful_cma_token', label: 'Contentful CMA Personal Access Token', authType: 'bearer_token', compatibleCredentialTypeIds: ['contentful_cma_token', 'bearer_token'] },
     // Cloud / infra
     aws:           { credentialTypeId: 'aws_s3_api_key',       label: 'AWS Credentials',          authType: 'api_key' },
+    amazon_ses:    { credentialTypeId: 'amazon_ses_access_key', label: 'Amazon SES Access Key',    authType: 'api_key', compatibleCredentialTypeIds: ['amazon_ses_access_key', 'aws_s3_api_key'] },
     cloudflare:    { credentialTypeId: 'cloudflare_api_key',   label: 'Cloudflare API Key',       authType: 'bearer_token' },
     dropbox:       { credentialTypeId: 'dropbox_oauth2',       label: 'Dropbox Connection',       authType: 'oauth2' },
     microsoft:     { credentialTypeId: 'microsoft_oauth2',     label: 'Microsoft Connection',     authType: 'oauth2' },
@@ -1223,6 +1224,10 @@ export class UnifiedNodeRegistry implements INodeRegistry {
             required: false,
             description: `${mapping.label} connection`,
             credentialTypeId: mapping.credentialTypeId,
+            credentialTypeIds: Array.from(new Set([
+              mapping.credentialTypeId,
+              ...(mapping.compatibleCredentialTypeIds || []),
+            ])),
             authType: mapping.authType,
             label: mapping.label,
           };

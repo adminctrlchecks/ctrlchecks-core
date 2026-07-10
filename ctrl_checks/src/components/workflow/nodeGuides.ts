@@ -12,6 +12,67 @@ export type FieldKey = string;
 
 // Guide data structure: nodeType -> fieldKey -> guide
 export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
+  amazon_ses: {
+    recipients: {
+      title: 'How to set Recipients?',
+      steps: [
+        'Enter a JSON object with to, cc, and bcc arrays.',
+        'At least one recipient is required across those arrays.',
+        'Example: {"to":["customer@example.com"],"cc":["ops@example.com"]}',
+        'Use workflow values such as {{input.email}} when the address comes from an earlier step.'
+      ],
+      example: '{"to":["customer@example.com"]}'
+    },
+    fromAddress: {
+      title: 'How to set From Address?',
+      url: 'https://docs.aws.amazon.com/ses/latest/dg/verify-addresses-and-domains.html',
+      steps: [
+        'Use an email address or domain identity verified in Amazon SES.',
+        'Open AWS Console -> Amazon SES -> Verified identities in the same region as this node.',
+        'Copy the exact sender address, for example notifications@yourdomain.com.',
+        'SES sandbox accounts can send only to verified recipients until production access is approved.'
+      ],
+      example: 'notifications@yourdomain.com'
+    },
+    awsRegion: {
+      title: 'How to choose AWS Region?',
+      steps: [
+        'Choose the region where your SES identities, templates, and configuration sets exist.',
+        'The node defaults to us-east-1 when no region is set.',
+        'If your saved Amazon SES connection includes a region, leave this field at the matching value or override it deliberately.'
+      ],
+      example: 'us-east-1'
+    },
+    templateName: {
+      title: 'How to use Template Name?',
+      url: 'https://docs.aws.amazon.com/ses/latest/dg/send-personalized-email-api.html',
+      steps: [
+        'Turn on Use AWS SES Template.',
+        'Open AWS Console -> Amazon SES -> Email templates in the selected region.',
+        'Copy the exact template name.',
+        'Fill Template Data with the variables used by that template.'
+      ],
+      example: 'OrderConfirmation'
+    },
+    templateData: {
+      title: 'How to set Template Data?',
+      steps: [
+        'Enter a JSON object whose keys match the variables in the SES template.',
+        'Example: {"name":"Ada","orderId":"12345"}',
+        'Use workflow values such as {{$json.name}} or {{input.orderId}} when values come from earlier steps.'
+      ],
+      example: '{"name":"Ada","orderId":"12345"}'
+    },
+    attachments: {
+      title: 'How to add Attachments?',
+      steps: [
+        'Enter a JSON array of attachment objects.',
+        'Each item needs filename, base64 content, and contentType.',
+        'SES sends attachments through a raw MIME email and enforces the total message size limit.'
+      ],
+      example: '[{"filename":"report.pdf","content":"{{input.pdfBase64}}","contentType":"application/pdf"}]'
+    }
+  },
   google_gemini: {
     apiKey: {
       title: 'Gemini AI Studio API Key – Step-by-Step',

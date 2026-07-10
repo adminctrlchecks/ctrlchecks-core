@@ -170,7 +170,7 @@ const CREDENTIAL_TYPE_MAP: Record<string, string> = {
   twilio: 'Twilio Credential',
   mailgun: 'Mailgun API Key',
   sendgrid: 'SendGrid API Key',
-  amazon_ses: 'AWS Credential',
+  amazon_ses: 'Amazon SES Access Key',
   email: 'SMTP Credential',
   // Data
   google_sheets2: 'Google Credential',

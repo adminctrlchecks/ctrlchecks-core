@@ -91,6 +91,7 @@ export const INTEGRATION_LOGO_MAP: Record<string, string> = {
   slack:            '/integrations-logos/Slack.svg',
   twilio:           '/integrations-logos/Twilio.svg',
   sendgrid:         '/integrations-logos/Sendgrid.svg',
+  amazon_ses:       '/integrations-logos/Amazon-SES.svg',
 
   // Misc
   contentful:       '/integrations-logos/Contentful.svg',

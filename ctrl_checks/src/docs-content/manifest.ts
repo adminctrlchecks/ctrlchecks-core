@@ -740,7 +740,7 @@ export const nodeDocManifest = [
     "displayName": "Amazon SES",
     "category": "Communication",
     "description": "Send emails through Amazon Simple Email Service (SES) Use this node when a workflow needs amazon ses behavior with schema-driven inputs from the CtrlChecks node registry.",
-    "logoUrl": "/icons/nodes/amazon_ses.svg"
+    "logoUrl": "/integrations-logos/Amazon-SES.svg"
   },
   {
     "slug": "facebook",

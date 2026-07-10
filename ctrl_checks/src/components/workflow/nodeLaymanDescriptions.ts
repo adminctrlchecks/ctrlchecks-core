@@ -121,7 +121,7 @@ export const NODE_LAYMAN_DESCRIPTIONS: Record<string, string> = {
   whatsapp_cloud:             "Sends WhatsApp messages to customers via the official WhatsApp Cloud API",
   mailgun:                    "Sends transactional emails via Mailgun — a reliable email delivery service",
   sendgrid:                   "Sends emails via SendGrid — a popular service for marketing and transactional mail",
-  amazon_ses:                 "Sends emails via Amazon Simple Email Service — reliable bulk email delivery",
+  amazon_ses:                 "Sends transactional emails through Amazon Simple Email Service with templates, tags, and attachments",
   twilio:                     "Sends SMS text messages or makes phone calls via Twilio",
   zoom_video:                 "Creates Zoom meetings, retrieves recordings, or manages meeting participants",
   database_write:             "Writes a record to your database — like inserting a new row into a table",

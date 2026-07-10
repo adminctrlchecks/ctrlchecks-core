@@ -2991,16 +2991,18 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
         label: 'Subject',
         type: 'text',
         placeholder: 'Order Confirmation',
-        required: true,
-        helpText: 'Email subject line. Supports template variables. Example: "Order {{input.orderId}} Confirmation"',
+        helpText: 'Email subject line for raw SES emails. Hidden when using an AWS SES template. Supports template variables. Example: "Order {{input.orderId}} Confirmation"',
+        requiredIf: { field: 'useTemplate', equals: false },
+        visibleIf: { field: 'useTemplate', equals: false },
       },
       {
         key: 'body',
         label: 'Body',
         type: 'textarea',
         placeholder: 'Hello {{input.name}}, your order is confirmed.',
-        required: true,
-        helpText: 'Email body content (HTML or plain text). Supports template variables. Example: "Hello {{input.name}}, your order #{{input.orderId}} is confirmed."',
+        helpText: 'Email body for raw SES emails. CtrlChecks sends this value as both HTML and text. Hidden when using an AWS SES template. Supports template variables.',
+        requiredIf: { field: 'useTemplate', equals: false },
+        visibleIf: { field: 'useTemplate', equals: false },
       },
       {
         key: 'fromAddress',
@@ -3015,14 +3017,15 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
         label: 'Use AWS SES Template',
         type: 'boolean',
         defaultValue: false,
-        helpText: 'Enable to use pre-defined AWS SES templates instead of raw email content',
+        helpText: 'Enable to fetch an existing AWS SES template by name instead of using the Subject and Body fields',
       },
       {
         key: 'templateName',
         label: 'Template Name',
         type: 'text',
         placeholder: 'OrderConfirmation',
-        helpText: 'Name of the AWS SES template to use (required if useTemplate is true)',
+        requiredIf: { field: 'useTemplate', equals: true },
+        helpText: 'Name of the AWS SES template to fetch from the selected SES region',
         visibleIf: { field: 'useTemplate', equals: true },
       },
       {
@@ -3061,7 +3064,7 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
           { label: 'Asia Pacific (Sydney)', value: 'ap-southeast-2' },
         ],
         defaultValue: 'us-east-1',
-        helpText: 'AWS region where SES service is configured. Choose the region closest to your users for better performance',
+        helpText: 'AWS region where your SES verified identities, templates, and configuration sets exist. This overrides the connection region when set.',
       },
       {
         key: 'configurationSetName',
@@ -3087,7 +3090,7 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     ],
     usageGuide: {
       overview: 'Send emails through Amazon Simple Email Service (SES)',
-      inputs: ['recipients', 'subject', 'body', 'fromAddress'],
+      inputs: ['recipients', 'fromAddress', 'subject/body or templateName'],
       outputs: ['success', 'messageId', 'recipientCount', 'error'],
       example: 'Send an order confirmation email to a customer',
       tips: [

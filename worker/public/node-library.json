@@ -2514,8 +2514,7 @@
     ],
     "requiredConfig": [
       "recipients",
-      "subject",
-      "body"
+      "fromAddress"
     ],
     "optionalConfig": [
       "recipients",

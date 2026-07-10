@@ -433,17 +433,17 @@ export const credentialSteps: Record<string, CredentialGuide> = {
   },
 
   // ─── Amazon SES ────────────────────────────────────────────────
-  'AWS SES Credential': {
+  'Amazon SES Access Key': {
     steps: [
       'Go to aws.amazon.com and sign in → open the IAM (Identity and Access Management) service.',
       'Click Users → Create user. Give it a name (e.g. ctrlchecks-ses) and click Next.',
       'Under "Permissions options", click "Attach policies directly" → search for "AmazonSESFullAccess" → select it → Next → Create user.',
       'Click the new user → Security credentials tab → Access keys → Create access key → Application running outside AWS.',
       'Copy the Access Key ID and Secret Access Key. Download the CSV to save them securely.',
-      'In CtrlChecks → left menu → Connections → Add Connection → Amazon SES → enter Access Key ID, Secret Access Key, and your AWS Region (e.g. us-east-1) → Save.',
+      'In CtrlChecks → left menu → Connections → Add Connection → Amazon SES Access Key → enter Access Key ID, Secret Access Key, and your AWS Region (e.g. us-east-1) → Save.',
       'First verify your email or domain in Amazon SES before sending (SES → Verified identities → Create identity).',
     ],
-    docsUrl: 'https://docs.aws.amazon.com/ses/latest/dg/setting-up.html',
+    docsUrl: 'https://docs.aws.amazon.com/ses/latest/dg/security-iam.html',
   },
 
   // ─── AWS S3 ────────────────────────────────────────────────────
@@ -1125,6 +1125,7 @@ Object.assign(credentialSteps, {
 
 Object.assign(credentialSteps, {
   'AWS Credential': credentialSteps['AWS S3 Credential'],
+  'AWS SES Credential': credentialSteps['Amazon SES Access Key'],
   'PostgreSQL Credential': credentialSteps['PostgreSQL Connection'],
   'MongoDB Credential': credentialSteps['MongoDB Connection'],
   'MySQL Credential': credentialSteps['MySQL Connection'],

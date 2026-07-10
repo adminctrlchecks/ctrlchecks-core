@@ -1114,6 +1114,47 @@ export const specificGuides: Record<string, GuideOverride> = {
     docsUrl: 'https://documentation.mailgun.com/docs/mailgun/api-reference/authentication',
   },
 
+  // ─── Amazon SES ───────────────────────────────────────────────────────────────
+
+  amazon_ses_access_key: {
+    summary: 'Create an AWS IAM access key with Amazon SES send permissions and save it as a CtrlChecks connection.',
+    prerequisites: [
+      'An AWS account with Amazon SES enabled in the region you will use.',
+      'A verified SES sender identity for the From Address used by the workflow.',
+      'Permission to create IAM users or access keys.',
+    ],
+    steps: [
+      'Sign in to AWS Console and open IAM.',
+      'Create or choose a user for CtrlChecks SES sending.',
+      'Attach the minimum SES permissions needed, such as ses:SendEmail, ses:SendRawEmail, and ses:GetTemplate.',
+      'Open the user Security credentials tab and create an access key for an application running outside AWS.',
+      'Copy the Access Key ID and Secret Access Key immediately.',
+      'Enter those values plus the SES region, for example us-east-1, then save the connection.',
+    ],
+    fieldGuides: {
+      apiKey: {
+        label: 'Access Key ID',
+        description: 'AWS IAM access key ID used to sign Amazon SES API requests.',
+        whereToFind: 'AWS Console -> IAM -> Users -> selected user -> Security credentials -> Access keys -> Create access key.',
+        example: 'AKIAIOSFODNN7EXAMPLE',
+      },
+      secretKey: {
+        label: 'Secret Access Key',
+        description: 'AWS IAM secret access key paired with the Access Key ID.',
+        whereToFind: 'Shown once when creating the access key in IAM. Download the CSV or copy it before closing.',
+        notes: ['Shown only once. Rotate it if it is pasted anywhere outside Connections.'],
+      },
+      region: {
+        label: 'SES Region',
+        description: 'AWS region where your SES verified identities, templates, and configuration sets live.',
+        whereToFind: 'AWS Console -> Amazon SES -> region selector in the top navigation.',
+        example: 'us-east-1',
+        notes: ['SES identities and templates are regional. Using the wrong region causes not found or unverified sender errors.'],
+      },
+    },
+    docsUrl: 'https://docs.aws.amazon.com/ses/latest/dg/security-iam.html',
+  },
+
   // ─── AWS S3 ───────────────────────────────────────────────────────────────────
 
   aws_s3_api_key: {

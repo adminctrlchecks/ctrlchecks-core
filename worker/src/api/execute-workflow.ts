@@ -987,9 +987,20 @@ async function getAWSCredentials(
   workflowId: string,
   nodeId: string,
   userId?: string,
-  currentUserId?: string
+  currentUserId?: string,
+  config?: Record<string, any>
 ): Promise<AWSCredentials> {
   try {
+    // Connection selected in the node panel is merged into config before dispatch
+    // (mergeRuntimeCredentials aliases apiKey→awsAccessKeyId, secretKey→awsSecretAccessKey),
+    // so config-injected keys take precedence — they honor the user's node-level selection.
+    if (config) {
+      const configCredentials = validateAWSCredentialsStructure(config);
+      if (configCredentials) {
+        return configCredentials;
+      }
+    }
+
     const vaultCredential = await retrieveRuntimeCredentialObject({
       userId,
       currentUserId,
@@ -1008,8 +1019,8 @@ async function getAWSCredentials(
 
     // No credentials found
     throw new Error(
-      'AWS credentials not found. Please configure AWS credentials for this workflow. ' +
-      'Go to Workflow Settings > Credentials and add your AWS access key ID and secret access key.'
+      'AWS credentials not found. Please add an AWS connection (access key ID + secret access key) ' +
+      'on the Connections page and select it on this node.'
     );
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error retrieving credentials';
@@ -1031,9 +1042,15 @@ function validateAWSCredentialsStructure(credentials: any): AWSCredentials | nul
     return null;
   }
 
-  // Extract credentials from encrypted storage
-  const accessKeyId = credentials.access_key_id || credentials.accessKeyId;
-  const secretAccessKey = credentials.secret_access_key || credentials.secretAccessKey;
+  // Extract credentials from encrypted storage. Accepts every shape in the chain:
+  // vault/legacy (access_key_id), connection type aws_s3_api_key (apiKey/secretKey),
+  // and config-injected aliases (awsAccessKeyId/awsSecretAccessKey).
+  const accessKeyId =
+    credentials.access_key_id || credentials.accessKeyId ||
+    credentials.awsAccessKeyId || credentials.apiKey;
+  const secretAccessKey =
+    credentials.secret_access_key || credentials.secretAccessKey ||
+    credentials.awsSecretAccessKey || credentials.secretKey;
   const region = credentials.region || 'us-east-1';
 
   if (!accessKeyId || !secretAccessKey) {
@@ -1135,17 +1152,10 @@ function validateAWSCredentials(credentials: AWSCredentials): { valid: boolean; 
     );
   }
 
-  // Validate region
-  const validRegions = [
-    'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2',
-    'eu-west-1', 'eu-west-2', 'eu-west-3', 'eu-central-1',
-    'ap-southeast-1', 'ap-southeast-2', 'ap-northeast-1', 'ap-northeast-2',
-    'ca-central-1', 'sa-east-1', 'ap-south-1', 'ap-northeast-3',
-  ];
-
+  // Validate region format (e.g. us-east-1, eu-north-1, ap-southeast-3)
   const region = credentials.region || 'us-east-1';
-  if (!validRegions.includes(region)) {
-    errors.push(`Invalid AWS region: ${region}. Must be one of: ${validRegions.join(', ')}`);
+  if (!AWS_REGION_PATTERN.test(region)) {
+    errors.push(`Invalid AWS region: ${region}. Expected a region code like us-east-1 or eu-west-1`);
   }
 
   return {
@@ -1161,30 +1171,24 @@ function validateAWSCredentials(credentials: AWSCredentials): { valid: boolean; 
  * Requirements: 4.2, 4.4
  */
 
+/** Matches AWS region codes like us-east-1, eu-north-1, ap-southeast-3, us-gov-west-1 */
+const AWS_REGION_PATTERN = /^[a-z]{2,3}(-[a-z]+)+-\d$/;
+
 /**
  * Task 7.1: Resolve AWS region configuration
- * 
+ *
  * Accept awsRegion from config, apply default region if not specified,
- * validate region is valid AWS region, and return resolved region.
- * 
+ * validate the region format, and return resolved region.
+ *
  * @param awsRegion - AWS region from config (optional)
  * @returns Resolved AWS region
  * Requirements: 4.2, 4.4
  */
 function resolveAWSRegion(awsRegion?: string): string {
-  // List of valid AWS regions
-  const validRegions = [
-    'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2',
-    'eu-west-1', 'eu-west-2', 'eu-west-3', 'eu-central-1',
-    'ap-southeast-1', 'ap-southeast-2', 'ap-northeast-1', 'ap-northeast-2',
-    'ca-central-1', 'sa-east-1', 'ap-south-1', 'ap-northeast-3',
-  ];
-
   // Apply default region if not specified
-  const region = awsRegion || 'us-east-1';
+  const region = (awsRegion || 'us-east-1').trim();
 
-  // Validate region is valid AWS region
-  if (!validRegions.includes(region)) {
+  if (!AWS_REGION_PATTERN.test(region)) {
     logger.warn(`[AmazonSES] Invalid region '${region}', using default 'us-east-1'`);
     return 'us-east-1';
   }
@@ -1194,30 +1198,22 @@ function resolveAWSRegion(awsRegion?: string): string {
 
 /**
  * Task 7.2: Validate AWS region
- * 
- * Check region against list of valid AWS regions and return validation result
- * with error if invalid.
- * 
+ *
+ * Check the region format and return validation result with error if invalid.
+ *
  * @param region - AWS region to validate
  * @returns Validation result with error if invalid
  * Requirements: 4.2
  */
 function validateAWSRegion(region?: string): { valid: boolean; error?: string } {
-  const validRegions = [
-    'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2',
-    'eu-west-1', 'eu-west-2', 'eu-west-3', 'eu-central-1',
-    'ap-southeast-1', 'ap-southeast-2', 'ap-northeast-1', 'ap-northeast-2',
-    'ca-central-1', 'sa-east-1', 'ap-south-1', 'ap-northeast-3',
-  ];
-
   if (!region) {
     return { valid: true }; // No region specified, will use default
   }
 
-  if (!validRegions.includes(region)) {
+  if (!AWS_REGION_PATTERN.test(region.trim())) {
     return {
       valid: false,
-      error: `Invalid AWS region: ${region}. Must be one of: ${validRegions.join(', ')}`,
+      error: `Invalid AWS region: ${region}. Expected a region code like us-east-1 or eu-west-1`,
     };
   }
 
@@ -1674,7 +1670,7 @@ export function processAttachments(attachments: any[]): {
  */
 export function validateAttachmentSize(
   attachments: Array<{ filename: string; content: Buffer; contentType: string }>,
-  emailContent: { subject: string; body: string }
+  emailContent: { subject: string; body?: string; html?: string; text?: string }
 ): {
   valid: boolean;
   errors: string[];
@@ -1685,7 +1681,11 @@ export function validateAttachmentSize(
   const AWS_SES_LIMIT = 40 * 1024 * 1024; // 40MB in bytes
 
   // Calculate email content size (rough estimate)
-  const contentSize = (emailContent.subject || '').length + (emailContent.body || '').length;
+  const contentSize =
+    (emailContent.subject || '').length +
+    (emailContent.body || '').length +
+    (emailContent.html || '').length +
+    (emailContent.text || '').length;
 
   // Calculate total size with attachments
   let totalSize = contentSize;
@@ -1895,27 +1895,70 @@ export async function sendEmailViaSES(
   error?: string;
 }> {
   try {
-    const { SendEmailCommand } = require('@aws-sdk/client-ses');
-
-    // Build AWS SES command
-    const command = new SendEmailCommand({
-      Source: emailMessage.source,
-      Destination: emailMessage.destination,
-      Message: emailMessage.message,
-      ReplyToAddresses: emailMessage.replyToAddresses,
-      ConfigurationSetName: emailMessage.configurationSetName,
-      Tags: emailMessage.tags,
-      ReturnPath: emailMessage.returnPath,
-    });
-
-    // Send email
-    const response = await sesClient.send(command);
-
-    // Calculate recipient count
     const recipientCount =
       (emailMessage.destination.toAddresses?.length || 0) +
       (emailMessage.destination.ccAddresses?.length || 0) +
       (emailMessage.destination.bccAddresses?.length || 0);
+
+    const sesTags = Array.isArray(emailMessage.tags)
+      ? emailMessage.tags.map((tag: { name: string; value: string }) => ({ Name: tag.name, Value: tag.value }))
+      : undefined;
+
+    // Attachments require a raw MIME message — the SendEmail API cannot carry them
+    if (Array.isArray(emailMessage.attachments) && emailMessage.attachments.length > 0) {
+      const { SendRawEmailCommand } = require('@aws-sdk/client-ses');
+      const allDestinations = [
+        ...(emailMessage.destination.toAddresses || []),
+        ...(emailMessage.destination.ccAddresses || []),
+        ...(emailMessage.destination.bccAddresses || []),
+      ];
+      const command = new SendRawEmailCommand({
+        Source: emailMessage.source,
+        Destinations: allDestinations,
+        RawMessage: { Data: Buffer.from(buildRawEmailMime(emailMessage), 'utf8') },
+        ...(emailMessage.configurationSetName ? { ConfigurationSetName: emailMessage.configurationSetName } : {}),
+        ...(sesTags && sesTags.length > 0 ? { Tags: sesTags } : {}),
+      });
+      const response = await sesClient.send(command);
+      return {
+        success: true,
+        messageId: response.MessageId,
+        recipientCount: allDestinations.length,
+      };
+    }
+
+    const { SendEmailCommand } = require('@aws-sdk/client-ses');
+
+    // Build AWS SES command (SDK requires PascalCase field names)
+    const command = new SendEmailCommand({
+      Source: emailMessage.source,
+      Destination: {
+        ToAddresses: emailMessage.destination.toAddresses || [],
+        ...(emailMessage.destination.ccAddresses?.length ? { CcAddresses: emailMessage.destination.ccAddresses } : {}),
+        ...(emailMessage.destination.bccAddresses?.length ? { BccAddresses: emailMessage.destination.bccAddresses } : {}),
+      },
+      Message: {
+        Subject: {
+          Data: emailMessage.message.subject.data,
+          Charset: emailMessage.message.subject.charset || 'UTF-8',
+        },
+        Body: {
+          ...(emailMessage.message.body.html
+            ? { Html: { Data: emailMessage.message.body.html.data, Charset: emailMessage.message.body.html.charset || 'UTF-8' } }
+            : {}),
+          ...(emailMessage.message.body.text
+            ? { Text: { Data: emailMessage.message.body.text.data, Charset: emailMessage.message.body.text.charset || 'UTF-8' } }
+            : {}),
+        },
+      },
+      ...(emailMessage.replyToAddresses?.length ? { ReplyToAddresses: emailMessage.replyToAddresses } : {}),
+      ...(emailMessage.configurationSetName ? { ConfigurationSetName: emailMessage.configurationSetName } : {}),
+      ...(sesTags && sesTags.length > 0 ? { Tags: sesTags } : {}),
+      ...(emailMessage.returnPath ? { ReturnPath: emailMessage.returnPath } : {}),
+    });
+
+    // Send email
+    const response = await sesClient.send(command);
 
     return {
       success: true,
@@ -1932,6 +1975,92 @@ export async function sendEmailViaSES(
       error: errorMessage,
     };
   }
+}
+
+/** Strip CR/LF so user-supplied values cannot inject extra MIME headers */
+function sanitizeMimeHeaderValue(value: string): string {
+  return String(value || '').replace(/[\r\n]+/g, ' ').trim();
+}
+
+/** RFC 2047 encoded-word — safe for any UTF-8 subject */
+function encodeMimeWord(value: string): string {
+  const sanitized = sanitizeMimeHeaderValue(value);
+  // eslint-disable-next-line no-control-regex
+  if (/^[\x20-\x7e]*$/.test(sanitized)) return sanitized;
+  return `=?UTF-8?B?${Buffer.from(sanitized, 'utf8').toString('base64')}?=`;
+}
+
+/** Fold base64 into 76-char lines per RFC 2045 */
+function foldBase64(base64: string): string {
+  return base64.replace(/.{76}/g, '$&\r\n');
+}
+
+/**
+ * Build a raw RFC 5322 MIME message (multipart/mixed with a multipart/alternative
+ * body part) so SES can deliver attachments via SendRawEmail.
+ */
+export function buildRawEmailMime(emailMessage: {
+  source: string;
+  destination: { toAddresses: string[]; ccAddresses?: string[]; bccAddresses?: string[] };
+  message: {
+    subject: { data: string; charset: string };
+    body: { html?: { data: string; charset: string }; text?: { data: string; charset: string } };
+  };
+  replyToAddresses?: string[];
+  attachments?: Array<{ filename: string; content: Buffer; contentType: string }>;
+}): string {
+  const mixedBoundary = `mixed-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  const altBoundary = `alt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  const lines: string[] = [];
+
+  lines.push(`From: ${sanitizeMimeHeaderValue(emailMessage.source)}`);
+  lines.push(`To: ${(emailMessage.destination.toAddresses || []).map(sanitizeMimeHeaderValue).join(', ')}`);
+  if (emailMessage.destination.ccAddresses?.length) {
+    lines.push(`Cc: ${emailMessage.destination.ccAddresses.map(sanitizeMimeHeaderValue).join(', ')}`);
+  }
+  // Bcc recipients are passed via SendRawEmail Destinations, never as a header
+  if (emailMessage.replyToAddresses?.length) {
+    lines.push(`Reply-To: ${emailMessage.replyToAddresses.map(sanitizeMimeHeaderValue).join(', ')}`);
+  }
+  lines.push(`Subject: ${encodeMimeWord(emailMessage.message.subject.data)}`);
+  lines.push('MIME-Version: 1.0');
+  lines.push(`Content-Type: multipart/mixed; boundary="${mixedBoundary}"`);
+  lines.push('');
+
+  // Body: multipart/alternative (text + html)
+  lines.push(`--${mixedBoundary}`);
+  lines.push(`Content-Type: multipart/alternative; boundary="${altBoundary}"`);
+  lines.push('');
+  if (emailMessage.message.body.text) {
+    lines.push(`--${altBoundary}`);
+    lines.push('Content-Type: text/plain; charset=UTF-8');
+    lines.push('Content-Transfer-Encoding: base64');
+    lines.push('');
+    lines.push(foldBase64(Buffer.from(emailMessage.message.body.text.data, 'utf8').toString('base64')));
+  }
+  if (emailMessage.message.body.html) {
+    lines.push(`--${altBoundary}`);
+    lines.push('Content-Type: text/html; charset=UTF-8');
+    lines.push('Content-Transfer-Encoding: base64');
+    lines.push('');
+    lines.push(foldBase64(Buffer.from(emailMessage.message.body.html.data, 'utf8').toString('base64')));
+  }
+  lines.push(`--${altBoundary}--`);
+  lines.push('');
+
+  for (const attachment of emailMessage.attachments || []) {
+    const safeFilename = sanitizeMimeHeaderValue(attachment.filename).replace(/"/g, "'");
+    lines.push(`--${mixedBoundary}`);
+    lines.push(`Content-Type: ${sanitizeMimeHeaderValue(attachment.contentType)}; name="${safeFilename}"`);
+    lines.push('Content-Transfer-Encoding: base64');
+    lines.push(`Content-Disposition: attachment; filename="${safeFilename}"`);
+    lines.push('');
+    lines.push(foldBase64(attachment.content.toString('base64')));
+  }
+  lines.push(`--${mixedBoundary}--`);
+  lines.push('');
+
+  return lines.join('\r\n');
 }
 
 /**
@@ -2255,8 +2384,8 @@ export function validateAmazonSesConfig(config: Record<string, any>): {
     errors.push('From address is required');
   }
 
-  // Validate subject and body
-  if (!config.subject || typeof config.subject !== 'string' || !config.subject.trim()) {
+  // Validate subject and body for raw email mode. AWS SES templates provide these parts.
+  if (!config.useTemplate && (!config.subject || typeof config.subject !== 'string' || !config.subject.trim())) {
     errors.push('Subject is required and must be a non-empty string');
   }
 
@@ -16806,7 +16935,7 @@ export async function executeNodeLegacy(
       // Uses new Task 4, 5, 6 functions for recipient processing, attachment handling, and email sending
       try {
         // Phase 1: Get AWS credentials
-        const credentials = await getAWSCredentials(db, workflowId, node.id, userId, currentUserId);
+        const credentials = await getAWSCredentials(db, workflowId, node.id, userId, currentUserId, config);
         if (!credentials) {
           return {
             ...inputObj,
@@ -16829,7 +16958,7 @@ export async function executeNodeLegacy(
         const resolvedConfig = await resolveEmailTemplates(config, nodeOutputs);
 
         // Phase 3.5: Resolve and validate AWS region (Task 7.1, 7.2)
-        const regionValidation = validateAWSRegion(resolvedConfig.awsRegion);
+        const regionValidation = validateAWSRegion(resolvedConfig.awsRegion || credentials.region);
         if (!regionValidation.valid) {
           return {
             ...inputObj,
@@ -16837,7 +16966,7 @@ export async function executeNodeLegacy(
             success: false,
           };
         }
-        const resolvedRegion = resolveAWSRegion(resolvedConfig.awsRegion);
+        const resolvedRegion = resolveAWSRegion(resolvedConfig.awsRegion || credentials.region);
 
         // Phase 4: Initialize AWS SES client
         const sesClient = initializeAWSSESClient(credentials, resolvedRegion);

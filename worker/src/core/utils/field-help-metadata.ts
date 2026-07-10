@@ -114,7 +114,8 @@ function docsForNodeField(nodeType: string, category: FieldHelpCategory): string
     [/activecampaign/, 'https://developers.activecampaign.com/reference/overview'],
     [/airtable/, 'https://airtable.com/developers/web/api/introduction'],
     [/anthropic|claude/, 'https://console.anthropic.com/settings/keys'],
-    [/aws|amazon_ses|s3/, 'https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html'],
+    [/amazon_ses/, 'https://docs.aws.amazon.com/ses/latest/dg/Welcome.html'],
+    [/aws|s3/, 'https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html'],
     [/bitbucket/, 'https://support.atlassian.com/bitbucket-cloud/docs/create-an-app-password/'],
     [/clickup/, 'https://clickup.com/api'],
     [/discord/, 'https://discord.com/developers/docs/intro'],
@@ -233,7 +234,7 @@ function exampleForNodeField(nodeType: string, fieldName: string, category: Fiel
     case 'bucket_name':
       return t.includes('s3') ? 'my-s3-bucket' : 'my-storage-bucket';
     case 'region':
-      return t.includes('aws') ? 'us-east-1' : 'us-central1';
+      return (t.includes('aws') || t.includes('amazon_ses')) ? 'us-east-1' : 'us-central1';
     case 'model_id':
       if (t.includes('openai') || t.includes('gpt')) return 'gpt-4o-mini';
       if (t.includes('anthropic') || t.includes('claude')) return 'claude-3-5-sonnet-latest';

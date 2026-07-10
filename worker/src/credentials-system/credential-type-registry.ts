@@ -46,6 +46,7 @@ const providerDocsUrls: Record<string, string> = {
   anthropic: 'https://docs.anthropic.com/',
   asana: 'https://developers.asana.com/docs/personal-access-token',
   aws: 'https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html',
+  amazon_ses: 'https://docs.aws.amazon.com/ses/latest/dg/security-iam.html',
   bitbucket: 'https://support.atlassian.com/bitbucket-cloud/docs/app-passwords/',
   calendly: 'https://developer.calendly.com/',
   clickup: 'https://developer.clickup.com/docs/authentication',
@@ -1243,6 +1244,45 @@ export const credentialTypeDefinitions: CredentialTypeDefinition[] = addCredenti
     },
     refresh: { enabled: false, refreshBeforeSeconds: 0 },
     maskFields: ['access_token', 'refresh_token'],
+  },
+
+  // ─── Amazon SES ───────────────────────────────────────────────────────────────
+  {
+    id: 'amazon_ses_access_key',
+    provider: 'amazon_ses',
+    displayName: 'Amazon SES Access Key',
+    authType: 'api_key',
+    inputFields: [
+      {
+        name: 'apiKey',
+        label: 'Access Key ID',
+        type: 'text',
+        required: true,
+        placeholder: 'AKIAIOSFODNN7EXAMPLE',
+        helpText: 'Create this in AWS IAM for a user or role allowed to send email with Amazon SES.',
+      },
+      {
+        name: 'secretKey',
+        label: 'Secret Access Key',
+        type: 'password',
+        required: true,
+        secret: true,
+        helpText: 'Shown once when you create the IAM access key. Store it only in Connections.',
+      },
+      {
+        name: 'region',
+        label: 'SES Region',
+        type: 'text',
+        required: true,
+        placeholder: 'us-east-1',
+        helpText: 'Use the AWS region where your SES identities, templates, and configuration sets exist.',
+      },
+    ],
+    form: { layout: 'stacked', submitLabel: 'Save SES Credentials', testLabel: 'Test Amazon SES' },
+    validation: { requiredFields: ['apiKey', 'secretKey', 'region'] },
+    injection: [],
+    refresh: { enabled: false, refreshBeforeSeconds: 0 },
+    maskFields: ['secretKey'],
   },
 
   // ─── AWS S3 ──────────────────────────────────────────────────────────────────
