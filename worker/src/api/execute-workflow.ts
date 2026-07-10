@@ -1985,7 +1985,6 @@ function sanitizeMimeHeaderValue(value: string): string {
 /** RFC 2047 encoded-word — safe for any UTF-8 subject */
 function encodeMimeWord(value: string): string {
   const sanitized = sanitizeMimeHeaderValue(value);
-  // eslint-disable-next-line no-control-regex
   if (/^[\x20-\x7e]*$/.test(sanitized)) return sanitized;
   return `=?UTF-8?B?${Buffer.from(sanitized, 'utf8').toString('base64')}?=`;
 }
