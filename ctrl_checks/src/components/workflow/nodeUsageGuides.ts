@@ -803,16 +803,15 @@ Sends formatted alert to Slack channel.`,
   },
 
   discord_webhook: {
-    overview: 'Send messages to Discord channels via webhook. Great for notifications and alerts.',
-    inputs: ['webhookUrl', 'content', 'username (optional)', 'avatarUrl (optional)'],
+    overview: 'Send messages to Discord channels via a selected webhook connection. Great for notifications and alerts.',
+    inputs: ['message', 'username (optional)', 'avatarUrl (optional)'],
     outputs: ['message_id'],
-    example: `Webhook URL: https://discord.com/api/webhooks/...
-Message: "✅ Workflow completed successfully!"
+    example: `Message: "✅ Workflow completed successfully!"
 Username: "Alert Bot"
 
 Sends message to Discord channel.`,
     tips: [
-      'Create webhook in Discord channel settings',
+      'Save the Discord webhook URL as a Connection',
       'Customize username and avatar per message',
       'Supports markdown formatting',
     ],

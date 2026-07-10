@@ -8041,18 +8041,7 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
     }
   },
   discord_webhook: {
-    webhookUrl: {
-      title: 'How to get Discord Webhook URL?',
-      steps: [
-        'Go to your Discord server → Server Settings → Integrations → Webhooks.',
-        'Create a webhook or select an existing one.',
-        '',
-        'Choose the channel and click "Copy Webhook URL".',
-        'Paste it into this field.'
-      ],
-      example: 'https://discord.com/api/webhooks/...'
-    },
-    content: {
+    message: {
       title: 'How to write Message?',
       steps: [
         'Message is the text posted to the channel.',

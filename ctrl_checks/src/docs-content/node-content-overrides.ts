@@ -329,7 +329,7 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
       outputDescription: 'id: Discord message ID. channelId: The channel it was sent to. content: The message text. timestamp: When the message was sent.',
       usageExample: {
         scenario: 'Post CI/CD build status to a #ci-notifications Discord channel',
-        inputValues: { channelId: '{{$env.DISCORD_CI_CHANNEL_ID}}', content: '{{$json.status === "pass" ? "✅" : "❌"}} Build #{{$json.buildNumber}} — {{$json.status}}' },
+        inputValues: { channelId: '{{$env.DISCORD_CI_CHANNEL_ID}}', message: '{{$json.status === "pass" ? "✅" : "❌"}} Build #{{$json.buildNumber}} — {{$json.status}}' },
         expectedOutput: 'Message appears in the Discord channel. Use `{{$json.id}}` to track or edit the message.',
       },
     },
@@ -459,7 +459,7 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
       outputDescription: 'success: true if the message was accepted. status: HTTP 204 means Discord accepted the webhook payload.',
       usageExample: {
         scenario: 'Post GitHub commit notifications to a Discord channel',
-        inputValues: { webhookUrl: '{{$env.DISCORD_WEBHOOK_URL}}', content: '📦 New commit by {{$json.author}}: {{$json.message}}\n{{$json.url}}' },
+        inputValues: { message: '📦 New commit by {{$json.author}}: {{$json.message}}\n{{$json.url}}' },
         expectedOutput: 'Message appears in the Discord channel. No bot setup required — just the webhook URL.',
       },
     },

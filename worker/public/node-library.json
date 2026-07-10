@@ -1482,13 +1482,12 @@
       "result"
     ],
     "requiredConfig": [
+      "channelId",
       "message"
     ],
     "optionalConfig": [
       "channelId",
-      "message",
-      "botToken",
-      "webhookUrl"
+      "message"
     ],
     "credentialType": null,
     "capabilities": []
@@ -2343,12 +2342,12 @@
       "result"
     ],
     "requiredConfig": [
-      "webhookUrl",
       "message"
     ],
     "optionalConfig": [
-      "webhookUrl",
-      "message"
+      "message",
+      "username",
+      "avatarUrl"
     ],
     "credentialType": null,
     "capabilities": []

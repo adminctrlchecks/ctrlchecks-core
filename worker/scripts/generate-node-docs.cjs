@@ -168,7 +168,7 @@ const CREDENTIAL_TYPE_MAP = {
   slack_message: 'Slack OAuth',
   slack_webhook: 'Slack Webhook URL',
   discord: 'Discord Bot Token',
-  discord_webhook: 'Discord Bot Token',
+  discord_webhook: 'Discord Webhook URL',
   telegram: 'Telegram Bot Token',
   twitter: 'Twitter API Key',
   linkedin: 'LinkedIn OAuth',

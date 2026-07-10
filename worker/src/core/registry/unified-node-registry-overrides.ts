@@ -52,6 +52,7 @@ import { overrideIntercom } from './overrides/intercom';
 import { overrideEmail } from './overrides/email';
 import { overrideTelegram } from './overrides/telegram';
 import { overrideDiscord } from './overrides/discord';
+import { overrideDiscordWebhook } from './overrides/discord-webhook';
 import { overrideExecuteWorkflow } from './overrides/execute-workflow';
 import { overrideJavascript } from './overrides/javascript';
 import { overrideTextSummarizer } from './overrides/text-summarizer';
@@ -203,6 +204,7 @@ const overridesByType: Record<string, OverrideFn> = {
   email: overrideEmail,
   telegram: overrideTelegram,
   discord: overrideDiscord,
+  discord_webhook: overrideDiscordWebhook,
   execute_workflow: overrideExecuteWorkflow,
   javascript: overrideJavascript,
   text_summarizer: overrideTextSummarizer,

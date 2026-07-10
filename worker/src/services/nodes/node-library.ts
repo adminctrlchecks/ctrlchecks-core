@@ -6650,13 +6650,13 @@ export class NodeLibrary {
       type: 'discord',
       label: 'Discord',
       category: 'output',
-      description: 'Send messages to Discord channels or users via Discord Bot API',
+      description: 'Send messages to Discord channels via a Discord bot token',
       configSchema: {
-        required: ['message'],
+        required: ['channelId', 'message'],
         optional: {
           channelId: {
             type: 'string',
-            description: 'Discord channel ID (required for Bot Token mode)',
+            description: 'Discord channel ID where the bot should post the message',
             examples: ['123456789012345678'],
           },
           message: {
@@ -6665,35 +6665,26 @@ export class NodeLibrary {
             examples: ['Hello from workflow!'],
             fillMode: { default: 'buildtime_ai_once', supportsRuntimeAI: true, supportsBuildtimeAI: true },
           },
-          botToken: {
-            type: 'string',
-            description: 'Discord bot token (stored as credential)',
-          },
-          webhookUrl: {
-            type: 'string',
-            description: 'Discord webhook URL — alternative to Bot Token, no channelId needed',
-            examples: ['https://discord.com/api/webhooks/...'],
-          },
         },
       },
       aiSelectionCriteria: {
-        whenToUse: ['User mentions Discord notifications', 'Send messages to Discord channels'],
-        whenNotToUse: ['Slack notifications (use slack_message)', 'Email notifications (use email/google_gmail)'],
+        whenToUse: ['User mentions Discord bot messages', 'Send messages to a Discord channel using a bot token'],
+        whenNotToUse: ['Simple Discord incoming webhook notifications (use discord_webhook)', 'Slack notifications (use slack_message)', 'Email notifications (use email/google_gmail)'],
         keywords: [
           'discord', 'discord message', 'discord channel', 'discord server',
-          'discord webhook', 'discord bot', 'discord api', 'discord integration'
+          'discord bot', 'discord api', 'discord integration'
         ],
         useCases: ['Discord notifications', 'Team communication via Discord'],
-        intentDescription: 'Discord integration node that sends messages to Discord channels or users via Discord Bot API. Sends text messages, notifications, and alerts to Discord channels. Used for Discord notifications, team communication via Discord, and Discord-based workflow automation.',
+        intentDescription: 'Discord bot node that sends text messages to Discord channels via the Bot API. Use it when a workspace has a Discord app/bot installed and you know the target channel ID.',
         intentCategories: ['communication', 'discord', 'notification', 'team_collaboration', 'chat_message'],
       },
       commonPatterns: [],
       validationRules: [],
       capabilities: ['notification.send', 'discord.send', 'message.send'],
-      providers: ['discord', 'discord_webhook'],
+      providers: ['discord'],
       keywords: [
         'discord', 'discord message', 'discord channel', 'discord server',
-        'discord webhook', 'discord bot', 'discord api', 'discord integration'
+        'discord bot', 'discord api', 'discord integration'
       ],
     };
   }
@@ -8410,25 +8401,30 @@ export class NodeLibrary {
       type: 'discord_webhook',
       label: 'Discord Webhook',
       category: 'output',
-      description: 'Send messages via Discord webhook',
+      description: 'Send messages to a Discord channel via an incoming webhook URL',
       configSchema: {
-        required: ['webhookUrl', 'message'],
+        required: ['message'],
         optional: {
-          webhookUrl: {
-            type: 'string',
-            description: 'Discord webhook URL',
-            examples: ['https://discord.com/api/webhooks/...'],
-          },
           message: {
             type: 'string',
             description: 'Message text',
             examples: ['{{$json.message}}'],
           },
+          username: {
+            type: 'string',
+            description: 'Optional sender name override for this webhook message',
+            examples: ['CtrlChecks Bot'],
+          },
+          avatarUrl: {
+            type: 'string',
+            description: 'Optional sender avatar URL override for this webhook message',
+            examples: ['https://example.com/avatar.png'],
+          },
         },
       },
       aiSelectionCriteria: {
         whenToUse: ['Discord webhook notifications', 'Simple Discord messages'],
-        whenNotToUse: ['Complex Discord operations (use discord)'],
+        whenNotToUse: ['Bot-token Discord API operations that require a channel ID or bot identity (use discord)'],
         keywords: [
           'discord webhook', 'discord webhook node', 'webhook discord', 'discord webhook message',
           'discord webhook send', 'send discord webhook', 'discord webhook notification',

@@ -14038,7 +14038,7 @@ export async function executeNodeLegacy(
     }
 
     case 'discord': {
-      // Discord node — supports both Bot API (botToken + channelId) and Webhook (webhookUrl)
+      // Discord bot node: Bot Token credential + channelId.
       const channelId = getStringProperty(config, 'channelId', '');
       const message = getStringProperty(config, 'message', '');
       if (!message) {
@@ -14074,10 +14074,6 @@ export async function executeNodeLegacy(
       // Strip "Bot " prefix if user accidentally included it in the stored token
       const botToken = rawBotToken.startsWith('Bot ') ? rawBotToken.slice(4).trim() : rawBotToken.trim();
 
-      // Webhook URL fallback: injected via mergeRuntimeCredentials from discord_webhook connections
-      const webhookUrl = getStringProperty(config, 'webhookUrl', '') || getStringProperty(config, 'headerName', '');
-
-      // Path 1: Bot API (requires botToken + channelId)
       if (botToken && resolvedChannelId) {
         try {
           const resp = await fetch(`https://discord.com/api/v10/channels/${encodeURIComponent(resolvedChannelId)}/messages`, {
@@ -14099,33 +14095,6 @@ export async function executeNodeLegacy(
         }
       }
 
-      // Path 2: Webhook API (requires webhookUrl, no channelId needed)
-      if (webhookUrl && webhookUrl.startsWith('https://discord.com/api/webhooks/')) {
-        try {
-          const resp = await fetch(webhookUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: resolvedMessage }),
-          });
-          const text = await resp.text().catch(() => '');
-          if (!resp.ok) {
-            return { ...inputObj, _error: `Discord webhook send failed (${resp.status})`, _errorDetails: text };
-          }
-          // Discord webhook returns 204 No Content on success (empty body by design)
-          return {
-            ...inputObj,
-            success: true,
-            sent: true,
-            message: resolvedMessage,
-            discord: { status: resp.status, delivered: true, mode: 'webhook' },
-          };
-        } catch (error) {
-          const msg = error instanceof Error ? error.message : String(error);
-          return { ...inputObj, _error: `Discord webhook error: ${msg}` };
-        }
-      }
-
-      // Neither path available
       if (!botToken) {
         return { ...inputObj, _error: 'Discord: Connect a Discord Bot Token credential, then select it in the Properties Panel.' };
       }
@@ -14135,6 +14104,8 @@ export async function executeNodeLegacy(
     case 'discord_webhook': {
       let webhookUrl = getStringProperty(config, 'webhookUrl', '') || getStringProperty(config, 'headerName', '');
       const message = getStringProperty(config, 'message', '') || getStringProperty(config, 'content', '');
+      const username = getStringProperty(config, 'username', '');
+      const avatarUrl = getStringProperty(config, 'avatarUrl', '');
 
       if (!webhookUrl) {
         const stored = await retrieveDashboardCredential({
@@ -14159,12 +14130,25 @@ export async function executeNodeLegacy(
       const resolvedMessage = typeof resolveWithSchema(message, execContext, 'string') === 'string'
         ? (resolveWithSchema(message, execContext, 'string') as string)
         : String(resolveTypedValue(message, execContext));
+      const resolvedUsername = username
+        ? (typeof resolveWithSchema(username, execContext, 'string') === 'string'
+            ? (resolveWithSchema(username, execContext, 'string') as string)
+            : String(resolveTypedValue(username, execContext)))
+        : '';
+      const resolvedAvatarUrl = avatarUrl
+        ? (typeof resolveWithSchema(avatarUrl, execContext, 'string') === 'string'
+            ? (resolveWithSchema(avatarUrl, execContext, 'string') as string)
+            : String(resolveTypedValue(avatarUrl, execContext)))
+        : '';
+      const payload: Record<string, string> = { content: resolvedMessage };
+      if (resolvedUsername) payload.username = resolvedUsername;
+      if (resolvedAvatarUrl) payload.avatar_url = resolvedAvatarUrl;
 
       try {
         const resp = await fetch(resolvedWebhookUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: resolvedMessage }),
+          body: JSON.stringify(payload),
         });
         const text = await resp.text().catch(() => '');
         if (!resp.ok) {

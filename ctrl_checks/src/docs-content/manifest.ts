@@ -424,8 +424,8 @@ export const nodeDocManifest = [
     "slug": "discord",
     "displayName": "Discord",
     "category": "Communication",
-    "description": "Send messages to Discord channels or users via Discord Bot API Use this node when a workflow needs discord behavior with schema-driven inputs from the CtrlChecks node registry.",
-    "logoUrl": "/icons/nodes/discord.svg"
+    "description": "Send messages to Discord channels via a Discord bot token. Use this node when a workflow needs Discord Bot API access with a channel ID.",
+    "logoUrl": "/integrations-logos/Discord.svg"
   },
   {
     "slug": "zoom_video",
@@ -697,8 +697,8 @@ export const nodeDocManifest = [
     "slug": "discord_webhook",
     "displayName": "Discord Webhook",
     "category": "Communication",
-    "description": "Send messages via Discord webhook Use this node when a workflow needs discord webhook behavior with schema-driven inputs from the CtrlChecks node registry.",
-    "logoUrl": "/icons/nodes/discord_webhook.svg"
+    "description": "Send messages to a Discord channel via a saved incoming webhook URL connection.",
+    "logoUrl": "/integrations-logos/Discord.svg"
   },
   {
     "slug": "microsoft_teams",

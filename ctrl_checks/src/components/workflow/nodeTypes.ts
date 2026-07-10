@@ -2623,12 +2623,11 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     label: 'Discord',
     category: 'output',
     icon: 'MessageCircle',
-    description: 'Send messages to Discord channels via Bot API or Webhook URL',
+    description: 'Send messages to Discord channels via Bot API',
     defaultConfig: {},
     configFields: [
-      { key: 'channelId', label: 'Channel ID', type: 'text', placeholder: '123456789012345678', required: false, helpText: 'Required for Bot Token mode. Enable Developer Mode in Discord → right-click the channel → Copy Channel ID. Leave empty if using Webhook URL below.' },
+      { key: 'channelId', label: 'Channel ID', type: 'text', placeholder: '123456789012345678', required: true, helpText: 'Enable Developer Mode in Discord, then right-click the target channel and copy its ID. The selected bot must be installed in the server and allowed to send messages in this channel.' },
       { key: 'message', label: 'Message', type: 'textarea', placeholder: 'Hello from CtrlChecks!', required: true, helpText: 'Message content to send. Supports Discord markdown (**bold**, *italic*, `code`). Can include template variables like {{input}}.' },
-      { key: 'webhookUrl', label: 'Webhook URL (alternative)', type: 'text', placeholder: 'https://discord.com/api/webhooks/...', required: false, helpText: 'Paste your Discord webhook URL here to use Webhook mode instead of Bot Token. Server Settings → Integrations → Webhooks → Copy Webhook URL. No Channel ID needed when using a webhook.' },
     ],
   },
   {
@@ -2636,11 +2635,10 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     label: 'Discord Webhook',
     category: 'output',
     icon: 'MessageCircle',
-    description: 'Discord message',
+    description: 'Send messages to Discord using an incoming webhook',
     defaultConfig: {},
     configFields: [
-      { key: 'webhookUrl', label: 'Webhook URL', type: 'text', placeholder: 'https://discord.com/api/webhooks/...', required: true, helpText: 'How to get Discord Webhook URL: 1) Open Discord server 2) Go to Server Settings → Integrations → Webhooks 3) Click "New Webhook" or select existing 4) Configure name and channel 5) Click "Copy Webhook URL" (starts with https://discord.com/api/webhooks/) 6) Paste it here securely' },
-      { key: 'content', label: 'Message', type: 'textarea', placeholder: 'Hello from CtrlChecks!', required: true, helpText: 'Message content to send to Discord. Supports Discord markdown formatting (**bold**, *italic*, `code`, ||spoiler||). Can include template variables like {{input}}. Examples: "**Workflow completed!**", "User {{input.userName}} did something"' },
+      { key: 'message', label: 'Message', type: 'textarea', placeholder: 'Hello from CtrlChecks!', required: true, helpText: 'Message content to send to Discord. Supports Discord markdown formatting (**bold**, *italic*, `code`, ||spoiler||). Can include template variables like {{input}}. Examples: "**Workflow completed!**", "User {{input.userName}} did something"' },
       { key: 'username', label: 'Username', type: 'text', placeholder: 'CtrlChecks Bot', helpText: 'Optional custom username for the webhook message. If not specified, uses the webhook\'s configured name. This overrides the default webhook name for this message only' },
       { key: 'avatarUrl', label: 'Avatar URL', type: 'text', placeholder: 'https://example.com/avatar.png', helpText: 'Optional avatar image URL for the webhook message. Must be a valid image URL (JPG, PNG, GIF). If not specified, uses the webhook\'s configured avatar. Image will be displayed next to the message' },
     ],

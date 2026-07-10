@@ -380,7 +380,7 @@ Where to find it:
   Step 2: Right-click the channel name → Copy ID.
 The ID is a 17–19 digit number.
 Example: 1234567890123456789`,
-      content: `What this field is: The message text to post in the Discord channel.
+      message: `What this field is: The message text to post in the Discord channel.
 Example: New order from {{$json.customerName}} - Total: \${{$json.amount}}. Order ID: {{$json.orderId}}.
 Formatting: **bold**, *italic*, \`code\`, and standard Discord markdown all work.`,
     },
@@ -393,10 +393,9 @@ Keep it absolutely secret — anyone with this token can control your bot.`,
 
   discord_webhook: {
     '*': {
-      webhookUrl: `What this field is: A special URL that lets CtrlChecks post messages to a specific Discord channel without needing a bot.
-Where to find it: In Discord → right-click the channel → Edit Channel → Integrations → Webhooks → New Webhook → Copy Webhook URL.
-Example: https://discord.com/api/webhooks/1234567890/xxxx...
-Note: Keep this URL private — anyone with it can post to your channel.`,
+      message: `What this field is: The message text to post in the Discord channel through the selected webhook connection.
+Example: New order from {{$json.customerName}} - Total: \${{$json.amount}}. Order ID: {{$json.orderId}}.
+Formatting: **bold**, *italic*, \`code\`, and standard Discord markdown all work.`,
     },
   },
 
