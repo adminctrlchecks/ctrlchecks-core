@@ -9,12 +9,6 @@ export const sendgridNodeDefinition: NodeDefinition = {
   version: 1,
 
   inputSchema: {
-    apiKey: {
-      type: 'string',
-      required: true,
-      description: 'SendGrid API key',
-      default: '',
-    },
     from: {
       type: 'string',
       required: true,
@@ -54,16 +48,28 @@ export const sendgridNodeDefinition: NodeDefinition = {
     },
   },
 
-  requiredInputs: ['apiKey', 'from', 'to'],
+  requiredInputs: ['from', 'to'],
   outgoingPorts: ['default'],
   incomingPorts: ['default'],
   isBranching: false,
+  credentialSchema: {
+    providers: ['sendgrid'],
+    requirements: [{
+      provider: 'sendgrid',
+      category: 'api_key',
+      required: true,
+      description: 'SendGrid API Key with Mail Send permission',
+      credentialTypeId: 'sendgrid_api_key',
+      credentialTypeIds: ['sendgrid_api_key'],
+      authType: 'bearer_token',
+      label: 'SendGrid API Key',
+      testable: true,
+    }],
+    credentialFields: [],
+  },
 
   validateInputs: (inputs) => {
     const errors: string[] = [];
-    if (!inputs.apiKey || typeof inputs.apiKey !== 'string' || inputs.apiKey.trim() === '') {
-      errors.push('apiKey is required');
-    }
     if (!inputs.from || typeof inputs.from !== 'string' || inputs.from.trim() === '') {
       errors.push('from email is required');
     }
@@ -74,7 +80,6 @@ export const sendgridNodeDefinition: NodeDefinition = {
   },
 
   defaultInputs: () => ({
-    apiKey: '',
     from: '',
     to: '',
     subject: '',

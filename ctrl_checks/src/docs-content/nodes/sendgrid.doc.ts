@@ -19,24 +19,13 @@ export const sendgridDoc: NodeDoc = {
   "resources": [
     {
       "name": "Configuration",
-      "description": "SendGrid is configured directly with input fields.",
+      "description": "SendGrid sends email through a saved SendGrid API Key connection plus message fields on the node.",
       "operations": [
         {
           "name": "Send email",
           "value": "send_email",
           "description": "Send a transactional or marketing email via SendGrid.",
           "fields": [
-            {
-              "name": "Api Key",
-              "internalKey": "apiKey",
-              "type": "password",
-              "required": true,
-              "description": "SendGrid API Key (must have Mail Send permission)",
-              "helpText": "What this field is: SendGrid API key, a secret password that lets CtrlChecks talk to SendGrid safely.\nWhere to find it: SendGrid -> Settings -> API Keys -> Create API Key.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: SG.....\nImportant: Treat this like a bank password. Grant Mail Send permission for sending email.",
-              "placeholder": "SG.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-              "example": "SG.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-              "notes": "Stored and displayed as a masked credential value."
-            },
             {
               "name": "From",
               "internalKey": "from",
@@ -61,7 +50,7 @@ export const sendgridDoc: NodeDoc = {
               "name": "Subject",
               "internalKey": "subject",
               "type": "string",
-              "required": true,
+              "required": false,
               "description": "Email subject line",
               "helpText": "What this field is: Email subject line.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Hello!.\nTip: Use {{$json.subject}} when this value comes from an earlier step.",
               "placeholder": "Hello!",
@@ -71,7 +60,7 @@ export const sendgridDoc: NodeDoc = {
               "name": "Text",
               "internalKey": "text",
               "type": "textarea",
-              "required": true,
+              "required": false,
               "description": "Plain text body of the email",
               "helpText": "What this field is: Plain text body of the email.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: Your message here.\nTip: Use {{$json.text}} when this value comes from an earlier step.",
               "placeholder": "Your message here",
@@ -106,7 +95,7 @@ export const sendgridDoc: NodeDoc = {
             },
             "expectedOutput": "Email is accepted by SendGrid for delivery. Track via the x-message-id in the SendGrid Activity Feed."
           },
-          "externalDocsUrl": "https://www.twilio.com/docs/sendgrid/api-reference"
+          "externalDocsUrl": "https://docs.sendgrid.com/api-reference/mail-send/mail-send"
         }
       ]
     }
@@ -114,8 +103,8 @@ export const sendgridDoc: NodeDoc = {
   "commonErrors": [
     {
       "error": "Authentication failed",
-      "cause": "The saved credential, token, API key, or OAuth grant is missing, expired, or lacks the required scope.",
-      "fix": "Reconnect the service in CtrlChecks → Connections, then re-run the SendGrid node."
+      "cause": "The saved SendGrid API Key connection is missing, invalid, or lacks Mail Send permission.",
+      "fix": "Reconnect SendGrid in CtrlChecks Connections, then re-run the SendGrid node."
     },
     {
       "error": "Required field missing",

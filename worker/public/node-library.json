@@ -2483,13 +2483,11 @@
       "result"
     ],
     "requiredConfig": [
-      "apiKey",
       "from",
       "to"
     ],
     "optionalConfig": [
       "operation",
-      "apiKey",
       "from",
       "to",
       "subject",

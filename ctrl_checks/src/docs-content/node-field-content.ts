@@ -376,11 +376,6 @@ Example: Welcome to {{$json.productName}} — here's how to get started`,
       body: `What this field is: The full email content in HTML or plain text.
 Example: <p>Hi {{$json.name}},</p><p>Thank you for signing up! Click below to verify your email.</p>`,
     },
-    '*': {
-      apiKey: `What this field is: Your SendGrid API Key.
-Where to find it: app.sendgrid.com → Settings → API Keys → Create API Key. Choose "Full Access" or "Restricted Access" with "Mail Send" enabled.
-It starts with SG. — copy it immediately, it is only shown once.`,
-    },
   },
 
   amazon_ses: {

@@ -19,14 +19,6 @@ export const sendgridSearchIndex = [
   },
   {
     "type": "field",
-    "title": "SendGrid: Api Key",
-    "slug": "sendgrid",
-    "category": "Communication",
-    "href": "/docs/nodes/sendgrid#operation-send_email",
-    "text": "SendGrid Operations Send Email Api Key apiKey SendGrid API Key (must have Mail Send permission)"
-  },
-  {
-    "type": "field",
     "title": "SendGrid: From",
     "slug": "sendgrid",
     "category": "Communication",

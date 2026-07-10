@@ -3030,14 +3030,6 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
         helpText: 'The SendGrid operation to perform.',
       },
       {
-        key: 'apiKey',
-        label: 'API Key',
-        type: 'text',
-        placeholder: 'SG.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
-        required: true,
-        helpText: 'Your SendGrid API Key. Find it in SendGrid Dashboard → Settings → API Keys. Must have "Mail Send" permission.',
-      },
-      {
         key: 'from',
         label: 'From Email',
         type: 'text',
@@ -3076,11 +3068,12 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
       },
     ],
     usageGuide: {
-      overview: 'Send transactional emails using the SendGrid API.',
-      inputs: ['apiKey', 'from', 'to', 'subject', 'text'],
+      overview: 'Send transactional emails using the SendGrid API through a SendGrid API Key connection.',
+      inputs: ['from', 'to', 'subject', 'text', 'html'],
       outputs: ['success', 'messageId'],
       example: 'Send a welcome email to a new user.',
       tips: [
+        'Create a SendGrid API Key connection with Mail Send permission before running this node.',
         'Verify your sender email in the SendGrid dashboard before sending.',
         'Use a dedicated IP or domain authentication for better deliverability.',
         'Use template variables like {{input.email}} to dynamically set recipients.',

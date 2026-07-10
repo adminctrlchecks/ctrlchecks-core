@@ -8883,18 +8883,13 @@ export class NodeLibrary {
       category: 'output',
       description: 'Send transactional emails using the SendGrid API.',
       configSchema: {
-        required: ['apiKey', 'from', 'to'],
+        required: ['from', 'to'],
         optional: {
           operation: {
             type: 'string',
             description: 'SendGrid operation to perform',
             default: 'send_email',
             options: [{ label: 'Send Email', value: 'send_email' }],
-          },
-          apiKey: {
-            type: 'string',
-            description: 'SendGrid API Key (must have Mail Send permission)',
-            examples: ['SG.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'],
           },
           from: {
             type: 'string',
@@ -8957,11 +8952,6 @@ export class NodeLibrary {
       ],
       validationRules: [
         {
-          field: 'apiKey',
-          validator: (value: unknown) => typeof value === 'string' && value.length > 0,
-          errorMessage: 'SendGrid API key is required',
-        },
-        {
           field: 'to',
           validator: (value: unknown) => typeof value === 'string' && value.length > 0,
           errorMessage: 'Recipient email is required',
@@ -8977,7 +8967,8 @@ export class NodeLibrary {
         success: { type: 'boolean' },
         messageId: { type: 'string' },
         status: { type: 'number' },
-        error: { type: 'object' },
+        _error: { type: 'string' },
+        _errorDetails: { type: 'object' },
       },
       capabilities: ['email.send', 'sendgrid.send', 'transactional_email', 'terminal'],
       providers: ['sendgrid'],

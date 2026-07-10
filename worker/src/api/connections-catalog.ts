@@ -257,7 +257,6 @@ const FIELD_OVERRIDES: Record<string, ConnectionCredentialField[]> = {
   ],
   sendgrid: [
     { name: 'apiKey', label: 'API Key',    type: 'password', required: true, helpCategory: 'api_key',      docsUrl: 'https://app.sendgrid.com/settings/api_keys' },
-    { name: 'from',   label: 'From Email', type: 'text',     required: true, helpCategory: 'email_address' },
   ],
   hubspot: [
     { name: 'apiKey',      label: 'API Key',           type: 'password', required: false, helpCategory: 'api_key',      docsUrl: 'https://developers.hubspot.com/docs/api/overview' },
