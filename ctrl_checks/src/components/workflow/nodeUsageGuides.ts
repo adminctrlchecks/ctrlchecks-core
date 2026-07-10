@@ -774,18 +774,18 @@ Sends personalized order confirmation.`,
     tips: ['Requires RESEND_API_KEY secret', 'Use HTML for rich emails', 'Use {{input.x}} for personalization'],
   },
   email: {
-    overview: 'Send emails via SMTP. Use for notifications, alerts, and reports.',
-    inputs: ['to', 'subject', 'text', 'html (optional)'],
-    outputs: ['status', 'message_id'],
+    overview: 'Send emails through your own SMTP server or mail relay. Use for notifications, alerts, and reports when Gmail/Outlook OAuth is not an option.',
+    inputs: ['to', 'subject', 'text', 'html (optional)', 'from (optional)'],
+    outputs: ['success', 'messageId', 'accepted', 'rejected'],
     example: `To: user@example.com
 Subject: "Order Confirmed"
 Text: "Thanks for your purchase!"
 
 Sends a notification email.`,
     tips: [
-      'SMTP settings are configured in system settings',
-      'Use text for plain emails, HTML for rich formatting',
-      'Validate recipient addresses before sending',
+      'Save your SMTP host, port, username, and password as an SMTP Account connection',
+      'Gmail/Outlook personal accounts need an app password, not the login password',
+      'Use text for plain emails, add html for rich formatting',
     ],
   },
 

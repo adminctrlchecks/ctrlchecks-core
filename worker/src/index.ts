@@ -106,8 +106,11 @@ try {
   try {
     const aliasTests: Array<{ alias: string; expectedCanonical: string }> = [
       { alias: 'gmail', expectedCanonical: 'google_gmail' },
-      { alias: 'email', expectedCanonical: 'google_gmail' },
+      { alias: 'send_email', expectedCanonical: 'google_gmail' },
       { alias: 'mail', expectedCanonical: 'google_gmail' },
+      // 'email' is a registered canonical type (standalone SMTP node), not an alias
+      { alias: 'email', expectedCanonical: 'email' },
+      { alias: 'smtp', expectedCanonical: 'email' },
     ];
 
     for (const { alias, expectedCanonical } of aliasTests) {

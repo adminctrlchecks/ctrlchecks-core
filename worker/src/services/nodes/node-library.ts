@@ -4330,9 +4330,9 @@ export class NodeLibrary {
   private createEmailSchema(): NodeSchema {
     return {
       type: 'email',
-      label: 'Email',
+      label: 'Send Email (SMTP)',
       category: 'output',
-      description: 'Send emails via SMTP',
+      description: 'Send emails through your own SMTP server or mail relay',
       // NodeResolver: Capability metadata (generic email, not Gmail)
       capabilities: [
         'email.send',
@@ -4340,9 +4340,8 @@ export class NodeLibrary {
       ],
       providers: ['smtp'],
       keywords: [
-        'email', 'email node', 'smtp email', 'email smtp',
-        'send email', 'email send', 'smtp send', 'email mail',
-        'email notification', 'email message', 'smtp mail', 'email via smtp'
+        'smtp', 'smtp email', 'email smtp', 'smtp send',
+        'smtp mail', 'email via smtp', 'smtp server', 'mail relay'
       ],
       configSchema: {
         required: ['to', 'subject', 'text'],
@@ -4365,20 +4364,25 @@ export class NodeLibrary {
             type: 'string',
             description: 'Email body (HTML)',
           },
+          from: {
+            type: 'string',
+            description: 'Sender email address (defaults to the SMTP username from the connection)',
+            examples: ['noreply@example.com'],
+          },
         },
       },
       aiSelectionCriteria: {
         whenToUse: [
-          'User mentions email notifications',
-          'Email communication needed',
+          'User explicitly asks to send email through their own SMTP server or mail relay',
+          'Gmail/Outlook OAuth is not available for the sender account',
         ],
         whenNotToUse: [
+          'Generic "send an email" requests without an SMTP mention (use google_gmail)',
           'Other notification channels',
         ],
         keywords: [
-          'email', 'email node', 'smtp email', 'email smtp',
-          'send email', 'email send', 'smtp send', 'email mail',
-          'email notification', 'email message', 'smtp mail', 'email via smtp'
+          'smtp', 'smtp email', 'email smtp', 'smtp send',
+          'smtp mail', 'email via smtp', 'smtp server', 'mail relay'
         ],
         useCases: ['Email notifications', 'Reports', 'Alerts'],
         // ✅ ROOT-LEVEL: Semantic intent description for AI understanding

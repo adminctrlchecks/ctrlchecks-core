@@ -1285,6 +1285,62 @@ export const credentialTypeDefinitions: CredentialTypeDefinition[] = addCredenti
     maskFields: ['secretKey'],
   },
 
+  // ─── SMTP (generic email) ────────────────────────────────────────────────────
+  {
+    id: 'smtp_credentials',
+    provider: 'smtp',
+    displayName: 'SMTP Account',
+    authType: 'basic_auth',
+    inputFields: [
+      {
+        name: 'host',
+        label: 'SMTP Host',
+        type: 'text',
+        required: true,
+        placeholder: 'smtp.example.com',
+        helpText: 'Your mail server hostname — e.g. smtp.gmail.com, smtp-mail.outlook.com, or mail.yourdomain.com.',
+      },
+      {
+        name: 'port',
+        label: 'Port',
+        type: 'text',
+        required: true,
+        defaultValue: '587',
+        placeholder: '587',
+        helpText: '587 for STARTTLS (most common), 465 for implicit TLS.',
+      },
+      {
+        name: 'username',
+        label: 'Username',
+        type: 'text',
+        required: true,
+        placeholder: 'you@example.com',
+        helpText: 'Usually your full email address.',
+      },
+      {
+        name: 'password',
+        label: 'Password',
+        type: 'password',
+        required: true,
+        secret: true,
+        helpText: 'Your SMTP password. For Gmail/Outlook personal accounts use an app password, not your login password.',
+      },
+      {
+        name: 'from',
+        label: 'From Address',
+        type: 'text',
+        required: false,
+        placeholder: 'noreply@example.com',
+        helpText: 'Default sender address. Leave blank to send from the username above.',
+      },
+    ],
+    form: { layout: 'stacked', submitLabel: 'Save SMTP Account', testLabel: 'Test SMTP' },
+    validation: { requiredFields: ['host', 'port', 'username', 'password'] },
+    injection: [],
+    refresh: { enabled: false, refreshBeforeSeconds: 0 },
+    maskFields: ['password'],
+  },
+
   // ─── AWS S3 ──────────────────────────────────────────────────────────────────
   {
     id: 'aws_s3_api_key',

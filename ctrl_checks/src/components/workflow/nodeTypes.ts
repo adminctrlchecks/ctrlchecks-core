@@ -12764,13 +12764,14 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     label: 'Send Email (SMTP)',
     category: 'output',
     icon: 'Mail',
-    description: 'Send an email via SMTP (generic provider).',
-    defaultConfig: { to: '', subject: '', body: '' },
+    description: 'Send an email through your own SMTP server or mail relay.',
+    defaultConfig: { to: '', subject: '', text: '' },
     configFields: [
       { key: 'to', label: 'To (email)', type: 'text', placeholder: 'recipient@example.com', required: true, helpText: 'Recipient email address. Use {{$json.email}} to reference a dynamic value.' },
       { key: 'subject', label: 'Subject', type: 'text', placeholder: 'Your subject', required: true, helpText: 'Email subject line.' },
-      { key: 'body', label: 'Body', type: 'textarea', placeholder: 'Email body text or HTML', required: true, helpText: 'Email content. Supports plain text and HTML.' },
-      { key: 'from', label: 'From (optional)', type: 'text', placeholder: 'sender@example.com', required: false, helpText: 'Sender address. Uses configured SMTP default if blank.' },
+      { key: 'text', label: 'Body (plain text)', type: 'textarea', placeholder: 'Email body text', required: true, helpText: 'Plain-text email content. Required unless an HTML body is provided.' },
+      { key: 'html', label: 'Body (HTML)', type: 'textarea', placeholder: '<p>Email body HTML</p>', required: false, helpText: 'Optional HTML version of the email. Sent alongside the plain-text body.' },
+      { key: 'from', label: 'From (optional)', type: 'text', placeholder: 'sender@example.com', required: false, helpText: 'Sender address. Defaults to the SMTP username from the connection if blank.' },
     ],
   },
   {

@@ -1155,6 +1155,56 @@ export const specificGuides: Record<string, GuideOverride> = {
     docsUrl: 'https://docs.aws.amazon.com/ses/latest/dg/security-iam.html',
   },
 
+  // ─── SMTP (generic email) ─────────────────────────────────────────────────────
+
+  smtp_credentials: {
+    summary: 'Save the host, port, username, and password of any SMTP mail server so workflows can send email through it.',
+    prerequisites: [
+      'An email account or mail relay that allows SMTP sending.',
+      'The SMTP hostname and port from your email provider (often on their "SMTP settings" help page).',
+      'For Gmail or Outlook personal accounts: an app password (regular login passwords are rejected).',
+    ],
+    steps: [
+      'Find your provider\'s SMTP settings — e.g. Gmail: smtp.gmail.com port 587; Outlook: smtp-mail.outlook.com port 587; custom domains often use mail.yourdomain.com.',
+      'If the provider uses two-factor auth (Gmail, Outlook), create an app password in the account security settings and use it instead of your normal password.',
+      'Enter the host, port, and your full email address as the username.',
+      'Paste the password or app password, optionally set a default From address, and save the connection.',
+    ],
+    fieldGuides: {
+      host: {
+        label: 'SMTP Host',
+        description: 'Hostname of the mail server that accepts outgoing mail for your account.',
+        whereToFind: 'Your email provider\'s SMTP or IMAP/POP settings page.',
+        example: 'smtp.gmail.com',
+      },
+      port: {
+        label: 'Port',
+        description: 'TCP port for SMTP submission.',
+        whereToFind: 'Same settings page as the host. 587 (STARTTLS) is the usual choice; 465 uses implicit TLS.',
+        example: '587',
+      },
+      username: {
+        label: 'Username',
+        description: 'Login for the SMTP server — almost always your full email address.',
+        whereToFind: 'The email address of the sending account.',
+        example: 'you@example.com',
+      },
+      password: {
+        label: 'Password',
+        description: 'SMTP password or app password for the account.',
+        whereToFind: 'Gmail: Google Account -> Security -> App passwords. Outlook: account.microsoft.com -> Security -> App passwords. Other providers: your normal mailbox password.',
+        notes: ['Never use a Gmail/Outlook login password directly — generate an app password.'],
+      },
+      from: {
+        label: 'From Address',
+        description: 'Default sender address for emails sent through this connection.',
+        whereToFind: 'Optional — leave blank to send from the username address.',
+        example: 'noreply@example.com',
+      },
+    },
+    docsUrl: 'https://en.wikipedia.org/wiki/Simple_Mail_Transfer_Protocol',
+  },
+
   // ─── AWS S3 ───────────────────────────────────────────────────────────────────
 
   aws_s3_api_key: {

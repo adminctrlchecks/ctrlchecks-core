@@ -122,6 +122,7 @@ export const NODE_LAYMAN_DESCRIPTIONS: Record<string, string> = {
   mailgun:                    "Sends transactional emails via Mailgun — a reliable email delivery service",
   sendgrid:                   "Sends emails via SendGrid — a popular service for marketing and transactional mail",
   amazon_ses:                 "Sends transactional emails through Amazon Simple Email Service with templates, tags, and attachments",
+  email:                      "Sends an email through your own SMTP mail server — for when you don't use Gmail or a delivery service",
   twilio:                     "Sends SMS text messages or makes phone calls via Twilio",
   zoom_video:                 "Creates Zoom meetings, retrieves recordings, or manages meeting participants",
   database_write:             "Writes a record to your database — like inserting a new row into a table",

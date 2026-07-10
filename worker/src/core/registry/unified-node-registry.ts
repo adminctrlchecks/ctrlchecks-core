@@ -77,8 +77,11 @@ export class UnifiedNodeRegistry implements INodeRegistry {
    * All resolution goes through this map — no external resolver files needed.
    */
   private readonly ALIAS_MAP: Record<string, string> = {
-    // ── Email (must resolve to google_gmail, never ollama) ──────────────────
-    'email': 'google_gmail',
+    // ── Email (generic phrases resolve to google_gmail, never ollama).
+    // 'email' itself is NOT listed here: it is a registered canonical type
+    // (the standalone SMTP node), and resolveAlias returns registered types
+    // before consulting this map. Listing it would desync the direct
+    // ALIAS_MAP lookups (isUtilityNode, getBuildValueContext) from resolveAlias.
     'mail': 'google_gmail',
     'gmail': 'google_gmail',
     'send_email': 'google_gmail',
@@ -1099,6 +1102,7 @@ export class UnifiedNodeRegistry implements INodeRegistry {
     whatsapp:      { credentialTypeId: 'whatsapp_api_key',     label: 'WhatsApp API Key',         authType: 'bearer_token' },
     twilio:        { credentialTypeId: 'twilio_api_key',       label: 'Twilio API Key',           authType: 'basic_auth' },
     sendgrid:      { credentialTypeId: 'sendgrid_api_key',     label: 'SendGrid API Key',         authType: 'bearer_token' },
+    smtp:          { credentialTypeId: 'smtp_credentials',     label: 'SMTP Account',             authType: 'basic_auth' },
     mailgun:       { credentialTypeId: 'mailgun_api',          label: 'Mailgun API Key',          authType: 'api_key' },
     mailchimp:     { credentialTypeId: 'mailchimp_api_key',    label: 'Mailchimp API Key',        authType: 'api_key' },
     activecampaign:{ credentialTypeId: 'activecampaign_api',   label: 'ActiveCampaign API Key',   authType: 'api_key' },

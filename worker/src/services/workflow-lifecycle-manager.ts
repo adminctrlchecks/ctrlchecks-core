@@ -127,8 +127,8 @@ export function detectLogoutIntent(prompt: string): boolean {
 }
 
 export function applyEmailTransportExclusivity(nodeTypes: string[], prompt: string): string[] {
-  // 'email' is not a canonical type — google_gmail is the only email node.
-  // Just deduplicate and return; no exclusivity logic needed.
+  // Email transports each resolve to their own canonical type (google_gmail,
+  // email/SMTP, amazon_ses, outlook). Just deduplicate; no exclusivity logic needed.
   return [...new Set((nodeTypes || []).map((t) => resolveNodeType(t)))];
 }
 
