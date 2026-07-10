@@ -144,7 +144,7 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
         type: 'time', 
         placeholder: '09:00', 
         defaultValue: '09:00',
-        required: true, 
+        required: true,
         helpText: 'Time in 24-hour format (e.g., 09:00 for 9 AM, 14:30 for 2:30 PM)' 
       },
       { 
@@ -1134,6 +1134,7 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
           { label: 'Extract from sheet', value: 'extract_from_sheet' },
         ],
         required: true,
+        visibleIf: { field: 'operation', equals: 'send' },
         helpText:
           'Manual: type addresses in Recipient emails. Extract from sheet: use row data from a Google Sheets node before Gmail—do not enter spreadsheet ID here.',
       },
@@ -1143,6 +1144,7 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
         type: 'textarea',
         placeholder: 'a@x.com, b@y.com',
         required: false,
+        visibleIf: { field: 'operation', equals: 'send' },
         helpText:
           'Manual mode only: comma-separated To addresses. Hidden when Extract from sheet is selected. Prefer this field over To for multiple recipients.',
       },
@@ -1152,6 +1154,7 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
         type: 'text',
         placeholder: 'recipient@example.com',
         required: false,
+        visibleIf: { field: 'operation', equals: 'send' },
         helpText:
           'Optional legacy single recipient or template. Prefer Recipient emails for manual lists. If empty, recipients come from recipientSource, prompt, or upstream data.',
       },
@@ -1161,6 +1164,7 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
         type: 'text', 
         placeholder: 'Email Subject',
         required: false,
+        visibleIf: { field: 'operation', equals: 'send' },
         helpText: 'Required for send operation',
       },
       { 
@@ -1169,13 +1173,42 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
         type: 'textarea', 
         placeholder: 'Email body content...',
         required: false,
+        visibleIf: { field: 'operation', equals: 'send' },
         helpText: 'Required for send operation',
+      },
+      {
+        key: 'cc',
+        label: 'CC',
+        type: 'text',
+        placeholder: 'manager@example.com',
+        required: false,
+        visibleIf: { field: 'operation', equals: 'send' },
+        helpText: 'Optional CC recipient email address(es), comma-separated',
+      },
+      {
+        key: 'bcc',
+        label: 'BCC',
+        type: 'text',
+        placeholder: 'archive@example.com',
+        required: false,
+        visibleIf: { field: 'operation', equals: 'send' },
+        helpText: 'Optional BCC recipient email address(es), comma-separated',
+      },
+      {
+        key: 'from',
+        label: 'From',
+        type: 'text',
+        placeholder: 'your-email@gmail.com',
+        required: false,
+        visibleIf: { field: 'operation', equals: 'send' },
+        helpText: 'Optional Gmail alias. Leave blank to use the connected Google account.',
       },
       { 
         key: 'messageId', 
         label: 'Message ID', 
         type: 'text', 
         placeholder: 'abc123def456',
+        visibleIf: { field: 'operation', equals: 'get' },
         helpText: 'Required for get operation',
       },
       { 
@@ -1183,6 +1216,7 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
         label: 'Search Query', 
         type: 'text', 
         placeholder: 'from:example@gmail.com',
+        visibleIf: { field: 'operation', equals: ['list', 'search'] },
         helpText: 'Gmail search query for list/search operations',
       },
       { 
@@ -1190,6 +1224,7 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
         label: 'Max Results', 
         type: 'number', 
         defaultValue: 10,
+        visibleIf: { field: 'operation', equals: ['list', 'search'] },
         helpText: 'Maximum number of messages to return',
       },
     ],

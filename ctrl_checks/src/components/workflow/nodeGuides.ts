@@ -3895,6 +3895,19 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         '• Search Messages – Use when this node should find emails matching a search. Fill Search Query (and optionally Max Results).'
       ]
     },
+    recipientEmails: {
+      title: 'How to set Recipient Emails?',
+      steps: [
+        'Recipient Emails is the To list for Send Email.',
+        '',
+        'Manual entry: Type one email address, or multiple addresses separated with commas, semicolons, or new lines.',
+        '',
+        'From previous data: Use a value such as {{$json.email}} when an earlier step provides the recipient address.',
+        '',
+        'For sheet-driven sends, choose Extract from sheet in Recipient Source and leave this field empty.'
+      ],
+      example: 'alice@example.com, bob@example.com'
+    },
     to: {
       title: 'How to get To?',
       steps: [
@@ -3909,6 +3922,39 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         'Format: Must be a valid email (name@domain.com). No spaces.'
       ],
       example: 'recipient@example.com'
+    },
+    cc: {
+      title: 'How to set CC?',
+      steps: [
+        'CC is optional and only used for Send Email.',
+        '',
+        'Use it for visible copied recipients. Enter one email address, or multiple addresses separated with commas, semicolons, or new lines.',
+        '',
+        'Leave it blank if no copied recipients are needed.'
+      ],
+      example: 'manager@example.com'
+    },
+    bcc: {
+      title: 'How to set BCC?',
+      steps: [
+        'BCC is optional and only used for Send Email.',
+        '',
+        'Use it for hidden copied recipients. Enter one email address, or multiple addresses separated with commas, semicolons, or new lines.',
+        '',
+        'Leave it blank if no hidden recipients are needed.'
+      ],
+      example: 'archive@example.com'
+    },
+    from: {
+      title: 'How to set From?',
+      steps: [
+        'From is optional and only used for Send Email.',
+        '',
+        'Leave it blank to send from the connected Google account.',
+        '',
+        'Only enter a sender address when it is a Gmail alias configured on that account. Gmail may reject unverified sender aliases.'
+      ],
+      example: 'orders@example.com'
     },
     subject: {
       title: 'How to get Subject?',
@@ -3934,7 +3980,7 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         '',
         'Option 3: Template with placeholders – Mix fixed text and dynamic values, e.g. "Hi {{input.name}}, your request #{{input.id}} has been received."',
         '',
-        'Plain text vs HTML: Use plain text unless your platform has a separate HTML body option.'
+        'This Gmail node currently sends text/plain messages. Do not rely on HTML rendering in this field.'
       ],
       example: 'Your workflow completed successfully.'
     },

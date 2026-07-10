@@ -67,16 +67,18 @@ function filterSelectOptionsByContract(inputSchema: Record<string, any>, contrac
 }
 
 function serializeNodeDefinition(definition: any) {
+  const unifiedDefinition = unifiedNodeRegistry.get(definition.type) as UnifiedNodeDefinition | undefined;
+  const policyDefinition = unifiedDefinition || definition;
   const contracts = implementedContracts(definition.type);
   const inputSchema = filterSelectOptionsByContract(definition.inputSchema || {}, contracts);
-  const defaultConfig = definition.defaultConfig?.() || {};
+  const defaultConfig = policyDefinition.defaultConfig?.() || definition.defaultInputs?.() || {};
   const operationFieldPolicies = contracts.map((contract) => {
     const config = {
       ...defaultConfig,
       resource: contract.resource ?? defaultConfig.resource,
       operation: contract.operation,
     };
-    const policy = resolveFieldPolicyForNode(definition, config);
+    const policy = resolveFieldPolicyForNode(policyDefinition, config);
     return {
       resource: contract.resource,
       operation: contract.operation,

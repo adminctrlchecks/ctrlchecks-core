@@ -93,9 +93,17 @@ How to fill it: Write a short, clear subject.
 Example: Your order #12345 has shipped!
 Tip: Use {{$json.orderNumber}} to include data from an earlier step. Example: Your order #{{$json.orderId}} has been confirmed.`,
       body: `What this field is: The full email content — everything the recipient reads after opening.
-How to fill it: Type the email text. You can use HTML for formatting (bold, links, etc.).
+How to fill it: Type plain text. Line breaks are kept.
 Example: Hi {{$json.name}}, thank you for your purchase! Your order will arrive in 3–5 business days.
 Tip: Anything inside {{ }} is replaced with real data from an earlier step. Example: {{$json.name}} becomes "Alice".`,
+      cc: `What this field is: Optional visible copied recipients.
+How to fill it: Type one email address, or multiple addresses separated with commas, semicolons, or new lines.
+Example: manager@example.com, audit@example.com
+Leave blank when no CC recipients are needed.`,
+      bcc: `What this field is: Optional hidden copied recipients.
+How to fill it: Type one email address, or multiple addresses separated with commas, semicolons, or new lines.
+Example: archive@example.com
+Leave blank when no BCC recipients are needed.`,
     },
     get: {
       messageId: `What this field is: The unique ID of a specific Gmail email you want to fetch.

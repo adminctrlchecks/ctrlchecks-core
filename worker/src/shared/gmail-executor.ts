@@ -28,6 +28,8 @@ export interface GmailSendConfig {
   subject: string;
   body: string;
   from?: string; // Optional - uses OAuth account if not provided
+  cc?: string;
+  bcc?: string;
 }
 
 export interface GmailListConfig {
@@ -44,7 +46,7 @@ export interface GmailGetConfig {
  */
 export const REQUIRED_GMAIL_SCOPES = [
   'https://www.googleapis.com/auth/gmail.send',
-  'https://www.googleapis.com/auth/gmail.modify',
+  'https://www.googleapis.com/auth/gmail.readonly',
 ];
 
 /**
@@ -73,7 +75,7 @@ export async function resolveGmailCredentials(
 
   // Unified resolver: checks oauth_table → credential_vault → user_credentials
   // Also handles token refresh automatically for Google tokens
-  const result = await resolveOAuthToken('google', candidates);
+  const result = await resolveOAuthToken('google', candidates, REQUIRED_GMAIL_SCOPES);
   if (!result) {
     console.error(`[GmailNode] No Google token found. Tried users: [${candidates.join(', ')}]`);
     return null;
@@ -84,6 +86,17 @@ export async function resolveGmailCredentials(
     accessToken: result.token,
     userId: result.userId,
   };
+}
+
+function parseEmailList(value?: string): string[] {
+  return String(value || '')
+    .split(/[,\n;]+/g)
+    .map((email) => email.trim())
+    .filter(Boolean);
+}
+
+function encodeHeaderValue(value: string): string {
+  return value.replace(/\r?\n/g, ' ').trim();
 }
 
 
@@ -108,19 +121,31 @@ export async function sendGmailEmail(
       return { success: false, error: 'Gmail: "body" field is required' };
     }
     
-    // Validate email format
-    if (!validateEmail(config.to)) {
-      return { success: false, error: `Gmail: Invalid email address format: ${config.to}` };
+    const toRecipients = parseEmailList(config.to);
+    if (toRecipients.length === 0) {
+      return { success: false, error: 'Gmail: "to" field is required' };
+    }
+
+    const ccRecipients = parseEmailList(config.cc);
+    const bccRecipients = parseEmailList(config.bcc);
+    for (const email of [...toRecipients, ...ccRecipients, ...bccRecipients]) {
+      if (!validateEmail(email)) {
+        return { success: false, error: `Gmail: Invalid email address format: ${email}` };
+      }
     }
     
-    console.log(`[GmailNode] Sending email to ${config.to} with subject: ${config.subject.substring(0, 50)}...`);
+    console.log(`[GmailNode] Sending email to ${toRecipients.join(', ')} with subject: ${config.subject.substring(0, 50)}...`);
     
     // Create email message in RFC 2822 format
-    const fromEmail = config.from || 'me'; // 'me' uses authenticated user's email
     const emailMessage = [
-      `To: ${config.to}`,
-      `From: ${fromEmail}`,
-      `Subject: ${config.subject}`,
+      ...(config.from?.trim() ? [`From: ${encodeHeaderValue(config.from)}`] : []),
+      `To: ${toRecipients.join(', ')}`,
+      ...(ccRecipients.length > 0 ? [`Cc: ${ccRecipients.join(', ')}`] : []),
+      ...(bccRecipients.length > 0 ? [`Bcc: ${bccRecipients.join(', ')}`] : []),
+      `Subject: ${encodeHeaderValue(config.subject)}`,
+      'MIME-Version: 1.0',
+      'Content-Type: text/plain; charset="UTF-8"',
+      'Content-Transfer-Encoding: 8bit',
       '',
       config.body,
     ].join('\r\n');

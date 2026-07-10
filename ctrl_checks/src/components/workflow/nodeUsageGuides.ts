@@ -1077,10 +1077,10 @@ Output: {
 
   google_gmail: {
     overview: 'Send, list, get, or search Gmail messages. Automate email operations in your workflows.',
-    inputs: ['to, subject, body (for send)', 'messageId (for get)', 'query (for search)'],
+    inputs: ['recipientEmails, subject, body (for send)', 'cc, bcc, from (optional for send)', 'messageId (for get)', 'query and maxResults (for list/search)'],
     outputs: ['messageId and threadId (send)', 'messages array (list/search)', 'full message (get)'],
     example: `Operation: Send Email
-To: recipient@example.com
+Recipient Emails: recipient@example.com
 Subject: "Workflow Notification"
 Body: "Your workflow completed successfully!"
 
@@ -1098,6 +1098,7 @@ Output: [
   {id: "message_id_2"}
 ]`,
     tips: [
+      'Connect Google OAuth in Connections; do not paste tokens into workflow fields',
       'Gmail search syntax: from:, subject:, is:unread, has:attachment',
       'Message IDs returned when listing/searching',
       'Body is plain text only',

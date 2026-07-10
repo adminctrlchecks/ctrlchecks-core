@@ -4196,6 +4196,7 @@ export class NodeLibrary {
             examples: ['Hello', '{{$json.subject}}'],
             // ✅ This is a configurable input field
             requiredIf: { field: 'operation', equals: 'send' },
+            visibleIf: { field: 'operation', equals: 'send' },
             fillMode: { default: 'runtime_ai', supportsRuntimeAI: true, supportsBuildtimeAI: true },
             runtimeContract: {
               aiGeneratable: true,
@@ -4210,6 +4211,7 @@ export class NodeLibrary {
             examples: ['Email content', '{{$json.message}}'],
             // ✅ This is a configurable input field
             requiredIf: { field: 'operation', equals: 'send' },
+            visibleIf: { field: 'operation', equals: 'send' },
             fillMode: { default: 'runtime_ai', supportsRuntimeAI: true, supportsBuildtimeAI: true },
             runtimeContract: {
               aiGeneratable: true,
@@ -4219,10 +4221,37 @@ export class NodeLibrary {
             },
           },
           // ✅ CRITICAL: from is NOT a configurable input - OAuth account is used
+          cc: {
+            type: 'string',
+            description: 'Optional CC recipient email address(es), comma- or newline-separated',
+            examples: ['manager@example.com', 'manager@example.com, audit@example.com'],
+            visibleIf: { field: 'operation', equals: 'send' },
+            fillMode: { default: 'manual_static', supportsRuntimeAI: true, supportsBuildtimeAI: true },
+            runtimeContract: {
+              aiGeneratable: true,
+              requiredWhen: [],
+              validation: { format: 'email_list', allowEmpty: true },
+              repair: ['clear_invalid_optional'],
+            },
+          },
+          bcc: {
+            type: 'string',
+            description: 'Optional BCC recipient email address(es), comma- or newline-separated',
+            examples: ['archive@example.com'],
+            visibleIf: { field: 'operation', equals: 'send' },
+            fillMode: { default: 'manual_static', supportsRuntimeAI: true, supportsBuildtimeAI: true },
+            runtimeContract: {
+              aiGeneratable: true,
+              requiredWhen: [],
+              validation: { format: 'email_list', allowEmpty: true },
+              repair: ['clear_invalid_optional'],
+            },
+          },
           from: {
             type: 'string',
-            description: 'Sender email address (optional - uses OAuth account if not provided)',
+            description: 'Optional sender address or configured Gmail alias. Leave blank to use the connected Google account.',
             examples: ['your-email@gmail.com'],
+            visibleIf: { field: 'operation', equals: 'send' },
             // ✅ This is a runtime field, NOT a configurable input
             // OAuth credentials handled separately
           },
@@ -4233,6 +4262,7 @@ export class NodeLibrary {
             examples: ['abc123def456'],
             // ✅ This is a runtime field, NOT a configurable input
             requiredIf: { field: 'operation', equals: 'get' },
+            visibleIf: { field: 'operation', equals: 'get' },
           },
           query: {
             type: 'string',
@@ -4240,11 +4270,13 @@ export class NodeLibrary {
             examples: ['from:example@gmail.com', 'subject:important'],
             // ✅ This is a runtime field, NOT a configurable input
             requiredIf: { field: 'operation', equals: 'search' },
+            visibleIf: { field: 'operation', equals: ['list', 'search'] },
           },
           maxResults: {
             type: 'number',
             description: 'Maximum number of results (for list/search)',
             default: 10,
+            visibleIf: { field: 'operation', equals: ['list', 'search'] },
             // ✅ This is a runtime field, NOT a configurable input
           },
         },

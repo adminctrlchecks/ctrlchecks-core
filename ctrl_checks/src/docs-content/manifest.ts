@@ -109,8 +109,8 @@ export const nodeDocManifest = [
     "slug": "google_gmail",
     "displayName": "Gmail",
     "category": "Communication",
-    "description": "Send/receive emails via Gmail API (OAuth) Use this node when a workflow needs gmail behavior with schema-driven inputs from the CtrlChecks node registry.",
-    "logoUrl": "/icons/nodes/google_gmail.svg"
+    "description": "Send, list, get, and search Gmail messages via Google OAuth. Use this node when a workflow needs Gmail behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "logoUrl": "/integrations-logos/Gmail.svg"
   },
   {
     "slug": "outlook",

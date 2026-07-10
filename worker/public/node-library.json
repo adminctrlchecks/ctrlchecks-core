@@ -338,6 +338,8 @@
       "useAiRecipientMapping",
       "subject",
       "body",
+      "cc",
+      "bcc",
       "from",
       "messageId",
       "query",

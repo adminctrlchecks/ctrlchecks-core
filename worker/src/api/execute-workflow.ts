@@ -13476,6 +13476,9 @@ export async function executeNodeLegacy(
       const recipientEmails = getStringProperty(config, 'recipientEmails', '');
       const subject = getStringProperty(config, 'subject', '');
       const body = getStringProperty(config, 'body', '');
+      const from = getStringProperty(config, 'from', '');
+      const cc = getStringProperty(config, 'cc', '');
+      const bcc = getStringProperty(config, 'bcc', '');
       const messageId = getStringProperty(config, 'messageId', '');
       const query = getStringProperty(config, 'query', '');
       const maxResults = parseInt(getStringProperty(config, 'maxResults', '10'), 10) || 10;
@@ -13494,6 +13497,15 @@ export async function executeNodeLegacy(
       const resolvedBody = typeof resolveWithSchema(body, execContext, 'string') === 'string'
         ? resolveWithSchema(body, execContext, 'string') as string
         : String(resolveTypedValue(body, execContext));
+      const resolvedFrom = from ? (typeof resolveWithSchema(from, execContext, 'string') === 'string'
+        ? resolveWithSchema(from, execContext, 'string') as string
+        : String(resolveTypedValue(from, execContext))) : '';
+      const resolvedCc = cc ? (typeof resolveWithSchema(cc, execContext, 'string') === 'string'
+        ? resolveWithSchema(cc, execContext, 'string') as string
+        : String(resolveTypedValue(cc, execContext))) : '';
+      const resolvedBcc = bcc ? (typeof resolveWithSchema(bcc, execContext, 'string') === 'string'
+        ? resolveWithSchema(bcc, execContext, 'string') as string
+        : String(resolveTypedValue(bcc, execContext))) : '';
       const resolvedMessageId = messageId ? (typeof resolveWithSchema(messageId, execContext, 'string') === 'string'
         ? resolveWithSchema(messageId, execContext, 'string') as string
         : String(resolveTypedValue(messageId, execContext))) : '';
@@ -13579,6 +13591,9 @@ export async function executeNodeLegacy(
             to: sendTo,
             subject: resolvedSubject,
             body: resolvedBody,
+            from: resolvedFrom,
+            cc: resolvedCc,
+            bcc: resolvedBcc,
           });
           
           if (!sendResult.success) {
