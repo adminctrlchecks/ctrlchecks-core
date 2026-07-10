@@ -1,0 +1,14 @@
+﻿flowchart TD
+    Run[Run request] --> Load[Load workflow from AWS RDB/RDS]
+    Load --> Sort[Topological sort and execution context]
+    Sort --> Node[Node execution loop]
+    Node --> Templates[Resolve templates from upstream outputs]
+    Templates --> RuntimeAI[Universal runtime AI value engine]
+    RuntimeAI --> Validate[Pre-execution validation and audit]
+    Validate --> Gate{Inputs valid?}
+    Gate -->|No| Block[Fail before external provider call]
+    Gate -->|Yes| Provider[Execute node adapter/provider call]
+    Provider --> Output[Store output, status, timing, checkpoint]
+    Output --> More{More nodes?}
+    More -->|Yes| Node
+    More -->|No| Done[Return final result and logs]

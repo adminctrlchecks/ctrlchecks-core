@@ -47,7 +47,11 @@ export interface ConfigField {
     /** Array of {field,operator,value} conditions — rendered by ConditionBuilder */
     | 'conditionList'
     /** Array of form field definitions — rendered by FormNodeSettings */
-    | 'formFieldList';
+    | 'formFieldList'
+    /** MySQL raw SQL query — textarea with a "Browse Tables" helper from the linked connection */
+    | 'mysqlQueryEditor'
+    /** MongoDB collection name — text input with a "Browse Collections" helper + document preview */
+    | 'mongoCollectionSelect';
   placeholder?: string;
   options?: { label: string; value: string }[];
   required?: boolean;
@@ -3501,10 +3505,17 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     configFields: [
       { key: 'operation', label: 'Operation', type: 'select', options: [
         { label: 'Find', value: 'find' },
-      ], defaultValue: 'find', helpText: 'MongoDB operation: Find = query documents from collection. Currently only Find operation is supported. This retrieves documents matching the query criteria' },
-      { key: 'collection', label: 'Collection Name', type: 'text', placeholder: 'my_collection', required: true, helpText: 'Name of the MongoDB collection to query. Collections are similar to tables in SQL databases. Examples: users, orders, events, products' },
-      { key: 'query', label: 'Query (JSON)', type: 'json', placeholder: '{"field": "value"}', helpText: 'MongoDB query filter in JSON format. Uses MongoDB query syntax. Format: {"field": "value"} for exact match, {"field": {"$gt": 10}} for operators. Examples: {"status": "active"}, {"age": {"$gte": 18}}, {"name": {"$regex": "^John"}}' },
-      { key: 'limit', label: 'Limit', type: 'number', defaultValue: 100, helpText: 'Maximum number of documents to return. Default: 100. Use to prevent large result sets. MongoDB can handle large result sets, but limiting improves performance' },
+        { label: 'Insert One', value: 'insertOne' },
+        { label: 'Update One', value: 'updateOne' },
+        { label: 'Delete One', value: 'deleteOne' },
+      ], defaultValue: 'find', helpText: 'MongoDB operation: Find = query documents, Insert One = add a document, Update One = modify a matching document, Delete One = remove a matching document' },
+      { key: 'collection', label: 'Collection Name', type: 'mongoCollectionSelect', placeholder: 'my_collection', required: true, helpText: 'Name of the MongoDB collection to operate on. Collections are similar to tables in SQL databases. Examples: users, orders, events, products' },
+      { key: 'filter', label: 'Filter (JSON)', type: 'json', placeholder: '{"field": "value"}', visibleIf: { field: 'operation', equals: 'find' }, helpText: 'MongoDB query filter in JSON format. Format: {"field": "value"} for exact match, {"field": {"$gt": 10}} for operators. Examples: {"status": "active"}, {"age": {"$gte": 18}}' },
+      { key: 'filter', label: 'Filter (JSON)', type: 'json', placeholder: '{"_id": "..."}', visibleIf: { field: 'operation', equals: 'updateOne' }, required: true, helpText: 'Which document to update — matched the same way as Find\'s filter. Example: {"_id": "6a47..."}' },
+      { key: 'filter', label: 'Filter (JSON)', type: 'json', placeholder: '{"_id": "..."}', visibleIf: { field: 'operation', equals: 'deleteOne' }, required: true, helpText: 'Which document to delete — matched the same way as Find\'s filter. Example: {"_id": "6a47..."}' },
+      { key: 'document', label: 'Document (JSON)', type: 'json', placeholder: '{"name": "Charlie"}', visibleIf: { field: 'operation', equals: 'insertOne' }, required: true, helpText: 'The new document to insert, as JSON. Example: {"name": "Charlie", "status": "active"}' },
+      { key: 'update', label: 'Update (JSON)', type: 'json', placeholder: '{"$set": {"name": "value"}}', visibleIf: { field: 'operation', equals: 'updateOne' }, required: true, helpText: 'MongoDB update operators to apply to the matched document. Example: {"$set": {"name": "Charlie Updated"}}' },
+      { key: 'limit', label: 'Limit', type: 'number', defaultValue: 100, visibleIf: { field: 'operation', equals: 'find' }, helpText: 'Maximum number of documents to return. Default: 100. Use to prevent large result sets.' },
     ],
   },
   {

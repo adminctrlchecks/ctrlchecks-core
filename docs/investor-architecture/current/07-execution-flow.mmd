@@ -1,0 +1,14 @@
+﻿flowchart TD
+    Run[Run request<br/>manual, schedule, webhook, form, chat] --> Load[Load workflow<br/>AWS RDB/RDS]
+    Load --> Sort[Topological sort<br/>execution context]
+    Sort --> Template[Resolve templates<br/>from upstream outputs]
+    Template --> RuntimeAI[Universal Runtime AI Value Engine<br/>multi-field generation from intent + lineage]
+    RuntimeAI --> Repair[Deterministic repair<br/>email extraction, object-to-row,<br/>body/title/condition derivation]
+    Repair --> Validate[Pre-execution validation<br/>empty, placeholder, protected,<br/>format, code, range]
+    Validate --> Gate{Inputs valid?}
+    Gate -->|no| Fail[Fail before provider call<br/>clear diagnostics + audit]
+    Gate -->|yes| Exec[Execute node adapter<br/>provider/API/logic/AI]
+    Exec --> Store[Store output + checkpoint<br/>AWS RDB/RDS, cache, WebSocket]
+    Store --> More{More nodes?}
+    More -->|yes| Template
+    More -->|no| Done[Final result<br/>logs + runtime audit]

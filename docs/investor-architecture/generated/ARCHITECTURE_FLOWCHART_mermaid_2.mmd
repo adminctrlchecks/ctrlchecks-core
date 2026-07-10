@@ -1,0 +1,29 @@
+﻿flowchart TD
+    START([User prompt or manual graph edit])
+    START --> FRONTEND[Frontend workflow UI<br/>Autonomous wizard, canvas, properties panel]
+    FRONTEND --> GENERATE[POST /api/generate-workflow<br/>Prompt, mode, answers, partial workflow]
+
+    GENERATE --> INTENT[Intent and capability planning<br/>Trigger, actions, data flow, constraints]
+    INTENT --> REGISTRY_LOAD[Registry-backed node selection<br/>Canonical node types and operations]
+    REGISTRY_LOAD --> GRAPH_BUILD[Graph construction<br/>Nodes, edges, branches, layout]
+    GRAPH_BUILD --> GRAPH_VALIDATE[Graph validation<br/>DAG, ports, required trigger, node contracts]
+    GRAPH_VALIDATE --> FIELD_OWNERSHIP[Field ownership and manifest<br/>manual_static, buildtime_ai_once, runtime_ai, credential, system]
+
+    FIELD_OWNERSHIP --> ASK_USER[Credential and input discovery<br/>Questions for missing manual and credential fields]
+    ASK_USER --> USER_CONFIG[User provides safe configuration<br/>Credentials, resource IDs, static values]
+    USER_CONFIG --> SAVE[Save workflow graph<br/>AWS RDB/RDS persistence]
+
+    SAVE --> RUN[Run request<br/>Manual, schedule, webhook, form, chat trigger]
+    RUN --> LOAD[Load workflow and execution context<br/>AWS RDB/RDS + user/session context]
+    LOAD --> ORDER[Topological execution order<br/>Branch-aware graph traversal]
+
+    ORDER --> NODE_LOOP[For each executable node]
+    NODE_LOOP --> TEMPLATE[Template resolution<br/>Use upstream outputs and explicit expressions]
+    TEMPLATE --> RUNTIME_ENGINE[Universal Runtime AI Value Engine<br/>Multi-field generation, deterministic repair, validation, audit]
+    RUNTIME_ENGINE --> BLOCK{Required runtime fields valid?}
+    BLOCK -->|No| FAIL_FAST[Block before provider call<br/>Clear diagnostics and audit trail]
+    BLOCK -->|Yes| EXECUTE[Execute node adapter<br/>Google, Gmail, HTTP, DB, logic, AI, utility]
+    EXECUTE --> STORE[Store output, status, timing<br/>Cache, checkpoint, AWS RDB/RDS, WebSocket]
+    STORE --> MORE{More nodes?}
+    MORE -->|Yes| NODE_LOOP
+    MORE -->|No| COMPLETE([Workflow execution complete])

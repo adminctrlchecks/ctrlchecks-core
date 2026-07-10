@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Remove-Item -Path \"c:\\\\Users\\\\user\\\\Desktop\\\\ctrlchecks-ai-workflow-os\\\\ctrl_checks\\\\src\\\\integrations\\\\supabase\" -Recurse -Force -Confirm:$false)",
+      "Bash(ssh -i \"C:/Users/user/Desktop/ctrlchecks-ai-workflow-os/Guide/Worker/ctrlchecks-backend.pem\" -o StrictHostKeyChecking=no ubuntu@3.7.115.58 \"grep -n 'transfer\\\\|connections/status' /opt/ctrlchecks-worker/src/index.ts | head -10\")",
+      "Bash(ssh -i C:/Users/user/Desktop/ctrlchecks-ai-workflow-os/Guide/Worker/ctrlchecks-backend.pem -o StrictHostKeyChecking=no ubuntu@3.7.115.58 ' *)"
+    ]
+  }
+}

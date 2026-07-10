@@ -1,0 +1,75 @@
+"use strict";
+/**
+ * Identity Resolver
+ *
+ * WHY: When a user registers with email/password (Cognito sub = UUID-A) then
+ * later signs in with Google/Facebook OAuth (Cognito creates a new federated
+ * sub = UUID-B), the DB has all their data under UUID-A.  Every auth method
+ * for the same email must resolve to the same canonical database user ID so
+ * queries always return the right data.
+ *
+ * Strategy: the canonical user is the OLDEST row in public.users with that
+ * email.  This is stable and deterministic regardless of which provider the
+ * user authenticates with first.
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.resolveCanonicalUserId = resolveCanonicalUserId;
+exports.invalidateIdentityCache = invalidateIdentityCache;
+const db_pool_1 = require("./db-pool");
+const _cache = new Map();
+const CACHE_TTL_MS = 5 * 60000; // 5 minutes
+/**
+ * Returns the canonical DB user ID for the given Cognito sub + email.
+ *
+ * If an older user row exists in public.users with the same email, that row's
+ * ID is returned instead of `sub`.  Otherwise `sub` is returned as-is (first
+ * login — ensureUserRows will create the row later in the request lifecycle).
+ *
+ * The result is cached for 5 minutes to avoid a DB round-trip on every request.
+ */
+async function resolveCanonicalUserId(sub, email) {
+    if (!sub)
+        return sub;
+    const cached = _cache.get(sub);
+    if (cached && Date.now() < cached.expiresAt)
+        return cached.canonicalId;
+    try {
+        // Fast path: identity_links stores a direct sub → canonical mapping recorded at OAuth
+        // callback time (oauth-github.ts) and after the first email-based resolution
+        // (subscription-auth.ts).  Works even when email is absent (Facebook federated users).
+        const linkRows = await (0, db_pool_1.queryAsService)(`SELECT canonical_user_id FROM identity_links WHERE linked_user_id = $1 LIMIT 1`, [sub]);
+        if (linkRows[0]?.canonical_user_id) {
+            const canonicalId = linkRows[0].canonical_user_id;
+            _cache.set(sub, { canonicalId, expiresAt: Date.now() + CACHE_TTL_MS });
+            return canonicalId;
+        }
+        // Email required for all remaining lookups.
+        if (!email || !email.includes('@')) {
+            _cache.set(sub, { canonicalId: sub, expiresAt: Date.now() + CACHE_TTL_MS });
+            return sub;
+        }
+        // Check users table first (email is synced there after first login)
+        const rows = await (0, db_pool_1.queryAsService)(`SELECT id FROM users WHERE LOWER(email) = LOWER($1) ORDER BY created_at ASC LIMIT 1`, [email]);
+        if (rows[0]?.id) {
+            const canonicalId = rows[0].id;
+            _cache.set(sub, { canonicalId, expiresAt: Date.now() + CACHE_TTL_MS });
+            return canonicalId;
+        }
+        // Fallback: profiles table always stores the real email (from Cognito/OAuth providers)
+        const profileRows = await (0, db_pool_1.queryAsService)(`SELECT p.user_id FROM profiles p
+       JOIN users u ON u.id = p.user_id
+       WHERE LOWER(p.email) = LOWER($1)
+       ORDER BY u.created_at ASC LIMIT 1`, [email]);
+        const canonicalId = profileRows[0]?.user_id ?? sub;
+        _cache.set(sub, { canonicalId, expiresAt: Date.now() + CACHE_TTL_MS });
+        return canonicalId;
+    }
+    catch {
+        // DB unavailable — non-fatal, fall back to raw sub
+        return sub;
+    }
+}
+/** Invalidate the cache for a sub (e.g. after manual account merge). */
+function invalidateIdentityCache(sub) {
+    _cache.delete(sub);
+}

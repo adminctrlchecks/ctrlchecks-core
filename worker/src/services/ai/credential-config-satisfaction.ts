@@ -66,5 +66,30 @@ export function isCredentialSatisfiedByNodeConfig(
     return false;
   }
 
+  if (contract.type === 'runtime') {
+    const field = contract.credentialFieldName;
+    if (field && isNonPlaceholderString(config[field])) return true;
+    // Discrete-field database connections (mysql, postgresql, redis, etc.) don't
+    // populate a single connectionString field — host/username/password are typed
+    // directly into the node, so satisfaction has to be checked against those.
+    if (
+      isNonPlaceholderString(config.host) &&
+      isNonPlaceholderString(config.username) &&
+      isNonPlaceholderString(config.password)
+    ) {
+      return true;
+    }
+    // Or the node links to a saved Connection (Properties Panel "Connect" flow)
+    // instead of typing credentials inline — node.data.connectionRefs[credentialTypeId].
+    const connectionRefs = (node.data?.connectionRefs || {}) as Record<string, unknown>;
+    const candidateKeys = [
+      contract.provider,
+      `${contract.provider}_connection`,
+      `${contract.provider}_api_key`,
+      `${contract.provider}_oauth2`,
+    ];
+    return candidateKeys.some((key) => isNonPlaceholderString(connectionRefs[key]));
+  }
+
   return false;
 }

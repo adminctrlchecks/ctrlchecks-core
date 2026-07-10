@@ -1,0 +1,91 @@
+{
+  "name": "Test Zoom — List Meetings + Create Meeting",
+  "description": "Tests listing Zoom meetings and creating a test meeting. Requires Zoom OAuth connected in /connections.",
+  "nodes": [
+    {
+      "id": "node_1",
+      "type": "custom",
+      "position": { "x": 100, "y": 250 },
+      "data": {
+        "type": "manual_trigger",
+        "label": "Start Test",
+        "category": "triggers",
+        "icon": "Play",
+        "config": {}
+      }
+    },
+    {
+      "id": "node_2",
+      "type": "custom",
+      "position": { "x": 400, "y": 150 },
+      "data": {
+        "type": "zoom_video",
+        "label": "Zoom — List My Meetings",
+        "category": "video",
+        "icon": "Video",
+        "config": {
+          "operation": "list_meetings",
+          "type": "scheduled",
+          "pageSize": 10
+        }
+      }
+    },
+    {
+      "id": "node_3",
+      "type": "custom",
+      "position": { "x": 700, "y": 150 },
+      "data": {
+        "type": "log_output",
+        "label": "Log: Meetings List",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "level": "info",
+          "message": "Zoom Meetings → total_records={{$json.total_records}} | first meeting: {{$json.meetings[0].topic}} ({{$json.meetings[0].start_time}})"
+        }
+      }
+    },
+    {
+      "id": "node_4",
+      "type": "custom",
+      "position": { "x": 400, "y": 350 },
+      "data": {
+        "type": "zoom_video",
+        "label": "Zoom — Create Test Meeting",
+        "category": "video",
+        "icon": "PlusCircle",
+        "config": {
+          "operation": "create_meeting",
+          "topic": "ctrlchecks Integration Test Meeting (safe to delete)",
+          "type": 2,
+          "start_time": "2026-12-01T09:00:00Z",
+          "duration": 30,
+          "timezone": "UTC",
+          "agenda": "This meeting was created by ctrlchecks workflow platform for testing. Safe to delete."
+        }
+      }
+    },
+    {
+      "id": "node_5",
+      "type": "custom",
+      "position": { "x": 700, "y": 350 },
+      "data": {
+        "type": "log_output",
+        "label": "Log: Created Meeting",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "level": "info",
+          "message": "Zoom Meeting Created → id={{$json.id}} | topic={{$json.topic}} | join_url={{$json.join_url}} | start_time={{$json.start_time}}"
+        }
+      }
+    }
+  ],
+  "edges": [
+    { "id": "edge_1", "source": "node_1", "target": "node_2" },
+    { "id": "edge_2", "source": "node_2", "target": "node_3" },
+    { "id": "edge_3", "source": "node_1", "target": "node_4" },
+    { "id": "edge_4", "source": "node_4", "target": "node_5" }
+  ],
+  "viewport": { "x": 0, "y": 0, "zoom": 0.9 }
+}

@@ -1,0 +1,10 @@
+﻿flowchart TD
+    Plan[AI/DSL workflow plan] --> Canon[Canonicalize node types<br/>registry aliases resolved]
+    Canon --> Build[Build nodes + edges]
+    Build --> Ports[Validate ports and handles]
+    Ports --> DAG[Validate DAG<br/>no cycles, no broken links]
+    DAG --> Branch[Branch/merge reconciliation<br/>if, switch, try/catch]
+    Branch --> Repair[Deterministic graph repairs<br/>missing links, invalid shapes]
+    Repair --> Ready{Executable graph?}
+    Ready -->|yes| Persist[Persist graph state<br/>AWS RDB/RDS]
+    Ready -->|no| Block[Return diagnostics<br/>do not execute]

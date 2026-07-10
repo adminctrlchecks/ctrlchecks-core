@@ -1,274 +1,711 @@
-You're right to question it. The plan is useful but not fully reconciled with reality. The Progress Tracker says Tasks 1–12 are largely done, while older sections still list gaps that were closed months ago (ai-generator “not deployed”, microservices “not extracted”, Task 3–9 detail checkboxes still open). Code is far ahead of production activation — most Task 11 work exists in the repo, but EC2 soak, flag ramps, and retirement gates are not documented as complete.
+GET  /api/ai/models - List available models
+  GET  /api/ai/metrics - AI performance metrics
 
-Below: honest status, what's wrong with the plan, and a single master prompt you can paste into Claude.
+📚 Training API Endpoints:
+  GET  /api/training/stats - Training dataset statistics     
+  GET  /api/training/categories - Available workflow categories
+  GET  /api/training/workflows - Get workflows by category   
+  POST /api/training/similar - Find similar workflows        
+  GET  /api/training/examples - Get training examples for few-shot learning
+  GET  /api/training/usage - Get training usage metrics      
+  POST /api/training/reload - Reload training dataset (hot reload)
 
-Honest end-to-end status
-What is genuinely done (code + docs in repo)
-Area	Status
-Monorepo structure
-worker/ :3001, ctrl_checks/, services/ai-generator/ :3002, + 5 extracted services :3003–3007
-Tasks 1–2
-Env validator, expanded .env.example, systemd hardening pattern
-Task 4
-Frontend deploy script, nginx config, CORS — HTTPS blocked on DNS for app.ctrlchecks.ai
-Task 5
-ai-generator deploy script + systemd unit — tracker says deployed; plan body still has unchecked manual steps
-Tasks 6–10
-Registry parity (partial gaps remain), SES/Sentry/rate limits, CI/CD workflows, bundle optimization, DB runbooks
-Task 11A
-Execution engine P1–P5 code complete — still calls worker via /api/internal/engine-execute; P6 not started
-Task 11B
-Credential service P1–P4 code complete — ops soak + VAULT_WRITES_DISABLED pending
-Task 11C
-Notification service P1–P4 code complete — ops soak pending
-Task 11D
-Trigger service P1–P3 code complete — P4 (Kafka + scheduler move) not started
-Task 11E
-Workflow CRUD P1–P3 code complete — P4 (templates + load/list canary + retirement gate) not started
-Task 12
-Metrics, Grafana JSON, Prometheus config, observability runbook — may not be live on EC2 (config only in repo)
-Contracts
-5 service contracts in docs/engineering/
-Deploy automation
-GitHub Actions + scripts/deploy-*.sh for all 7 backend services
-What is NOT done (production-ready gap)
-Gap	Why it matters
-Plan doc drift
-PRODUCTION_READY_MICROSERVICES_PLAN.md “Current State” and Task 3–9 sections contradict the Progress Tracker
-Missing referenced artifacts
-Plan cites ANALASISI.txt, PLAN_GAPS_AND_MISSING_ANALYSIS.md, TASK01_BASELINE_AUDIT.md, TASK11B_COMPLETE.md — not found in repo
-EC2 truth unknown
-Which of :3002–3007 are actually running on 3.7.115.58? What are current .env flag values? Plan assumes, doesn't verify
-All microservice soaks
-Every service needs ENABLED=true + CANARY_PERCENT ramp 5→25→50→100 with 7-day soak at 100%
-Retirement gates
-WORKFLOW_CRUD_LOCAL_WRITES_DISABLED, CREDENTIAL_SERVICE_VAULT_WRITES_DISABLED — code exists/partial; must not flip until soak passes
-11E Phase 4
-Templates move, GET load/list canary, TASK11E_COMPLETE.md
-11D Phase 4
-Kafka + move SchedulerService off worker
-11A Phase 6
-Move executor into engine; remove internal execute route
-Frontend HTTPS + Cognito
-DNS A record + Certbot + Cognito callback URIs still manual
-Observability on server
-Prometheus/Grafana/Loki configs exist in repo — deployment status unclear
-Branch inconsistency
-Deploy snippets mix main and main-repair
-Worker still owns most runtime
-Execution, OAuth proxy, scheduler cron, admin-templates, graph orchestration — by design until cutover
-Architecture reality today
-Internet → worker.ctrlchecks.ai (:3001 public)
-         → app.ctrlchecks.ai (frontend, HTTP; HTTPS pending)
-On EC2 (127.0.0.1 only, worker proxies/delegates):
-  :3002 ai-generator
-  :3003 execution-engine
-  :3004 credential-service
-  :3005 notification-service
-  :3006 trigger-service
-  :3007 workflow-crud-service
-Shared: AWS RDS PostgreSQL, Redis, Cognito, (Kafka planned 11D-4)
-You are ~70% code-complete, ~30% ops/production-cutover-complete. The system is not fully microservices until soaks pass and retirement flags are enabled.
+🤖 AI Gateway Endpoints:
+  POST /api/ai/chatbot/message - Chichu chatbot
+  POST /api/ai/editor/suggest-improvements - Workflow node suggestions
+  POST /api/ai/builder/generate-from-prompt - Generate workflow from prompt
+  POST /api/ai/ollama/generate - Direct Gemini generation (legacy path)
+  GET  /api/ai/metrics - Performance metrics
 
-What's wrong with the plan as a guide
-Two sources of truth fight each other — trust Progress Tracker + Session Log, not the stale “What Is Missing” block.
-Code-complete ≠ task-complete — Task 11 items should split CODE vs OPS ACTIVATION checkboxes.
-No single activation matrix — 7 services × 4 env vars each; nowhere consolidated.
-No production cutover runbook — referenced but never written (MICROSERVICES_CUTOVER_COMPLETE.md).
-Observability gap — TASK12 omits :3007 in metrics smoke and systemd status (workflow-crud missing from rollback block).
-End-state diagram outdated — still shows “future services” instead of current 7-process layout.
-Master prompt for Claude (copy everything below)
-# CtrlChecks — Full Production Microservices Audit, Plan Reconciliation & Cutover
-You are the lead platform engineer for CtrlChecks. Your job is to bring the system to **production-ready, end-to-end microservices** — not just write code, but verify AWS EC2 reality matches the repo, reconcile all planning docs, complete remaining extraction work, and execute safe ops cutover.
-## NON-NEGOTIABLE RULES
-1. Read `.cursor/rules/permanent-core-architecture.mdc` and `.cursor/rules/unified-graph-orchestrator-edge-ownership.mdc` — node behavior only in `worker/src/core/registry/unified-node-registry.ts`; never mutate `workflow.edges` outside orchestrator.
-2. Microservices bind **127.0.0.1 only** — worker keeps all public URLs and proxies/delegates.
-3. Every extraction uses: `*_SERVICE_ENABLED=false` default, FNV canary `*_CANARY_PERCENT`, worker client returns `null` → monolith fallback.
-4. Rollback = set `ENABLED=false` + restart worker (no redeploy).
-5. Do NOT enable retirement gates (`*_LOCAL_WRITES_DISABLED`, `VAULT_WRITES_DISABLED`) until documented soak passes.
-6. Do NOT force-push main. Do NOT commit secrets (.env, PEM, RDS passwords).
-## REPOSITORY LAYOUT
-| Path | Role | Port |
-|---|---|---|
-| `ctrl_checks/` | React SPA | 5173 dev / nginx prod |
-| `worker/` | Monolith hub + fallbacks | 3001 public |
-| `services/ai-generator/` | AI pipeline stages | 3002 |
-| `services/execution-engine/` | Async execution accept + consumer | 3003 |
-| `services/credential-service/` | Vault + OAuth + connections | 3004 |
-| `services/notification-service/` | Email, in-app, webhooks | 3005 |
-| `services/trigger-service/` | Webhook/form/chat/schedule dispatch | 3006 |
-| `services/workflow-crud-service/` | Save/load/delete/versions | 3007 |
-## AWS PRODUCTION REFERENCE
-- Server: `ubuntu@3.7.115.58`
-- PEM: `Guide/Worker/ctrlchecks-backend.pem`
-- Worker dir: `/opt/ctrlchecks-worker`
-- Worker URL: `https://worker.ctrlchecks.ai/health`
-- Frontend target: `app.ctrlchecks.ai` (HTTPS pending DNS)
-- RDS: via EC2 bastion only (see `docs/launch-plan/05_PGBOUNCER_DATABASE_POOLING.md`)
-- Branch on server: verify whether `main` or `main-repair` — standardize deploy docs to one branch
-## AUTHORITATIVE FILES (read first)
-1. `.claude/logs/PRODUCTION_READY_MICROSERVICES_PLAN.md` — master tracker (NOTE: body sections are stale; reconcile against Session Log + SSH truth)
-2. `.claude/logs/MICROSERVICES_PROMPT_CHAIN.md` — implementer prompts
-3. `.claude/logs/TASK12_OBSERVABILITY.md` — on-call runbook
-4. `docs/engineering/*-contract.md` — per-service contracts (5 files)
-5. `worker/.env.example` — all feature flags
-6. `infra/prometheus/prometheus.yml` — scrape targets 3001–3007
-7. `CLAUDE.md` — monorepo commands
-## PHASE 0 — GROUND TRUTH AUDIT (do this before any code)
-SSH to EC2 and document in a NEW file `.claude/logs/PRODUCTION_GROUND_TRUTH_AUDIT.md`:
-```bash
-ssh -i Guide/Worker/ctrlchecks-backend.pem ubuntu@3.7.115.58
-# Git + branch
-git -C /opt/ctrlchecks-worker branch -v && git log --oneline -3
-# All systemd services
-sudo systemctl list-units 'ctrlchecks-*' --all --no-pager
-for p in 3001 3002 3003 3004 3005 3006 3007; do
-  echo "=== :$p ===" && curl -fsS "http://127.0.0.1:$p/health/ready" 2>/dev/null || curl -fsS "http://127.0.0.1:$p/health" 2>/dev/null || echo FAIL
-done
-# Worker delegation flags (redact secrets)
-grep -E '_(ENABLED|CANARY_PERCENT|LOCAL_WRITES|VAULT_WRITES|OAUTH)' /opt/ctrlchecks-worker/.env | sed 's/=.*/=***/'
-# Metrics delegation counters
-curl -s http://localhost:3001/metrics | grep -E 'delegation|workflow_crud'
-# Frontend + HTTPS
-curl -sI http://app.ctrlchecks.ai | head -5
-curl -sI https://app.ctrlchecks.ai | head -5 2>/dev/null || echo HTTPS not ready
-# Open ports
-ss -tlnp | grep -E '300[1-7]|80|443'
-Compare audit to plan. Produce a table: Service | Code in repo | Deployed on EC2 | ENABLED | CANARY% | Soak status.
+============================================================ 
+✅ Backend ready to accept connections!
+============================================================ 
 
-PHASE 1 — RECONCILE PLANNING DOCS (no behavior changes)
-Update .claude/logs/PRODUCTION_READY_MICROSERVICES_PLAN.md:
-
-Replace stale "What Is Missing" with accurate 2026 snapshot.
-Split every Task 11 checkbox into [CODE] and [OPS] sub-items.
-Fix architecture diagram to show all 7 processes on EC2.
-Mark Tasks 3–9 detail sections to match Progress Tracker (or note deferred items honestly).
-Add Activation Matrix section:
-Service	Port	ENABLED var	CANARY var	Retirement gate	Contract
-execution-engine
-3003
-EXECUTION_ENGINE_ENABLED
-EXECUTION_ENGINE_CANARY_PERCENT
-(Phase 6 removes internal route)
-execution-engine-contract.md
-credential-service
-3004
-CREDENTIAL_SERVICE_ENABLED
-CREDENTIAL_SERVICE_CANARY_PERCENT
-CREDENTIAL_SERVICE_VAULT_WRITES_DISABLED
-credential-service-contract.md
-notification-service
-3005
-NOTIFICATION_SERVICE_ENABLED
-NOTIFICATION_SERVICE_CANARY_PERCENT
-—
-notification-service-contract.md
-trigger-service
-3006
-TRIGGER_SERVICE_ENABLED
-TRIGGER_SERVICE_CANARY_PERCENT
-—
-trigger-service-contract.md
-workflow-crud-service
-3007
-WORKFLOW_CRUD_SERVICE_ENABLED
-WORKFLOW_CRUD_SERVICE_CANARY_PERCENT
-WORKFLOW_CRUD_LOCAL_WRITES_DISABLED
-workflow-crud-service-contract.md
-Create missing completion docs referenced but absent:
-
-.claude/logs/TASK11B_COMPLETE.md (if missing — extract from credential contract)
-.claude/logs/TASK11C_COMPLETE.md (if missing)
-.claude/logs/MICROSERVICES_OPS_PLAYBOOK.md — unified soak + rollback for all services
-Fix .claude/logs/TASK12_OBSERVABILITY.md:
-
-Add :3007 metrics smoke line
-Add ctrlchecks-workflow-crud-service to systemd status block
-Add WORKFLOW_CRUD rollback to worker fast-rollback block
-PHASE 2 — REMAINING CODE (in order)
-2A — Task 11E Phase 4 (NEXT CODE TASK)
-Implement per MICROSERVICES_PROMPT_CHAIN.md → TASK 11E PHASE 4:
-
-templates-repo.ts + GET /templates routes on :3007
-Worker templates proxy (listTemplatesRemote / getTemplateRemote)
-Wire GET /api/workflows + GET /api/workflows/:id canary (listWorkflowsRemote / getWorkflowRemote)
-WORKFLOW_CRUD_LOCAL_WRITES_DISABLED gate on save/delete/rollback
-Contract v0.4 + .claude/logs/TASK11E_COMPLETE.md
-Tests + type-check both repos
-2B — Task 11D Phase 4 (after trigger soak at CANARY=100)
-Kafka integration in trigger-service
-Move SchedulerService cron loop from worker
-Contract v0.4 + TASK11D_COMPLETE.md
-2C — Task 11A Phase 6 (after execution soak at CANARY=100 for 7 days)
-Move dynamic-node-executor.ts + execution runner into engine
-Remove POST /api/internal/engine-execute from worker
-Contract update + TASK11A_COMPLETE.md
-2D — Frontend production blockers
-DNS A record: app.ctrlchecks.ai → 3.7.115.58
-Certbot HTTPS
-Cognito callback URIs for https://app.ctrlchecks.ai
-PHASE 3 — OPS CUTOVER (parallel tracks, each independent soak)
-Standard ramp for EACH service (document dates in ops playbook):
-
-ENABLED=true
-CANARY_PERCENT=5 → soak 48h → 25 → 50 → 100 → soak 7 days
-Monitor: curl -s localhost:3001/metrics | grep delegation
-Rollback test: ENABLED=false + systemctl restart ctrlchecks-worker
-Deploy any missing services to EC2:
-
-# From local machine (examples)
-bash scripts/deploy-execution-engine.sh
-bash scripts/deploy-credential-service.sh
-bash scripts/deploy-notification-service.sh
-bash scripts/deploy-trigger-service.sh
-bash scripts/deploy-workflow-crud-service.sh
-On server: install systemd units, copy shared DATABASE_URL/REDIS_URL/service keys from worker .env.
-
-After 7-day soak at CANARY=100 per service, enable retirement gates where applicable:
-
-CREDENTIAL_SERVICE_VAULT_WRITES_DISABLED=true (after 2-week credential soak)
-WORKFLOW_CRUD_LOCAL_WRITES_DISABLED=true (after 2-week CRUD soak)
-PHASE 4 — PRODUCTION CUTOVER DOC
-Create .claude/logs/MICROSERVICES_PRODUCTION_CUTOVER.md:
-
-Pre-cutover checklist (all 7 services healthy, all soaks pass)
-Final flag values table
-End-to-end smoke script (login → generate workflow → save → execute → webhook trigger → OAuth connect → notification)
-Rollback matrix (per service + full monolith fallback)
-"Done" criteria: worker is thin proxy; no double-writes; Grafana alerts green for 7 days
-PHASE 5 — VERIFY END-TO-END
-Run and document:
-
-cd worker && npm run type-check && npm run test:contracts
-cd services/workflow-crud-service && npm run type-check && npm test
-# ... each service
-cd ctrl_checks && npm run build
-Production smoke from EC2 + browser:
-
-Health all ports 3001–3007
-Generate workflow (ai-generator delegation in logs)
-Save workflow (CRUD delegation metric++)
-Execute workflow (execution engine canary)
-Connect OAuth credential (credential service)
-Receive email/in-app notification
-Trigger via webhook/schedule (trigger service)
-OUTPUT REQUIRED
-When finished, deliver:
-
-Updated PRODUCTION_READY_MICROSERVICES_PLAN.md (single source of truth)
-PRODUCTION_GROUND_TRUTH_AUDIT.md
-MICROSERVICES_OPS_PLAYBOOK.md
-MICROSERVICES_PRODUCTION_CUTOVER.md
-Any remaining code from Phase 2
-Handoff Card with: what's live on EC2, current CANARY values, next ops step, next code step
-DO NOT
-Build new microservices from scratch
-Change public API URLs
-Skip soak periods
-Mark Task 11 complete until BOTH code AND ops activation are done
-Assume plan checkboxes are accurate without SSH verification
----
-## How to use this
-1. Paste the master prompt into a **new Claude session** with repo + SSH access.
-2. Ask it to start with **Phase 0 (SSH audit)** — that fixes the biggest gap (plan vs server truth).
-3. Then Phase 1 doc reconciliation, then 11E Phase 4 code, then ops ramps in parallel.
+[ServerStartup] 🔵 Starting scheduler services...
+Redis Client Connected
+[ServerStartup] ⏭️  Skipping scheduler + watchdog startup beccause DATABASE_URL is unreachable
+Connected to Redis at redis://127.0.0.1:6379
+[WsRedisBridge] ✅ Active — replica 30240-gnfsag, channel: ws:exec:events
+[2026-06-30 18:28:02.673 +0530] INFO: request completed
+    req: {
+      "id": "77775604-49f6-4d2d-a2e5-83f5b70e1a46",
+      "method": "OPTIONS",
+      "url": "/api/auth/status",
+      "query": {},
+      "params": {},
+      "headers": {
+        "host": "localhost:3001",
+        "connection": "keep-alive",
+        "accept": "*/*",
+        "access-control-request-method": "GET",
+        "access-control-request-headers": "authorization",   
+        "origin": "http://localhost:8080",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-site",
+        "sec-fetch-dest": "empty",
+        "referer": "http://localhost:8080/",
+        "accept-encoding": "gzip, deflate, br, zstd",        
+        "accept-language": "en-US,en;q=0.9,te;q=0.8"
+      },
+      "remoteAddress": "127.0.0.1",
+      "remotePort": 52511
+    }
+    requestId: "77775604-49f6-4d2d-a2e5-83f5b70e1a46"        
+    res: {
+      "statusCode": 204,
+      "headers": {
+        "x-request-id": "77775604-49f6-4d2d-a2e5-83f5b70e1a46",
+        "origin-agent-cluster": "?1",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-download-options": "noopen",
+        "x-permitted-cross-domain-policies": "none",
+        "access-control-allow-origin": "http://localhost:8080",
+        "vary": "Origin",
+        "access-control-allow-headers": "authorization, x-client-info, apikey, content-type, accept, x-requested-with, x-stream-progress, x-idempotency-key",
+        "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+        "access-control-allow-credentials": "true"
+      }
+    }
+    responseTime: 1
+[RedisGetCache] miss /api/auth/status:3583c2db48d93e038c549c7f6527862ceac2b8a4fbe00cdb2aa943c715252664
+[Request] GET /health - 200 - 6484ms - anonymous
+[Request] GET /health - 200 - 1ms - anonymous
+[2026-06-30 18:28:09.570 +0530] INFO: request completed
+    req: {
+      "id": "e8d80198-9ec3-43de-8339-92b3a6293ea5",
+      "method": "OPTIONS",
+      "url": "/api/db/workflows?select=id%2C+cron_expression&filter_setup_completed=true&notnull_cron_expression=true",   
+      "query": {
+        "select": "id, cron_expression",
+        "filter_setup_completed": "true",
+        "notnull_cron_expression": "true"
+      },
+      "params": {},
+      "headers": {
+        "host": "localhost:3001",
+        "connection": "keep-alive",
+        "accept": "*/*",
+        "access-control-request-method": "GET",
+        "access-control-request-headers": "authorization,content-type",
+        "origin": "http://localhost:8080",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-site",
+        "sec-fetch-dest": "empty",
+        "referer": "http://localhost:8080/",
+        "accept-encoding": "gzip, deflate, br, zstd",        
+        "accept-language": "en-US,en;q=0.9,te;q=0.8"
+      },
+      "remoteAddress": "127.0.0.1",
+      "remotePort": 60072
+    }
+    requestId: "e8d80198-9ec3-43de-8339-92b3a6293ea5"        
+    res: {
+      "statusCode": 204,
+      "headers": {
+        "x-request-id": "e8d80198-9ec3-43de-8339-92b3a6293ea5",
+        "origin-agent-cluster": "?1",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-download-options": "noopen",
+        "x-permitted-cross-domain-policies": "none",
+        "access-control-allow-origin": "http://localhost:8080",
+        "vary": "Origin",
+        "access-control-allow-headers": "authorization, x-client-info, apikey, content-type, accept, x-requested-with, x-stream-progress, x-idempotency-key",
+        "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+        "access-control-allow-credentials": "true"
+      }
+    }
+    responseTime: 3
+[2026-06-30 18:28:09.575 +0530] INFO: request completed
+    req: {
+      "id": "3dd4f87b-d5ee-436f-b93c-882eea43da54",
+      "method": "OPTIONS",
+      "url": "/api/db/workflows?order_col=updated_at&order_dir=DESC&limit=6&filter_setup_completed=true",
+      "query": {
+        "order_col": "updated_at",
+        "order_dir": "DESC",
+        "limit": "6",
+        "filter_setup_completed": "true"
+      },
+      "params": {},
+      "headers": {
+        "host": "localhost:3001",
+        "connection": "keep-alive",
+        "accept": "*/*",
+        "access-control-request-method": "GET",
+        "access-control-request-headers": "authorization,content-type",
+        "origin": "http://localhost:8080",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-site",
+        "sec-fetch-dest": "empty",
+        "referer": "http://localhost:8080/",
+        "accept-encoding": "gzip, deflate, br, zstd",        
+        "accept-language": "en-US,en;q=0.9,te;q=0.8"
+      },
+      "remoteAddress": "127.0.0.1",
+      "remotePort": 51851
+    }
+    requestId: "3dd4f87b-d5ee-436f-b93c-882eea43da54"        
+    res: {
+      "statusCode": 204,
+      "headers": {
+        "x-request-id": "3dd4f87b-d5ee-436f-b93c-882eea43da54",
+        "origin-agent-cluster": "?1",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-download-options": "noopen",
+        "x-permitted-cross-domain-policies": "none",
+        "access-control-allow-origin": "http://localhost:8080",
+        "vary": "Origin",
+        "access-control-allow-headers": "authorization, x-client-info, apikey, content-type, accept, x-requested-with, x-stream-progress, x-idempotency-key",
+        "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+        "access-control-allow-credentials": "true"
+      }
+    }
+    responseTime: 1
+[2026-06-30 18:28:09.579 +0530] INFO: request completed      
+    req: {
+      "id": "69c61c7e-40f1-4dad-bc20-2acc107ea047",
+      "method": "OPTIONS",
+      "url": "/api/db/workflows?select=id&limit=0&count=exact&filter_setup_completed=true",
+      "query": {
+        "select": "id",
+        "limit": "0",
+        "count": "exact",
+        "filter_setup_completed": "true"
+      },
+      "params": {},
+      "headers": {
+        "host": "localhost:3001",
+        "connection": "keep-alive",
+        "accept": "*/*",
+        "access-control-request-method": "GET",
+        "access-control-request-headers": "authorization,content-type",
+        "origin": "http://localhost:8080",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-site",
+        "sec-fetch-dest": "empty",
+        "referer": "http://localhost:8080/",
+        "accept-encoding": "gzip, deflate, br, zstd",        
+        "accept-language": "en-US,en;q=0.9,te;q=0.8"
+      },
+      "remoteAddress": "127.0.0.1",
+      "remotePort": 55457
+    }
+    requestId: "69c61c7e-40f1-4dad-bc20-2acc107ea047"        
+    res: {
+      "statusCode": 204,
+      "headers": {
+        "x-request-id": "69c61c7e-40f1-4dad-bc20-2acc107ea047",
+        "origin-agent-cluster": "?1",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-download-options": "noopen",
+        "x-permitted-cross-domain-policies": "none",
+        "access-control-allow-origin": "http://localhost:8080",
+        "vary": "Origin",
+        "access-control-allow-headers": "authorization, x-client-info, apikey, content-type, accept, x-requested-with, x-stream-progress, x-idempotency-key",
+        "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+        "access-control-allow-credentials": "true"
+      }
+    }
+    responseTime: 2
+[2026-06-30 18:28:09.584 +0530] INFO: request completed      
+    req: {
+      "id": "26c5abba-5daf-4d86-b187-960b93ea09b0",
+      "method": "OPTIONS",
+      "url": "/api/db/user_roles?select=role&filter_user_id=d1f3dd1a-2081-7056-9577-8ef4e3a8082a",
+      "query": {
+        "select": "role",
+        "filter_user_id": "d1f3dd1a-2081-7056-9577-8ef4e3a8082a"
+      },
+      "params": {},
+      "headers": {
+        "host": "localhost:3001",
+        "connection": "keep-alive",
+        "accept": "*/*",
+        "access-control-request-method": "GET",
+        "access-control-request-headers": "authorization,content-type",
+        "origin": "http://localhost:8080",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-site",
+        "sec-fetch-dest": "empty",
+        "referer": "http://localhost:8080/",
+        "accept-encoding": "gzip, deflate, br, zstd",        
+        "accept-language": "en-US,en;q=0.9,te;q=0.8"
+      },
+      "remoteAddress": "127.0.0.1",
+      "remotePort": 54160
+    }
+    requestId: "26c5abba-5daf-4d86-b187-960b93ea09b0"        
+    res: {
+      "statusCode": 204,
+      "headers": {
+        "x-request-id": "26c5abba-5daf-4d86-b187-960b93ea09b0",
+        "origin-agent-cluster": "?1",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-download-options": "noopen",
+        "x-permitted-cross-domain-policies": "none",
+        "access-control-allow-origin": "http://localhost:8080",
+        "vary": "Origin",
+        "access-control-allow-headers": "authorization, x-client-info, apikey, content-type, accept, x-requested-with, x-stream-progress, x-idempotency-key",
+        "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+        "access-control-allow-credentials": "true"
+      }
+    }
+    responseTime: 2
+[2026-06-30 18:28:09.596 +0530] INFO: request aborted
+    req: {
+      "id": "a41a308e-8588-4de3-94f0-428a67b913c2",
+      "method": "GET",
+      "url": "/api/auth/status",
+      "query": {},
+      "params": {},
+      "headers": {
+        "host": "localhost:3001",
+        "connection": "keep-alive",
+        "sec-ch-ua-platform": "\"Windows\"",
+        "authorization": "Bearer eyJraWQiOiJSN2x5WWNsNHI4TmlGLzlHd1NFbVZLTTBhSjl4bE5LYW9SL0tEY1ErMDFzPSIsImFsZyI6IlJTMjU2In0.eyJzdWIiOiJkMWYzZGQxYS0yMDgxLTcwNTYtOTU3Ny04ZWY0ZTNhODA4MmEiLCJjb2duaXRvOmdyb3VwcyI6WyJhcC1zb3V0aC0xX2FUWXZTWWZscV9Hb29nbGUiXSwiaXNzIjoiaHR0cHM6Ly9jb2duaXRvLWlkcC5hcC1zb3V0aC0xLmFtYXpvbmF3cy5jb20vYXAtc291dGgtMV9hVFl2U1lmbHEiLCJ2ZXJzaW9uIjoyLCJjbGllbnRfaWQiOiIzaXN0czVoOGExbW1jczhhcmU1bjFwaTVtOCIsIm9yaWdpbl9qdGkiOiJiYjdmZGM2Zi1mNjg3LTRhZjMtOTVmYS00YjE0NmU2ZjJhN2EiLCJ0b2tlbl91c2UiOiJhY2Nlc3MiLCJzY29wZSI6Im9wZW5pZCBwcm9maWxlIGVtYWlsIiwiYXV0aF90aW1lIjoxNzgyODIyODg2LCJleHAiOjE3ODI4MjY0ODYsImlhdCI6MTc4MjgyMjg4NiwianRpIjoiZmEyZjNjZDEtMTI3NS00NzU2LTg5OGMtY2E4MTg0NTU4MTBmIiwidXNlcm5hbWUiOiJnb29nbGVfMTExMDI1OTM0MjU5ODQ4MTAxODMyIn0.fvwwZ1y4SZ2CJM241FG2yh6V_KAFIEfR5wxQjLUq733PIE2U__yasUfy0MmSW9kpzeARJoQ8hgw2Jru9_mAq8_214TZ3PFGRDzpI_FSEW5i1FqR5WtV5QM-5XXbEM1z2LyhJn30Gwm9goUgvrx3cXkRkvHBkjsrGQlrHcdICDT7Zpf7na2lwWIJ7imV1KnzjlV5qluNLT9zzLWpxiLImvy7_pvew71wYjktPb1aZrl0zJWm8CuT3iqxyBdIRuulivZ3kkXZ73tuY7B8UvCXeGm1Fx_OQc04npVg4VY303wEhPbZG-ptaVG8UUgRpFSDTKaFBnhXgGZUFdPoCk8H_rA", 
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Google Chrome\";v=\"149\", \"Chromium\";v=\"149\", \"Not)A;Brand\";v=\"24\"",
+        "sec-ch-ua-mobile": "?0",
+        "accept": "*/*",
+        "origin": "http://localhost:8080",
+        "sec-fetch-site": "same-site",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-dest": "empty",
+        "referer": "http://localhost:8080/",
+        "accept-encoding": "gzip, deflate, br, zstd",        
+        "accept-language": "en-US,en;q=0.9,te;q=0.8"
+      },
+      "remoteAddress": "127.0.0.1",
+      "remotePort": 52511
+    }
+    requestId: "a41a308e-8588-4de3-94f0-428a67b913c2"        
+    res: {
+      "statusCode": null,
+      "headers": {
+        "x-request-id": "a41a308e-8588-4de3-94f0-428a67b913c2",
+        "origin-agent-cluster": "?1",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-download-options": "noopen",
+        "x-permitted-cross-domain-policies": "none",
+        "access-control-allow-origin": "http://localhost:8080",
+        "vary": "Origin",
+        "access-control-allow-headers": "authorization, x-client-info, apikey, content-type, accept, x-requested-with, x-stream-progress, x-idempotency-key",
+        "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+        "access-control-allow-credentials": "true",
+        "x-ratelimit-limit": "100",
+        "x-ratelimit-remaining": "99",
+        "x-cache": "MISS",
+        "content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://checkout.razorpay.com https://js.razorpay.com; style-src 'self' 'unsafe-inline' https://checkout.razorpay.com; img-src 'self' data: https:; connect-src 'self' https://api.razorpay.com https://checkout.razorpay.com; frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com; font-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self' https://api.razorpay.com",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-xss-protection": "1; mode=block",
+        "permissions-policy": "payment=self, camera=(), microphone=(), geolocation=()",
+        "x-development-mode": "true",
+        "x-test-pricing": "enabled",
+        "x-trace-id": "473683606efc4d308cf8d82ff7831859",    
+        "traceparent": "00-473683606efc4d308cf8d82ff7831859-ebf1033dca5142df-01"
+      }
+    }
+    responseTime: 6921
+[RedisGetCache] miss /api/auth/status:3583c2db48d93e038c549c7f6527862ceac2b8a4fbe00cdb2aa943c715252664
+[DB] Circuit opened — DB unreachable, fast-failing for 30s: 
+[Auth] User authenticated: vusalashivakumar@gmail.com (user) - GET /api/db/workflows
+[Security] DATA_ACCESS: Request failed with status 503 - 127.0.0.1 - GET /api/db/workflows
+[2026-06-30 18:28:10.445 +0530] INFO: request errored
+    req: {
+      "id": "dbac87db-262f-4a68-8f7a-ff45663d6768",
+      "method": "GET",
+      "url": "/api/db/workflows?select=id&limit=0&count=exact&filter_setup_completed=true",
+      "query": {
+        "select": "id",
+        "limit": "0",
+        "count": "exact",
+        "filter_setup_completed": "true"
+      },
+      "params": {},
+      "headers": {
+        "host": "localhost:3001",
+        "connection": "keep-alive",
+        "sec-ch-ua-platform": "\"Windows\"",
+        "authorization": "Bearer eyJraWQiOiJSN2x5WWNsNHI4TmlGLzlHd1NFbVZLTTBhSjl4bE5LYW9SL0tEY1ErMDFzPSIsImFsZyI6IlJTMjU2In0.eyJzdWIiOiJkMWYzZGQxYS0yMDgxLTcwNTYtOTU3Ny04ZWY0ZTNhODA4MmEiLCJjb2duaXRvOmdyb3VwcyI6WyJhcC1zb3V0aC0xX2FUWXZTWWZscV9Hb29nbGUiXSwiaXNzIjoiaHR0cHM6Ly9jb2duaXRvLWlkcC5hcC1zb3V0aC0xLmFtYXpvbmF3cy5jb20vYXAtc291dGgtMV9hVFl2U1lmbHEiLCJ2ZXJzaW9uIjoyLCJjbGllbnRfaWQiOiIzaXN0czVoOGExbW1jczhhcmU1bjFwaTVtOCIsIm9yaWdpbl9qdGkiOiJiYjdmZGM2Zi1mNjg3LTRhZjMtOTVmYS00YjE0NmU2ZjJhN2EiLCJ0b2tlbl91c2UiOiJhY2Nlc3MiLCJzY29wZSI6Im9wZW5pZCBwcm9maWxlIGVtYWlsIiwiYXV0aF90aW1lIjoxNzgyODIyODg2LCJleHAiOjE3ODI4MjY0ODYsImlhdCI6MTc4MjgyMjg4NiwianRpIjoiZmEyZjNjZDEtMTI3NS00NzU2LTg5OGMtY2E4MTg0NTU4MTBmIiwidXNlcm5hbWUiOiJnb29nbGVfMTExMDI1OTM0MjU5ODQ4MTAxODMyIn0.fvwwZ1y4SZ2CJM241FG2yh6V_KAFIEfR5wxQjLUq733PIE2U__yasUfy0MmSW9kpzeARJoQ8hgw2Jru9_mAq8_214TZ3PFGRDzpI_FSEW5i1FqR5WtV5QM-5XXbEM1z2LyhJn30Gwm9goUgvrx3cXkRkvHBkjsrGQlrHcdICDT7Zpf7na2lwWIJ7imV1KnzjlV5qluNLT9zzLWpxiLImvy7_pvew71wYjktPb1aZrl0zJWm8CuT3iqxyBdIRuulivZ3kkXZ73tuY7B8UvCXeGm1Fx_OQc04npVg4VY303wEhPbZG-ptaVG8UUgRpFSDTKaFBnhXgGZUFdPoCk8H_rA", 
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Google Chrome\";v=\"149\", \"Chromium\";v=\"149\", \"Not)A;Brand\";v=\"24\"",
+        "content-type": "application/json",
+        "sec-ch-ua-mobile": "?0",
+        "accept": "*/*",
+        "origin": "http://localhost:8080",
+        "sec-fetch-site": "same-site",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-dest": "empty",
+        "referer": "http://localhost:8080/",
+        "accept-encoding": "gzip, deflate, br, zstd",        
+        "accept-language": "en-US,en;q=0.9,te;q=0.8"
+      },
+      "remoteAddress": "127.0.0.1",
+      "remotePort": 55457
+    }
+    requestId: "dbac87db-262f-4a68-8f7a-ff45663d6768"        
+    res: {
+      "statusCode": 503,
+      "headers": {
+        "x-request-id": "dbac87db-262f-4a68-8f7a-ff45663d6768",
+        "origin-agent-cluster": "?1",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-download-options": "noopen",
+        "x-permitted-cross-domain-policies": "none",
+        "access-control-allow-origin": "http://localhost:8080",
+        "vary": "Origin",
+        "access-control-allow-headers": "authorization, x-client-info, apikey, content-type, accept, x-requested-with, x-stream-progress, x-idempotency-key",
+        "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+        "access-control-allow-credentials": "true",
+        "x-ratelimit-limit": "100",
+        "x-ratelimit-remaining": "95",
+        "content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://checkout.razorpay.com https://js.razorpay.com; style-src 'self' 'unsafe-inline' https://checkout.razorpay.com; img-src 'self' data: https:; connect-src 'self' https://api.razorpay.com https://checkout.razorpay.com; frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com; font-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self' https://api.razorpay.com",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-xss-protection": "1; mode=block",
+        "permissions-policy": "payment=self, camera=(), microphone=(), geolocation=()",
+        "x-development-mode": "true",
+        "x-test-pricing": "enabled",
+        "x-trace-id": "195c711c2f6a4c8bae6680c53d8678f6",    
+        "traceparent": "00-195c711c2f6a4c8bae6680c53d8678f6-74d1a51401d347e1-01",
+        "content-type": "application/json; charset=utf-8",   
+        "content-length": "92",
+        "etag": "W/\"5c-edxU1KVKqcqodU2yz3WtCjjvdLU\""       
+      }
+    }
+    responseTime: 827
+    err: {
+      "type": "Error",
+      "message": "failed with status code 503",
+      "stack":
+          Error: failed with status code 503
+              at onResFinished (C:\Users\user\Desktop\ctrlchecks-hostinger\worker\node_modules\pino-http\logger.js:115:39)
+              at ServerResponse.onResponseComplete (C:\Users\user\Desktop\ctrlchecks-hostinger\worker\node_modules\pino-http\logger.js:178:14)
+              at ServerResponse.emit (node:events:520:35)    
+              at ServerResponse.emit (node:domain:489:12)    
+              at onFinish (node:_http_outgoing:1026:10)      
+              at callback (node:internal/streams/writable:764:21)
+              at afterWrite (node:internal/streams/writable:708:5)
+              at afterWriteTick (node:internal/streams/writable:694:10)
+              at processTicksAndRejections (node:internal/process/task_queues:89:21)
+    }
+[Auth] User authenticated: vusalashivakumar@gmail.com (user) - GET /api/db/workflows
+[Security] DATA_ACCESS: Request failed with status 503 - 127.0.0.1 - GET /api/db/workflows
+[Auth] User authenticated: vusalashivakumar@gmail.com (user) - GET /api/auth/status
+[Request] GET /api/auth/status - 200 - 967ms - vusalashivakumar@gmail.com
+[2026-06-30 18:28:10.608 +0530] INFO: request errored        
+    req: {
+      "id": "68ba9f3f-8224-463f-98e5-821003a6095a",
+      "method": "GET",
+      "url": "/api/db/workflows?order_col=updated_at&order_dir=DESC&limit=6&filter_setup_completed=true",
+      "query": {
+        "order_col": "updated_at",
+        "order_dir": "DESC",
+        "limit": "6",
+        "filter_setup_completed": "true"
+      },
+      "params": {},
+      "headers": {
+        "host": "localhost:3001",
+        "connection": "keep-alive",
+        "sec-ch-ua-platform": "\"Windows\"",
+        "authorization": "Bearer eyJraWQiOiJSN2x5WWNsNHI4TmlGLzlHd1NFbVZLTTBhSjl4bE5LYW9SL0tEY1ErMDFzPSIsImFsZyI6IlJTMjU2In0.eyJzdWIiOiJkMWYzZGQxYS0yMDgxLTcwNTYtOTU3Ny04ZWY0ZTNhODA4MmEiLCJjb2duaXRvOmdyb3VwcyI6WyJhcC1zb3V0aC0xX2FUWXZTWWZscV9Hb29nbGUiXSwiaXNzIjoiaHR0cHM6Ly9jb2duaXRvLWlkcC5hcC1zb3V0aC0xLmFtYXpvbmF3cy5jb20vYXAtc291dGgtMV9hVFl2U1lmbHEiLCJ2ZXJzaW9uIjoyLCJjbGllbnRfaWQiOiIzaXN0czVoOGExbW1jczhhcmU1bjFwaTVtOCIsIm9yaWdpbl9qdGkiOiJiYjdmZGM2Zi1mNjg3LTRhZjMtOTVmYS00YjE0NmU2ZjJhN2EiLCJ0b2tlbl91c2UiOiJhY2Nlc3MiLCJzY29wZSI6Im9wZW5pZCBwcm9maWxlIGVtYWlsIiwiYXV0aF90aW1lIjoxNzgyODIyODg2LCJleHAiOjE3ODI4MjY0ODYsImlhdCI6MTc4MjgyMjg4NiwianRpIjoiZmEyZjNjZDEtMTI3NS00NzU2LTg5OGMtY2E4MTg0NTU4MTBmIiwidXNlcm5hbWUiOiJnb29nbGVfMTExMDI1OTM0MjU5ODQ4MTAxODMyIn0.fvwwZ1y4SZ2CJM241FG2yh6V_KAFIEfR5wxQjLUq733PIE2U__yasUfy0MmSW9kpzeARJoQ8hgw2Jru9_mAq8_214TZ3PFGRDzpI_FSEW5i1FqR5WtV5QM-5XXbEM1z2LyhJn30Gwm9goUgvrx3cXkRkvHBkjsrGQlrHcdICDT7Zpf7na2lwWIJ7imV1KnzjlV5qluNLT9zzLWpxiLImvy7_pvew71wYjktPb1aZrl0zJWm8CuT3iqxyBdIRuulivZ3kkXZ73tuY7B8UvCXeGm1Fx_OQc04npVg4VY303wEhPbZG-ptaVG8UUgRpFSDTKaFBnhXgGZUFdPoCk8H_rA", 
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Google Chrome\";v=\"149\", \"Chromium\";v=\"149\", \"Not)A;Brand\";v=\"24\"",
+        "content-type": "application/json",
+        "sec-ch-ua-mobile": "?0",
+        "accept": "*/*",
+        "origin": "http://localhost:8080",
+        "sec-fetch-site": "same-site",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-dest": "empty",
+        "referer": "http://localhost:8080/",
+        "accept-encoding": "gzip, deflate, br, zstd",        
+        "accept-language": "en-US,en;q=0.9,te;q=0.8"
+      },
+      "remoteAddress": "127.0.0.1",
+      "remotePort": 51851
+    }
+    requestId: "68ba9f3f-8224-463f-98e5-821003a6095a"        
+    res: {
+      "statusCode": 503,
+      "headers": {
+        "x-request-id": "68ba9f3f-8224-463f-98e5-821003a6095a",
+        "origin-agent-cluster": "?1",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-download-options": "noopen",
+        "x-permitted-cross-domain-policies": "none",
+        "access-control-allow-origin": "http://localhost:8080",
+        "vary": "Origin",
+        "access-control-allow-headers": "authorization, x-client-info, apikey, content-type, accept, x-requested-with, x-stream-progress, x-idempotency-key",
+        "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+        "access-control-allow-credentials": "true",
+        "x-ratelimit-limit": "100",
+        "x-ratelimit-remaining": "96",
+        "content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://checkout.razorpay.com https://js.razorpay.com; style-src 'self' 'unsafe-inline' https://checkout.razorpay.com; img-src 'self' data: https:; connect-src 'self' https://api.razorpay.com https://checkout.razorpay.com; frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com; font-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self' https://api.razorpay.com",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-xss-protection": "1; mode=block",
+        "permissions-policy": "payment=self, camera=(), microphone=(), geolocation=()",
+        "x-development-mode": "true",
+        "x-test-pricing": "enabled",
+        "x-trace-id": "7dc8d3aa008642c1a800bb60ff2fc993",    
+        "traceparent": "00-7dc8d3aa008642c1a800bb60ff2fc993-df6f1f038ddb42f1-01",
+        "content-type": "application/json; charset=utf-8",   
+        "content-length": "92",
+        "etag": "W/\"5c-edxU1KVKqcqodU2yz3WtCjjvdLU\""       
+      }
+    }
+    responseTime: 993
+    err: {
+      "type": "Error",
+      "message": "failed with status code 503",
+      "stack":
+          Error: failed with status code 503
+              at onResFinished (C:\Users\user\Desktop\ctrlchecks-hostinger\worker\node_modules\pino-http\logger.js:115:39)
+              at ServerResponse.onResponseComplete (C:\Users\user\Desktop\ctrlchecks-hostinger\worker\node_modules\pino-http\logger.js:178:14)
+              at ServerResponse.emit (node:events:520:35)    
+              at ServerResponse.emit (node:domain:489:12)    
+              at onFinish (node:_http_outgoing:1026:10)      
+              at callback (node:internal/streams/writable:764:21)
+              at afterWrite (node:internal/streams/writable:708:5)
+              at afterWriteTick (node:internal/streams/writable:694:10)
+              at processTicksAndRejections (node:internal/process/task_queues:89:21)
+    }
+[2026-06-30 18:28:10.620 +0530] INFO: request completed      
+    req: {
+      "id": "e49aa85d-e139-468b-af67-dc990eda5701",
+      "method": "GET",
+      "url": "/api/auth/status",
+      "query": {},
+      "params": {},
+      "headers": {
+        "host": "localhost:3001",
+        "connection": "keep-alive",
+        "sec-ch-ua-platform": "\"Windows\"",
+        "authorization": "Bearer eyJraWQiOiJSN2x5WWNsNHI4TmlGLzlHd1NFbVZLTTBhSjl4bE5LYW9SL0tEY1ErMDFzPSIsImFsZyI6IlJTMjU2In0.eyJzdWIiOiJkMWYzZGQxYS0yMDgxLTcwNTYtOTU3Ny04ZWY0ZTNhODA4MmEiLCJjb2duaXRvOmdyb3VwcyI6WyJhcC1zb3V0aC0xX2FUWXZTWWZscV9Hb29nbGUiXSwiaXNzIjoiaHR0cHM6Ly9jb2duaXRvLWlkcC5hcC1zb3V0aC0xLmFtYXpvbmF3cy5jb20vYXAtc291dGgtMV9hVFl2U1lmbHEiLCJ2ZXJzaW9uIjoyLCJjbGllbnRfaWQiOiIzaXN0czVoOGExbW1jczhhcmU1bjFwaTVtOCIsIm9yaWdpbl9qdGkiOiJiYjdmZGM2Zi1mNjg3LTRhZjMtOTVmYS00YjE0NmU2ZjJhN2EiLCJ0b2tlbl91c2UiOiJhY2Nlc3MiLCJzY29wZSI6Im9wZW5pZCBwcm9maWxlIGVtYWlsIiwiYXV0aF90aW1lIjoxNzgyODIyODg2LCJleHAiOjE3ODI4MjY0ODYsImlhdCI6MTc4MjgyMjg4NiwianRpIjoiZmEyZjNjZDEtMTI3NS00NzU2LTg5OGMtY2E4MTg0NTU4MTBmIiwidXNlcm5hbWUiOiJnb29nbGVfMTExMDI1OTM0MjU5ODQ4MTAxODMyIn0.fvwwZ1y4SZ2CJM241FG2yh6V_KAFIEfR5wxQjLUq733PIE2U__yasUfy0MmSW9kpzeARJoQ8hgw2Jru9_mAq8_214TZ3PFGRDzpI_FSEW5i1FqR5WtV5QM-5XXbEM1z2LyhJn30Gwm9goUgvrx3cXkRkvHBkjsrGQlrHcdICDT7Zpf7na2lwWIJ7imV1KnzjlV5qluNLT9zzLWpxiLImvy7_pvew71wYjktPb1aZrl0zJWm8CuT3iqxyBdIRuulivZ3kkXZ73tuY7B8UvCXeGm1Fx_OQc04npVg4VY303wEhPbZG-ptaVG8UUgRpFSDTKaFBnhXgGZUFdPoCk8H_rA", 
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Google Chrome\";v=\"149\", \"Chromium\";v=\"149\", \"Not)A;Brand\";v=\"24\"",
+        "sec-ch-ua-mobile": "?0",
+        "accept": "*/*",
+        "origin": "http://localhost:8080",
+        "sec-fetch-site": "same-site",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-dest": "empty",
+        "referer": "http://localhost:8080/",
+        "accept-encoding": "gzip, deflate, br, zstd",        
+        "accept-language": "en-US,en;q=0.9,te;q=0.8"
+      },
+      "remoteAddress": "127.0.0.1",
+      "remotePort": 54220
+    }
+    requestId: "e49aa85d-e139-468b-af67-dc990eda5701"        
+    res: {
+      "statusCode": 200,
+      "headers": {
+        "x-request-id": "e49aa85d-e139-468b-af67-dc990eda5701",
+        "origin-agent-cluster": "?1",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-download-options": "noopen",
+        "x-permitted-cross-domain-policies": "none",
+        "access-control-allow-origin": "http://localhost:8080",
+        "vary": "Origin",
+        "access-control-allow-headers": "authorization, x-client-info, apikey, content-type, accept, x-requested-with, x-stream-progress, x-idempotency-key",
+        "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+        "access-control-allow-credentials": "true",
+        "x-ratelimit-limit": "100",
+        "x-ratelimit-remaining": "99",
+        "x-cache": "MISS",
+        "content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://checkout.razorpay.com https://js.razorpay.com; style-src 'self' 'unsafe-inline' https://checkout.razorpay.com; img-src 'self' data: https:; connect-src 'self' https://api.razorpay.com https://checkout.razorpay.com; frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com; font-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self' https://api.razorpay.com",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-xss-protection": "1; mode=block",
+        "permissions-policy": "payment=self, camera=(), microphone=(), geolocation=()",
+        "x-development-mode": "true",
+        "x-test-pricing": "enabled",
+        "x-trace-id": "a09b02f0a1de423abc6ba4cb17dcf5f9",    
+        "traceparent": "00-a09b02f0a1de423abc6ba4cb17dcf5f9-3cdf1a5096694d1b-01",
+        "content-type": "application/json; charset=utf-8",   
+        "content-length": "51",
+        "etag": "W/\"33-HyPJfwKakOxJhexEYwbLmGzCwb4\""       
+      }
+    }
+    responseTime: 1080
+[Auth] User authenticated: vusalashivakumar@gmail.com (user) - GET /api/db/user_roles
+[Security] DATA_ACCESS: Request failed with status 503 - 127.0.0.1 - GET /api/db/user_roles
+[Auth] User authenticated: vusalashivakumar@gmail.com (user) - GET /api/db/workflows
+[Security] DATA_ACCESS: Request failed with status 503 - 127.0.0.1 - GET /api/db/workflows
+[Auth] User authenticated: vusalashivakumar@gmail.com (user) - GET /api/auth/status
+[Request] GET /api/auth/status - 200 - 7951ms - vusalashivakumar@gmail.com
+[2026-06-30 18:28:10.633 +0530] INFO: request errored
+    req: {
+      "id": "400d3f54-13c3-414d-809a-f14474bb1cda",
+      "method": "GET",
+      "url": "/api/db/user_roles?select=role&filter_user_id=d1f3dd1a-2081-7056-9577-8ef4e3a8082a",
+      "query": {
+        "select": "role",
+        "filter_user_id": "d1f3dd1a-2081-7056-9577-8ef4e3a8082a"
+      },
+      "params": {},
+      "headers": {
+        "host": "localhost:3001",
+        "connection": "keep-alive",
+        "sec-ch-ua-platform": "\"Windows\"",
+        "authorization": "Bearer eyJraWQiOiJSN2x5WWNsNHI4TmlGLzlHd1NFbVZLTTBhSjl4bE5LYW9SL0tEY1ErMDFzPSIsImFsZyI6IlJTMjU2In0.eyJzdWIiOiJkMWYzZGQxYS0yMDgxLTcwNTYtOTU3Ny04ZWY0ZTNhODA4MmEiLCJjb2duaXRvOmdyb3VwcyI6WyJhcC1zb3V0aC0xX2FUWXZTWWZscV9Hb29nbGUiXSwiaXNzIjoiaHR0cHM6Ly9jb2duaXRvLWlkcC5hcC1zb3V0aC0xLmFtYXpvbmF3cy5jb20vYXAtc291dGgtMV9hVFl2U1lmbHEiLCJ2ZXJzaW9uIjoyLCJjbGllbnRfaWQiOiIzaXN0czVoOGExbW1jczhhcmU1bjFwaTVtOCIsIm9yaWdpbl9qdGkiOiJiYjdmZGM2Zi1mNjg3LTRhZjMtOTVmYS00YjE0NmU2ZjJhN2EiLCJ0b2tlbl91c2UiOiJhY2Nlc3MiLCJzY29wZSI6Im9wZW5pZCBwcm9maWxlIGVtYWlsIiwiYXV0aF90aW1lIjoxNzgyODIyODg2LCJleHAiOjE3ODI4MjY0ODYsImlhdCI6MTc4MjgyMjg4NiwianRpIjoiZmEyZjNjZDEtMTI3NS00NzU2LTg5OGMtY2E4MTg0NTU4MTBmIiwidXNlcm5hbWUiOiJnb29nbGVfMTExMDI1OTM0MjU5ODQ4MTAxODMyIn0.fvwwZ1y4SZ2CJM241FG2yh6V_KAFIEfR5wxQjLUq733PIE2U__yasUfy0MmSW9kpzeARJoQ8hgw2Jru9_mAq8_214TZ3PFGRDzpI_FSEW5i1FqR5WtV5QM-5XXbEM1z2LyhJn30Gwm9goUgvrx3cXkRkvHBkjsrGQlrHcdICDT7Zpf7na2lwWIJ7imV1KnzjlV5qluNLT9zzLWpxiLImvy7_pvew71wYjktPb1aZrl0zJWm8CuT3iqxyBdIRuulivZ3kkXZ73tuY7B8UvCXeGm1Fx_OQc04npVg4VY303wEhPbZG-ptaVG8UUgRpFSDTKaFBnhXgGZUFdPoCk8H_rA", 
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Google Chrome\";v=\"149\", \"Chromium\";v=\"149\", \"Not)A;Brand\";v=\"24\"",
+        "content-type": "application/json",
+        "sec-ch-ua-mobile": "?0",
+        "accept": "*/*",
+        "origin": "http://localhost:8080",
+        "sec-fetch-site": "same-site",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-dest": "empty",
+        "referer": "http://localhost:8080/",
+        "accept-encoding": "gzip, deflate, br, zstd",        
+        "accept-language": "en-US,en;q=0.9,te;q=0.8"
+      },
+      "remoteAddress": "127.0.0.1",
+      "remotePort": 54160
+    }
+    requestId: "400d3f54-13c3-414d-809a-f14474bb1cda"        
+    res: {
+      "statusCode": 503,
+      "headers": {
+        "x-request-id": "400d3f54-13c3-414d-809a-f14474bb1cda",
+        "origin-agent-cluster": "?1",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-download-options": "noopen",
+        "x-permitted-cross-domain-policies": "none",
+        "access-control-allow-origin": "http://localhost:8080",
+        "vary": "Origin",
+        "access-control-allow-headers": "authorization, x-client-info, apikey, content-type, accept, x-requested-with, x-stream-progress, x-idempotency-key",
+        "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+        "access-control-allow-credentials": "true",
+        "x-ratelimit-limit": "100",
+        "x-ratelimit-remaining": "98",
+        "content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://checkout.razorpay.com https://js.razorpay.com; style-src 'self' 'unsafe-inline' https://checkout.razorpay.com; img-src 'self' data: https:; connect-src 'self' https://api.razorpay.com https://checkout.razorpay.com; frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com; font-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self' https://api.razorpay.com",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-xss-protection": "1; mode=block",
+        "permissions-policy": "payment=self, camera=(), microphone=(), geolocation=()",
+        "x-development-mode": "true",
+        "x-test-pricing": "enabled",
+        "x-trace-id": "ccf840c5da494b3ea1ad9dc212c22dd8",    
+        "traceparent": "00-ccf840c5da494b3ea1ad9dc212c22dd8-a604c08cb45b4c42-01",
+        "content-type": "application/json; charset=utf-8",   
+        "content-length": "92",
+        "etag": "W/\"5c-edxU1KVKqcqodU2yz3WtCjjvdLU\""       
+      }
+    }
+    responseTime: 1043
+    err: {
+      "type": "Error",
+      "message": "failed with status code 503",
+      "stack":
+          Error: failed with status code 503
+              at onResFinished (C:\Users\user\Desktop\ctrlchecks-hostinger\worker\node_modules\pino-http\logger.js:115:39)
+              at ServerResponse.onResponseComplete (C:\Users\user\Desktop\ctrlchecks-hostinger\worker\node_modules\pino-http\logger.js:178:14)
+              at ServerResponse.emit (node:events:520:35)    
+              at ServerResponse.emit (node:domain:489:12)    
+              at onFinish (node:_http_outgoing:1026:10)      
+              at callback (node:internal/streams/writable:764:21)
+              at afterWrite (node:internal/streams/writable:708:5)
+              at afterWriteTick (node:internal/streams/writable:694:10)
+              at processTicksAndRejections (node:internal/process/task_queues:89:21)
+    }
+[2026-06-30 18:28:10.644 +0530] INFO: request errored        
+    req: {
+      "id": "574584f1-a581-40d6-baba-3a02a69d7326",
+      "method": "GET",
+      "url": "/api/db/workflows?select=id%2C+cron_expression&filter_setup_completed=true&notnull_cron_expression=true",   
+      "query": {
+        "select": "id, cron_expression",
+        "filter_setup_completed": "true",
+        "notnull_cron_expression": "true"
+      },
+      "params": {},
+      "headers": {
+        "host": "localhost:3001",
+        "connection": "keep-alive",
+        "sec-ch-ua-platform": "\"Windows\"",
+        "authorization": "Bearer eyJraWQiOiJSN2x5WWNsNHI4TmlGLzlHd1NFbVZLTTBhSjl4bE5LYW9SL0tEY1ErMDFzPSIsImFsZyI6IlJTMjU2In0.eyJzdWIiOiJkMWYzZGQxYS0yMDgxLTcwNTYtOTU3Ny04ZWY0ZTNhODA4MmEiLCJjb2duaXRvOmdyb3VwcyI6WyJhcC1zb3V0aC0xX2FUWXZTWWZscV9Hb29nbGUiXSwiaXNzIjoiaHR0cHM6Ly9jb2duaXRvLWlkcC5hcC1zb3V0aC0xLmFtYXpvbmF3cy5jb20vYXAtc291dGgtMV9hVFl2U1lmbHEiLCJ2ZXJzaW9uIjoyLCJjbGllbnRfaWQiOiIzaXN0czVoOGExbW1jczhhcmU1bjFwaTVtOCIsIm9yaWdpbl9qdGkiOiJiYjdmZGM2Zi1mNjg3LTRhZjMtOTVmYS00YjE0NmU2ZjJhN2EiLCJ0b2tlbl91c2UiOiJhY2Nlc3MiLCJzY29wZSI6Im9wZW5pZCBwcm9maWxlIGVtYWlsIiwiYXV0aF90aW1lIjoxNzgyODIyODg2LCJleHAiOjE3ODI4MjY0ODYsImlhdCI6MTc4MjgyMjg4NiwianRpIjoiZmEyZjNjZDEtMTI3NS00NzU2LTg5OGMtY2E4MTg0NTU4MTBmIiwidXNlcm5hbWUiOiJnb29nbGVfMTExMDI1OTM0MjU5ODQ4MTAxODMyIn0.fvwwZ1y4SZ2CJM241FG2yh6V_KAFIEfR5wxQjLUq733PIE2U__yasUfy0MmSW9kpzeARJoQ8hgw2Jru9_mAq8_214TZ3PFGRDzpI_FSEW5i1FqR5WtV5QM-5XXbEM1z2LyhJn30Gwm9goUgvrx3cXkRkvHBkjsrGQlrHcdICDT7Zpf7na2lwWIJ7imV1KnzjlV5qluNLT9zzLWpxiLImvy7_pvew71wYjktPb1aZrl0zJWm8CuT3iqxyBdIRuulivZ3kkXZ73tuY7B8UvCXeGm1Fx_OQc04npVg4VY303wEhPbZG-ptaVG8UUgRpFSDTKaFBnhXgGZUFdPoCk8H_rA", 
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Google Chrome\";v=\"149\", \"Chromium\";v=\"149\", \"Not)A;Brand\";v=\"24\"",
+        "content-type": "application/json",
+        "sec-ch-ua-mobile": "?0",
+        "accept": "*/*",
+        "origin": "http://localhost:8080",
+        "sec-fetch-site": "same-site",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-dest": "empty",
+        "referer": "http://localhost:8080/",
+        "accept-encoding": "gzip, deflate, br, zstd",        
+        "accept-language": "en-US,en;q=0.9,te;q=0.8"
+      },
+      "remoteAddress": "127.0.0.1",
+      "remotePort": 60072
+    }
+    requestId: "574584f1-a581-40d6-baba-3a02a69d7326"        
+    res: {
+      "statusCode": 503,
+      "headers": {
+        "x-request-id": "574584f1-a581-40d6-baba-3a02a69d7326",
+        "origin-agent-cluster": "?1",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-download-options": "noopen",
+        "x-permitted-cross-domain-policies": "none",
+        "access-control-allow-origin": "http://localhost:8080",
+        "vary": "Origin",
+        "access-control-allow-headers": "authorization, x-client-info, apikey, content-type, accept, x-requested-with, x-stream-progress, x-idempotency-key",
+        "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+        "access-control-allow-credentials": "true",
+        "x-ratelimit-limit": "100",
+        "x-ratelimit-remaining": "97",
+        "content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://checkout.razorpay.com https://js.razorpay.com; style-src 'self' 'unsafe-inline' https://checkout.razorpay.com; img-src 'self' data: https:; connect-src 'self' https://api.razorpay.com https://checkout.razorpay.com; frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com; font-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self' https://api.razorpay.com",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-xss-protection": "1; mode=block",
+        "permissions-policy": "payment=self, camera=(), microphone=(), geolocation=()",
+        "x-development-mode": "true",
+        "x-test-pricing": "enabled",
+        "x-trace-id": "43e9397d06f74ec583bccaca2ccfaf02",    
+        "traceparent": "00-43e9397d06f74ec583bccaca2ccfaf02-c226f179244a4bb9-01",
+        "content-type": "application/json; charset=utf-8",   
+        "content-length": "92",
+        "etag": "W/\"5c-edxU1KVKqcqodU2yz3WtCjjvdLU\""       
+      }
+    }
+    responseTime: 1031
+    err: {
+      "type": "Error",
+      "message": "failed with status code 503",
+      "stack":
+          Error: failed with status code 503
+              at onResFinished (C:\Users\user\Desktop\ctrlchecks-hostinger\worker\node_modules\pino-http\logger.js:115:39)
+              at ServerResponse.onResponseComplete (C:\Users\user\Desktop\ctrlchecks-hostinger\worker\node_modules\pino-http\logger.js:178:14)
+              at ServerResponse.emit (node:events:520:35)    
+              at ServerResponse.emit (node:domain:489:12)    
+              at onFinish (node:_http_outgoing:1026:10)      
+              at callback (node:internal/streams/writable:764:21)
+              at afterWrite (node:internal/streams/writable:708:5)
+              at afterWriteTick (node:internal/streams/writable:694:10)
+              at processTicksAndRejections (node:internal/process/task_queues:89:21)
+    }

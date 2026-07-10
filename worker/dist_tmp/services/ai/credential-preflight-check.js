@@ -1,0 +1,152 @@
+"use strict";
+// PHASE-2: Credential Preflight Check (STEP-4.5)
+// Validates credentials BEFORE building workflow
+// Prevents wasted builds
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.credentialPreflightChecker = exports.CredentialPreflightChecker = void 0;
+const unified_node_registry_1 = require("../../core/registry/unified-node-registry");
+/**
+ * Credential Preflight Check - PHASE-2 Feature #4
+ *
+ * STEP-4.5: Credential Readiness Check
+ * Validates:
+ * - Credential exists
+ * - Permission scopes sufficient
+ * - Stops early if invalid
+ *
+ * Credential policy is driven by unifiedNodeRegistry.getCredentialPreflightDescriptor().
+ */
+class CredentialPreflightChecker {
+    /**
+     * Check credential readiness before building
+     */
+    async checkCredentials(nodes, existingAuth = {}) {
+        console.log('🔐 [CredentialPreflight] Checking credentials...');
+        const checks = [];
+        const missing = [];
+        const invalid = [];
+        const warnings = [];
+        for (const node of nodes) {
+            if (this.requiresCredentials(node.type)) {
+                const check = await this.checkNodeCredentials(node, existingAuth);
+                checks.push(check);
+                if (!check.exists) {
+                    missing.push(check);
+                }
+                else if (!check.valid) {
+                    invalid.push(check);
+                }
+                if (check.exists && check.missingScopes.length > 0) {
+                    warnings.push(`Node ${node.data?.label || node.id} (${node.type}) is missing scopes: ${check.missingScopes.join(', ')}`);
+                }
+            }
+        }
+        const ready = missing.length === 0 && invalid.length === 0;
+        if (!ready) {
+            console.warn(`⚠️  [CredentialPreflight] Not ready: ${missing.length} missing, ${invalid.length} invalid`);
+        }
+        else {
+            console.log('✅ [CredentialPreflight] All credentials ready');
+        }
+        return {
+            ready,
+            checks,
+            missing,
+            invalid,
+            warnings,
+        };
+    }
+    /**
+     * Registry-driven: true when UnifiedNodeRegistry says this node participates in preflight.
+     */
+    requiresCredentials(nodeType) {
+        return unified_node_registry_1.unifiedNodeRegistry.getCredentialPreflightDescriptor(nodeType).requiresCheck;
+    }
+    /**
+     * Check credentials for a single node
+     */
+    async checkNodeCredentials(node, existingAuth) {
+        const nodeType = node.type;
+        const desc = unified_node_registry_1.unifiedNodeRegistry.getCredentialPreflightDescriptor(nodeType);
+        const credentialTypeLabel = desc.credentialType === 'OAuth' ? 'OAuth' : desc.credentialType === 'API_KEY' ? 'API_KEY' : 'API_KEY';
+        const requiredScopes = desc.requiredScopes;
+        const credential = this.findCredential(existingAuth, desc.lookupKeys);
+        const exists = !!credential;
+        let valid = false;
+        let scopes = [];
+        let missingScopes = [];
+        let error;
+        if (credential) {
+            valid = this.validateCredentialFormat(credential, desc.credentialType);
+            if (!valid) {
+                error = 'Invalid credential format';
+            }
+            else {
+                scopes = this.extractScopes(credential);
+                missingScopes = requiredScopes.filter((scope) => !scopes.includes(scope));
+                if (desc.credentialType === 'OAuth' && missingScopes.length > 0) {
+                    valid = true;
+                }
+                else if (missingScopes.length > 0) {
+                    valid = false;
+                    error = `Missing required scopes: ${missingScopes.join(', ')}`;
+                }
+            }
+        }
+        return {
+            nodeId: node.id,
+            nodeType,
+            credentialType: credentialTypeLabel,
+            exists,
+            valid,
+            scopes,
+            requiredScopes,
+            missingScopes,
+            error,
+        };
+    }
+    /**
+     * Find credential in existing auth using registry-provided lookup keys (order preserved).
+     */
+    findCredential(existingAuth, lookupKeys) {
+        for (const key of lookupKeys) {
+            if (key && existingAuth[key]) {
+                return existingAuth[key];
+            }
+        }
+        return null;
+    }
+    /**
+     * Validate credential format
+     */
+    validateCredentialFormat(credential, credentialType) {
+        if (credentialType === 'API_KEY' || credentialType === 'UNKNOWN') {
+            if (typeof credential === 'string' && credential.length > 0)
+                return true;
+            return !!(credential &&
+                typeof credential === 'object' &&
+                (credential.apiKey || credential.key || credential.access_token || credential.token));
+        }
+        if (credentialType === 'OAuth') {
+            return !!(credential &&
+                typeof credential === 'object' &&
+                (credential.access_token || credential.token));
+        }
+        return false;
+    }
+    /**
+     * Extract scopes from credential
+     */
+    extractScopes(credential) {
+        if (credential.scopes && Array.isArray(credential.scopes)) {
+            return credential.scopes;
+        }
+        if (credential.scope && typeof credential.scope === 'string') {
+            return credential.scope.split(' ');
+        }
+        return [];
+    }
+}
+exports.CredentialPreflightChecker = CredentialPreflightChecker;
+// Export singleton instance
+exports.credentialPreflightChecker = new CredentialPreflightChecker();

@@ -8,6 +8,8 @@
  */
 
 import { publishExecutionEvent } from '../lib/ws-publish';
+import { getDb } from '../lib/db';
+import { getRedis } from '../lib/redis';
 
 export interface EngineJob {
   id: string;
@@ -82,6 +84,28 @@ export async function runEngineJob(job: EngineJob): Promise<void> {
     structuredLog('info', 'completed', { executionId, jobId, workflowId, durationMs });
   } else {
     structuredLog('error', 'failed', { executionId, jobId, workflowId, durationMs, error: errorMsg });
+
+    // Write failed status to DB so polling sees a terminal state (not pending forever)
+    const db = await getDb();
+    if (db) {
+      await db.query(
+        `UPDATE executions SET status = 'failed', error = $1, finished_at = NOW() WHERE id = $2`,
+        [errorMsg ?? 'engine error', executionId],
+      ).catch((e: unknown) => structuredLog('error', 'failed', { executionId, msg: 'db-update-failed', err: String(e) }));
+    }
+
+    // Invalidate Redis cache so /api/execution-status stops serving stale 'pending'
+    const redis = await getRedis();
+    if (redis) {
+      const pattern = `/api/execution-status/${executionId}:*`;
+      let cursor = '0';
+      do {
+        const [newCursor, keys] = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100) as [string, string[]];
+        cursor = newCursor;
+        if (keys.length > 0) await redis.del(...keys).catch(() => { /* non-fatal */ });
+      } while (cursor !== '0');
+    }
+
     // Publish failed WS event so client UI doesn't hang on "running"
     await publishExecutionEvent(executionId, {
       type: 'EXECUTION_UPDATE',

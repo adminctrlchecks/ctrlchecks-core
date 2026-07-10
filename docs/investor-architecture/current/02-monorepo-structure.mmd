@@ -1,0 +1,10 @@
+﻿flowchart TD
+    ROOT[ctrlchecks-ai-workflow-os] --> FRONT[ctrl_checks/<br/>React/Vite frontend<br/>canvas, wizard, docs, debug]
+    ROOT --> WORKER[worker/<br/>Express API + runtime]
+    ROOT --> DOCS[docs/<br/>Investor and architecture docs]
+    ROOT --> INFRA[infra/ + infrastructure/<br/>Docker, Nginx, HPA,<br/>Terraform/cloud setup]
+    WORKER --> API[worker/src/api/<br/>generate, attach inputs,<br/>attach credentials, execute]
+    WORKER --> CORE[worker/src/core/<br/>registry, orchestration,<br/>execution, database]
+    WORKER --> SERVICES[worker/src/services/<br/>AI pipeline, node library,<br/>credentials, billing]
+    CORE --> RDS[core/database/aws-db-client.ts<br/>AWS RDB/RDS facade]
+    CORE --> CONTRACTS[core/execution/runtime-field-contract.ts<br/>universal runtime field validation]

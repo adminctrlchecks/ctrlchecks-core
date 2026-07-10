@@ -1,0 +1,47 @@
+sequenceDiagram
+  actor User
+  participant Frontend as Frontend useExecutionStatus
+  participant Nginx as Nginx :443
+  participant Worker as worker :3001
+  participant Engine as execution-engine :3003
+  participant Redis as Redis
+  participant RDS as RDS
+  participant Notify as notification-service :3005
+  participant SES as AWS SES
+
+  User->>Frontend: Click Run
+  Frontend->>Nginx: POST /api/execute-workflow + JWT
+  Nginx->>Worker: Proxy request
+  Worker->>Engine: POST /execute + x-service-key
+  Engine->>RDS: Pre-create execution row (pending, non-fatal)
+  Engine->>Redis: SETEX job + ZADD workflow:execution:engine-queue
+  Engine-->>Worker: 202 queued + executionId + jobId
+  Worker-->>Nginx: 202 queued
+  Nginx-->>Frontend: 202, then subscribe to executionId
+
+  Engine->>Redis: Consumer ZRANGE/ZREM and add engine-processing
+  Engine->>Redis: PUBLISH running event
+  Engine->>Worker: POST /api/internal/engine-execute + x-internal-engine-key
+  Worker->>RDS: Load latest workflow and execution state
+  Worker->>Worker: Topological sort + owner credential resolution
+
+  loop Each runnable node in graph order
+    Worker->>Worker: UnifiedNodeRegistry.get(type).execute(context)
+    Worker->>RDS: Update executions and execution_steps/checkpoint
+    Worker->>Redis: Publish node/progress WebSocket event
+    Redis-->>Worker: ws:exec:events bridge delivery
+    Worker-->>Nginx: /ws/executions event
+    Nginx-->>Frontend: WSS EXECUTION_UPDATE
+  end
+
+  Worker->>RDS: Persist success/failed terminal state and release lock
+  Worker-->>Notify: Fire-and-forget email + in-app dispatch
+  Notify->>SES: Send email when enabled
+  Notify->>RDS: Insert in-app notification
+  Worker-->>Engine: Synchronous internal result
+  Engine->>Redis: Remove engine-processing marker
+
+  loop Worker watchdog every 5 minutes
+    Worker->>RDS: Find stale running heartbeat or timeout
+    Worker->>RDS: Mark failed and release lock when stuck
+  end

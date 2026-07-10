@@ -1,0 +1,677 @@
+"use strict";
+/**
+ * Social Media Dispatcher
+ *
+ * Centralized dispatcher for social media node operations.
+ * Routes node operations to appropriate service handlers.
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.executeSocialNode = executeSocialNode;
+const social_token_manager_1 = require("../../shared/social-token-manager");
+const githubService_1 = require("./githubService");
+const facebookService_1 = require("./facebookService");
+const twitterService_1 = require("./twitterService");
+const retry_wrapper_1 = require("./retry-wrapper");
+const github_node_1 = require("./github-node");
+const facebook_node_1 = require("./facebook-node");
+const whatsapp_node_1 = require("./whatsapp-node");
+const instagram_node_1 = require("./instagram-node");
+const whatsapp_token_manager_1 = require("../../shared/whatsapp-token-manager");
+const instagram_token_manager_1 = require("../../shared/instagram-token-manager");
+/**
+ * Execute social media node operation
+ */
+async function executeSocialNode(db, config, userId, currentUserId) {
+    const { provider, operation } = config;
+    // Get token for user
+    const userIdsToTry = [];
+    if (userId)
+        userIdsToTry.push(userId);
+    if (currentUserId && currentUserId !== userId)
+        userIdsToTry.push(currentUserId);
+    // WhatsApp and Instagram use their own token managers — skip generic token lookup
+    if (provider === 'whatsapp') {
+        try {
+            const waToken = await (0, whatsapp_token_manager_1.getWhatsAppAccessToken)(db, userIdsToTry);
+            if (!waToken) {
+                return {
+                    success: false,
+                    provider: 'whatsapp',
+                    action: operation,
+                    data: {},
+                    error: 'No WhatsApp token found. Please connect your WhatsApp Business account in settings.',
+                };
+            }
+            return await executeWhatsAppNode(waToken, db, config);
+        }
+        catch (error) {
+            return {
+                success: false,
+                provider: 'whatsapp',
+                action: operation,
+                data: {},
+                error: error instanceof Error ? error.message : 'Unknown error occurred',
+            };
+        }
+    }
+    if (provider === 'instagram') {
+        try {
+            const igToken = await (0, instagram_token_manager_1.getInstagramAccessToken)(db, userIdsToTry);
+            if (!igToken) {
+                return {
+                    success: false,
+                    provider: 'instagram',
+                    action: operation,
+                    data: {},
+                    error: 'No Instagram token found. Please connect your Instagram account in settings.',
+                };
+            }
+            return await executeInstagramNode(igToken, db, config);
+        }
+        catch (error) {
+            return {
+                success: false,
+                provider: 'instagram',
+                action: operation,
+                data: {},
+                error: error instanceof Error ? error.message : 'Unknown error occurred',
+            };
+        }
+    }
+    const token = userIdsToTry.length > 0
+        ? await (0, social_token_manager_1.getProviderToken)(db, userIdsToTry, provider)
+        : null;
+    if (!token) {
+        return {
+            success: false,
+            provider,
+            action: operation,
+            data: {},
+            error: `No ${provider} token found. Please connect your ${provider} account in settings.`,
+        };
+    }
+    // Route to appropriate service handler
+    try {
+        switch (provider) {
+            case 'github':
+                // Check if using new comprehensive GitHub node pattern (resource/operation)
+                if (config.resource && config.operation) {
+                    // Extract resource and operation, then spread rest of config
+                    const { resource, operation: op, ...restConfig } = config;
+                    // Build explicit GitHubNodeParams object to satisfy TypeScript
+                    const ghParams = {
+                        resource: resource,
+                        operation: op,
+                        ...restConfig,
+                    };
+                    return await executeGitHubNode(token, ghParams);
+                }
+                // Otherwise use legacy operation pattern (backward compatible)
+                return await executeGitHubOperation(token, operation, config);
+            case 'facebook':
+                // Check if using new comprehensive Facebook node pattern (resource/operation)
+                if (config.resource && config.operation) {
+                    // Extract resource and operation, then spread rest of config
+                    const { resource, operation: op, ...restConfig } = config;
+                    // Build explicit FacebookNodeParams object to satisfy TypeScript
+                    const fbParams = {
+                        resource: resource,
+                        operation: op,
+                        ...restConfig,
+                    };
+                    return await executeFacebookNode(token, fbParams);
+                }
+                // Otherwise use legacy operation pattern (backward compatible)
+                return await executeFacebookOperation(token, operation, config);
+            case 'twitter':
+                return await executeTwitterOperation(token, operation, config);
+            default:
+                return {
+                    success: false,
+                    provider,
+                    action: operation,
+                    data: {},
+                    error: `Unsupported provider: ${provider}`,
+                };
+        }
+    }
+    catch (error) {
+        return {
+            success: false,
+            provider,
+            action: operation,
+            data: {},
+            error: error instanceof Error ? error.message : 'Unknown error occurred',
+        };
+    }
+}
+/**
+ * Execute GitHub node using comprehensive resource/operation pattern
+ */
+async function executeGitHubNode(token, params) {
+    return (0, retry_wrapper_1.withRetry)(async () => {
+        const node = new github_node_1.GitHubNode(token);
+        const result = await node.execute(params);
+        // Convert GitHubNodeResult to SocialServiceResponse format
+        if (result.success) {
+            return {
+                success: true,
+                provider: 'github',
+                action: `${result.resource}.${result.operation}`,
+                data: result.data,
+                error: null,
+            };
+        }
+        else {
+            return {
+                success: false,
+                provider: 'github',
+                action: `${result.resource}.${result.operation}`,
+                data: {},
+                error: result.error.message || 'GitHub operation failed',
+            };
+        }
+    });
+}
+/**
+ * Execute GitHub operation
+ */
+async function executeGitHubOperation(token, operation, config) {
+    return (0, retry_wrapper_1.withRetry)(async () => {
+        switch (operation) {
+            case 'get_repo':
+            case 'get_repository': {
+                // Map legacy get_repo operation to new GitHubNode repository.getRepo
+                const { owner, repo } = config;
+                const ghParams = {
+                    resource: 'repository',
+                    operation: 'getRepo',
+                    owner,
+                    repo,
+                };
+                return await executeGitHubNode(token, ghParams);
+            }
+            case 'list_repos':
+            case 'list_repositories': {
+                // List repositories for authenticated user or organization
+                // If owner is provided, list repos for that user/org; otherwise list for authenticated user
+                const ghParams = {
+                    resource: 'repository',
+                    operation: 'listRepos',
+                    owner: config.owner || undefined, // Use owner field (works for both users and orgs)
+                    type: 'all',
+                };
+                return await executeGitHubNode(token, ghParams);
+            }
+            // Issue operations
+            case 'list_issues': {
+                const ghParams = {
+                    resource: 'issue',
+                    operation: 'listIssues',
+                    owner: config.owner,
+                    repo: config.repo,
+                    state: config.state,
+                };
+                return await executeGitHubNode(token, ghParams);
+            }
+            case 'get_issue': {
+                const ghParams = {
+                    resource: 'issue',
+                    operation: 'getIssue',
+                    owner: config.owner,
+                    repo: config.repo,
+                    issue_number: config.issueNumber,
+                };
+                return await executeGitHubNode(token, ghParams);
+            }
+            case 'update_issue': {
+                const ghParams = {
+                    resource: 'issue',
+                    operation: 'updateIssue',
+                    owner: config.owner,
+                    repo: config.repo,
+                    issue_number: config.issueNumber,
+                    title: config.title,
+                    body: config.body,
+                    state: config.state,
+                };
+                return await executeGitHubNode(token, ghParams);
+            }
+            case 'close_issue': {
+                const ghParams = {
+                    resource: 'issue',
+                    operation: 'updateIssue',
+                    owner: config.owner,
+                    repo: config.repo,
+                    issue_number: config.issueNumber,
+                    state: 'closed',
+                };
+                return await executeGitHubNode(token, ghParams);
+            }
+            case 'add_issue_comment': {
+                const ghParams = {
+                    resource: 'issue',
+                    operation: 'addIssueComment',
+                    owner: config.owner,
+                    repo: config.repo,
+                    issue_number: config.issueNumber,
+                    body: config.comment,
+                };
+                return await executeGitHubNode(token, ghParams);
+            }
+            case 'post_issue':
+            case 'create_issue': {
+                const { owner, repo, title, body, labels } = config;
+                return await (0, githubService_1.postGitHubIssue)(token, owner, repo, title, body, labels);
+            }
+            case 'create_repo':
+            case 'create_repository': {
+                const { name, description, private: privateRepo } = config;
+                return await (0, githubService_1.createGitHubRepository)(token, name, description, privateRepo);
+            }
+            case 'get_user':
+            case 'get_profile': {
+                return await (0, githubService_1.getGitHubUser)(token);
+            }
+            // Pull Request operations
+            case 'list_prs': {
+                const ghParams = {
+                    resource: 'pullRequest',
+                    operation: 'listPullRequests',
+                    owner: config.owner,
+                    repo: config.repo,
+                    state: config.state,
+                };
+                return await executeGitHubNode(token, ghParams);
+            }
+            case 'get_pr': {
+                const ghParams = {
+                    resource: 'pullRequest',
+                    operation: 'getPullRequest',
+                    owner: config.owner,
+                    repo: config.repo,
+                    pull_number: config.prNumber,
+                };
+                return await executeGitHubNode(token, ghParams);
+            }
+            case 'create_pr': {
+                const ghParams = {
+                    resource: 'pullRequest',
+                    operation: 'createPullRequest',
+                    owner: config.owner,
+                    repo: config.repo,
+                    title: config.title,
+                    head: config.branchName || config.ref,
+                    base: config.ref || 'main',
+                    body: config.body,
+                };
+                return await executeGitHubNode(token, ghParams);
+            }
+            case 'update_pr': {
+                const ghParams = {
+                    resource: 'pullRequest',
+                    operation: 'updatePullRequest',
+                    owner: config.owner,
+                    repo: config.repo,
+                    pull_number: config.prNumber,
+                    title: config.title,
+                    body: config.body,
+                    state: config.state,
+                };
+                return await executeGitHubNode(token, ghParams);
+            }
+            case 'merge_pr': {
+                const ghParams = {
+                    resource: 'pullRequest',
+                    operation: 'mergePullRequest',
+                    owner: config.owner,
+                    repo: config.repo,
+                    pull_number: config.prNumber,
+                    merge_method: config.mergeMethod,
+                };
+                return await executeGitHubNode(token, ghParams);
+            }
+            case 'add_pr_comment': {
+                // PRs are issues under the hood – use issue comment API
+                const ghParams = {
+                    resource: 'issue',
+                    operation: 'addIssueComment',
+                    owner: config.owner,
+                    repo: config.repo,
+                    issue_number: config.prNumber,
+                    body: config.comment,
+                };
+                return await executeGitHubNode(token, ghParams);
+            }
+            // Branch operations
+            case 'list_branches': {
+                const ghParams = {
+                    resource: 'branch',
+                    operation: 'listBranches',
+                    owner: config.owner,
+                    repo: config.repo,
+                };
+                return await executeGitHubNode(token, ghParams);
+            }
+            case 'get_branch': {
+                const ghParams = {
+                    resource: 'branch',
+                    operation: 'getBranch',
+                    owner: config.owner,
+                    repo: config.repo,
+                    branch: config.branchName || config.ref,
+                };
+                return await executeGitHubNode(token, ghParams);
+            }
+            case 'create_branch': {
+                const ghParams = {
+                    resource: 'branch',
+                    operation: 'createBranch',
+                    owner: config.owner,
+                    repo: config.repo,
+                    branch: config.branchName,
+                    sha: config.sha,
+                };
+                return await executeGitHubNode(token, ghParams);
+            }
+            case 'delete_branch': {
+                const ghParams = {
+                    resource: 'branch',
+                    operation: 'deleteBranch',
+                    owner: config.owner,
+                    repo: config.repo,
+                    branch: config.branchName,
+                };
+                return await executeGitHubNode(token, ghParams);
+            }
+            // Commit operations
+            case 'list_commits': {
+                const ghParams = {
+                    resource: 'commit',
+                    operation: 'listCommits',
+                    owner: config.owner,
+                    repo: config.repo,
+                    sha: config.commitSha || config.ref,
+                };
+                return await executeGitHubNode(token, ghParams);
+            }
+            case 'get_commit': {
+                const ghParams = {
+                    resource: 'commit',
+                    operation: 'getCommit',
+                    owner: config.owner,
+                    repo: config.repo,
+                    commit_sha: config.commitSha,
+                };
+                return await executeGitHubNode(token, ghParams);
+            }
+            case 'commit_file':
+            case 'commit': {
+                const { owner, repo, path, content, message, branch } = config;
+                return await (0, githubService_1.commitGitHubFile)(token, owner, repo, path, content, message, branch);
+            }
+            case 'create_commit': {
+                // Map create_commit UI operation to commitGitHubFile helper
+                const { owner, repo, filePath, fileContent, commitMessage, branchName, ref } = config;
+                return await (0, githubService_1.commitGitHubFile)(token, owner, repo, filePath, fileContent, commitMessage, branchName || ref);
+            }
+            // Release operations
+            case 'list_releases': {
+                const ghParams = {
+                    resource: 'release',
+                    operation: 'listReleases',
+                    owner: config.owner,
+                    repo: config.repo,
+                };
+                return await executeGitHubNode(token, ghParams);
+            }
+            case 'get_release': {
+                const ghParams = {
+                    resource: 'release',
+                    operation: 'getRelease',
+                    owner: config.owner,
+                    repo: config.repo,
+                    release_id: config.releaseId,
+                };
+                return await executeGitHubNode(token, ghParams);
+            }
+            case 'create_release': {
+                const ghParams = {
+                    resource: 'release',
+                    operation: 'createRelease',
+                    owner: config.owner,
+                    repo: config.repo,
+                    tag_name: config.tagName,
+                    name: config.releaseName,
+                    body: config.releaseBody,
+                };
+                return await executeGitHubNode(token, ghParams);
+            }
+            // Workflow operations
+            case 'get_workflow_runs': {
+                const ghParams = {
+                    resource: 'workflow',
+                    operation: 'getWorkflowRuns',
+                    owner: config.owner,
+                    repo: config.repo,
+                    workflowId: config.workflowId,
+                };
+                return await executeGitHubNode(token, ghParams);
+            }
+            case 'trigger_workflow': {
+                const ghParams = {
+                    resource: 'workflow',
+                    operation: 'triggerWorkflow',
+                    owner: config.owner,
+                    repo: config.repo,
+                    workflowId: config.workflowId,
+                    ref: config.ref || 'main',
+                };
+                return await executeGitHubNode(token, ghParams);
+            }
+            // Repository contributors
+            case 'list_contributors': {
+                const params = {
+                    resource: 'repository',
+                    operation: 'listContributors',
+                    owner: config.owner,
+                    repo: config.repo,
+                };
+                // listContributors handled via repository handler extension (using Octokit directly)
+                const node = new github_node_1.GitHubNode(token);
+                const result = await node.execute(params);
+                if (result.success) {
+                    return {
+                        success: true,
+                        provider: 'github',
+                        action: 'repository.listContributors',
+                        data: result.data,
+                        error: null,
+                    };
+                }
+                else {
+                    return {
+                        success: false,
+                        provider: 'github',
+                        action: 'repository.listContributors',
+                        data: {},
+                        error: result.error.message,
+                    };
+                }
+            }
+            default:
+                return {
+                    success: false,
+                    provider: 'github',
+                    action: operation,
+                    data: {},
+                    error: `Unsupported GitHub operation: ${operation}`,
+                };
+        }
+    });
+}
+/**
+ * Execute Facebook node using comprehensive resource/operation pattern
+ */
+async function executeFacebookNode(token, params) {
+    return (0, retry_wrapper_1.withRetry)(async () => {
+        const node = new facebook_node_1.FacebookNode(token);
+        const result = await node.execute(params);
+        // Convert FacebookNodeResult to SocialServiceResponse format
+        if (result.success) {
+            return {
+                success: true,
+                provider: 'facebook',
+                action: `${result.resource}.${result.operation}`,
+                data: result.data,
+                error: null,
+            };
+        }
+        else {
+            return {
+                success: false,
+                provider: 'facebook',
+                action: `${result.resource}.${result.operation}`,
+                data: {},
+                error: result.error?.message || 'Facebook operation failed',
+            };
+        }
+    });
+}
+/**
+ * Execute Facebook operation (legacy pattern for backward compatibility)
+ */
+async function executeFacebookOperation(token, operation, config) {
+    return (0, retry_wrapper_1.withRetry)(async () => {
+        switch (operation) {
+            case 'post':
+            case 'create_post': {
+                const { message, pageId, link } = config;
+                return await (0, facebookService_1.postToFacebook)(token, message, pageId, link);
+            }
+            case 'get_user':
+            case 'get_profile': {
+                return await (0, facebookService_1.getFacebookUser)(token);
+            }
+            default:
+                return {
+                    success: false,
+                    provider: 'facebook',
+                    action: operation,
+                    data: {},
+                    error: `Unsupported Facebook operation: ${operation}`,
+                };
+        }
+    });
+}
+/**
+ * Execute Twitter operation
+ */
+async function executeTwitterOperation(token, operation, config) {
+    return (0, retry_wrapper_1.withRetry)(async () => {
+        switch (operation) {
+            case 'post':
+            case 'tweet':
+            case 'create_tweet': {
+                const { text } = config;
+                return await (0, twitterService_1.postTweet)(token, text);
+            }
+            case 'get_user':
+            case 'get_profile': {
+                return await (0, twitterService_1.getTwitterUser)(token);
+            }
+            default:
+                return {
+                    success: false,
+                    provider: 'twitter',
+                    action: operation,
+                    data: {},
+                    error: `Unsupported Twitter operation: ${operation}`,
+                };
+        }
+    });
+}
+/**
+ * Execute WhatsApp node using comprehensive resource/operation pattern
+ */
+async function executeWhatsAppNode(token, db, config) {
+    try {
+        const { resource, operation: op, provider: _provider, ...restConfig } = config;
+        const params = {
+            resource: resource,
+            operation: op,
+            ...restConfig,
+        };
+        const node = new whatsapp_node_1.WhatsAppNode(token, db);
+        const result = await node.execute(params);
+        if (result.success) {
+            return {
+                success: true,
+                provider: 'whatsapp',
+                action: `${result.resource}.${result.operation}`,
+                data: result.data,
+                error: null,
+            };
+        }
+        else {
+            return {
+                success: false,
+                provider: 'whatsapp',
+                action: `${result.resource}.${result.operation}`,
+                data: {},
+                error: result.error?.message || 'WhatsApp operation failed',
+            };
+        }
+    }
+    catch (err) {
+        return {
+            success: false,
+            provider: 'whatsapp',
+            action: config.operation ?? 'unknown',
+            data: {},
+            error: err?.message ?? String(err),
+        };
+    }
+}
+/**
+ * Execute Instagram node using comprehensive resource/operation pattern
+ */
+async function executeInstagramNode(token, db, config) {
+    try {
+        const { resource, operation: op, provider: _provider, ...restConfig } = config;
+        const params = {
+            resource: resource,
+            operation: op,
+            ...restConfig,
+        };
+        const node = new instagram_node_1.InstagramNode(token, db);
+        const result = await node.execute(params);
+        if (result.success) {
+            return {
+                success: true,
+                provider: 'instagram',
+                action: `${result.resource}.${result.operation}`,
+                data: result.data,
+                error: null,
+            };
+        }
+        else {
+            return {
+                success: false,
+                provider: 'instagram',
+                action: `${result.resource}.${result.operation}`,
+                data: {},
+                error: result.error?.message || 'Instagram operation failed',
+            };
+        }
+    }
+    catch (err) {
+        return {
+            success: false,
+            provider: 'instagram',
+            action: config.operation ?? 'unknown',
+            data: {},
+            error: err?.message ?? String(err),
+        };
+    }
+}

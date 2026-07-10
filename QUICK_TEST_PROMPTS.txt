@@ -1,0 +1,20 @@
+# 🧪 Quick Test Prompts - Copy & Paste These
+
+## Test Prompt 1: Sales Agent with Schedule
+create a sales agent. Fixed Schedule
+
+## Test Prompt 2: Chatbot with Fixed Schedule
+create a chat bot. Fixed Schedule
+
+## Test Prompt 3: CRM Agent with Platform Specification
+create a CRM agent workflow. Manual run. Specify platform
+
+## Test Prompt 4: Simple Webhook Workflow
+when a new contact is created in HubSpot, send a notification to Slack
+
+## Test Prompt 5: Complex Multi-Step Workflow
+create a workflow that reads data from Google Sheets daily, if the value is greater than 100, create a contact in HubSpot and send email notification, otherwise log the result
+
+---
+
+For detailed testing instructions, see DEBUG_TEST_PROMPTS.md

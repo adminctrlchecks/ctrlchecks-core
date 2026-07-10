@@ -1,0 +1,14 @@
+﻿flowchart TD
+    NODE[Current node execution] --> CONTRACTS[Load field contracts<br/>Input schema, operation contract, ownership, validation, repair hints]
+    CONTRACTS --> LINEAGE[Build lineage context<br/>User intent, trigger output, upstream outputs, last successful business output, upstream errors]
+    LINEAGE --> FIND_FIELDS[Find missing or invalid runtime_ai fields<br/>All fields collected together]
+    FIND_FIELDS --> REPAIR[Deterministic repair first<br/>Extract emails, object-to-row values, derive body/title/condition]
+    REPAIR --> AI_NEEDED{Still missing safe AI-owned fields?}
+    AI_NEEDED -->|Yes| AI_JSON[Strict structured AI resolver<br/>One JSON object for all requested fields]
+    AI_NEEDED -->|No| VALIDATE
+    AI_JSON --> VALIDATE[Universal validation<br/>Required, protected, format, placeholder, empty, unsafe values]
+    VALIDATE --> RETRY{Invalid AI output?}
+    RETRY -->|Yes| AI_RETRY[Retry with exact invalid fields]
+    AI_RETRY --> VALIDATE
+    RETRY -->|No| AUDIT[Runtime input audit<br/>Field, source, repair, validation, preview]
+    AUDIT --> FINAL[Final resolved input object]

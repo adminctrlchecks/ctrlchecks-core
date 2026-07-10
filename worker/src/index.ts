@@ -202,6 +202,7 @@ import {
   testConnectionHandler,
   updateConnectionHandler,
 } from './api/credential-connections';
+import { listMysqlTablesHandler, previewMysqlTableHandler, listMongoCollectionsHandler, previewMongoCollectionHandler } from './api/database-explorer';
 import { credentialExecutionAuthMiddleware } from './credentials-system/execution-auth-middleware';
 import workflowFieldOwnershipCatalogHandler from './api/workflow-field-ownership-catalog';
 import { linkedinStatusHandler, linkedinTestHandler, linkedinRefreshNowHandler, linkedinDisconnectHandler } from './api/connections-linkedin';
@@ -764,6 +765,10 @@ app.post('/api/credential-connections/connections', asyncHandler(authenticateUse
 app.put('/api/credential-connections/connections/:id', asyncHandler(authenticateUser), asyncHandler(updateConnectionHandler));
 app.delete('/api/credential-connections/connections/:id', asyncHandler(authenticateUser), asyncHandler(deleteConnectionHandler));
 app.post('/api/credential-connections/connections/:id/test', asyncHandler(authenticateUser), asyncHandler(testConnectionHandler));
+app.post('/api/database-explorer/mysql/tables', asyncHandler(authenticateUser), asyncHandler(listMysqlTablesHandler));
+app.post('/api/database-explorer/mysql/preview', asyncHandler(authenticateUser), asyncHandler(previewMysqlTableHandler));
+app.post('/api/database-explorer/mongo/collections', asyncHandler(authenticateUser), asyncHandler(listMongoCollectionsHandler));
+app.post('/api/database-explorer/mongo/preview', asyncHandler(authenticateUser), asyncHandler(previewMongoCollectionHandler));
 app.post('/api/credential-connections/connections/:id/reconnect', asyncHandler(authenticateUser), asyncHandler(oauthReconnectHandler));
 // Generic OAuth (Slack, HubSpot, etc.) — proxy start when credentialTypeId is a migrated provider.
 // Proxy checks CREDENTIAL_SERVICE_OAUTH_ENABLED + credentialTypeId; on disabled/mismatch/timeout → local.

@@ -1,0 +1,123 @@
+{
+  "name": "Test Shopify — List Products + List Orders + Get Shop Info",
+  "description": "Tests Shopify product listing, order listing, and shop metadata. Requires Shopify Admin API access token in /connections. Fill in shop domain.",
+  "nodes": [
+    {
+      "id": "node_1",
+      "type": "custom",
+      "position": { "x": 100, "y": 350 },
+      "data": {
+        "type": "manual_trigger",
+        "label": "Start Test",
+        "category": "triggers",
+        "icon": "Play",
+        "config": {}
+      }
+    },
+    {
+      "id": "node_2",
+      "type": "custom",
+      "position": { "x": 400, "y": 150 },
+      "data": {
+        "type": "shopify",
+        "label": "Shopify — Get Shop Info",
+        "category": "ecommerce",
+        "icon": "ShoppingBag",
+        "config": {
+          "resource": "shop",
+          "operation": "get",
+          "shop": "YOUR_SHOPIFY_STORE.myshopify.com"
+        }
+      }
+    },
+    {
+      "id": "node_3",
+      "type": "custom",
+      "position": { "x": 700, "y": 150 },
+      "data": {
+        "type": "log_output",
+        "label": "Log: Shop Info",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "level": "info",
+          "message": "Shopify Shop → name={{$json.shop.name}} | domain={{$json.shop.domain}} | currency={{$json.shop.currency}} | plan={{$json.shop.plan_name}}"
+        }
+      }
+    },
+    {
+      "id": "node_4",
+      "type": "custom",
+      "position": { "x": 400, "y": 350 },
+      "data": {
+        "type": "shopify",
+        "label": "Shopify — List 5 Products",
+        "category": "ecommerce",
+        "icon": "Package",
+        "config": {
+          "resource": "product",
+          "operation": "list",
+          "shop": "YOUR_SHOPIFY_STORE.myshopify.com",
+          "limit": 5
+        }
+      }
+    },
+    {
+      "id": "node_5",
+      "type": "custom",
+      "position": { "x": 700, "y": 350 },
+      "data": {
+        "type": "log_output",
+        "label": "Log: Products",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "level": "info",
+          "message": "Shopify Products → count={{$json.products.length}} | first product: {{$json.products[0].title}} (${{$json.products[0].variants[0].price}})"
+        }
+      }
+    },
+    {
+      "id": "node_6",
+      "type": "custom",
+      "position": { "x": 400, "y": 550 },
+      "data": {
+        "type": "shopify",
+        "label": "Shopify — List 5 Recent Orders",
+        "category": "ecommerce",
+        "icon": "ShoppingCart",
+        "config": {
+          "resource": "order",
+          "operation": "list",
+          "shop": "YOUR_SHOPIFY_STORE.myshopify.com",
+          "limit": 5,
+          "status": "any"
+        }
+      }
+    },
+    {
+      "id": "node_7",
+      "type": "custom",
+      "position": { "x": 700, "y": 550 },
+      "data": {
+        "type": "log_output",
+        "label": "Log: Orders",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "level": "info",
+          "message": "Shopify Orders → count={{$json.orders.length}} | first order: #{{$json.orders[0].order_number}} (${{$json.orders[0].total_price}})"
+        }
+      }
+    }
+  ],
+  "edges": [
+    { "id": "edge_1", "source": "node_1", "target": "node_2" },
+    { "id": "edge_2", "source": "node_2", "target": "node_3" },
+    { "id": "edge_3", "source": "node_1", "target": "node_4" },
+    { "id": "edge_4", "source": "node_4", "target": "node_5" },
+    { "id": "edge_5", "source": "node_1", "target": "node_6" },
+    { "id": "edge_6", "source": "node_6", "target": "node_7" }
+  ],
+  "viewport": { "x": 0, "y": 0, "zoom": 0.85 }
+}

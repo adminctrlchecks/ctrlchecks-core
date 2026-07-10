@@ -1002,7 +1002,7 @@
       "result"
     ],
     "requiredConfig": [
-      "webhookUrl"
+      "message"
     ],
     "optionalConfig": [
       "webhookUrl",
@@ -1657,8 +1657,8 @@
     ],
     "optionalConfig": [
       "operation",
-      "a",
-      "b"
+      "value1",
+      "value2"
     ]
   },
   {
@@ -2525,7 +2525,9 @@
     "optionalConfig": [
       "operation",
       "collection",
-      "query"
+      "filter",
+      "document",
+      "update"
     ]
   },
   {

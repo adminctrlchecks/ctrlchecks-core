@@ -1,0 +1,201 @@
+{
+  "name": "Test Salesforce — Query + Create + Update Contacts",
+  "description": "Tests Salesforce SOQL query, record creation, and update. Requires Salesforce OAuth connected in /connections. Fill in instanceUrl before running.",
+  "nodes": [
+    {
+      "id": "node_1",
+      "type": "custom",
+      "position": { "x": 100, "y": 400 },
+      "data": {
+        "type": "manual_trigger",
+        "label": "Start Test",
+        "category": "triggers",
+        "icon": "Play",
+        "config": {}
+      }
+    },
+    {
+      "id": "node_2",
+      "type": "custom",
+      "position": { "x": 400, "y": 150 },
+      "data": {
+        "type": "salesforce",
+        "label": "Salesforce — Query 5 Contacts",
+        "category": "crm",
+        "icon": "Cloud",
+        "config": {
+          "instanceUrl": "YOUR_SALESFORCE_INSTANCE_URL",
+          "resource": "Contact",
+          "operation": "query",
+          "soql": "SELECT Id, Name, Email, Phone, AccountId FROM Contact LIMIT 5"
+        }
+      }
+    },
+    {
+      "id": "node_3",
+      "type": "custom",
+      "position": { "x": 700, "y": 150 },
+      "data": {
+        "type": "log_output",
+        "label": "Log: Query Contacts",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "level": "info",
+          "message": "Salesforce Query → totalSize={{$json.totalSize}} | done={{$json.done}} | first contact: {{$json.records[0].Name}}"
+        }
+      }
+    },
+    {
+      "id": "node_4",
+      "type": "custom",
+      "position": { "x": 400, "y": 350 },
+      "data": {
+        "type": "salesforce",
+        "label": "Salesforce — Query 5 Accounts",
+        "category": "crm",
+        "icon": "Building",
+        "config": {
+          "instanceUrl": "YOUR_SALESFORCE_INSTANCE_URL",
+          "resource": "Account",
+          "operation": "query",
+          "soql": "SELECT Id, Name, Industry, Phone, Website FROM Account LIMIT 5"
+        }
+      }
+    },
+    {
+      "id": "node_5",
+      "type": "custom",
+      "position": { "x": 700, "y": 350 },
+      "data": {
+        "type": "log_output",
+        "label": "Log: Query Accounts",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "level": "info",
+          "message": "Salesforce Accounts → totalSize={{$json.totalSize}} | first: {{$json.records[0].Name}} ({{$json.records[0].Industry}})"
+        }
+      }
+    },
+    {
+      "id": "node_6",
+      "type": "custom",
+      "position": { "x": 400, "y": 550 },
+      "data": {
+        "type": "salesforce",
+        "label": "Salesforce — Create Test Contact",
+        "category": "crm",
+        "icon": "UserPlus",
+        "config": {
+          "instanceUrl": "YOUR_SALESFORCE_INSTANCE_URL",
+          "resource": "Contact",
+          "operation": "create",
+          "properties": {
+            "FirstName": "ctrlchecks",
+            "LastName": "TestContact",
+            "Email": "ctrltest_delete_me@example.com",
+            "Phone": "+15550000001",
+            "Title": "Test Record - Safe to Delete"
+          }
+        }
+      }
+    },
+    {
+      "id": "node_7",
+      "type": "custom",
+      "position": { "x": 700, "y": 550 },
+      "data": {
+        "type": "log_output",
+        "label": "Log: Created",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "level": "info",
+          "message": "Salesforce Contact Created → id={{$json.id}} | success={{$json.success}}"
+        }
+      }
+    },
+    {
+      "id": "node_8",
+      "type": "custom",
+      "position": { "x": 1000, "y": 550 },
+      "data": {
+        "type": "salesforce",
+        "label": "Salesforce — UPDATE Created Contact",
+        "category": "crm",
+        "icon": "Edit",
+        "config": {
+          "instanceUrl": "YOUR_SALESFORCE_INSTANCE_URL",
+          "resource": "Contact",
+          "operation": "update",
+          "id": "{{$json.id}}",
+          "properties": {
+            "Phone": "+15550000099",
+            "Description": "Updated by ctrlchecks workflow test"
+          }
+        }
+      }
+    },
+    {
+      "id": "node_9",
+      "type": "custom",
+      "position": { "x": 1300, "y": 550 },
+      "data": {
+        "type": "log_output",
+        "label": "Log: Updated",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "level": "info",
+          "message": "Salesforce Update → success={{$json.success}} | NOTE: manually delete contact Id={{$json.id}} from Salesforce"
+        }
+      }
+    },
+    {
+      "id": "node_10",
+      "type": "custom",
+      "position": { "x": 400, "y": 750 },
+      "data": {
+        "type": "salesforce",
+        "label": "Salesforce — Query 5 Leads",
+        "category": "crm",
+        "icon": "Target",
+        "config": {
+          "instanceUrl": "YOUR_SALESFORCE_INSTANCE_URL",
+          "resource": "Lead",
+          "operation": "query",
+          "soql": "SELECT Id, FirstName, LastName, Email, Company, Status FROM Lead LIMIT 5"
+        }
+      }
+    },
+    {
+      "id": "node_11",
+      "type": "custom",
+      "position": { "x": 700, "y": 750 },
+      "data": {
+        "type": "log_output",
+        "label": "Log: Leads",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "level": "info",
+          "message": "Salesforce Leads → totalSize={{$json.totalSize}} | first lead: {{$json.records[0].FirstName}} {{$json.records[0].LastName}}"
+        }
+      }
+    }
+  ],
+  "edges": [
+    { "id": "edge_1", "source": "node_1", "target": "node_2" },
+    { "id": "edge_2", "source": "node_2", "target": "node_3" },
+    { "id": "edge_3", "source": "node_1", "target": "node_4" },
+    { "id": "edge_4", "source": "node_4", "target": "node_5" },
+    { "id": "edge_5", "source": "node_1", "target": "node_6" },
+    { "id": "edge_6", "source": "node_6", "target": "node_7" },
+    { "id": "edge_7", "source": "node_6", "target": "node_8" },
+    { "id": "edge_8", "source": "node_8", "target": "node_9" },
+    { "id": "edge_9", "source": "node_1", "target": "node_10" },
+    { "id": "edge_10", "source": "node_10", "target": "node_11" }
+  ],
+  "viewport": { "x": 0, "y": 0, "zoom": 0.65 }
+}

@@ -79,6 +79,13 @@ function detectObjectWidget(
     return 'hubspotProperties';
   }
 
+  // MongoDB filter/document/update values routinely need nested operators
+  // ($set, $gte, etc.) that a flat key-value editor can't express — a
+  // key-value widget would silently drop the operator wrapper.
+  if (nodeType === 'mongodb' && ['filter', 'document', 'update'].includes(fieldKey)) {
+    return 'json';
+  }
+
   // Everything that's a plain object becomes a key-value editor
   return 'keyValue';
 }
@@ -399,6 +406,14 @@ export function convertSchemaToConfigField(
 
   if (fieldSchema.ui?.widget === 'date') {
     frontendType = 'date';
+  }
+
+  if (nodeType === 'mysql' && fieldKey === 'query') {
+    frontendType = 'mysqlQueryEditor';
+  }
+
+  if (nodeType === 'mongodb' && fieldKey === 'collection') {
+    frontendType = 'mongoCollectionSelect';
   }
 
   let friendlyLabel =

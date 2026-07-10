@@ -194,14 +194,16 @@ export async function runMySQLNode(context: NodeExecutionContext): Promise<any> 
     ssl: inputs.ssl,
   };
 
-  // Extract operation
+  // Extract operation. The registered node schema only exposes `query` + `parameters`
+  // (raw-SQL design, no separate operation/table fields), so default to executeQuery
+  // and accept `parameters` as an alias for `params` when `operation` isn't set.
   const operation: MySQLOperation = {
-    name: inputs.operation,
+    name: inputs.operation || 'executeQuery',
     query: inputs.query,
     table: inputs.table,
     data: inputs.data,
     where: inputs.where,
-    params: inputs.params,
+    params: inputs.params ?? inputs.parameters,
   };
 
   // Validate credentials

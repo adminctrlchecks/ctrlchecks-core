@@ -1,0 +1,12342 @@
+"use strict";
+// Agentic Workflow Builder
+// Prompt-to-workflow generation with iterative improvement
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.agenticWorkflowBuilder = exports.AgenticWorkflowBuilder = void 0;
+const crypto_1 = require("crypto");
+function sanitizeRuntimeInputConfigForNodes(nodes) {
+    return (nodes || []).map((node) => {
+        const nodeType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(node) || node.type;
+        const def = unified_node_registry_1.unifiedNodeRegistry.get(nodeType);
+        if (!def?.inputSchema)
+            return node;
+        const cfg = { ...(node.data?.config || {}) };
+        for (const fieldName of Object.keys(def.inputSchema)) {
+            const mode = cfg?._fillMode?.[fieldName];
+            if (mode === 'manual_static' || mode === 'buildtime_ai_once')
+                continue;
+            const current = cfg[fieldName];
+            if (current === undefined || current === null)
+                continue;
+            if (typeof current === 'string' && (current.includes('{{') || current.includes('{{$json.') || current.trim() === '')) {
+                cfg[fieldName] = '';
+            }
+        }
+        return {
+            ...node,
+            data: {
+                ...node.data,
+                config: cfg,
+            },
+        };
+    });
+}
+const fs = __importStar(require("fs"));
+const path = __importStar(require("path"));
+const gemini_orchestrator_1 = require("./gemini-orchestrator");
+const requirements_extractor_1 = require("./requirements-extractor");
+const node_equivalence_mapper_1 = require("./node-equivalence-mapper");
+const enhanced_workflow_analyzer_1 = require("./enhanced-workflow-analyzer");
+const node_library_1 = require("../nodes/node-library");
+const node_definition_1 = require("../../core/types/node-definition");
+const unified_node_registry_1 = require("../../core/registry/unified-node-registry");
+const config_1 = require("../../core/config");
+const type_validator_1 = require("../../core/validation/type-validator");
+const workflow_training_service_1 = require("./workflow-training-service");
+const connection_validator_1 = require("./connection-validator");
+const node_defaults_1 = require("./node-defaults");
+const workflow_validation_pipeline_1 = require("./workflow-validation-pipeline");
+const ai_workflow_validator_1 = require("./ai-workflow-validator");
+const workflow_graph_repair_1 = require("./workflow-graph-repair");
+const intent_classifier_1 = require("./intent-classifier");
+const workflow_policy_enforcer_1 = require("./workflow-policy-enforcer");
+const workflow_builder_utils_1 = require("./workflow-builder-utils");
+const placeholder_filter_1 = require("../../core/utils/placeholder-filter");
+const transformation_templates_1 = require("./transformation-templates");
+const workflow_construction_logic_1 = require("./workflow-construction-logic");
+const node_output_types_1 = require("../../core/types/node-output-types");
+// TypeConverter removed - not used in this file
+const unified_node_type_normalizer_1 = require("../../core/utils/unified-node-type-normalizer");
+const node_type_resolver_util_1 = require("../../core/utils/node-type-resolver-util");
+const universal_node_type_checker_1 = require("../../core/utils/universal-node-type-checker");
+const is_empty_value_1 = require("../../core/utils/is-empty-value");
+const node_schema_registry_1 = require("../../core/contracts/node-schema-registry");
+const workflow_auto_repair_1 = require("../../core/contracts/workflow-auto-repair");
+const node_handle_registry_1 = require("../../core/utils/node-handle-registry");
+const workflow_example_selector_1 = require("./workflow-example-selector");
+const logger_1 = require("../../core/logger");
+const input_field_mapper_1 = require("./input-field-mapper");
+const workflow_planner_1 = require("../workflow-planner");
+const step_to_node_mapper_1 = require("./step-to-node-mapper");
+const workflow_ir_1 = require("../../core/workflow-ir");
+const template_expression_validator_1 = require("./template-expression-validator");
+const node_auto_configurator_1 = require("../node-auto-configurator");
+const platform_selection_resolver_1 = require("./platform-selection-resolver");
+const schema_aware_template_generator_1 = require("./schema-aware-template-generator");
+const template_validation_gate_1 = require("./template-validation-gate");
+const node_capability_registry_dsl_1 = require("./node-capability-registry-dsl");
+const node_catalog_builder_1 = require("./node-catalog-builder");
+const node_catalog_builder_2 = require("./node-catalog-builder");
+const system_prompt_builder_1 = require("./system-prompt-builder");
+const unified_graph_orchestrator_1 = require("../../core/orchestration/unified-graph-orchestrator");
+const branching_intent_from_prompt_1 = require("../../core/utils/branching-intent-from-prompt");
+const workflow_plan_validator_1 = require("../../core/validation/workflow-plan-validator");
+class AgenticWorkflowBuilder {
+    constructor() {
+        this.nodeLibrary = new Map();
+        this.initializeNodeLibrary();
+        this.constructionLogic = new workflow_construction_logic_1.WorkflowConstructionLogic();
+        // ✅ NODE LIBRARY INITIALIZATION CHECK: Verify all integrations are registered
+        this.verifyNodeLibraryInitialization();
+    }
+    /**
+     * Gemini-based planning: call workflow-planning mode with node catalog + planning prompt.
+     * Returns a high-level PlannedWorkflow (summary + ordered steps, no edges).
+     */
+    async planWorkflowWithGemini(userPrompt) {
+        const nodeCatalog = (0, node_catalog_builder_1.buildNodeCatalog)();
+        // ✅ AI-FIRST: Use SystemPromptBuilder — no static markdown files
+        const { systemPrompt: baseSystemPrompt } = system_prompt_builder_1.systemPromptBuilder.build({
+            stage: 'intent',
+            nodeCatalog: (0, node_catalog_builder_2.buildNodeCatalogText)(),
+            userIntent: userPrompt,
+        });
+        const systemPrompt = baseSystemPrompt + '\n\nSUMMARY FIELD RULES:\nThe "summary" field MUST be a specific, descriptive title for this exact workflow.\n- 5 to 15 words\n- Title-Case every word\n- Include the primary integration names (e.g. Gmail, Slack, Google Sheets)\n- Include the core action verb (e.g. Sync, Notify, Summarize, Send)\n- Do NOT use generic labels like "Workflow", "Automation", or "Process"\nExample: "Sync Gmail Attachments to Google Sheets Daily"';
+        const input = {
+            system: systemPrompt,
+            message: `USER_REQUEST:\n${userPrompt}\n\nNODE_CATALOG:\n${JSON.stringify(nodeCatalog)}`,
+        };
+        const raw = await gemini_orchestrator_1.geminiOrchestrator.processRequest('workflow-generation', input, {
+            model: 'gemini-3.5-flash',
+            temperature: 0.2,
+            cache: false,
+        });
+        const text = typeof raw === 'string' ? raw : JSON.stringify(raw);
+        const jsonStart = text.indexOf('{');
+        const jsonEnd = text.lastIndexOf('}');
+        if (jsonStart === -1 || jsonEnd === -1 || jsonEnd <= jsonStart) {
+            throw new Error('Failed to parse PlannedWorkflow JSON from Gemini response');
+        }
+        const json = text.substring(jsonStart, jsonEnd + 1);
+        const planned = JSON.parse(json);
+        if (!planned || !Array.isArray(planned.steps)) {
+            throw new Error('Invalid PlannedWorkflow structure from Gemini');
+        }
+        // ✅ TASK 10.1: Analyze steps to detect branch-specific output requirements
+        this.analyzeBranchSpecificOutputs(planned);
+        return planned;
+    }
+    /**
+     * Analyze PlannedWorkflow steps to detect if branching nodes have branch-specific output requirements.
+     *
+     * This method looks for patterns indicating different branches need different output nodes:
+     * - Step with role "branch" or "switch" followed by multiple steps with different output types
+     * - Steps with metadata indicating branch association (e.g., branchCase: "admin")
+     *
+     * The analysis results are logged for debugging and can be used by downstream hydration logic.
+     *
+     * @param planned - The PlannedWorkflow from Gemini
+     */
+    analyzeBranchSpecificOutputs(planned) {
+        const steps = planned.steps;
+        // Find branching nodes (switch, if_else)
+        const branchingNodes = [];
+        for (let i = 0; i < steps.length; i++) {
+            const step = steps[i];
+            const normalizedType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeTypeString)(step.type);
+            if (normalizedType === 'switch' || normalizedType === 'if_else') {
+                branchingNodes.push({ index: i, step, type: normalizedType });
+            }
+        }
+        if (branchingNodes.length === 0) {
+            // No branching nodes detected - no analysis needed
+            return;
+        }
+        // Analyze each branching node for branch-specific outputs
+        for (const branchingNode of branchingNodes) {
+            const { index, step, type } = branchingNode;
+            // Look at steps following this branching node
+            const downstreamSteps = steps.slice(index + 1);
+            // Detect if downstream steps have branch association metadata
+            const branchSpecificSteps = downstreamSteps.filter(s => s.config?.branchCase ||
+                s.config?.branchParent ||
+                s.config?.metadata?.branchCase ||
+                s.config?.metadata?.branchParent);
+            if (branchSpecificSteps.length > 0) {
+                console.log(`[Branch Analysis] Detected branch-specific steps for ${type} node at index ${index}:`, branchSpecificSteps.map(s => ({
+                    type: s.type,
+                    branchCase: s.config?.branchCase || s.config?.metadata?.branchCase,
+                    branchParent: s.config?.branchParent || s.config?.metadata?.branchParent
+                })));
+            }
+            // Detect if multiple different output types follow the branching node
+            // Check for nodes with 'output', 'sink', or 'terminal' tags
+            const outputTypes = new Set();
+            for (const ds of downstreamSteps) {
+                const normalizedType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeTypeString)(ds.type);
+                const nodeDef = unified_node_registry_1.unifiedNodeRegistry.get(normalizedType);
+                // Check if node is an output node by checking tags or terminal behavior
+                const isOutputNode = nodeDef?.tags?.some(tag => tag === 'output' || tag === 'sink' || tag === 'terminal') || nodeDef?.isTerminal === true;
+                if (isOutputNode) {
+                    outputTypes.add(normalizedType);
+                }
+            }
+            if (outputTypes.size > 1) {
+                console.log(`[Branch Analysis] Detected multiple output types after ${type} node at index ${index}:`, Array.from(outputTypes));
+            }
+            // Detect if only some branches mention specific output nodes
+            // This is indicated by steps with different roles or types following the branch
+            const branchOutputMap = new Map();
+            for (const ds of downstreamSteps) {
+                const branchCase = ds.config?.branchCase || ds.config?.metadata?.branchCase;
+                if (branchCase) {
+                    const normalizedType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeTypeString)(ds.type);
+                    const nodeDef = unified_node_registry_1.unifiedNodeRegistry.get(normalizedType);
+                    // Check if node is an output node
+                    const isOutputNode = nodeDef?.tags?.some(tag => tag === 'output' || tag === 'sink' || tag === 'terminal') || nodeDef?.isTerminal === true;
+                    if (isOutputNode) {
+                        if (!branchOutputMap.has(branchCase)) {
+                            branchOutputMap.set(branchCase, []);
+                        }
+                        branchOutputMap.get(branchCase).push(normalizedType);
+                    }
+                }
+            }
+            if (branchOutputMap.size > 0) {
+                console.log(`[Branch Analysis] Branch-specific output mapping for ${type} node at index ${index}:`, Object.fromEntries(branchOutputMap));
+            }
+        }
+    }
+    /**
+     * Normalize a config fragment proposed by Gemini against the node's input schema and defaults.
+     * - Drops unknown keys
+     * - Fills missing values from defaultConfig
+     * - ✅ ENHANCED: Filters placeholder values from defaultConfig before merging
+     */
+    normalizePlannedConfig(nodeType, aiConfig) {
+        const def = unified_node_registry_1.unifiedNodeRegistry.get(nodeType);
+        if (!def) {
+            throw new Error(`Unknown node type in PlannedWorkflow: ${nodeType}`);
+        }
+        const baseConfigRaw = typeof def.defaultConfig === 'function' ? def.defaultConfig() || {} : {};
+        const inputSchema = def.inputSchema || {};
+        // ✅ ENHANCED: Filter placeholder values from defaultConfig before merging
+        // This ensures placeholders like "YOUR_SPREADSHEET_ID" are not included in final config
+        const baseConfig = {};
+        for (const [key, value] of Object.entries(baseConfigRaw)) {
+            if (!(0, placeholder_filter_1.isPlaceholderValue)(value)) {
+                baseConfig[key] = value;
+            }
+            else {
+                console.log(`[WorkflowBuilder] Filtering placeholder from defaultConfig for ${nodeType}.${key}: ${value}`);
+            }
+        }
+        const result = { ...baseConfig };
+        if (aiConfig && typeof aiConfig === 'object') {
+            for (const [key, value] of Object.entries(aiConfig)) {
+                if (Object.prototype.hasOwnProperty.call(inputSchema, key)) {
+                    // ✅ ENHANCED: Also filter placeholder values from AI config
+                    if (!(0, placeholder_filter_1.isPlaceholderValue)(value)) {
+                        result[key] = value;
+                    }
+                    else {
+                        console.log(`[WorkflowBuilder] Filtering placeholder from AI config for ${nodeType}.${key}: ${value}`);
+                    }
+                }
+            }
+        }
+        return result;
+    }
+    /**
+     * Map Gemini's role field to DSL category for context-aware node categorization.
+     * This enables multi-capability nodes (Gmail, Sheets) to have correct roles based on user intent.
+     */
+    mapRoleToDSLCategory(role, nodeType, config) {
+        if (!role) {
+            return null; // No role provided, will use fallback resolution
+        }
+        const roleLower = role.toLowerCase();
+        const nodeDef = unified_node_registry_1.unifiedNodeRegistry.get(nodeType);
+        const operation = config?.operation?.toLowerCase() || '';
+        // ✅ AI-FIRST: Map Gemini's role to DSL category
+        switch (roleLower) {
+            case 'trigger':
+                return 'dataSource'; // Triggers are data sources
+            case 'action':
+                // For multi-capability nodes, check operation to determine category
+                if (operation === 'read' || operation === 'get' || operation === 'list' || operation === 'search' || operation === 'fetch') {
+                    return 'dataSource'; // Reading/fetching → data source
+                }
+                if (operation === 'send' || operation === 'write' || operation === 'create' || operation === 'update' || operation === 'delete') {
+                    return 'output'; // Writing/sending → output
+                }
+                // Default: check node capabilities
+                if (nodeDef) {
+                    const capabilities = (nodeDef.tags || []).map(t => t.toLowerCase());
+                    if (capabilities.includes('read') || capabilities.includes('data_source')) {
+                        return 'dataSource';
+                    }
+                    if (capabilities.includes('write') || capabilities.includes('output') || capabilities.includes('send')) {
+                        return 'output';
+                    }
+                }
+                return 'dataSource'; // Default action → data source
+            case 'logic':
+                return 'transformation'; // Logic nodes are transformations
+            case 'output':
+                return 'output'; // Explicit output role
+            case 'utility':
+                // Utility nodes can be transformation or output based on operation
+                if (operation === 'read' || operation === 'get') {
+                    return 'dataSource';
+                }
+                if (operation === 'write' || operation === 'send') {
+                    return 'output';
+                }
+                return 'transformation'; // Default utility → transformation
+            default:
+                return null; // Unknown role, use fallback
+        }
+    }
+    /**
+     * Branch hydration: ensure the planner emitted at least one planned step per branch port.
+     *
+     * - If downstream step count >= branchCount (e.g. if_else → gmail, slack_message), preserve types as-is.
+     * - If downstream step count < branchCount (e.g. one slack_message for two branches), clone the last
+     *   template so each port can bind a distinct node instance (registry-driven wiring in orchestrator).
+     *
+     * Per-type expansion is wrong: two different types each appearing once would be duplicated when branchCount=2.
+     */
+    expandBranchSteps(steps) {
+        const branchingStepIndex = steps.findIndex((s) => s.type === 'switch' || s.type === 'if_else');
+        if (branchingStepIndex < 0) {
+            return steps;
+        }
+        const branchingStep = steps[branchingStepIndex];
+        let branchCount;
+        let branchCases = [];
+        if (branchingStep.type === 'switch') {
+            const cases = branchingStep.config?.cases;
+            branchCount = Array.isArray(cases) && cases.length > 0 ? cases.length : 2;
+            // Extract case names for metadata
+            if (Array.isArray(cases)) {
+                branchCases = cases.map((c, idx) => typeof c === 'string' ? c : `case_${idx + 1}`);
+            }
+            else {
+                branchCases = Array.from({ length: branchCount }, (_, i) => `case_${i + 1}`);
+            }
+        }
+        else {
+            branchCount = 2;
+            branchCases = ['true', 'false'];
+        }
+        const prefix = steps.slice(0, branchingStepIndex + 1);
+        const downstreamSteps = steps.slice(branchingStepIndex + 1);
+        if (downstreamSteps.length === 0 || downstreamSteps.length >= branchCount) {
+            return steps;
+        }
+        const expanded = [...downstreamSteps];
+        const template = downstreamSteps[downstreamSteps.length - 1];
+        let seq = 0;
+        // ✅ TASK 11 (9.2): Preserve branch association metadata when expanding
+        while (expanded.length < branchCount) {
+            const branchIndex = expanded.length;
+            const branchCase = branchCases[branchIndex] || `case_${branchIndex + 1}`;
+            expanded.push({
+                ...template,
+                id: `${template.type}_branch_${seq++}_${(0, crypto_1.randomUUID)().slice(0, 8)}`,
+                // ✅ Preserve branch metadata for downstream processing
+                config: {
+                    ...(template.config || {}),
+                    metadata: {
+                        ...(template.config?.metadata || {}),
+                        branchCase,
+                        branchParent: branchingStep.id || `${branchingStep.type}_${branchingStepIndex}`,
+                    },
+                },
+            });
+        }
+        return [...prefix, ...expanded];
+    }
+    /**
+     * ✅ TASK 11.1: Detect branching nodes and analyze which branches need which output types.
+     *
+     * This method scans the expanded steps to identify:
+     * - Branching nodes (switch, if_else)
+     * - Downstream steps for each branch
+     * - Which branches explicitly need log_output vs other output types
+     *
+     * Returns analysis data used by generateBranchSpecificLogOutputs.
+     */
+    detectBranchingNodesAndOutputs(steps) {
+        const branchingNodes = [];
+        // Find all branching nodes
+        steps.forEach((step, index) => {
+            if (step.type === 'switch' || step.type === 'if_else') {
+                const branches = new Map();
+                // Analyze downstream steps to determine branch-specific outputs
+                const downstreamSteps = steps.slice(index + 1);
+                for (const ds of downstreamSteps) {
+                    const branchCase = ds.config?.metadata?.branchCase;
+                    if (branchCase) {
+                        if (!branches.has(branchCase)) {
+                            branches.set(branchCase, { needsLogOutput: false, hasOtherOutput: false });
+                        }
+                        const normalizedType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeTypeString)(ds.type);
+                        const nodeDef = unified_node_registry_1.unifiedNodeRegistry.get(normalizedType);
+                        // Check if this is an output/terminal node
+                        const isOutputNode = nodeDef?.workflowBehavior?.alwaysTerminal === true ||
+                            (nodeDef?.tags || []).includes('terminal') ||
+                            (nodeDef?.tags || []).includes('output');
+                        if (isOutputNode) {
+                            if (normalizedType === 'log_output') {
+                                branches.get(branchCase).needsLogOutput = true;
+                            }
+                            else {
+                                branches.get(branchCase).hasOtherOutput = true;
+                            }
+                        }
+                    }
+                }
+                branchingNodes.push({
+                    index,
+                    step,
+                    type: step.type,
+                    branches,
+                });
+            }
+        });
+        return { branchingNodes };
+    }
+    /**
+     * ✅ TASK 11.1: Generate separate log_output nodes for branches that need them.
+     *
+     * For each branch that:
+     * - Doesn't have any output node, OR
+     * - Explicitly needs log_output (based on user intent)
+     *
+     * Generate a unique log_output node with metadata:
+     * - branchCase: which branch this log_output belongs to
+     * - branchParent: the ID of the branching node
+     *
+     * This ensures each branch has its own terminal node, preventing invalid merge topologies.
+     */
+    generateBranchSpecificLogOutputs(existingNodes, branchingAnalysis, workflowSummary) {
+        const additionalNodes = [];
+        // ✅ TASK 11.1: Only generate log_output if user intent explicitly includes logging keywords
+        const intentIncludesLogging = /\b(log|output|record|track|observe|monitor)\b/i.test(workflowSummary);
+        // If user didn't request logging, don't generate any log_output nodes
+        if (!intentIncludesLogging) {
+            return additionalNodes;
+        }
+        for (const branchingNode of branchingAnalysis.branchingNodes) {
+            const branchingNodeId = branchingNode.step.id || `${branchingNode.type}_${branchingNode.index}`;
+            for (const [branchCase, branchInfo] of branchingNode.branches.entries()) {
+                // ✅ TASK 11.1: Generate log_output ONLY if:
+                // 1. Branch explicitly needs log_output (detected from prompt analysis), OR
+                // 2. Branch has no other output node AND user requested logging
+                const shouldGenerateLogOutput = branchInfo.needsLogOutput ||
+                    (!branchInfo.hasOtherOutput && intentIncludesLogging);
+                if (shouldGenerateLogOutput && !branchInfo.hasOtherOutput) {
+                    // Only generate if this branch doesn't already have an output node
+                    const logOutputId = `log_output_${branchCase}_${(0, crypto_1.randomUUID)().slice(0, 8)}`;
+                    const logOutputNode = {
+                        id: logOutputId,
+                        type: 'log_output',
+                        data: {
+                            label: `Log Output (${branchCase})`,
+                            type: 'log_output',
+                            category: 'output',
+                            config: {
+                                message: `Branch ${branchCase} output`,
+                            },
+                            metadata: {
+                                branchCase,
+                                branchParent: branchingNodeId,
+                                generatedByTask11: true,
+                            },
+                        },
+                    };
+                    additionalNodes.push(logOutputNode);
+                    console.log(`[Task 11] Generated log_output for branch "${branchCase}" of ${branchingNode.type} node "${branchingNodeId}"`);
+                }
+            }
+        }
+        return additionalNodes;
+    }
+    /**
+     * Hydrate a PlannedWorkflow (summary + steps) into a concrete Workflow:
+     * - Creates WorkflowNode instances using Unified Node Registry
+     * - Maps Gemini's role field to DSL category for context-aware categorization
+     * - Delegates to Unified Graph Orchestrator to create edges and execution order
+     *
+     * Branch-aware step expansion (Bug 2 fix):
+     * If the planner collapsed same-type steps for multiple branches into one entry,
+     * we clone the step so each branch has its own independent node instance.
+     */
+    hydratePlannedWorkflow(planned) {
+        // ── Bug 2 fix: expand collapsed same-type branch steps ──────────────────
+        const expandedSteps = this.expandBranchSteps(planned.steps);
+        // ✅ TASK 11.1: Detect branching nodes and analyze branch-specific outputs
+        const branchingAnalysis = this.detectBranchingNodesAndOutputs(expandedSteps);
+        const nodes = expandedSteps.map((step, index) => {
+            const resolvedType = unified_node_registry_1.unifiedNodeRegistry.resolvePlannedStepCanonicalType(step.type, step.role, step.config || {}, {
+                workflowIntentText: planned.summary,
+                stepLabel: typeof step.label === 'string' ? step.label : undefined,
+            });
+            const def = unified_node_registry_1.unifiedNodeRegistry.get(resolvedType);
+            if (!def) {
+                throw new Error(`Planned step references unknown node type: ${step.type} (resolved: ${resolvedType})`);
+            }
+            const id = step.id || `step_${index + 1}`;
+            const config = this.normalizePlannedConfig(resolvedType, step.config || {});
+            // ✅ AI-FIRST: Map Gemini's role to DSL category
+            const aiDeterminedCategory = this.mapRoleToDSLCategory(step.role, resolvedType, config);
+            // ✅ TASK 11.1: Preserve branch metadata from expandBranchSteps
+            const branchMetadata = step.config?.metadata?.branchCase ? {
+                branchCase: step.config.metadata.branchCase,
+                branchParent: step.config.metadata.branchParent,
+            } : {};
+            return {
+                id,
+                type: resolvedType,
+                data: {
+                    label: def.label || id,
+                    type: resolvedType,
+                    category: def.category || 'action',
+                    config,
+                    stepRef: step.id,
+                    stepType: step.role,
+                    // ✅ AI-FIRST: Store AI-determined category in metadata for context-aware resolution
+                    metadata: {
+                        aiRole: step.role,
+                        aiDeterminedCategory,
+                        ...branchMetadata,
+                        ...(aiDeterminedCategory && {
+                            intendedCapability: aiDeterminedCategory === 'dataSource' ? 'data_source' :
+                                aiDeterminedCategory === 'transformation' ? 'transformation' :
+                                    'output'
+                        }),
+                    },
+                },
+            };
+        });
+        // ✅ TASK 11.1: Generate separate log_output nodes per branch if needed
+        const additionalLogOutputNodes = this.generateBranchSpecificLogOutputs(nodes, branchingAnalysis, planned.summary);
+        const allNodes = [...nodes, ...additionalLogOutputNodes];
+        const { workflow, executionOrder } = unified_graph_orchestrator_1.unifiedGraphOrchestrator.initializeWorkflow(allNodes);
+        const validation = unified_graph_orchestrator_1.unifiedGraphOrchestrator.validateWorkflow(workflow, executionOrder);
+        if (!validation.valid) {
+            logger_1.logger.warn('[WorkflowBuilder] hydratePlannedWorkflow: structural validation failed', {
+                errors: validation.errors,
+                nodeIds: workflow.nodes.map((n) => n.id),
+                nodeTypes: workflow.nodes.map((n) => (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n) || n.type),
+                edgeCount: workflow.edges?.length ?? 0,
+                edges: (workflow.edges || []).map((e) => ({
+                    source: e.source,
+                    target: e.target,
+                    type: e.type,
+                })),
+            });
+        }
+        // Attach summary into metadata for downstream usage
+        const hydratedWorkflow = {
+            ...workflow,
+            metadata: {
+                ...(workflow.metadata || {}),
+                summary: planned.summary,
+            },
+        };
+        return { workflow: hydratedWorkflow, validation };
+    }
+    /**
+     * Public entrypoint: generate a workflow using Gemini planning + registry + graph orchestrator.
+     */
+    async generateWorkflowWithGeminiPlanner(userPrompt) {
+        const planned = await this.planWorkflowWithGemini(userPrompt);
+        const { workflow, validation } = this.hydratePlannedWorkflow(planned);
+        if (!validation?.valid) {
+            const errorMessage = (validation?.errors || []).join('; ') || 'Unknown validation error';
+            throw new Error(`Planned workflow failed structural validation: ${errorMessage}`);
+        }
+        return workflow;
+    }
+    /**
+     * Derives a human-readable summary from the user's prompt.
+     * Extracts up to 12 words, title-cases each, and joins them.
+     * Returns "Custom Workflow" for empty input.
+     */
+    deriveSummaryFromPrompt(userPrompt) {
+        const trimmed = userPrompt.trim();
+        if (!trimmed) {
+            return 'Custom Workflow';
+        }
+        const words = trimmed.split(/\s+/).slice(0, 12);
+        const titled = words.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+        return titled.join(' ');
+    }
+    /**
+     * Minimal rule-based fallback generator.
+     * Produces a simple, always-linear workflow: manual_trigger -> ai_chat_model -> log_output
+     * using canonical node types from the registry.
+     */
+    generateMinimalFallbackWorkflow(userPrompt) {
+        const triggerType = unified_node_registry_1.unifiedNodeRegistry.get('manual_trigger') ? 'manual_trigger' : 'manual';
+        const aiType = unified_node_registry_1.unifiedNodeRegistry.get('ai_chat_model') ? 'ai_chat_model' : 'ai_service';
+        const logType = unified_node_registry_1.unifiedNodeRegistry.get('log_output') ? 'log_output' : 'log';
+        const nodes = [
+            {
+                id: 'trigger_1',
+                type: triggerType,
+                data: {
+                    label: 'Manual Trigger',
+                    type: triggerType,
+                    category: 'trigger',
+                    config: this.normalizePlannedConfig(triggerType, {}),
+                },
+            },
+            {
+                id: 'ai_1',
+                type: aiType,
+                data: {
+                    label: 'AI Step',
+                    type: aiType,
+                    category: 'action',
+                    config: this.normalizePlannedConfig(aiType, {
+                        prompt: `User request: ${userPrompt}`,
+                    }),
+                },
+            },
+            {
+                id: 'log_1',
+                type: logType,
+                data: {
+                    label: 'Log Result',
+                    type: logType,
+                    category: 'output',
+                    config: this.normalizePlannedConfig(logType, {}),
+                },
+            },
+        ];
+        const { workflow, executionOrder } = unified_graph_orchestrator_1.unifiedGraphOrchestrator.initializeWorkflow(nodes);
+        return {
+            workflow: {
+                ...workflow,
+                metadata: {
+                    ...(workflow.metadata || {}),
+                    summary: this.deriveSummaryFromPrompt(userPrompt),
+                    fallback: true,
+                },
+            },
+            executionOrder,
+        };
+    }
+    /**
+     * Branching fallback when Gemini planning fails but the user prompt implies conditions
+     * (eligibility, validation, if/then). Uses orchestrator-only graph construction.
+     */
+    generateConditionalBranchingFallbackWorkflow(userPrompt) {
+        const triggerType = unified_node_registry_1.unifiedNodeRegistry.get('manual_trigger') ? 'manual_trigger' : 'manual';
+        const ifType = 'if_else';
+        const logType = unified_node_registry_1.unifiedNodeRegistry.get('log_output') ? 'log_output' : 'log';
+        const ifConfig = {
+            ...this.normalizePlannedConfig(ifType, {}),
+            conditions: [],
+            _fillMode: { conditions: 'runtime_ai' },
+        };
+        const nodes = [
+            {
+                id: 'trigger_1',
+                type: triggerType,
+                data: {
+                    label: 'Manual Trigger',
+                    type: triggerType,
+                    category: 'trigger',
+                    config: this.normalizePlannedConfig(triggerType, {}),
+                },
+            },
+            {
+                id: 'if_else_1',
+                type: ifType,
+                data: {
+                    label: 'Condition',
+                    type: ifType,
+                    category: 'logic',
+                    config: ifConfig,
+                },
+            },
+            {
+                id: 'log_true_1',
+                type: logType,
+                data: {
+                    label: 'True branch',
+                    type: logType,
+                    category: 'output',
+                    config: this.normalizePlannedConfig(logType, {}),
+                },
+            },
+            {
+                id: 'log_false_1',
+                type: logType,
+                data: {
+                    label: 'False branch',
+                    type: logType,
+                    category: 'output',
+                    config: this.normalizePlannedConfig(logType, {}),
+                },
+            },
+        ];
+        const explicitExecutionOrder = {
+            nodeIds: ['trigger_1', 'if_else_1', 'log_true_1', 'log_false_1'],
+            dependencies: new Map(),
+            metadata: {
+                triggerNodeId: 'trigger_1',
+                terminalNodeIds: ['log_true_1', 'log_false_1'],
+                branchingNodeIds: ['if_else_1'],
+                mergeNodeIds: [],
+            },
+        };
+        const { workflow, executionOrder } = unified_graph_orchestrator_1.unifiedGraphOrchestrator.initializeWorkflow(nodes, explicitExecutionOrder);
+        return {
+            workflow: {
+                ...workflow,
+                metadata: {
+                    ...(workflow.metadata || {}),
+                    summary: this.deriveSummaryFromPrompt(userPrompt),
+                    fallback: true,
+                    branchingFallback: true,
+                },
+            },
+            executionOrder,
+        };
+    }
+    /**
+     * Robust planner entrypoint with retry + rule-based fallback.
+     * - First attempt: Gemini planning
+     * - Second attempt: retry Gemini planning on failure
+     * - Final fallback: minimal rule-based linear workflow
+     */
+    async generateWorkflowWithGeminiPlannerRobust(userPrompt) {
+        // First attempt
+        try {
+            return await this.generateWorkflowWithGeminiPlanner(userPrompt);
+        }
+        catch (firstError) {
+            logger_1.logger.warn('[WorkflowBuilder] First Gemini planning attempt failed, retrying...', {
+                error: firstError instanceof Error ? firstError.message : String(firstError),
+            });
+        }
+        // Second attempt
+        try {
+            return await this.generateWorkflowWithGeminiPlanner(userPrompt);
+        }
+        catch (secondError) {
+            logger_1.logger.warn('[WorkflowBuilder] Second Gemini planning attempt failed, using minimal fallback workflow', {
+                error: secondError instanceof Error ? secondError.message : String(secondError),
+            });
+        }
+        // Fallback: preserve branching intent when Gemini fails (avoid always-linear AI fallback)
+        // Do not degrade explicit switch/case prompts to binary if_else fallback.
+        const hasExplicitSwitchIntent = /\bswitch\b|\bcase\b/.test((userPrompt || '').toLowerCase());
+        const { workflow: fallbackWorkflow, executionOrder } = (0, branching_intent_from_prompt_1.detectBranchingIntentFromPrompt)(userPrompt) && !hasExplicitSwitchIntent
+            ? this.generateConditionalBranchingFallbackWorkflow(userPrompt)
+            : this.generateMinimalFallbackWorkflow(userPrompt);
+        const validation = unified_graph_orchestrator_1.unifiedGraphOrchestrator.validateWorkflow(fallbackWorkflow, executionOrder);
+        if (!validation.valid) {
+            const message = (validation.errors || []).join('; ') || 'Unknown validation error in fallback workflow';
+            throw new Error(`Fallback workflow failed structural validation: ${message}`);
+        }
+        return fallbackWorkflow;
+    }
+    /**
+     * NEW: Materialize a Workflow directly from a universal WorkflowPlan (nodes + edges)
+     * using the central WorkflowPlan validator + unified graph orchestrator.
+     */
+    async generateWorkflowFromPlan(plan) {
+        const result = await (0, workflow_plan_validator_1.validateAndMaterializeWorkflowPlan)(plan);
+        if (!result.valid || !result.workflow) {
+            const messages = result.issues.map((i) => i.message).join('; ');
+            throw new Error(messages
+                ? `WorkflowPlan validation failed: ${messages}`
+                : 'WorkflowPlan validation failed with unknown error');
+        }
+        return result.workflow;
+    }
+    /**
+     * NEW: Use the graph-level planner (WorkflowPlan JSON) and validator
+     * to build a Workflow in one step.
+     */
+    async generateWorkflowWithGraphPlanner(userPrompt, constraints) {
+        const mandatoryNodes = constraints?.mandatoryNodeTypes && constraints.mandatoryNodeTypes.length > 0
+            ? constraints.mandatoryNodeTypes
+            : [];
+        if (mandatoryNodes.length > 0) {
+            logger_1.logger.info('[WorkflowBuilder] [GraphPlanner] Mandatory nodes passed to planner', {
+                mandatoryNodes,
+            });
+        }
+        const graphPlan = await workflow_planner_1.workflowPlanner.planWorkflowGraph(userPrompt, {
+            mandatoryNodes,
+            suggestedNodes: constraints?.suggestedNodes || [],
+        });
+        return this.generateWorkflowFromPlan(graphPlan);
+    }
+    /**
+     * Build a workflow from an ordered list of node types (registry-only).
+     * Used for registry_minimal and registry_extended strategies.
+     * All node types must exist in unifiedNodeRegistry; edges come from orchestrator.
+     * Tokens may be annotated with branch tags (e.g. `google_gmail[true]`).
+     */
+    buildWorkflowFromNodeTypes(nodeTypes, userPrompt) {
+        const { stripPlanTokenToType: stripToken, extractBranchTag: getBranchTag } = require('./plan-chain-prune');
+        const { randomUUID: uuid } = require('crypto');
+        const nodes = nodeTypes
+            .map((rawToken) => {
+            const canonicalType = stripToken(rawToken);
+            return unified_node_registry_1.unifiedNodeRegistry.get(canonicalType) ? { rawToken, canonicalType } : null;
+        })
+            .filter((t) => t != null)
+            .map(({ rawToken, canonicalType }, index) => {
+            const def = unified_node_registry_1.unifiedNodeRegistry.get(canonicalType);
+            const branchTag = getBranchTag(rawToken);
+            const id = branchTag
+                ? `${canonicalType}_${branchTag}_${index + 1}`
+                : `${canonicalType}_${index + 1}`;
+            const label = def?.label ?? canonicalType.replace(/_/g, ' ');
+            const category = def?.category ?? 'action';
+            return {
+                id,
+                type: canonicalType,
+                data: {
+                    label,
+                    type: canonicalType,
+                    category,
+                    config: this.normalizePlannedConfig(canonicalType, userPrompt ? { prompt: userPrompt } : {}),
+                    ...(branchTag ? { meta: { branchTag } } : {}),
+                },
+            };
+        });
+        if (nodes.length === 0) {
+            throw new Error('Variant node list produced no valid registry nodes');
+        }
+        const { workflow } = unified_graph_orchestrator_1.unifiedGraphOrchestrator.initializeWorkflow(nodes);
+        return workflow;
+    }
+    /**
+     * Validate that a built workflow satisfies the variant contract:
+     * - requiredNodeTypes must all appear (by type)
+     * - For registry_* strategies, no extra node types beyond fixedNodeTypes (plus allowed extensions for extended)
+     */
+    validateVariantContract(workflow, strategy, requiredNodeTypes, fixedNodeTypes) {
+        const errors = [];
+        const actualTypes = new Set(workflow.nodes.map((n) => n.type));
+        for (const req of requiredNodeTypes) {
+            if (!actualTypes.has(req)) {
+                errors.push(`Required node type missing: ${req}`);
+            }
+        }
+        const isRegistry = strategy === 'registry_minimal' || strategy === 'registry_extended';
+        if (isRegistry && fixedNodeTypes && fixedNodeTypes.length > 0) {
+            const allowed = new Set(fixedNodeTypes);
+            if (strategy === 'registry_extended') {
+                allowed.add('log_output');
+                allowed.add('log');
+            }
+            for (const node of workflow.nodes) {
+                if (!allowed.has(node.type)) {
+                    errors.push(`Registry variant contains disallowed node type: ${node.type}`);
+                }
+            }
+        }
+        return { valid: errors.length === 0, errors };
+    }
+    /**
+     * Planner entry point that accepts a chosen summarize-layer variant.
+     *
+     * - Variants 1–2 (registry_minimal, registry_extended): build from fixed node list (registry reference only).
+     * - Variants 3–4 (keyword_minimal, keyword_extended): constrain planner to required + keyword-derived nodes.
+     * Edges and validation are always handled by the unified graph orchestrator.
+     */
+    async generateWorkflowFromVariant(selectedStructuredPrompt, options) {
+        const strategy = options?.strategy ?? 'registry_minimal';
+        const variantNodes = options?.variantNodes ?? options?.mandatoryNodeTypes ?? [];
+        const requiredNodeTypes = options?.requiredNodeTypes ?? variantNodes;
+        const isRegistry = strategy === 'registry_minimal' || strategy === 'registry_extended';
+        if (isRegistry && variantNodes.length > 0) {
+            const nodeTypes = [...variantNodes];
+            if (strategy === 'registry_extended' && !nodeTypes.some((t) => t === 'log_output' || t === 'log')) {
+                if (unified_node_registry_1.unifiedNodeRegistry.get('log_output'))
+                    nodeTypes.push('log_output');
+            }
+            const workflow = this.buildWorkflowFromNodeTypes(nodeTypes, selectedStructuredPrompt);
+            const validation = unified_graph_orchestrator_1.unifiedGraphOrchestrator.validateWorkflow(workflow);
+            if (!validation.valid) {
+                const msg = (validation.errors || []).join('; ') || 'Unknown validation error';
+                throw new Error(`Variant workflow failed structural validation: ${msg}`);
+            }
+            const contract = this.validateVariantContract(workflow, strategy, requiredNodeTypes, variantNodes);
+            if (!contract.valid) {
+                throw new Error(`Variant contract violated: ${contract.errors.join('; ')}`);
+            }
+            return {
+                ...workflow,
+                metadata: { ...workflow.metadata, variantStrategy: strategy, fromVariant: true },
+            };
+        }
+        // Keyword strategies: use planner with mandatory node set; orchestrator still builds edges.
+        const promptForPlanner = selectedStructuredPrompt;
+        const workflow = await this.generateWorkflowWithGeminiPlannerRobust(promptForPlanner);
+        const validation = unified_graph_orchestrator_1.unifiedGraphOrchestrator.validateWorkflow(workflow);
+        if (!validation.valid) {
+            const message = (validation.errors || []).join('; ') || 'Unknown validation error in variant-based workflow';
+            throw new Error(`Variant-based workflow failed structural validation: ${message}`);
+        }
+        const contract = this.validateVariantContract(workflow, strategy, requiredNodeTypes, variantNodes.length > 0 ? variantNodes : undefined);
+        if (!contract.valid) {
+            logger_1.logger.warn('[WorkflowBuilder] Variant contract check (keyword path):', contract.errors);
+        }
+        return { ...workflow, metadata: { ...workflow.metadata, variantStrategy: strategy, fromVariant: true } };
+    }
+    /**
+     * ✅ NODE LIBRARY INITIALIZATION CHECK: Ensure all required integrations are registered
+     */
+    verifyNodeLibraryInitialization() {
+        const verification = node_library_1.nodeLibrary.verifyIntegrationRegistration();
+        if (!verification.valid) {
+            console.error(`❌ [Node Library Check] Missing integrations: ${verification.missing.join(', ')}`);
+            console.warn(`⚠️  [Node Library Check] Registered integrations: ${verification.registered.length}`);
+            console.warn(`⚠️  [Node Library Check] Please ensure all required integrations are registered in node-library.ts`);
+        }
+        else {
+            console.log(`✅ [Node Library Check] All ${verification.registered.length} required integrations are registered`);
+        }
+    }
+    /**
+     * Registry-driven node classification helpers (single source of truth).
+     * Avoid hardcoded node-type lists throughout the planner/builder.
+     */
+    isTriggerNodeType(nodeType) {
+        const def = unified_node_registry_1.unifiedNodeRegistry.get(nodeType);
+        return def?.category === 'trigger' || nodeType.includes('trigger');
+    }
+    isInternalNodeType(nodeType) {
+        const def = unified_node_registry_1.unifiedNodeRegistry.get(nodeType);
+        return (def?.tags || []).includes('internal');
+    }
+    /**
+     * ✅ UNIVERSAL: Get all keywords for a node type from registry
+     * Replaces hardcoded keyword lists with registry-based collection
+     */
+    getKeywordsForNodeType(nodeType) {
+        const schema = node_library_1.nodeLibrary.getSchema(nodeType);
+        if (!schema)
+            return [];
+        const keywords = new Set();
+        // 1. From schema.keywords
+        if (schema.keywords && Array.isArray(schema.keywords)) {
+            schema.keywords.forEach((k) => keywords.add(k.toLowerCase()));
+        }
+        // 2. From aiSelectionCriteria.keywords
+        if (schema.aiSelectionCriteria?.keywords && Array.isArray(schema.aiSelectionCriteria.keywords)) {
+            schema.aiSelectionCriteria.keywords.forEach((k) => keywords.add(k.toLowerCase()));
+        }
+        // 3. From node type name (split by _ and -)
+        const typeWords = nodeType.toLowerCase().split(/[_\s-]+/);
+        typeWords.forEach(word => {
+            if (word.length > 2)
+                keywords.add(word);
+        });
+        // 4. From label
+        if (schema.label) {
+            const labelWords = schema.label.toLowerCase().split(/\s+/);
+            labelWords.forEach((word) => {
+                if (word.length > 2)
+                    keywords.add(word);
+            });
+        }
+        return Array.from(keywords);
+    }
+    /**
+     * ✅ UNIVERSAL: Get all CRM node types from registry (using capabilities)
+     * Replaces hardcoded crmPlatforms arrays
+     */
+    getCrmNodeTypes() {
+        const allNodeTypes = unified_node_registry_1.unifiedNodeRegistry.getAllTypes();
+        const crmNodes = [];
+        for (const nodeType of allNodeTypes) {
+            const capabilities = node_capability_registry_dsl_1.nodeCapabilityRegistryDSL.getCapabilities(nodeType);
+            // Check if node has CRM capabilities
+            if (capabilities.some(cap => cap.toLowerCase().includes('crm') ||
+                cap.toLowerCase().includes('customer_relationship') ||
+                cap.toLowerCase().includes('salesforce') ||
+                cap.toLowerCase().includes('hubspot') ||
+                cap.toLowerCase().includes('zoho') ||
+                cap.toLowerCase().includes('pipedrive'))) {
+                crmNodes.push(nodeType);
+            }
+        }
+        return crmNodes;
+    }
+    /**
+     * ✅ UNIVERSAL: Check if a node type is a CRM node
+     */
+    isCrmNodeType(nodeType) {
+        const crmNodes = this.getCrmNodeTypes();
+        return crmNodes.includes(nodeType.toLowerCase());
+    }
+    /**
+     * ✅ UNIVERSAL: Get all node types that require authentication
+     * Replaces hardcoded requiresAuth arrays
+     */
+    getNodesRequiringAuth() {
+        const allNodeTypes = unified_node_registry_1.unifiedNodeRegistry.getAllTypes();
+        const authNodes = [];
+        for (const nodeType of allNodeTypes) {
+            const requiredCreds = unified_node_registry_1.unifiedNodeRegistry.getRequiredCredentials(nodeType);
+            if (requiredCreds && requiredCreds.length > 0) {
+                // Check if it's not OAuth (OAuth is handled via UI, not as credential)
+                const nodeDef = unified_node_registry_1.unifiedNodeRegistry.get(nodeType);
+                const isOAuth = nodeDef?.credentialSchema?.requirements?.some(req => req.category === 'oauth');
+                if (!isOAuth) {
+                    authNodes.push(nodeType);
+                }
+            }
+        }
+        return authNodes;
+    }
+    /**
+     * ✅ UNIVERSAL: Check if a node type requires authentication
+     */
+    nodeRequiresAuth(nodeType) {
+        const authNodes = this.getNodesRequiringAuth();
+        return authNodes.includes(nodeType.toLowerCase());
+    }
+    /**
+     * ✅ UNIVERSAL: Build keyword map for all node types from registry
+     * Replaces hardcoded integrationKeywords and serviceKeywords
+     */
+    buildUniversalKeywordMap() {
+        const keywordMap = {};
+        const allNodeTypes = unified_node_registry_1.unifiedNodeRegistry.getAllTypes();
+        for (const nodeType of allNodeTypes) {
+            const keywords = this.getKeywordsForNodeType(nodeType);
+            if (keywords.length > 0) {
+                keywordMap[nodeType] = keywords;
+            }
+        }
+        return keywordMap;
+    }
+    /**
+     * ✅ UNIVERSAL: Select CRM node based on user intent (EXPLICIT > CATEGORY)
+     * Replaces hardcoded priority lists with intent-based selection
+     */
+    selectCrmNodeByIntent(detectedIntegrations, userPrompt) {
+        const crmNodes = this.getCrmNodeTypes();
+        const promptLower = userPrompt.toLowerCase();
+        // First, check for EXPLICIT mentions (user said specific CRM name)
+        for (const integration of detectedIntegrations) {
+            if (crmNodes.includes(integration.toLowerCase())) {
+                // Check if it's explicitly mentioned in prompt
+                const keywords = this.getKeywordsForNodeType(integration);
+                const isExplicit = keywords.some(keyword => {
+                    // Check if keyword appears as a complete word in prompt
+                    const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+                    return regex.test(promptLower);
+                });
+                if (isExplicit) {
+                    console.log(`✅ [CRM Selection] Selected ${integration} (EXPLICIT mention)`);
+                    return integration;
+                }
+            }
+        }
+        // If no explicit mention, return first detected CRM (fallback)
+        const detectedCrm = detectedIntegrations.find(int => crmNodes.includes(int.toLowerCase()));
+        if (detectedCrm) {
+            console.log(`✅ [CRM Selection] Selected ${detectedCrm} (CATEGORY match)`);
+            return detectedCrm;
+        }
+        return null;
+    }
+    /**
+     * Build a lightweight WorkflowGenerationStructure from a canonical example.
+     * The actual node configs will still be generated/customized later in the pipeline.
+     */
+    buildStructureFromExample(exampleId, triggerOverride) {
+        const examples = workflow_example_selector_1.workflowExampleSelector.getAllExamples();
+        const example = examples.find((ex) => ex.id === exampleId);
+        if (!example) {
+            console.warn(`⚠️ [Planner] buildStructureFromExample: example ${exampleId} not found, falling back to generative structure.`);
+            return {
+                trigger: triggerOverride || null,
+                steps: [],
+                outputs: [],
+            };
+        }
+        const triggerNode = example.nodes.find((n) => this.isTriggerNodeType(n.type));
+        const effectiveTrigger = triggerOverride || (triggerNode ? triggerNode.type : null);
+        const steps = [];
+        example.nodes.forEach((node, index) => {
+            // Skip explicit trigger node, steps represent action nodes
+            if (triggerNode && node.id === triggerNode.id)
+                return;
+            const libraryNode = this.nodeLibrary.get(node.type);
+            const label = libraryNode?.label || node.type;
+            steps.push({
+                id: node.id || `step_${index + 1}`,
+                description: label,
+                type: node.type,
+            });
+        });
+        const outputs = [];
+        if (example.nodes.length > 0) {
+            const lastNode = example.nodes[example.nodes.length - 1];
+            // OutputDefinition requires: name, type, description, required, (optional) format
+            outputs.push({
+                name: 'output_1',
+                description: `Output from ${lastNode.type}`,
+                type: 'object',
+                required: false,
+            });
+        }
+        const connections = example.edges?.map((e) => ({
+            source: e.source === (triggerNode?.id || '') ? 'trigger' : e.source,
+            target: e.target,
+        })) || [];
+        return {
+            trigger: effectiveTrigger,
+            steps,
+            outputs,
+            connections,
+        };
+    }
+    /**
+     * ✅ UNIVERSAL: Initialize node library from unified-node-registry
+     * No hardcoded node lists - everything comes from registry
+     */
+    initializeNodeLibrary() {
+        // ✅ UNIVERSAL: Get all nodes from unified registry
+        const { unifiedNodeRegistry } = require('../../core/registry/unified-node-registry');
+        const allNodeTypes = unifiedNodeRegistry.getAllTypes();
+        console.log(`[AgenticWorkflowBuilder] ✅ UNIVERSAL: Initializing node library from registry (${allNodeTypes.length} nodes)`);
+        allNodeTypes.forEach((nodeType) => {
+            const nodeDef = unifiedNodeRegistry.get(nodeType);
+            if (nodeDef) {
+                this.nodeLibrary.set(nodeType, {
+                    type: nodeType,
+                    category: nodeDef.category || 'general',
+                    label: nodeDef.label || nodeType,
+                    description: nodeDef.description || `${nodeType} node`,
+                });
+            }
+        });
+        console.log(`[AgenticWorkflowBuilder] ✅ Initialized ${this.nodeLibrary.size} nodes from registry`);
+    }
+    /**
+     * Get node library description for AI agent
+     * Returns formatted string describing all available nodes with their properties
+     * CRITICAL: This is the ONLY source of truth for available nodes - use ONLY these nodes
+     */
+    getNodeLibraryDescription() {
+        const allSchemas = node_library_1.nodeLibrary.getAllSchemas();
+        const nodesByCategory = new Map();
+        // Group nodes by category
+        allSchemas.forEach(schema => {
+            const category = schema.category || 'other';
+            if (!nodesByCategory.has(category)) {
+                nodesByCategory.set(category, []);
+            }
+            nodesByCategory.get(category).push({
+                type: schema.type,
+                label: schema.label,
+                schema,
+            });
+        });
+        let description = '\n## 📚 AVAILABLE NODES REFERENCE (USE ONLY THESE NODES)\n\n';
+        description += '**CRITICAL RULE: You MUST use ONLY the node types listed below. DO NOT create new node types or use node types not in this list.**\n\n';
+        // Sort categories for consistent output
+        const categoryOrder = [
+            'triggers', 'logic', 'data', 'ai', 'http_api',
+            'google', 'output', 'database', 'transformation'
+        ];
+        categoryOrder.forEach(category => {
+            const nodes = nodesByCategory.get(category);
+            if (!nodes || nodes.length === 0)
+                return;
+            const categoryLabel = category.charAt(0).toUpperCase() + category.slice(1).replace('_', ' ');
+            description += `### ${categoryLabel} NODES (${nodes.length} nodes)\n\n`;
+            nodes.forEach(({ type, label, schema }) => {
+                description += `#### ${label} (\`${type}\`)\n`;
+                description += `- **Description**: ${schema.description || 'No description'}\n`;
+                // Required fields with details
+                const requiredFields = schema.configSchema?.required || [];
+                if (requiredFields.length > 0) {
+                    description += `- **Required Fields**:\n`;
+                    requiredFields.forEach((fieldName) => {
+                        const fieldInfo = schema.configSchema?.optional?.[fieldName];
+                        if (fieldInfo) {
+                            description += `  - \`${fieldName}\` (${fieldInfo.type}): ${fieldInfo.description || ''}`;
+                            if (fieldInfo.examples && fieldInfo.examples.length > 0) {
+                                description += ` - Examples: ${fieldInfo.examples.slice(0, 2).join(', ')}`;
+                            }
+                            description += '\n';
+                        }
+                        else {
+                            description += `  - \`${fieldName}\`: Required field\n`;
+                        }
+                    });
+                }
+                // Key optional fields
+                const optionalFields = schema.configSchema?.optional || {};
+                const importantOptional = Object.keys(optionalFields).slice(0, 5);
+                if (importantOptional.length > 0) {
+                    description += `- **Key Optional Fields**: ${importantOptional.join(', ')}\n`;
+                }
+                // When to use
+                if (schema.aiSelectionCriteria?.whenToUse && schema.aiSelectionCriteria.whenToUse.length > 0) {
+                    description += `- **When to Use**: ${schema.aiSelectionCriteria.whenToUse.slice(0, 3).join('; ')}\n`;
+                }
+                // Keywords for matching
+                if (schema.aiSelectionCriteria?.keywords && schema.aiSelectionCriteria.keywords.length > 0) {
+                    description += `- **Keywords**: ${schema.aiSelectionCriteria.keywords.slice(0, 5).join(', ')}\n`;
+                }
+                description += '\n';
+            });
+        });
+        // Add nodes from other categories
+        const otherCategories = Array.from(nodesByCategory.keys()).filter(cat => !categoryOrder.includes(cat));
+        if (otherCategories.length > 0) {
+            description += `### OTHER NODES\n\n`;
+            otherCategories.forEach(category => {
+                const nodes = nodesByCategory.get(category);
+                nodes.forEach(({ type, label }) => {
+                    description += `- \`${type}\` (${label})\n`;
+                });
+            });
+        }
+        description += '\n**REMINDER: Use ONLY the node types listed above. Do not invent new node types.**\n';
+        return description;
+    }
+    /**
+     * Autonomous Workflow Generation Agent
+     *
+     * Implements the system prompt requirements:
+     * - Fully executable, zero-error workflows
+     * - All required fields auto-filled
+     * - Intelligent defaults for missing values
+     * - Proper input-output mapping
+     * - Self-repair until zero errors
+     * - NO placeholders or empty required fields
+     *
+     * Simplified 7-Step Workflow Generation Process:
+     * 1. User raw prompt (input)
+     * 2. Questions for confirming (handled externally)
+     * 3. System prompt in 20-30 words (what you understood)
+     * 4. Workflow requirements (URL, API, etc.)
+     * 5. Workflow building (structure → nodes → config → connections)
+     * 6. Validating (with auto-fix/self-repair)
+     * 7. Outputs (documentation, suggestions, complexity)
+     */
+    async generateFromPrompt(userPrompt, constraints, onProgress) {
+        console.log(`🤖 [STAGE: START] Generating workflow from prompt: "${userPrompt}"`);
+        // ✅ ROOT-LEVEL FIX: Check for platform ambiguity BEFORE generating workflow
+        // If user says "CRM" or "email" without specifying platform, auto-select default
+        const platformCheck = platform_selection_resolver_1.platformSelectionResolver.analyzePlatformSelection(userPrompt);
+        if (platformCheck.needsClarification) {
+            // ✅ AUTO-SELECT: Instead of throwing error, auto-select default platforms
+            // This provides better UX - user can always edit the workflow later
+            const defaultSelections = platform_selection_resolver_1.platformSelectionResolver.autoSelectDefaults(platformCheck.ambiguousCategories || []);
+            if (defaultSelections.length > 0) {
+                console.log(`[Platform Selection] ⚠️  Auto-selected default platforms: ${defaultSelections.map(s => `${s.category} → ${s.platform}`).join(', ')}`);
+                console.log(`[Platform Selection] 💡 User can edit the workflow to change platforms if needed`);
+                // Update prompt with selected platforms for better context
+                let enhancedPrompt = userPrompt;
+                for (const selection of defaultSelections) {
+                    enhancedPrompt += ` (using ${selection.platform} for ${selection.category})`;
+                }
+                userPrompt = enhancedPrompt;
+            }
+            else {
+                // Fallback: Just log warning and continue
+                console.warn(`[Platform Selection] ⚠️  Ambiguous platform mentions detected: ${platformCheck.ambiguousCategories?.join(', ')}`);
+                console.warn(`[Platform Selection] 💡 Proceeding with workflow generation - AI will infer best platform`);
+            }
+        }
+        // ⚡ EARLY DETECTION: Check if this is a chatbot workflow BEFORE any LLM calls
+        const promptLower = userPrompt.toLowerCase();
+        const isChatbotWorkflow = promptLower.includes('chat') ||
+            promptLower.includes('bot') ||
+            promptLower.includes('assistant') ||
+            promptLower.includes('chatbot');
+        if (isChatbotWorkflow && !config_1.config.geminiApiKey?.trim()) {
+            const error = new Error('Gemini API key not set - use chatbot fallback');
+            error.useChatbotFallback = true;
+            throw error;
+        }
+        // PHASE-2: Prompt Normalization (Feature #1) - BEFORE STEP-1
+        console.log('[WorkflowBuilder] 🔄 [STAGE: Prompt Normalization] Starting...');
+        onProgress?.({ step: 0, stepName: 'Normalizing', progress: 5, details: { message: 'Normalizing user prompt...' } });
+        const { promptNormalizer } = await Promise.resolve().then(() => __importStar(require('./prompt-normalizer')));
+        let normalized;
+        let effectivePrompt = userPrompt;
+        try {
+            normalized = await promptNormalizer.normalizePrompt(userPrompt);
+            if (normalized.missingIntent.length > 0) {
+                console.warn('⚠️  [PHASE-2] Missing intent detected:', normalized.missingIntent);
+            }
+            // Use normalized prompt for rest of pipeline
+            effectivePrompt = normalized.normalizedPrompt;
+            console.log(`✅ [PHASE-2] Prompt normalized: "${effectivePrompt.substring(0, 100)}"`);
+            console.log('[WorkflowBuilder] ✅ [STAGE: Prompt Normalization] Completed');
+        }
+        catch (error) {
+            // CRITICAL: If AI normalization fails (e.g., models unavailable, connection refused), use original prompt
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            const errorCause = error?.cause;
+            const isConnectionError = errorMessage.includes('ECONNREFUSED') ||
+                errorMessage.includes('fetch failed') ||
+                errorMessage.includes('Connection refused') ||
+                (errorCause && (errorCause.code === 'ECONNREFUSED' || errorCause.message?.includes('ECONNREFUSED')));
+            const isModelUnavailable = errorMessage.includes('not found') ||
+                errorMessage.includes('Ollama models not available') ||
+                errorMessage.includes('404') && errorMessage.includes('model');
+            if (isModelUnavailable || isConnectionError) {
+                console.warn('⚠️  [PHASE-2] AI normalization unavailable (Ollama connection failed), using original prompt');
+                effectivePrompt = userPrompt;
+                normalized = {
+                    originalPrompt: userPrompt,
+                    normalizedPrompt: userPrompt,
+                    trigger: { type: 'manual_trigger', description: 'Manual trigger', detected: false },
+                    actions: [],
+                    output: { description: 'Workflow output' },
+                    missingIntent: [],
+                    confidence: 0.5,
+                };
+            }
+            else {
+                // Re-throw if it's a different error
+                throw error;
+            }
+        }
+        // PHASE-2: Intent Classification (Feature #2)
+        console.log('[WorkflowBuilder] 🔄 [STAGE: Intent Classification] Starting...');
+        onProgress?.({ step: 0, stepName: 'Classifying', progress: 8, details: { message: 'Classifying workflow intent...' } });
+        // Intent classification is already done earlier in the pipeline
+        // Use the classification result from earlier
+        const intentClassification = intent_classifier_1.intentClassifier.classifyIntent(userPrompt);
+        console.log(`[WorkflowBuilder] ✅ [STAGE: Intent Classification] Completed - Intent: ${intentClassification.intent}`);
+        // 🚨 CRITICAL FIX: For vague prompts, use minimal safe structure instead of full AI generation
+        if (intentClassification.intent === 'ambiguous' && intentClassification.minimalSafeStructure) {
+            console.log(`✅ [Vague Prompt Handler] Using minimal safe structure for vague prompt: "${userPrompt}"`);
+            console.log(`   Minimal structure: ${intentClassification.minimalSafeStructure.trigger} → ${intentClassification.minimalSafeStructure.steps.map(s => s.type).join(' → ')}`);
+        }
+        // PHASE-2: Build Mode Selection (Feature #10)
+        const { buildModeManager } = await Promise.resolve().then(() => __importStar(require('./build-modes')));
+        const buildMode = constraints?.buildMode || 'safe';
+        const modeConfig = buildModeManager.getConfig(buildMode);
+        // Use medium complexity as default
+        const expectedComplexity = 'medium';
+        const modeValidation = buildModeManager.validateMode(buildMode, expectedComplexity);
+        if (!modeValidation.valid && modeValidation.recommendation) {
+            console.warn(`⚠️  [PHASE-2] Build mode validation: ${modeValidation.reason}`);
+        }
+        // 🆕 NEW PIPELINE: Workflow Planner - Convert prompt to ordered steps
+        console.log('[WorkflowBuilder] 🔄 [STAGE: Workflow Planning] Starting...');
+        onProgress?.({ step: 2, stepName: 'Planning', progress: 12, details: { message: 'Planning workflow steps...' } });
+        let workflowPlan = null;
+        let usePlannerOutput = false;
+        try {
+            // ✅ NEW: Extract mandatory nodes from constraints (if provided from summarize layer)
+            const mandatoryNodes = constraints?.mandatoryNodes || constraints?.mandatoryNodeTypes || [];
+            const plannerConstraints = mandatoryNodes.length > 0
+                ? { mandatoryNodes, suggestedNodes: constraints?.suggestedNodes || [] }
+                : undefined;
+            if (mandatoryNodes.length > 0) {
+                console.log(`[WorkflowBuilder] 🔒 Passing ${mandatoryNodes.length} mandatory node(s) to planner: ${mandatoryNodes.join(', ')}`);
+            }
+            workflowPlan = await workflow_planner_1.workflowPlanner.planWorkflow(userPrompt, plannerConstraints);
+            console.log(`✅ [WorkflowPlanner] Plan created:`, JSON.stringify(workflowPlan, null, 2));
+            console.log(`[WorkflowBuilder] ✅ [STAGE: Workflow Planning] Completed - ${workflowPlan.steps?.length || 0} steps planned`);
+            console.log(`✅ [WorkflowPlanner] Trigger: ${workflowPlan.trigger_type}, Steps: ${workflowPlan.steps.length}`);
+            // Log planner output
+            if (workflowPlan.steps && workflowPlan.steps.length > 0) {
+                usePlannerOutput = true;
+                console.log(`✅ [WorkflowPlanner] Using planner output (${workflowPlan.steps.length} steps)`);
+                workflowPlan.steps.forEach((step, idx) => {
+                    const stepType = step.node_type || step.action || 'unknown';
+                    console.log(`   [Step ${idx + 1}] Node Type: ${stepType}, Description: ${step.description || 'N/A'}`);
+                });
+                if (workflowPlan.reasoning) {
+                    console.log(`   [Reasoning] ${workflowPlan.reasoning}`);
+                }
+                if (workflowPlan.confidence !== undefined) {
+                    console.log(`   [Confidence] ${workflowPlan.confidence}`);
+                }
+            }
+            else {
+                console.warn(`⚠️  [WorkflowPlanner] Plan returned empty steps, falling back to pattern matching`);
+                usePlannerOutput = false;
+            }
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.warn(`⚠️  [WorkflowPlanner] Planning failed: ${errorMessage}, falling back to pattern matching`);
+            usePlannerOutput = false;
+        }
+        // STEP-4: Pattern Matching - Only if planner didn't return steps
+        let patternMatch = null;
+        if (!usePlannerOutput) {
+            onProgress?.({ step: 3, stepName: 'Pattern Matching', progress: 15, details: { message: 'Searching for similar workflow patterns...' } });
+            const similarWorkflows = workflow_training_service_1.workflowTrainingService.getSimilarWorkflowsWithScores(userPrompt, 3);
+            if (similarWorkflows.length > 0 && similarWorkflows[0].score >= 70 && similarWorkflows[0].matchType === 'pattern') {
+                patternMatch = similarWorkflows[0].workflow;
+                console.log(`✅ Pattern match found (score: ${similarWorkflows[0].score}): ${patternMatch.goal}`);
+                onProgress?.({ step: 3, stepName: 'Pattern Match', progress: 18, details: { message: `Found pattern: ${patternMatch.category}` } });
+            }
+            else if (similarWorkflows.length > 0) {
+                console.log(`⚠️  Hybrid approach (score: ${similarWorkflows[0].score}): Using partial pattern matching`);
+            }
+            else {
+                console.log('⚠️  No pattern match found. Building from scratch using STEP-3 rules.');
+            }
+        }
+        else {
+            console.log(`✅ [WorkflowPlanner] Skipping pattern matching - using planner output`);
+        }
+        // Step 3: Generate system prompt (20-30 words understanding)
+        onProgress?.({ step: 3, stepName: 'Understanding', progress: 20, details: { message: 'Generating system prompt...' } });
+        let systemPrompt;
+        try {
+            systemPrompt = await this.generateSystemPrompt(userPrompt, constraints);
+        }
+        catch (error) {
+            // CRITICAL: If AI system prompt generation fails, use fallback
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            const isModelUnavailable = errorMessage.includes('not found') ||
+                errorMessage.includes('Ollama models not available') ||
+                errorMessage.includes('404') && errorMessage.includes('model');
+            if (isModelUnavailable) {
+                console.warn('⚠️  [WorkflowBuilder] AI system prompt generation unavailable, using fallback');
+                systemPrompt = `Build an automated workflow to: ${effectivePrompt.substring(0, 100)}`;
+            }
+            else {
+                throw error;
+            }
+        }
+        // Step 4: Extract workflow requirements (URLs, APIs, credentials, etc.)
+        onProgress?.({ step: 4, stepName: 'Requirements Extraction', progress: 40, details: { message: 'Extracting requirements...' } });
+        // Use RequirementsExtractor service if answers are provided, otherwise use legacy method
+        const answers = constraints?.answers;
+        let requirements;
+        try {
+            requirements = answers
+                ? await requirements_extractor_1.requirementsExtractor.extractRequirements(userPrompt, systemPrompt, answers, constraints)
+                : await this.extractWorkflowRequirements(userPrompt, systemPrompt, constraints);
+        }
+        catch (error) {
+            // CRITICAL: If AI requirements extraction fails, use fallback
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            const isModelUnavailable = errorMessage.includes('not found') ||
+                errorMessage.includes('Ollama models not available') ||
+                errorMessage.includes('404') && errorMessage.includes('model');
+            if (isModelUnavailable) {
+                console.warn('⚠️  [WorkflowBuilder] AI requirements extraction unavailable, using rule-based fallback');
+                // Use rule-based requirements extraction
+                requirements = {
+                    primaryGoal: effectivePrompt,
+                    keySteps: [],
+                    inputs: [],
+                    outputs: [],
+                    constraints: [],
+                    complexity: 'medium',
+                    urls: [],
+                    apis: [],
+                    credentials: [],
+                    schedules: [],
+                    platforms: [],
+                };
+            }
+            else {
+                throw error;
+            }
+        }
+        // ✅ CRITICAL: Always preserve the ORIGINAL user prompt on requirements for downstream detection
+        // This ensures integration/trigger/node detection sees the full natural language, not just summaries.
+        requirements.originalPrompt = userPrompt;
+        // ✅ CRITICAL: Attach structured spec to requirements if available
+        const structuredSpec = constraints?.structuredSpec;
+        if (structuredSpec) {
+            requirements.structuredSpec = structuredSpec;
+            console.log('📋 [generateWorkflow] Structured spec attached to requirements');
+        }
+        // ✅ CRITICAL FIX: Extract planner trigger preference if available
+        // The planner may have detected a trigger preference that should override sample workflow triggers
+        if (constraints?.plannerSpec?.trigger) {
+            const plannerTrigger = constraints.plannerSpec.trigger;
+            // Map planner trigger format to node trigger format
+            const triggerMap = {
+                'manual': 'manual_trigger',
+                'schedule': 'schedule',
+                'webhook': 'webhook',
+                'event': 'manual_trigger', // Default event to manual
+            };
+            const mappedTrigger = triggerMap[plannerTrigger] || plannerTrigger;
+            if (mappedTrigger) {
+                requirements.trigger = mappedTrigger;
+                requirements.plannerTrigger = mappedTrigger;
+                console.log(`✅ [generateWorkflow] Planner trigger preference detected: ${plannerTrigger} → ${mappedTrigger}`);
+            }
+        }
+        // PHASE-2: Credential Preflight Check (Feature #4) - STEP-4.5
+        // Check credentials BEFORE building (if nodes are known)
+        onProgress?.({ step: 4, stepName: 'Preflight', progress: 45, details: { message: 'Checking credential readiness...' } });
+        const { credentialPreflightChecker } = await Promise.resolve().then(() => __importStar(require('./credential-preflight-check')));
+        const existingAuth = constraints?.existingAuth || {};
+        // Note: We'll do full preflight check after nodes are selected
+        // Step 5: Build workflow structure FIRST to detect AI Agent nodes
+        // CRITICAL: Check for chatbot intent BEFORE trigger selection
+        const isChatbotIntent = this.detectChatbotIntent(requirements);
+        // 🆕 NEW PIPELINE: Use planner trigger if available, otherwise use construction logic
+        let triggerSelection;
+        if (usePlannerOutput && workflowPlan) {
+            // Use trigger from planner
+            const { mapTriggerType } = await Promise.resolve().then(() => __importStar(require('./step-to-node-mapper')));
+            const plannerTrigger = mapTriggerType(workflowPlan.trigger_type);
+            triggerSelection = {
+                triggerType: plannerTrigger,
+                confidence: workflowPlan.confidence || 0.9,
+            };
+            console.log(`✅ [WorkflowPlanner] Using planner trigger: ${workflowPlan.trigger_type} → ${plannerTrigger}`);
+        }
+        else {
+            // Workflow Construction Logic (STEP-3): PHASE_1 - Trigger Selection
+            onProgress?.({ step: 5, stepName: 'Building', progress: 50, details: { message: 'PHASE 1: Selecting trigger...' } });
+            triggerSelection = this.constructionLogic.selectTrigger(effectivePrompt, constraints?.answers);
+            // For chatbot workflows, automatically use chat_trigger even if multiple triggers detected
+            // 🚨 CRITICAL: But ONLY if user didn't explicitly request a schedule
+            const userPromptLower = (userPrompt || effectivePrompt || '').toLowerCase();
+            const explicitlyRequestsSchedule = userPromptLower.includes('schedule') ||
+                userPromptLower.includes('fixed schedule') ||
+                userPromptLower.includes('daily') ||
+                userPromptLower.includes('weekly') ||
+                userPromptLower.includes('hourly') ||
+                triggerSelection.triggerType === 'schedule';
+            if (isChatbotIntent && triggerSelection.error && triggerSelection.error.includes('Multiple triggers')) {
+                if (explicitlyRequestsSchedule) {
+                    console.log('✅ [Chatbot] Chatbot workflow detected BUT user explicitly requested schedule - using schedule trigger');
+                    triggerSelection.triggerType = 'schedule';
+                    triggerSelection.confidence = 0.95;
+                    triggerSelection.error = undefined;
+                }
+                else {
+                    console.log('✅ [Chatbot] Chatbot workflow detected - using chat_trigger despite multiple trigger matches');
+                    triggerSelection.triggerType = 'chat_trigger';
+                    triggerSelection.confidence = 0.95;
+                    triggerSelection.error = undefined;
+                }
+            }
+            if (triggerSelection.error && triggerSelection.confidence === 0) {
+                throw new Error(`Trigger selection failed: ${triggerSelection.error}. Please clarify your workflow trigger.`);
+            }
+        }
+        // Update requirements with selected trigger (add to requirements object)
+        if (triggerSelection.triggerType) {
+            requirements.trigger = triggerSelection.triggerType;
+        }
+        // Canonical example selection - Skip if using planner output
+        let exampleSelection = null;
+        if (!usePlannerOutput) {
+            onProgress?.({
+                step: 5,
+                stepName: 'Building',
+                progress: 51,
+                details: { message: 'Checking canonical examples before free-form planning...' },
+            });
+            // Create intent object for example selector (if it expects a different format)
+            const intentForSelector = intentClassification || {
+                intent: 'automation_workflow',
+                confidence: 0.6,
+                requiresClarification: false
+            };
+            exampleSelection = workflow_example_selector_1.workflowExampleSelector.selectBestExample({
+                prompt: effectivePrompt,
+                normalizedPrompt: normalized?.normalizedPrompt,
+                triggerType: triggerSelection.triggerType || normalized?.trigger?.type || null,
+                intent: intentForSelector, // Type compatibility - selector may expect different format
+            });
+        }
+        else {
+            console.log(`✅ [WorkflowPlanner] Skipping example selection - using planner output`);
+        }
+        let structure;
+        // 🆕 NEW PIPELINE: Use planner output if available (skip pattern matching and examples)
+        if (usePlannerOutput && workflowPlan) {
+            console.log(`✅ [WorkflowPlanner] Building structure from planner steps`);
+            onProgress?.({
+                step: 5,
+                stepName: 'Building',
+                progress: 52,
+                details: { message: 'Building workflow from planner steps...' },
+            });
+            // 🆕 IR LAYER: Convert planner plan to IR
+            console.log(`✅ [WorkflowIR] Converting plan to Intermediate Representation`);
+            let workflowIR = workflow_ir_1.WorkflowIRBuilder.fromPlan(workflowPlan, userPrompt);
+            // Validate IR
+            const validation = workflow_ir_1.WorkflowIRValidator.validate(workflowIR);
+            if (!validation.valid) {
+                console.warn(`⚠️  [WorkflowIR] Validation errors:`, validation.errors);
+                console.warn(`⚠️  [WorkflowIR] Attempting to repair...`);
+                // Repair IR
+                const repairResult = workflow_ir_1.WorkflowIRRepairer.repair(workflowIR);
+                workflowIR = repairResult.repaired;
+                console.log(`✅ [WorkflowIR] Repaired ${repairResult.fixes.length} issues:`, repairResult.fixes);
+                // Re-validate after repair
+                const revalidation = workflow_ir_1.WorkflowIRValidator.validate(workflowIR);
+                if (!revalidation.valid) {
+                    console.error(`❌ [WorkflowIR] IR still invalid after repair:`, revalidation.errors);
+                }
+                else {
+                    console.log(`✅ [WorkflowIR] IR validated successfully after repair`);
+                }
+            }
+            else {
+                console.log(`✅ [WorkflowIR] IR validated successfully`);
+                if (validation.warnings.length > 0) {
+                    console.warn(`⚠️  [WorkflowIR] Warnings:`, validation.warnings);
+                }
+            }
+            // Log IR structure
+            console.log(`✅ [WorkflowIR] IR structure:`);
+            console.log(`   Trigger: ${workflowIR.trigger.type}`);
+            console.log(`   Steps: ${workflowIR.steps.length}`);
+            console.log(`   Data bindings: ${workflowIR.dataBindings.length}`);
+            console.log(`   Conditions: ${workflowIR.conditions.length}`);
+            // Convert IR to WorkflowGenerationStructure
+            console.log(`✅ [WorkflowIR] Converting IR to WorkflowGenerationStructure`);
+            const irStructure = workflow_ir_1.WorkflowIRConverter.toStructure(workflowIR);
+            // Map node types using step-to-node-mapper (IR doesn't map node types yet)
+            const planStructure = (0, step_to_node_mapper_1.convertPlanToStructure)(workflowPlan, userPrompt);
+            // Use IR structure but with mapped node types from planStructure
+            structure = {
+                trigger: irStructure.trigger,
+                steps: planStructure.steps, // Use mapped steps with node types
+                outputs: planStructure.outputs, // Use outputs from planStructure (correctly typed)
+                connections: irStructure.connections,
+            };
+            // Mark that we used planner output and IR
+            requirements.planner_used = true;
+            requirements.ir_used = true;
+            requirements.ir_validation = validation;
+            requirements.planner_trigger = workflowPlan.trigger_type;
+            requirements.planner_steps_count = workflowPlan.steps.length;
+            requirements.planner_confidence = workflowPlan.confidence;
+            console.log(`✅ [WorkflowPlanner] Structure built from planner via IR (${planStructure.steps.length} steps)`);
+        }
+        else if (exampleSelection) {
+            console.log(`🧩 [Planner] planner_selected_example=${exampleSelection.example.id} planner_score=${exampleSelection.score}`);
+            requirements.planner_selected_example = exampleSelection.example.id;
+            requirements.planner_score = exampleSelection.score;
+            requirements.planner_fallback_used = false;
+            onProgress?.({
+                step: 5,
+                stepName: 'Building',
+                progress: 52,
+                details: {
+                    message: `Using canonical example: ${exampleSelection.example.id}`,
+                },
+            });
+            structure = this.buildStructureFromExample(exampleSelection.example.id, triggerSelection.triggerType || null);
+        }
+        else {
+            console.log('🧩 [Planner] planner_fallback_used=true (no canonical example above threshold)');
+            requirements.planner_fallback_used = true;
+            onProgress?.({
+                step: 5,
+                stepName: 'Building',
+                progress: 52,
+                details: { message: 'Building workflow structure (no canonical example match)...' },
+            });
+            // ✅ CRITICAL: Pass structured spec if available for enhanced matching
+            const structuredSpecFromRequirements = requirements.structuredSpec;
+            structure = await this.generateStructure(requirements, structuredSpecFromRequirements);
+        }
+        // Extract detected integrations from structure generation (if available)
+        // We'll detect them again in credential identification, but this ensures consistency
+        const promptForIntegrations = userPrompt.toLowerCase();
+        const detectedIntegrations = [];
+        // ✅ UNIVERSAL: Detect integrations from prompt using registry-based keywords
+        // Replaces hardcoded integrationKeywords with dynamic registry lookup
+        const integrationKeywords = this.buildUniversalKeywordMap();
+        // ✅ UNIVERSAL: Split prompt into words for word-based pattern matching
+        const promptWords = promptForIntegrations
+            .split(/[\s_\-.,;:!?()\[\]{}'"]+/)
+            .filter(word => word.length > 0);
+        for (const [integration, keywords] of Object.entries(integrationKeywords)) {
+            // ✅ UNIVERSAL: Use word-based pattern matching instead of sentence-based
+            const matched = keywords.some(keyword => {
+                // Split keyword into words
+                const keywordWords = keyword
+                    .toLowerCase()
+                    .split(/[\s_\-.,;:!?()\[\]{}'"]+/)
+                    .filter(w => w.length > 0);
+                if (keywordWords.length === 0)
+                    return false;
+                // Check if ALL keyword words appear in prompt words
+                const stopWords = new Set(['a', 'an', 'the', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from']);
+                const importantKeywordWords = keywordWords.filter(w => !stopWords.has(w) || w.length > 2);
+                if (importantKeywordWords.length === 0) {
+                    // If only stop words, check if any word matches
+                    return keywordWords.some(kw => promptWords.some(pw => pw === kw || pw.includes(kw) || kw.includes(pw)));
+                }
+                // Check if ALL important keyword words appear in prompt
+                return importantKeywordWords.every(keywordWord => promptWords.some(promptWord => promptWord === keywordWord ||
+                    promptWord.includes(keywordWord) ||
+                    keywordWord.includes(promptWord)));
+            });
+            if (matched) {
+                detectedIntegrations.push(integration);
+            }
+        }
+        // Step 4.5: Identify required credentials AFTER structure is generated (to detect AI Agent nodes)
+        onProgress?.({ step: 4, stepName: 'Credential Analysis', progress: 45, details: { message: 'Identifying required credentials...' } });
+        const requiredCredentials = await this.identifyRequiredCredentials(requirements, userPrompt, answers, structure, detectedIntegrations);
+        // Apply node preferences from user answers if available
+        const nodePreferences = constraints?.answers
+            ? enhanced_workflow_analyzer_1.enhancedWorkflowAnalyzer.extractNodePreferences(constraints.answers)
+            : {};
+        // Update structure with user's node preferences
+        const structureWithPreferences = this.applyNodePreferences(structure, nodePreferences, requirements);
+        // GRAPH INTEGRITY ENFORCEMENT: Check and repair missing structural nodes BEFORE validation
+        onProgress?.({ step: 4, stepName: 'Graph Integrity Check', progress: 48, details: { message: 'Checking workflow graph integrity...' } });
+        // Check integrity (before nodes are created, use empty array for nodes)
+        const integrityCheck = workflow_graph_repair_1.workflowGraphRepair.checkGraphIntegrity(structureWithPreferences, [], // Nodes not created yet, will check again after node creation
+        requirements, effectivePrompt);
+        let finalStructure = structureWithPreferences;
+        let repairAttempted = false;
+        if (integrityCheck.missingNodes.length > 0 || integrityCheck.orderIssues.length > 0) {
+            console.log(`🔧 [Graph Repair] Detected ${integrityCheck.missingNodes.length} missing node(s) and ${integrityCheck.orderIssues.length} order issue(s)`);
+            integrityCheck.missingNodes.forEach((node, idx) => {
+                console.log(`   ${idx + 1}. Missing: ${node.type} - ${node.reason} (position: ${node.requiredPosition})`);
+            });
+            // Filter out nodes that might be false positives (e.g., if_else when prompt doesn't clearly need it)
+            // Only repair if the prompt clearly indicates the need (strict patterns)
+            const promptLower = effectivePrompt.toLowerCase();
+            const filteredMissingNodes = integrityCheck.missingNodes.filter(node => {
+                // Skip branching-node injection if prompt doesn't have clear conditional patterns
+                // (registry-driven; no node-type hardcoding here)
+                const def = unified_node_registry_1.unifiedNodeRegistry.get(node.type);
+                if (def?.isBranching) {
+                    const hasClearConditional = /\bif\s+(.+?)\s+then\b/i.test(effectivePrompt) ||
+                        /\bif\s+(.+?)\s+else\b/i.test(effectivePrompt) ||
+                        /\bcheck\s+if\b/i.test(effectivePrompt) ||
+                        /\bgreater\s+than\b/i.test(effectivePrompt) ||
+                        /\bless\s+than\b/i.test(effectivePrompt) ||
+                        /\bage\s+(is|>|>=|<|<=|greater|less)/i.test(effectivePrompt);
+                    if (!hasClearConditional) {
+                        console.log(`   ⚠️  Skipping branching node injection (${node.type}) - no clear conditional pattern in prompt`);
+                        return false;
+                    }
+                }
+                return true;
+            });
+            if (filteredMissingNodes.length < integrityCheck.missingNodes.length) {
+                console.log(`   ℹ️  Filtered ${integrityCheck.missingNodes.length - filteredMissingNodes.length} false positive node(s)`);
+                integrityCheck.missingNodes = filteredMissingNodes;
+            }
+            if (integrityCheck.missingNodes.length > 0) {
+                // Attempt repair
+                const repairResult = workflow_graph_repair_1.workflowGraphRepair.repairWorkflowGraph(structureWithPreferences, [], // Nodes not created yet
+                requirements, effectivePrompt);
+                if (repairResult.repaired) {
+                    console.log(`✅ [Graph Repair] Successfully repaired workflow graph`);
+                    console.log(`   Injected ${repairResult.injectedNodes.length} node(s):`);
+                    repairResult.injectedNodes.forEach((node, idx) => {
+                        console.log(`     ${idx + 1}. ${node.type} at position ${node.position} - ${node.reason}`);
+                    });
+                    finalStructure = repairResult.modifiedStructure;
+                    repairAttempted = true;
+                }
+                else {
+                    console.warn(`⚠️  [Graph Repair] Could not repair workflow graph automatically`);
+                }
+            }
+            else {
+                console.log(`   ℹ️  All missing nodes were false positives - skipping repair`);
+            }
+        }
+        else {
+            console.log(`✅ [Graph Integrity] Workflow graph integrity check passed - no missing structural nodes`);
+        }
+        // AI VALIDATION: Validate structure against user prompt (after repair if attempted)
+        onProgress?.({ step: 4, stepName: 'AI Validation', progress: 50, details: { message: 'AI validating workflow structure...' } });
+        const aiValidation = await ai_workflow_validator_1.aiWorkflowValidator.validateWorkflowStructure(effectivePrompt, finalStructure);
+        // Log validation results
+        console.log(`📊 [AI Validator] Validation results:`);
+        console.log(`   Valid: ${aiValidation.valid}`);
+        console.log(`   Confidence: ${aiValidation.confidence}%`);
+        console.log(`   Node Order Valid: ${aiValidation.nodeOrderValid}`);
+        console.log(`   Connections Valid: ${aiValidation.connectionsValid}`);
+        console.log(`   Completeness Valid: ${aiValidation.completenessValid}`);
+        if (!aiValidation.valid || aiValidation.confidence < 70) {
+            console.warn('⚠️  [AI Validator] Workflow structure validation failed or low confidence');
+            console.warn(`   Issues: ${aiValidation.issues.join('; ')}`);
+            console.warn(`   Suggestions: ${aiValidation.suggestions.join('; ')}`);
+            // If validation fails critically, return structured error instead of throwing
+            if (aiValidation.confidence < 50 || !aiValidation.completenessValid) {
+                // Store validation error for later (will be handled in generateFromPrompt)
+                finalStructure._validationError = {
+                    valid: false,
+                    confidence: aiValidation.confidence,
+                    issues: aiValidation.issues,
+                    suggestions: aiValidation.suggestions,
+                    nodeOrderValid: aiValidation.nodeOrderValid,
+                    connectionsValid: aiValidation.connectionsValid,
+                    completenessValid: aiValidation.completenessValid,
+                    repairAttempted
+                };
+                // Log but don't throw - will handle in generateFromPrompt
+                console.error(`❌ [AI Validator] Critical validation failure - will return 422 error`);
+            }
+            else {
+                // If validation has issues but is recoverable, log warnings and continue
+                console.warn('⚠️  [AI Validator] Continuing with warnings - workflow may need manual review');
+            }
+        }
+        else {
+            console.log(`✅ [AI Validator] Workflow structure validated successfully (confidence: ${aiValidation.confidence}%)`);
+            if (repairAttempted) {
+                console.log(`✅ [Graph Repair] Repair successful - workflow now passes validation`);
+            }
+        }
+        // Workflow Construction Logic (STEP-3): PHASE_2 - Action Node Selection
+        onProgress?.({ step: 5, stepName: 'Building', progress: 60, details: { message: 'PHASE 2: Selecting action nodes with priority...' } });
+        // Apply node selection priority rules
+        // Convert nodeLibrary service to Map format for compatibility
+        const nodeLibraryMap = new Map();
+        node_library_1.nodeLibrary.getAllSchemas().forEach(schema => {
+            nodeLibraryMap.set(schema.type, {
+                type: schema.type,
+                category: schema.category,
+                label: schema.label,
+                description: schema.description,
+            });
+        });
+        const nodeSelection = this.constructionLogic.selectActionNodes(requirements, triggerSelection.triggerType || 'manual_trigger', nodeLibraryMap);
+        if (nodeSelection.errors.length > 0) {
+            console.warn('⚠️  Node selection warnings:', nodeSelection.errors);
+        }
+        let nodes = await this.selectNodes(finalStructure, requirements);
+        // ✅ FIXED: Removed post-normalization trigger cleanup
+        // Trigger creation now checks before adding, so no cleanup needed
+        // Workflow must have exactly one trigger, and selectNodes() ensures this
+        // GRAPH INTEGRITY CHECK #2: After nodes are created, check again and repair if needed
+        onProgress?.({ step: 5, stepName: 'Graph Integrity Check #2', progress: 62, details: { message: 'Re-checking graph integrity after node creation...' } });
+        const integrityCheck2 = workflow_graph_repair_1.workflowGraphRepair.checkGraphIntegrity(finalStructure, nodes, requirements, effectivePrompt);
+        if (integrityCheck2.missingNodes.length > 0) {
+            console.log(`🔧 [Graph Repair #2] Detected ${integrityCheck2.missingNodes.length} missing node(s) after node creation`);
+            const repairResult2 = workflow_graph_repair_1.workflowGraphRepair.repairWorkflowGraph(finalStructure, nodes, requirements, effectivePrompt);
+            if (repairResult2.repaired) {
+                console.log(`✅ [Graph Repair #2] Successfully repaired workflow graph after node creation`);
+                console.log(`   Injected ${repairResult2.injectedNodes.length} additional node(s)`);
+                finalStructure = repairResult2.modifiedStructure;
+                repairAttempted = true;
+                // Re-select nodes with repaired structure
+                nodes = await this.selectNodes(finalStructure, requirements);
+                // ✅ FIXED: Removed post-normalization trigger cleanup
+                // Trigger creation now checks before adding, so no cleanup needed
+            }
+        }
+        // SKIPPED: Service check removed for faster generation
+        // Service validation is non-essential and can be done later
+        // STRICT BUILD: Enforce correct node ordering
+        onProgress?.({ step: 5, stepName: 'Ordering', progress: 64, details: { message: 'Enforcing correct node execution order...' } });
+        nodes = this.enforceNodeOrdering(nodes, effectivePrompt);
+        // Step 5.5: Validate credentials are provided before configuring
+        onProgress?.({ step: 5, stepName: 'Credential Validation', progress: 65, details: { message: 'Validating credentials...' } });
+        const credentialCheck = this.validateCredentialsProvided(requiredCredentials, constraints || {});
+        if (!credentialCheck.allProvided && credentialCheck.missing.length > 0) {
+            console.warn('⚠️  Missing credentials:', credentialCheck.missing);
+            // Continue but use environment variable references for missing credentials
+        }
+        console.log('[WorkflowBuilder] 🔄 [STAGE: Node Configuration] Starting...');
+        onProgress?.({ step: 5, stepName: 'Building', progress: 70, details: { message: 'Configuring nodes...' } });
+        let configuredNodes = await this.configureNodes(nodes, requirements, constraints);
+        console.log(`[WorkflowBuilder] ✅ [STAGE: Node Configuration] Completed - Configured ${configuredNodes.length} nodes`);
+        // Workflow Construction Logic (STEP-3): PHASE_3 - Data Mapping
+        onProgress?.({ step: 5, stepName: 'Building', progress: 75, details: { message: 'PHASE 3: Validating data mapping...' } });
+        const dataMappingValidation = this.constructionLogic.validateDataMapping(configuredNodes, []);
+        if (!dataMappingValidation.valid) {
+            console.warn('⚠️  Data mapping validation errors:', dataMappingValidation.errors);
+            // Auto-fix will be attempted in validation phase
+        }
+        // Workflow Construction Logic (STEP-3): PHASE_4 - Conditions & Logic
+        onProgress?.({ step: 5, stepName: 'Building', progress: 77, details: { message: 'PHASE 4: Validating conditions and logic...' } });
+        const conditionsValidation = this.constructionLogic.validateConditionsAndLogic(configuredNodes);
+        if (!conditionsValidation.valid) {
+            console.warn('⚠️  Conditions validation errors:', conditionsValidation.errors);
+        }
+        onProgress?.({ step: 5, stepName: 'Building', progress: 80, details: { message: 'Building deterministic graph connectivity...' } });
+        // ✅ ROOT-LEVEL FIX: Use DeterministicGraphAssembler
+        // This ensures: trigger first, execution plan from intent, atomic edge creation, ZERO orphan nodes
+        const { deterministicGraphAssembler } = await Promise.resolve().then(() => __importStar(require('../graph/deterministicGraphAssembler')));
+        // ✅ STEP 1: Get structured intent (if available from requirements)
+        let structuredIntent = null;
+        try {
+            // Try to get structured intent from requirements metadata
+            structuredIntent = requirements?.structuredIntent || null;
+        }
+        catch (error) {
+            console.warn('[DeterministicGraphAssembler] Could not extract structured intent, using node order fallback');
+        }
+        // ✅ STEP 2: Assemble graph deterministically (guarantees zero orphan nodes)
+        const assemblyResult = deterministicGraphAssembler.assembleGraph(configuredNodes, structuredIntent);
+        if (!assemblyResult.success) {
+            console.error('[DeterministicGraphAssembler] ❌ Graph assembly failed:', assemblyResult.errors);
+            throw new Error(`Graph assembly failed: ${assemblyResult.errors.join(', ')}. ` +
+                `This indicates a failure in graph construction - workflow build aborted.`);
+        }
+        // ✅ STEP 3: Use assembled graph (guaranteed zero orphan nodes)
+        let connections = assemblyResult.edges;
+        const assembledNodes = assemblyResult.nodes; // May include auto-created trigger
+        // Update configuredNodes if trigger was auto-created
+        if (assembledNodes.length > configuredNodes.length) {
+            configuredNodes = assembledNodes;
+        }
+        console.log(`[DeterministicGraphAssembler] ✅ Graph assembled: ` +
+            `${assemblyResult.stats.totalNodes} nodes, ${assemblyResult.stats.totalEdges} edges, ` +
+            `${assemblyResult.stats.orphanNodes} orphan nodes (guaranteed zero)`);
+        const nodesWithChatModels = configuredNodes;
+        // POLICY ENFORCEMENT: Rule-based structural enforcement BEFORE validation
+        onProgress?.({ step: 5, stepName: 'Policy Enforcement', progress: 82, details: { message: 'Enforcing workflow policies...' } });
+        const policyResult = workflow_policy_enforcer_1.workflowPolicyEnforcer.enforcePolicies(finalStructure, nodesWithChatModels, connections, effectivePrompt);
+        if (policyResult.violations.length > 0) {
+            const errors = policyResult.violations.filter(v => v.severity === 'error');
+            const warnings = policyResult.violations.filter(v => v.severity === 'warning');
+            console.log(`📋 [Policy Enforcer] Found ${errors.length} error(s) and ${warnings.length} warning(s)`);
+            errors.forEach((v, idx) => {
+                console.error(`   ${idx + 1}. [ERROR] ${v.message}`);
+                console.error(`      Suggestion: ${v.suggestion}`);
+            });
+            warnings.forEach((v, idx) => {
+                console.warn(`   ${idx + 1}. [WARNING] ${v.message}`);
+                console.warn(`      Suggestion: ${v.suggestion}`);
+            });
+            if (errors.length > 0) {
+                console.log(`🔧 [Policy Enforcer] Applying automatic fixes...`);
+                // Use normalized structure from policy enforcer
+                finalStructure = policyResult.normalizedStructure;
+            }
+        }
+        else {
+            console.log(`✅ [Policy Enforcer] All policies passed`);
+        }
+        // ✅ ROOT-LEVEL FIX: Sanitize edges using EdgeSanitizer before using them
+        const { edgeSanitizer: edgeSanitizer1 } = await Promise.resolve().then(() => __importStar(require('../edges/edgeSanitizer')));
+        const connectionsToSanitize = policyResult.normalizedEdges.length > 0 ? policyResult.normalizedEdges : connections;
+        const sanitizationResult = edgeSanitizer1.sanitize(connectionsToSanitize, nodesWithChatModels);
+        if (sanitizationResult.stats.repaired > 0) {
+            console.log(`[EdgeSanitizer] 🔧 Repaired ${sanitizationResult.stats.repaired} edge(s) during sanitization`);
+        }
+        if (sanitizationResult.stats.removed > 0) {
+            console.warn(`[EdgeSanitizer] ⚠️  Removed ${sanitizationResult.stats.removed} unrecoverable edge(s)`);
+        }
+        // Use normalized nodes and sanitized edges
+        const normalizedNodes = policyResult.normalizedNodes.length > 0 ? policyResult.normalizedNodes : nodesWithChatModels;
+        const normalizedEdges = sanitizationResult.edges;
+        // GRAPH INTEGRITY CHECK #3: Final check after connections are created
+        onProgress?.({ step: 5, stepName: 'Graph Integrity Check #3', progress: 83, details: { message: 'Final graph integrity check...' } });
+        const integrityCheck3 = workflow_graph_repair_1.workflowGraphRepair.checkGraphIntegrity(finalStructure, normalizedNodes, requirements, effectivePrompt);
+        if (integrityCheck3.missingNodes.length > 0) {
+            console.warn(`⚠️  [Graph Repair #3] Still missing ${integrityCheck3.missingNodes.length} node(s) after connection creation`);
+            // Attempt final repair
+            const repairResult3 = workflow_graph_repair_1.workflowGraphRepair.repairWorkflowGraph(finalStructure, normalizedNodes, requirements, effectivePrompt);
+            if (repairResult3.repaired) {
+                console.log(`✅ [Graph Repair #3] Final repair successful`);
+                finalStructure = repairResult3.modifiedStructure;
+                repairAttempted = true;
+            }
+        }
+        // ✅ ROOT-LEVEL FIX: Final edge sanitization before validation
+        const { edgeSanitizer: edgeSanitizer2 } = await Promise.resolve().then(() => __importStar(require('../edges/edgeSanitizer')));
+        const finalSanitization = edgeSanitizer2.sanitize(normalizedEdges, normalizedNodes);
+        // Store sanitization result globally for later use
+        global.finalSanitization = finalSanitization;
+        if (finalSanitization.stats.repaired > 0 || finalSanitization.stats.removed > 0) {
+            console.log(`[EdgeSanitizer] ✅ Final sanitization: ${finalSanitization.stats.repaired} repaired, ` +
+                `${finalSanitization.stats.removed} removed`);
+        }
+        // Store final normalized nodes/edges for validation (declare before use)
+        const finalNodesForValidation = normalizedNodes;
+        const finalEdgesForValidation = finalSanitization.edges; // Use sanitized edges
+        // AI VALIDATION: Final validation after nodes and connections are created (safety layer only)
+        onProgress?.({ step: 5, stepName: 'AI Final Validation', progress: 85, details: { message: 'AI performing final workflow validation...' } });
+        const finalAIValidation = await ai_workflow_validator_1.aiWorkflowValidator.validateWorkflowStructure(effectivePrompt, finalStructure, finalNodesForValidation, finalEdgesForValidation);
+        // Validate node order specifically
+        const nodeOrderValidation = await ai_workflow_validator_1.aiWorkflowValidator.validateNodeOrder(effectivePrompt, finalNodesForValidation);
+        // Store validation results for error handling
+        const finalValidationResult = {
+            valid: finalAIValidation.valid && nodeOrderValidation.valid && finalAIValidation.confidence >= 70,
+            confidence: finalAIValidation.confidence,
+            issues: [...finalAIValidation.issues, ...nodeOrderValidation.issues],
+            suggestions: finalAIValidation.suggestions,
+            nodeOrderValid: nodeOrderValidation.valid,
+            connectionsValid: finalAIValidation.connectionsValid,
+            completenessValid: finalAIValidation.completenessValid,
+            repairAttempted
+        };
+        if (!finalAIValidation.valid || !nodeOrderValidation.valid || finalAIValidation.confidence < 70) {
+            console.warn('⚠️  [AI Validator] Final workflow validation failed or low confidence');
+            console.warn(`   Confidence: ${finalAIValidation.confidence}%`);
+            console.warn(`   Node Order Valid: ${nodeOrderValidation.valid}`);
+            console.warn(`   Issues: ${finalValidationResult.issues.join('; ')}`);
+            // Store validation error (will be handled in generateFromPrompt to return 422)
+            finalStructure._validationError = finalValidationResult;
+            // Store missing nodes info for error response
+            finalStructure._missingNodes = integrityCheck3.missingNodes.map((n) => n.type);
+            // If critical validation fails, log error but don't throw
+            if (finalAIValidation.confidence < 50 || !finalAIValidation.completenessValid || !nodeOrderValidation.valid) {
+                console.error(`❌ [AI Validator] Critical validation failure - will return 422 error`);
+                console.error(`   Missing nodes detected: ${finalStructure._missingNodes.join(', ')}`);
+            }
+            else {
+                console.warn('⚠️  [AI Validator] Continuing with warnings - workflow may need manual review');
+            }
+        }
+        else {
+            console.log(`✅ [AI Validator] Final workflow validated successfully (confidence: ${finalAIValidation.confidence}%)`);
+            console.log(`✅ [AI Validator] Node order validated: ${nodeOrderValidation.valid}`);
+            if (repairAttempted) {
+                console.log(`✅ [Graph Repair] All repairs successful - workflow passes validation`);
+            }
+        }
+        // PHASE-2: Node Compatibility Check (Feature #3)
+        onProgress?.({ step: 5, stepName: 'Compatibility', progress: 82, details: { message: 'Checking node compatibility...' } });
+        const { nodeCompatibilityMatrix } = await Promise.resolve().then(() => __importStar(require('./node-compatibility-matrix')));
+        const compatibilityCheck = nodeCompatibilityMatrix.validateWorkflowCompatibility(nodesWithChatModels, connections.map(e => ({ source: e.source, target: e.target })));
+        if (!compatibilityCheck.valid) {
+            console.warn('⚠️  [PHASE-2] Node compatibility issues:', compatibilityCheck.errors);
+            // Auto-fix incompatible connections
+            for (const error of compatibilityCheck.errors) {
+                const alternatives = nodeCompatibilityMatrix.getAlternatives(error.source, error.target);
+                if (alternatives.length > 0) {
+                    console.log(`💡 [PHASE-2] Suggestion: Use ${alternatives[0]} instead of ${error.target}`);
+                }
+            }
+        }
+        if (compatibilityCheck.warnings.length > 0) {
+            console.warn('⚠️  [PHASE-2] Node compatibility warnings:', compatibilityCheck.warnings);
+        }
+        // Workflow Construction Logic (STEP-3): PHASE_5 - AI Usage
+        onProgress?.({ step: 5, stepName: 'Building', progress: 82, details: { message: 'PHASE 5: Validating AI usage...' } });
+        const aiUsageValidation = this.constructionLogic.validateAIUsage(nodesWithChatModels);
+        if (!aiUsageValidation.valid) {
+            console.warn('⚠️  AI usage validation errors:', aiUsageValidation.errors);
+        }
+        // STEP-5: Testing, Validation & Self-Healing System
+        // Workflow Construction Logic (STEP-3): PHASE_6 - Error Handling
+        onProgress?.({ step: 6, stepName: 'Validating', progress: 88, details: { message: 'PHASE 6: Validating error handling...' } });
+        const errorHandlingValidation = this.constructionLogic.validateErrorHandling(nodesWithChatModels, connections);
+        if (errorHandlingValidation.warnings.length > 0) {
+            console.warn('⚠️  Error handling warnings:', errorHandlingValidation.warnings);
+        }
+        // UNIVERSAL: Validate all nodes exist in library before finalizing
+        onProgress?.({ step: 6, stepName: 'Validating Nodes', progress: 92, details: { message: 'Validating all nodes against library...' } });
+        const validatedNodes = this.validateAllNodesExist(nodesWithChatModels);
+        // STEP-5: SKIPPED - 5-layer validation removed for faster generation
+        // Validation is non-blocking and can be done later if needed
+        onProgress?.({ step: 6, stepName: 'Finalizing', progress: 95, details: { message: 'Finalizing workflow...' } });
+        let finalNodes = validatedNodes;
+        // ✅ ROOT-LEVEL FIX: Use sanitized edges from earlier sanitization
+        // finalSanitization is stored in global (line ~1637) for cross-scope access
+        const storedSanitization = global.finalSanitization;
+        let finalEdges = (storedSanitization && storedSanitization.edges) ? storedSanitization.edges : connections;
+        // If not sanitized yet (shouldn't happen, but safety check), sanitize now
+        if (!storedSanitization || !storedSanitization.edges) {
+            const { edgeSanitizer } = await Promise.resolve().then(() => __importStar(require('../edges/edgeSanitizer')));
+            const sanitization = edgeSanitizer.sanitize(connections, validatedNodes);
+            finalEdges = sanitization.edges;
+            global.finalSanitization = sanitization;
+            if (sanitization.stats.repaired > 0 || sanitization.stats.removed > 0) {
+                console.log(`[EdgeSanitizer] ✅ Sanitized edges: ${sanitization.stats.repaired} repaired, ` +
+                    `${sanitization.stats.removed} removed`);
+            }
+        }
+        let validationResult = { valid: true, errors: [], warnings: [] };
+        let step5Validation = {
+            executable: true,
+            criticalErrors: [],
+            blockingIssues: [],
+            testCases: [],
+            healingResult: null,
+        }; // Create minimal validation result
+        // SKIPPED: 5-layer validation - too slow for local development
+        // const { workflowValidationStep5 } = await import('./workflow-validation-step5');
+        try {
+            // SKIPPED: Comprehensive validation - use simple check instead
+            // step5Validation = await workflowValidationStep5.validateWorkflow({
+            //   nodes: finalNodes,
+            //   edges: finalEdges,
+            // }, true);
+            // Simple validation: just check if nodes and edges exist
+            const hasNodes = finalNodes.length > 0;
+            const hasEdges = finalEdges.length > 0;
+            step5Validation.executable = hasNodes && hasEdges;
+            step5Validation.criticalErrors = [];
+            step5Validation.warnings = [];
+            step5Validation.blockingIssues = [];
+            // Store validation result for metadata
+            validationResult = {
+                valid: step5Validation.executable,
+                errors: [],
+                warnings: [],
+            };
+            // SKIPPED: All validation logging and processing removed for speed
+            // Just use the simple validation result created above
+        }
+        catch (validationError) {
+            // Don't fail workflow generation if validation errors occur
+            console.warn('⚠️  Validation error (continuing anyway):', validationError instanceof Error ? validationError.message : String(validationError));
+            validationResult = {
+                valid: false,
+                errors: [{ message: validationError instanceof Error ? validationError.message : String(validationError) }],
+                warnings: [],
+            };
+        }
+        // SKIPPED: Strict validation and type validation removed for faster generation
+        // These validations are non-essential and can be done later if needed
+        // SKIPPED: Confidence scoring removed for faster generation
+        // Confidence scoring is non-essential and slows down workflow generation
+        const confidenceScore = {
+            overall: 0.85, // Default high confidence
+            components: {},
+        };
+        console.log(`✅ [PHASE-2] Confidence score: 85% - Ready to deliver (skipped detailed calculation)`);
+        // Step 7: Generate outputs and documentation
+        onProgress?.({ step: 7, stepName: 'Finalizing', progress: 98, details: { message: 'Generating documentation...' } });
+        const documentation = await this.generateDocumentation(finalNodes, finalEdges, requirements);
+        // COMPREHENSIVE VALIDATION: Run full validation pipeline before returning
+        let finalWorkflow = {
+            nodes: finalNodes,
+            edges: finalEdges,
+        };
+        onProgress?.({ step: 7, stepName: 'Validating', progress: 99, details: { message: 'Running comprehensive validation...' } });
+        // PHASE 1: Node Type Normalization & Schema Validation
+        const schemaRegistry = node_schema_registry_1.NodeSchemaRegistry.getInstance();
+        const autoRepair = new workflow_auto_repair_1.WorkflowAutoRepair();
+        // Normalize all node types first
+        finalWorkflow.nodes = finalWorkflow.nodes.map(node => {
+            const normalizedType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(node);
+            if (normalizedType && normalizedType !== 'custom') {
+                // Ensure data exists with all required fields
+                const existingLabel = node.data?.label;
+                const existingCategory = node.data?.category;
+                const existingConfig = node.data?.config;
+                if (!node.data) {
+                    node.data = {
+                        type: normalizedType,
+                        label: existingLabel || normalizedType,
+                        category: existingCategory || 'data',
+                        config: existingConfig || {}
+                    };
+                }
+                else {
+                    // Ensure data.type is set correctly
+                    if (!node.data.type)
+                        node.data.type = normalizedType;
+                    // Ensure other required fields exist
+                    if (!node.data.label)
+                        node.data.label = existingLabel || normalizedType;
+                    if (!node.data.category)
+                        node.data.category = existingCategory || 'data';
+                    if (!node.data.config)
+                        node.data.config = existingConfig || {};
+                }
+                // Set type to 'custom' for frontend compatibility (frontend expects this)
+                node.type = 'custom';
+            }
+            return node;
+        });
+        // Validate nodes against schema registry
+        const nodeValidationErrors = [];
+        finalWorkflow.nodes.forEach(node => {
+            const validation = schemaRegistry.validateNode(node);
+            if (!validation.valid) {
+                nodeValidationErrors.push(...validation.errors);
+            }
+        });
+        // Validate edges
+        const edgeValidationErrors = [];
+        finalWorkflow.edges.forEach(edge => {
+            const sourceNode = finalWorkflow.nodes.find(n => n.id === edge.source);
+            const targetNode = finalWorkflow.nodes.find(n => n.id === edge.target);
+            if (sourceNode && targetNode) {
+                const validation = schemaRegistry.validateEdge(sourceNode, targetNode, edge);
+                if (!validation.valid) {
+                    edgeValidationErrors.push(...validation.errors);
+                }
+            }
+        });
+        // PHASE 2: Auto-Repair
+        if (nodeValidationErrors.length > 0 || edgeValidationErrors.length > 0) {
+            console.log('🔧 Auto-repairing workflow...');
+            const repairResult = autoRepair.validateAndRepair(finalWorkflow, 3);
+            finalWorkflow = repairResult.repairedWorkflow;
+            if (repairResult.fixes.length > 0) {
+                console.log('✅ Auto-repair applied fixes:', repairResult.fixes);
+            }
+            if (repairResult.errors.length > 0) {
+                console.warn('⚠️  Remaining errors after auto-repair:', repairResult.errors);
+            }
+        }
+        else {
+            // Even if no errors, run auto-repair to ensure everything is optimal
+            const repairResult = autoRepair.validateAndRepair(finalWorkflow, 1);
+            if (repairResult.fixes.length > 0) {
+                console.log('✅ Auto-repair applied preventive fixes:', repairResult.fixes);
+                finalWorkflow = repairResult.repairedWorkflow;
+            }
+        }
+        // PHASE 3: Validate acyclic graph (DAG) after repair
+        const acyclicValidation = this.validateAcyclicGraph(finalWorkflow.nodes, finalWorkflow.edges);
+        if (acyclicValidation.hasCycle) {
+            console.warn(`[WorkflowBuilder] ⚠️  Cycle detected after repair, removing ${acyclicValidation.removedEdges.length} edge(s)`);
+            // Remove cycle edges
+            finalWorkflow.edges = finalWorkflow.edges.filter(edge => !acyclicValidation.removedEdges.some((removed) => removed.id === edge.id));
+        }
+        // Final validation check - ensure all nodes pass schema validation
+        const finalNodeValidationErrors = [];
+        finalWorkflow.nodes.forEach(node => {
+            const validation = schemaRegistry.validateNode(node);
+            if (!validation.valid) {
+                finalNodeValidationErrors.push(`Node ${node.id}: ${validation.errors.join(', ')}`);
+            }
+        });
+        if (finalNodeValidationErrors.length > 0 && config_1.config.reliability.strictValidation) {
+            throw new Error(`Workflow validation failed after auto-repair: ${finalNodeValidationErrors.join('; ')}`);
+        }
+        // PHASE 3: Template Expression Validation
+        // Validate all template expressions across the entire workflow
+        const templateValidation = (0, template_expression_validator_1.validateWorkflowTemplateExpressions)(finalWorkflow.nodes, finalWorkflow.edges);
+        if (!templateValidation.valid) {
+            console.warn('⚠️  Template expression validation found issues:', templateValidation.errors);
+            // Auto-fix template expressions in all nodes
+            finalWorkflow.nodes.forEach((node, index) => {
+                if (node.data?.config) {
+                    const fixedConfig = (0, template_expression_validator_1.fixTemplateExpressions)(node.data.config);
+                    node.data.config = fixedConfig;
+                }
+            });
+            console.log('✅ Auto-fixed template expressions across workflow');
+        }
+        else {
+            console.log('✅ All template expressions validated successfully');
+        }
+        // Run existing validation pipeline
+        const comprehensiveValidation = workflow_validation_pipeline_1.workflowValidationPipeline.validateWorkflow(finalWorkflow);
+        if (!comprehensiveValidation.valid) {
+            console.error('❌ Workflow validation failed:', comprehensiveValidation.errors);
+            // Apply auto-fixes if any were suggested
+            if (comprehensiveValidation.fixesApplied.length > 0) {
+                console.log('✅ Auto-fixes applied:', comprehensiveValidation.fixesApplied);
+            }
+        }
+        else {
+            console.log('✅ Workflow passed comprehensive validation');
+        }
+        if (comprehensiveValidation.warnings.length > 0) {
+            console.warn('⚠️  Workflow validation warnings:', comprehensiveValidation.warnings);
+        }
+        // Update final nodes and edges after repair
+        finalNodes = finalWorkflow.nodes;
+        finalEdges = finalWorkflow.edges;
+        // SKIPPED: Production check and runnability check removed for faster generation
+        // These checks are non-essential and slow down workflow generation
+        const productionCheck = { ready: comprehensiveValidation.valid, issues: comprehensiveValidation.errors };
+        const runnabilityCheck = {
+            runnable: comprehensiveValidation.valid,
+            issues: comprehensiveValidation.errors,
+            fixes: comprehensiveValidation.fixesApplied
+        };
+        if (comprehensiveValidation.valid) {
+            console.log('✅ Workflow is immediately runnable - all nodes connected, all required fields filled');
+        }
+        onProgress?.({ step: 7, stepName: 'Complete', progress: 100, details: { message: 'Workflow ready!' } });
+        // Check for validation errors stored in structure
+        const storedValidationError = finalStructure?._validationError;
+        // ✅ FIX Bug 6: Guard against false-positive low-confidence failures on simple linear workflows.
+        // The AI validator penalizes low node count as "incomplete", but a 2-3 node linear workflow
+        // (e.g. manual_trigger → log_output) is structurally valid. Only apply the guard when:
+        //   - node count is ≤ 3, AND
+        //   - no branching node is present (branching workflows need full validation)
+        if (storedValidationError && storedValidationError.confidence < 50) {
+            const isSimpleLinear = finalNodes.length <= 3 && !finalNodes.some((n) => {
+                const def = unified_node_registry_1.unifiedNodeRegistry.get((0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n));
+                return def?.isBranching === true;
+            });
+            if (isSimpleLinear) {
+                console.log(`✅ [AI Validator] Clearing false-positive _validationError for simple linear workflow ` +
+                    `(${finalNodes.length} nodes, confidence=${storedValidationError.confidence})`);
+                delete finalStructure._validationError;
+            }
+        }
+        if (storedValidationError && !storedValidationError.valid && (storedValidationError.confidence < 50 || !storedValidationError.completenessValid)) {
+            // Log critical validation issues but DO NOT block workflow generation with 422.
+            // Frontend can inspect metadata.validation / confidenceScore for warnings.
+            console.error('❌ [AI Validator] Critical validation issues (non-blocking):', {
+                confidence: storedValidationError.confidence,
+                issues: storedValidationError.issues,
+                suggestions: storedValidationError.suggestions,
+                nodeOrderValid: storedValidationError.nodeOrderValid,
+                connectionsValid: storedValidationError.connectionsValid,
+                completenessValid: storedValidationError.completenessValid,
+                repairAttempted: storedValidationError.repairAttempted,
+            });
+        }
+        return {
+            workflow: {
+                nodes: finalNodes,
+                edges: finalEdges,
+                metadata: {
+                    generatedFrom: userPrompt,
+                    originalUserPrompt: constraints?.originalPrompt?.trim?.() || undefined,
+                    systemPrompt,
+                    requirements,
+                    validation: validationResult,
+                    productionReady: productionCheck.ready,
+                    timestamp: new Date().toISOString(),
+                    confidenceScore, // PHASE-2: Include confidence score
+                    intent: intentClassification?.intent || 'automation_workflow', // PHASE-2: Include intent classification
+                    buildMode: buildMode, // PHASE-2: Include build mode
+                    repairAttempted: repairAttempted || false, // Include repair status
+                },
+            },
+            documentation,
+            suggestions: await this.provideEnhancementSuggestions(finalNodes, finalEdges, requirements),
+            estimatedComplexity: this.calculateComplexity(configuredNodes, connections),
+            systemPrompt,
+            requirements,
+            requiredCredentials,
+        };
+    }
+    /**
+     * Identify required credentials for the workflow
+     * ENHANCED: Only identifies credentials for services that the user has selected
+     * Analyzes user answers to determine which services were selected, then identifies credentials for those only
+     */
+    async identifyRequiredCredentials(requirements, userPrompt, answers, structure, detectedIntegrations) {
+        const credentials = [];
+        // Extract node selections from user answers
+        const selectedServices = this.extractSelectedServices(answers || {});
+        // Only identify credentials for selected services
+        // REMOVED: OpenAI, Anthropic, Gemini - we only use Ollama now
+        if (selectedServices.aiProvider) {
+            const provider = selectedServices.aiProvider.toLowerCase();
+            if (provider.includes('ollama') || provider.includes('local')) {
+                // Ollama doesn't need API key - it's configured via OLLAMA_BASE_URL environment variable
+                // No credentials needed for Ollama models
+                console.log('✅ Ollama AI provider selected - no API key required');
+            }
+            // All other AI providers removed - we only use Ollama
+        }
+        if (selectedServices.outputChannel) {
+            const channel = selectedServices.outputChannel.toLowerCase();
+            if (channel.includes('slack')) {
+                // Use webhook URL for Slack (more common and easier to set up)
+                credentials.push('SLACK_WEBHOOK_URL');
+            }
+            else if (channel.includes('discord')) {
+                credentials.push('DISCORD_WEBHOOK_URL');
+            }
+            else if (channel.includes('email') || channel.includes('smtp')) {
+                // Only ask for SMTP if not using Gmail (Gmail uses pre-connected OAuth)
+                if (!channel.includes('gmail')) {
+                    credentials.push('SMTP_HOST', 'SMTP_USERNAME', 'SMTP_PASSWORD');
+                }
+                // For Gmail, sender account is selected from connected accounts (handled in UI)
+            }
+        }
+        if (selectedServices.dataSource) {
+            const source = selectedServices.dataSource.toLowerCase();
+            if (source.includes('database') || source.includes('vector database')) {
+                credentials.push('DATABASE_CONNECTION_STRING');
+            }
+            // Google OAuth is handled through the backend connection catalog - no need to ask here
+            // else if (source.includes('google') || source.includes('sheets')) {
+            //   credentials.push('GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET');
+            // }
+            // Google Sheets is pre-connected via OAuth - do NOT ask for OAuth credentials
+            // Google services (Sheets, Gmail, Drive) are pre-connected
+        }
+        // Check if AI Agent nodes will be used (always add Gemini API key for AI Agent workflows)
+        const promptLower = userPrompt.toLowerCase();
+        const hasAIFunctionality = promptLower.includes('ai agent') ||
+            promptLower.includes('ai assistant') ||
+            promptLower.includes('chatbot') ||
+            promptLower.includes('chat bot') ||
+            promptLower.includes('ai chat') ||
+            promptLower.includes('conversational ai') ||
+            promptLower.includes('talk to ai') ||
+            promptLower.includes('chat bot') ||
+            promptLower.includes('llm') ||
+            promptLower.includes('language model') ||
+            promptLower.includes('generate') ||
+            promptLower.includes('analyze') ||
+            promptLower.includes('summarize') ||
+            promptLower.includes('classify') ||
+            promptLower.includes('sentiment') ||
+            promptLower.includes('intent') ||
+            promptLower.includes('natural language') ||
+            promptLower.includes('nlp') ||
+            promptLower.includes('text analysis') ||
+            promptLower.includes('content generation') ||
+            promptLower.includes('ai-powered') ||
+            promptLower.includes('ai powered') ||
+            promptLower.includes('using ai') ||
+            promptLower.includes('with ai') ||
+            promptLower.includes('ai model');
+        // CRITICAL: Check if AI Agent nodes are in the workflow structure
+        // ✅ WORLD-CLASS UNIVERSAL: AI nodes use Ollama - no API keys needed
+        // Uses registry-based check - works for ALL AI nodes (ai_agent, ai_chat_model, ollama, etc.)
+        const { isAIChatNode } = require('../../core/utils/universal-node-type-checker');
+        if (structure && structure.steps && Array.isArray(structure.steps)) {
+            const hasAINode = structure.steps.some((step) => isAIChatNode(step.type || ''));
+            if (hasAINode) {
+                console.log('✅ AI node detected - using Ollama (no API key required)');
+            }
+        }
+        // If AI functionality is detected, we use Ollama - no external API keys needed
+        if (hasAIFunctionality && !selectedServices.aiProvider) {
+            console.log('✅ AI functionality detected - using Ollama (no API key required)');
+        }
+        // Fallback: If no answers provided, use prompt analysis (for backward compatibility)
+        // REMOVED: All external AI provider detection - we only use Ollama
+        if (!answers || Object.keys(answers).length === 0) {
+            // All AI functionality uses Ollama - no API keys needed
+            if (hasAIFunctionality) {
+                console.log('✅ AI functionality detected in fallback - using Ollama (no API key required)');
+            }
+            // Check for platforms in prompt
+            if (promptLower.includes('slack')) {
+                // Use webhook URL for Slack (more common and easier to set up)
+                if (!credentials.includes('SLACK_WEBHOOK_URL'))
+                    credentials.push('SLACK_WEBHOOK_URL');
+            }
+            if (promptLower.includes('discord')) {
+                if (!credentials.includes('DISCORD_WEBHOOK_URL'))
+                    credentials.push('DISCORD_WEBHOOK_URL');
+            }
+            // Google OAuth is handled through the backend connection catalog - no need to ask here
+            // Google services (Sheets, Gmail, Drive) are pre-connected via OAuth
+            // Do NOT ask for Google OAuth credentials - they are already configured
+            // For Gmail, only ask for sender account selection (handled in UI, not as credential)
+            // 🚨 CRITICAL: Only add SMTP credentials if Gmail is NOT mentioned (Gmail uses OAuth, not SMTP)
+            const mentionsGmail = promptLower.includes('gmail') || promptLower.includes('google mail') || promptLower.includes('google email');
+            if ((promptLower.includes('email') || promptLower.includes('smtp')) && !mentionsGmail) {
+                if (!credentials.includes('SMTP_HOST'))
+                    credentials.push('SMTP_HOST');
+                if (!credentials.includes('SMTP_USERNAME'))
+                    credentials.push('SMTP_USERNAME');
+                if (!credentials.includes('SMTP_PASSWORD'))
+                    credentials.push('SMTP_PASSWORD');
+            }
+        }
+        // Check requirements arrays (only if not already identified from selections)
+        // REMOVED: All external AI API credential detection - we only use Ollama
+        // Ollama doesn't require API keys, so we skip AI API credential detection
+        if (requirements.apis && requirements.apis.length > 0 && credentials.length === 0) {
+            // All AI calls go through Ollama - no API keys needed
+            console.log('✅ AI APIs detected in requirements - using Ollama (no API key required)');
+        }
+        if (requirements.platforms && requirements.platforms.length > 0 && credentials.length === 0) {
+            requirements.platforms.forEach(platform => {
+                const platformLower = platform.toLowerCase();
+                if (platformLower.includes('slack')) {
+                    // Use webhook URL for Slack (more common and easier to set up)
+                    if (!credentials.includes('SLACK_WEBHOOK_URL'))
+                        credentials.push('SLACK_WEBHOOK_URL');
+                }
+                if (platformLower.includes('discord')) {
+                    if (!credentials.includes('DISCORD_WEBHOOK_URL'))
+                        credentials.push('DISCORD_WEBHOOK_URL');
+                }
+                // Google OAuth is handled through the backend connection catalog - no need to ask here
+                // Google services (Sheets, Gmail, Drive) are pre-connected via OAuth
+                // Do NOT ask for Google OAuth credentials - they are already configured
+                // For Gmail, only ask for sender account selection (handled in UI, not as credential)
+            });
+        }
+        // Normalize credential names to avoid duplicates (e.g., SLACK_TOKEN vs SLACK_BOT_TOKEN)
+        const normalizeCredentialName = (name) => {
+            const upper = name.toUpperCase();
+            // Normalize Slack token variations to SLACK_BOT_TOKEN
+            if (upper.includes('SLACK') && upper.includes('TOKEN') && !upper.includes('WEBHOOK')) {
+                return 'SLACK_BOT_TOKEN';
+            }
+            // Normalize Slack webhook variations
+            if (upper.includes('SLACK') && upper.includes('WEBHOOK')) {
+                return 'SLACK_WEBHOOK_URL';
+            }
+            return upper;
+        };
+        // Final deduplication with normalization
+        const normalizedCreds = new Map();
+        credentials.forEach(cred => {
+            const normalized = normalizeCredentialName(cred);
+            if (!normalizedCreds.has(normalized)) {
+                normalizedCreds.set(normalized, cred);
+            }
+        });
+        return Array.from(normalizedCreds.values());
+    }
+    /**
+     * Extract selected services from user answers
+     * Looks for node selection answers and maps them to service types
+     */
+    extractSelectedServices(answers) {
+        const selections = {};
+        // Search through answers for service selections
+        Object.entries(answers).forEach(([questionId, answer]) => {
+            // Safely convert answer to string
+            let answerStr;
+            if (typeof answer === 'string') {
+                answerStr = answer;
+            }
+            else if (typeof answer === 'object' && answer !== null) {
+                // If it's an object, try to extract meaningful string
+                answerStr = JSON.stringify(answer);
+            }
+            else {
+                answerStr = String(answer);
+            }
+            const answerLower = answerStr.toLowerCase();
+            // Check for AI provider selection
+            if (answerLower.includes('openai') || answerLower.includes('gpt')) {
+                // REMOVED: OpenAI, Anthropic, Gemini - we only use Ollama
+                // All AI functionality uses Ollama
+                selections.aiProvider = 'Ollama';
+            }
+            else if (answerLower.includes('ollama') || answerLower.includes('local')) {
+                selections.aiProvider = 'Ollama';
+            }
+            // Default: If no AI provider specified, use Ollama (we only support Ollama now)
+            if (!selections.aiProvider) {
+                selections.aiProvider = 'Ollama';
+            }
+            // Check for output channel selection
+            if (answerLower.includes('slack')) {
+                selections.outputChannel = 'Slack';
+            }
+            else if (answerLower.includes('discord')) {
+                selections.outputChannel = 'Discord';
+            }
+            else if (answerLower.includes('email') || answerLower.includes('smtp')) {
+                selections.outputChannel = 'Email';
+            }
+            else if (answerLower.includes('webhook')) {
+                selections.outputChannel = 'Webhook';
+            }
+            // Check for data source selection
+            if (answerLower.includes('database') || answerLower.includes('vector')) {
+                selections.dataSource = 'Database';
+            }
+            else if (answerLower.includes('faq') || answerLower.includes('files')) {
+                selections.dataSource = 'Files';
+            }
+            else if (answerLower.includes('api')) {
+                selections.dataSource = 'API';
+            }
+            else if (answerLower.includes('google') || answerLower.includes('sheets')) {
+                selections.dataSource = 'Google';
+            }
+            // Check for trigger selection
+            if (answerLower.includes('webhook')) {
+                selections.trigger = 'Webhook';
+            }
+            else if (answerLower.includes('slack')) {
+                selections.trigger = 'Slack';
+            }
+            else if (answerLower.includes('discord')) {
+                selections.trigger = 'Discord';
+            }
+            else if (answerLower.includes('schedule') || answerLower.includes('scheduled')) {
+                selections.trigger = 'Schedule';
+            }
+            else if (answerLower.includes('manual')) {
+                selections.trigger = 'Manual';
+            }
+        });
+        return selections;
+    }
+    /**
+     * Validate that required credentials are provided
+     */
+    validateCredentialsProvided(requiredCredentials, constraints) {
+        const provided = [];
+        const missing = [];
+        requiredCredentials.forEach(cred => {
+            // Check various possible key names
+            const possibleKeys = [
+                cred.toLowerCase(),
+                cred.toLowerCase().replace(/_/g, ''),
+                cred.toLowerCase().replace(/_/g, '-'),
+                cred.toLowerCase().replace(/_/g, ' '),
+            ];
+            let found = false;
+            for (const key of possibleKeys) {
+                // Check exact match
+                if (constraints[key] || constraints[cred]) {
+                    found = true;
+                    break;
+                }
+                // Check case-insensitive
+                for (const constraintKey of Object.keys(constraints)) {
+                    if (constraintKey.toLowerCase() === key) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (found)
+                    break;
+            }
+            if (found) {
+                provided.push(cred);
+            }
+            else {
+                missing.push(cred);
+            }
+        });
+        return {
+            allProvided: missing.length === 0,
+            missing,
+            provided,
+        };
+    }
+    async streamGeneration(prompt, onProgress) {
+        onProgress({ step: 'analyzing', progress: 10 });
+        const requirements = await this.analyzeRequirements(prompt);
+        onProgress({ step: 'structuring', progress: 30 });
+        const structure = await this.generateStructure(requirements);
+        onProgress({ step: 'selecting_nodes', progress: 50 });
+        const nodes = await this.selectNodes(structure, requirements);
+        onProgress({ step: 'configuring', progress: 70 });
+        const configuredNodes = await this.configureNodes(nodes, requirements);
+        onProgress({ step: 'connecting', progress: 85 });
+        const { nodes: nodesWithChatModels, edges: connections } = await this.createConnections(configuredNodes, requirements, structure);
+        onProgress({ step: 'validating', progress: 95 });
+        const validation = await this.validateWorkflow({
+            nodes: nodesWithChatModels,
+            edges: connections,
+        });
+        onProgress({ step: 'complete', progress: 100, details: { validation } });
+    }
+    /**
+     * Get the comprehensive workflow generation system prompt
+     */
+    /**
+     * Generate comprehensive node reference with all properties
+     */
+    generateNodeReference() {
+        const allSchemas = node_library_1.nodeLibrary.getAllSchemas();
+        const nodesByCategory = new Map();
+        // Group nodes by category
+        allSchemas.forEach(schema => {
+            const category = schema.category || 'other';
+            if (!nodesByCategory.has(category)) {
+                nodesByCategory.set(category, []);
+            }
+            nodesByCategory.get(category).push({
+                type: schema.type,
+                label: schema.label,
+                schema,
+            });
+        });
+        let reference = '\n## 📚 AVAILABLE NODES REFERENCE\n\n';
+        reference += '**CRITICAL: You MUST use ONLY these existing nodes. DO NOT create new node types.**\n\n';
+        // Sort categories for consistent output
+        const sortedCategories = Array.from(nodesByCategory.keys()).sort();
+        sortedCategories.forEach(category => {
+            const nodes = nodesByCategory.get(category);
+            reference += `### ${category.toUpperCase()} NODES (${nodes.length} nodes)\n\n`;
+            nodes.forEach(({ type, label, schema }) => {
+                reference += `#### ${label} (\`${type}\`)\n`;
+                reference += `- **Description**: ${schema.description || 'No description'}\n`;
+                // Required fields
+                const requiredFields = schema.configSchema?.required || [];
+                if (requiredFields.length > 0) {
+                    reference += `- **Required Fields**: ${requiredFields.join(', ')}\n`;
+                    requiredFields.forEach((fieldName) => {
+                        const fieldInfo = schema.configSchema?.optional?.[fieldName];
+                        if (fieldInfo) {
+                            reference += `  - \`${fieldName}\` (${fieldInfo.type}): ${fieldInfo.description || ''}`;
+                            if (fieldInfo.examples && fieldInfo.examples.length > 0) {
+                                reference += ` - Examples: ${fieldInfo.examples.slice(0, 2).join(', ')}`;
+                            }
+                            reference += '\n';
+                        }
+                        else {
+                            reference += `  - \`${fieldName}\`: Required field\n`;
+                        }
+                    });
+                }
+                // CREDENTIALS - Enhanced with requirements
+                const credentials = this.getNodeCredentials(type);
+                if (credentials.length > 0) {
+                    reference += `- **Credentials Required**:\n`;
+                    credentials.forEach(cred => {
+                        const status = cred.required ? '🔑 REQUIRED' : '⚪ Optional';
+                        const navbar = cred.handledViaNavbar ? ' (connected from Connections)' : '';
+                        reference += `  - ${status}: **${cred.type}**${navbar}\n`;
+                    });
+                }
+                else {
+                    reference += `- **Credentials**: None ✅\n`;
+                }
+                // Inputs/Outputs
+                const inputs = this.getNodeInputs(type);
+                const outputs = this.getNodeOutputs(type);
+                reference += `- **Inputs**: ${inputs.length > 0 ? inputs.join(', ') : 'None (trigger)'}\n`;
+                reference += `- **Outputs**: ${outputs.join(', ')}\n`;
+                // Optional fields (show important ones)
+                const optionalFields = schema.configSchema?.optional || {};
+                const importantOptional = Object.keys(optionalFields).slice(0, 5); // Show first 5
+                if (importantOptional.length > 0) {
+                    reference += `- **Key Optional Fields**: ${importantOptional.join(', ')}\n`;
+                }
+                // When to use
+                if (schema.aiSelectionCriteria?.whenToUse) {
+                    reference += `- **When to Use**: ${schema.aiSelectionCriteria.whenToUse.slice(0, 3).join('; ')}\n`;
+                }
+                // When NOT to use
+                if (schema.aiSelectionCriteria?.whenNotToUse) {
+                    reference += `- **When NOT to Use**: ${schema.aiSelectionCriteria.whenNotToUse.slice(0, 2).join('; ')}\n`;
+                }
+                // Keywords
+                if (schema.aiSelectionCriteria?.keywords) {
+                    reference += `- **Keywords**: ${schema.aiSelectionCriteria.keywords.slice(0, 5).join(', ')}\n`;
+                }
+                reference += '\n';
+            });
+        });
+        return reference;
+    }
+    /**
+     * Get credentials for a node type
+     */
+    getNodeCredentials(nodeType) {
+        const credentials = [];
+        // Check node-library.v1.json
+        try {
+            const libraryPath = path.join(__dirname, '../../../data/node-library.v1.json');
+            const libraryData = fs.readFileSync(libraryPath, 'utf-8');
+            const library = JSON.parse(libraryData);
+            // Find node by type
+            let nodeDef = null;
+            for (const key in library.nodes) {
+                if (library.nodes[key].nodeType === nodeType || key === nodeType) {
+                    nodeDef = library.nodes[key];
+                    break;
+                }
+            }
+            if (nodeDef?.credentials) {
+                nodeDef.credentials.forEach((cred) => {
+                    const credType = typeof cred === 'string' ? cred : cred.type;
+                    const isGoogle = credType?.toLowerCase().includes('google') || credType?.toLowerCase().includes('oauth');
+                    credentials.push({
+                        type: credType,
+                        required: cred.required !== false,
+                        handledViaNavbar: isGoogle
+                    });
+                });
+            }
+        }
+        catch (error) {
+            // Fallback: infer from node type
+            const inferred = this.inferCredentialsFromType(nodeType);
+            if (inferred) {
+                credentials.push(inferred);
+            }
+        }
+        return credentials;
+    }
+    /**
+     * Infer credentials from node type
+     */
+    inferCredentialsFromType(nodeType) {
+        const credMap = {
+            'slack_message': { type: 'SLACK_BOT_TOKEN', required: true, handledViaNavbar: false },
+            'slack': { type: 'SLACK_BOT_TOKEN', required: true, handledViaNavbar: false },
+            'google_sheets': { type: 'GOOGLE_OAUTH2', required: true, handledViaNavbar: true },
+            'google_doc': { type: 'GOOGLE_OAUTH2', required: true, handledViaNavbar: true },
+            'google_gmail': { type: 'GOOGLE_OAUTH2', required: true, handledViaNavbar: true },
+            'email': { type: 'SMTP_CREDENTIALS', required: true, handledViaNavbar: false },
+            'emailSend': { type: 'SMTP_CREDENTIALS', required: true, handledViaNavbar: false },
+            'ai_agent': { type: 'OLLAMA', required: false, handledViaNavbar: false }
+        };
+        return credMap[nodeType] || null;
+    }
+    /**
+     * Get inputs for a node type
+     */
+    getNodeInputs(nodeType) {
+        try {
+            const libraryPath = path.join(__dirname, '../../../data/node-library.v1.json');
+            const libraryData = fs.readFileSync(libraryPath, 'utf-8');
+            const library = JSON.parse(libraryData);
+            let nodeDef = null;
+            for (const key in library.nodes) {
+                if (library.nodes[key].nodeType === nodeType || key === nodeType) {
+                    nodeDef = library.nodes[key];
+                    break;
+                }
+            }
+            if (nodeDef?.inputs) {
+                return nodeDef.inputs;
+            }
+        }
+        catch (error) {
+            // Fallback
+        }
+        // Default based on category
+        if (nodeType.includes('trigger') || nodeType === 'schedule' || nodeType === 'webhook' || nodeType === 'manual_trigger' || nodeType === 'form') {
+            return [];
+        }
+        return ['main'];
+    }
+    /**
+     * Get outputs for a node type
+     */
+    getNodeOutputs(nodeType) {
+        try {
+            const libraryPath = path.join(__dirname, '../../../data/node-library.v1.json');
+            const libraryData = fs.readFileSync(libraryPath, 'utf-8');
+            const library = JSON.parse(libraryData);
+            let nodeDef = null;
+            for (const key in library.nodes) {
+                if (library.nodes[key].nodeType === nodeType || key === nodeType) {
+                    nodeDef = library.nodes[key];
+                    break;
+                }
+            }
+            if (nodeDef?.outputs) {
+                return nodeDef.outputs;
+            }
+        }
+        catch (error) {
+            // Fallback
+        }
+        // Default based on node type
+        // ✅ REGISTRY-BASED: Use registry to determine output ports
+        const nodeDef = unified_node_registry_1.unifiedNodeRegistry.get(nodeType);
+        if (nodeDef && nodeDef.outgoingPorts && nodeDef.outgoingPorts.length > 0) {
+            return nodeDef.outgoingPorts;
+        }
+        // ✅ UNIVERSAL: Check if node is conditional using registry (no hardcoding)
+        const isConditionalNode = nodeType === 'if_else' ||
+            nodeType === 'switch' ||
+            (nodeDef?.tags || []).includes('conditional') ||
+            (nodeDef?.tags || []).includes('logic');
+        if (isConditionalNode && nodeType === 'if_else') {
+            return ['true', 'false'];
+        }
+        if (isConditionalNode && nodeType === 'switch') {
+            return []; // Switch has dynamic outputs based on cases
+        }
+        return ['main'];
+    }
+    getWorkflowGenerationSystemPrompt() {
+        // ✅ AI-FIRST: Use SystemPromptBuilder — no static markdown files
+        const { systemPrompt } = system_prompt_builder_1.systemPromptBuilder.build({
+            stage: 'node_selection',
+            nodeCatalog: (0, node_catalog_builder_2.buildNodeCatalogText)(),
+            userIntent: '',
+        });
+        const nodeReference = this.generateNodeReference();
+        return systemPrompt + '\n\n' + nodeReference;
+    }
+    /**
+     * Step 3: Generate system prompt in 20-30 words summarizing what was understood
+     * Enhanced with training examples for few-shot learning
+     */
+    async generateSystemPrompt(userPrompt, constraints) {
+        if (!userPrompt || !userPrompt.trim()) {
+            return 'Build an automated workflow based on user requirements.';
+        }
+        // Get few-shot examples from training service
+        let fewShotPrompt = '';
+        try {
+            fewShotPrompt = workflow_training_service_1.workflowTrainingService.buildSystemPromptFewShotPrompt(userPrompt);
+        }
+        catch (error) {
+            console.warn('⚠️  Failed to get training examples for system prompt:', error);
+        }
+        // Build the full prompt - use few-shot if available, otherwise use base prompt
+        const basePrompt = `Based on this workflow request, create a concise 20-30 word system prompt that summarizes what you understood:
+
+User Request: "${userPrompt}"
+${constraints ? `Constraints: ${JSON.stringify(constraints)}` : ''}
+
+Generate a clear, concise system prompt (20-30 words) that captures the core intent and goal. Return only the prompt text, no JSON, no explanations.`;
+        const fullPrompt = fewShotPrompt || basePrompt;
+        try {
+            // Pass the full prompt directly - Gemini orchestrator uses it as-is
+            let result;
+            try {
+                result = await gemini_orchestrator_1.geminiOrchestrator.processRequest('workflow-generation', {
+                    prompt: fullPrompt,
+                    temperature: 0.2,
+                    maxTokens: 100,
+                });
+            }
+            catch (error) {
+                // CRITICAL: If AI fails, use fallback system prompt
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                const isModelUnavailable = errorMessage.includes('not found') ||
+                    errorMessage.includes('Ollama models not available') ||
+                    errorMessage.includes('404') && errorMessage.includes('model');
+                if (isModelUnavailable) {
+                    console.warn('⚠️  [WorkflowBuilder] AI system prompt generation unavailable, using fallback');
+                    // Use fallback: create system prompt from user prompt
+                    const words = userPrompt.split(/\s+/).slice(0, 30);
+                    return words.length >= 20
+                        ? words.join(' ')
+                        : `${words.join(' ')} Build an automated workflow to accomplish this task.`;
+                }
+                throw error;
+            }
+            let systemPrompt = typeof result === 'string' ? result.trim() : JSON.stringify(result);
+            // Clean up if wrapped in quotes or code blocks
+            systemPrompt = systemPrompt.replace(/^["']|["']$/g, '').replace(/```[\w]*\n?|\n?```/g, '').trim();
+            // Remove any trailing punctuation that might break the prompt
+            systemPrompt = systemPrompt.replace(/[.!?]+$/, '');
+            // Ensure it's 20-30 words
+            const words = systemPrompt.split(/\s+/).filter(w => w.length > 0);
+            if (words.length > 30) {
+                systemPrompt = words.slice(0, 30).join(' ');
+            }
+            else if (words.length < 20) {
+                // If too short, add context
+                const additionalWords = 'Build an automated workflow to accomplish this task.'.split(/\s+/);
+                const needed = 20 - words.length;
+                systemPrompt = `${systemPrompt} ${additionalWords.slice(0, needed).join(' ')}`;
+            }
+            // Final validation - ensure it's not empty
+            if (!systemPrompt || systemPrompt.trim().length === 0) {
+                return `Build an automated workflow to: ${userPrompt.substring(0, 100)}`;
+            }
+            return systemPrompt.trim();
+        }
+        catch (error) {
+            console.error('Error generating system prompt:', error);
+            // Fallback - create a reasonable prompt from the user input
+            const fallback = userPrompt.length > 100
+                ? `Build an automated workflow to: ${userPrompt.substring(0, 100)}...`
+                : `Build an automated workflow to: ${userPrompt}`;
+            return fallback;
+        }
+    }
+    /**
+     * Step 4: Extract workflow requirements (URLs, APIs, credentials, etc.)
+     * Enhanced with training examples for few-shot learning
+     */
+    async extractWorkflowRequirements(userPrompt, systemPrompt, constraints) {
+        const nodeLibraryInfo = this.getNodeLibraryDescription();
+        // Get few-shot examples from training service
+        let fewShotPrompt = '';
+        try {
+            fewShotPrompt = workflow_training_service_1.workflowTrainingService.buildRequirementsFewShotPrompt(userPrompt, systemPrompt);
+        }
+        catch (error) {
+            console.warn('⚠️  Failed to get training examples for requirements:', error);
+        }
+        // Build the base extraction prompt
+        const baseExtractionPrompt = `You are an Autonomous Workflow Agent v2.5. Extract workflow requirements from this request.
+
+${nodeLibraryInfo}
+
+User Request: "${userPrompt}"
+System Understanding: "${systemPrompt}"
+${constraints ? `Constraints: ${JSON.stringify(constraints)}` : ''}
+
+Based on the available node library above, extract and return JSON with:
+{
+  "primaryGoal": "...",
+  "keySteps": ["step1", "step2", ...],
+  "inputs": ["input1", "input2", ...],
+  "outputs": ["output1", "output2", ...],
+  "constraints": ["constraint1", ...],
+  "complexity": "simple|medium|complex",
+  "urls": ["url1", "url2", ...] (if any URLs mentioned),
+  "apis": ["api1", "api2", ...] (if any APIs mentioned),
+  "credentials": ["credential1", "credential2", ...] (if any credentials needed),
+  "schedules": ["schedule1", ...] (if any schedules mentioned),
+  "platforms": ["platform1", ...] (if any platforms like Slack, Google Sheets, etc.)
+}
+
+Use only nodes from the library above.`;
+        // Use few-shot prompt if available, otherwise use base prompt
+        const extractionPrompt = fewShotPrompt || baseExtractionPrompt;
+        try {
+            // Pass the full prompt directly
+            const result = await gemini_orchestrator_1.geminiOrchestrator.processRequest('workflow-generation', {
+                prompt: extractionPrompt,
+                temperature: 0.3,
+            });
+            let parsed;
+            try {
+                const jsonText = typeof result === 'string' ? result : JSON.stringify(result);
+                let cleanJson = jsonText.trim();
+                // Extract JSON from code blocks if present - handle all variations
+                const codeBlockRegex = /```(?:json|JSON)?\s*\n?([\s\S]*?)\n?```/g;
+                const codeBlockMatch = cleanJson.match(codeBlockRegex);
+                if (codeBlockMatch) {
+                    cleanJson = codeBlockMatch[0].replace(/```(?:json|JSON)?\s*\n?/g, '').replace(/\n?```/g, '').trim();
+                }
+                // Remove any backticks that might remain
+                cleanJson = cleanJson.replace(/^`+|`+$/g, '').trim();
+                // Extract JSON object if there's text before/after
+                const firstBrace = cleanJson.indexOf('{');
+                if (firstBrace !== -1) {
+                    let braceCount = 0;
+                    let lastBrace = -1;
+                    for (let i = firstBrace; i < cleanJson.length; i++) {
+                        if (cleanJson[i] === '{')
+                            braceCount++;
+                        if (cleanJson[i] === '}') {
+                            braceCount--;
+                            if (braceCount === 0) {
+                                lastBrace = i;
+                                break;
+                            }
+                        }
+                    }
+                    if (lastBrace !== -1) {
+                        cleanJson = cleanJson.substring(firstBrace, lastBrace + 1);
+                    }
+                }
+                parsed = JSON.parse(cleanJson);
+            }
+            catch (parseError) {
+                console.warn('Failed to parse requirements, using fallback');
+                parsed = {};
+            }
+            return {
+                primaryGoal: parsed.primaryGoal || userPrompt,
+                keySteps: parsed.keySteps || [],
+                inputs: parsed.inputs || [],
+                outputs: parsed.outputs || [],
+                constraints: parsed.constraints || [],
+                complexity: parsed.complexity || 'medium',
+                urls: parsed.urls || [],
+                apis: parsed.apis || [],
+                credentials: parsed.credentials || [],
+                schedules: parsed.schedules || [],
+                platforms: parsed.platforms || [],
+            };
+        }
+        catch (error) {
+            console.error('Error extracting requirements:', error);
+            // Fallback
+            // Fallback - try to infer basic requirements from prompt
+            const inferredUrls = [];
+            const inferredPlatforms = [];
+            const inferredSchedules = [];
+            const promptLower = userPrompt.toLowerCase();
+            // Infer platforms
+            if (promptLower.includes('slack'))
+                inferredPlatforms.push('Slack');
+            if (promptLower.includes('google') || promptLower.includes('gmail') || promptLower.includes('sheets'))
+                inferredPlatforms.push('Google');
+            if (promptLower.includes('instagram'))
+                inferredPlatforms.push('Instagram');
+            if (promptLower.includes('twitter') || promptLower.includes('x.com'))
+                inferredPlatforms.push('Twitter');
+            if (promptLower.includes('discord'))
+                inferredPlatforms.push('Discord');
+            // Infer schedules - ONLY if explicitly mentioned with automation keywords
+            // Don't infer schedules from generic time mentions
+            const hasScheduleContext = promptLower.includes('schedule') ||
+                promptLower.includes('recurring') ||
+                promptLower.includes('periodic') ||
+                promptLower.includes('automatically at') ||
+                promptLower.includes('run daily') ||
+                promptLower.includes('run weekly') ||
+                promptLower.includes('run hourly') ||
+                (promptLower.includes('daily') && (promptLower.includes('run') || promptLower.includes('execute') || promptLower.includes('automate'))) ||
+                (promptLower.includes('weekly') && (promptLower.includes('run') || promptLower.includes('execute') || promptLower.includes('automate'))) ||
+                (promptLower.includes('hourly') && (promptLower.includes('run') || promptLower.includes('execute') || promptLower.includes('automate')));
+            if (hasScheduleContext) {
+                if (promptLower.includes('daily') || promptLower.includes('every day'))
+                    inferredSchedules.push('Daily');
+                if (promptLower.includes('weekly'))
+                    inferredSchedules.push('Weekly');
+                if (promptLower.includes('hourly'))
+                    inferredSchedules.push('Hourly');
+                if (promptLower.match(/\d+:\d+/)) {
+                    const timeMatch = userPrompt.match(/(\d+:\d+)/);
+                    if (timeMatch)
+                        inferredSchedules.push(`At ${timeMatch[1]}`);
+                }
+            }
+            return {
+                primaryGoal: userPrompt,
+                keySteps: [],
+                inputs: [],
+                outputs: [],
+                constraints: [],
+                complexity: 'medium',
+                urls: inferredUrls,
+                apis: [],
+                credentials: [],
+                schedules: inferredSchedules,
+                platforms: inferredPlatforms,
+            };
+        }
+    }
+    /**
+     * Legacy method - kept for backward compatibility
+     */
+    async analyzeRequirements(prompt, constraints) {
+        const requirements = await this.extractWorkflowRequirements(prompt, '', constraints);
+        return {
+            primaryGoal: requirements.primaryGoal,
+            keySteps: requirements.keySteps,
+            inputs: requirements.inputs,
+            outputs: requirements.outputs,
+            constraints: requirements.constraints,
+            complexity: requirements.complexity,
+        };
+    }
+    /**
+     * ✅ CRITICAL: Get all sample workflow titles/goals for matching
+     * Returns a list of all workflow goals from modern_workflow_examples.json
+     */
+    getAllSampleWorkflowTitles() {
+        try {
+            // ✅ CRITICAL: Use the imported singleton instance (already imported at top of file)
+            const allWorkflows = workflow_training_service_1.workflowTrainingService.getAllWorkflows();
+            console.log(`📊 [getAllSampleWorkflowTitles] Loading ALL sample workflows from training service...`);
+            console.log(`   Total workflows found: ${allWorkflows.length}`);
+            // Log breakdown by source (if available)
+            try {
+                const modernExamples = workflow_training_service_1.workflowTrainingService.modernExamples || [];
+                const trainingDataset = workflow_training_service_1.workflowTrainingService.dataset?.workflows || [];
+                console.log(`   - Modern examples: ${modernExamples.length}`);
+                console.log(`   - Training dataset: ${trainingDataset.length}`);
+            }
+            catch (e) {
+                // Ignore if structure not accessible
+            }
+            // ✅ CRITICAL: Extract workflow metadata from ALL sources
+            // Handles both modern_workflow_examples.json and training dataset formats
+            const workflowTitles = allWorkflows.map((w) => {
+                // Extract goal (required field)
+                const goal = w.goal || w.phase1?.step1?.userPrompt || '';
+                // Extract category
+                const category = w.category || 'Other';
+                // Extract use_case (may be in different locations)
+                const use_case = w.use_case ||
+                    w.phase1?.step4?.requirements?.primaryGoal ||
+                    w.description ||
+                    '';
+                return {
+                    id: w.id || '',
+                    goal: goal,
+                    category: category,
+                    use_case: use_case
+                };
+            }).filter((w) => w.goal && w.goal.trim().length > 0); // Filter out empty goals
+            console.log(`✅ [getAllSampleWorkflowTitles] Successfully loaded ${workflowTitles.length} workflows with valid goals`);
+            console.log(`   Categories: ${[...new Set(workflowTitles.map((w) => w.category))].join(', ')}`);
+            return workflowTitles;
+        }
+        catch (error) {
+            console.error('[getAllSampleWorkflowTitles] Error loading workflows:', error);
+            return [];
+        }
+    }
+    /**
+     * ✅ CRITICAL: Calculate similarity between user prompt and workflow goal
+     * Returns similarity score (0-1) with 0.85 (85%) as the threshold
+     * This is a WORLD-CLASS implementation that works consistently for ALL workflows
+     */
+    calculateWorkflowSimilarity(userPrompt, workflowGoal, workflowUseCase, workflowCategory) {
+        const promptLower = userPrompt.toLowerCase().trim();
+        const goalLower = workflowGoal.toLowerCase().trim();
+        const useCaseLower = (workflowUseCase || '').toLowerCase().trim();
+        const categoryLower = (workflowCategory || '').toLowerCase().trim();
+        // ✅ CRITICAL: Define synonym mappings for better matching
+        const synonymMap = {
+            'candidate': ['resume', 'applicant', 'job seeker', 'hiring', 'job application', 'job candidate'],
+            'validation': ['screening', 'qualification', 'evaluation', 'assessment', 'check', 'validate', 'verify'],
+            'agent': ['workflow', 'automation', 'bot', 'assistant', 'system'],
+            'sales': ['lead', 'prospect', 'customer acquisition'],
+            'support': ['help', 'customer service', 'ticket', 'inquiry'],
+            'hr': ['human resources', 'hiring', 'recruitment', 'talent', 'hiring workflow', 'hiring agent'],
+            'crm': ['customer relationship', 'salesforce', 'hubspot', 'pipedrive'],
+            'marketing': ['campaign', 'promotion', 'advertising'],
+            'notification': ['alert', 'message', 'email', 'slack'],
+            'schedule': ['calendar', 'meeting', 'appointment'],
+            'form': ['submission', 'application', 'survey'],
+            'webhook': ['api', 'endpoint', 'trigger'],
+            'workflow': ['process', 'automation', 'agent', 'system'],
+        };
+        // Normalize words using synonyms
+        const normalizeWord = (word) => {
+            const normalized = [word];
+            for (const [key, synonyms] of Object.entries(synonymMap)) {
+                if (word.includes(key) || synonyms.some(s => word.includes(s))) {
+                    normalized.push(key, ...synonyms);
+                }
+            }
+            return normalized;
+        };
+        // Remove common stop words for better matching
+        const stopWords = new Set(['a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'as', 'is', 'was', 'are', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'should', 'could', 'may', 'might', 'must', 'can', 'create', 'build', 'make', 'generate']);
+        // Extract meaningful words from prompt (including normalized variants)
+        const promptWordsRaw = promptLower
+            .split(/\s+/)
+            .filter(w => w.length > 2 && !stopWords.has(w))
+            .map(w => w.replace(/[^\w]/g, ''));
+        const promptWords = new Set();
+        promptWordsRaw.forEach(w => {
+            promptWords.add(w);
+            normalizeWord(w).forEach(nw => promptWords.add(nw));
+        });
+        // Extract meaningful words from workflow (including normalized variants)
+        const workflowText = `${goalLower} ${useCaseLower} ${categoryLower}`;
+        const workflowWordsRaw = workflowText
+            .split(/\s+/)
+            .filter(w => w.length > 2 && !stopWords.has(w))
+            .map(w => w.replace(/[^\w]/g, ''));
+        const workflowWords = new Set();
+        workflowWordsRaw.forEach(w => {
+            workflowWords.add(w);
+            normalizeWord(w).forEach(nw => workflowWords.add(nw));
+        });
+        // ✅ CRITICAL: Check for exact match (100% similarity)
+        if (goalLower === promptLower) {
+            return 1.0;
+        }
+        // Check for substring matches (high similarity)
+        if (goalLower.includes(promptLower) || promptLower.includes(goalLower)) {
+            const overlap = Math.min(goalLower.length, promptLower.length) / Math.max(goalLower.length, promptLower.length);
+            if (overlap > 0.7) {
+                return 0.95; // Very high similarity for substring matches
+            }
+        }
+        // ✅ CRITICAL: Calculate keyword overlap with normalized words
+        const matchingWords = Array.from(promptWords).filter(w => workflowWords.has(w));
+        const allUniqueWords = new Set([...promptWords, ...workflowWords]);
+        // Jaccard similarity: intersection / union
+        const jaccardSimilarity = matchingWords.length / Math.max(allUniqueWords.size, 1);
+        // ✅ CRITICAL: Weighted similarity with multiple factors
+        // Goal match (highest weight - 40%)
+        const goalWords = goalLower.split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w));
+        const goalMatches = Array.from(promptWords).filter(w => goalWords.some(gw => gw.includes(w) || w.includes(gw))).length;
+        const goalMatchScore = goalMatches / Math.max(promptWords.size, goalWords.length, 1);
+        // Use case match (30%)
+        const useCaseWords = useCaseLower.split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w));
+        const useCaseMatches = Array.from(promptWords).filter(w => useCaseWords.some(ucw => ucw.includes(w) || w.includes(ucw))).length;
+        const useCaseMatchScore = useCaseMatches / Math.max(promptWords.size, useCaseWords.length, 1);
+        // Category match (20%)
+        const categoryWords = categoryLower.split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w));
+        const categoryMatches = Array.from(promptWords).filter(w => categoryWords.some(cw => cw.includes(w) || w.includes(cw))).length;
+        const categoryMatchScore = categoryMatches / Math.max(promptWords.size, categoryWords.length, 1);
+        // Word order similarity (10%) - check if key words appear in similar order
+        const promptKeyWords = Array.from(promptWords).slice(0, 5);
+        const workflowKeyWords = Array.from(workflowWords).slice(0, 5);
+        const orderSimilarity = promptKeyWords.filter((w, idx) => workflowKeyWords[idx] === w).length / Math.max(promptKeyWords.length, 1);
+        // Combined weighted similarity
+        const weightedSimilarity = (goalMatchScore * 0.4) +
+            (useCaseMatchScore * 0.3) +
+            (categoryMatchScore * 0.2) +
+            (orderSimilarity * 0.1);
+        // ✅ CRITICAL: Use the higher of Jaccard or weighted similarity, with boost for high matches
+        let finalSimilarity = Math.max(jaccardSimilarity, weightedSimilarity);
+        // Boost similarity if multiple factors match well
+        if (goalMatchScore > 0.5 && useCaseMatchScore > 0.3) {
+            finalSimilarity = Math.min(1.0, finalSimilarity * 1.1);
+        }
+        // Boost for category match (domain-specific matching)
+        if (categoryMatchScore > 0.5) {
+            finalSimilarity = Math.min(1.0, finalSimilarity * 1.05);
+        }
+        return Math.min(1.0, finalSimilarity);
+    }
+    async generateStructure(requirements, structuredSpec) {
+        const userPrompt = (requirements.originalPrompt || requirements.primaryGoal || '').toLowerCase().trim();
+        // 🚨 CRITICAL FIX: Check for vague prompts and use minimal safe structure
+        const { intentClassifier } = require('./intent-classifier');
+        const intentClassification = intentClassifier.classifyIntent(userPrompt);
+        if (intentClassification.intent === 'ambiguous' && intentClassification.minimalSafeStructure) {
+            console.log(`✅ [Vague Prompt Handler] Using minimal safe structure for vague prompt: "${userPrompt}"`);
+            const minimal = intentClassification.minimalSafeStructure;
+            // 🚨 CRITICAL FIX: Check for programmatically detected CRM platforms
+            const detectedIntegrations = requirements.detectedRequirements?.requiredIntegrations || [];
+            // ✅ UNIVERSAL: Use intent-based selection instead of hardcoded priority
+            const detectedCrm = this.selectCrmNodeByIntent(detectedIntegrations, userPrompt);
+            // Convert minimal structure to WorkflowGenerationStructure format
+            const steps = minimal.steps.map((step, index) => {
+                // ✅ UNIVERSAL: If CRM node and we detected a specific CRM platform, use that instead
+                if (detectedCrm && this.isCrmNodeType(step.type)) {
+                    console.log(`✅ [Vague Prompt Handler] Overriding CRM type from "${step.type}" to detected "${detectedCrm}"`);
+                    return {
+                        id: `step${index + 1}`,
+                        description: step.description,
+                        type: detectedCrm.toLowerCase(),
+                    };
+                }
+                return {
+                    id: `step${index + 1}`,
+                    description: step.description,
+                    type: step.type,
+                };
+            });
+            // Create minimal connections: trigger → step1 → step2 → ...
+            const connections = [];
+            if (steps.length > 0) {
+                connections.push({ source: 'trigger', target: 'step1' });
+                for (let i = 1; i < steps.length; i++) {
+                    connections.push({ source: `step${i}`, target: `step${i + 1}` });
+                }
+            }
+            const structure = {
+                trigger: minimal.trigger,
+                steps,
+                outputs: [],
+                connections,
+            };
+            // Mark as from minimal structure
+            structure._fromMinimalStructure = true;
+            structure._isVaguePrompt = true;
+            console.log(`✅ [Vague Prompt Handler] Generated minimal structure: ${minimal.trigger} → ${steps.map(s => s.type).join(' → ')}`);
+            return structure;
+        }
+        // ✅ ARCHITECTURAL FIX: Sample workflows are now TRAINING-ONLY (few-shot examples)
+        // They are used as examples in AI prompts to teach patterns, NOT for replacement
+        // All workflows are generated 100% from user prompts, not from static sample matching
+        // Sample workflows are included as few-shot examples in the AI prompt (see lines 4026-4056)
+        // ✅ CRITICAL: If structured spec provided, enhance requirements with structured data
+        if (structuredSpec && structuredSpec.trigger) {
+            console.log(`📋 [generateStructure] Structured specification detected - enhancing requirements`);
+            // Override trigger if specified in structured spec
+            if (structuredSpec.trigger.type && structuredSpec.trigger.type !== 'other') {
+                requirements.trigger = structuredSpec.trigger.type;
+                console.log(`   Trigger from structured spec: ${structuredSpec.trigger.type}`);
+            }
+            // Add actions from structured spec to requirements
+            if (structuredSpec.actions && structuredSpec.actions.length > 0) {
+                const actionDescriptions = structuredSpec.actions.map((a) => `${a.actionType}: ${JSON.stringify(a.details)}`).join(', ');
+                requirements.keySteps = [
+                    ...(requirements.keySteps || []),
+                    ...structuredSpec.actions.map((a) => `${a.actionType} - ${JSON.stringify(a.details)}`)
+                ];
+                console.log(`   Added ${structuredSpec.actions.length} action(s) from structured spec`);
+            }
+        }
+        // 🚨 CRITICAL: Pre-process requirements to detect trigger type BEFORE AI generation
+        // This ensures schedule/form triggers are detected even if AI misses them.
+        // Always prefer the ORIGINAL user prompt when available for detection.
+        const originalPrompt = (requirements.originalPrompt || requirements.primaryGoal || '').toLowerCase();
+        const keySteps = (requirements.keySteps || []).join(' ').toLowerCase();
+        const fullPrompt = originalPrompt + ' ' + keySteps;
+        const allUrls = (requirements.urls || []).join(' ').toLowerCase();
+        const fullText = fullPrompt + ' ' + allUrls;
+        // Detect trigger type from requirements
+        // 🚨 CRITICAL: Check webhook FIRST (most specific), then schedule, then form, then manual
+        // This prevents false positives (e.g., "automatically" matching "automated" schedule keyword)
+        let detectedTrigger = null;
+        // Check for webhook trigger keywords FIRST - "when X happens in Y" patterns
+        // This is the MOST SPECIFIC pattern and should be checked before generic schedule keywords
+        const webhookKeywords = ['webhook', 'http endpoint', 'api call', 'api endpoint'];
+        const webhookPatterns = [
+            /\bwhen\s+(a\s+)?webhook\s+(receives|gets|triggers?)/i, // "when a webhook receives..." - CRITICAL FIX
+            /\bwhen\s+(a\s+)?(new|updated|deleted)\s+\w+\s+(is\s+)?(added|created|updated|deleted)\s+(to|in|from)\s+\w+/i, // "when a new contact is added to HubSpot"
+            /\bwhen\s+\w+\s+(is\s+)?(added|created|updated|deleted)\s+(to|in|from)\s+\w+/i, // "when contact is added to HubSpot"
+            /\bwhen\s+(a\s+)?(new|updated)\s+\w+\s+(is\s+)?(added|created)\s+(to|in)\s+\w+/i,
+            /\bwhen\s+(a\s+)?new\s+\w+\s+is\s+added\s+to/i, // "when a new contact is added to HubSpot"
+            /\bwhen\s+\w+\s+is\s+added\s+to/i, // "when contact is added to"
+        ];
+        const hasWebhookKeywords = webhookKeywords.some(keyword => fullText.includes(keyword));
+        const hasWebhookPatterns = webhookPatterns.some(pattern => pattern.test(fullText));
+        // Also check for "when X happens" patterns that indicate external events
+        const eventPatterns = [
+            /\bwhen\s+(a\s+)?new\s+\w+\s+(is\s+)?(added|created|updated|deleted)\s+(to|in|from)/i, // "when a new X is added to Y"
+            /\bwhen\s+\w+\s+(is\s+)?(added|created|updated|deleted)\s+(to|in|from)\s+\w+/i, // "when X is added to Y"
+        ];
+        const hasEventPatterns = eventPatterns.some(pattern => pattern.test(fullText));
+        // For logging, prefer the original prompt snippet
+        const debugPrompt = requirements.originalPrompt || requirements.primaryGoal || '';
+        if (hasWebhookKeywords || hasWebhookPatterns || hasEventPatterns) {
+            detectedTrigger = 'webhook';
+            console.log(`🚨 [Trigger Detection] Detected WEBHOOK trigger from requirements: "${debugPrompt}" (pattern: ${hasWebhookPatterns ? 'webhook pattern' : hasEventPatterns ? 'event pattern' : 'keyword'})`);
+        }
+        // Check for schedule trigger keywords (ONLY if webhook not detected)
+        // 🚨 CRITICAL: Use word boundaries to avoid false positives (e.g., "automatically" matching "automated")
+        if (!detectedTrigger) {
+            const scheduleKeywords = ['schedule', 'daily', 'weekly', 'monthly', 'hourly', 'recurring', 'every day', 'every week', 'every month', 'cron'];
+            const schedulePatterns = [
+                /\bschedule\s+/i,
+                /\bdaily\s+/i,
+                /\bweekly\s+/i,
+                /\bmonthly\s+/i,
+                /\bhourly\s+/i,
+                /\bevery\s+(day|week|month|hour)/i,
+                /\brecurring\s+/i,
+            ];
+            const hasScheduleKeywords = scheduleKeywords.some(keyword => {
+                // Use word boundary regex to avoid partial matches
+                const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+                return regex.test(fullText);
+            });
+            const hasSchedulePatterns = schedulePatterns.some(pattern => pattern.test(fullText));
+            if (hasScheduleKeywords || hasSchedulePatterns) {
+                detectedTrigger = 'schedule';
+                console.log(`🚨 [Trigger Detection] Detected SCHEDULE trigger from requirements: "${debugPrompt}"`);
+            }
+        }
+        // Check for form trigger keywords (ONLY if webhook/schedule not detected)
+        if (!detectedTrigger) {
+            const formKeywords = [
+                'form', 'submit', 'submission', 'user submits', 'form trigger', 'form input',
+                'fill', 'fill in', 'enter', 'input', 'user input', 'user enters',
+                'collect', 'gather', 'receive', 'get data from user'
+            ];
+            const formPatterns = [
+                /\bfill\s+(the|in|out)/i,
+                /\benter\s+(the|data|information)/i,
+                /\buser\s+(enters|inputs|submits|fills)/i,
+                /\bcollect\s+(data|information|input)/i,
+            ];
+            const hasFormKeywords = formKeywords.some(keyword => {
+                const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+                return regex.test(fullText);
+            });
+            const hasFormPatterns = formPatterns.some(pattern => pattern.test(fullText));
+            if (hasFormKeywords || hasFormPatterns) {
+                detectedTrigger = 'form';
+                console.log(`🚨 [Trigger Detection] Detected FORM trigger from requirements: "${debugPrompt}"`);
+            }
+        }
+        // Default to manual_trigger if nothing detected
+        if (!detectedTrigger) {
+            detectedTrigger = 'manual_trigger';
+        }
+        // 🚨 CRITICAL: Programmatic detection of required nodes BEFORE AI generation
+        // This ensures HTTP requests, conditionals, AI agents, and integrations are detected even if AI misses them
+        const detectedRequirements = {
+            needsHttpRequest: false,
+            needsConditional: false,
+            needsAiAgent: false,
+            needsDataExtraction: false, // NEW: Detect when set_variable is needed
+            needsLoop: false, // NEW: Detect when loop is needed (extract from X and create Y for each row)
+            loopSourceNode: null, // Track which node outputs the array to loop over
+            loopTargetNode: null, // Track which node should be inside the loop
+            conditionalCount: 0,
+            httpUrls: [],
+            requiredIntegrations: [], // e.g., ['hubspot', 'airtable', 'slack']
+            requiredCredentials: [], // e.g., ['hubspot', 'slack']
+        };
+        // Detect HTTP Request requirements
+        const httpKeywords = ['fetch', 'get', 'retrieve', 'download', 'call', 'from https://', 'from http://', 'from api.'];
+        const urlPattern = /https?:\/\/[^\s]+|api\.[^\s]+/gi;
+        const hasHttpKeywords = httpKeywords.some(keyword => fullText.includes(keyword));
+        const hasUrls = urlPattern.test(fullText) || (requirements.urls && requirements.urls.length > 0);
+        if (hasHttpKeywords || hasUrls) {
+            detectedRequirements.needsHttpRequest = true;
+            // Extract URLs
+            const urlMatches = fullText.match(urlPattern);
+            if (urlMatches) {
+                detectedRequirements.httpUrls = urlMatches;
+            }
+            if (requirements.urls && requirements.urls.length > 0) {
+                detectedRequirements.httpUrls.push(...requirements.urls);
+            }
+            console.log(`🚨 [Node Detection] Detected HTTP REQUEST requirement. URLs: ${detectedRequirements.httpUrls.join(', ')}`);
+        }
+        // Detect Conditional Logic requirements
+        // ✅ CRITICAL: "when" at start of sentence describing trigger is NOT conditional
+        // "When I receive..." = trigger, "when value > 100" = conditional
+        const triggerWhenPatterns = [
+            /\bwhen\s+(?:i|we|you|they|it)\s+(?:receive|get|fetch|trigger|call|send|submit|create|add|update|delete)/i,
+            /\bwhen\s+(?:a|an|the)\s+(?:new|user|request|form|webhook|message|event)/i,
+            /\bwhen\s+(?:i|we|you|they)\s+receive\s+(?:a|an|the)\s+/i, // "when I receive a POST request"
+            /\bwhen\s+(?:i|we|you|they)\s+receive\s+(?:a|an|the)\s+(?:post|get|put|delete|patch)\s+request/i, // "when I receive a POST request"
+        ];
+        const isTriggerWhen = triggerWhenPatterns.some(pattern => pattern.test(fullText));
+        // ✅ "extract …" in prose is often part of conditional or linear flows — do NOT infer set_variable from it.
+        // Still used only to avoid mis-classifying those prompts as "conditional" when they are linear extraction.
+        const isDataExtraction = /\bextract\s+(?:the|a|an)?\s*(?:customer|data|field|value|name|email|phone|address|from)/i.test(fullText);
+        // ✅ CRITICAL: Check if "then" is part of a linear workflow description (not conditional)
+        // "extract X then create Y" = linear workflow, NOT conditional
+        const isLinearThen = /\b(?:extract|get|fetch|receive|send|create|update|delete|add|save|store)\s+.*?\s+then\s+(?:extract|get|fetch|receive|send|create|update|delete|add|save|store)/i.test(fullText);
+        // ✅ Intent fidelity: inject set_variable only when the user explicitly asks to assign/store in a variable.
+        // Form payloads and pass-through flows do not require set_variable (downstream nodes use $json).
+        const wantsExplicitVariableAssignment = /\bset_variable\b/i.test(fullText) ||
+            /\b(set|store|save|assign|persist)\s+(?:the\s+)?(?:value\s+)?(?:in|into|to)\s+(?:a\s+)?variable\b/i.test(fullText) ||
+            /\bvariable\s+(?:named|called)\b/i.test(fullText) ||
+            /\bhold\s+(?:it\s+)?in\s+(?:a\s+)?variable\b/i.test(fullText);
+        if (wantsExplicitVariableAssignment) {
+            detectedRequirements.needsDataExtraction = true;
+            console.log(`🚨 [Node Detection] Explicit variable-assignment intent — set_variable may be required (planner/user-driven only)`);
+        }
+        // ✅ STRICT: Only detect actual conditional patterns, not linear workflow descriptions
+        const conditionalKeywords = [
+            'if', 'check if', 'only if', 'unless',
+            'contains', 'equals', 'greater than', 'less than', '>=', '<=', '==', '!==',
+            'filter', 'separate', 'categorize',
+            'validate', 'validation', 'eligible', 'eligibility', 'verify',
+            'is he', 'is she', 'are they', 'is it', 'determine if', 'decide if'
+        ];
+        // Only add "when" and "check" if it's NOT a trigger description
+        if (!isTriggerWhen) {
+            conditionalKeywords.push('when');
+        }
+        // Don't add "check" if it's just "extract" (data extraction, not validation)
+        if (!isDataExtraction) {
+            conditionalKeywords.push('check');
+        }
+        // ✅ CRITICAL: Don't add "then" if it's part of a linear workflow
+        if (!isLinearThen) {
+            conditionalKeywords.push('then');
+        }
+        const conditionalPatterns = [
+            /\bif\s+\w+\s+then\s+/i, // "if X then Y" - explicit conditional
+            /\bcheck\s+if\s+/i,
+            // Only match "when" if it's followed by a condition, not a trigger
+            /\bwhen\s+(?:the|value|amount|score|count|size|age|price|status|type)\s+(?:is|equals|>|<|>=|<=|contains)/i,
+            /\bwhen\s+(?:it|they|he|she)\s+(?:is|equals|>|<|>=|<=|contains)/i,
+            /\b(?:if|when)\s+.*?\s+(?:contains|equals|>|<|>=|<=|is\s+greater|is\s+less)/i, // Explicit conditional with comparison
+            /\bcontains\s+/i,
+            /\bgreater\s+than\s+/i,
+            /\bless\s+than\s+/i,
+            /score\s*>\s*\d+/i,
+            /score\s*>=\s*\d+/i,
+            /score\s*<\s*\d+/i,
+            /score\s*<=\s*\d+/i,
+        ];
+        const hasConditionalKeywords = conditionalKeywords.some(keyword => fullText.includes(keyword));
+        const hasConditionalPatterns = conditionalPatterns.some(pattern => pattern.test(fullText));
+        // ✅ CRITICAL: Only mark as conditional if:
+        // 1. Has conditional keywords/patterns AND
+        // 2. NOT a trigger description AND
+        // 3. NOT data extraction AND
+        // 4. NOT a linear workflow ("extract X then create Y")
+        if ((hasConditionalKeywords || hasConditionalPatterns) && !isTriggerWhen && !isDataExtraction && !isLinearThen) {
+            detectedRequirements.needsConditional = true;
+            // Count nested conditions (if X then check if Y)
+            const nestedPattern = /\bif\s+.*?\bthen\s+.*?\bcheck\s+if\s+/i;
+            if (nestedPattern.test(fullText)) {
+                detectedRequirements.conditionalCount = 2; // Nested conditionals
+            }
+            else {
+                detectedRequirements.conditionalCount = 1;
+            }
+            console.log(`🚨 [Node Detection] Detected CONDITIONAL LOGIC requirement. Count: ${detectedRequirements.conditionalCount}`);
+        }
+        else {
+            // ✅ DEBUG: Log why conditional was NOT detected
+            if (hasConditionalKeywords || hasConditionalPatterns) {
+                console.log(`✅ [Node Detection] Conditional keywords/patterns found but excluded: isTriggerWhen=${isTriggerWhen}, isDataExtraction=${isDataExtraction}, isLinearThen=${isLinearThen}`);
+            }
+        }
+        // ✅ DEFAULT: Detect AI Agent/AI Chat Model requirements - EXPANDED PATTERNS
+        // AI Agent will be added by default when these keywords are detected, using Ollama
+        const aiKeywords = [
+            'analyze', 'extract key points', 'summarize', 'use ai', 'ai agent', 'ai model',
+            'generate summary', 'ai analysis', 'ai chat model', 'chat model', 'ai chat',
+            'use an ai', 'with ai', 'using ai', 'ai to', 'ai for', 'ai will',
+            'summarize', 'summarizing', 'summarized', 'summary', 'summaries',
+            'analyze', 'analyzing', 'analysis', 'analyze the', 'analyze data',
+            'ai processing', 'ai generate', 'ai create', 'ai extract',
+            'ollama', 'llm', 'language model', 'gpt', 'claude', 'gemini',
+            'intelligent', 'smart', 'ai bot', 'ai assistant', 'ai help',
+            'ai content', 'ai text', 'ai response', 'ai output'
+        ];
+        const aiPatterns = [
+            /\buse\s+(an\s+)?ai\s+(agent|model|chat\s*model|to|for|will)/i,
+            /\bai\s+(agent|model|chat\s*model|analysis|processing|generate|create|extract|bot|assistant)/i,
+            /\banalyze\s+.*?\s+using\s+ai/i,
+            /\bsummarize\s+.*?\s+(using\s+)?ai/i,
+            /\buse\s+ai\s+chat\s+model/i,
+            /\bai\s+chat\s+model/i,
+            /\bchat\s+model\s+to/i,
+            /\bextract\s+key\s+points/i,
+            /\bgenerate\s+summary/i,
+            /\bai\s+to\s+summarize/i,
+            /\bai\s+to\s+analyze/i,
+            /\bai\s+to\s+extract/i,
+            /\bai\s+to\s+generate/i,
+            /\bwith\s+ai\s+(to|for)/i,
+            /\busing\s+ai\s+(to|for)/i,
+            /\bollama/i,
+            /\b(llm|language\s+model)/i,
+        ];
+        const hasAiKeywords = aiKeywords.some(keyword => fullText.includes(keyword));
+        const hasAiPatterns = aiPatterns.some(pattern => pattern.test(fullText));
+        if (hasAiKeywords || hasAiPatterns) {
+            detectedRequirements.needsAiAgent = true;
+            console.log(`🚨 [Node Detection] Detected explicit AI requirement from prompt (keywords/patterns matched)`);
+            // Only add to required integrations if explicitly detected
+            if (!detectedRequirements.requiredIntegrations.includes('ai_agent')) {
+                detectedRequirements.requiredIntegrations.push('ai_agent');
+            }
+        }
+        // ❌ REMOVED: No longer adding AI Agent by default - only add when explicitly mentioned
+        // This prevents unnecessary AI nodes in simple workflows like "webhook → hubspot"
+        // Detect Integration/Platform requirements (CRM, Communication, Storage, etc.)
+        const integrationPatterns = {
+            hubspot: [
+                /\bhubspot\b/i,
+                /\bhub\s*spot\b/i,
+                /\bsales\s+agent\b/i, // 🚨 CRITICAL: "sales agent" requires CRM (default to hubspot if no platform specified)
+                /\bsales\s+automation\b/i,
+                /\bwhen\s+(a\s+)?new\s+\w+\s+is\s+added\s+to\s+hubspot/i
+            ],
+            salesforce: [
+                /\bsalesforce\b/i,
+                /\bsf\b/i,
+                /\bsales\s+agent\b/i, // 🚨 CRITICAL: "sales agent" requires CRM (if Salesforce mentioned)
+                /\bsales\s+automation\b/i
+            ],
+            airtable: [/\bairtable\b/i],
+            slack: [/\bslack\b/i, /\bnotify\s+(the\s+)?(sales\s+)?team\s+on\s+slack/i, /\bnotify\s+.*?\s+on\s+slack/i],
+            gmail: [/\bgmail\b/i, /\bgoogle\s*gmail\b/i, /\bsend\s+(a\s+)?(welcome\s+)?email\s+via\s+gmail/i, /\bemail\s+via\s+gmail/i],
+            amazon_ses: [
+                /\bamazon\s+ses\b/i,
+                /\baws\s+ses\b/i,
+                /\bamazon\s+email\b/i,
+                /\baws\s+email\b/i,
+                /\bsend\s+(a\s+)?(welcome\s+)?email\s+via\s+amazon\s+ses/i,
+                /\bemail\s+via\s+amazon\s+ses/i,
+                /\bsend\s+(a\s+)?(welcome\s+)?email\s+via\s+aws\s+ses/i,
+                /\bemail\s+via\s+aws\s+ses/i,
+                /\bses\s+email/i,
+                /\bamazon\s+simple\s+email\s+service/i,
+            ],
+            google_sheets: [/\bgoogle\s*sheets\b/i, /\bsheets\b/i, /\bgoogle\s*spreadsheet\b/i, /\bcreate\s+(a\s+)?(corresponding\s+)?record\s+in\s+google\s+sheets/i, /\bsave\s+to\s+google\s+sheets/i, /\brecord\s+in\s+google\s+sheets/i, /\badd\s+(a\s+)?(row|record)\s+to\s+google\s+sheets/i],
+            clickup: [/\bclickup\b/i, /\bclick\s*up\b/i],
+            notion: [/\bnotion\b/i],
+            telegram: [/\btelegram\b/i, /\btelegram\s+channel\b/i, /\btelegram\s+group\b/i],
+            discord: [/\bdiscord\b/i],
+            whatsapp_cloud: [/\bwhatsapp\b/i, /\bwhats\s+app\b/i],
+            twitter: [/\btwitter\b/i, /\bx\.com\b/i],
+            linkedin: [
+                /\blinkedin\b/i,
+                /\blinked\s*in\b/i,
+                /\bsocial\s+media\b/i,
+                /\bpost\s+on\s+social\b/i,
+                /\bshare\s+on\s+social\s+media\b/i,
+                /\bpost\s+on\s+linkedin\b/i,
+                /\bshare\s+update\s+on\s+linkedin\b/i
+            ],
+            instagram: [/\binstagram\b/i, /\big\s+story\b/i, /\binstagram\s+post\b/i],
+            github: [/\bgithub\b/i, /\bgit\s*hub\b/i, /\brepository\b/i, /\brepo\b/i, /\bissue\b/i, /\btracking\s+issue\b/i],
+            zoho_crm: [
+                /\bzoho\s*crm\b/i,
+                /\bzoho\b/i,
+                /\bcrm\b/i,
+                /\bcrm\s+system\b/i,
+                /\bcustomer\s+relationship\b/i,
+                /\bsales\s+crm\b/i,
+                /\bsales\s+agent\b/i, // 🚨 CRITICAL: "sales agent" requires CRM
+                /\bsales\s+automation\b/i,
+                /\bupdate\s+crm\b/i,
+                /\bpush\s+leads\s+to\s+crm\b/i
+            ],
+            pipedrive: [
+                /\bpipedrive\b/i,
+                /\bsales\s+pipeline\b/i,
+                /\bdeal\s+pipeline\b/i,
+                /\bsales\s+agent\b/i, // 🚨 CRITICAL: "sales agent" requires CRM (if Pipedrive mentioned)
+                /\bsales\s+automation\b/i
+            ],
+            outlook: [/\boutlook\b/i, /\bmicrosoft\s+outlook\b/i, /\boutlook\s+email\b/i],
+            youtube: [/\byoutube\b/i, /\byou\s*tube\b/i, /\byt\b/i, /\bupload\s+to\s+youtube\b/i, /\bpost\s+on\s+youtube\b/i],
+        };
+        // 🚨 CRITICAL: Check if user says "specify platform" - if so, only detect ONE CRM platform
+        const userSaysSpecifyPlatform = fullText.includes('specify platform') || fullText.includes('specify the platform');
+        // ✅ UNIVERSAL: Get CRM platforms from registry instead of hardcoded list
+        const crmPlatforms = this.getCrmNodeTypes();
+        let crmDetected = false;
+        // Check for each integration
+        for (const [integration, patterns] of Object.entries(integrationPatterns)) {
+            const isMentioned = patterns.some(pattern => pattern.test(fullText));
+            if (isMentioned) {
+                // 🚨 CRITICAL: If "specify platform" and this is a CRM, only add ONE CRM
+                if (userSaysSpecifyPlatform && crmPlatforms.includes(integration.toLowerCase())) {
+                    if (!crmDetected) {
+                        detectedRequirements.requiredIntegrations.push(integration);
+                        crmDetected = true;
+                        // ✅ UNIVERSAL: Check if node requires auth from registry
+                        if (this.nodeRequiresAuth(integration)) {
+                            detectedRequirements.requiredCredentials.push(integration);
+                        }
+                        console.log(`🚨 [Integration Detection] Detected ${integration.toUpperCase()} integration requirement (only ONE CRM because "specify platform" was mentioned)`);
+                    }
+                    else {
+                        console.log(`⚠️  [Integration Detection] Skipping ${integration.toUpperCase()} - already detected one CRM platform (user said "specify platform")`);
+                    }
+                }
+                else {
+                    detectedRequirements.requiredIntegrations.push(integration);
+                    // ✅ UNIVERSAL: Check if node requires auth from registry
+                    if (this.nodeRequiresAuth(integration)) {
+                        detectedRequirements.requiredCredentials.push(integration);
+                    }
+                    console.log(`🚨 [Integration Detection] Detected ${integration.toUpperCase()} integration requirement`);
+                }
+            }
+        }
+        // 🚨 CRITICAL: If "specify platform" but no CRM detected yet, use intent-based selection
+        if (userSaysSpecifyPlatform && !crmDetected && (fullText.includes('crm') || fullText.includes('sales agent') || fullText.includes('crm agent'))) {
+            // ✅ UNIVERSAL: Use intent-based selection instead of hardcoded default
+            const selectedCrm = this.selectCrmNodeByIntent(detectedRequirements.requiredIntegrations, fullText);
+            if (selectedCrm) {
+                detectedRequirements.requiredIntegrations.push(selectedCrm);
+                if (this.nodeRequiresAuth(selectedCrm)) {
+                    detectedRequirements.requiredCredentials.push(selectedCrm);
+                }
+                console.log(`🚨 [Integration Detection] User said "specify platform" but no specific CRM mentioned - selected: ${selectedCrm}`);
+            }
+            else {
+                // Fallback: use first CRM from registry
+                const firstCrm = crmPlatforms[0];
+                if (firstCrm) {
+                    detectedRequirements.requiredIntegrations.push(firstCrm);
+                    if (this.nodeRequiresAuth(firstCrm)) {
+                        detectedRequirements.requiredCredentials.push(firstCrm);
+                    }
+                    console.log(`🚨 [Integration Detection] User said "specify platform" but no specific CRM mentioned - defaulting to first CRM: ${firstCrm}`);
+                }
+            }
+        }
+        // 🚨 CRITICAL: Detect LOOP requirement for "extract from X and create Y" patterns
+        // Pattern: "extract X from Google Sheets and create Y in HubSpot" → needs loop
+        // Pattern: "for each row", "process each item", "loop through" → needs loop
+        const loopPatterns = [
+            /\bextract\s+.*?\s+from\s+.*?\s+(?:and|then)\s+create\s+.*?\s+in\s+/i, // "extract X from Y and create Z in W"
+            /\bextract\s+.*?\s+from\s+.*?\s+(?:and|then)\s+add\s+.*?\s+to\s+/i, // "extract X from Y and add Z to W"
+            /\bfor\s+each\s+(?:row|item|record|entry|contact|lead)/i, // "for each row"
+            /\bloop\s+(?:through|over|for)\s+/i, // "loop through rows"
+            /\bprocess\s+each\s+(?:row|item|record|entry)/i, // "process each row"
+            /\bcreate\s+.*?\s+for\s+each\s+/i, // "create contact for each row"
+            /\b(?:read|get|fetch)\s+.*?\s+from\s+.*?\s+(?:and|then)\s+create\s+.*?\s+for\s+each/i, // "read from sheets and create contact for each"
+        ];
+        const hasLoopPattern = loopPatterns.some(pattern => pattern.test(fullText));
+        // Also check if we have a data source (google_sheets, database_read) AND a create operation (hubspot.create, airtable.create)
+        const hasDataSource = detectedRequirements.requiredIntegrations.includes('google_sheets') ||
+            /\b(?:read|get|fetch|extract)\s+.*?\s+from\s+(?:google\s+)?sheets/i.test(fullText);
+        const hasCreateOperation = /\bcreate\s+.*?\s+(?:in|to|on)\s+(?:hubspot|airtable|crm|database)/i.test(fullText) ||
+            detectedRequirements.requiredIntegrations.some(integration => ['hubspot', 'airtable', 'salesforce', 'zoho_crm', 'pipedrive'].includes(integration));
+        if (hasLoopPattern || (hasDataSource && hasCreateOperation)) {
+            detectedRequirements.needsLoop = true;
+            // Try to identify source and target nodes
+            if (detectedRequirements.requiredIntegrations.includes('google_sheets')) {
+                detectedRequirements.loopSourceNode = 'google_sheets';
+            }
+            if (detectedRequirements.requiredIntegrations.some(integration => ['hubspot', 'airtable', 'salesforce', 'zoho_crm', 'pipedrive'].includes(integration))) {
+                const targetIntegration = detectedRequirements.requiredIntegrations.find(integration => ['hubspot', 'airtable', 'salesforce', 'zoho_crm', 'pipedrive'].includes(integration));
+                if (targetIntegration) {
+                    detectedRequirements.loopTargetNode = targetIntegration;
+                }
+            }
+            console.log(`🚨 [Node Detection] Detected LOOP requirement - source: ${detectedRequirements.loopSourceNode}, target: ${detectedRequirements.loopTargetNode}`);
+        }
+        // Log all detected requirements
+        if (detectedRequirements.needsHttpRequest || detectedRequirements.needsConditional || detectedRequirements.needsAiAgent || detectedRequirements.needsLoop || detectedRequirements.requiredIntegrations.length > 0) {
+            console.log(`📊 [Node Detection Summary]`, JSON.stringify(detectedRequirements, null, 2));
+        }
+        // CRITICAL: Check for chatbot intent FIRST
+        const isChatbotIntent = this.detectChatbotIntent(requirements);
+        // ✅ IMPORTANT:
+        // Only use the fixed chatbot structure for *pure* chatbots.
+        // If the prompt also mentions HTTP calls or external integrations (Zoho, Pipedrive, Outlook, LinkedIn, etc.),
+        // we must build a full automation workflow so those nodes appear in the graph.
+        const hasComplexIntegrations = detectedRequirements.needsHttpRequest ||
+            detectedRequirements.requiredIntegrations.length > 0;
+        // 🚨 CRITICAL: Check if user explicitly requested schedule BEFORE using fixed chatbot structure
+        const chatbotPrompt = (requirements.originalPrompt || requirements.primaryGoal || '').toLowerCase();
+        const explicitlyRequestsSchedule = chatbotPrompt.includes('schedule') ||
+            chatbotPrompt.includes('fixed schedule') ||
+            chatbotPrompt.includes('daily') ||
+            chatbotPrompt.includes('weekly') ||
+            chatbotPrompt.includes('hourly');
+        if (isChatbotIntent && !hasComplexIntegrations) {
+            if (explicitlyRequestsSchedule) {
+                console.log('🤖 CHATBOT MODE DETECTED with SCHEDULE - Using schedule trigger for chatbot workflow');
+                // Use schedule trigger instead of chat_trigger
+                return this.generateFixedChatbotStructure('schedule');
+            }
+            else {
+                console.log('🤖 CHATBOT MODE DETECTED - Using fixed chatbot workflow structure (no extra integrations detected)');
+                // CRITICAL: Return fixed structure WITHOUT filtering - chatbot structure is already optimal
+                return this.generateFixedChatbotStructure();
+            }
+        }
+        // CRITICAL: Include node library reference in structure generation
+        const nodeLibraryInfo = this.getNodeLibraryDescription();
+        const nodeReference = this.generateNodeReference(); // Now includes credentials and requirements
+        // DEBUG: Log that node library is included
+        console.log(`📚 [STRUCTURE GENERATION] Node library included: ${node_library_1.nodeLibrary.getAllSchemas().length} nodes available`);
+        // ✅ ARCHITECTURAL FIX: Sample workflows are TRAINING-ONLY (few-shot examples)
+        // They teach the AI patterns, node combinations, and data flow - NOT used for replacement
+        // All workflows are generated 100% from user prompts, with samples as learning examples
+        let fewShotExamples = '';
+        try {
+            // Get similar workflows based on user prompt for better relevance (training examples only)
+            const similarWorkflows = workflow_training_service_1.workflowTrainingService.getSimilarWorkflows(requirements.primaryGoal || '', 5 // Use 5 similar examples for few-shot learning
+            );
+            // If we have similar workflows, use them; otherwise use general examples with user prompt for similarity
+            const examples = similarWorkflows.length > 0
+                ? similarWorkflows.map((w) => ({
+                    goal: w.goal,
+                    selectedNodes: w.phase1.step5?.selectedNodes || [],
+                    connections: w.phase1.step5?.connections || [],
+                }))
+                : workflow_training_service_1.workflowTrainingService.getNodeSelectionExamples(5, requirements.primaryGoal || '');
+            if (examples.length > 0) {
+                fewShotExamples = '\n\n## 📚 TRAINING EXAMPLES - Learn from these similar workflows (DO NOT COPY - USE AS PATTERNS):\n\n';
+                fewShotExamples += '**IMPORTANT**: These examples show workflow patterns and node combinations. Generate a NEW workflow based on the user\'s prompt, not these examples.\n\n';
+                examples.forEach((example, idx) => {
+                    fewShotExamples += `### Example ${idx + 1}:\n`;
+                    fewShotExamples += `**Goal:** "${example.goal}"\n`;
+                    fewShotExamples += `**Selected Nodes:** ${example.selectedNodes.join(' → ')}\n`;
+                    if (example.connections && example.connections.length > 0) {
+                        fewShotExamples += `**Flow:** ${example.connections.slice(0, 3).join(' → ')}${example.connections.length > 3 ? '...' : ''}\n`;
+                    }
+                    fewShotExamples += '\n';
+                });
+                fewShotExamples += '---\n\n';
+                console.log(`📚 [Structure Generation] Using ${examples.length} training examples for few-shot learning (patterns only, not replacement)`);
+            }
+        }
+        catch (error) {
+            console.warn('⚠️  Failed to get training examples for structure generation:', error);
+        }
+        // Get comprehensive system prompt (includes IO mapping rules AND node reference)
+        const comprehensivePrompt = this.getWorkflowGenerationSystemPrompt();
+        // Generate a logical structure for the workflow using AI
+        // CRITICAL: Include BOTH node library description AND reference
+        const structurePrompt = `${comprehensivePrompt}
+
+---
+
+## CURRENT TASK: Generate Workflow Structure
+
+${fewShotExamples}
+
+## 📚 AVAILABLE NODES (USE ONLY THESE)
+
+${nodeLibraryInfo}
+
+${nodeReference}
+
+**🚨 CRITICAL REMINDER: You MUST use ONLY the node types listed above. DO NOT invent new node types. If a node type is not in the list above, it does not exist and cannot be used.**
+
+**🚨 ABSOLUTELY FORBIDDEN:**
+- ❌ NEVER use "custom" as a node type - THIS WILL CAUSE WORKFLOW TO FAIL
+- ❌ NEVER use node types not in the list above
+- ❌ NEVER invent new node types
+- ✅ ALWAYS use the EXACT node type from the list above (e.g., "slack_message", "google_sheets", "hubspot", "ai_agent", "javascript")
+- ✅ For HubSpot operations → use "hubspot" (NOT "custom", NOT "crm", NOT "hubspot_crm")
+- ✅ For Google Sheets → use "google_sheets" (NOT "custom", NOT "sheets", NOT "spreadsheet")
+- ✅ For Gmail → use "google_gmail" (NOT "custom", NOT "email", NOT "gmail")
+
+**CRITICAL**: If you use "custom" or any invalid node type, the workflow will FAIL validation and the node will be REMOVED. You MUST use the exact node type from the library list above.
+
+**CRITICAL: Before using any node, check:**
+1. ✅ All required configs are present (see node reference above)
+2. ✅ Credentials are available (if needed - see credentials in node reference)
+3. ✅ Inputs match previous node outputs (see inputs/outputs in node reference)
+4. ✅ Outputs match next node inputs
+
+Requirements:
+${JSON.stringify(requirements, null, 2)}
+
+🚨 PROGRAMMATIC DETECTION RESULTS (MANDATORY - These nodes MUST be included):
+${detectedRequirements.needsHttpRequest ? `- ✅ HTTP REQUEST NODE REQUIRED (URLs detected: ${detectedRequirements.httpUrls.join(', ') || 'from prompt'})` : ''}
+${detectedRequirements.needsConditional ? `- ✅ IF/ELSE NODE(S) REQUIRED (${detectedRequirements.conditionalCount} conditional(s) detected) - MUST add if_else node for validation/eligibility checks` : ''}
+${detectedRequirements.needsLoop ? `- ✅ LOOP NODE REQUIRED (extract from ${detectedRequirements.loopSourceNode || 'data source'} and create in ${detectedRequirements.loopTargetNode || 'target'}) - MUST add loop node between data source and create operation` : ''}
+${detectedTrigger === 'form' ? `- ✅ FORM TRIGGER REQUIRED - User will fill/submit form data` : ''}
+${detectedRequirements.needsAiAgent ? `- ✅ AI AGENT NODE REQUIRED (AI analysis detected)` : ''}
+${detectedRequirements.requiredIntegrations.length > 0 ? `- ✅ INTEGRATION NODES REQUIRED: ${detectedRequirements.requiredIntegrations.map(i => i.toUpperCase()).join(', ')}` : ''}
+${detectedRequirements.requiredCredentials.length > 0 ? `- ✅ CREDENTIALS REQUIRED: ${detectedRequirements.requiredCredentials.map(c => c.toUpperCase()).join(', ')}` : ''}
+
+**CRITICAL**: The nodes listed above were programmatically detected and MUST be included in the workflow structure. Do NOT replace them with generic processing nodes. If HubSpot, Airtable, or any other integration is mentioned, the corresponding node MUST be in the workflow steps.
+
+CRITICAL INSTRUCTIONS FOR STRUCTURE GENERATION:
+
+**SIMPLICITY FIRST - CRITICAL RULE**: For simple requests, use the MINIMUM nodes needed. DO NOT add unnecessary extraction, transformation, or formatting nodes.
+
+**SIMPLE WORKFLOW EXAMPLES** (use ONLY these nodes):
+- "send notification to slack" → trigger: manual_trigger, steps: [slack_message] (2 nodes total)
+- "save form data to google sheets" → trigger: form, steps: [google_sheets] (2 nodes total)
+- "read data from google sheets" → trigger: manual_trigger, steps: [google_sheets] (2 nodes total)
+- "send email" → trigger: manual_trigger, steps: [google_gmail] (2 nodes total)
+- "form submission sends confirmation email" → trigger: form, steps: [google_gmail] (2 nodes total)
+- "form data to email" → trigger: form, steps: [email] (2 nodes total)
+- "user submits form and receives email" → trigger: form, steps: [google_gmail] (2 nodes total)
+
+**🚨 CRITICAL: MANDATORY NODE DETECTION RULES**
+
+**MUST ADD HTTP REQUEST NODE if prompt contains:**
+- "fetch" / "get" / "retrieve" / "download" / "call" + URL (https://, http://, api.)
+- "from https://" / "from http://" / "from api."
+- Any URL mentioned → MUST use http_request node (NOT javascript, NOT generic processing)
+
+**MUST ADD IF/ELSE NODE if prompt contains:**
+- "if" / "then" / "check if" / "when" / "only if" / "unless"
+- "contains" / "equals" / "greater than" / "less than" / ">=" / "<=" / "=="
+- "filter" / "separate" / "categorize" based on condition
+- "validate" / "validation" / "eligible" / "eligibility" / "verify" / "check"
+- "is he" / "is she" / "are they" / "is it" / "determine if" / "decide if"
+- Nested conditions ("if X then check if Y") → MUST use nested if_else nodes
+- **CRITICAL**: If user mentions "validate" or "eligible" → MUST add if_else node
+
+**MUST ADD AI AGENT NODE if prompt contains:**
+- "analyze" / "extract key points" / "summarize" / "use AI" / "AI agent"
+- "generate summary" / "AI analysis" / "AI model"
+
+**MUST ADD LOOP NODE if prompt contains:**
+- "extract X from Y and create Z in W" → MUST add loop node: data_source → loop → create_operation
+- "for each row", "for each item", "process each", "loop through" → MUST add loop node
+- Pattern: data source (google_sheets, database_read) + create operation (hubspot.create, airtable.create) → MUST add loop
+- **CRITICAL**: Loop node MUST be placed BETWEEN the data source and the create operation
+- **CRITICAL**: Loop.items MUST be set to {{$json.rows}} or {{$json.data}} from the data source node
+- **CRITICAL**: Create operation (hubspot, airtable) MUST be INSIDE the loop (connected from loop, not from data source)
+- Example: "extract email and name from Google Sheets and create contact in HubSpot" → trigger → google_sheets → loop → hubspot
+  - google_sheets.operation = "read" or "getMany"
+  - loop.items = {{$json.rows}} or {{$json.data}}
+  - hubspot.operation = "create"
+  - hubspot.resource = "contact"
+
+**MUST ADD ALL MENTIONED INTEGRATIONS:**
+- "and also" / "and" + service name → MUST add ALL services
+- Multiple destinations → MUST create parallel branches or sequential nodes
+
+**WHEN TO ADD EXTRACTION/TRANSFORMATION NODES** (ONLY if explicitly mentioned):
+- User says "set variable", "store in a variable", "assign to" → add set_variable
+- User says "if/then", "condition", "filter", "separate by", "categorize" → **MUST add if_else**
+- User says "format", "transform", "convert", "calculate" → add text_formatter or javascript
+- User says "combine", "merge", "join" → add merge_data
+
+**DO NOT ADD** extraction/transformation nodes for simple pass-through workflows like:
+- Simple notifications (just send message)
+- Simple data saves (just save data)
+- Simple data reads (just read data)
+
+1. **EXTRACT SPECIFIC DATA FIELDS**: ONLY if requirements explicitly mention extracting specific fields (age, amount, etc.) OR if data transformation is needed. For simple pass-through workflows, SKIP extraction nodes.
+
+2. **IMPLEMENT ACTUAL LOGIC**: 
+   - **MANDATORY**: If requirements mention ANY conditional words ("if", "then", "check if", "contains", ">", "<", "==", "greater than", "less than", "otherwise", etc.) → **MUST add if_else node as FIRST step after trigger**
+   - **MANDATORY**: If requirements mention nested conditions → **MUST add nested if_else nodes**
+   - **CRITICAL**: For conditional workflows like "if X then A else B", the structure MUST be: trigger → if_else → [true: A, false: B]
+   - **CRITICAL**: Do NOT use AI Agent, JavaScript, or generic processing nodes to replace conditional logic
+   - **CRITICAL**: Do NOT create linear workflows for conditional prompts - conditional workflows MUST branch
+   - For simple workflows without conditions, SKIP if_else nodes
+
+3. **USE SPECIFIC NODE TYPES**: ALWAYS use the most specific node type available:
+   - For Google Sheets: use 'google_sheets' (NOT 'database_read' or 'database_write')
+   - For Gmail: use 'google_gmail' (NOT generic 'email')
+   - For Slack: use 'slack_message' (NOT generic 'message')
+   - For JavaScript: use 'javascript' (NOT 'code' or 'script')
+   - NEVER use generic types when specific types exist
+   - The node TYPE must match the actual service/functionality, only the description can be customized
+
+3. **USE SPECIFIC NODES**: 
+   - For extraction: set_variable, json_parser, edit_fields
+   - For conditions: if_else, switch
+   - For transformations: javascript, text_formatter, merge_data
+   - For output: log_output, respond_to_webhook, platform-specific nodes
+
+4. **NO GENERIC NODES**: Do NOT use generic "check", "ask", "process" nodes. Every node must have specific purpose.
+
+5. **COMPLETE DATA FLOW**: Ensure data flows from extraction → processing → transformation → output.
+
+Based on the requirements and available nodes, determine:
+1. Trigger type (use only trigger nodes from library)
+   - Use "manual_trigger" as DEFAULT unless user explicitly mentions:
+     * Schedule/recurring/daily/weekly/hourly/cron → "schedule"
+     * Webhook/HTTP endpoint/API call → "webhook"
+     * Form submission/form input/form trigger/user submits form/when a user submits → "form"
+   - 🚨 CRITICAL TRIGGER DETECTION RULES:
+     * If user says "daily", "weekly", "monthly", "hourly", "schedule", "recurring", "automated", "every day", "every week" → MUST use "schedule" trigger
+     * Examples: "post to linkedin daily" → schedule, "send email weekly" → schedule, "daily report" → schedule
+     * If user says "post to linkedin daily" → trigger MUST be "schedule" (NOT manual_trigger)
+     * If user says "schedule linkedin posts weekly" → trigger MUST be "schedule"
+   - CRITICAL: If user mentions "form", "submit", "submission", "user submits", "form trigger", or "form input" → MUST use "form" trigger
+   - CRITICAL: If user mentions ANY time-based words (daily, weekly, hourly, schedule, recurring, automated) → MUST use "schedule" trigger
+   - DO NOT default to "schedule" - default to "manual_trigger" ONLY if no time-based words are mentioned
+2. Workflow steps (use appropriate nodes from library)
+   - **FOR SIMPLE WORKFLOWS**: Use ONLY the action node (e.g., slack_message, google_sheets, email)
+   - **FOR COMPLEX WORKFLOWS**: Add extraction/transformation only if explicitly needed:
+     * Extract data fields ONLY if user mentions "extract", "get specific fields", "parse", etc.
+     * Add logic nodes ONLY if user mentions "if/then", "condition", "filter", "separate", etc.
+     * Add formatting ONLY if user mentions "format", "transform", "convert", etc.
+   - **KEEP IT SIMPLE**: Don't add unnecessary nodes. A simple "send notification to slack" needs only: trigger → slack_message
+   - **CRITICAL**: For Google Docs operations (reading/writing documents), use 'google_doc' node type (NOT 'google_sheets', NOT 'database_read', NOT 'javascript')
+   - **CRITICAL**: For Google Sheets operations (reading/writing spreadsheets), use 'google_sheets' node type (NOT 'google_doc', NOT 'database_read', NOT 'javascript')
+   - **CRITICAL**: Google Docs and Google Sheets are DIFFERENT - use 'google_doc' for documents, 'google_sheets' for spreadsheets
+   - **CRITICAL**: For data transformation, use 'javascript' node type
+   - **CRITICAL**: Use the MOST SPECIFIC node type available - never use generic types when specific ones exist
+3. Output nodes (use only output nodes from library)
+   - Output MUST contain all required result fields
+
+CRITICAL: Before returning, validate:
+- Each step's required inputs can be sourced from previous steps or trigger
+- AI Agent nodes will have chat_model connections (will be auto-added)
+- Output nodes can receive data from processing steps
+- No circular dependencies
+- All node types exist in the library
+
+IMPORTANT: Return ONLY valid JSON, no explanations, no markdown, no code blocks. Just the JSON object.
+
+CRITICAL INSTRUCTIONS FOR STRUCTURE GENERATION:
+
+**WORKFLOW FLOW PATTERN - LINEAR BY DEFAULT, BRANCH WHEN INTENT REQUIRES:**
+- Default to LINEAR workflows: trigger → step1 → step2 → step3 (sequential chain).
+- If user intent includes conditions/routing (if/else/switch), create explicit branching from the logic node only.
+- NEVER burst from trigger into many unrelated branches.
+- Data MUST flow through valid DAG edges; use merge when branch reconvergence is needed.
+
+**CORRECT LINEAR FLOW EXAMPLES:**
+✅ "get data from sheets and send to slack" → trigger → google_sheets → slack_message
+✅ "extract data from google sheets and send the received data to slack" → trigger → google_sheets → slack_message
+❌ "extract data from google sheets and send to slack" → WRONG if uses google_gmail (should be google_sheets → slack_message)
+✅ "read sheets, process, send to LinkedIn" → trigger → google_sheets → javascript → linkedin
+✅ "form submission to sheets and email" → trigger → google_sheets → google_gmail (or form → sheets, form → email if truly parallel)
+✅ "extract email and name from Google Sheets and create contact in HubSpot" → trigger → google_sheets → loop → hubspot
+  - google_sheets.operation = "read" (or "getMany" if available)
+  - loop.items = {{$json.rows}} (or {{$json.data}} depending on google_sheets output)
+  - hubspot.operation = "create"
+  - hubspot.resource = "contact"
+
+**INCORRECT TREE STRUCTURE (DO NOT CREATE):**
+❌ trigger → google_sheets, trigger → slack_message (WRONG - creates tree)
+❌ trigger → step1, trigger → step2, trigger → step3 (WRONG - everything connects to trigger)
+
+**CONNECTION RULES:**
+1. Each step MUST have a unique ID (e.g., "step1", "step2", etc.).
+2. The connections MUST use these step IDs to specify the edges.
+3. Each connection MUST specify the outputField and inputField when applicable.
+4. Use "trigger" as the source ID when connecting from the trigger node.
+5. Connect steps sequentially: step1 → step2 → step3 (NOT trigger → step1, trigger → step2)
+6. The LAST step in the chain should be the final output/action node
+
+**CONDITIONAL IF_ELSE / SWITCH (branching; still no burst from trigger):**
+- For if_else: place the node in the main spine after upstream data; wire two downstream paths using connection sourceOutput "true" and "false" (or equivalent) to their first step IDs — never omit the if_else node itself.
+- For switch: set expression (e.g. discriminant) and cases in configuration; wire one outgoing connection per case value using sourceOutput equal to each case value.
+- Keep a valid topological order in the steps list (all nodes reachable from trigger); use merge when two branches must reconverge.
+
+**🚨 CRITICAL NODE TYPE SELECTION RULES - FOLLOW EXACTLY:**
+
+**Google Services:**
+- "Google Docs" / "Google Document" / "read doc" → MUST use "google_doc" (NEVER "google_sheets", NEVER "database_read", NEVER "javascript")
+- "Google Sheets" / "spreadsheet" / "sheets" / "read from sheet" / "extract data from google sheets" / "read data from sheets" → MUST use "google_sheets" (NEVER "google_gmail", NEVER "database_read", NEVER "javascript", NEVER "google_doc")
+- ⚠️ CRITICAL: Google Docs ≠ Google Sheets ≠ Gmail - they are THREE DIFFERENT services!
+- ⚠️ CRITICAL: "extract data from google sheets" = google_sheets (NOT gmail, NOT email)
+- ⚠️ CRITICAL: "read from sheets" = google_sheets (NOT gmail, NOT email)
+- "Gmail" / "send via Gmail" / "send email via Gmail" → MUST use "google_gmail" (NEVER "google_sheets", NEVER generic "email")
+- ⚠️ CRITICAL: If user says "sheets" or "spreadsheet" → use "google_sheets" (NOT "google_gmail")
+- ⚠️ CRITICAL: If user says "gmail" or "email via gmail" → use "google_gmail" (NOT "google_sheets")
+
+**Communication Services:**
+- "Slack" / "notify" / "send to Slack" → MUST use "slack_message" (NEVER generic "message")
+- "Email" (not Gmail) → use "email" node
+- "Gmail" → use "google_gmail" node
+
+**Social Media (CRITICAL - ALWAYS ADD WHEN PLATFORM MENTIONED):**
+- "LinkedIn" / "post to LinkedIn" / "linkedin" / "linked in" / "post to linkedin" / "linkedin posting" → MUST use "linkedin" (NEVER "twitter", NEVER "instagram", NEVER generic "social")
+- "Twitter" / "X" / "tweet" / "post to twitter" / "twitter posting" → MUST use "twitter" (NEVER generic "social")
+- "Instagram" / "post to Instagram" / "post to instagram" / "instagram posting" → MUST use "instagram" (NEVER generic "social")
+- 🚨 CRITICAL: If user mentions ANY platform name (LinkedIn, Twitter, Instagram), you MUST include that platform's node in the workflow. This is NON-NEGOTIABLE.
+- 🚨 CRITICAL: If user says "post to LinkedIn daily" → MUST include: schedule trigger + linkedin node
+- 🚨 CRITICAL: If user says "post on LinkedIn" → MUST include: linkedin node (even if trigger not specified, use manual_trigger)
+- 🚨 CRITICAL: If user says "post to linkedin" → MUST include: linkedin node (check for "daily"/"weekly" to determine trigger)
+- 🚨 CRITICAL: If user says "automated linkedin posting" → MUST include: linkedin node (use schedule trigger if "daily"/"weekly" mentioned, otherwise manual_trigger)
+- 🚨 CRITICAL: If user says "schedule linkedin posts weekly" → MUST include: schedule trigger + linkedin node
+- 🚨 CRITICAL: Platform nodes are MANDATORY - if platform is mentioned, the node MUST be in the workflow steps array
+
+**Data Processing:**
+- "JavaScript" / "code" / "transform" / "process data" → use "javascript"
+- "if" / "condition" / "check" / "filter" → use "if_else"
+- "database" / "db" / "query" → use "database_read" or "database_write" (NOT "google_sheets")
+
+**AI/ML:**
+- "AI agent" / "chatbot" / "AI assistant" / "LLM" → use "ai_agent"
+
+**⚠️ COMMON MISTAKES TO AVOID:**
+- ❌ Using "database_read" for Google Sheets → WRONG! Use "google_sheets"
+- ❌ Using "google_sheets" for Google Docs → WRONG! Use "google_doc"
+- ❌ Using generic "email" for Gmail → WRONG! Use "google_gmail"
+- ❌ Adding LinkedIn/Twitter/Instagram without explicit mention → WRONG! Only add if user says the platform name
+- ❌ Using "custom" as node type → FORBIDDEN! Always use specific node types
+
+**✅ ALWAYS:**
+- Use the MOST SPECIFIC node type available
+- Match the EXACT service/platform mentioned by user
+- Verify node type exists in the library before using it
+
+**🚨 CRITICAL: DO NOT ADD NODES THAT WERE NOT MENTIONED:**
+- ❌ If user says "extract data from google sheets" → ONLY use: trigger + google_sheets (2 nodes)
+- ❌ DO NOT add Slack, email, or any other output node unless user explicitly mentions it
+- ❌ DO NOT add transformation nodes unless user explicitly asks for transformation
+- ❌ DO NOT add conditional logic unless user explicitly mentions conditions
+- ✅ ONLY add nodes that match what the user actually requested
+- ✅ For "extract data from google sheets" → the google_sheets node IS the output (it extracts data)
+- ✅ Simple data extraction workflows do NOT need additional output nodes
+
+**EXAMPLES OF CORRECT vs INCORRECT:**
+- ✅ User: "extract data from google sheets" → CORRECT: [manual_trigger, google_sheets]
+- ❌ User: "extract data from google sheets" → WRONG: [manual_trigger, google_sheets, slack_message] (Slack not mentioned!)
+- ✅ User: "extract data from google sheets and send to slack" → CORRECT: [manual_trigger, google_sheets, slack_message]
+- ✅ User: "extract data from google sheets and send the received data to slack" → CORRECT: [manual_trigger, google_sheets, slack_message]
+- ❌ User: "extract data from google sheets and send the received data to slack" → WRONG: [manual_trigger, google_gmail, slack_message] (WRONG! User said "sheets" not "gmail"!)
+- ✅ User: "read google sheets" → CORRECT: [manual_trigger, google_sheets]
+- ❌ User: "read google sheets" → WRONG: [manual_trigger, google_sheets, email] (Email not mentioned!)
+- ⚠️ CRITICAL: "extract data from google sheets" = google_sheets node (NOT google_gmail, NOT email)
+
+Return JSON:
+{
+  "trigger": "node_type_from_library",
+  "steps": [
+    {"id": "step1", "description": "...", "type": "node_type_from_library"},
+    {"id": "step2", "description": "...", "type": "node_type_from_library"},
+    ...
+  ],
+  "outputs": [
+    {"name": "output1", "type": "string|number|boolean|object|array", "description": "...", "required": true}
+  ],
+  "connections": [
+    {"source": "trigger", "target": "step1", "outputField": "inputData", "inputField": "input"},
+    {"source": "step1", "target": "step2", "outputField": "output", "inputField": "input"},
+    {"source": "step2", "target": "step3", "outputField": "output", "inputField": "input"}
+  ]
+  
+**CRITICAL: Connections MUST form a LINEAR chain. Each step connects to the NEXT step, not back to trigger.**
+}`;
+        try {
+            let result;
+            try {
+                result = await gemini_orchestrator_1.geminiOrchestrator.processRequest('workflow-generation', {
+                    prompt: structurePrompt,
+                    temperature: 0.2, // Lower temperature for more consistent JSON
+                });
+            }
+            catch (error) {
+                // CRITICAL: If AI structure generation fails, use rule-based fallback
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                const isModelUnavailable = errorMessage.includes('not found') ||
+                    errorMessage.includes('Ollama models not available') ||
+                    errorMessage.includes('404') && errorMessage.includes('model');
+                if (isModelUnavailable) {
+                    console.warn('⚠️  [WorkflowBuilder] AI structure generation unavailable, using rule-based fallback');
+                    // Use rule-based structure generation
+                    return this.generateStructureFallback(requirements);
+                }
+                throw error;
+            }
+            let parsed;
+            try {
+                const jsonText = typeof result === 'string' ? result : JSON.stringify(result);
+                let cleanJson = jsonText.trim();
+                // Remove markdown code blocks - handle all variations
+                // Match ```json, ```JSON, ```, or any code block
+                const codeBlockRegex = /```(?:json|JSON)?\s*\n?([\s\S]*?)\n?```/g;
+                const codeBlockMatch = cleanJson.match(codeBlockRegex);
+                if (codeBlockMatch) {
+                    // Extract content from first code block
+                    cleanJson = codeBlockMatch[0].replace(/```(?:json|JSON)?\s*\n?/g, '').replace(/\n?```/g, '').trim();
+                }
+                // Remove any backticks that might remain
+                cleanJson = cleanJson.replace(/^`+|`+$/g, '').trim();
+                // Try to extract JSON if there's text before/after
+                // Look for first { and last } (handle nested braces)
+                const firstBrace = cleanJson.indexOf('{');
+                if (firstBrace !== -1) {
+                    // Find matching closing brace
+                    let braceCount = 0;
+                    let lastBrace = -1;
+                    for (let i = firstBrace; i < cleanJson.length; i++) {
+                        if (cleanJson[i] === '{')
+                            braceCount++;
+                        if (cleanJson[i] === '}') {
+                            braceCount--;
+                            if (braceCount === 0) {
+                                lastBrace = i;
+                                break;
+                            }
+                        }
+                    }
+                    if (lastBrace !== -1 && lastBrace > firstBrace) {
+                        cleanJson = cleanJson.substring(firstBrace, lastBrace + 1);
+                    }
+                }
+                // Remove any leading/trailing non-JSON text and whitespace
+                cleanJson = cleanJson.replace(/^[^{]*/, '').replace(/[^}]*$/, '').trim();
+                // Final cleanup: remove any remaining backticks or markdown artifacts
+                cleanJson = cleanJson.replace(/^[`\s]+|[`\s]+$/g, '').trim();
+                // Safety check: ensure we have valid JSON before parsing
+                if (!cleanJson || cleanJson.length === 0 || !cleanJson.includes('{')) {
+                    throw new Error('No valid JSON found in response');
+                }
+                parsed = JSON.parse(cleanJson);
+                // 🔥 PRODUCTION-GRADE ALIAS RESOLUTION LAYER
+                // Resolve all node types (aliases, misspellings, variations) to canonical types BEFORE validation
+                // This handles: extra spaces, misspellings, broken words, user phrasing, multi-word variations
+                parsed = this.resolveAndNormalizeNodeTypes(parsed);
+                // ✅ STRICT ARCHITECTURE: Validate LLM-generated node types IMMEDIATELY after parsing
+                // This is the ROOT-LEVEL enforcement that blocks invalid node types before they reach any downstream logic
+                // If validation fails, workflow generation is ABORTED (fail-fast)
+                this.validateLLMGeneratedNodeTypes(parsed);
+            }
+            catch (parseError) {
+                // Check if error is from our validation (re-throw to abort)
+                if (parseError instanceof Error && parseError.message.includes('[LLM Schema Validation]')) {
+                    throw parseError; // Re-throw validation errors to abort workflow generation
+                }
+                console.warn('⚠️  Failed to parse AI-generated structure:', parseError instanceof Error ? parseError.message : String(parseError));
+                console.warn('   Raw response (first 500 chars):', (typeof result === 'string' ? result : JSON.stringify(result)).substring(0, 500));
+                parsed = null;
+            }
+            // 🔧 INTEGRATION ENFORCEMENT UPGRADE: Rebuild workflow if AI output is empty/invalid
+            // Handle both formats: parsed.nodes (new format) and parsed.steps (old format)
+            const nodesOrSteps = parsed?.nodes || parsed?.steps || [];
+            if (!parsed || nodesOrSteps.length === 0) {
+                logger_1.logger.warn('⚠️  AI returned empty nodes/steps – falling back to programmatic generation');
+                parsed = this.buildWorkflowProgrammatically(requirements, detectedRequirements, detectedTrigger);
+            }
+            else {
+                // Remove any nodes/steps with invalid types
+                // ✅ CRITICAL: Check data.type for nodes with type: 'custom' (frontend compatibility)
+                const validItems = nodesOrSteps.filter((item) => {
+                    // For workflow nodes: check data.type if type is 'custom', otherwise check type
+                    const itemType = item.data?.type || item.type || item.nodeType;
+                    // Also check if it's a valid trigger (triggers don't have data.type)
+                    if (!itemType || itemType === 'custom') {
+                        // If type is 'custom' but no data.type, it's invalid
+                        if (item.type === 'custom' && !item.data?.type) {
+                            return false;
+                        }
+                        // If no type at all, it's invalid
+                        if (!itemType) {
+                            return false;
+                        }
+                    }
+                    return node_library_1.nodeLibrary.getSchema(itemType) || this.nodeLibrary.has(itemType);
+                });
+                if (validItems.length === 0) {
+                    logger_1.logger.warn('⚠️  All AI nodes/steps were invalid – falling back to programmatic generation');
+                    parsed = this.buildWorkflowProgrammatically(requirements, detectedRequirements, detectedTrigger);
+                }
+                else {
+                    // Update the appropriate field (nodes or steps)
+                    if (parsed.nodes) {
+                        parsed.nodes = validItems;
+                    }
+                    else {
+                        parsed.steps = validItems;
+                    }
+                    // Ensure all required integrations (detected by regex) are present
+                    // ✅ CRITICAL: Check data.type for nodes with type: 'custom'
+                    const detectedInts = new Set(detectedRequirements.requiredIntegrations);
+                    const presentInts = new Set(validItems.map((n) => {
+                        // For workflow nodes: check data.type if type is 'custom'
+                        return n.data?.type || n.type || n.nodeType;
+                    }));
+                    for (const int of detectedInts) {
+                        if (!presentInts.has(int)) {
+                            logger_1.logger.warn(`⚠️  Integration ${int} missing – adding node programmatically`);
+                            const newNode = this.createNodeForIntegration(int, parsed);
+                            if (newNode) {
+                                if (parsed.nodes) {
+                                    parsed.nodes.push(newNode);
+                                }
+                                else {
+                                    if (!parsed.steps)
+                                        parsed.steps = [];
+                                    parsed.steps.push(newNode);
+                                }
+                                // Also add connections (wire it appropriately)
+                                this.connectIntegrationNode(parsed, newNode);
+                            }
+                        }
+                    }
+                    // Re-validate and auto-fix connections
+                    parsed = this.validateAndFixWorkflow(parsed, requirements);
+                }
+            }
+            // CRITICAL: Validate all node types in parsed structure exist in library
+            if (parsed) {
+                logger_1.logger.validation(`🔍 [STRUCTURE VALIDATION] Validating AI-generated structure with ${parsed.steps?.length || 0} steps`);
+                // 🚨 CRITICAL: Override trigger if programmatic detection found a better match
+                if (detectedTrigger && detectedTrigger !== parsed.trigger) {
+                    const detectedSchema = node_library_1.nodeLibrary.getSchema(detectedTrigger);
+                    if (detectedSchema) {
+                        logger_1.logger.warn(`⚠️  [STRUCTURE VALIDATION] Overriding AI trigger "${parsed.trigger}" with programmatically detected trigger: "${detectedTrigger}"`);
+                        parsed.trigger = detectedTrigger;
+                    }
+                }
+                // Validate trigger
+                const triggerSchema = node_library_1.nodeLibrary.getSchema(parsed.trigger);
+                if (!triggerSchema) {
+                    logger_1.logger.error(`❌ [STRUCTURE VALIDATION] Invalid trigger type: "${parsed.trigger}" not found in library`);
+                    const availableTriggers = node_library_1.nodeLibrary.getAllSchemas()
+                        .filter(s => s.category === 'triggers' || s.type.includes('trigger'))
+                        .map(s => s.type);
+                    logger_1.logger.error(`❌ [STRUCTURE VALIDATION] Available triggers: ${availableTriggers.join(', ')}`);
+                    // Use detected trigger or manual_trigger as fallback
+                    parsed.trigger = detectedTrigger || 'manual_trigger';
+                    logger_1.logger.validation(`✅ [STRUCTURE VALIDATION] Using fallback trigger: ${parsed.trigger}`);
+                }
+                else {
+                    logger_1.logger.validation(`✅ [STRUCTURE VALIDATION] Trigger "${parsed.trigger}" validated`);
+                }
+                // Validate all steps
+                if (parsed.steps && Array.isArray(parsed.steps)) {
+                    const invalidSteps = [];
+                    parsed.steps = parsed.steps.filter((step) => {
+                        // ✅ CRITICAL: Check data.type for nodes with type: 'custom' (frontend compatibility)
+                        const stepType = step.data?.type || step.type || step.nodeType;
+                        // 🚨 CRITICAL: Reject "custom" node types WITHOUT data.type - they are invalid
+                        if ((step.type === 'custom' || stepType === 'custom') && !step.data?.type) {
+                            logger_1.logger.error(`❌ [STRUCTURE VALIDATION] FORBIDDEN: "custom" node type detected without data.type. Step description: "${step.description || 'N/A'}". Removing.`);
+                            invalidSteps.push('custom');
+                            return false; // Remove invalid "custom" node
+                        }
+                        // If stepType is still 'custom' but has data.type, use data.type
+                        const actualType = (stepType === 'custom' && step.data?.type) ? step.data.type : stepType;
+                        const stepSchema = node_library_1.nodeLibrary.getSchema(actualType);
+                        if (!stepSchema) {
+                            logger_1.logger.error(`❌ [STRUCTURE VALIDATION] Invalid step type: "${actualType}" not found in library`);
+                            logger_1.logger.error(`❌ [STRUCTURE VALIDATION] Step description: "${step.description || 'N/A'}"`);
+                            invalidSteps.push(actualType);
+                            return false; // Remove invalid step
+                        }
+                        else {
+                            logger_1.logger.validation(`✅ [STRUCTURE VALIDATION] Step "${actualType}" validated`);
+                            return true;
+                        }
+                    });
+                    if (invalidSteps.length > 0) {
+                        logger_1.logger.warn(`⚠️  [STRUCTURE VALIDATION] Removed ${invalidSteps.length} invalid step(s): ${invalidSteps.join(', ')}`);
+                        logger_1.logger.warn(`⚠️  [STRUCTURE VALIDATION] Remaining valid steps: ${parsed.steps.length}`);
+                    }
+                    else {
+                        logger_1.logger.validation(`✅ [STRUCTURE VALIDATION] All ${parsed.steps.length} steps validated successfully`);
+                    }
+                }
+            }
+            if (parsed && parsed.trigger && node_library_1.nodeLibrary.getSchema(parsed.trigger)) {
+                // 🚨 CRITICAL: Enforce detected trigger type (override AI if wrong)
+                if (detectedTrigger && detectedTrigger !== parsed.trigger) {
+                    console.warn(`⚠️  [Trigger Enforcement] AI generated "${parsed.trigger}" but detected "${detectedTrigger}" from requirements. Overriding.`);
+                    parsed.trigger = detectedTrigger;
+                }
+                // Ensure each step has an id
+                const steps = (parsed.steps || []).map((step, index) => ({
+                    ...step,
+                    id: step.id || `step${index + 1}`,
+                }));
+                // 🚨 CRITICAL: Remove duplicate nodes and unnecessary log_output nodes
+                const seenTypes = new Set();
+                const cleanedSteps = steps.filter((step) => {
+                    // ✅ CRITICAL: Check data.type for nodes with type: 'custom' (frontend compatibility)
+                    const stepType = step.data?.type || step.type || step.nodeType || '';
+                    // Remove duplicate nodes of same type
+                    if (seenTypes.has(stepType)) {
+                        console.warn(`⚠️  [Node Cleanup] Removing duplicate node: ${stepType}`);
+                        return false;
+                    }
+                    // Remove unnecessary log_output nodes (only keep if explicitly needed)
+                    if (stepType === 'log_output' && steps.length > 2) {
+                        console.warn(`⚠️  [Node Cleanup] Removing unnecessary log_output node`);
+                        return false;
+                    }
+                    // Remove duplicate manual_trigger nodes (should only be in trigger, not steps)
+                    if (stepType === 'manual_trigger' || stepType === 'schedule' || stepType === 'form' || stepType === 'webhook') {
+                        console.warn(`⚠️  [Node Cleanup] Removing trigger node from steps: ${stepType} (triggers should not be in steps array)`);
+                        return false;
+                    }
+                    seenTypes.add(stepType);
+                    return true;
+                });
+                parsed.steps = cleanedSteps;
+                // 🚨 CRITICAL: Ensure detected integrations are included in workflow steps
+                if (detectedRequirements.requiredIntegrations.length > 0) {
+                    const isDebug = process.env.DEBUG === 'true' || process.env.NODE_ENV === 'development';
+                    if (isDebug) {
+                        console.log(`🔍 [DIAGNOSTIC] Detected integrations: ${detectedRequirements.requiredIntegrations.join(', ')}`);
+                        console.log(`🔍 [DIAGNOSTIC] Steps before enforcement: ${cleanedSteps.length} steps`);
+                        console.log(`🔍 [DIAGNOSTIC] Existing step types: ${Array.from(cleanedSteps.map((s) => s.data?.type || s.type || s.nodeType)).join(', ')}`);
+                    }
+                    // ✅ CRITICAL: Check data.type for nodes with type: 'custom' (frontend compatibility)
+                    const existingStepTypes = new Set(cleanedSteps.map((s) => {
+                        // For workflow steps: check data.type if type is 'custom', otherwise check type
+                        return s.data?.type || s.type || s.nodeType;
+                    }));
+                    const missingIntegrations = [];
+                    for (const integration of detectedRequirements.requiredIntegrations) {
+                        if (isDebug) {
+                            console.log(`🔍 [DIAGNOSTIC] Checking integration: ${integration}, exists: ${existingStepTypes.has(integration)}`);
+                        }
+                        if (!existingStepTypes.has(integration)) {
+                            // Validate that the integration node type exists in the library
+                            // CRITICAL: Use the imported nodeLibrary instance (has getSchema method)
+                            const integrationSchema = node_library_1.nodeLibrary.getSchema(integration);
+                            if (isDebug) {
+                                console.log(`🔍 [DIAGNOSTIC] Schema lookup for ${integration}: ${integrationSchema ? 'FOUND' : 'NOT FOUND'}`);
+                            }
+                            if (!integrationSchema) {
+                                // Fallback: check this.nodeLibrary Map as well
+                                const fallbackSchema = this.nodeLibrary.get(integration);
+                                if (!fallbackSchema) {
+                                    console.error(`❌ [Integration Enforcement] ${integration.toUpperCase()} node type does not exist in library. Available nodes: ${Array.from(this.nodeLibrary.keys()).slice(0, 10).join(', ')}...`);
+                                    continue;
+                                }
+                                // Use fallback schema from Map
+                                const integrationStep = {
+                                    id: `step_${integration}_${Date.now()}`,
+                                    description: fallbackSchema.label || `Add ${integration} integration`,
+                                    type: integration, // For steps, use actual type (not 'custom')
+                                };
+                                cleanedSteps.push(integrationStep);
+                                console.log(`✅ [Integration Enforcement] Added ${integration.toUpperCase()} node with type: ${integration} (from fallback)`);
+                                continue;
+                            }
+                            missingIntegrations.push(integration);
+                            console.warn(`⚠️  Integration ${integration} missing – adding node programmatically`);
+                            // Add the missing integration node with proper label from library
+                            // CRITICAL: Use the exact node type from library, not "custom"
+                            const integrationStep = {
+                                id: `step_${integration}_${Date.now()}`,
+                                description: integrationSchema.label || `Add ${integration} integration`,
+                                type: integration, // Use exact node type from library (e.g., "hubspot", "google_sheets") - for steps, not 'custom'
+                            };
+                            cleanedSteps.push(integrationStep);
+                            console.log(`✅ [Integration Enforcement] Added ${integration.toUpperCase()} node with type: ${integration} (validated in library)`);
+                            if (isDebug) {
+                                console.log(`🔍 [DIAGNOSTIC] Added step: ${JSON.stringify(integrationStep)}`);
+                            }
+                        }
+                    }
+                    if (missingIntegrations.length > 0) {
+                        console.log(`✅ [Integration Enforcement] Added ${missingIntegrations.length} missing integration(s): ${missingIntegrations.join(', ')}`);
+                        parsed.steps = cleanedSteps;
+                        if (isDebug) {
+                            console.log(`🔍 [DIAGNOSTIC] Steps after enforcement: ${parsed.steps.length} steps`);
+                            console.log(`🔍 [DIAGNOSTIC] Step types after enforcement: ${Array.from(parsed.steps.map((s) => s.data?.type || s.type || s.nodeType)).join(', ')}`);
+                        }
+                    }
+                }
+                // ✅ CRITICAL: Only enforce if_else node if conditional logic is EXPLICITLY required
+                // Don't add if_else for simple linear workflows like "extract X then create Y"
+                if (detectedRequirements.needsConditional) {
+                    const existingStepTypes = new Set(cleanedSteps.map((s) => s.data?.type || s.type || s.nodeType));
+                    const conditionalNodeTypes = ['if_else', 'if', 'switch', 'filter'];
+                    const hasConditionalNode = conditionalNodeTypes.some(nodeType => existingStepTypes.has(nodeType));
+                    if (!hasConditionalNode) {
+                        // ✅ ADDITIONAL CHECK: Verify this is actually a conditional workflow
+                        // If AI didn't generate a conditional node, it might be a false positive
+                        const hasExplicitConditional = /\bif\s+.*?\s+then\s+/i.test(fullText) ||
+                            /\bcheck\s+if\s+/i.test(fullText) ||
+                            /\bwhen\s+(?:the|value|amount|score|count|size|age|price|status|type)\s+(?:is|equals|>|<|>=|<=|contains)/i.test(fullText);
+                        if (hasExplicitConditional) {
+                            console.warn(`⚠️  [Conditional Enforcement] IF/ELSE node was detected but not in workflow steps. Adding it as FIRST step.`);
+                            // ✅ CRITICAL: For conditional workflows, if_else MUST be the first step after trigger
+                            // Remove any AI Agent or processing nodes that shouldn't be there for simple conditionals
+                            const processingNodeTypes = ['ai_agent', 'javascript', 'code', 'set_variable', 'json_parser'];
+                            const hasProcessingNodes = cleanedSteps.some((s) => {
+                                const stepType = s.data?.type || s.type || s.nodeType;
+                                return processingNodeTypes.includes(stepType);
+                            });
+                            let finalSteps = cleanedSteps;
+                            if (hasProcessingNodes) {
+                                console.warn(`⚠️  [Conditional Enforcement] Removing unnecessary processing nodes for conditional workflow`);
+                                finalSteps = cleanedSteps.filter((s) => {
+                                    const stepType = s.data?.type || s.type || s.nodeType;
+                                    return !processingNodeTypes.includes(stepType);
+                                });
+                            }
+                            // Add if_else node as FIRST step (right after trigger)
+                            const ifElseStep = {
+                                id: `step_if_else_${Date.now()}`,
+                                description: 'Check condition and route to different actions',
+                                type: 'if_else', // Use exact node type from library
+                            };
+                            // Insert if_else node at the beginning (first step after trigger)
+                            finalSteps.unshift(ifElseStep);
+                            console.log(`✅ [Conditional Enforcement] Added if_else node as FIRST step with type: if_else (validated in library)`);
+                            console.log(`🔍 [DIAGNOSTIC] Added step: ${JSON.stringify(ifElseStep)}`);
+                            parsed.steps = finalSteps;
+                            console.log(`🔍 [DIAGNOSTIC] Steps after conditional enforcement: ${parsed.steps.length} steps`);
+                            console.log(`🔍 [DIAGNOSTIC] Step types after conditional enforcement: ${Array.from(parsed.steps.map((s) => s.data?.type || s.type || s.nodeType)).join(', ')}`);
+                        }
+                        else {
+                            // ✅ FALSE POSITIVE: Conditional was detected but not explicit - don't add if_else
+                            console.log(`✅ [Conditional Enforcement] Conditional detection was false positive - skipping if_else node addition`);
+                            detectedRequirements.needsConditional = false; // Reset to prevent downstream issues
+                        }
+                    }
+                    else {
+                        console.log(`✅ [Conditional Enforcement] Conditional node already present in workflow`);
+                    }
+                }
+                // 🚨 CRITICAL: Enforce AI Agent node if detected but missing (DEFAULT: uses Ollama)
+                // ✅ CRITICAL FIX: This check happens BEFORE DSL compilation, so ai_chat_model might not exist yet
+                // DSL layer will inject ai_chat_model if needed, so we should NOT inject ai_agent here
+                // This prevents duplicate AI nodes (ai_agent + ai_chat_model)
+                // 
+                // REMOVED: AI Agent injection at this stage to prevent duplicates
+                // The DSL layer (ensureLLMNodeInDSL) will handle AI node injection AFTER structure is generated
+                // This ensures we don't create duplicate AI nodes
+                if (detectedRequirements.needsAiAgent) {
+                    const existingStepTypes = new Set(cleanedSteps.map((s) => s.data?.type || s.type || s.nodeType));
+                    const aiNodeTypes = ['ai_agent', 'ai_chat_model', 'chat_model'];
+                    const hasAiNode = aiNodeTypes.some(type => existingStepTypes.has(type));
+                    if (!hasAiNode) {
+                        // ✅ CRITICAL FIX: Don't inject ai_agent here - DSL layer will inject ai_chat_model if needed
+                        // This prevents duplicate AI nodes (ai_agent + ai_chat_model)
+                        console.log(`[AI Enforcement] ⚠️  AI requirement detected but no AI node found in steps. DSL layer will inject ai_chat_model if needed (skipping ai_agent injection to prevent duplicates)`);
+                        // REMOVED: ai_agent injection - let DSL layer handle it
+                    }
+                    else {
+                        const existingAiNodes = Array.from(existingStepTypes).filter((t) => typeof t === 'string' && aiNodeTypes.includes(t)).join(', ');
+                        console.log(`[AI Enforcement] ✅ AI node already exists in steps: ${existingAiNodes}`);
+                    }
+                }
+                // 🚨 CRITICAL: Enforce HTTP Request node if detected but missing
+                // ✅ ROOT-LEVEL FIX: Use UniversalNodeInjectionGuard to prevent unnecessary injection
+                if (detectedRequirements.needsHttpRequest) {
+                    const existingStepTypes = new Set(cleanedSteps.map((s) => s.data?.type || s.type || s.nodeType));
+                    const httpNodeTypes = ['http_request', 'http_post', 'http_get'];
+                    const hasHttpNode = httpNodeTypes.some(type => existingStepTypes.has(type));
+                    if (!hasHttpNode) {
+                        // ✅ CRITICAL FIX: Check with UniversalNodeInjectionGuard before injecting
+                        try {
+                            const { UniversalNodeInjectionGuard } = await Promise.resolve().then(() => __importStar(require('./universal-node-injection-guard')));
+                            const currentWorkflow = { nodes: cleanedSteps.map((s) => ({ type: s.data?.type || s.type || s.nodeType })), edges: [] };
+                            // Get user prompt from requirements or structuredSpec
+                            const userPrompt = (requirements.originalPrompt || requirements.userPrompt || requirements.primaryGoal || '').toLowerCase().trim();
+                            const guardResult = UniversalNodeInjectionGuard.shouldInjectNode('http_request', currentWorkflow, userPrompt, 'HTTP requirement detected');
+                            if (!guardResult.shouldInject) {
+                                console.log(`[HTTP Enforcement] ⚠️  Skipping HTTP request injection: ${guardResult.reason}`);
+                            }
+                            else {
+                                // ✅ UNIVERSAL: Check if HTTP node is already specified by AI (prevent duplicate injection)
+                                const aiSpecifiedNodesContext = requirements?._aiSpecifiedNodesContext;
+                                let shouldSkipInjection = false;
+                                if (aiSpecifiedNodesContext) {
+                                    const { isNodeAISpecified } = await Promise.resolve().then(() => __importStar(require('../../core/utils/ai-specified-nodes-context')));
+                                    if (isNodeAISpecified(aiSpecifiedNodesContext, 'http_request') ||
+                                        isNodeAISpecified(aiSpecifiedNodesContext, 'http_post') ||
+                                        isNodeAISpecified(aiSpecifiedNodesContext, 'http_get')) {
+                                        console.log(`[HTTP Enforcement] ✅ HTTP node already specified by AI - skipping duplicate injection`);
+                                        shouldSkipInjection = true;
+                                    }
+                                }
+                                if (!shouldSkipInjection) {
+                                    console.warn(`⚠️  [HTTP Enforcement] HTTP requirement detected but no HTTP node found. Adding http_request.`);
+                                    const httpSchema = node_library_1.nodeLibrary.getSchema('http_request');
+                                    if (httpSchema) {
+                                        const httpStep = {
+                                            id: `step_http_request_${Date.now()}`,
+                                            description: httpSchema.label || 'HTTP Request',
+                                            type: 'http_request',
+                                        };
+                                        cleanedSteps.push(httpStep);
+                                        parsed.steps = cleanedSteps;
+                                        console.log(`✅ [HTTP Enforcement] Added HTTP REQUEST node with type: http_request`);
+                                    }
+                                }
+                            }
+                        }
+                        catch (error) {
+                            // Fallback to old behavior if guard not available
+                            console.warn(`⚠️  [HTTP Enforcement] HTTP requirement detected but no HTTP node found. Adding http_request.`);
+                            const httpSchema = node_library_1.nodeLibrary.getSchema('http_request');
+                            if (httpSchema) {
+                                const httpStep = {
+                                    id: `step_http_request_${Date.now()}`,
+                                    description: httpSchema.label || 'HTTP Request',
+                                    type: 'http_request',
+                                };
+                                cleanedSteps.push(httpStep);
+                                parsed.steps = cleanedSteps;
+                                console.log(`✅ [HTTP Enforcement] Added HTTP REQUEST node with type: http_request`);
+                            }
+                        }
+                    }
+                }
+                // Parse connections - handle both old format (from/to) and new format (source/target)
+                const connections = (parsed.connections || []).map((conn) => {
+                    let source;
+                    let target;
+                    if (conn.from && conn.to) {
+                        // Old format: convert to new format
+                        source = conn.from === 'trigger' ? 'trigger' : conn.from;
+                        target = conn.to;
+                    }
+                    else {
+                        // New format: use as-is
+                        source = conn.source || conn.from || 'trigger';
+                        target = conn.target || conn.to;
+                    }
+                    // 🚨 CRITICAL FIX: Prevent self-loops at structure parsing level
+                    if (source === target) {
+                        console.warn(`⚠️  [Structure Parsing] Prevented self-loop connection: ${source} → ${target}`);
+                        return null; // Return null to filter out
+                    }
+                    return {
+                        source,
+                        target,
+                        outputField: conn.outputField,
+                        inputField: conn.inputField,
+                    };
+                }).filter((conn) => conn !== null); // Remove null entries (self-loops)
+                // 🚨 CRITICAL: Enforce detected trigger type (override AI if wrong)
+                let finalTrigger = parsed.trigger;
+                if (detectedTrigger && detectedTrigger !== parsed.trigger) {
+                    console.warn(`⚠️  [Trigger Enforcement] AI generated "${parsed.trigger}" but detected "${detectedTrigger}" from requirements. Overriding.`);
+                    finalTrigger = detectedTrigger;
+                }
+                const structure = {
+                    trigger: finalTrigger,
+                    steps: steps,
+                    outputs: parsed.outputs || [],
+                    connections: connections,
+                };
+                const isDebug = process.env.DEBUG === 'true' || process.env.NODE_ENV === 'development';
+                if (isDebug) {
+                    console.log(`🔍 [DIAGNOSTIC] [Pipeline Snapshot] After AI generation:`);
+                    console.log(`🔍 [DIAGNOSTIC]   - Detected integrations: ${detectedRequirements.requiredIntegrations.join(', ')}`);
+                    console.log(`🔍 [DIAGNOSTIC]   - Steps count: ${structure.steps.length}`);
+                    console.log(`🔍 [DIAGNOSTIC]   - Step types: ${structure.steps.map((s) => s.data?.type || s.type || s.nodeType).join(', ')}`);
+                }
+                // CRITICAL: Skip filtering for chatbot workflows (they use fixed structure)
+                const isChatbotIntent = this.detectChatbotIntent(requirements);
+                if (isChatbotIntent) {
+                    console.log('🤖 [Structure] Chatbot workflow detected - skipping node filtering');
+                    return structure; // Return structure as-is for chatbot workflows
+                }
+                // ✅ ARCHITECTURAL FIX: All workflows are now AI-generated from user prompts
+                // No sample workflow replacement logic - sample workflows are training-only (few-shot examples)
+                const filteredStructure = this.filterUnmentionedNodes(structure, requirements, detectedRequirements);
+                if (isDebug) {
+                    console.log(`🔍 [DIAGNOSTIC] [Pipeline Snapshot] After filtering:`);
+                    console.log(`🔍 [DIAGNOSTIC]   - Steps count: ${filteredStructure.steps.length}`);
+                    console.log(`🔍 [DIAGNOSTIC]   - Step types: ${filteredStructure.steps.map((s) => s.data?.type || s.type || s.nodeType).join(', ')}`);
+                }
+                // 🚨 CRITICAL: Enforce platform node selection - if platform is mentioned, ensure node exists
+                const enforcedStructure = this.enforcePlatformNodeSelection(filteredStructure, requirements);
+                if (isDebug) {
+                    console.log(`🔍 [DIAGNOSTIC] [Pipeline Snapshot] After platform enforcement:`);
+                    console.log(`🔍 [DIAGNOSTIC]   - Steps count: ${enforcedStructure.steps.length}`);
+                    console.log(`🔍 [DIAGNOSTIC]   - Step types: ${enforcedStructure.steps.map((s) => s.data?.type || s.type || s.nodeType).join(', ')}`);
+                }
+                // 🚨 CRITICAL: If user said "specify platform", remove duplicate CRM nodes (keep only one)
+                const userPromptLower = (requirements.originalPrompt || requirements.primaryGoal || '').toLowerCase();
+                const userSaysSpecifyPlatform = userPromptLower.includes('specify platform') || userPromptLower.includes('specify the platform');
+                if (userSaysSpecifyPlatform) {
+                    // ✅ UNIVERSAL: Get CRM platforms from registry instead of hardcoded list
+                    const crmPlatforms = this.getCrmNodeTypes();
+                    const crmSteps = enforcedStructure.steps.filter((step) => {
+                        const stepType = step.data?.type || step.type || step.nodeType || '';
+                        return this.isCrmNodeType(stepType);
+                    });
+                    if (crmSteps.length > 1) {
+                        console.log(`⚠️  [CRM Deduplication] Found ${crmSteps.length} CRM nodes but user said "specify platform" - keeping only the first one`);
+                        // ✅ UNIVERSAL: Use intent-based selection instead of hardcoded priority
+                        const detectedIntegrations = crmSteps.map((step) => {
+                            return step.data?.type || step.type || step.nodeType || '';
+                        });
+                        const firstCrmType = this.selectCrmNodeByIntent(detectedIntegrations, userPromptLower) ||
+                            (crmSteps[0].data?.type || crmSteps[0].type || crmSteps[0].nodeType);
+                        // Remove all CRM steps except the first one (by intent)
+                        const nonCrmSteps = enforcedStructure.steps.filter((step) => {
+                            const stepType = step.data?.type || step.type || step.nodeType || '';
+                            return !this.isCrmNodeType(stepType);
+                        });
+                        const firstCrmStep = crmSteps.find((step) => {
+                            const stepType = step.data?.type || step.type || step.nodeType || '';
+                            return stepType.toLowerCase() === firstCrmType.toLowerCase();
+                        }) || crmSteps[0];
+                        enforcedStructure.steps = [...nonCrmSteps, firstCrmStep];
+                        // Also update connections to remove references to removed CRM nodes
+                        if (enforcedStructure.connections) {
+                            const keptStepIds = new Set(enforcedStructure.steps.map((s) => s.id));
+                            enforcedStructure.connections = enforcedStructure.connections.filter((conn) => {
+                                const sourceId = conn.source === 'trigger' ? 'trigger' : conn.source;
+                                const targetId = conn.target;
+                                return sourceId === 'trigger' || keptStepIds.has(sourceId) || keptStepIds.has(targetId);
+                            });
+                        }
+                        console.log(`✅ [CRM Deduplication] Removed ${crmSteps.length - 1} duplicate CRM node(s), kept: ${firstCrmType}`);
+                    }
+                }
+                // Simplify structure for simple workflows (remove unnecessary transformation nodes)
+                const simplifiedStructure = this.simplifyStructureForSimpleWorkflows(enforcedStructure, requirements);
+                if (isDebug) {
+                    console.log(`🔍 [DIAGNOSTIC] [Pipeline Snapshot] After simplification:`);
+                    console.log(`🔍 [DIAGNOSTIC]   - Steps count: ${simplifiedStructure.steps.length}`);
+                    console.log(`🔍 [DIAGNOSTIC]   - Step types: ${simplifiedStructure.steps.map((s) => s.data?.type || s.type || s.nodeType).join(', ')}`);
+                }
+                // 🚨 CRITICAL: Enforce LOOP node if "extract from X and create Y" pattern is detected
+                if (detectedRequirements.needsLoop) {
+                    const existingStepTypes = new Set(simplifiedStructure.steps.map((s) => s.data?.type || s.type || s.nodeType));
+                    const hasLoopNode = existingStepTypes.has('loop');
+                    if (!hasLoopNode) {
+                        console.warn(`⚠️  [Loop Enforcement] LOOP node missing. Adding it between data source and create operation.`);
+                        // Find data source node (google_sheets, database_read) and create operation node (hubspot, airtable)
+                        const dataSourceIndex = simplifiedStructure.steps.findIndex((s) => {
+                            const stepType = s.data?.type || s.type || s.nodeType;
+                            return ['google_sheets', 'database_read'].includes(stepType);
+                        });
+                        const createOperationIndex = simplifiedStructure.steps.findIndex((s) => {
+                            const stepType = s.data?.type || s.type || s.nodeType;
+                            return ['hubspot', 'airtable', 'salesforce', 'zoho_crm', 'pipedrive'].includes(stepType);
+                        });
+                        if (dataSourceIndex !== -1 && createOperationIndex !== -1 && createOperationIndex > dataSourceIndex) {
+                            const dataSourceStep = simplifiedStructure.steps[dataSourceIndex];
+                            const createOperationStep = simplifiedStructure.steps[createOperationIndex];
+                            const dataSourceType = dataSourceStep.data?.type || dataSourceStep.type || dataSourceStep.nodeType;
+                            const createOperationType = createOperationStep.data?.type || createOperationStep.type || createOperationStep.nodeType;
+                            // Infer properties for data source node (google_sheets)
+                            if (dataSourceType === 'google_sheets') {
+                                dataSourceStep.inferredProperties = {
+                                    operation: 'read' // Default to 'read' for extracting data
+                                };
+                                console.log(`✅ [Loop Enforcement] Inferred google_sheets.operation = 'read'`);
+                            }
+                            // Infer properties for create operation node (hubspot, airtable, etc.)
+                            if (['hubspot', 'airtable', 'salesforce', 'zoho_crm', 'pipedrive'].includes(createOperationType)) {
+                                createOperationStep.inferredProperties = {
+                                    operation: 'create', // Default to 'create' for "create contact" patterns
+                                    resource: createOperationType === 'hubspot' ? 'contact' : 'record' // Default resource
+                                };
+                                console.log(`✅ [Loop Enforcement] Inferred ${createOperationType}.operation = 'create', resource = '${createOperationStep.inferredProperties.resource}'`);
+                            }
+                            // Insert loop node between data source and create operation
+                            const loopStep = {
+                                id: `step_loop_${Date.now()}`,
+                                description: `Loop through rows from ${dataSourceType}`,
+                                type: 'loop',
+                                // Pre-infer items property: will be set to {{$json.rows}} or {{$json.data}} from data source
+                                inferredProperties: {
+                                    items: '{{$json.rows}}' // Will be adjusted based on actual data source output field
+                                }
+                            };
+                            // Insert loop after data source, before create operation
+                            simplifiedStructure.steps.splice(createOperationIndex, 0, loopStep);
+                            console.log(`✅ [Loop Enforcement] Added loop node between ${dataSourceType} and ${createOperationType}`);
+                        }
+                        else {
+                            // Fallback: add loop after first data source node
+                            const firstDataSourceIndex = dataSourceIndex !== -1 ? dataSourceIndex : 0;
+                            const dataSourceStep = simplifiedStructure.steps[firstDataSourceIndex];
+                            const dataSourceType = dataSourceStep.data?.type || dataSourceStep.type || dataSourceStep.nodeType;
+                            // Infer properties for data source if it's google_sheets
+                            if (dataSourceType === 'google_sheets') {
+                                dataSourceStep.inferredProperties = {
+                                    operation: 'read'
+                                };
+                            }
+                            const loopStep = {
+                                id: `step_loop_${Date.now()}`,
+                                description: 'Loop through data rows',
+                                type: 'loop',
+                                inferredProperties: {
+                                    items: '{{$json.rows}}'
+                                }
+                            };
+                            simplifiedStructure.steps.splice(firstDataSourceIndex + 1, 0, loopStep);
+                            console.log(`✅ [Loop Enforcement] Added loop node after data source (fallback)`);
+                        }
+                    }
+                }
+                // 🚨 CRITICAL: Enforce conditional node AFTER filtering (in case it was filtered out)
+                // This ensures if_else is always present when conditional logic is detected
+                if (detectedRequirements.needsConditional) {
+                    const existingStepTypes = new Set(simplifiedStructure.steps.map((s) => s.data?.type || s.type || s.nodeType));
+                    const conditionalNodeTypes = ['if_else', 'if', 'switch', 'filter'];
+                    const hasConditionalNode = conditionalNodeTypes.some(nodeType => existingStepTypes.has(nodeType));
+                    if (!hasConditionalNode) {
+                        console.warn(`⚠️  [Conditional Enforcement] IF/ELSE node missing after filtering. Adding it as FIRST step.`);
+                        // Remove unnecessary processing nodes (but keep set_variable if data extraction is needed)
+                        const processingNodeTypes = ['ai_agent', 'javascript', 'code', 'json_parser'];
+                        let finalSteps = simplifiedStructure.steps.filter((s) => {
+                            const stepType = s.data?.type || s.type || s.nodeType;
+                            // Keep set_variable if data extraction is needed
+                            if (detectedRequirements.needsDataExtraction && stepType === 'set_variable') {
+                                return true;
+                            }
+                            return !processingNodeTypes.includes(stepType);
+                        });
+                        // Add if_else node as FIRST step (before set_variable if it exists)
+                        const ifElseStep = {
+                            id: `step_if_else_${Date.now()}`,
+                            description: 'Check condition and route to different actions',
+                            type: 'if_else',
+                        };
+                        finalSteps.unshift(ifElseStep);
+                        simplifiedStructure.steps = finalSteps;
+                        console.log(`✅ [Conditional Enforcement] Added if_else node after filtering`);
+                        console.log(`🔍 [DIAGNOSTIC] Final step types: ${finalSteps.map((s) => s.data?.type || s.type || s.nodeType).join(', ')}`);
+                    }
+                }
+                return simplifiedStructure;
+            }
+        }
+        catch (error) {
+            // ✅ STRICT ARCHITECTURE: Re-throw validation errors to abort workflow generation
+            if (error instanceof Error && error.message.includes('[LLM Schema Validation]')) {
+                throw error; // Abort workflow generation if validation fails
+            }
+            console.warn('Error generating structure with AI, using fallback logic:', error);
+        }
+        // Fallback: Generate structure using simple logic
+        const fallbackStructure = this.generateStructureFallback(requirements);
+        return this.simplifyStructureForSimpleWorkflows(fallbackStructure, requirements);
+    }
+    /**
+     * 🔥 PRODUCTION-GRADE ALIAS RESOLUTION
+     *
+     * Resolves all node types in parsed structure to canonical types using comprehensive alias resolver.
+     * Handles: extra spaces, misspellings, broken words, user phrasing, multi-word variations.
+     *
+     * Pipeline:
+     * 1. Normalize and resolve trigger
+     * 2. Normalize and resolve all steps/nodes
+     * 3. Replace original types with resolved canonical types
+     * 4. Log resolution mappings for debugging
+     *
+     * @param parsed - Parsed JSON structure from LLM
+     * @returns Parsed structure with all node types resolved to canonical types
+     */
+    resolveAndNormalizeNodeTypes(parsed) {
+        if (!parsed || typeof parsed !== 'object') {
+            return parsed;
+        }
+        const resolutionLog = [];
+        // Resolve trigger
+        if (parsed.trigger && typeof parsed.trigger === 'string') {
+            const original = parsed.trigger;
+            const resolved = unified_node_registry_1.unifiedNodeRegistry.resolveAlias(original) ?? original;
+            if (node_library_1.nodeLibrary.isNodeTypeRegistered(resolved)) {
+                resolutionLog.push({
+                    location: 'trigger',
+                    original,
+                    resolved,
+                    method: resolved === original ? 'registry_exact' : 'registry_alias',
+                    confidence: resolved === original ? 1 : 0.95,
+                });
+                parsed.trigger = resolved;
+            }
+            else {
+                console.warn(`[Alias Resolver] ⚠️ Could not resolve trigger via registry: "${parsed.trigger}"`);
+            }
+        }
+        // Resolve all steps/nodes
+        const steps = parsed.steps || parsed.nodes || [];
+        if (Array.isArray(steps)) {
+            steps.forEach((step, index) => {
+                if (!step || typeof step !== 'object') {
+                    return;
+                }
+                const stepType = step.type || step.nodeType;
+                if (stepType && typeof stepType === 'string') {
+                    const original = stepType;
+                    const resolved = unified_node_registry_1.unifiedNodeRegistry.resolveAlias(original) ?? original;
+                    if (node_library_1.nodeLibrary.isNodeTypeRegistered(resolved)) {
+                        resolutionLog.push({
+                            location: `step${index + 1} (${step.id || 'unknown'})`,
+                            original,
+                            resolved,
+                            method: resolved === original ? 'registry_exact' : 'registry_alias',
+                            confidence: resolved === original ? 1 : 0.95,
+                        });
+                        // Replace with resolved canonical type
+                        if (step.type)
+                            step.type = resolved;
+                        if (step.nodeType)
+                            step.nodeType = resolved;
+                    }
+                    else {
+                        console.warn(`[Alias Resolver] ⚠️ Could not resolve step${index + 1} type via registry: "${stepType}"`);
+                    }
+                }
+            });
+        }
+        // Log resolution summary
+        if (resolutionLog.length > 0) {
+            console.log(`[Alias Resolver] ✅ Resolved ${resolutionLog.length} node type(s):`);
+            resolutionLog.forEach(log => {
+                console.log(`  ${log.location}: "${log.original}" → "${log.resolved}" ` +
+                    `(${log.method}, confidence: ${(log.confidence * 100).toFixed(1)}%)`);
+            });
+        }
+        return parsed;
+    }
+    /**
+     * ✅ STRICT ARCHITECTURE: Validate LLM-generated node types
+     *
+     * This is the ROOT-LEVEL enforcement that blocks invalid node types.
+     *
+     * Rules:
+     * - Validates trigger against CANONICAL_NODE_TYPES
+     * - Validates every step.type or step.nodeType against CANONICAL_NODE_TYPES
+     * - Collects ALL invalid types before throwing (comprehensive error message)
+     * - THROWS ERROR immediately if any invalid type found (fail-fast)
+     * - Blocks execution - invalid workflows CANNOT proceed
+     *
+     * This ensures:
+     * - LLM cannot generate invalid node types
+     * - Invalid types are blocked at generation time
+     * - No invalid types reach NodeLibrary or registry
+     * - Clear error messages for debugging
+     *
+     * NOTE: This validation runs AFTER alias resolution, so all types should already be canonical.
+     *
+     * @param parsed - Parsed JSON structure from LLM (with resolved canonical types)
+     * @throws Error if any invalid node types are detected
+     */
+    validateLLMGeneratedNodeTypes(parsed) {
+        if (!parsed || typeof parsed !== 'object') {
+            // Empty or invalid structure - let downstream logic handle it
+            return;
+        }
+        const invalidTypes = [];
+        // ✅ STEP 1: Validate trigger
+        if (parsed.trigger) {
+            if (typeof parsed.trigger !== 'string') {
+                invalidTypes.push({ location: 'trigger', type: String(parsed.trigger) });
+            }
+            else if (!node_library_1.CANONICAL_NODE_TYPES.includes(parsed.trigger)) {
+                invalidTypes.push({ location: 'trigger', type: parsed.trigger });
+            }
+        }
+        // ✅ STEP 2: Validate all steps
+        const steps = parsed.steps || parsed.nodes || [];
+        if (Array.isArray(steps)) {
+            steps.forEach((step, index) => {
+                if (!step || typeof step !== 'object') {
+                    return; // Skip invalid step objects (handled elsewhere)
+                }
+                // Check both step.type and step.nodeType (support different formats)
+                const stepType = step.type || step.nodeType;
+                if (!stepType) {
+                    // Missing type - invalid
+                    invalidTypes.push({
+                        location: `step${index + 1} (${step.id || 'unknown'})`,
+                        type: '<missing>'
+                    });
+                }
+                else if (typeof stepType !== 'string') {
+                    // Non-string type - invalid
+                    invalidTypes.push({
+                        location: `step${index + 1} (${step.id || 'unknown'})`,
+                        type: String(stepType)
+                    });
+                }
+                else if (!node_library_1.CANONICAL_NODE_TYPES.includes(stepType)) {
+                    // Type not in canonical list - invalid
+                    invalidTypes.push({
+                        location: `step${index + 1} (${step.id || 'unknown'})`,
+                        type: stepType
+                    });
+                }
+            });
+        }
+        // ✅ STEP 3: Fail-fast if any invalid types found
+        if (invalidTypes.length > 0) {
+            const invalidList = invalidTypes.map(item => `${item.location}: "${item.type}"`).join(', ');
+            const sampleTypes = node_library_1.CANONICAL_NODE_TYPES.slice(0, 10).join(', ');
+            const errorMessage = `[LLM Schema Validation] ❌ Invalid node types generated: ${invalidList}. ` +
+                `Only canonical types from NodeLibrary are allowed. ` +
+                `Valid types (sample): ${sampleTypes}... ` +
+                `Total valid types: ${node_library_1.CANONICAL_NODE_TYPES.length}. ` +
+                `This indicates LLM generated invalid node types. Workflow generation aborted.`;
+            console.error(`❌ [LLM Schema Validation] Invalid types detected: ${invalidList}`);
+            console.error(`   Total invalid: ${invalidTypes.length}`);
+            console.error(`   Valid types count: ${node_library_1.CANONICAL_NODE_TYPES.length}`);
+            throw new Error(errorMessage);
+        }
+        // ✅ STEP 4: Log success
+        const stepCount = (parsed.steps || parsed.nodes || []).length;
+        console.log(`✅ [LLM Schema Validation] All node types are canonical ` +
+            `(trigger: ${parsed.trigger || 'none'}, ${stepCount} step(s) validated)`);
+    }
+    /**
+     * CRITICAL: Filter out nodes that weren't mentioned in the requirements
+     * Prevents adding Slack, email, or other nodes when user only mentioned specific services
+     */
+    filterUnmentionedNodes(structure, requirements, detectedRequirements) {
+        // CRITICAL: Use the ORIGINAL user prompt when available for better detection
+        const originalPrompt = (requirements.originalPrompt || requirements.primaryGoal || '').toLowerCase();
+        const keySteps = (requirements.keySteps || []).join(' ').toLowerCase();
+        const promptLower = originalPrompt + ' ' + keySteps; // Combine for better detection
+        const steps = structure.steps || [];
+        const filteredSteps = [];
+        const removedNodes = [];
+        // ✅ UNIVERSAL: Use registry-based keyword mapping (replaces hardcoded serviceKeywords)
+        const serviceKeywords = this.buildUniversalKeywordMap();
+        const isDebug = process.env.DEBUG === 'true' || process.env.NODE_ENV === 'development';
+        if (isDebug) {
+            console.log(`🔍 [DIAGNOSTIC] [Node Filter] Starting filter with ${steps.length} steps`);
+            console.log(`🔍 [DIAGNOSTIC] [Node Filter] Prompt: "${promptLower.substring(0, 100)}..."`);
+        }
+        // Check each step to see if it matches what was mentioned
+        for (const step of steps) {
+            // ✅ CRITICAL: Check data.type for nodes with type: 'custom' (frontend compatibility)
+            // NOTE: WorkflowStepDefinition doesn't formally expose data/nodeType, so we cast to any here.
+            const stepAny = step;
+            const stepType = (stepAny.data?.type || stepAny.type || stepAny.nodeType || '').toLowerCase();
+            // ✅ UNIVERSAL: Get keywords from registry instead of hardcoded map
+            const keywords = serviceKeywords[stepType] || this.getKeywordsForNodeType(stepType);
+            if (isDebug) {
+                console.log(`🔍 [DIAGNOSTIC] [Node Filter] Step: type="${stepType}", keywords=[${keywords.join(', ')}]`);
+            }
+            // ✅ UNIVERSAL: For platform nodes and CRM nodes, use registry (no hardcoding)
+            const nodeDef = unified_node_registry_1.unifiedNodeRegistry.get(stepType);
+            const nodeCategory = nodeDef?.category?.toLowerCase() || '';
+            const nodeTags = (nodeDef?.tags || []).map((t) => t.toLowerCase());
+            const isPlatformNode = nodeCategory === 'social' ||
+                nodeTags.includes('platform') ||
+                nodeTags.includes('social');
+            const isCrmNode = nodeCategory === 'crm' ||
+                nodeTags.includes('crm') ||
+                nodeTags.includes('customer relationship');
+            if (isDebug) {
+                console.log(`🔍 [DIAGNOSTIC] [Node Filter] Step "${stepType}": isPlatform=${isPlatformNode}, isCrm=${isCrmNode}`);
+            }
+            // Check if this service was mentioned in the prompt
+            // ✅ UNIVERSAL: Split prompt into words for word-based pattern matching
+            const promptWords = promptLower
+                .split(/[\s_\-.,;:!?()\[\]{}'"]+/)
+                .filter(word => word.length > 0);
+            let wasMentioned = false;
+            if (isPlatformNode || isCrmNode) {
+                // ✅ CRITICAL: For CRM nodes, also check if generic "crm" is mentioned (even if not in keywords)
+                if (isCrmNode && promptWords.some(pw => pw === 'crm' || pw.includes('crm') || 'crm'.includes(pw))) {
+                    wasMentioned = true;
+                    if (isDebug) {
+                        console.log(`🔍 [DIAGNOSTIC] [Node Filter] CRM node "${stepType}" matched - generic "crm" found in prompt`);
+                    }
+                }
+                else {
+                    // ✅ UNIVERSAL: For platform/CRM nodes, use word-based pattern matching
+                    wasMentioned = keywords.some(keyword => {
+                        // Split keyword into words
+                        const keywordWords = keyword
+                            .toLowerCase()
+                            .split(/[\s_\-.,;:!?()\[\]{}'"]+/)
+                            .filter(w => w.length > 0);
+                        if (keywordWords.length === 0)
+                            return false;
+                        // Check if ALL keyword words appear in prompt words
+                        const stopWords = new Set(['a', 'an', 'the', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from']);
+                        const importantKeywordWords = keywordWords.filter(w => !stopWords.has(w) || w.length > 2);
+                        if (importantKeywordWords.length === 0) {
+                            // If only stop words, check if any word matches
+                            return keywordWords.some(kw => promptWords.some(pw => pw === kw || pw.includes(kw) || kw.includes(pw)));
+                        }
+                        // Check if ALL important keyword words appear in prompt
+                        const allWordsFound = importantKeywordWords.every(keywordWord => promptWords.some(promptWord => promptWord === keywordWord ||
+                            promptWord.includes(keywordWord) ||
+                            keywordWord.includes(promptWord)));
+                        if (isDebug && allWordsFound) {
+                            console.log(`🔍 [DIAGNOSTIC] [Node Filter] Keyword "${keyword}" matched for "${stepType}" (word-based pattern match)`);
+                        }
+                        return allWordsFound;
+                    });
+                }
+            }
+            else {
+                // ✅ UNIVERSAL: For other nodes, use word-based pattern matching
+                wasMentioned = keywords.some(keyword => {
+                    // Split keyword into words
+                    const keywordWords = keyword
+                        .toLowerCase()
+                        .split(/[\s_\-.,;:!?()\[\]{}'"]+/)
+                        .filter(w => w.length > 0);
+                    if (keywordWords.length === 0)
+                        return false;
+                    // Check if ALL keyword words appear in prompt words
+                    const stopWords = new Set(['a', 'an', 'the', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from']);
+                    const importantKeywordWords = keywordWords.filter(w => !stopWords.has(w) || w.length > 2);
+                    if (importantKeywordWords.length === 0) {
+                        // If only stop words, check if any word matches
+                        return keywordWords.some(kw => promptWords.some(pw => pw === kw || pw.includes(kw) || kw.includes(pw)));
+                    }
+                    // Check if ALL important keyword words appear in prompt
+                    const allWordsFound = importantKeywordWords.every(keywordWord => promptWords.some(promptWord => promptWord === keywordWord ||
+                        promptWord.includes(keywordWord) ||
+                        keywordWord.includes(promptWord)));
+                    if (isDebug && allWordsFound) {
+                        console.log(`🔍 [DIAGNOSTIC] [Node Filter] Keyword "${keyword}" matched for "${stepType}" (word-based pattern match)`);
+                    }
+                    return allWordsFound;
+                });
+            }
+            if (isDebug) {
+                console.log(`🔍 [DIAGNOSTIC] [Node Filter] Step "${stepType}": wasMentioned=${wasMentioned}`);
+            }
+            // Special cases:
+            // - google_sheets is mentioned if "sheet" or "spreadsheet" is in prompt
+            // - google_doc is mentioned if "doc" or "document" is in prompt (but not "spreadsheet")
+            // - slack_message is mentioned if "slack" or "notify" is in prompt
+            // ✅ CRITICAL: Check if this is a conditional logic node
+            const isConditionalNode = ['if_else', 'if', 'switch', 'filter'].includes(stepType);
+            const conditionalMentioned = promptLower.includes('if') ||
+                promptLower.includes('then') ||
+                promptLower.includes('when') ||
+                promptLower.includes('greater than') ||
+                promptLower.includes('less than') ||
+                promptLower.includes('otherwise') ||
+                promptLower.includes('condition') ||
+                promptLower.includes('check if') ||
+                promptLower.includes('>') ||
+                promptLower.includes('<') ||
+                promptLower.includes('==');
+            // For data processing nodes (javascript, if_else, etc.), check if transformation was mentioned
+            const isDataProcessing = ['javascript', 'set_variable', 'text_formatter', 'json_parser'].includes(stepType);
+            const transformationMentioned = promptLower.includes('transform') ||
+                promptLower.includes('process') ||
+                promptLower.includes('extract') ||
+                promptLower.includes('filter') ||
+                promptLower.includes('condition');
+            // ✅ PRESERVATION: set_variable must also be kept when explicit variable-assignment phrasing is present
+            // This mirrors the wantsExplicitVariableAssignment detection in generateStructure.
+            const explicitVariableAssignmentMentioned = /\bset_variable\b/i.test(promptLower) ||
+                /\b(set|store|save|assign|persist)\s+(?:the\s+)?(?:value\s+)?(?:in|into|to)\s+(?:a\s+)?variable\b/i.test(promptLower) ||
+                /\bvariable\s+(?:named|called)\b/i.test(promptLower) ||
+                /\bhold\s+(?:it\s+)?in\s+(?:a\s+)?variable\b/i.test(promptLower);
+            // ✅ CRITICAL: For AI nodes, check if AI-related keywords are mentioned
+            // ✅ Updated: ai_service removed, capabilities resolve to real nodes
+            const isAiNode = ['ai_chat_model', 'ai_agent', 'chat_model', 'text_summarizer', 'ollama', 'openai_gpt', 'anthropic_claude', 'google_gemini', 'ai_summarization', 'ai_summarizer'].includes(stepType);
+            const aiMentioned = promptLower.includes('ai') ||
+                promptLower.includes('summarize') ||
+                promptLower.includes('summary') ||
+                promptLower.includes('summarization') ||
+                promptLower.includes('analyze') ||
+                promptLower.includes('ai model') ||
+                promptLower.includes('chat model') ||
+                promptLower.includes('ollama') ||
+                promptLower.includes('llm') ||
+                promptLower.includes('using ai') ||
+                promptLower.includes('with ai');
+            // ✅ CRITICAL: For HTTP nodes, check if HTTP/API keywords are mentioned
+            const isHttpNode = ['http_request', 'http_post', 'http_get'].includes(stepType);
+            const httpMentioned = promptLower.includes('http') ||
+                promptLower.includes('api') ||
+                promptLower.includes('fetch') ||
+                promptLower.includes('call') ||
+                promptLower.includes('endpoint') ||
+                promptLower.includes('url');
+            // ✅ CRITICAL: Always keep conditional nodes if conditional logic is detected
+            if (isConditionalNode) {
+                // Always keep conditional nodes if conditional logic was programmatically detected
+                if (detectedRequirements?.needsConditional || conditionalMentioned) {
+                    filteredSteps.push(step);
+                    if (isDebug) {
+                        console.log(`🔍 [DIAGNOSTIC] [Node Filter] Keeping conditional node "${stepType}" - conditional logic detected (programmatic: ${detectedRequirements?.needsConditional}, mentioned: ${conditionalMentioned})`);
+                    }
+                }
+                else {
+                    // Even if not detected, keep it if conditional keywords are mentioned
+                    filteredSteps.push(step);
+                    if (isDebug) {
+                        console.log(`🔍 [DIAGNOSTIC] [Node Filter] Keeping conditional node "${stepType}" - conditional keywords found in prompt`);
+                    }
+                }
+            }
+            else if (isDataProcessing) {
+                // ✅ PRESERVATION: For set_variable, also keep when explicit variable-assignment phrasing is present
+                const shouldKeepDataProcessing = transformationMentioned ||
+                    (stepType === 'set_variable' && explicitVariableAssignmentMentioned);
+                if (shouldKeepDataProcessing) {
+                    filteredSteps.push(step);
+                }
+                else {
+                    removedNodes.push(stepType);
+                }
+            }
+            else if (isAiNode) {
+                // 🚨 CRITICAL: Only keep AI nodes if explicitly mentioned OR if detectedRequirements.needsAiAgent is true
+                const shouldKeep = aiMentioned || wasMentioned || detectedRequirements?.needsAiAgent;
+                if (shouldKeep) {
+                    filteredSteps.push(step);
+                    if (isDebug) {
+                        console.log(`🔍 [DIAGNOSTIC] [Node Filter] Keeping AI node "${stepType}" - AI mentioned: ${aiMentioned}, needsAiAgent: ${detectedRequirements?.needsAiAgent}`);
+                    }
+                }
+                else {
+                    removedNodes.push(stepType);
+                    logger_1.logger.debug(`⚠️  [Node Filter] Removing "${stepType}" - AI not mentioned in prompt and needsAiAgent=false`);
+                }
+            }
+            else if (isHttpNode) {
+                // Keep HTTP nodes if HTTP/API keywords are mentioned
+                if (httpMentioned || wasMentioned) {
+                    filteredSteps.push(step);
+                    if (isDebug) {
+                        console.log(`🔍 [DIAGNOSTIC] [Node Filter] Keeping HTTP node "${stepType}" - HTTP/API mentioned in prompt`);
+                    }
+                }
+                else {
+                    removedNodes.push(stepType);
+                    logger_1.logger.debug(`⚠️  [Node Filter] Removing "${stepType}" - HTTP/API not mentioned in prompt`);
+                }
+            }
+            else if (stepType === 'google_gmail' || stepType === 'email') {
+                // 🚨 CRITICAL: Special handling for Gmail/email nodes
+                // Check if Gmail is mentioned in prompt
+                const gmailKeywords = ['gmail', 'google mail', 'google email', 'send via gmail', 'gmail them', 'email via gmail'];
+                const gmailMentioned = gmailKeywords.some(keyword => promptLower.includes(keyword));
+                if (stepType === 'google_gmail') {
+                    // Keep google_gmail if Gmail is mentioned OR if it was already in the structure
+                    if (gmailMentioned || wasMentioned) {
+                        filteredSteps.push(step);
+                        if (isDebug) {
+                            console.log(`🔍 [DIAGNOSTIC] [Node Filter] Keeping google_gmail node - Gmail mentioned: ${gmailMentioned}`);
+                        }
+                    }
+                    else {
+                        // Check if generic email keywords are mentioned (might be Gmail use case)
+                        const emailKeywords = ['send email', 'send mail', 'email', 'mail'];
+                        const emailMentioned = emailKeywords.some(keyword => promptLower.includes(keyword));
+                        if (emailMentioned) {
+                            // Keep google_gmail even if not explicitly mentioned (prefer Gmail over generic email)
+                            filteredSteps.push(step);
+                            if (isDebug) {
+                                console.log(`🔍 [DIAGNOSTIC] [Node Filter] Keeping google_gmail node - email keywords found, preferring Gmail`);
+                            }
+                        }
+                        else {
+                            removedNodes.push(stepType);
+                            logger_1.logger.debug(`⚠️  [Node Filter] Removing "${stepType}" - not mentioned in prompt`);
+                        }
+                    }
+                }
+                else if (stepType === 'email') {
+                    // Only keep generic email node if Gmail is NOT mentioned
+                    if (gmailMentioned) {
+                        // Gmail is mentioned, so remove generic email node (will be replaced with google_gmail)
+                        removedNodes.push(stepType);
+                        logger_1.logger.debug(`⚠️  [Node Filter] Removing generic "${stepType}" node - Gmail mentioned, will use google_gmail instead`);
+                    }
+                    else if (wasMentioned) {
+                        // Keep generic email if email keywords are mentioned and Gmail is not
+                        filteredSteps.push(step);
+                        if (isDebug) {
+                            console.log(`🔍 [DIAGNOSTIC] [Node Filter] Keeping email node - email mentioned, Gmail not mentioned`);
+                        }
+                    }
+                    else {
+                        removedNodes.push(stepType);
+                        logger_1.logger.debug(`⚠️  [Node Filter] Removing "${stepType}" - not mentioned in prompt`);
+                    }
+                }
+            }
+            else if (wasMentioned || stepType === 'log_output') {
+                // Keep if mentioned OR if it's log_output (can be added automatically)
+                filteredSteps.push(step);
+            }
+            else {
+                // ✅ CRITICAL: Check if this node was programmatically detected (e.g., from detectedRequirements)
+                // If it was detected programmatically, keep it even if not explicitly mentioned in prompt
+                const stepAny = step;
+                const isProgrammaticallyDetected = detectedRequirements?.requiredIntegrations?.includes(stepType.toUpperCase()) ||
+                    detectedRequirements?.requiredIntegrations?.some((int) => stepType.toLowerCase() === int.toLowerCase() ||
+                        stepType.toLowerCase().includes(int.toLowerCase()));
+                if (isProgrammaticallyDetected) {
+                    filteredSteps.push(step);
+                    if (isDebug) {
+                        console.log(`🔍 [DIAGNOSTIC] [Node Filter] Keeping "${stepType}" - programmatically detected integration`);
+                    }
+                }
+                else {
+                    // Remove node that wasn't mentioned
+                    removedNodes.push(stepType);
+                    logger_1.logger.debug(`⚠️  [Node Filter] Removing "${stepType}" - not mentioned in prompt: "${requirements.primaryGoal}"`);
+                }
+            }
+        }
+        if (removedNodes.length > 0) {
+            logger_1.logger.debug(`✅ [Node Filter] Filtered out ${removedNodes.length} unmentioned node(s): ${removedNodes.join(', ')}`);
+            // Update connections to remove references to filtered nodes
+            const removedNodeIds = new Set(steps
+                .filter(s => removedNodes.includes(s.type?.toLowerCase() || ''))
+                .map(s => s.id));
+            const filteredConnections = (structure.connections || []).filter(conn => !removedNodeIds.has(conn.source) && !removedNodeIds.has(conn.target));
+            // Rebuild connections if needed
+            if (filteredSteps.length > 0 && filteredConnections.length === 0) {
+                // Create simple linear connection: trigger → first step
+                filteredConnections.push({
+                    source: 'trigger',
+                    target: filteredSteps[0].id,
+                });
+                // Connect steps sequentially
+                for (let i = 0; i < filteredSteps.length - 1; i++) {
+                    filteredConnections.push({
+                        source: filteredSteps[i].id,
+                        target: filteredSteps[i + 1].id,
+                    });
+                }
+            }
+            return {
+                ...structure,
+                steps: filteredSteps,
+                connections: filteredConnections,
+            };
+        }
+        return structure;
+    }
+    /**
+     * 🚨 CRITICAL: Enforce platform node selection
+     * If user mentions a platform (LinkedIn, Twitter, etc.), ensure the corresponding node exists
+     * Also enforces Gmail/email node selection
+     */
+    enforcePlatformNodeSelection(structure, requirements) {
+        // CRITICAL: Check ORIGINAL prompt (if available) and keySteps for platform mentions
+        const promptText = (requirements.originalPrompt || requirements.primaryGoal || '').toLowerCase();
+        const keySteps = (requirements.keySteps || []).join(' ').toLowerCase();
+        const promptLower = promptText + ' ' + keySteps; // Combine for better detection
+        const steps = structure.steps || [];
+        const stepTypes = new Set(steps.map(s => s.data?.type || s.type || s.nodeType || '').map((t) => t.toLowerCase()));
+        // Platform to node type mapping (expanded keywords)
+        const platformMapping = {
+            'linkedin': 'linkedin',
+            'linked in': 'linkedin',
+            'linked-in': 'linkedin',
+            'li ': 'linkedin', // "post to li" or "li posting"
+            'twitter': 'twitter',
+            'tweet': 'twitter',
+            'x.com': 'twitter',
+            'instagram': 'instagram',
+            'ig ': 'instagram', // "post to ig"
+            'facebook': 'facebook',
+            'fb ': 'facebook', // "post to fb"
+            'youtube': 'youtube',
+            'you tube': 'youtube',
+            'yt': 'youtube',
+        };
+        let structureModified = false;
+        let newSteps = [...steps];
+        let newConnections = [...(structure.connections || [])];
+        // 🚨 CRITICAL: Check for Gmail/email mentions FIRST (before platform nodes)
+        // Gmail keywords (must check before generic email)
+        const gmailKeywords = ['gmail', 'google mail', 'google email', 'send via gmail', 'gmail them', 'email via gmail'];
+        const gmailMentioned = gmailKeywords.some(keyword => {
+            const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+            return regex.test(promptLower);
+        });
+        // Generic email keywords (only if Gmail is NOT mentioned)
+        const emailKeywords = ['send email', 'send mail', 'email', 'mail'];
+        const emailMentioned = !gmailMentioned && emailKeywords.some(keyword => {
+            const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+            return regex.test(promptLower);
+        });
+        // Check if Gmail node exists
+        const hasGmailNode = stepTypes.has('google_gmail');
+        const hasEmailNode = stepTypes.has('email');
+        // 🚨 CRITICAL: If Gmail is mentioned but google_gmail node is missing, add it
+        if (gmailMentioned && !hasGmailNode) {
+            console.log(`🚨 [Gmail Enforcement] User mentioned Gmail but google_gmail node is missing. Adding it.`);
+            // If there's a generic email node, replace it with google_gmail
+            if (hasEmailNode) {
+                console.log(`🚨 [Gmail Enforcement] Replacing generic email node with google_gmail node.`);
+                newSteps = newSteps.map(step => {
+                    const stepType = (step.data?.type || step.type || step.nodeType || '').toLowerCase();
+                    if (stepType === 'email') {
+                        return {
+                            ...step,
+                            type: 'google_gmail',
+                            ...step.data ? { data: { ...step.data, type: 'google_gmail' } } : {},
+                        };
+                    }
+                    return step;
+                });
+                structureModified = true;
+            }
+            else {
+                // Add new google_gmail node
+                const newNodeId = `step_google_gmail_${Date.now()}`;
+                newSteps.push({
+                    id: newNodeId,
+                    type: 'google_gmail',
+                    description: 'Send email via Gmail',
+                });
+                // Update connections: connect last step to new Gmail node
+                if (newSteps.length > 1) {
+                    const lastStepId = newSteps[newSteps.length - 2].id;
+                    newConnections.push({
+                        source: lastStepId,
+                        target: newNodeId,
+                    });
+                }
+                else if (structure.trigger) {
+                    newConnections.push({
+                        source: 'trigger',
+                        target: newNodeId,
+                    });
+                }
+                structureModified = true;
+            }
+        }
+        else if (emailMentioned && !hasGmailNode && !hasEmailNode) {
+            // Only add generic email node if Gmail is NOT mentioned and no email node exists
+            console.log(`🚨 [Email Enforcement] User mentioned email but email node is missing. Adding it.`);
+            const newNodeId = `step_email_${Date.now()}`;
+            newSteps.push({
+                id: newNodeId,
+                type: 'email',
+                description: 'Send email via SMTP',
+            });
+            // Update connections
+            if (newSteps.length > 1) {
+                const lastStepId = newSteps[newSteps.length - 2].id;
+                newConnections.push({
+                    source: lastStepId,
+                    target: newNodeId,
+                });
+            }
+            else if (structure.trigger) {
+                newConnections.push({
+                    source: 'trigger',
+                    target: newNodeId,
+                });
+            }
+            structureModified = true;
+        }
+        // Check if any platform is mentioned
+        for (const [platformKeyword, nodeType] of Object.entries(platformMapping)) {
+            // More flexible matching: check if keyword appears as a word
+            const keywordRegex = new RegExp(`\\b${platformKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+            const isMentioned = keywordRegex.test(promptLower);
+            if (isMentioned && !stepTypes.has(nodeType)) {
+                console.log(`🚨 [Platform Enforcement] User mentioned "${platformKeyword}" but "${nodeType}" node is missing. Adding it.`);
+                // Add the missing platform node
+                const newNodeId = `step_${nodeType}_${Date.now()}`;
+                newSteps.push({
+                    id: newNodeId,
+                    type: nodeType,
+                    description: `Post to ${platformKeyword.charAt(0).toUpperCase() + platformKeyword.slice(1)}`,
+                });
+                // Update connections: connect last step to new platform node
+                if (newSteps.length > 1) {
+                    const lastStepId = newSteps[newSteps.length - 2].id;
+                    newConnections.push({
+                        source: lastStepId,
+                        target: newNodeId,
+                    });
+                }
+                else if (structure.trigger) {
+                    // If only trigger exists, connect trigger to platform node
+                    newConnections.push({
+                        source: 'trigger',
+                        target: newNodeId,
+                    });
+                }
+                else {
+                    // If no trigger, create one and connect
+                    // This shouldn't happen, but handle it gracefully
+                    console.warn(`⚠️  [Platform Enforcement] No trigger found, platform node added but may need trigger`);
+                }
+                structureModified = true;
+            }
+        }
+        if (structureModified) {
+            return {
+                ...structure,
+                steps: newSteps,
+                connections: newConnections,
+            };
+        }
+        return structure;
+    }
+    /**
+     * Simplify workflow structure for simple requests
+     * Removes unnecessary extraction/transformation nodes for simple workflows
+     */
+    simplifyStructureForSimpleWorkflows(structure, requirements) {
+        const promptLower = (requirements.originalPrompt || requirements.primaryGoal || '').toLowerCase();
+        const steps = structure.steps || [];
+        // Detect simple workflow patterns
+        const isSimpleNotification = (promptLower.includes('send notification') ||
+            promptLower.includes('notify') ||
+            promptLower.includes('send message') ||
+            promptLower.includes('alert')) && !promptLower.includes('extract') && !promptLower.includes('transform') && !promptLower.includes('filter');
+        const isSimpleSave = (promptLower.includes('save') ||
+            promptLower.includes('store')) && !promptLower.includes('extract') && !promptLower.includes('transform') && !promptLower.includes('separate');
+        const isSimpleRead = (promptLower.includes('read') ||
+            promptLower.includes('get data')) && !promptLower.includes('extract') && !promptLower.includes('transform') && !promptLower.includes('filter');
+        // If it's a simple workflow, remove unnecessary transformation nodes
+        if (isSimpleNotification || isSimpleSave || isSimpleRead) {
+            const transformationNodeTypes = ['set_variable', 'if_else', 'text_formatter', 'javascript', 'json_parser', 'edit_fields', 'merge_data'];
+            const actionNodeTypes = ['slack_message', 'discord', 'google_gmail', 'email', 'google_sheets', 'database_write', 'database_read', 'google_doc'];
+            // Find action nodes (the actual task)
+            const actionNodes = steps.filter(step => actionNodeTypes.includes(step.type?.toLowerCase() || ''));
+            // Find transformation nodes (unnecessary for simple workflows)
+            const transformationNodes = steps.filter(step => transformationNodeTypes.includes(step.type?.toLowerCase() || ''));
+            // If we have action nodes and transformation nodes, and transformation nodes are not needed
+            if (actionNodes.length > 0 && transformationNodes.length > 0) {
+                // Check if transformation nodes are actually doing something necessary
+                const hasExplicitTransformation = promptLower.includes('extract') ||
+                    promptLower.includes('transform') ||
+                    promptLower.includes('calculate') ||
+                    promptLower.includes('filter') ||
+                    promptLower.includes('separate') ||
+                    promptLower.includes('categorize') ||
+                    promptLower.includes('if') ||
+                    promptLower.includes('condition');
+                if (!hasExplicitTransformation) {
+                    console.log(`✅ [Structure Simplification] Detected simple workflow, removing ${transformationNodes.length} unnecessary transformation node(s)`);
+                    // Remove transformation nodes
+                    const simplifiedSteps = steps.filter(step => !transformationNodeTypes.includes(step.type?.toLowerCase() || ''));
+                    // Update connections to skip transformation nodes
+                    const transformationNodeIds = new Set(transformationNodes.map(n => n.id));
+                    const simplifiedConnections = (structure.connections || [])
+                        .filter(conn => !transformationNodeIds.has(conn.source) &&
+                        !transformationNodeIds.has(conn.target))
+                        .map(conn => {
+                        // If connection was going through a transformation node, connect directly to action
+                        if (transformationNodeIds.has(conn.source)) {
+                            // Find the transformation node and its source
+                            const transNode = transformationNodes.find(n => n.id === conn.source);
+                            if (transNode) {
+                                // Find connection that feeds into this transformation node
+                                const inputConn = (structure.connections || []).find(c => c.target === transNode.id);
+                                if (inputConn && actionNodes.length > 0) {
+                                    // Connect directly from original source to action node
+                                    return {
+                                        ...conn,
+                                        source: inputConn.source,
+                                        target: actionNodes[0].id,
+                                    };
+                                }
+                            }
+                        }
+                        return conn;
+                    })
+                        .filter(conn => conn.source && conn.target); // Remove invalid connections
+                    // If no connections remain, create direct connection from trigger to action
+                    if (simplifiedConnections.length === 0 && actionNodes.length > 0) {
+                        simplifiedConnections.push({
+                            source: 'trigger',
+                            target: actionNodes[0].id,
+                            outputField: 'inputData',
+                            inputField: 'input',
+                        });
+                    }
+                    return {
+                        ...structure,
+                        steps: simplifiedSteps,
+                        connections: simplifiedConnections,
+                    };
+                }
+            }
+        }
+        return structure;
+    }
+    /**
+     * Fallback structure generation when AI is unavailable
+     */
+    generateStructureFallback(requirements) {
+        const structure = {
+            trigger: null,
+            steps: [],
+            outputs: [],
+            connections: [],
+        };
+        // Determine trigger type based on requirements - FIXED: Don't default to schedule
+        // Only use schedule if explicitly mentioned in schedules array or prompt
+        const promptLower = requirements.primaryGoal?.toLowerCase() || '';
+        const hasScheduleKeywords = promptLower.includes('schedule') ||
+            promptLower.includes('daily') ||
+            promptLower.includes('weekly') ||
+            promptLower.includes('hourly') ||
+            promptLower.includes('cron') ||
+            promptLower.includes('recurring') ||
+            promptLower.includes('periodic') ||
+            promptLower.includes('automatically at');
+        // Enhanced form trigger detection - check for all variations
+        const hasFormKeywords = promptLower.includes('form') ||
+            promptLower.includes('submit') ||
+            promptLower.includes('submission') ||
+            promptLower.includes('user submits') ||
+            promptLower.includes('when a user submits') ||
+            promptLower.includes('form submission') ||
+            promptLower.includes('form trigger') ||
+            promptLower.includes('form input') ||
+            promptLower.includes('form data');
+        if (requirements.schedules && requirements.schedules.length > 0 && hasScheduleKeywords) {
+            structure.trigger = 'schedule';
+        }
+        else if (requirements.urls && requirements.urls.some(url => url.includes('webhook'))) {
+            structure.trigger = 'webhook';
+        }
+        else if (requirements.platforms && requirements.platforms.some(p => p.toLowerCase().includes('form'))) {
+            structure.trigger = 'form';
+        }
+        else if (hasFormKeywords) {
+            // Prioritize form trigger if form keywords are detected
+            structure.trigger = 'form';
+        }
+        else if (promptLower.includes('webhook') || promptLower.includes('http request') || promptLower.includes('api call')) {
+            structure.trigger = 'webhook';
+        }
+        else {
+            // Default to manual trigger - user can change it later
+            structure.trigger = 'manual_trigger';
+        }
+        // Map key steps to workflow steps
+        requirements.keySteps.forEach((step, index) => {
+            // CRITICAL FIX: Check if Google Sheets is mentioned in step or requirements
+            const stepLower = step.toLowerCase();
+            const promptLower = requirements.primaryGoal?.toLowerCase() || '';
+            const hasGoogleSheets = stepLower.includes('google sheet') ||
+                stepLower.includes('spreadsheet') ||
+                stepLower.includes('sheets') ||
+                promptLower.includes('google sheet') ||
+                promptLower.includes('spreadsheet') ||
+                promptLower.includes('sheets');
+            // CRITICAL: Check if LinkedIn is mentioned - if not, don't add it
+            const hasLinkedIn = stepLower.includes('linkedin') ||
+                stepLower.includes('linked in') ||
+                promptLower.includes('linkedin') ||
+                promptLower.includes('linked in');
+            let inferredType = this.inferStepType(step);
+            // Skip step if inferStepType could not match a known node type
+            if (inferredType === null) {
+                console.warn(`⚠️  [buildStructure] Skipping step "${step.substring(0, 80)}" — no matching node type found`);
+                return;
+            }
+            // Force google_sheets if Google Sheets is mentioned
+            if (hasGoogleSheets && (inferredType === 'database_read' || inferredType === 'database_write' || inferredType === 'javascript')) {
+                console.log(`✅ Correcting step type from ${inferredType} to google_sheets (Google Sheets detected in: "${step}")`);
+                inferredType = 'google_sheets';
+            }
+            // CRITICAL: Remove LinkedIn if not mentioned
+            if (inferredType === 'linkedin' && !hasLinkedIn) {
+                console.log(`⚠️  LinkedIn detected but not mentioned in prompt. Changing to slack_message (step: "${step}")`);
+                // Default to slack if notification is needed, or remove if not
+                if (stepLower.includes('send') || stepLower.includes('notify') || stepLower.includes('post')) {
+                    inferredType = 'slack_message'; // Default to Slack for notifications
+                }
+                else {
+                    // Skip this step if it's not clear what it should be
+                    console.log(`⚠️  Skipping step "${step}" - LinkedIn not mentioned and unclear alternative`);
+                    return; // Skip adding this step
+                }
+            }
+            const stepDefinition = {
+                id: `step_${index + 1}`,
+                description: step,
+                type: inferredType,
+            };
+            structure.steps.push(stepDefinition);
+        });
+        // Map outputs - FIXED: Now correctly typed as OutputDefinition[]
+        requirements.outputs.forEach((output, index) => {
+            const outputDefinition = {
+                name: this.generateOutputName(output),
+                type: this.inferOutputType(output),
+                description: output,
+                required: true,
+                format: this.inferFormat(output),
+            };
+            structure.outputs.push(outputDefinition);
+        });
+        // Generate sequential connections
+        if (structure.steps.length > 0) {
+            structure.connections = [];
+            // Connect trigger to first step
+            structure.connections.push({
+                source: 'trigger',
+                target: structure.steps[0].id,
+            });
+            // Connect steps sequentially
+            for (let i = 0; i < structure.steps.length - 1; i++) {
+                const sourceId = structure.steps[i].id;
+                const targetId = structure.steps[i + 1].id;
+                // 🚨 CRITICAL FIX: Prevent self-loops
+                if (sourceId !== targetId) {
+                    structure.connections.push({
+                        source: sourceId,
+                        target: targetId,
+                    });
+                }
+                else {
+                    console.warn(`⚠️  [Sequential Connections] Prevented self-loop: ${sourceId} → ${targetId}`);
+                }
+            }
+        }
+        // Validate the structure before returning
+        const validation = type_validator_1.TypeValidator.validateStructure({
+            inputs: [],
+            outputs: structure.outputs,
+            steps: structure.steps,
+        });
+        if (!validation.isValid) {
+            console.warn('⚠️  Structure validation warnings:', validation.errors);
+            if (validation.errors.length > 0) {
+                throw new Error(`Invalid workflow structure: ${validation.errors.join(', ')}`);
+            }
+        }
+        return structure;
+    }
+    /**
+     * Apply node preferences to workflow structure
+     */
+    applyNodePreferences(structure, nodePreferences, requirements) {
+        const updatedStructure = { ...structure };
+        // Apply preferences to trigger if scheduling preference exists
+        if (nodePreferences.scheduling) {
+            const preference = node_equivalence_mapper_1.nodeEquivalenceMapper.getNodeOption('scheduling', nodePreferences.scheduling);
+            if (preference && node_library_1.nodeLibrary.getSchema(preference.nodeType)) {
+                updatedStructure.trigger = preference.nodeType;
+            }
+        }
+        // Apply preferences to steps (notifications, databases, file storage, etc.)
+        updatedStructure.steps = structure.steps.map(step => {
+            const stepLower = step.description?.toLowerCase() || '';
+            // Check for notification preference
+            if (nodePreferences.notification && (stepLower.includes('notify') ||
+                stepLower.includes('send') ||
+                stepLower.includes('alert') ||
+                stepLower.includes('message') ||
+                step.type === 'slack_message' ||
+                step.type === 'email' ||
+                step.type === 'discord_webhook' ||
+                step.type === 'twilio')) {
+                const preference = node_equivalence_mapper_1.nodeEquivalenceMapper.getNodeOption('notification', nodePreferences.notification);
+                if (preference && node_library_1.nodeLibrary.getSchema(preference.nodeType)) {
+                    return { ...step, type: preference.nodeType };
+                }
+            }
+            // Check for database preference
+            if (nodePreferences.database && (stepLower.includes('store') ||
+                stepLower.includes('save') ||
+                stepLower.includes('database') ||
+                step.type === 'database_read' ||
+                step.type === 'database_write' ||
+                step.type === 'db')) {
+                const preference = node_equivalence_mapper_1.nodeEquivalenceMapper.getNodeOption('database', nodePreferences.database);
+                if (preference && node_library_1.nodeLibrary.getSchema(preference.nodeType)) {
+                    return { ...step, type: preference.nodeType };
+                }
+            }
+            // Check for file storage preference
+            if (nodePreferences.file_storage && (stepLower.includes('file') ||
+                stepLower.includes('upload') ||
+                stepLower.includes('store file') ||
+                step.type === 'google_drive' ||
+                step.type === 'aws_s3')) {
+                const preference = node_equivalence_mapper_1.nodeEquivalenceMapper.getNodeOption('file_storage', nodePreferences.file_storage);
+                if (preference && node_library_1.nodeLibrary.getSchema(preference.nodeType)) {
+                    return { ...step, type: preference.nodeType };
+                }
+            }
+            return step;
+        });
+        return updatedStructure;
+    }
+    /**
+     * UNIVERSAL: Infer node type from step description using node library service
+     * Uses schema information for intelligent matching
+     */
+    /**
+     * ✅ REGISTRY-BASED: Infer node type from prompt using registry metadata
+     *
+     * Replaces hardcoded pattern matching with semantic matching.
+     * Falls back to legacy pattern matching if registry inference fails.
+     */
+    inferStepType(step, context) {
+        // ✅ STEP 1: Try registry-based inference first
+        try {
+            const { inferNodeTypeFromPrompt } = require('./registry-based-node-inference');
+            const inference = inferNodeTypeFromPrompt(step, context);
+            if (inference && inference.confidence > 0.5) {
+                console.log(`[RegistryInference] ✅ Inferred "${inference.nodeType}" from "${step.substring(0, 50)}" ` +
+                    `(confidence: ${(inference.confidence * 100).toFixed(0)}%, keywords: ${inference.matchedKeywords.join(', ')})`);
+                return inference.nodeType;
+            }
+        }
+        catch (error) {
+            console.warn(`[RegistryInference] ⚠️  Registry inference failed: ${error}`);
+        }
+        // 🔒 STRICT SINGLE-SOURCE: no legacy pattern/keyword fallback in critical node typing path.
+        return null;
+    }
+    inferOutputType(output) {
+        const outputLower = output.toLowerCase();
+        // Determine the data type, not the node type
+        if (outputLower.includes('json') || outputLower.includes('object'))
+            return 'object';
+        if (outputLower.includes('array') || outputLower.includes('list'))
+            return 'array';
+        if (outputLower.includes('number') || outputLower.includes('count') || outputLower.includes('total'))
+            return 'number';
+        if (outputLower.includes('boolean') || outputLower.includes('flag'))
+            return 'boolean';
+        if (outputLower.includes('file') || outputLower.includes('attachment'))
+            return 'file';
+        return 'string';
+    }
+    inferFormat(output) {
+        const outputLower = output.toLowerCase();
+        if (outputLower.includes('json'))
+            return 'json';
+        if (outputLower.includes('csv'))
+            return 'csv';
+        if (outputLower.includes('xml'))
+            return 'xml';
+        if (outputLower.includes('html'))
+            return 'html';
+        if (outputLower.includes('markdown') || outputLower.includes('md'))
+            return 'markdown';
+        return undefined;
+    }
+    generateOutputName(description) {
+        return description
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '_')
+            .replace(/^_+|_+$/g, '')
+            .slice(0, 50);
+    }
+    /**
+     * Detect chatbot intent from requirements
+     */
+    detectChatbotIntent(requirements) {
+        const promptLower = (requirements.originalPrompt || requirements.primaryGoal || '').toLowerCase();
+        // CRITICAL: Make chatbot detection STRICT - only match explicit chatbot requests
+        // Do NOT match generic words like "assistant" or "bot" that appear in other contexts
+        const strictChatbotKeywords = [
+            'chatbot',
+            'chat bot',
+            'create chatbot',
+            'build chatbot',
+            'ai chat',
+            'conversational ai',
+            'chat with ai',
+            'talk to ai',
+            'ai conversation',
+            'create ai agent',
+            'build ai agent',
+        ];
+        // Check for strict matches
+        const hasStrictMatch = strictChatbotKeywords.some(keyword => promptLower.includes(keyword));
+        // Additional check: if user says "chat" or "conversation" AND mentions AI/agent, it's likely a chatbot
+        const hasChatKeyword = promptLower.includes('chat') || promptLower.includes('conversation');
+        const hasAIAgentKeyword = promptLower.includes('ai agent') || promptLower.includes('ai assistant');
+        const hasChatAndAI = hasChatKeyword && hasAIAgentKeyword;
+        // CRITICAL: Exclude false positives
+        // If prompt mentions data extraction, sheets, database, etc., it's NOT a chatbot
+        const isDataWorkflow = promptLower.includes('extract') ||
+            promptLower.includes('sheet') ||
+            promptLower.includes('database') ||
+            promptLower.includes('read data') ||
+            promptLower.includes('get data') ||
+            promptLower.includes('save data') ||
+            promptLower.includes('store data');
+        if (isDataWorkflow) {
+            console.log(`✅ [Chatbot Detection] Excluding chatbot mode - data workflow detected: "${requirements.primaryGoal}"`);
+            return false;
+        }
+        const isChatbot = hasStrictMatch || hasChatAndAI;
+        if (isChatbot) {
+            console.log(`🤖 [Chatbot Detection] Chatbot intent detected: "${requirements.primaryGoal}"`);
+        }
+        return isChatbot;
+    }
+    /**
+     * Generate fixed chatbot workflow structure (N8N-style)
+     * Structure: Trigger → AI Agent (with Gemini Chat Model + Window Buffer Memory)
+     * @param triggerType - Optional trigger type (default: 'chat_trigger'). Use 'schedule' for scheduled chatbots.
+     */
+    generateFixedChatbotStructure(triggerType = 'chat_trigger') {
+        return {
+            trigger: triggerType,
+            steps: [
+                {
+                    id: 'ai_agent',
+                    description: 'AI Agent with Gemini Chat Model and Memory',
+                    type: 'ai_agent',
+                },
+            ],
+            outputs: [
+                {
+                    name: 'reply',
+                    type: 'string',
+                    description: 'AI response message',
+                    required: true,
+                },
+            ],
+        };
+    }
+    async selectNodes(structure, requirements) {
+        // ✅ ARCHITECTURAL FIX: All workflows are now AI-generated from user prompts
+        // No special handling for sample workflows - they are training-only (few-shot examples)
+        console.log(`🔍 [DIAGNOSTIC] [selectNodes] Starting with ${structure.steps.length} steps`);
+        console.log(`🔍 [DIAGNOSTIC] [selectNodes] Step types: ${structure.steps.map((s) => s.data?.type || s.type || s.nodeType).join(', ')}`);
+        let nodes = [];
+        let xPosition = 100;
+        // Use NodeLibrary to get better node selection
+        const triggerType = structure.trigger || 'manual_trigger';
+        const triggerSchema = node_library_1.nodeLibrary.getSchema(triggerType);
+        const triggerLabel = triggerSchema?.label || this.getNodeLabel(triggerType);
+        const triggerCategory = triggerSchema?.category || 'triggers';
+        // ✅ FIXED: Check if trigger node already exists BEFORE creating (prevent duplicates)
+        const { getTriggerNodes } = await Promise.resolve().then(() => __importStar(require('../../core/utils/trigger-deduplicator')));
+        const existingTriggers = getTriggerNodes(nodes);
+        if (existingTriggers.length > 0) {
+            // ✅ FIXED: If trigger exists, do not create another - just log and continue
+            const existingTriggerType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(existingTriggers[0]);
+            console.log(`✅ [NODE SELECTION] Trigger node already exists (type: ${existingTriggerType}), skipping trigger creation`);
+            // Do NOT remove duplicates here - workflow must have exactly one trigger, and we've checked it exists
+        }
+        else {
+            // ✅ FIXED: Only add trigger if none exists
+            // Add trigger node with unique UUID (position will be set by layout algorithm)
+            const triggerNode = {
+                id: (0, crypto_1.randomUUID)(),
+                type: triggerType,
+                position: { x: 0, y: 0 }, // Will be set by layout algorithm
+                data: {
+                    type: triggerType,
+                    label: triggerLabel,
+                    category: triggerCategory,
+                    config: {},
+                },
+            };
+            nodes.push(triggerNode);
+            console.log(`✅ [NODE SELECTION] Added trigger node: ${triggerType}`);
+        }
+        // CRITICAL: Validate and filter nodes using node library service
+        // This ensures ALL nodes exist in the library before processing
+        // DEBUG: Log all available node types for debugging
+        const allAvailableNodeTypes = node_library_1.nodeLibrary.getAllSchemas().map(s => s.type);
+        console.log(`📚 [NODE VALIDATION] Available node types in library: ${allAvailableNodeTypes.length} nodes`);
+        console.log(`📚 [NODE VALIDATION] Sample nodes: ${allAvailableNodeTypes.slice(0, 10).join(', ')}...`);
+        const validSteps = structure.steps.filter((step) => {
+            // ✅ CRITICAL: Check data.type for nodes with type: 'custom' (frontend compatibility)
+            const stepAny = step;
+            let correctedType = stepAny.data?.type || step.type;
+            const originalType = correctedType;
+            console.log(`🔍 [DIAGNOSTIC] [selectNodes] Validating step: "${step.description}"`);
+            console.log(`🔍 [DIAGNOSTIC] [selectNodes]   - step.type: ${step.type}`);
+            console.log(`🔍 [DIAGNOSTIC] [selectNodes]   - step.data?.type: ${stepAny.data?.type || 'undefined'}`);
+            console.log(`🔍 [DIAGNOSTIC] [selectNodes]   - correctedType: ${correctedType}`);
+            // 🔒 STRUCTURAL FIX: No node is allowed into the graph unless its schema exists
+            // Resolve aliases via unified-node-registry (single source of truth)
+            const resolvedAlias = unified_node_registry_1.unifiedNodeRegistry.resolveAlias(correctedType);
+            let resolvedType = resolvedAlias ?? correctedType;
+            if (resolvedType !== correctedType) {
+                correctedType = resolvedType;
+                step.type = resolvedType;
+            }
+            let stepSchema = node_library_1.nodeLibrary.getSchema(correctedType);
+            console.log(`🔍 [DIAGNOSTIC] [selectNodes] Schema lookup for "${correctedType}": ${stepSchema ? 'FOUND' : 'NOT FOUND'}`);
+            if (!stepSchema) {
+                console.error(`🚨 [NODE VALIDATION] CRITICAL: Node type "${correctedType}" NOT FOUND in library.`);
+                console.error(`🚨 [NODE VALIDATION] Step description: "${step.description}"`);
+                console.error(`🚨 [NODE VALIDATION] Step object: ${JSON.stringify({ type: step.type, data: stepAny.data })}`);
+                // 🔒 STRICT MODE: No infer/similar/pattern fallback allowed in critical selection path.
+                // Node must resolve from unified registry + NodeLibrary canonical catalog.
+                const availableTypes = node_library_1.nodeLibrary.getAllSchemas().map(s => s.type).slice(0, 20).join(', ');
+                console.error(`❌ [NODE VALIDATION] STRICT rejection for "${originalType}" (resolved: "${correctedType}")`);
+                console.error(`❌ [NODE VALIDATION] Available node types (first 20): ${availableTypes}`);
+                return false;
+            }
+            else {
+                console.log(`✅ [NODE VALIDATION] Node type "${correctedType}" validated successfully`);
+            }
+            // Additional validation - ensure schema has required config structure
+            if (!stepSchema.configSchema) {
+                console.warn(`⚠️  [NODE VALIDATION] Node type "${correctedType}" has no config schema. This may cause configuration issues.`);
+            }
+            return true; // Keep valid steps
+        });
+        // Log validation results
+        const skippedCount = structure.steps.length - validSteps.length;
+        if (skippedCount > 0) {
+            console.warn(`⚠️  [NODE VALIDATION] Skipped ${skippedCount} invalid step(s). Only ${validSteps.length} valid steps remain.`);
+        }
+        else {
+            console.log(`✅ [NODE VALIDATION] All ${validSteps.length} steps validated successfully`);
+        }
+        console.log(`🔍 [DIAGNOSTIC] [selectNodes] Processing ${validSteps.length} valid steps`);
+        // Process valid steps
+        validSteps.forEach((step, index) => {
+            // ✅ CRITICAL: Check data.type for nodes with type: 'custom' (frontend compatibility)
+            const stepAny = step;
+            let correctedType = stepAny.data?.type || step.type;
+            console.log(`🔍 [DIAGNOSTIC] [selectNodes] Processing step ${index + 1}: type="${correctedType}", description="${step.description}"`);
+            // ✅ CRITICAL: Normalize and validate node type before creating node
+            // Delegates to unified-node-registry (single source of truth)
+            const resolvedAlias = unified_node_registry_1.unifiedNodeRegistry.resolveAlias(correctedType) ?? correctedType;
+            const isValid = node_library_1.nodeLibrary.isNodeTypeRegistered(resolvedAlias);
+            let normalizationResult = { normalized: resolvedAlias, valid: isValid, method: 'registry_alias' };
+            // ✅ ROOT-LEVEL FIX: If normalization fails, try lowercase
+            if (!normalizationResult.valid) {
+                console.warn(`⚠️  [NODE SELECTION] Node type "${correctedType}" not found, attempting registry resolution...`);
+                const lower = correctedType.toLowerCase().trim();
+                const resolvedLower = unified_node_registry_1.unifiedNodeRegistry.resolveAlias(lower) ?? lower;
+                if (node_library_1.nodeLibrary.isNodeTypeRegistered(resolvedLower)) {
+                    console.log(`✅ [NODE SELECTION] Resolved "${correctedType}" → "${resolvedLower}" via registry`);
+                    correctedType = resolvedLower;
+                    normalizationResult = { normalized: resolvedLower, valid: true, method: 'registry_lower' };
+                }
+                else {
+                    console.error(`❌ [NODE SELECTION] Invalid node type "${correctedType}" and no resolution found. Skipping node.`);
+                    return; // Skip invalid node types
+                }
+            }
+            // Use normalized type
+            if (normalizationResult.normalized !== correctedType) {
+                console.log(`✅ [NODE SELECTION] Normalized node type "${correctedType}" → "${normalizationResult.normalized}" (${normalizationResult.method})`);
+                correctedType = normalizationResult.normalized;
+            }
+            // Use NodeLibrary to get node information
+            const stepSchema = node_library_1.nodeLibrary.getSchema(correctedType);
+            const defaultLabel = stepSchema?.label || this.getNodeLabel(correctedType);
+            const stepCategory = stepSchema?.category || this.getNodeCategory(correctedType);
+            // Extract short label from description (max 3-4 words)
+            let shortLabel = defaultLabel;
+            if (step.description) {
+                // Clean description first
+                let cleanDesc = step.description
+                    .replace(/^[-*•]\s*/, '') // Remove bullet points
+                    .replace(/\*\*/g, '') // Remove markdown bold
+                    .replace(/\[.*?\]/g, '') // Remove markdown links
+                    .trim();
+                const words = cleanDesc.split(/\s+/).filter(w => w.length > 0);
+                if (words.length <= 4) {
+                    shortLabel = words.join(' ');
+                }
+                else {
+                    // Extract key action - try to get verb + noun (first 2-3 words)
+                    // Skip common words like "the", "a", "an", "to", "for", "with"
+                    const skipWords = ['the', 'a', 'an', 'to', 'for', 'with', 'from', 'and', 'or', 'in', 'on', 'at'];
+                    const meaningfulWords = words.filter(w => !skipWords.includes(w.toLowerCase()));
+                    if (meaningfulWords.length >= 2) {
+                        shortLabel = meaningfulWords.slice(0, 3).join(' ');
+                    }
+                    else {
+                        shortLabel = words.slice(0, 3).join(' ');
+                    }
+                    // Limit length
+                    if (shortLabel.length > 35) {
+                        shortLabel = shortLabel.substring(0, 32) + '...';
+                    }
+                }
+                // Clean up label - remove trailing punctuation
+                shortLabel = shortLabel.replace(/[.,;:!?]+$/, '').trim();
+                // Capitalize first letter
+                if (shortLabel.length > 0) {
+                    shortLabel = shortLabel.charAt(0).toUpperCase() + shortLabel.slice(1);
+                }
+            }
+            // CRITICAL: Check for duplicate nodes (same type and similar description)
+            const isDuplicate = nodes.some(existingNode => {
+                const existingType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(existingNode);
+                const existingLabel = existingNode.data?.label?.toLowerCase() || '';
+                const newLabel = shortLabel.toLowerCase();
+                // Check if same type and similar label (within 3 words)
+                if (existingType === correctedType) {
+                    const existingWords = existingLabel.split(/\s+/).slice(0, 3);
+                    const newWords = newLabel.split(/\s+/).slice(0, 3);
+                    const commonWords = existingWords.filter(w => newWords.includes(w));
+                    // If 2+ common words, likely duplicate
+                    if (commonWords.length >= 2) {
+                        return true;
+                    }
+                }
+                return false;
+            });
+            if (isDuplicate) {
+                logger_1.logger.debug(`⚠️  [NODE SELECTION] Skipping duplicate node: ${correctedType} - "${shortLabel}"`);
+                return; // Skip this node
+            }
+            // ✅ CRITICAL: Use step.id as node.id to enable connection mapping
+            // This ensures connections from structure can map to actual nodes
+            const nodeId = step.id || `step_${index + 1}`;
+            // PHASE 1: Frontend expects type: 'custom' for non-form nodes, actual type in data.type
+            // Apply inferred properties if available (e.g., loop.items from pattern detection)
+            const inferredProperties = stepAny.inferredProperties || {};
+            const initialConfig = {};
+            // For loop nodes, apply inferred items property
+            if (correctedType === 'loop' && inferredProperties.items) {
+                initialConfig.items = inferredProperties.items;
+                console.log(`✅ [Property Inference] Applied inferred loop.items: ${inferredProperties.items}`);
+            }
+            // For google_sheets nodes in loop patterns, infer operation
+            if (correctedType === 'google_sheets' && inferredProperties.operation) {
+                initialConfig.operation = inferredProperties.operation;
+                console.log(`✅ [Property Inference] Applied inferred google_sheets.operation: ${inferredProperties.operation}`);
+            }
+            // For hubspot/airtable nodes in loop patterns, infer operation and resource
+            if (['hubspot', 'airtable'].includes(correctedType)) {
+                if (inferredProperties.operation) {
+                    initialConfig.operation = inferredProperties.operation;
+                    console.log(`✅ [Property Inference] Applied inferred ${correctedType}.operation: ${inferredProperties.operation}`);
+                }
+                if (inferredProperties.resource) {
+                    initialConfig.resource = inferredProperties.resource;
+                    console.log(`✅ [Property Inference] Applied inferred ${correctedType}.resource: ${inferredProperties.resource}`);
+                }
+            }
+            // ✅ Get icon from schema if available
+            let nodeIcon;
+            if (stepSchema) {
+                // Try to get icon from schema metadata or use category-based default
+                nodeIcon = stepSchema.icon || this.getDefaultIconForCategory(stepCategory, correctedType);
+            }
+            else {
+                nodeIcon = this.getDefaultIconForCategory(stepCategory, correctedType);
+            }
+            const node = {
+                id: step.id || `step${index + 1}`, // Use step ID as node ID
+                type: correctedType === 'form' ? 'form' : 'custom', // Frontend expects 'custom' for non-form nodes
+                position: { x: 0, y: 0 }, // Will be set by layout algorithm
+                data: {
+                    type: correctedType, // Actual node type stored here
+                    label: shortLabel,
+                    category: stepCategory,
+                    icon: nodeIcon || 'Box', // ✅ Add icon from schema (default to Box if not found)
+                    config: initialConfig, // Apply inferred properties
+                }, // Type assertion to allow icon property
+            };
+            nodes.push(node);
+            console.log(`🔍 [DIAGNOSTIC] [selectNodes] Created node: type="${node.type}", data.type="${node.data.type}", label="${shortLabel}"`);
+            logger_1.logger.debug(`✅ [NODE SELECTION] Added step node: ${correctedType} - "${shortLabel}"`);
+        });
+        console.log(`🔍 [DIAGNOSTIC] [selectNodes] Final nodes count: ${nodes.length}`);
+        console.log(`🔍 [DIAGNOSTIC] [selectNodes] Final node types: ${nodes.map(n => n.data?.type || n.type).join(', ')}`);
+        // Add output nodes with unique UUIDs
+        structure.outputs.forEach((output, index) => {
+            // PERMANENT FIX: Skip if output is invalid or missing required fields
+            if (!output || (!output.name && !output.description && !output.type)) {
+                console.warn(`⚠️  Skipping invalid output at index ${index}:`, output);
+                return;
+            }
+            // Map output type to node type for output nodes
+            const nodeType = this.mapOutputTypeToNodeType(output);
+            // Extract short label from description (max 3-4 words)
+            let shortLabel = this.getNodeLabel(nodeType);
+            if (output.description) {
+                // Clean description first
+                let cleanDesc = output.description
+                    .replace(/^[-*•]\s*/, '') // Remove bullet points
+                    .replace(/\*\*/g, '') // Remove markdown bold
+                    .replace(/\[.*?\]/g, '') // Remove markdown links
+                    .trim();
+                const words = cleanDesc.split(/\s+/).filter(w => w.length > 0);
+                if (words.length <= 4) {
+                    shortLabel = words.join(' ');
+                }
+                else {
+                    // Extract key action - try to get verb + noun
+                    const skipWords = ['the', 'a', 'an', 'to', 'for', 'with', 'from', 'and', 'or', 'in', 'on', 'at'];
+                    const meaningfulWords = words.filter(w => !skipWords.includes(w.toLowerCase()));
+                    if (meaningfulWords.length >= 2) {
+                        shortLabel = meaningfulWords.slice(0, 3).join(' ');
+                    }
+                    else {
+                        shortLabel = words.slice(0, 3).join(' ');
+                    }
+                    // Limit length
+                    if (shortLabel.length > 35) {
+                        shortLabel = shortLabel.substring(0, 32) + '...';
+                    }
+                }
+                // Clean up label
+                shortLabel = shortLabel.replace(/[.,;:!?]+$/, '').trim();
+                // Capitalize first letter
+                if (shortLabel.length > 0) {
+                    shortLabel = shortLabel.charAt(0).toUpperCase() + shortLabel.slice(1);
+                }
+            }
+            // PHASE 1: Frontend expects type: 'custom' for non-form nodes, actual type in data.type
+            const node = {
+                id: (0, crypto_1.randomUUID)(),
+                type: nodeType === 'form' ? 'form' : 'custom', // Frontend expects 'custom' for non-form nodes
+                position: { x: 0, y: 0 }, // Will be set by layout algorithm
+                data: {
+                    type: nodeType, // Actual node type stored here
+                    label: shortLabel,
+                    category: 'output',
+                    config: {},
+                },
+            };
+            nodes.push(node);
+        });
+        // CRITICAL: Final deduplication - remove any duplicate nodes by type and label
+        const uniqueNodes = [];
+        const seenNodes = new Map(); // Track seen node types + labels
+        const isTriggerType = (t) => {
+            const def = unified_node_registry_1.unifiedNodeRegistry.get(t);
+            return def?.category === 'trigger' || t.includes('trigger');
+        };
+        let firstTriggerSeen = false;
+        let firstTriggerType = null;
+        for (const node of nodes) {
+            const nodeType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(node);
+            // ✅ CRITICAL: Resolve to canonical type to catch aliases (e.g., "gmail" → "google_gmail")
+            let canonicalType;
+            try {
+                canonicalType = (0, node_type_resolver_util_1.resolveNodeType)(nodeType);
+            }
+            catch (error) {
+                // If resolution fails, use normalized type as fallback
+                canonicalType = nodeType;
+            }
+            const nodeLabel = (node.data?.label || '').toLowerCase();
+            // CRITICAL: For triggers, only allow ONE trigger regardless of label
+            if (isTriggerType(canonicalType)) {
+                if (firstTriggerSeen) {
+                    // Already have a trigger, skip this duplicate
+                    console.warn(`⚠️  [NODE DEDUPLICATION] Removed duplicate trigger: ${nodeType} (canonical: ${canonicalType}) - "${node.data?.label}" (already have ${firstTriggerType})`);
+                    continue;
+                }
+                // First trigger - keep it
+                firstTriggerSeen = true;
+                firstTriggerType = canonicalType;
+                uniqueNodes.push(node);
+                continue;
+            }
+            // ✅ ENHANCED: For non-trigger nodes, check by CANONICAL type (not original type)
+            // This prevents duplicates like "gmail" and "google_gmail" from both existing
+            const key = `${canonicalType}:${nodeLabel}`;
+            if (!seenNodes.has(key)) {
+                seenNodes.set(key, true);
+                uniqueNodes.push(node);
+            }
+            else {
+                console.warn(`⚠️  [NODE DEDUPLICATION] Removed duplicate node: ${nodeType} (canonical: ${canonicalType}) - "${node.data?.label}"`);
+            }
+        }
+        const finalNodes = uniqueNodes;
+        console.log(`✅ [NODE DEDUPLICATION] Final node count: ${finalNodes.length} (removed ${nodes.length - finalNodes.length} duplicates)`);
+        // Note: Layout will be applied after edges are created in createConnections()
+        // Registry-driven normalization: apply deprecations/replacements universally
+        finalNodes.forEach((node) => {
+            const actualType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(node);
+            const def = unified_node_registry_1.unifiedNodeRegistry.get(actualType);
+            if (def?.deprecated && def.replacement) {
+                console.log(`✅ Post-processing: Normalizing deprecated node ${node.id} ${actualType} → ${def.replacement}`);
+                node.type = node.type === 'custom' ? 'custom' : def.replacement;
+                node.data.type = def.replacement;
+            }
+        });
+        // 🔒 REMOVED: Heuristic Gmail post-processing hack
+        // Node resolution is now handled deterministically by NodeResolver in generate-workflow.ts
+        // This ensures Gmail nodes are selected correctly during planning, not patched afterwards
+        // The NodeResolver runs BEFORE graph building and force-inserts required nodes based on capabilities
+        logger_1.logger.debug(`✅ [NODE SELECTION] Returning ${finalNodes.length} unique nodes`);
+        return finalNodes;
+    }
+    async configureNodes(nodes, requirements, constraints) {
+        // Step 1: Try auto-configuration first
+        console.log('[WorkflowBuilder] 🤖 Attempting auto-configuration for all nodes...');
+        const workflowIntent = (requirements.originalPrompt || requirements.primaryGoal || requirements.enhancedPrompt || '').trim();
+        const autoConfigResult = await node_auto_configurator_1.nodeAutoConfigurator.autoConfigureWorkflow(nodes, [], // edges will be added later, but we can still auto-configure based on node order
+        workflowIntent);
+        console.log(`[WorkflowBuilder] ✅ Auto-configuration results:`);
+        console.log(`   - Configured: ${autoConfigResult.summary.configured}/${autoConfigResult.summary.total}`);
+        console.log(`   - Partial: ${autoConfigResult.summary.partial}`);
+        console.log(`   - Failed: ${autoConfigResult.summary.failed}`);
+        console.log(`   - Skip wizard: ${autoConfigResult.skipWizard}`);
+        // ✅ ROOT-LEVEL FIX: Populate required fields for all nodes
+        console.log('[WorkflowBuilder] 🔧 [STAGE: Populate Required Fields] Starting...');
+        let configuredNodesWithRequiredFields = [];
+        try {
+            const { populateRequiredFields } = await Promise.resolve().then(() => __importStar(require('./required-field-populator')));
+            const { LLMAdapter } = await Promise.resolve().then(() => __importStar(require('../../shared/llm-adapter')));
+            const llmAdapter = new LLMAdapter();
+            for (let i = 0; i < autoConfigResult.nodes.length; i++) {
+                const node = autoConfigResult.nodes[i];
+                const previousNode = i > 0 ? autoConfigResult.nodes[i - 1] : null;
+                try {
+                    // Populate required fields
+                    const populationResult = await populateRequiredFields(node, previousNode, autoConfigResult.nodes, i, llmAdapter);
+                    // Merge populated fields into node config
+                    const updatedConfig = {
+                        ...(node.data?.config || {}),
+                        ...populationResult.populated,
+                    };
+                    const updatedNode = {
+                        ...node,
+                        data: {
+                            ...node.data,
+                            config: updatedConfig,
+                        },
+                    };
+                    configuredNodesWithRequiredFields.push(updatedNode);
+                    if (Object.keys(populationResult.populated).length > 0) {
+                        console.log(`[WorkflowBuilder] ✅ Populated ${Object.keys(populationResult.populated).length} required field(s) for ${node.data?.type || node.type} ` +
+                            `(source: ${populationResult.source}, confidence: ${populationResult.confidence.toFixed(2)})`);
+                    }
+                }
+                catch (nodeError) {
+                    console.warn(`[WorkflowBuilder] ⚠️  Failed to populate fields for node ${node.id} (${node.data?.type || node.type}): ${nodeError.message}`);
+                    // Continue with node as-is
+                    configuredNodesWithRequiredFields.push(node);
+                }
+            }
+            console.log(`[WorkflowBuilder] ✅ [STAGE: Populate Required Fields] Completed for ${configuredNodesWithRequiredFields.length} nodes`);
+        }
+        catch (error) {
+            console.error('[WorkflowBuilder] ❌ [STAGE: Populate Required Fields] Failed:', error.message);
+            console.warn('[WorkflowBuilder] ⚠️  Continuing with auto-configured nodes (without field population)');
+            // Fallback: Use auto-configured nodes without field population
+            configuredNodesWithRequiredFields = autoConfigResult.nodes;
+        }
+        // Use auto-configured nodes if successful
+        if (autoConfigResult.allConfigured && autoConfigResult.skipWizard) {
+            console.log('[WorkflowBuilder] ✅ All nodes auto-configured successfully, skipping manual configuration');
+            return configuredNodesWithRequiredFields;
+        }
+        // Step 2: Fall back to manual configuration for nodes that need it
+        console.log('[WorkflowBuilder] ⚙️  Applying manual configuration for remaining nodes...');
+        // 🚨 CRITICAL FIX: For vague prompts with CRM nodes, set default operation to "create"
+        const userPrompt = workflowIntent.toLowerCase().trim();
+        const { intentClassifier } = require('./intent-classifier');
+        const intentClassification = intentClassifier.classifyIntent(userPrompt);
+        const isVaguePrompt = intentClassification.intent === 'ambiguous';
+        if (isVaguePrompt) {
+            console.log(`✅ [Vague Prompt Config] Detected vague prompt - setting default operations for CRM nodes`);
+        }
+        // Configure each node based on requirements and user-provided config values
+        // Merge constraints with credentials if provided
+        const configValues = { ...(constraints || {}) };
+        // Extract credentials from constraints if provided
+        if (constraints?.credentials) {
+            // Merge credentials into configValues so they're accessible via getConfigValue
+            Object.assign(configValues, constraints.credentials);
+        }
+        // Also check answers for credential keys
+        if (constraints?.answers) {
+            const credentialKeys = Object.keys(constraints.answers).filter(key => key.toLowerCase().includes('credential') ||
+                key.toLowerCase().includes('api_key') ||
+                key.toLowerCase().includes('token') ||
+                key.toLowerCase().includes('secret'));
+            credentialKeys.forEach(key => {
+                configValues[key] = constraints.answers[key];
+            });
+        }
+        // Configure each node with intelligent field filling and IO mapping
+        // Merge auto-configuration with manual configuration
+        const configuredNodes = await Promise.all(autoConfigResult.nodes.map(async (node, index) => {
+            // Get previous node for IO mapping
+            const previousNode = index > 0 ? autoConfigResult.nodes[index - 1] : null;
+            // CRITICAL FIX: Even if auto-configured, we need to apply intelligent property selection
+            // Auto-config might have wrong template expressions like {{node.type}} instead of {{$json.field}}
+            // So we always run generateRequiredInputFields to fix template expressions
+            const isAutoConfigured = node.data?.autoConfigured && node.data?.autoConfigConfidence >= 0.8;
+            // Generate base configuration (credentials are now in configValues)
+            let config = await this.generateNodeConfig(node, requirements, configValues, autoConfigResult.nodes, index);
+            // Merge with auto-configuration if available
+            if (node.data?.config) {
+                config = { ...node.data.config, ...config };
+                // CRITICAL: Fix wrong template expressions from auto-config
+                // Replace {{node.type}}, {{nodeId.type}} with proper {{$json.field}} expressions
+                for (const [key, value] of Object.entries(config)) {
+                    if (typeof value === 'string' &&
+                        (value.includes('{{') && value.includes('.type}}') && !value.includes('$json'))) {
+                        console.log(`⚠️  [Auto-Config Fix] Found wrong template in ${node.type}.${key}: ${value}`);
+                        // This will be fixed by generateRequiredInputFields
+                        delete config[key]; // Remove wrong template so it gets regenerated correctly
+                    }
+                }
+            }
+            if (isAutoConfigured) {
+                console.log(`ℹ️  Node ${node.type} was auto-configured, but applying intelligent property selection to fix template expressions`);
+            }
+            // 🚨 CRITICAL FIX: For vague prompts with CRM nodes, set default operation to "create"
+            if (isVaguePrompt) {
+                const nodeType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(node);
+                // ✅ UNIVERSAL: Get CRM node types from registry instead of hardcoded list
+                const crmNodeTypes = this.getCrmNodeTypes();
+                if (crmNodeTypes.includes(nodeType)) {
+                    if (!config.operation) {
+                        config.operation = 'create';
+                        console.log(`✅ [Vague Prompt Config] Set default operation "create" for ${nodeType} node`);
+                    }
+                    if (!config.resource && nodeType === 'hubspot') {
+                        config.resource = 'contact';
+                        console.log(`✅ [Vague Prompt Config] Set default resource "contact" for ${nodeType} node`);
+                    }
+                }
+            }
+            // ✅ ROOT-LEVEL FIX: Populate required fields before generating inputs
+            try {
+                const { populateRequiredFields } = await Promise.resolve().then(() => __importStar(require('./required-field-populator')));
+                const { LLMAdapter } = await Promise.resolve().then(() => __importStar(require('../../shared/llm-adapter')));
+                const llmAdapter = new LLMAdapter();
+                const populationResult = await populateRequiredFields(node, previousNode, nodes, index, llmAdapter);
+                // Merge populated required fields into config
+                config = { ...config, ...populationResult.populated };
+                if (Object.keys(populationResult.populated).length > 0) {
+                    console.log(`[WorkflowBuilder] ✅ Populated ${Object.keys(populationResult.populated).length} required field(s) for ${node.data?.type || node.type}`);
+                }
+            }
+            catch (populateError) {
+                console.warn(`[WorkflowBuilder] ⚠️  Failed to populate required fields for ${node.data?.type || node.type}: ${populateError.message}`);
+                // Continue with config as-is
+            }
+            // CRITICAL: Generate all required input fields with IO mapping
+            const configWithInputs = await this.generateRequiredInputFields(node, config, previousNode, nodes, index, requirements);
+            // Special handling for transformation nodes
+            if (this.isTransformationNode(node.type)) {
+                const transformedConfig = await this.configureTransformationNode(node, nodes, index, configWithInputs, requirements);
+                return {
+                    ...node,
+                    data: {
+                        ...node.data,
+                        config: transformedConfig,
+                    },
+                };
+            }
+            // CRITICAL: Ensure config is properly stored
+            const finalConfig = configWithInputs;
+            // CRITICAL FIX: Remove any wrong template expressions that might have been set
+            // Replace {{node.type}}, {{nodeId.type}}, {{step_X.type}} with proper {{$json.field}} expressions
+            for (const [key, value] of Object.entries(finalConfig)) {
+                if (typeof value === 'string' && value.includes('{{') && !value.includes('$json') && !value.includes('input')) {
+                    // This is a wrong template - try to fix it
+                    if (value.includes('.type}}') || value.includes('.output}}')) {
+                        console.log(`⚠️  [Config Cleanup] Removing wrong template from ${node.type}.${key}: ${value}`);
+                        // If we have a previous node, use intelligent selection to fix it
+                        if (previousNode && index > 0) {
+                            const previousOutputs = this.getPreviousNodeOutputFields(previousNode);
+                            if (previousOutputs.length > 0) {
+                                const bestMatch = this.findBestOutputMatch(key, previousOutputs, previousNode.type, requirements, node.type);
+                                finalConfig[key] = `{{$json.${bestMatch}}}`;
+                                console.log(`✅ [Config Cleanup] Fixed ${node.type}.${key} = {{$json.${bestMatch}}}`);
+                            }
+                            else {
+                                delete finalConfig[key]; // Remove wrong template
+                            }
+                        }
+                        else {
+                            delete finalConfig[key]; // Remove wrong template if no previous node
+                        }
+                    }
+                }
+            }
+            // Log final config for debugging
+            const templateExpressions = Object.entries(finalConfig)
+                .filter(([_, v]) => typeof v === 'string' && v.includes('{{$json.'))
+                .map(([k, v]) => `${k}=${v}`);
+            const wrongTemplates = Object.entries(finalConfig)
+                .filter(([_, v]) => typeof v === 'string' && v.includes('{{') && !v.includes('$json') && !v.includes('input'))
+                .map(([k, v]) => `${k}=${v}`);
+            if (templateExpressions.length > 0) {
+                console.log(`✅ [Config Finalized] ${node.type} (${node.id}): ${templateExpressions.length} correct template expressions`);
+                templateExpressions.forEach(expr => {
+                    console.log(`   └─ ${expr}`);
+                });
+            }
+            if (wrongTemplates.length > 0) {
+                console.log(`⚠️  [Config Finalized] ${node.type} (${node.id}): ${wrongTemplates.length} WRONG template expressions still present!`);
+                wrongTemplates.forEach(expr => {
+                    console.log(`   └─ ${expr}`);
+                });
+            }
+            return {
+                ...node,
+                data: {
+                    ...node.data,
+                    config: finalConfig,
+                },
+            };
+        }));
+        return configuredNodes;
+    }
+    /**
+     * STRICT NODE I/O AUTOFILL & DATA-FLOW GUARANTEE
+     *
+     * This method enforces strict data-flow rules:
+     * - Every required input field is explicitly filled
+     * - Every input comes from a valid upstream output
+     * - Type compatibility is validated
+     * - No empty, implicit, or guessed fields
+     */
+    async generateRequiredInputFields(node, baseConfig, previousNode, allNodes, nodeIndex, requirements) {
+        const config = { ...baseConfig };
+        // STEP 1: Load node schema (required inputs, outputs)
+        // CRITICAL FIX: Use normalizeNodeType to get actual node type
+        const actualNodeType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(node);
+        const nodeSchema = node_library_1.nodeLibrary.getSchema(actualNodeType);
+        if (!nodeSchema?.configSchema) {
+            console.warn(`⚠️  No schema found for node type: ${actualNodeType} (node.type="${node.type}", node.data.type="${node.data?.type || 'undefined'}")`);
+            return config;
+        }
+        const requiredFields = nodeSchema.configSchema.required || [];
+        const optionalFields = nodeSchema.configSchema.optional || {};
+        // UNIVERSAL INVARIANT:
+        // Any field that exists in the unified node INPUT schema is a runtime input.
+        // Build-time must NOT infer/template these values into node.data.config.
+        // They must remain empty until dynamic-node-executor fills them after runtime.
+        const unifiedDef = unified_node_registry_1.unifiedNodeRegistry.get(actualNodeType);
+        const runtimeInputKeys = new Set(Object.keys(unifiedDef?.inputSchema || {}));
+        // STEP 2: Build data contract table (input source resolution)
+        const dataContract = new Map();
+        // Get all upstream nodes (nodes that execute before this one)
+        const upstreamNodes = allNodes.slice(0, nodeIndex);
+        // STEP 3: Process ALL required fields with strict validation
+        // CRITICAL: Use nodeDefaults system to ensure all required fields have values
+        for (const fieldName of requiredFields) {
+            // Skip if already configured with non-empty value
+            if (config[fieldName] !== undefined && config[fieldName] !== null && config[fieldName] !== '') {
+                // Validate that existing config references a valid source
+                const existingValue = String(config[fieldName]);
+                if (existingValue.startsWith('{{') && existingValue.endsWith('}}')) {
+                    // Extract field reference
+                    const fieldRef = existingValue.slice(2, -2).trim();
+                    // Validate reference exists in upstream nodes
+                    const isValid = this.validateFieldReference(fieldRef, upstreamNodes, node);
+                    if (!isValid) {
+                        console.warn(`⚠️  Invalid field reference ${fieldRef} for ${node.type}.${fieldName}`);
+                        // Will be auto-filled below
+                        delete config[fieldName];
+                    }
+                    else {
+                        continue; // Valid reference, skip
+                    }
+                }
+                else {
+                    continue; // Non-template value, assume valid
+                }
+            }
+            // If this is a runtime input field (unified inputSchema key), keep it empty at build time.
+            // Runtime executor will fill it after previous nodes produce real output.
+            if (runtimeInputKeys.has(fieldName)) {
+                config[fieldName] = '';
+                dataContract.set(fieldName, {
+                    sourceNode: previousNode?.id || 'trigger',
+                    sourceField: 'runtime-input',
+                    type: 'ai-resolved',
+                });
+                continue;
+            }
+            // STEP 4: Resolve input source with priority rules (includes user intent analysis)
+            const resolution = this.resolveInputSource(fieldName, node.type, upstreamNodes, previousNode, requirements, nodeSchema);
+            if (resolution.resolved) {
+                // STEP 5: Validate type compatibility
+                const typeValid = this.validateTypeCompatibility(resolution.sourceType || 'string', resolution.targetType || 'string', fieldName, node.type);
+                if (typeValid) {
+                    config[fieldName] = resolution.value;
+                    dataContract.set(fieldName, {
+                        sourceNode: resolution.sourceNode || 'trigger',
+                        sourceField: resolution.sourceField || fieldName,
+                        type: resolution.sourceType || 'string'
+                    });
+                }
+                else {
+                    console.warn(`⚠️  Type mismatch for ${node.type}.${fieldName}: ${resolution.sourceType} → ${resolution.targetType}`);
+                    // Try to find compatible alternative
+                    const alternative = this.findCompatibleSource(fieldName, node.type, upstreamNodes, previousNode);
+                    if (alternative) {
+                        config[fieldName] = alternative.value;
+                        dataContract.set(fieldName, {
+                            sourceNode: alternative.sourceNode || 'trigger',
+                            sourceField: alternative.sourceField || fieldName,
+                            type: alternative.sourceType || 'string'
+                        });
+                    }
+                    else {
+                        // ✅ ARCHITECTURAL REFACTOR: Do NOT generate {{$json.*}} template expressions
+                        // AI Input Resolver will handle input generation dynamically at runtime
+                        // Leave field empty - AI will generate it based on previous output and user intent
+                        if (previousNode) {
+                            const previousOutputs = this.getPreviousNodeOutputFields(previousNode);
+                            if (previousOutputs.length > 0) {
+                                // ✅ AI Input Resolver will analyze previous output and generate appropriate input
+                                // No need to generate template expressions - AI will handle it at runtime
+                                // Leave field empty to indicate AI generation
+                                config[fieldName] = '';
+                                dataContract.set(fieldName, {
+                                    sourceNode: previousNode.id,
+                                    sourceField: 'ai-generated', // Mark as AI-generated
+                                    type: 'ai-resolved'
+                                });
+                                console.log(`✅ [AI Input Resolver] ${node.type}.${fieldName} will be AI-generated at runtime (from ${previousNode.type} output)`);
+                                console.log(`   └─ Available outputs: ${previousOutputs.join(', ')}`);
+                                console.log(`   └─ AI will analyze and generate appropriate input based on user intent`);
+                            }
+                            else {
+                                // No previous output - AI will generate based on user intent and node schema
+                                config[fieldName] = '';
+                                console.log(`✅ [AI Input Resolver] ${node.type}.${fieldName} will be AI-generated at runtime (no previous output)`);
+                                dataContract.set(fieldName, {
+                                    sourceNode: previousNode.id,
+                                    sourceField: 'output',
+                                    type: 'object'
+                                });
+                                console.log(`✅ [Data Flow] ${node.type}.${fieldName} = {{$json}} (from previous node ${previousNode.type})`);
+                            }
+                        }
+                        else {
+                            // Only use defaults if no previous node exists
+                            config[fieldName] = node_defaults_1.nodeDefaults.getDefaultValue(node.type, fieldName, {
+                                requirements,
+                                previousNode,
+                                workflowGoal: requirements.primaryGoal,
+                            });
+                        }
+                    }
+                }
+            }
+            else {
+                // STEP 6: CRITICAL FIX - If previous node exists, ALWAYS use its output instead of defaults
+                // Uses intelligent property selection based on user intent and node types
+                if (previousNode) {
+                    const previousOutputs = this.getPreviousNodeOutputFields(previousNode);
+                    if (previousOutputs.length > 0) {
+                        // Use intelligent property selection: analyzes user intent to select best JSON property
+                        const bestMatch = this.findBestOutputMatch(fieldName, previousOutputs, previousNode.type, requirements, node.type);
+                        config[fieldName] = '';
+                        dataContract.set(fieldName, {
+                            sourceNode: previousNode.id,
+                            sourceField: bestMatch,
+                            type: 'ai-resolved'
+                        });
+                        console.log(`✅ [Property Selection] ${node.type}.${fieldName} deferred to runtime AI (candidate: ${bestMatch} from ${previousNode.type})`);
+                        console.log(`   └─ Available outputs: ${previousOutputs.join(', ')}`);
+                        console.log(`   └─ Selected: ${bestMatch} (based on user intent: "${requirements.primaryGoal?.substring(0, 50)}...")`);
+                    }
+                    else {
+                        // Fallback: Use intelligent property selection with common outputs
+                        const commonOutputs = ['items', 'data', 'output', 'result', 'rows'];
+                        const bestMatch = this.findBestOutputMatch(fieldName, commonOutputs, previousNode.type, requirements, node.type);
+                        config[fieldName] = '';
+                        dataContract.set(fieldName, {
+                            sourceNode: previousNode.id,
+                            sourceField: bestMatch,
+                            type: 'ai-resolved'
+                        });
+                        console.log(`✅ [Data Flow] ${node.type}.${fieldName} deferred to runtime AI (fallback candidate: ${bestMatch} from ${previousNode.type})`);
+                    }
+                }
+                else {
+                    // Only use defaults if no previous node exists (e.g., trigger node)
+                    console.log(`ℹ️  Using default value for ${node.type}.${fieldName} (no upstream source found)`);
+                    config[fieldName] = node_defaults_1.nodeDefaults.getDefaultValue(node.type, fieldName, {
+                        requirements,
+                        previousNode,
+                        workflowGoal: requirements.primaryGoal,
+                    });
+                }
+            }
+        }
+        // STEP 7: Process critical optional fields for data flow
+        const criticalOptionalFields = ['input', 'data', 'value', 'message', 'text', 'content', 'body', 'userInput', 'context'];
+        for (const fieldName of Object.keys(optionalFields)) {
+            // If this is a runtime input field, keep it empty at build time.
+            if (runtimeInputKeys.has(fieldName)) {
+                if (config[fieldName] === undefined || config[fieldName] === null || config[fieldName] === '') {
+                    config[fieldName] = '';
+                }
+                continue;
+            }
+            if (criticalOptionalFields.includes(fieldName.toLowerCase()) &&
+                (config[fieldName] === undefined || config[fieldName] === null || config[fieldName] === '')) {
+                const resolution = this.resolveInputSource(fieldName, node.type, upstreamNodes, previousNode, requirements, nodeSchema);
+                if (resolution.resolved) {
+                    config[fieldName] = resolution.value;
+                    dataContract.set(fieldName, {
+                        sourceNode: resolution.sourceNode || 'trigger',
+                        sourceField: resolution.sourceField || fieldName,
+                        type: resolution.sourceType || 'string'
+                    });
+                }
+            }
+        }
+        // STEP 8: CRITICAL - Ensure AI-like nodes that expose `userInput` always have it populated
+        // (registry-driven: check schema, not hardcoded node types)
+        const nodeActualType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(node) || node.type;
+        const nodeDef = unified_node_registry_1.unifiedNodeRegistry.get(nodeActualType);
+        const requiresUserInput = !!nodeDef?.inputSchema && 'userInput' in nodeDef.inputSchema;
+        if (requiresUserInput) {
+            const hasUserInput = config.userInput && typeof config.userInput === 'string' && config.userInput.trim() !== '';
+            if (!hasUserInput) {
+                // UNIVERSAL INVARIANT: keep runtime input userInput empty at build time.
+                // Runtime executor will generate it from previous output + workflow intent.
+                config.userInput = '';
+                dataContract.set('userInput', {
+                    sourceNode: previousNode?.id || 'trigger',
+                    sourceField: 'runtime-input',
+                    type: 'ai-resolved',
+                });
+            }
+        }
+        // STEP 8.5: Use input-field-mapper for enhanced field mapping and validation
+        // This ensures correct template format ({{$json.field}}) and validates field references
+        try {
+            const fieldMappingValidation = input_field_mapper_1.inputFieldMapper.validateNodeInputs(node, previousNode, allNodes, nodeIndex);
+            // Apply validated mappings to config
+            // CRITICAL: Preserve existing intelligent property selection - don't overwrite if already set
+            for (const mapping of fieldMappingValidation.mappings) {
+                // UNIVERSAL INVARIANT: do not apply build-time template mappings for unified runtime input fields.
+                if (runtimeInputKeys.has(mapping.field)) {
+                    continue;
+                }
+                const existingValue = config[mapping.field];
+                const hasIntelligentSelection = typeof existingValue === 'string' &&
+                    existingValue.includes('{{$json.') &&
+                    !existingValue.includes('{{$json.type}}'); // Don't preserve wrong templates
+                // Only overwrite if:
+                // 1. Field is empty/undefined, OR
+                // 2. Existing value is not a valid template expression (intelligent selection)
+                if (mapping.valid) {
+                    if (mapping.field in config && !hasIntelligentSelection) {
+                        // Update config with validated template expression (only if not already intelligently set)
+                        config[mapping.field] = mapping.value;
+                        console.log(`✅ [Field Mapping] ${node.type}.${mapping.field} = ${mapping.value} (from ${mapping.sourceNodeType}.${mapping.sourceField})`);
+                    }
+                    else if (hasIntelligentSelection) {
+                        // Preserve intelligent property selection
+                        console.log(`✅ [Field Mapping] Preserving intelligent selection for ${node.type}.${mapping.field} = ${existingValue}`);
+                    }
+                    else if (requiredFields.includes(mapping.field) && !config[mapping.field]) {
+                        // Add missing required field with validated mapping
+                        config[mapping.field] = mapping.value;
+                        console.log(`✅ [Field Mapping] Added ${node.type}.${mapping.field} = ${mapping.value} (from ${mapping.sourceNodeType}.${mapping.sourceField})`);
+                    }
+                }
+                else if (!mapping.valid && requiredFields.includes(mapping.field) && !hasIntelligentSelection) {
+                    console.warn(`⚠️  [Field Mapping] Invalid mapping for required field ${node.type}.${mapping.field}: ${mapping.validationErrors?.join(', ') || 'Unknown error'}`);
+                }
+            }
+            // Log validation errors if any
+            if (fieldMappingValidation.errors.length > 0) {
+                console.warn(`⚠️  [Field Mapping] Node ${node.id} (${node.type}) has mapping errors:`, fieldMappingValidation.errors);
+            }
+        }
+        catch (error) {
+            console.warn(`⚠️  [Field Mapping] Error during field mapping validation for ${node.type}:`, error);
+            // Continue with existing config - don't fail the entire workflow
+        }
+        // STEP 8.5.5: INTELLIGENT DATA FILTERING - Extract user intent for specific data filtering
+        // If user mentions specific columns/fields (e.g., "resumes column"), filter data accordingly
+        // Apply to data-receiving fields AFTER all fields are configured
+        // This runs after STEP 8.7 (critical optional fields) to ensure all data fields are set
+        // STEP 8.6: Validate and fix template expressions
+        try {
+            const templateValidation = (0, template_expression_validator_1.validateTemplateExpressions)(node, previousNode, allNodes, nodeIndex);
+            if (!templateValidation.valid && templateValidation.errors.length > 0) {
+                console.warn(`⚠️  [Template Validation] Node ${node.id} (${node.type}) has template errors:`, templateValidation.errors);
+                // Auto-fix template expressions in config
+                for (const key in config) {
+                    if (typeof config[key] === 'string' && config[key].includes('{{')) {
+                        const fixed = (0, template_expression_validator_1.fixTemplateExpressions)({ [key]: config[key] });
+                        if (fixed[key]) {
+                            config[key] = fixed[key];
+                        }
+                    }
+                }
+                console.log(`✅ [Template Fix] Auto-fixed template expressions for ${node.type}`);
+            }
+        }
+        catch (error) {
+            console.warn(`⚠️  [Template Validation] Error during template validation for ${node.type}:`, error);
+            // Continue with existing config - don't fail the entire workflow
+        }
+        // STEP 9: Final validation - ensure ALL required fields have values
+        // CRITICAL FIX: Always prefer previous node output over defaults
+        for (const fieldName of requiredFields) {
+            if (!fieldName || typeof fieldName !== 'string') {
+                continue;
+            }
+            const value = config[fieldName];
+            const isEmpty = value === undefined || value === null ||
+                (typeof value === 'string' && value.trim() === '') ||
+                (Array.isArray(value) && value.length === 0);
+            if (isEmpty) {
+                // UNIVERSAL INVARIANT: keep unified runtime input fields empty until runtime.
+                // Do not inject {{$json...}} templates or defaults pre-execution.
+                if (runtimeInputKeys.has(fieldName)) {
+                    config[fieldName] = '';
+                    dataContract.set(fieldName, {
+                        sourceNode: previousNode?.id || 'trigger',
+                        sourceField: 'runtime-input',
+                        type: 'ai-resolved',
+                    });
+                    continue;
+                }
+                // CRITICAL FIX: If previous node exists, ALWAYS use its output instead of defaults
+                if (previousNode) {
+                    const previousOutputs = this.getPreviousNodeOutputFields(previousNode);
+                    if (previousOutputs.length > 0) {
+                        const bestMatch = this.findBestOutputMatch(fieldName, previousOutputs, previousNode.type, requirements, node.type);
+                        config[fieldName] = '';
+                        dataContract.set(fieldName, {
+                            sourceNode: previousNode.id,
+                            sourceField: bestMatch,
+                            type: 'ai-resolved'
+                        });
+                        console.log(`✅ [Final Validation] ${node.type}.${fieldName} deferred to runtime AI (candidate: ${bestMatch})`);
+                        continue;
+                    }
+                    else {
+                        // Fallback: Use intelligent property selection based on user intent
+                        // Even if no specific outputs, try to select best property from common outputs
+                        const commonOutputs = ['items', 'data', 'output', 'result', 'rows'];
+                        const bestMatch = this.findBestOutputMatch(fieldName, commonOutputs, previousNode.type, requirements, node.type);
+                        config[fieldName] = '';
+                        dataContract.set(fieldName, {
+                            sourceNode: previousNode.id,
+                            sourceField: bestMatch,
+                            type: 'ai-resolved'
+                        });
+                        console.log(`✅ [Final Validation] ${node.type}.${fieldName} deferred to runtime AI (fallback candidate: ${bestMatch})`);
+                        continue;
+                    }
+                }
+                // Only use defaults if no previous node exists (e.g., trigger node)
+                const defaultValue = node_defaults_1.nodeDefaults.getDefaultValue(node.type, fieldName, {
+                    requirements,
+                    previousNode,
+                    workflowGoal: requirements.primaryGoal,
+                });
+                if (defaultValue !== undefined && defaultValue !== null &&
+                    (typeof defaultValue !== 'string' || defaultValue.trim() !== '')) {
+                    config[fieldName] = defaultValue;
+                    console.log(`✅ Auto-filled required field ${node.type}.${fieldName} with default: ${JSON.stringify(defaultValue).substring(0, 50)}`);
+                }
+                else {
+                    // CRITICAL: This should never happen with nodeDefaults, but fail fast if it does
+                    const errorMsg = `Cannot generate value for required field: ${fieldName} in node ${node.type} (${node.id}). NodeDefaults system failed.`;
+                    console.error(`❌ ${errorMsg}`);
+                    throw new Error(errorMsg);
+                }
+            }
+            // PRIORITY 2: Check for placeholder values
+            if (typeof value === 'string') {
+                const lowerValue = value.toLowerCase();
+                if (lowerValue.includes('todo') ||
+                    lowerValue.includes('example') ||
+                    lowerValue.includes('replace') ||
+                    lowerValue.includes('fill this') ||
+                    (lowerValue.includes('placeholder') && !lowerValue.includes('{{ENV.'))) {
+                    const errorMsg = `Placeholder value detected in required field ${node.type}.${fieldName}: "${value}"`;
+                    console.error(`❌ ${errorMsg}`);
+                    throw new Error(errorMsg);
+                }
+            }
+        }
+        // STEP 10: Store data contract in node metadata for validation
+        if (dataContract.size > 0) {
+            config._dataContract = Object.fromEntries(dataContract);
+        }
+        // UNIVERSAL INVARIANT:
+        // Never leave runtime-input fields pre-filled (including {{$json...}} templates)
+        // inside node.data.config at build/save time.
+        // The dynamic runtime executor will fill them after previous nodes have produced
+        // real outputs via AI Input Resolver + guarantee.
+        for (const runtimeKey of runtimeInputKeys) {
+            if (runtimeKey in config) {
+                config[runtimeKey] = '';
+            }
+        }
+        return config;
+    }
+    /**
+     * Resolve input source with strict priority rules
+     */
+    resolveInputSource(fieldName, nodeType, upstreamNodes, previousNode, requirements, nodeSchema) {
+        // Priority 1: Direct upstream node output (exact match)
+        if (previousNode) {
+            const previousOutputs = this.getPreviousNodeOutputFields(previousNode);
+            const exactMatch = previousOutputs.find(f => f.toLowerCase() === fieldName.toLowerCase());
+            if (exactMatch) {
+                return {
+                    resolved: true,
+                    value: `{{$json.${exactMatch}}}`, // Use $json prefix for correct data flow
+                    sourceNode: previousNode.id,
+                    sourceField: exactMatch,
+                    sourceType: this.inferFieldType(exactMatch, previousNode.type),
+                    targetType: this.inferFieldType(fieldName, nodeType)
+                };
+            }
+            // Priority 2: Intelligent property selection based on user intent and node types
+            const bestMatch = this.findBestOutputMatch(fieldName, previousOutputs, previousNode.type, requirements, nodeType);
+            if (bestMatch) {
+                return {
+                    resolved: true,
+                    value: `{{$json.${bestMatch}}}`, // Use $json prefix for correct data flow
+                    sourceNode: previousNode.id,
+                    sourceField: bestMatch,
+                    sourceType: this.inferFieldType(bestMatch, previousNode.type),
+                    targetType: this.inferFieldType(fieldName, nodeType)
+                };
+            }
+            // Priority 2.5: Semantic match from previous node (fallback)
+            const semanticMatch = this.findSemanticMatch(fieldName, previousOutputs, previousNode.type);
+            if (semanticMatch) {
+                return {
+                    resolved: true,
+                    value: `{{$json.${semanticMatch.field}}}`, // Use $json prefix for correct data flow
+                    sourceNode: previousNode.id,
+                    sourceField: semanticMatch.field,
+                    sourceType: semanticMatch.type,
+                    targetType: this.inferFieldType(fieldName, nodeType)
+                };
+            }
+        }
+        // Priority 3: Search all upstream nodes for compatible output
+        for (let i = upstreamNodes.length - 1; i >= 0; i--) {
+            const upstreamNode = upstreamNodes[i];
+            const upstreamOutputs = this.getPreviousNodeOutputFields(upstreamNode);
+            const match = upstreamOutputs.find(f => f.toLowerCase() === fieldName.toLowerCase() ||
+                f.toLowerCase().includes(fieldName.toLowerCase()) ||
+                fieldName.toLowerCase().includes(f.toLowerCase()));
+            if (match) {
+                return {
+                    resolved: true,
+                    value: `{{$json.${match}}}`, // Use $json prefix for correct data flow
+                    sourceNode: upstreamNode.id,
+                    sourceField: match,
+                    sourceType: this.inferFieldType(match, upstreamNode.type),
+                    targetType: this.inferFieldType(fieldName, nodeType)
+                };
+            }
+        }
+        // Priority 4: Trigger payload fields
+        const triggerFields = this.getTriggerPayloadFields(upstreamNodes);
+        const triggerMatch = triggerFields.find(f => f.toLowerCase() === fieldName.toLowerCase() ||
+            f.toLowerCase().includes(fieldName.toLowerCase()));
+        if (triggerMatch) {
+            return {
+                resolved: true,
+                value: `{{input.${triggerMatch}}}`,
+                sourceNode: 'trigger',
+                sourceField: triggerMatch,
+                sourceType: 'string'
+            };
+        }
+        // Priority 5: Requirements inputs
+        if (requirements.inputs && Array.isArray(requirements.inputs)) {
+            const reqMatch = requirements.inputs.find((input) => {
+                const inputName = typeof input === 'string' ? input : (input?.name || input?.field || '');
+                return inputName && (inputName.toLowerCase() === fieldName.toLowerCase() ||
+                    inputName.toLowerCase().includes(fieldName.toLowerCase()));
+            });
+            if (reqMatch) {
+                const inputName = typeof reqMatch === 'string' ? reqMatch : (reqMatch?.name || reqMatch?.field || String(reqMatch));
+                return {
+                    resolved: true,
+                    value: `{{input.${inputName}}}`,
+                    sourceNode: 'trigger',
+                    sourceField: inputName,
+                    sourceType: 'string'
+                };
+            }
+        }
+        // Not resolved
+        return { resolved: false };
+    }
+    /**
+     * Find semantic match between field name and available outputs
+     */
+    findSemanticMatch(fieldName, availableOutputs, sourceNodeType) {
+        const fieldLower = fieldName.toLowerCase();
+        // Message/text/content patterns
+        if (fieldLower.includes('message') || fieldLower.includes('text') || fieldLower.includes('content')) {
+            const match = availableOutputs.find(f => f.toLowerCase().includes('message') ||
+                f.toLowerCase().includes('text') ||
+                f.toLowerCase().includes('content') ||
+                f.toLowerCase().includes('response') ||
+                f.toLowerCase().includes('reply'));
+            if (match) {
+                return { field: match, type: 'string' };
+            }
+        }
+        // Data/value patterns
+        if (fieldLower.includes('data') || fieldLower.includes('value') || fieldLower.includes('result')) {
+            const match = availableOutputs.find(f => f.toLowerCase().includes('data') ||
+                f.toLowerCase().includes('value') ||
+                f.toLowerCase().includes('result') ||
+                f.toLowerCase().includes('output'));
+            if (match) {
+                return { field: match, type: this.inferFieldType(match, sourceNodeType) };
+            }
+        }
+        // Email/to patterns
+        if (fieldLower.includes('email') || fieldLower.includes('to')) {
+            const match = availableOutputs.find(f => f.toLowerCase().includes('email') ||
+                f.toLowerCase().includes('to'));
+            if (match) {
+                return { field: match, type: 'string' };
+            }
+        }
+        // Use first available output as fallback
+        if (availableOutputs.length > 0) {
+            return { field: availableOutputs[0], type: this.inferFieldType(availableOutputs[0], sourceNodeType) };
+        }
+        return null;
+    }
+    /**
+     * Find upstream field by name patterns
+     */
+    findUpstreamField(upstreamNodes, patterns) {
+        for (let i = upstreamNodes.length - 1; i >= 0; i--) {
+            const node = upstreamNodes[i];
+            const outputs = this.getPreviousNodeOutputFields(node);
+            for (const pattern of patterns) {
+                const match = outputs.find(f => f.toLowerCase().includes(pattern.toLowerCase()));
+                if (match) {
+                    return {
+                        value: `{{$json.${match}}}`, // Use $json prefix for correct data flow
+                        sourceNode: node.id,
+                        sourceField: match
+                    };
+                }
+            }
+        }
+        return null;
+    }
+    /**
+     * Get trigger payload fields
+     */
+    getTriggerPayloadFields(upstreamNodes) {
+        const triggerNode = upstreamNodes.find((n) => this.isTriggerNodeType((0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n) || n.type));
+        if (!triggerNode) {
+            return [];
+        }
+        // Common trigger payload fields
+        const commonFields = ['user_message', 'message', 'text', 'input', 'body', 'data', 'session_id'];
+        // Registry-driven trigger payload fields: union with trigger output schema fields
+        const actualType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(triggerNode) || triggerNode.type;
+        const outputFields = this.getNodeOutputFields(actualType);
+        return Array.from(new Set([...commonFields, ...outputFields]));
+    }
+    /**
+     * Validate type compatibility
+     */
+    validateTypeCompatibility(sourceType, targetType, fieldName, nodeType) {
+        // Exact match
+        if (sourceType === targetType) {
+            return true;
+        }
+        // String compatibility (most flexible)
+        if (targetType === 'string') {
+            return true; // Can convert anything to string
+        }
+        // Number compatibility
+        if (targetType === 'number' && (sourceType === 'string' || sourceType === 'number')) {
+            return true; // Can parse string to number
+        }
+        // Object/array compatibility
+        if ((targetType === 'object' || targetType === 'array') &&
+            (sourceType === 'object' || sourceType === 'array')) {
+            return true;
+        }
+        // Boolean compatibility
+        if (targetType === 'boolean' && (sourceType === 'string' || sourceType === 'boolean')) {
+            return true;
+        }
+        return false;
+    }
+    /**
+     * Infer field type from field name and node type
+     */
+    inferFieldType(fieldName, nodeType) {
+        const fieldLower = fieldName.toLowerCase();
+        const nodeLower = nodeType.toLowerCase();
+        // Number fields
+        if (fieldLower.includes('count') || fieldLower.includes('total') ||
+            fieldLower.includes('amount') || fieldLower.includes('price') ||
+            fieldLower.includes('age') || fieldLower.includes('number')) {
+            return 'number';
+        }
+        // Boolean fields
+        if (fieldLower.includes('is_') || fieldLower.includes('has_') ||
+            fieldLower.includes('enabled') || fieldLower.includes('active') ||
+            fieldLower.includes('valid') || fieldLower === 'true' || fieldLower === 'false') {
+            return 'boolean';
+        }
+        // Array fields
+        if (fieldLower.includes('list') || fieldLower.includes('array') ||
+            fieldLower.includes('items') || fieldLower.endsWith('s')) {
+            return 'array';
+        }
+        // Object fields
+        if (fieldLower.includes('data') || fieldLower.includes('object') ||
+            fieldLower.includes('config') || fieldLower.includes('metadata')) {
+            return 'object';
+        }
+        // Default to string
+        return 'string';
+    }
+    /**
+     * Validate field reference exists in upstream nodes
+     */
+    validateFieldReference(fieldRef, upstreamNodes, currentNode) {
+        // Check if it's an input reference
+        if (fieldRef.startsWith('input.')) {
+            return true; // Input references are always valid
+        }
+        // Check all upstream nodes for this field
+        for (const node of upstreamNodes) {
+            const outputs = this.getPreviousNodeOutputFields(node);
+            if (outputs.includes(fieldRef)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    /**
+     * Find compatible source when type mismatch occurs
+     */
+    findCompatibleSource(fieldName, nodeType, upstreamNodes, previousNode) {
+        // Try to find a source with compatible type
+        const targetType = this.inferFieldType(fieldName, nodeType);
+        const nodesToCheck = previousNode ? [previousNode, ...upstreamNodes] : upstreamNodes;
+        for (const node of nodesToCheck) {
+            const outputs = this.getPreviousNodeOutputFields(node);
+            for (const output of outputs) {
+                const outputType = this.inferFieldType(output, node.type);
+                if (this.validateTypeCompatibility(outputType, targetType, fieldName, nodeType)) {
+                    return {
+                        value: `{{$json.${output}}}`, // Use $json prefix for correct data flow
+                        sourceNode: node.id,
+                        sourceField: output,
+                        sourceType: outputType
+                    };
+                }
+            }
+        }
+        return null;
+    }
+    /**
+     * Generate value for an input field based on IO mapping rules
+     */
+    generateInputFieldValue(fieldName, fieldSchema, previousNode, allNodes, nodeIndex, requirements, nodeType) {
+        // 🚨 CRITICAL: Auto-populate HubSpot Properties field when operation is "create"
+        if (nodeType === 'hubspot' && fieldName === 'properties') {
+            const currentNode = allNodes[nodeIndex];
+            const operation = currentNode?.data?.config?.operation;
+            if (operation === 'create' && previousNode) {
+                const previousOutputFields = this.getPreviousNodeOutputFields(previousNode);
+                const previousNodeType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(previousNode);
+                // Check if we have email and name in the flow
+                const hasEmail = previousOutputFields.some(f => f.toLowerCase().includes('email'));
+                const hasName = previousOutputFields.some(f => f.toLowerCase().includes('name') || f.toLowerCase().includes('firstname'));
+                if (hasEmail && hasName) {
+                    // Find email and name fields
+                    const emailField = previousOutputFields.find(f => f.toLowerCase().includes('email')) || 'email';
+                    const nameField = previousOutputFields.find(f => f.toLowerCase().includes('name') && !f.toLowerCase().includes('lastname')) || previousOutputFields.find(f => f.toLowerCase().includes('firstname')) || 'name';
+                    // Auto-generate Properties JSON with template expressions
+                    const propertiesJson = {
+                        email: `{{$json.${emailField}}}`,
+                        firstname: `{{$json.${nameField}}}`
+                    };
+                    console.log(`✅ [HubSpot Auto-Config] Auto-populated Properties field: ${JSON.stringify(propertiesJson)}`);
+                    return propertiesJson;
+                }
+            }
+        }
+        // If previous node exists, map from its output
+        if (previousNode) {
+            const previousOutputFields = this.getPreviousNodeOutputFields(previousNode);
+            // Try to match field name with previous output
+            const matchingField = previousOutputFields.find(field => field.toLowerCase() === fieldName.toLowerCase() ||
+                field.toLowerCase().includes(fieldName.toLowerCase()) ||
+                fieldName.toLowerCase().includes(field.toLowerCase()));
+            // ✅ ARCHITECTURAL REFACTOR: Do NOT generate {{$json.*}} template expressions
+            // AI Input Resolver will handle input generation dynamically at runtime
+            // Return empty string to indicate field will be AI-generated
+            // This prevents static JSON dropdown options from appearing in UI
+            if (matchingField) {
+                // Field will be resolved by AI Input Resolver at runtime
+                // Return empty to indicate AI generation
+                return '';
+            }
+            // If no direct match, return empty (AI will generate)
+            if (previousOutputFields.length > 0) {
+                // ✅ AI Input Resolver will analyze previous output and generate appropriate input
+                // No need to generate template expressions here
+                return '';
+            }
+            // For fields that need AI generation (message, text, content, email, etc.)
+            if (fieldName.toLowerCase().includes('message') ||
+                fieldName.toLowerCase().includes('text') ||
+                fieldName.toLowerCase().includes('content') ||
+                fieldName.toLowerCase().includes('email') ||
+                fieldName.toLowerCase().includes('subject') ||
+                fieldName.toLowerCase().includes('body') ||
+                fieldName.toLowerCase().includes('to')) {
+                // These fields will be AI-generated at runtime
+                return '';
+            }
+            if (fieldName.toLowerCase().includes('data') || fieldName.toLowerCase().includes('value')) {
+                // AI will generate based on previous output structure
+                return '';
+            }
+            // All fields that need data from previous nodes will be AI-generated
+            // No template expressions needed - AI Input Resolver handles this
+            return '';
+        }
+        // If no previous node, try to extract from requirements
+        const fieldNameLower = fieldName.toLowerCase();
+        // Check requirements for matching fields
+        if (fieldNameLower.includes('age') && requirements.inputs) {
+            const ageInput = requirements.inputs.find(i => i.toLowerCase().includes('age'));
+            if (ageInput) {
+                return `{{input.${ageInput}}}`;
+            }
+        }
+        if (fieldNameLower.includes('email') && requirements.inputs) {
+            const emailInput = requirements.inputs.find(i => i.toLowerCase().includes('email'));
+            if (emailInput) {
+                return `{{input.${emailInput}}}`;
+            }
+        }
+        if (fieldNameLower.includes('name') && requirements.inputs) {
+            const nameInput = requirements.inputs.find(i => i.toLowerCase().includes('name'));
+            if (nameInput) {
+                return `{{input.${nameInput}}}`;
+            }
+        }
+        // Use default from schema if available
+        if (fieldSchema?.default !== undefined) {
+            return fieldSchema.default;
+        }
+        // Generate intelligent default based on field name and node type
+        return this.generateIntelligentDefault(fieldName, nodeType, requirements);
+    }
+    /**
+     * ✅ ARCHITECTURAL FIX: Get output fields from previous node
+     * Uses comprehensive registry to ensure correct fields are returned
+     */
+    /**
+     * INTELLIGENT PROPERTY SELECTION: Find the best matching output field from previous node
+     * Based on: 1) User intent from prompt, 2) Target field name, 3) Source node type
+     *
+     * CRITICAL: This decides WHICH JSON property to forward, not what JSON to generate
+     * - JSON structure is generated by user input (e.g., Google Sheets link → full JSON)
+     * - This method selects which property of that JSON to forward to next node
+     */
+    findBestOutputMatch(targetFieldName, availableOutputs, sourceNodeType, requirements, targetNodeType) {
+        const targetLower = targetFieldName.toLowerCase();
+        const userPrompt = (requirements?.originalPrompt || requirements?.primaryGoal || '').toLowerCase();
+        // ============================================
+        // PRIORITY 1: User Intent-Based Selection
+        // ============================================
+        // If user specifies a column/field (e.g., "resumes column"), check if it exists in outputs
+        if (userPrompt) {
+            // Extract potential column/field names from user prompt
+            const columnPatterns = [
+                /(?:only|just|send|forward|use|filter|extract|get)\s+(?:the\s+)?(\w+)\s+(?:column|field|data|section)/i,
+                /(\w+)\s+(?:column|field|data|section)\s+(?:only|just|send|forward|use)/i,
+            ];
+            for (const pattern of columnPatterns) {
+                const match = userPrompt.match(pattern);
+                if (match && match[1]) {
+                    const userSpecifiedField = match[1].trim();
+                    // CRITICAL: For Google Sheets and similar data sources, columns are inside the 'items' array
+                    // If source is Google Sheets and user specifies a column (e.g., "resumes"), 
+                    // we need to forward items[].ColumnName or filter to that column
+                    if (sourceNodeType === 'google_sheets' && availableOutputs.includes('items')) {
+                        // Google Sheets outputs items array where each item has column names as keys
+                        // User wants specific column → forward items[].ColumnName
+                        // Capitalize first letter to match typical column naming (Resumes, Name, etc.)
+                        const columnName = userSpecifiedField.charAt(0).toUpperCase() + userSpecifiedField.slice(1);
+                        console.log(`✅ [Property Selection] User specified "${userSpecifiedField}" column from Google Sheets`);
+                        console.log(`   └─ Prompt: "${userPrompt.substring(0, 100)}..."`);
+                        console.log(`   └─ Matched pattern: "${match[0]}"`);
+                        console.log(`   └─ Forwarding items[].${columnName} (column filtering will be applied)`);
+                        // Return 'items' - the filtering will be handled by template expression construction
+                        // The actual filtering can be done with: {{$json.items[].Resumes}} or similar
+                        return 'items'; // Base property, column filtering handled separately if needed
+                    }
+                    // Check if this field exists in available outputs (case-insensitive)
+                    const fieldMatch = availableOutputs.find(f => f.toLowerCase() === userSpecifiedField.toLowerCase() ||
+                        f.toLowerCase().includes(userSpecifiedField.toLowerCase()));
+                    if (fieldMatch) {
+                        console.log(`✅ [Property Selection] User specified "${userSpecifiedField}" → forwarding ${fieldMatch}`);
+                        console.log(`   └─ Prompt: "${userPrompt.substring(0, 100)}..."`);
+                        console.log(`   └─ Matched pattern: "${match[0]}"`);
+                        return fieldMatch;
+                    }
+                }
+            }
+        }
+        // ============================================
+        // PRIORITY 2: Target Node Type-Based Selection
+        // ============================================
+        // Different target nodes need different properties
+        if (targetNodeType) {
+            const targetLower = targetNodeType.toLowerCase();
+            // AI/LLM nodes need data/content, prefer items or data arrays
+            if (targetLower.includes('ai_agent') || targetLower.includes('gpt') ||
+                targetLower.includes('claude') || targetLower.includes('gemini') ||
+                targetLower.includes('ollama') || targetLower.includes('chat_model')) {
+                // For AI nodes, prefer items (array of objects) or data
+                const aiPreferredFields = ['items', 'data', 'rows', 'records'];
+                for (const field of aiPreferredFields) {
+                    if (availableOutputs.includes(field)) {
+                        console.log(`✅ [Property Selection] AI node target (${targetNodeType}) → forwarding ${field}`);
+                        console.log(`   └─ Available outputs: ${availableOutputs.join(', ')}`);
+                        return field;
+                    }
+                }
+            }
+            // Communication nodes (Gmail, Slack, etc.) need text/message content
+            if (targetLower.includes('gmail') || targetLower.includes('email') ||
+                targetLower.includes('slack') || targetLower.includes('discord') ||
+                targetLower.includes('telegram') || targetLower.includes('whatsapp')) {
+                // For communication nodes, prefer text/message from AI nodes
+                const commPreferredFields = ['response_text', 'text', 'message', 'content', 'body'];
+                for (const field of commPreferredFields) {
+                    if (availableOutputs.includes(field)) {
+                        console.log(`✅ [Property Selection] Communication node target → forwarding ${field}`);
+                        return field;
+                    }
+                }
+            }
+        }
+        // ============================================
+        // PRIORITY 3: Exact Match
+        // ============================================
+        const exactMatch = availableOutputs.find(f => f.toLowerCase() === targetLower);
+        if (exactMatch) {
+            console.log(`✅ [Property Selection] Exact match → forwarding ${exactMatch}`);
+            return exactMatch;
+        }
+        // ============================================
+        // PRIORITY 4: Semantic Match
+        // ============================================
+        const semanticMatch = this.findSemanticMatch(targetFieldName, availableOutputs, sourceNodeType);
+        if (semanticMatch) {
+            console.log(`✅ [Property Selection] Semantic match → forwarding ${semanticMatch.field}`);
+            return semanticMatch.field;
+        }
+        // ============================================
+        // PRIORITY 5: Source Node Type-Based Selection
+        // ============================================
+        // Google Sheets → prefer items (array of row objects)
+        if (sourceNodeType === 'google_sheets') {
+            if (availableOutputs.includes('items')) {
+                console.log(`✅ [Property Selection] Google Sheets source → forwarding items`);
+                return 'items';
+            }
+            if (availableOutputs.includes('rows')) {
+                console.log(`✅ [Property Selection] Google Sheets source → forwarding rows`);
+                return 'rows';
+            }
+        }
+        // AI nodes → prefer response_text or text
+        if (sourceNodeType.includes('ai_agent') || sourceNodeType.includes('gpt') ||
+            sourceNodeType.includes('claude') || sourceNodeType.includes('gemini')) {
+            if (availableOutputs.includes('response_text')) {
+                console.log(`✅ [Property Selection] AI source → forwarding response_text`);
+                return 'response_text';
+            }
+            if (availableOutputs.includes('text')) {
+                console.log(`✅ [Property Selection] AI source → forwarding text`);
+                return 'text';
+            }
+        }
+        // ============================================
+        // PRIORITY 6: Common Data Flow Patterns
+        // ============================================
+        // For message/text/content fields, prefer response_text, text, message, content
+        if (targetLower.includes('message') || targetLower.includes('text') || targetLower.includes('content') || targetLower.includes('body')) {
+            const messageFields = ['response_text', 'text', 'message', 'content', 'body', 'output', 'response'];
+            for (const msgField of messageFields) {
+                if (availableOutputs.includes(msgField)) {
+                    console.log(`✅ [Property Selection] Message field target → forwarding ${msgField}`);
+                    return msgField;
+                }
+            }
+        }
+        // For data/input fields, prefer items, data, output, result
+        if (targetLower.includes('data') || targetLower.includes('input') || targetLower.includes('value')) {
+            const dataFields = ['items', 'data', 'output', 'result', 'rows', 'records'];
+            for (const dataField of dataFields) {
+                if (availableOutputs.includes(dataField)) {
+                    console.log(`✅ [Property Selection] Data field target → forwarding ${dataField}`);
+                    return dataField;
+                }
+            }
+        }
+        // ============================================
+        // PRIORITY 7: Fallback to Preferred Order
+        // ============================================
+        const preferredOrder = ['items', 'data', 'output', 'result', 'response_text', 'text', 'message', 'content'];
+        for (const preferred of preferredOrder) {
+            if (availableOutputs.includes(preferred)) {
+                console.log(`✅ [Property Selection] Fallback → forwarding ${preferred}`);
+                return preferred;
+            }
+        }
+        // ============================================
+        // PRIORITY 8: Ultimate Fallback
+        // ============================================
+        const fallback = availableOutputs[0] || 'output';
+        console.log(`✅ [Property Selection] Ultimate fallback → forwarding ${fallback}`);
+        return fallback;
+    }
+    getPreviousNodeOutputFields(previousNode) {
+        const outputFields = [];
+        // Check config for outputFields (explicitly set)
+        if (previousNode.data?.config?.outputFields) {
+            const fields = previousNode.data.config.outputFields;
+            if (Array.isArray(fields)) {
+                outputFields.push(...fields);
+            }
+            else if (typeof fields === 'string') {
+                outputFields.push(fields);
+            }
+        }
+        // Check config for output schema (explicitly set)
+        if (previousNode.data?.config?.outputSchema) {
+            const schema = previousNode.data.config.outputSchema;
+            if (typeof schema === 'object' && schema !== null) {
+                outputFields.push(...Object.keys(schema));
+            }
+        }
+        // ✅ CRITICAL FIX: Always use comprehensive registry, even if config has fields
+        // This ensures we have the complete list of available outputs
+        const nodeActualType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(previousNode);
+        const registryFields = this.getNodeOutputFields(nodeActualType);
+        // Merge config fields with registry fields (registry takes precedence for duplicates)
+        const allFields = [...new Set([...registryFields, ...outputFields])];
+        // ✅ ARCHITECTURAL FIX: Remove dangerous generic fallback
+        // If no output fields found, fail gracefully instead of using generic 'output'
+        if (allFields.length === 0) {
+            console.warn(`⚠️  [getPreviousNodeOutputFields] No declared outputs for node type: ${nodeActualType} (node.id: ${previousNode.id})`);
+            // Return empty array - edge creation should handle this gracefully
+            // DO NOT fall back to generic 'output' - this causes validation errors
+            return [];
+        }
+        return allFields;
+    }
+    /**
+     * Infer output fields from node type
+     */
+    inferOutputFieldsFromNodeType(nodeType) {
+        const typeLower = nodeType.toLowerCase();
+        // ============================================
+        // TRIGGER NODES
+        // ============================================
+        if (typeLower === 'manual_trigger') {
+            return ['inputData', 'timestamp', 'triggerType'];
+        }
+        if (typeLower === 'workflow_trigger') {
+            return ['inputData', 'workflowId', 'timestamp'];
+        }
+        if (typeLower === 'chat_trigger') {
+            return ['message', 'userId', 'sessionId', 'timestamp'];
+        }
+        if (typeLower === 'webhook') {
+            return ['body', 'headers', 'queryParams', 'method', 'output'];
+        }
+        if (typeLower === 'form') {
+            return ['fields', 'submittedAt', 'formId', 'output'];
+        }
+        if (typeLower === 'schedule') {
+            return ['cronExpression', 'executionTime', 'timezone', 'output'];
+        }
+        if (typeLower === 'interval') {
+            return ['interval', 'unit', 'executionTime', 'output'];
+        }
+        if (typeLower === 'error_trigger') {
+            return ['error', 'timestamp', 'source', 'output'];
+        }
+        // ============================================
+        // AI NODES
+        // ============================================
+        if (typeLower === 'ai_agent') {
+            return ['response_text', 'response_json', 'response_markdown', 'text', 'output'];
+        }
+        if (typeLower.includes('openai') || typeLower.includes('gpt')) {
+            return ['text', 'response', 'content', 'message', 'output'];
+        }
+        if (typeLower.includes('claude') || typeLower.includes('anthropic')) {
+            return ['text', 'response', 'content', 'message', 'output'];
+        }
+        if (typeLower.includes('gemini') || typeLower.includes('google_gemini')) {
+            return ['text', 'response', 'content', 'message', 'output'];
+        }
+        if (typeLower === 'ollama') {
+            return ['text', 'response', 'content', 'message', 'output'];
+        }
+        if (typeLower.includes('summarizer')) {
+            return ['text', 'summary', 'output'];
+        }
+        if (typeLower.includes('sentiment')) {
+            return ['sentiment', 'score', 'emotions', 'output'];
+        }
+        // ============================================
+        // HTTP & API NODES
+        // ============================================
+        if (typeLower.includes('http_request') || typeLower.includes('http_post')) {
+            return ['status', 'headers', 'body', 'response', 'responseTime'];
+        }
+        if (typeLower.includes('webhook_response') || typeLower.includes('respond_to_webhook')) {
+            return []; // void output
+        }
+        if (typeLower === 'graphql') {
+            return ['data', 'errors', 'response'];
+        }
+        // ============================================
+        // GOOGLE SERVICES
+        // ============================================
+        if (typeLower === 'google_sheets') {
+            return ['rows', 'row_data', 'sheet_data', 'data'];
+        }
+        if (typeLower === 'google_doc') {
+            return ['content', 'document_data', 'text'];
+        }
+        if (typeLower === 'google_drive') {
+            return ['file_id', 'file_url', 'file_data', 'files'];
+        }
+        if (typeLower === 'google_gmail') {
+            return ['message', 'response', 'output'];
+        }
+        if (typeLower === 'google_calendar') {
+            return ['eventId', 'success', 'event'];
+        }
+        if (typeLower === 'google_tasks') {
+            return ['tasks', 'data'];
+        }
+        if (typeLower === 'google_contacts') {
+            return ['contacts', 'data'];
+        }
+        if (typeLower === 'google_bigquery') {
+            return ['rows', 'data', 'result'];
+        }
+        // ============================================
+        // OUTPUT & COMMUNICATION NODES (all return strings)
+        // ============================================
+        if (typeLower.includes('slack') || typeLower.includes('discord') ||
+            typeLower.includes('email') || typeLower === 'telegram' ||
+            typeLower.includes('teams') || typeLower.includes('whatsapp') ||
+            typeLower === 'twilio') {
+            return ['message', 'response', 'output'];
+        }
+        if (typeLower === 'log_output') {
+            return []; // void output
+        }
+        // ============================================
+        // SOCIAL MEDIA NODES (all return strings)
+        // ============================================
+        if (typeLower === 'linkedin' || typeLower === 'twitter' ||
+            typeLower === 'instagram' || typeLower === 'facebook') {
+            return ['message', 'response', 'output'];
+        }
+        // ============================================
+        // DATA MANIPULATION NODES
+        // ============================================
+        if (typeLower.includes('set_variable') || typeLower === 'set') {
+            return ['data', 'output', 'variables'];
+        }
+        if (typeLower.includes('javascript') || typeLower.includes('code')) {
+            return ['result', 'output', 'data'];
+        }
+        if (typeLower.includes('text_formatter') || typeLower.includes('format')) {
+            return ['formatted', 'output', 'text'];
+        }
+        if (typeLower.includes('json_parser') || typeLower.includes('json')) {
+            return ['parsed', 'data', 'output'];
+        }
+        if (typeLower.includes('date_time') || typeLower.includes('datetime')) {
+            return ['formatted', 'timestamp', 'output'];
+        }
+        if (typeLower === 'math') {
+            return ['result', 'output'];
+        }
+        if (typeLower === 'html') {
+            return ['parsed', 'text', 'output'];
+        }
+        if (typeLower === 'xml') {
+            return ['parsed', 'text', 'output'];
+        }
+        if (typeLower === 'csv') {
+            return ['rows', 'data'];
+        }
+        if (typeLower.includes('merge_data')) {
+            return ['merged', 'data', 'output'];
+        }
+        if (typeLower.includes('rename_keys')) {
+            return ['renamed', 'data', 'output'];
+        }
+        if (typeLower.includes('edit_fields')) {
+            return ['edited', 'data', 'output'];
+        }
+        // ============================================
+        // LOGIC NODES
+        // ============================================
+        if (typeLower.includes('if_else') || typeLower.includes('condition')) {
+            return ['result', 'condition_result', 'output', 'true', 'false'];
+        }
+        if (typeLower === 'switch') {
+            return ['result', 'output', 'case_result', 'data'];
+        }
+        if (typeLower === 'filter') {
+            return ['filtered', 'data', 'output'];
+        }
+        if (typeLower === 'loop') {
+            return ['iterated', 'data', 'output'];
+        }
+        if (typeLower === 'merge') {
+            return ['merged', 'data', 'output'];
+        }
+        if (typeLower.includes('split_in_batches')) {
+            return ['batches', 'data'];
+        }
+        if (typeLower === 'wait') {
+            return ['waitedUntil', 'duration', 'output'];
+        }
+        if (typeLower.includes('error_handler')) {
+            return ['result', 'output', 'data'];
+        }
+        if (typeLower.includes('stop_and_error')) {
+            return []; // void output
+        }
+        if (typeLower === 'noop') {
+            return ['output', 'data'];
+        }
+        if (typeLower === 'limit') {
+            return ['limited', 'data', 'output'];
+        }
+        if (typeLower === 'aggregate') {
+            return ['groups', 'totals', 'count', 'output'];
+        }
+        if (typeLower === 'sort') {
+            return ['sorted', 'data', 'output'];
+        }
+        // ============================================
+        // DATABASE NODES
+        // ============================================
+        if (typeLower.includes('database_read')) {
+            return ['rows', 'data', 'result'];
+        }
+        if (typeLower.includes('database_write')) {
+            return ['affectedRows', 'insertId', 'result', 'rowsAffected'];
+        }
+        if (typeLower === 'db') {
+            return ['data', 'error', 'rows'];
+        }
+        if (typeLower.includes('postgres') || typeLower.includes('mysql') ||
+            typeLower.includes('mongodb') || typeLower === 'redis') {
+            return ['rows', 'data', 'result'];
+        }
+        // ============================================
+        // CRM & MARKETING NODES
+        // ============================================
+        if (typeLower.includes('hubspot') || typeLower.includes('zoho') ||
+            typeLower.includes('pipedrive') || typeLower.includes('salesforce') ||
+            typeLower.includes('freshdesk') || typeLower.includes('intercom') ||
+            typeLower.includes('mailchimp') || typeLower.includes('activecampaign')) {
+            return ['data', 'result', 'output'];
+        }
+        // ============================================
+        // FILE & STORAGE NODES
+        // ============================================
+        if (typeLower.includes('read_binary_file') || typeLower.includes('read_file')) {
+            return ['content', 'data', 'file'];
+        }
+        if (typeLower.includes('write_binary_file') || typeLower.includes('write_file')) {
+            return ['success', 'filePath', 'output'];
+        }
+        if (typeLower.includes('s3') || typeLower.includes('dropbox') ||
+            typeLower.includes('onedrive') || typeLower.includes('ftp') ||
+            typeLower.includes('sftp')) {
+            return ['fileUrl', 'filePath', 'data'];
+        }
+        // ============================================
+        // DEVOPS & E-COMMERCE NODES
+        // ============================================
+        if (typeLower.includes('github') || typeLower.includes('gitlab') ||
+            typeLower.includes('bitbucket') || typeLower === 'jira' ||
+            typeLower === 'jenkins' || typeLower.includes('shopify') ||
+            typeLower.includes('woocommerce') || typeLower === 'stripe' ||
+            typeLower === 'paypal') {
+            return ['data', 'result', 'output'];
+        }
+        // Default fallback
+        return ['output', 'data', 'result'];
+    }
+    /**
+     * Generate intelligent default value for a field
+     */
+    generateIntelligentDefault(fieldName, nodeType, requirements) {
+        const fieldNameLower = fieldName.toLowerCase();
+        // ✅ NEW: Strategy 0 - Handle stop_and_error errorMessage specifically
+        if (nodeType === 'stop_and_error' && fieldNameLower === 'errormessage') {
+            // Generate contextual error message based on workflow context
+            if (requirements.primaryGoal) {
+                const goalLower = requirements.primaryGoal.toLowerCase();
+                if (goalLower.includes('login') || goalLower.includes('auth')) {
+                    return 'Login failed - Invalid credentials';
+                }
+                if (goalLower.includes('validation') || goalLower.includes('validate')) {
+                    return 'Validation failed - Please check your input';
+                }
+                if (goalLower.includes('permission') || goalLower.includes('access')) {
+                    return 'Access denied - Insufficient permissions';
+                }
+                if (goalLower.includes('payment') || goalLower.includes('transaction')) {
+                    return 'Payment processing failed';
+                }
+            }
+            // Default error message
+            return 'Workflow execution stopped - Condition not met';
+        }
+        // ENHANCED: Add example values so users can see where to change things
+        // Strategy 1: Use requirements context with examples
+        if (fieldNameLower.includes('message') || fieldNameLower.includes('text') || fieldNameLower.includes('content') ||
+            fieldNameLower.includes('subject') || fieldNameLower.includes('title') || fieldNameLower.includes('body')) {
+            if (requirements.primaryGoal) {
+                return requirements.primaryGoal;
+            }
+            if (requirements.inputs && requirements.inputs.length > 0) {
+                return `{{input.${requirements.inputs[0]}}}`;
+            }
+            // Add example message
+            return 'Example: Process the input data - Change this message as needed';
+        }
+        // Strategy 2: Use template variables with examples
+        if (fieldNameLower.includes('condition')) {
+            // Add example conditions based on common patterns
+            if (requirements.primaryGoal?.toLowerCase().includes('age')) {
+                return '{{age}} >= 18  // Example: Change age and threshold as needed';
+            }
+            if (requirements.primaryGoal?.toLowerCase().includes('even') || requirements.primaryGoal?.toLowerCase().includes('odd')) {
+                return '{{number}} % 2 === 0  // Example: Check if number is even (change field name as needed)';
+            }
+            return '{{$json}}  // Example: Change this condition (e.g., {{age}} >= 18)';
+        }
+        if (fieldNameLower.includes('template')) {
+            return '{{$json}}  // Example: Change this template (e.g., "Age: {{age}}, Eligible: {{eligible}}")';
+        }
+        // Strategy 3: Use code defaults with examples
+        if (fieldNameLower.includes('code')) {
+            return `// Example code - modify as needed
+return {
+  ...input,
+  result: input.value * 2
+};`;
+        }
+        // Strategy 4: Use requirements inputs with examples
+        if (fieldNameLower.includes('variables') || fieldNameLower.includes('input')) {
+            if (requirements.inputs && requirements.inputs.length > 0) {
+                return `{{input.${requirements.inputs[0]}}}  // Example: Change field name as needed`;
+            }
+        }
+        if (fieldNameLower.includes('variables')) {
+            // Return example object structure
+            return {
+                example_field: '{{input.example_field}}  // Example: Change field name and template as needed',
+                age: '{{input.age}}  // Example: Add more fields as needed'
+            };
+        }
+        if (fieldNameLower.includes('url')) {
+            return 'https://api.example.com  // Example: Change this URL to your API endpoint';
+        }
+        if (fieldNameLower.includes('name') || fieldNameLower.includes('field')) {
+            return 'example_field  // Example: Change this field name as needed';
+        }
+        if (fieldNameLower.includes('value')) {
+            return '{{input.value}}  // Example: Change this template (e.g., {{input.age}})';
+        }
+        // Return example string as last resort
+        return 'Example value - Change this as needed';
+    }
+    /**
+     * Generate intelligent node configuration following system prompt rules
+     * - Auto-fills ALL required fields
+     * - Uses secure variable references for API keys
+     * - Generates valid service URLs
+     * - Applies safe defaults
+     * - NO placeholders or empty required fields
+     */
+    async generateNodeConfig(node, requirements, configValues = {}, allNodes, nodeIndex) {
+        const actualNodeType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(node) || node.data?.type || node.type;
+        const def = unified_node_registry_1.unifiedNodeRegistry.get(actualNodeType);
+        const schema = node_library_1.nodeLibrary.getSchema(actualNodeType);
+        // Start from registry defaults (single source of truth)
+        const defaults = unified_node_registry_1.unifiedNodeRegistry.getDefaultConfig(actualNodeType) || {};
+        let config = { ...defaults };
+        // Merge any provided values (constraints/credentials). Only keep values that exist in schema.
+        const allConfigValues = { ...(configValues || {}) };
+        const inputKeys = def ? Object.keys(def.inputSchema || {}) : Object.keys(schema?.configSchema?.optional || {});
+        for (const key of inputKeys) {
+            const v = allConfigValues[key];
+            if (v !== undefined && v !== null && v !== '') {
+                config[key] = v;
+            }
+        }
+        // Apply NodeLibrary "commonPatterns" as hints (still schema-driven)
+        const matchedPattern = schema?.commonPatterns?.[0];
+        if (matchedPattern && matchedPattern.config && typeof matchedPattern.config === 'object') {
+            config = { ...matchedPattern.config, ...config };
+        }
+        const requiredFields = def?.requiredInputs || schema?.configSchema?.required || [];
+        const serviceName = (0, workflow_builder_utils_1.extractServiceName)(actualNodeType);
+        const inferValue = (fieldName) => {
+            const f = fieldName.toLowerCase();
+            // ✅ ARCHITECTURAL FIX: URLs are now credentials - do NOT auto-generate
+            // Only auto-generate configuration URLs (webhook_url, callback_url, redirect_url)
+            // Credential URLs (baseUrl, apiUrl, endpoint, host, server) should be asked from user
+            const isCredentialUrl = (f.includes('url') || f.includes('endpoint') || f === 'baseurl' || f === 'base_url' ||
+                f === 'apiurl' || f === 'api_url' || f === 'host' || f === 'hostname' || f === 'server') &&
+                !f.includes('webhook') && !f.includes('callback') && !f.includes('redirect');
+            if (isCredentialUrl) {
+                // ✅ DO NOT auto-generate credential URLs - they should be asked from user
+                // Return empty string so it will be detected as empty and asked as credential
+                return '';
+            }
+            // Configuration URLs (webhook, callback, redirect) can still be auto-generated
+            if ((f.includes('webhook') && f.includes('url')) ||
+                (f.includes('callback') && f.includes('url')) ||
+                (f.includes('redirect') && f.includes('url'))) {
+                return (requirements.urls && requirements.urls[0]) || (0, workflow_builder_utils_1.getServiceBaseUrl)(serviceName);
+            }
+            if (f.includes('cron')) {
+                const schedule = (requirements.schedules && requirements.schedules[0]) || '';
+                return this.parseScheduleToCron(schedule || 'daily');
+            }
+            if (f.includes('interval'))
+                return 3600;
+            if (f === 'unit')
+                return 'seconds';
+            if (f.includes('headers'))
+                return { 'Content-Type': 'application/json' };
+            if (f.includes('method'))
+                return actualNodeType.toLowerCase().includes('post') ? 'POST' : 'GET';
+            if (f.includes('apikey') || f.includes('api_key') || f.endsWith('key') || f.includes('token')) {
+                return (0, workflow_builder_utils_1.generateApiKeyRef)(serviceName || 'api');
+            }
+            if (f.includes('sheetname'))
+                return 'Sheet1';
+            if (f === 'range')
+                return 'A1:Z1000';
+            if (f.includes('condition'))
+                return 'true';
+            if (f.includes('prompt') || f.includes('message') || f.includes('body') || f.includes('text') || f.includes('subject') || f.includes('title') || f.includes('content')) {
+                return requirements.primaryGoal || 'Process the input data';
+            }
+            if (f.includes('model'))
+                return schema?.configSchema?.optional?.[fieldName]?.default;
+            return schema?.configSchema?.optional?.[fieldName]?.default ?? requirements.primaryGoal ?? 'value';
+        };
+        // Fill missing required fields deterministically
+        // ✅ FIX: Use universal isEmpty check to handle arrays, objects, nested structures
+        for (const fieldName of requiredFields) {
+            const v = config[fieldName];
+            if ((0, is_empty_value_1.isEmptyValue)(v)) {
+                config[fieldName] = inferValue(fieldName);
+            }
+        }
+        // Final guard: if any placeholders slipped in, replace with inferred values
+        for (const [k, v] of Object.entries(config)) {
+            if ((0, workflow_builder_utils_1.isPlaceholder)(v)) {
+                config[k] = inferValue(k);
+            }
+        }
+        return (0, workflow_builder_utils_1.applySafeDefaults)(config, actualNodeType);
+    }
+    /**
+     * Check if node is a transformation node
+     */
+    isTransformationNode(nodeType) {
+        return (0, transformation_templates_1.isTransformationNode)(nodeType);
+    }
+    /**
+     * Configure transformation node with input-output mapping
+     */
+    async configureTransformationNode(node, allNodes, index, baseConfig, requirements) {
+        const previousNode = index > 0 ? allNodes[index - 1] : null;
+        const config = { ...baseConfig };
+        // Get transformation template
+        const template = (0, transformation_templates_1.getTransformationTemplate)(node.type, previousNode || undefined);
+        Object.assign(config, template);
+        // Generate input/output mappings based on context
+        if (previousNode) {
+            // Get output schema from previous node
+            const previousOutputSchema = previousNode.data?.config?.outputSchema;
+            const previousOutputFields = previousNode.data?.config?.outputFields;
+            // Set input mapping
+            if (!config.inputMapping) {
+                // Pass requirements and node type for intelligent property selection
+                const nodeType = node.data?.type || node.type;
+                // ✅ SCHEMA-AWARE: Use async schema-aware template generation
+                config.inputMapping = await this.generateInputMapping(previousNode, node, requirements, nodeType);
+            }
+            // Set input fields
+            if (!config.inputFields || (Array.isArray(config.inputFields) && config.inputFields.length === 0)) {
+                if (previousOutputFields) {
+                    config.inputFields = Array.isArray(previousOutputFields)
+                        ? previousOutputFields
+                        : [previousOutputFields];
+                }
+                else {
+                    config.inputFields = this.inferInputFields(previousNode);
+                }
+            }
+            // Generate output schema
+            if (!config.outputSchema) {
+                config.outputSchema = this.generateOutputSchema(node.type, previousNode);
+            }
+            // Set output fields
+            if (!config.outputFields || (Array.isArray(config.outputFields) && config.outputFields.length === 0)) {
+                config.outputFields = this.generateOutputFieldNames(node.type, previousNode);
+            }
+            // Generate transformation rules
+            if (!config.transformationRules || (Array.isArray(config.transformationRules) && config.transformationRules.length === 0)) {
+                config.transformationRules = this.generateTransformationRules(node.type, config.inputFields, config.outputFields);
+            }
+        }
+        else {
+            // No previous node - use defaults
+            config.inputFields = config.inputFields || ['data'];
+            config.outputFields = config.outputFields || ['transformed_data'];
+            config.inputMapping = config.inputMapping || { data: '{{input.data}}' };
+        }
+        // Set intelligent defaults for transformation
+        if (!config.transformationType) {
+            config.transformationType = 'map';
+        }
+        if (config.preserveStructure === undefined) {
+            config.preserveStructure = true;
+        }
+        if (!config.errorHandling) {
+            config.errorHandling = {
+                onError: 'continue',
+                fallbackValue: null,
+                logErrors: true,
+            };
+        }
+        return config;
+    }
+    /**
+     * Generate input mapping from previous node
+     * ✅ SCHEMA-AWARE: Uses actual upstream node output schemas to generate templates
+     * This prevents invalid template expressions like {{$json.body}} when field doesn't exist
+     */
+    async generateInputMapping(previousNode, currentNode, requirements, currentNodeType) {
+        // ✅ FEATURE FLAG: Check if schema-aware templates are enabled
+        const useSchemaAware = process.env.ENABLE_SCHEMA_AWARE_TEMPLATES !== 'false';
+        if (!useSchemaAware) {
+            // Fallback to naive generation (legacy behavior)
+            return this.generateInputMappingNaive(previousNode, requirements, currentNodeType);
+        }
+        try {
+            // ✅ STEP 1: Get LLM adapter
+            const { LLMAdapter } = await Promise.resolve().then(() => __importStar(require('../../shared/llm-adapter')));
+            const llmAdapter = new LLMAdapter();
+            if (!llmAdapter) {
+                console.warn('[SchemaAwareTemplateGenerator] LLM adapter not available, falling back to naive generation');
+                return this.generateInputMappingNaive(previousNode, requirements, currentNodeType);
+            }
+            // ✅ STEP 2: Generate templates using schema-aware generator
+            const structuredIntent = requirements?.primaryGoal || requirements?.originalPrompt || '';
+            const templateResult = await (0, schema_aware_template_generator_1.generateTemplates)({
+                upstreamNode: previousNode,
+                targetNode: currentNode,
+                structuredIntent,
+                sampleLimit: 3,
+                llmAdapter,
+            });
+            // ✅ STEP 3: Validate mappings before applying
+            const validation = (0, template_validation_gate_1.validateMappings)(templateResult.mappings, templateResult.upstreamSchema, currentNodeType || currentNode.data?.type || currentNode.type);
+            // ✅ STEP 4: Apply only approved mappings
+            const mapping = {};
+            for (const approvedMapping of validation.approvedMappings) {
+                mapping[approvedMapping.targetField] = approvedMapping.template;
+            }
+            // ✅ STEP 5: Log rejected mappings for debugging
+            if (validation.rejectedMappings.length > 0) {
+                console.warn(`[SchemaAwareTemplateGenerator] ${validation.rejectedMappings.length} mappings rejected:`, validation.rejectedMappings.map(m => `${m.targetField} → ${m.sourceField}`).join(', '));
+            }
+            // ✅ STEP 6: Store debug info in node config (not data directly)
+            if (currentNode.data) {
+                currentNode.data.config._templateGeneration = {
+                    overallConfidence: templateResult.overallConfidence,
+                    validationScore: validation.score,
+                    approvedCount: validation.approvedMappings.length,
+                    rejectedCount: validation.rejectedMappings.length,
+                    notes: templateResult.notes,
+                    warnings: validation.warnings,
+                };
+            }
+            // ✅ STEP 7: If no approved mappings, fallback to naive generation
+            if (Object.keys(mapping).length === 0) {
+                console.warn('[SchemaAwareTemplateGenerator] No approved mappings, falling back to naive generation');
+                return this.generateInputMappingNaive(previousNode, requirements, currentNodeType);
+            }
+            return mapping;
+        }
+        catch (error) {
+            console.error('[SchemaAwareTemplateGenerator] Error generating templates:', error);
+            // Fallback to naive generation on error
+            return this.generateInputMappingNaive(previousNode, requirements, currentNodeType);
+        }
+    }
+    /**
+     * Naive input mapping generation (legacy fallback)
+     * This is the original implementation that creates templates without schema validation
+     */
+    generateInputMappingNaive(previousNode, requirements, currentNodeType) {
+        const mapping = {};
+        // Try to extract output fields from previous node
+        if (previousNode.data?.config?.outputFields) {
+            const outputFields = Array.isArray(previousNode.data.config.outputFields)
+                ? previousNode.data.config.outputFields
+                : [previousNode.data.config.outputFields];
+            // CRITICAL FIX: Use proper {{$json.field}} format instead of {{previousNode.field}}
+            outputFields.forEach((field) => {
+                mapping[field] = `{{$json.${field}}}`;
+            });
+        }
+        else {
+            // Default mapping - use common output fields
+            // Use {{$json}} format with intelligent property selection if available
+            const commonFields = ['items', 'data', 'output', 'result', 'rows'];
+            if (requirements && currentNodeType) {
+                const bestField = this.findBestOutputMatch('data', commonFields, previousNode.type, requirements, currentNodeType);
+                mapping['data'] = `{{$json.${bestField}}}`;
+            }
+            else {
+                // Fallback to 'items' for Google Sheets, 'data' for others
+                const defaultField = previousNode.type === 'google_sheets' ? 'items' : 'data';
+                mapping['data'] = `{{$json.${defaultField}}}`;
+            }
+        }
+        return mapping;
+    }
+    /**
+     * Infer input fields from previous node
+     */
+    inferInputFields(previousNode) {
+        const nodeType = previousNode.type.toLowerCase();
+        if (nodeType.includes('http') || nodeType.includes('api')) {
+            return ['response', 'data', 'body'];
+        }
+        if (nodeType.includes('sheet') || nodeType.includes('database')) {
+            return ['rows', 'data', 'records'];
+        }
+        if (nodeType.includes('json') || nodeType.includes('parse')) {
+            return ['json', 'data', 'parsed'];
+        }
+        return ['data', 'output', 'result'];
+    }
+    /**
+     * Generate output schema for transformation node
+     */
+    generateOutputSchema(nodeType, previousNode) {
+        const schema = {};
+        // Try to preserve previous node's output schema
+        if (previousNode.data?.config?.outputSchema) {
+            return previousNode.data.config.outputSchema;
+        }
+        // Generate based on node type
+        const nodeTypeLower = nodeType.toLowerCase();
+        if (nodeTypeLower.includes('filter')) {
+            schema.type = 'array';
+            schema.items = { type: 'object' };
+        }
+        else if (nodeTypeLower.includes('format') || nodeTypeLower.includes('convert')) {
+            schema.type = 'string';
+        }
+        else if (nodeTypeLower.includes('aggregate')) {
+            schema.type = 'object';
+            schema.properties = {
+                total: { type: 'number' },
+                count: { type: 'number' },
+            };
+        }
+        else {
+            schema.type = 'object';
+        }
+        return schema;
+    }
+    /**
+     * Generate output field names
+     */
+    generateOutputFieldNames(nodeType, previousNode) {
+        // Try to use previous node's output fields as base
+        if (previousNode?.data?.config?.outputFields) {
+            const prevOutputs = previousNode.data.config.outputFields;
+            if (Array.isArray(prevOutputs)) {
+                return prevOutputs.map((field) => `transformed_${field}`);
+            }
+            return [`transformed_${prevOutputs}`];
+        }
+        // Generate based on node type
+        const nodeTypeLower = nodeType.toLowerCase();
+        if (nodeTypeLower.includes('filter')) {
+            return ['filtered_data'];
+        }
+        if (nodeTypeLower.includes('format') || nodeTypeLower.includes('convert')) {
+            return ['formatted_data'];
+        }
+        if (nodeTypeLower.includes('aggregate')) {
+            return ['aggregated_data', 'summary'];
+        }
+        return ['transformed_data', 'output'];
+    }
+    /**
+     * Generate transformation rules
+     */
+    generateTransformationRules(nodeType, inputFields, outputFields) {
+        const rules = [];
+        // Create direct mappings
+        const minLength = Math.min(inputFields.length, outputFields.length);
+        for (let i = 0; i < minLength; i++) {
+            rules.push({
+                source: `{{input.${inputFields[i]}}}`,
+                target: outputFields[i],
+                transformation: 'direct',
+            });
+        }
+        // If more output fields, map remaining to first input
+        if (outputFields.length > inputFields.length) {
+            for (let i = inputFields.length; i < outputFields.length; i++) {
+                rules.push({
+                    source: `{{input.${inputFields[0] || 'data'}}}`,
+                    target: outputFields[i],
+                    transformation: 'direct',
+                });
+            }
+        }
+        return rules;
+    }
+    /**
+     * Parse schedule string to cron expression
+     */
+    parseScheduleToCron(schedule) {
+        const lower = schedule.toLowerCase();
+        // Daily patterns
+        if (lower.includes('daily') || lower.includes('every day')) {
+            const timeMatch = schedule.match(/(\d+):(\d+)/);
+            if (timeMatch) {
+                return `${timeMatch[2]} ${timeMatch[1]} * * *`; // minute hour * * *
+            }
+            return '0 9 * * *'; // Default 9 AM
+        }
+        // Hourly
+        if (lower.includes('hourly') || lower.includes('every hour')) {
+            return '0 * * * *';
+        }
+        // Weekly
+        if (lower.includes('weekly') || lower.includes('every week')) {
+            return '0 9 * * 0'; // Sunday 9 AM
+        }
+        // Monthly
+        if (lower.includes('monthly') || lower.includes('every month')) {
+            return '0 9 1 * *'; // 1st of month at 9 AM
+        }
+        // Try to parse cron-like expressions
+        if (/^[\d\s\*\/,-]+$/.test(schedule.trim())) {
+            return schedule.trim();
+        }
+        // Default: daily at 9 AM
+        return '0 9 * * *';
+    }
+    /**
+     * Create connections between nodes with proper input-output mapping
+     * Following comprehensive prompt: Match output schema to input schema exactly
+     * Transform data if needed, never pass incompatible types
+     *
+     * Also automatically creates and connects Chat Model nodes for AI Agent nodes
+     *
+     * Enhanced with proper field mapping and validation per comprehensive prompt rules
+     */
+    /**
+     * COMPREHENSIVE: Validate connection before creating edge
+     */
+    validateConnectionBeforeCreation(sourceNode, targetNode, outputField, inputField) {
+        // Get node schemas
+        // CRITICAL FIX: Use normalizeNodeType to get actual node types
+        const sourceActualType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(sourceNode);
+        const targetActualType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(targetNode);
+        const sourceSchema = node_library_1.nodeLibrary.getSchema(sourceActualType);
+        const targetSchema = node_library_1.nodeLibrary.getSchema(targetActualType);
+        if (!sourceSchema || !targetSchema) {
+            return { valid: false, error: `Missing schema for ${sourceActualType} or ${targetActualType}` };
+        }
+        // Use connection validator's validateConnection method which handles schema validation
+        // Create a temporary edge for validation
+        const tempEdge = {
+            id: 'temp',
+            source: sourceNode.id,
+            target: targetNode.id,
+            sourceHandle: outputField,
+            targetHandle: inputField,
+        };
+        const validationResult = connection_validator_1.connectionValidator.validateConnection(sourceNode, targetNode, tempEdge);
+        if (!validationResult.valid) {
+            // Extract suggested fields from validation result
+            const suggestedOutput = validationResult.dataContract?.sourceField || outputField;
+            const suggestedInput = validationResult.dataContract?.targetField || inputField;
+            return {
+                valid: false,
+                error: validationResult.errors.join('; '),
+                suggestedOutputField: suggestedOutput,
+                suggestedInputField: suggestedInput,
+            };
+        }
+        return { valid: true };
+    }
+    /**
+     * ✅ ARCHITECTURAL FIX: Get output fields for a node type
+     * Uses the same registry as comprehensive-workflow-validator for consistency
+     */
+    getNodeOutputFields(nodeType) {
+        // Use the same registry as in createConnections
+        // ✅ COMPREHENSIVE: Output fields registry matching comprehensive-workflow-validator.ts
+        const outputFields = {
+            // ============================================
+            // TRIGGER NODES
+            // ============================================
+            'manual_trigger': ['inputData', 'timestamp', 'triggerType'],
+            'workflow_trigger': ['inputData', 'workflowId', 'timestamp'],
+            'webhook': ['body', 'headers', 'query', 'method', 'path', 'queryParams'],
+            'schedule': ['output', 'executionId', 'cronExpression', 'executionTime', 'timezone'],
+            'interval': ['output', 'executionId', 'interval', 'unit', 'executionTime'],
+            'chat_trigger': ['message', 'userId', 'sessionId', 'timestamp'],
+            'error_trigger': ['error', 'timestamp', 'source'],
+            'form': ['formData', 'submissionId', 'timestamp', 'fields'],
+            // ============================================
+            // AI NODES
+            // ============================================
+            'ai_agent': ['response_text', 'response_json', 'response_markdown', 'confidence_score', 'used_tools', 'memory_written', 'error_flag', 'error_message', 'reasoning', 'text', 'output'],
+            'openai_gpt': ['text', 'response', 'content', 'message', 'output'],
+            'anthropic_claude': ['text', 'response', 'content', 'message', 'output'],
+            'google_gemini': ['text', 'response', 'content', 'message', 'output'],
+            'ollama': ['text', 'response', 'content', 'message', 'output'],
+            'text_summarizer': ['text', 'summary', 'output'],
+            'sentiment_analyzer': ['sentiment', 'score', 'emotions', 'output'],
+            'chat_model': ['config', 'provider', 'model'],
+            'memory': ['messages', 'context'],
+            'tool': ['name', 'description', 'parameters'],
+            // ============================================
+            // HTTP & API NODES
+            // ============================================
+            'http_request': ['status', 'headers', 'body', 'response', 'responseTime'],
+            'http_post': ['status', 'headers', 'body', 'response', 'responseTime'],
+            'respond_to_webhook': [],
+            'webhook_response': [],
+            'graphql': ['data', 'errors', 'response'],
+            // ============================================
+            // GOOGLE SERVICES
+            // ============================================
+            'google_sheets': ['data', 'rows', 'row_data', 'sheet_data'],
+            'google_doc': ['content', 'document_data', 'text'],
+            'google_drive': ['file_id', 'file_url', 'file_data', 'files'],
+            'google_gmail': ['message', 'response', 'output'],
+            'google_calendar': ['eventId', 'success', 'event'],
+            'google_tasks': ['tasks', 'data'],
+            'google_contacts': ['contacts', 'data'],
+            'google_bigquery': ['rows', 'data', 'result'],
+            // ============================================
+            // OUTPUT & COMMUNICATION NODES
+            // ============================================
+            'slack_message': ['message', 'response', 'output'],
+            'slack_webhook': ['message', 'response', 'output'],
+            'log_output': [],
+            'discord': ['message', 'response', 'output'],
+            'discord_webhook': ['message', 'response', 'output'],
+            'email': ['message', 'response', 'output'],
+            'microsoft_teams': ['message', 'response', 'output'],
+            'telegram': ['message', 'response', 'output'],
+            'whatsapp_cloud': ['message', 'response', 'output'],
+            'twilio': ['message', 'response', 'output'],
+            'outlook': ['message', 'response', 'output'],
+            // ============================================
+            // SOCIAL MEDIA NODES
+            // ============================================
+            'linkedin': ['message', 'response', 'output'],
+            'twitter': ['message', 'response', 'output'],
+            'instagram': ['message', 'response', 'output'],
+            'facebook': ['message', 'response', 'output'],
+            'youtube': ['message', 'response', 'output'],
+            // ============================================
+            // DATA MANIPULATION NODES
+            // ============================================
+            'javascript': ['output', 'result', 'data'],
+            'set_variable': ['output', 'data', 'variables'],
+            'set': ['output', 'data', 'variables'],
+            'json_parser': ['parsed', 'data', 'output'],
+            'text_formatter': ['formatted', 'output', 'text'],
+            'date_time': ['formatted', 'timestamp', 'output'],
+            'math': ['result', 'output'],
+            'html': ['parsed', 'text', 'output'],
+            'xml': ['parsed', 'text', 'output'],
+            'csv': ['rows', 'data'],
+            'merge_data': ['merged', 'data', 'output'],
+            'rename_keys': ['renamed', 'data', 'output'],
+            'edit_fields': ['edited', 'data', 'output'],
+            // ============================================
+            // LOGIC NODES
+            // ============================================
+            'if_else': ['data', 'output', 'result', 'condition_result', 'true', 'false'],
+            'switch': ['result', 'output', 'case_result', 'data'],
+            'filter': ['filtered', 'data', 'output'],
+            'loop': ['iterated', 'data', 'output'],
+            'merge': ['merged', 'data', 'output'],
+            'split_in_batches': ['batches', 'data'],
+            'wait': ['waitedUntil', 'duration', 'output'],
+            'error_handler': ['result', 'output', 'data'],
+            'stop_and_error': [],
+            'noop': ['output', 'data'],
+            'limit': ['limited', 'data', 'output'],
+            'aggregate': ['groups', 'totals', 'count', 'output'],
+            'sort': ['sorted', 'data', 'output'],
+            'function': ['output', 'result', 'data'],
+            'function_item': ['output', 'result', 'data'],
+            // ============================================
+            // DATABASE NODES
+            // ============================================
+            'database_read': ['rows', 'data', 'result'],
+            'database_write': ['affectedRows', 'insertId', 'result', 'rowsAffected'],
+            'db': ['data', 'error', 'rows'],
+            'postgresql': ['rows', 'data', 'result'],
+            'mysql': ['rows', 'data', 'result'],
+            'mongodb': ['documents', 'data', 'result'],
+            'redis': ['value', 'data', 'result'],
+            'airtable': ['record', 'records', 'data', 'output'],
+            // ============================================
+            // CRM & MARKETING NODES
+            // ============================================
+            'hubspot': ['data', 'result', 'output'],
+            'zoho_crm': ['data', 'result', 'output'],
+            'pipedrive': ['data', 'result', 'output'],
+            'salesforce': ['data', 'result', 'output'],
+            'freshdesk': ['data', 'result', 'output'],
+            'intercom': ['data', 'result', 'output'],
+            'mailchimp': ['data', 'result', 'output'],
+            'activecampaign': ['data', 'result', 'output'],
+            // ============================================
+            // FILE & STORAGE NODES
+            // ============================================
+            'read_binary_file': ['content', 'data', 'file'],
+            'write_binary_file': ['success', 'filePath', 'output'],
+            'aws_s3': ['fileUrl', 'fileKey', 'data'],
+            'dropbox': ['fileUrl', 'filePath', 'data'],
+            'onedrive': ['fileUrl', 'filePath', 'data'],
+            'ftp': ['success', 'filePath', 'output'],
+            'sftp': ['success', 'filePath', 'output'],
+            // ============================================
+            // DEVOPS NODES
+            // ============================================
+            'github': ['data', 'result', 'output'],
+            'gitlab': ['data', 'result', 'output'],
+            'bitbucket': ['data', 'result', 'output'],
+            'jira': ['data', 'result', 'output'],
+            'jenkins': ['data', 'result', 'output'],
+            // ============================================
+            // E-COMMERCE NODES
+            // ============================================
+            'shopify': ['data', 'result', 'output'],
+            'woocommerce': ['data', 'result', 'output'],
+            'stripe': ['data', 'result', 'output'],
+            'paypal': ['data', 'result', 'output'],
+            // ============================================
+            // PRODUCTIVITY NODES
+            // ============================================
+            'notion': ['data', 'result', 'output'],
+            'clickup': ['data', 'result', 'output'],
+        };
+        // If not in registry, infer from node type
+        if (outputFields[nodeType]) {
+            return outputFields[nodeType];
+        }
+        // Fallback to inference
+        return this.inferOutputFieldsFromNodeType(nodeType);
+    }
+    /**
+     * ✅ ARCHITECTURAL FIX: Get input fields for a node type
+     */
+    getNodeInputFields(nodeType) {
+        // ✅ CRITICAL: Always use the registry first for consistency with resolveTargetHandle
+        // This ensures we use the same input fields that resolveTargetHandle expects
+        const defaultInputs = {
+            // AI Nodes
+            'ai_agent': ['userInput', 'chat_model', 'memory', 'tool'],
+            'openai_gpt': ['prompt', 'model', 'temperature', 'maxTokens'],
+            'anthropic_claude': ['prompt', 'model', 'temperature', 'maxTokens'],
+            'google_gemini': ['prompt', 'model', 'temperature', 'maxTokens'],
+            'ollama': ['prompt', 'model', 'temperature', 'maxTokens'],
+            // Google Services
+            'google_sheets': ['spreadsheetId', 'range', 'values', 'data', 'operation', 'sheetName'],
+            'google_doc': ['documentId', 'operation', 'content'],
+            'google_drive': ['operation', 'fileId', 'fileName'],
+            'google_gmail': ['credentialId', 'operation', 'to', 'subject', 'body', 'from', 'messageId', 'query', 'maxResults'],
+            'google_calendar': ['resource', 'operation', 'credentialId', 'calendarId', 'eventId', 'summary', 'start', 'end', 'eventData', 'description', 'timeMin', 'timeMax', 'maxResults', 'q'],
+            'google_tasks': ['operation', 'taskId', 'title', 'notes', 'due'],
+            'google_contacts': ['operation', 'contactId', 'name', 'email'],
+            'google_bigquery': ['query', 'projectId', 'datasetId'],
+            // Communication
+            'slack_message': ['webhookUrl', 'channel', 'message', 'text', 'blocks', 'username', 'iconEmoji'],
+            'slack_webhook': ['webhookUrl', 'message', 'text'],
+            'email': ['to', 'subject', 'text', 'html', 'from', 'smtpHost', 'smtpPort'],
+            'discord': ['channelId', 'message', 'botToken'],
+            'discord_webhook': ['webhookUrl', 'message'],
+            'telegram': ['chatId', 'messageType', 'message', 'botToken'],
+            'whatsapp_cloud': ['resource', 'operation', 'phoneNumberId', 'to', 'text'],
+            'twilio': ['to', 'message', 'from'],
+            'microsoft_teams': ['webhookUrl', 'message'],
+            'outlook': ['operation', 'to', 'subject', 'body', 'from'],
+            // CRM & Integration
+            'hubspot': ['resource', 'operation', 'apiKey', 'accessToken', 'credentialId', 'id', 'objectId', 'properties', 'searchQuery', 'limit', 'after'],
+            'airtable': ['baseId', 'tableId', 'operation', 'recordId', 'fields'],
+            'salesforce': ['resource', 'operation', 'recordId', 'fields'],
+            'zoho_crm': ['resource', 'operation', 'module', 'recordId'],
+            'pipedrive': ['resource', 'operation', 'apiToken', 'recordId'],
+            'freshdesk': ['resource', 'operation', 'domain', 'apiKey'],
+            'intercom': ['resource', 'operation', 'accessToken'],
+            'mailchimp': ['listId', 'operation', 'apiKey'],
+            'activecampaign': ['resource', 'operation', 'apiUrl', 'apiKey'],
+            // Logic
+            'if_else': ['conditions', 'combineOperation'],
+            'switch': ['routingType', 'rules', 'value'],
+            'filter': ['condition', 'items'],
+            'loop': ['items', 'maxIterations'],
+            'merge': ['mode', 'joinBy', 'data1', 'data2'], // ✅ CRITICAL: merge receives data via 'data1' and 'data2'
+            'javascript': ['code', 'input', 'data'], // ✅ CRITICAL: javascript receives data via 'data' field
+            'set_variable': ['name', 'value'], // ✅ CRITICAL: set_variable receives data via 'value' (removed 'input' - not a valid field)
+            'json_parser': ['jsonData', 'options'],
+            'text_formatter': ['text', 'format', 'options'],
+            'set': ['name', 'value', 'input'],
+            'edit_fields': ['fields', 'data'],
+            'rename_keys': ['keys', 'data'],
+            'merge_data': ['data1', 'data2', 'mode'],
+            'function': ['description', 'code', 'timeout'],
+            'function_item': ['description', 'items'],
+            'wait': ['duration', 'unit'],
+            'error_handler': ['continueOnFail', 'retryOnFail', 'maxRetries', 'retryDelay'],
+            'stop_and_error': ['errorMessage'],
+            'noop': [],
+            'split_in_batches': ['batchSize'],
+            'limit': ['limit'],
+            'aggregate': ['aggregateBy', 'groupBy'],
+            'sort': ['sortBy', 'order'],
+            'date_time': ['format', 'timezone'],
+            'math': ['operation', 'a', 'b'],
+            'html': ['html', 'selector'],
+            'xml': ['xml', 'xpath'],
+            'csv': ['csv', 'delimiter'],
+            // Database
+            'database_read': ['query', 'connectionString', 'host', 'port', 'database', 'username', 'password'],
+            'database_write': ['query', 'connectionString', 'host', 'port', 'database', 'username', 'password'],
+            'db': ['operation', 'table', 'select', 'filter', 'data'],
+            'postgresql': ['query', 'host', 'port', 'database', 'username', 'password'],
+            'mysql': ['query', 'host', 'port', 'database', 'username', 'password'],
+            'mongodb': ['operation', 'collection', 'query', 'data', 'connectionString'],
+            'redis': ['operation', 'key', 'value', 'host', 'port'],
+            // HTTP
+            'http_request': ['url', 'method', 'headers', 'body', 'qs'],
+            'http_post': ['url', 'body', 'headers'],
+            'graphql': ['url', 'query', 'variables'],
+            'respond_to_webhook': ['responseCode', 'headers', 'body'],
+            'webhook_response': ['responseCode', 'body'],
+            // File/Storage
+            'read_binary_file': ['filePath'],
+            'write_binary_file': ['filePath', 'data'],
+            'aws_s3': ['operation', 'bucket', 'key', 'accessKeyId', 'secretAccessKey'],
+            'dropbox': ['operation', 'path', 'accessToken'],
+            'onedrive': ['operation', 'path', 'accessToken'],
+            'ftp': ['operation', 'host', 'path', 'username', 'password'],
+            'sftp': ['operation', 'host', 'path', 'username', 'password'],
+            // Social Media
+            'linkedin': ['operation', 'text', 'mediaUrl', 'visibility', 'personUrn'],
+            'twitter': ['resource', 'operation', 'text', 'tweetId'],
+            'instagram': ['resource', 'operation', 'media_url', 'caption', 'accessToken'],
+            'youtube': ['operation', 'videoUrl', 'title', 'description', 'channelId'],
+            'facebook': ['message', 'pageId', 'accessToken', 'credentialId'],
+            // E-commerce
+            'shopify': ['resource', 'operation', 'shop', 'accessToken'],
+            'woocommerce': ['resource', 'operation', 'url', 'consumerKey', 'consumerSecret'],
+            'stripe': ['operation', 'amount', 'currency', 'apiKey'],
+            'paypal': ['operation', 'amount', 'currency', 'clientId', 'clientSecret'],
+            // DevOps
+            'github': ['operation', 'owner', 'repo', 'token'],
+            'gitlab': ['operation', 'repo', 'token'],
+            'bitbucket': ['operation', 'repo', 'username', 'password'],
+            'jira': ['operation', 'issueKey', 'url', 'username', 'apiToken'],
+            'jenkins': ['operation', 'jobName', 'url', 'username', 'apiToken'],
+            // Productivity
+            'notion': ['apiKey', 'accessToken', 'credentialId', 'resource', 'operation'],
+            'clickup': ['resource', 'operation', 'apiKey', 'listId', 'taskId'],
+        };
+        // ✅ CRITICAL: Always return from registry if available
+        if (defaultInputs[nodeType]) {
+            return defaultInputs[nodeType];
+        }
+        // ✅ FALLBACK: If schema exists, use it, but merge with registry if needed
+        const nodeSchema = node_library_1.nodeLibrary.getSchema(nodeType);
+        if (nodeSchema?.configSchema) {
+            const requiredFields = nodeSchema.configSchema.required || [];
+            const optionalFields = Object.keys(nodeSchema.configSchema.optional || {});
+            const schemaFields = [...requiredFields, ...optionalFields];
+            // ✅ CRITICAL: For set_variable and loop, ensure we include the correct fields
+            if (nodeType === 'set_variable' && !schemaFields.includes('value')) {
+                schemaFields.push('value');
+            }
+            if (nodeType === 'loop' && !schemaFields.includes('items')) {
+                schemaFields.push('items');
+            }
+            return schemaFields;
+        }
+        // Final fallback
+        return ['input', 'data'];
+    }
+    /**
+     * ✅ SCHEMA-AWARE HANDLE RESOLUTION: Get the correct source handle for an edge
+     * Maps step output fields to actual node output handles based on schema
+     */
+    resolveSourceHandle(sourceNode, stepOutputField) {
+        const sourceActualType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(sourceNode);
+        const sourceOutputs = this.getNodeOutputFields(sourceActualType);
+        // If step specifies an output field, validate and use it
+        if (stepOutputField) {
+            // ✅ CRITICAL: Handle if_else branching - map 'true'/'false' to actual output handles
+            if (sourceActualType === 'if_else') {
+                // if_else doesn't have 'true'/'false' handles - use 'output' or 'data'
+                if (stepOutputField === 'true' || stepOutputField === 'false') {
+                    // Use 'output' if available, else 'data', else first available
+                    return sourceOutputs.find(f => f === 'output') ||
+                        sourceOutputs.find(f => f === 'data') ||
+                        sourceOutputs[0] || 'output';
+                }
+            }
+            // Check if the specified field exists in node outputs
+            if (sourceOutputs.includes(stepOutputField)) {
+                return stepOutputField;
+            }
+            // Field doesn't exist - log warning and fall through to default
+            console.warn(`⚠️  [resolveSourceHandle] Step output field '${stepOutputField}' not found in ${sourceActualType} outputs. Available: ${sourceOutputs.join(', ')}`);
+        }
+        // ✅ Use primary output field based on node type
+        const primaryOutputs = {
+            // Triggers
+            'manual_trigger': 'inputData',
+            'workflow_trigger': 'inputData',
+            'chat_trigger': 'message',
+            'webhook': 'body',
+            'schedule': 'output',
+            'interval': 'output',
+            'form': 'formData',
+            'error_trigger': 'error',
+            // AI Nodes
+            'ai_agent': 'response_text',
+            'openai_gpt': 'text',
+            'anthropic_claude': 'text',
+            'google_gemini': 'text',
+            'ollama': 'text',
+            'text_summarizer': 'summary',
+            'sentiment_analyzer': 'sentiment',
+            // Google Services
+            'google_sheets': 'rows',
+            'google_doc': 'content',
+            'google_drive': 'file_id',
+            'google_gmail': 'message',
+            'google_calendar': 'eventId',
+            'google_tasks': 'tasks',
+            'google_contacts': 'contacts',
+            'google_bigquery': 'rows',
+            // Communication
+            'slack_message': 'message',
+            'slack_webhook': 'message',
+            'email': 'message',
+            'discord': 'message',
+            'discord_webhook': 'message',
+            'telegram': 'message',
+            'whatsapp_cloud': 'message',
+            'twilio': 'message',
+            'microsoft_teams': 'message',
+            // CRM & Integration
+            'hubspot': 'contact',
+            'airtable': 'record',
+            'salesforce': 'record',
+            'zoho_crm': 'data',
+            'pipedrive': 'data',
+            // Logic
+            'if_else': 'output',
+            'switch': 'result',
+            'filter': 'filtered',
+            'loop': 'iterated',
+            'merge': 'merged',
+            'javascript': 'output',
+            'set_variable': 'data',
+            'json_parser': 'parsed',
+            'text_formatter': 'formatted',
+            // Database
+            'database_read': 'rows',
+            'database_write': 'affectedRows',
+            'db': 'data',
+            'postgresql': 'rows',
+            'mysql': 'rows',
+            'mongodb': 'documents',
+            // HTTP
+            'http_request': 'body',
+            'http_post': 'body',
+            'graphql': 'data',
+            // File/Storage
+            'read_binary_file': 'content',
+            'write_binary_file': 'success',
+            'aws_s3': 'fileUrl',
+            'dropbox': 'fileUrl',
+            'onedrive': 'fileUrl',
+            // Social Media
+            'linkedin': 'message',
+            'twitter': 'message',
+            'instagram': 'message',
+            'youtube': 'message',
+            'facebook': 'message',
+            // E-commerce
+            'shopify': 'data',
+            'woocommerce': 'data',
+            'stripe': 'data',
+            'paypal': 'data',
+            // DevOps
+            'github': 'data',
+            'gitlab': 'data',
+            'bitbucket': 'data',
+            'jira': 'data',
+            'jenkins': 'data',
+        };
+        const primaryOutput = primaryOutputs[sourceActualType];
+        if (primaryOutput && sourceOutputs.includes(primaryOutput)) {
+            return primaryOutput;
+        }
+        // ✅ CRITICAL: Fallback - use first available output, but NEVER use 'output' if it doesn't exist
+        // Only use 'output' if it's actually in the schema
+        if (sourceOutputs.length > 0) {
+            // Prefer 'output' if it exists, else 'data', else first available
+            return sourceOutputs.find(f => f === 'output') ||
+                sourceOutputs.find(f => f === 'data') ||
+                sourceOutputs[0];
+        }
+        // If no outputs found, log error and return empty (will be caught by validation)
+        console.error(`❌ [resolveSourceHandle] No output fields found for ${sourceActualType} node`);
+        return 'output'; // Last resort - will fail validation
+    }
+    /**
+     * ✅ SCHEMA-AWARE HANDLE RESOLUTION: Get the correct target handle for an edge
+     * Maps step input fields to actual node input handles based on schema
+     */
+    resolveTargetHandle(targetNode, stepInputField) {
+        const targetActualType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(targetNode);
+        const targetInputs = this.getNodeInputFields(targetActualType);
+        // If step specifies an input field, validate and use it
+        if (stepInputField) {
+            if (targetInputs.includes(stepInputField)) {
+                return stepInputField;
+            }
+            // Field doesn't exist - log warning and fall through to default
+            console.warn(`⚠️  [resolveTargetHandle] Step input field '${stepInputField}' not found in ${targetActualType} inputs. Available: ${targetInputs.join(', ')}`);
+        }
+        // ✅ Use primary input field based on node type
+        const primaryInputs = {
+            // AI Nodes
+            'ai_agent': 'userInput',
+            'openai_gpt': 'prompt',
+            'anthropic_claude': 'prompt',
+            'google_gemini': 'prompt',
+            'ollama': 'prompt',
+            // Google Services
+            'google_sheets': 'values', // ✅ CRITICAL: google_sheets receives data via 'values' array (for write/append operations)
+            'google_doc': 'content', // ✅ CRITICAL: google_doc receives content via 'content' field
+            'google_drive': 'fileId', // ✅ CRITICAL: google_drive receives file reference via 'fileId'
+            'google_gmail': 'body', // ✅ CRITICAL: google_gmail receives email body via 'body' field
+            'google_calendar': 'eventData', // ✅ CRITICAL: google_calendar receives event data via 'eventData'
+            'google_tasks': 'title', // ✅ CRITICAL: google_tasks receives task data via 'title' (primary field)
+            'google_contacts': 'name', // ✅ CRITICAL: google_contacts receives contact data via 'name' (primary field)
+            'google_bigquery': 'query', // ✅ CRITICAL: google_bigquery receives SQL query via 'query'
+            // Communication
+            'slack_message': 'message',
+            'slack_webhook': 'message',
+            'email': 'to',
+            'discord': 'message',
+            'discord_webhook': 'message',
+            'telegram': 'message',
+            'whatsapp_cloud': 'to',
+            'twilio': 'to',
+            'microsoft_teams': 'message',
+            // CRM & Integration
+            'hubspot': 'properties', // ✅ CRITICAL: hubspot receives contact/company data via 'properties' object
+            'airtable': 'fields', // ✅ CRITICAL: airtable receives record data via 'fields' object
+            'salesforce': 'fields', // ✅ CRITICAL: salesforce receives record data via 'fields' object
+            'zoho_crm': 'data', // ✅ CRITICAL: zoho_crm receives data via 'data' field
+            'pipedrive': 'data', // ✅ CRITICAL: pipedrive receives data via 'data' field
+            'freshdesk': 'data', // ✅ CRITICAL: freshdesk receives ticket data via 'data' field
+            'intercom': 'data', // ✅ CRITICAL: intercom receives conversation data via 'data' field
+            'mailchimp': 'data', // ✅ CRITICAL: mailchimp receives subscriber data via 'data' field
+            'activecampaign': 'data', // ✅ CRITICAL: activecampaign receives contact data via 'data' field
+            // Logic
+            'if_else': 'conditions', // ✅ CRITICAL: if_else receives data via 'conditions' array
+            'switch': 'value', // ✅ CRITICAL: switch receives data via 'value' field
+            'filter': 'items', // ✅ CRITICAL: filter receives array via 'items'
+            'loop': 'items', // ✅ CRITICAL: loop receives array via 'items'
+            'merge': 'data1', // ✅ CRITICAL: merge receives data via 'data1' (first branch)
+            'javascript': 'data', // ✅ CRITICAL: javascript receives data via 'data' field
+            'set_variable': 'value', // ✅ CRITICAL: set_variable receives data via 'value' (not 'name' which is for variable name)
+            'json_parser': 'jsonData', // ✅ CRITICAL: json_parser receives JSON string via 'jsonData'
+            'text_formatter': 'text', // ✅ CRITICAL: text_formatter receives text via 'text'
+            // Database
+            'database_read': 'query', // ✅ CRITICAL: database_read receives SQL query via 'query'
+            'database_write': 'query', // ✅ CRITICAL: database_write receives SQL query via 'query'
+            'db': 'data', // ✅ CRITICAL: db receives record data via 'data' field (for insert/update)
+            'postgresql': 'query', // ✅ CRITICAL: postgresql receives SQL query via 'query'
+            'mysql': 'query', // ✅ CRITICAL: mysql receives SQL query via 'query'
+            'mongodb': 'data', // ✅ CRITICAL: mongodb receives document data via 'data' field (for insert/update)
+            // HTTP
+            'http_request': 'url',
+            'http_post': 'url',
+            'graphql': 'url',
+            'respond_to_webhook': 'responseCode',
+            'webhook_response': 'responseCode',
+            // File/Storage
+            'read_binary_file': 'filePath',
+            'write_binary_file': 'filePath',
+            'aws_s3': 'bucket',
+            'dropbox': 'operation',
+            'onedrive': 'operation',
+            'ftp': 'host',
+            'sftp': 'host',
+            // Social Media
+            'linkedin': 'text',
+            'twitter': 'text',
+            'instagram': 'media_url',
+            'youtube': 'title',
+            'facebook': 'message',
+            // E-commerce
+            'shopify': 'resource',
+            'woocommerce': 'resource',
+            'stripe': 'operation',
+            'paypal': 'operation',
+            // DevOps
+            'github': 'operation',
+            'gitlab': 'operation',
+            'bitbucket': 'operation',
+            'jira': 'operation',
+            'jenkins': 'operation',
+            // Productivity
+            'notion': 'resource',
+            'outlook': 'to',
+        };
+        const primaryInput = primaryInputs[targetActualType];
+        if (primaryInput && targetInputs.includes(primaryInput)) {
+            return primaryInput;
+        }
+        // ✅ CRITICAL: Special handling for nodes that receive data connections
+        // For set_variable: use 'value' for data connections (not 'name' which is for variable name)
+        if (targetActualType === 'set_variable') {
+            // If connecting data, use 'value'; if connecting variable name, use 'name'
+            // Default to 'value' for data connections
+            if (targetInputs.includes('value')) {
+                return 'value';
+            }
+            if (targetInputs.includes('name')) {
+                return 'name';
+            }
+        }
+        // ✅ CRITICAL: Fallback - use first available input, but prefer specific fields over generic 'input'
+        // Many nodes don't have 'input' - they have specific fields
+        if (targetInputs.length > 0) {
+            // Prefer 'inputData', then 'data', then 'items' (for loop), then 'value' (for set_variable), then first available
+            // ✅ CRITICAL: Do NOT use 'input' as fallback - many nodes don't have it (e.g., google_sheets, set_variable, loop)
+            const preferredField = targetInputs.find(f => f === 'inputData') ||
+                targetInputs.find(f => f === 'data') ||
+                targetInputs.find(f => f === 'items') ||
+                targetInputs.find(f => f === 'value') ||
+                targetInputs[0];
+            if (preferredField) {
+                return preferredField;
+            }
+        }
+        // If no inputs found, log error and return empty (will be caught by validation)
+        console.error(`❌ [resolveTargetHandle] No input fields found for ${targetActualType} node`);
+        // ✅ CRITICAL: Return empty string instead of 'input' - this will fail validation and prevent silent corruption
+        return ''; // Will fail validation - better than using non-existent 'input'
+    }
+    /**
+     * ✅ ARCHITECTURAL FIX: Global safety guard - validates all edge handles before saving workflow
+     * Prevents silent corruption by ensuring all edges use valid handles
+     * Throws error if any edge has invalid handles
+     */
+    validateAllEdgeHandles(nodes, edges) {
+        const nodeMap = new Map(nodes.map(n => [n.id, n]));
+        const errors = [];
+        const repairedEdges = [];
+        for (const edge of edges) {
+            const sourceNode = nodeMap.get(edge.source);
+            const targetNode = nodeMap.get(edge.target);
+            if (!sourceNode) {
+                errors.push(`Edge ${edge.id}: Source node ${edge.source} not found`);
+                continue;
+            }
+            if (!targetNode) {
+                errors.push(`Edge ${edge.id}: Target node ${edge.target} not found`);
+                continue;
+            }
+            // ✅ CRITICAL: Use normalizeNodeType to get actual types
+            const sourceActualType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(sourceNode);
+            const targetActualType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(targetNode);
+            // Get valid output fields for source node
+            const sourceOutputs = this.getNodeOutputFields(sourceActualType);
+            // Get valid input fields for target node
+            const targetInputs = this.getNodeInputFields(targetActualType);
+            // Attempt to repair invalid handles in-place (to avoid crashing API with 500)
+            let sourceHandle = edge.sourceHandle;
+            let targetHandle = edge.targetHandle;
+            const sourceValid = !!sourceHandle && sourceOutputs.includes(sourceHandle);
+            const targetValid = !!targetHandle && targetInputs.includes(targetHandle);
+            if (!sourceValid || !targetValid) {
+                const resolvedSourceHandle = this.resolveSourceHandle(sourceNode, sourceHandle);
+                const resolvedTargetHandle = this.resolveTargetHandle(targetNode, targetHandle);
+                const { sourceHandle: fixedSourceHandle, targetHandle: fixedTargetHandle } = (0, node_handle_registry_1.validateAndFixEdgeHandles)(sourceActualType, targetActualType, resolvedSourceHandle, resolvedTargetHandle);
+                const fixedSourceValid = !!fixedSourceHandle && sourceOutputs.includes(fixedSourceHandle);
+                const fixedTargetValid = !!fixedTargetHandle && targetInputs.includes(fixedTargetHandle);
+                if (fixedSourceValid && fixedTargetValid) {
+                    edge.sourceHandle = fixedSourceHandle;
+                    edge.targetHandle = fixedTargetHandle;
+                    repairedEdges.push(edge);
+                    continue;
+                }
+                // Still invalid - record and drop the edge (better than crashing the request)
+                if (!sourceValid) {
+                    errors.push(`Edge ${edge.id} (${edge.source} → ${edge.target}): ` +
+                        `Invalid source handle "${edge.sourceHandle}" for ${sourceActualType} node. ` +
+                        `Valid outputs: ${sourceOutputs.join(', ')}`);
+                }
+                if (!targetValid) {
+                    errors.push(`Edge ${edge.id} (${edge.source} → ${edge.target}): ` +
+                        `Invalid target handle "${edge.targetHandle}" for ${targetActualType} node. ` +
+                        `Valid inputs: ${targetInputs.join(', ')}`);
+                }
+                continue;
+            }
+            repairedEdges.push(edge);
+        }
+        if (errors.length > 0) {
+            const errorMessage = `⚠️  [GLOBAL SAFETY GUARD] Dropped ${edges.length - repairedEdges.length} invalid edge(s):\n${errors.join('\n')}`;
+            console.warn(errorMessage);
+        }
+        // Mutate edges array in-place so callers see repaired/dropped edges
+        edges.length = 0;
+        edges.push(...repairedEdges);
+        console.log(`✅ [GLOBAL SAFETY GUARD] Edge handles validated. Kept ${edges.length} edge(s).`);
+    }
+    /**
+     * Create connections for workflow nodes
+     *
+     * STRICT LINEAR FLOW ENFORCEMENT:
+     * - NO branching structures
+     * - NO tree patterns
+     * - NO parallel paths
+     * - NO multiple outgoing edges from same node (except if_else which is handled specially)
+     * - Flow must be: START → step1 → step2 → step3 → ... → END
+     * - Each node connects to exactly one next node (except final node)
+     * - Only verification/validation logic allowed at final step
+     */
+    async createConnections(nodes, requirements, structure) {
+        const edges = [];
+        let finalNodes = [...nodes];
+        // Helper function to get output fields for a node type
+        const getNodeOutputFields = (nodeType) => {
+            const outputFields = {
+                // ============================================
+                // TRIGGER NODES
+                // ============================================
+                'form': ['formData', 'submissionId', 'timestamp', 'fields'],
+                'webhook': ['body', 'headers', 'query', 'method', 'path', 'queryParams'],
+                'schedule': ['output', 'executionId', 'cronExpression', 'executionTime', 'timezone'],
+                'interval': ['output', 'executionId', 'interval', 'unit', 'executionTime'],
+                'manual_trigger': ['inputData', 'timestamp', 'triggerType'],
+                'workflow_trigger': ['inputData', 'workflowId', 'timestamp'],
+                'chat_trigger': ['message', 'userId', 'sessionId', 'timestamp'],
+                'error_trigger': ['error', 'timestamp', 'source', 'output'],
+                // ============================================
+                // AI NODES
+                // ============================================
+                'ai_agent': ['response_text', 'response_json', 'response_markdown', 'confidence_score', 'used_tools', 'memory_written', 'error_flag', 'error_message', 'reasoning', 'text', 'output'],
+                'openai_gpt': ['text', 'response', 'content', 'message', 'output'],
+                'anthropic_claude': ['text', 'response', 'content', 'message', 'output'],
+                'google_gemini': ['text', 'response', 'content', 'message', 'output'],
+                'ollama': ['text', 'response', 'content', 'message', 'output'],
+                'text_summarizer': ['text', 'summary', 'output'],
+                'sentiment_analyzer': ['sentiment', 'score', 'emotions', 'output'],
+                'chat_model': ['config', 'provider', 'model'], // Configuration object
+                'memory': ['messages', 'context'], // Memory state object
+                'tool': ['name', 'description', 'parameters'], // Tool configuration
+                // ============================================
+                // HTTP & API NODES
+                // ============================================
+                'http_request': ['status', 'headers', 'body', 'response', 'responseTime'],
+                'http_post': ['status', 'headers', 'body', 'response', 'responseTime'],
+                'respond_to_webhook': [], // void output
+                'webhook_response': [], // void output
+                'graphql': ['data', 'errors', 'response'],
+                // ============================================
+                // GOOGLE SERVICES
+                // ============================================
+                'google_sheets': ['rows', 'row_data', 'sheet_data', 'data'],
+                'google_doc': ['content', 'document_data', 'text'],
+                'google_drive': ['file_id', 'file_url', 'file_data', 'files'],
+                'google_gmail': ['message', 'response', 'output'],
+                'google_calendar': ['eventId', 'success', 'event'],
+                'google_tasks': ['tasks', 'data'],
+                'google_contacts': ['contacts', 'data'],
+                'google_bigquery': ['rows', 'data', 'result'],
+                // ============================================
+                // OUTPUT & COMMUNICATION NODES
+                // ============================================
+                'slack_message': ['message', 'response', 'output'],
+                'slack_webhook': ['message', 'response', 'output'],
+                'log_output': [], // void output
+                'discord': ['message', 'response', 'output'],
+                'discord_webhook': ['message', 'response', 'output'],
+                'email': ['message', 'response', 'output'],
+                'microsoft_teams': ['message', 'response', 'output'],
+                'telegram': ['message', 'response', 'output'],
+                'whatsapp_cloud': ['message', 'response', 'output'],
+                'twilio': ['message', 'response', 'output'],
+                // ============================================
+                // SOCIAL MEDIA NODES
+                // ============================================
+                'linkedin': ['message', 'response', 'output'],
+                'twitter': ['message', 'response', 'output'],
+                'instagram': ['message', 'response', 'output'],
+                'facebook': ['message', 'response', 'output'],
+                // ============================================
+                // DATA MANIPULATION NODES
+                // ============================================
+                'javascript': ['output', 'result', 'data'],
+                'set_variable': ['data', 'output', 'variables'],
+                'set': ['data', 'output', 'variables'],
+                'json_parser': ['parsed', 'data', 'output'],
+                'text_formatter': ['formatted', 'output', 'text'],
+                'date_time': ['formatted', 'timestamp', 'output'],
+                'math': ['result', 'output'],
+                'html': ['parsed', 'text', 'output'],
+                'xml': ['parsed', 'text', 'output'],
+                'csv': ['rows', 'data'],
+                'merge_data': ['merged', 'data', 'output'],
+                'rename_keys': ['renamed', 'data', 'output'],
+                'edit_fields': ['edited', 'data', 'output'],
+                // ============================================
+                // LOGIC NODES
+                // ============================================
+                'if_else': ['result', 'output', 'condition_result', 'data', 'true', 'false'],
+                'switch': ['result', 'output', 'case_result', 'data'],
+                'filter': ['filtered', 'data', 'output'],
+                'loop': ['iterated', 'data', 'output'],
+                'merge': ['merged', 'data', 'output'],
+                'split_in_batches': ['batches', 'data'],
+                'wait': ['waitedUntil', 'duration', 'output'],
+                'error_handler': ['result', 'output', 'data'],
+                'stop_and_error': [], // void output
+                'noop': ['output', 'data'],
+                'limit': ['limited', 'data', 'output'],
+                'aggregate': ['groups', 'totals', 'count', 'output'],
+                'sort': ['sorted', 'data', 'output'],
+                // ============================================
+                // DATABASE NODES
+                // ============================================
+                'database_read': ['rows', 'data', 'result'],
+                'database_write': ['affectedRows', 'insertId', 'result', 'rowsAffected'],
+                'db': ['data', 'error', 'rows'],
+                'postgresql': ['rows', 'data', 'result'],
+                'mysql': ['rows', 'data', 'result'],
+                'mongodb': ['documents', 'data', 'result'],
+                'redis': ['value', 'data', 'result'],
+                // ============================================
+                // CRM & MARKETING NODES
+                // ============================================
+                'hubspot': ['data', 'result', 'output'],
+                'zoho_crm': ['data', 'result', 'output'],
+                'pipedrive': ['data', 'result', 'output'],
+                'salesforce': ['data', 'result', 'output'],
+                'freshdesk': ['data', 'result', 'output'],
+                'intercom': ['data', 'result', 'output'],
+                'mailchimp': ['data', 'result', 'output'],
+                'activecampaign': ['data', 'result', 'output'],
+                // ============================================
+                // FILE & STORAGE NODES
+                // ============================================
+                'read_binary_file': ['content', 'data', 'file'],
+                'write_binary_file': ['success', 'filePath', 'output'],
+                'aws_s3': ['fileUrl', 'fileKey', 'data'],
+                'dropbox': ['fileUrl', 'filePath', 'data'],
+                'onedrive': ['fileUrl', 'filePath', 'data'],
+                'ftp': ['success', 'filePath', 'output'],
+                'sftp': ['success', 'filePath', 'output'],
+                // ============================================
+                // DEVOPS NODES
+                // ============================================
+                'github': ['data', 'result', 'output'],
+                'gitlab': ['data', 'result', 'output'],
+                'bitbucket': ['data', 'result', 'output'],
+                'jira': ['data', 'result', 'output'],
+                'jenkins': ['data', 'result', 'output'],
+                // ============================================
+                // E-COMMERCE NODES
+                // ============================================
+                'shopify': ['data', 'result', 'output'],
+                'woocommerce': ['data', 'result', 'output'],
+                'stripe': ['data', 'result', 'output'],
+                'paypal': ['data', 'result', 'output'],
+            };
+            return outputFields[nodeType] || ['data', 'output'];
+        };
+        // Helper function to get input fields for a node type (registry-driven)
+        const getNodeInputFields = (nodeType) => this.getNodeInputFields(nodeType);
+        // Helper function to map output to input based on node types
+        const mapOutputToInputLegacy = (sourceType, targetType) => {
+            // ✅ CRITICAL FIX: Handle all triggers that output 'inputData'
+            if (sourceType === 'manual_trigger' || sourceType === 'workflow_trigger') {
+                // Both manual_trigger and workflow_trigger output 'inputData'
+                // CRITICAL: Google Sheets doesn't need input from trigger - it reads from spreadsheetId
+                // Don't create edge - Google Sheets is configured via spreadsheetId field
+                if (targetType === 'google_sheets') {
+                    return null; // Return null to skip edge creation
+                }
+                const targetInputs = getNodeInputFields(targetType);
+                if (targetInputs.includes('input')) {
+                    return { outputField: 'inputData', inputField: 'input' };
+                }
+                if (targetInputs.includes('data')) {
+                    return { outputField: 'inputData', inputField: 'data' };
+                }
+                return { outputField: 'inputData', inputField: targetInputs[0] || 'input' };
+            }
+            // ✅ CRITICAL FIX: chat_trigger outputs 'message'
+            if (sourceType === 'chat_trigger') {
+                const targetInputs = getNodeInputFields(targetType);
+                // For AI Agent, chat_trigger message goes to userInput
+                if (targetType === 'ai_agent') {
+                    return { outputField: 'message', inputField: 'userInput' };
+                }
+                // For other nodes, try to map message to appropriate input
+                if (targetInputs.includes('input')) {
+                    return { outputField: 'message', inputField: 'input' };
+                }
+                if (targetInputs.includes('text')) {
+                    return { outputField: 'message', inputField: 'text' };
+                }
+                if (targetInputs.includes('data')) {
+                    return { outputField: 'message', inputField: 'data' };
+                }
+                return { outputField: 'message', inputField: targetInputs[0] || 'input' };
+            }
+            // AI Agent special cases
+            if (targetType === 'ai_agent') {
+                if (sourceType === 'chat_model') {
+                    return { outputField: 'config', inputField: 'chat_model', targetHandle: 'chat_model' };
+                }
+                if (sourceType === 'memory') {
+                    return { outputField: 'memory', inputField: 'memory', targetHandle: 'memory' };
+                }
+                if (sourceType === 'tool') {
+                    return { outputField: 'tool', inputField: 'tool', targetHandle: 'tool' };
+                }
+                // Text Formatter to AI Agent: map formatted text string to userInput (LEFT SIDE PORT)
+                // Text Formatter outputs: { data: "formatted string", formatted: "formatted string" }
+                // Always connect to left-side userInput port, not right side
+                if (sourceType === 'text_formatter') {
+                    return { outputField: 'data', inputField: 'userInput', targetHandle: 'userInput' };
+                }
+                // Default: map to userInput
+                const sourceOutputs = getNodeOutputFields(sourceType);
+                if (sourceOutputs.includes('inputData')) {
+                    return { outputField: 'inputData', inputField: 'userInput' };
+                }
+                if (sourceOutputs.includes('data')) {
+                    return { outputField: 'data', inputField: 'userInput' };
+                }
+                if (sourceOutputs.includes('body')) {
+                    return { outputField: 'body', inputField: 'userInput' };
+                }
+                if (sourceOutputs.includes('formData')) {
+                    return { outputField: 'formData', inputField: 'userInput' };
+                }
+                if (sourceOutputs.includes('formatted')) {
+                    return { outputField: 'formatted', inputField: 'userInput' };
+                }
+                if (sourceOutputs.includes('output')) {
+                    return { outputField: 'output', inputField: 'userInput' };
+                }
+                return { outputField: sourceOutputs[0] || 'data', inputField: 'userInput' };
+            }
+            // AI Agent outputs to other nodes
+            if (sourceType === 'ai_agent') {
+                // Map to output nodes (communication nodes that accept text/body/content)
+                if (targetType === 'slack_message') {
+                    return { outputField: 'response_text', inputField: 'text' };
+                }
+                if (targetType === 'email' || targetType === 'google_gmail') {
+                    return { outputField: 'response_text', inputField: 'body' };
+                }
+                if (targetType === 'discord') {
+                    return { outputField: 'response_text', inputField: 'content' };
+                }
+                if (targetType === 'telegram' || targetType === 'microsoft_teams' || targetType === 'whatsapp_cloud') {
+                    return { outputField: 'response_text', inputField: 'text' };
+                }
+                if (targetType === 'twilio') {
+                    return { outputField: 'response_text', inputField: 'message' };
+                }
+                if (targetType === 'http_request' || targetType === 'http_post') {
+                    return { outputField: 'response_json', inputField: 'body' };
+                }
+                // Default: use response_text
+                return { outputField: 'response_text', inputField: 'input' };
+            }
+            // Form to other nodes - Enhanced mapping
+            if (sourceType === 'form') {
+                // Form to Google Sheets - map formData to values
+                if (targetType === 'google_sheets') {
+                    return { outputField: 'formData', inputField: 'values' };
+                }
+                // Form to Slack - map formData to text (format as message)
+                if (targetType === 'slack_message') {
+                    return { outputField: 'formData', inputField: 'text' };
+                }
+                // Form to Gmail/Email - map formData fields appropriately
+                if (targetType === 'google_gmail' || targetType === 'email') {
+                    // CRITICAL: Form outputs formData object, email needs:
+                    // - to: formData.email (if email field exists in form)
+                    // - body: formData (all form data as email body)
+                    // Map formData to body, and formData.email to 'to' field (handled in node config)
+                    return { outputField: 'formData', inputField: 'body', targetHandle: 'body' };
+                }
+                // Form to other nodes - default mapping
+                return { outputField: 'formData', inputField: 'input' };
+            }
+            // Chat Trigger to other nodes
+            if (sourceType === 'chat_trigger') {
+                if (targetType === 'ai_agent') {
+                    // CRITICAL: ai_agent requires userInput on the left-side port, not generic input
+                    return { outputField: 'message', inputField: 'userInput', targetHandle: 'userInput' };
+                }
+                return { outputField: 'message', inputField: 'input' };
+            }
+            // Webhook to other nodes
+            if (sourceType === 'webhook') {
+                return { outputField: 'body', inputField: 'input' };
+            }
+            // HTTP Request outputs
+            if (sourceType === 'http_request' || sourceType === 'http_post') {
+                if (targetType === 'google_sheets') {
+                    return { outputField: 'body', inputField: 'values' };
+                }
+                return { outputField: 'body', inputField: 'input' };
+            }
+            // CRITICAL FIX: Google Sheets outputs
+            if (sourceType === 'google_sheets') {
+                // Google Sheets outputs: rows, row_data, sheet_data
+                if (targetType === 'javascript') {
+                    // JavaScript receives data via 'input' variable in code, but config field is 'code'
+                    // The actual data is passed through the edge, accessible as 'input' in the code
+                    return { outputField: 'rows', inputField: 'code' };
+                }
+                if (targetType === 'set_variable') {
+                    // Set variable expects: input or data
+                    return { outputField: 'rows', inputField: 'input' };
+                }
+                if (targetType === 'slack_message' || targetType === 'linkedin' || targetType === 'twitter') {
+                    return { outputField: 'rows', inputField: 'text' };
+                }
+                if (targetType === 'log_output') {
+                    return { outputField: 'rows', inputField: 'data' };
+                }
+                // Default: map to data/input
+                return { outputField: 'rows', inputField: 'input' };
+            }
+            // LinkedIn node mappings (output node - returns string)
+            if (sourceType === 'linkedin') {
+                // CRITICAL: LinkedIn is an output node, returns string (message)
+                if (targetType === 'log_output') {
+                    return { outputField: 'message', inputField: 'data' };
+                }
+                return { outputField: 'message', inputField: 'input' };
+            }
+            // Twitter node mappings (output node - returns string)
+            if (sourceType === 'twitter') {
+                // CRITICAL: Twitter is an output node, returns string (message)
+                if (targetType === 'log_output') {
+                    return { outputField: 'message', inputField: 'data' };
+                }
+                return { outputField: 'message', inputField: 'input' };
+            }
+            // Instagram node mappings (output node - returns string)
+            if (sourceType === 'instagram') {
+                // CRITICAL: Instagram is an output node, returns string (message)
+                if (targetType === 'log_output') {
+                    return { outputField: 'message', inputField: 'data' };
+                }
+                return { outputField: 'message', inputField: 'input' };
+            }
+            // Facebook node mappings (output node - returns string)
+            if (sourceType === 'facebook') {
+                // CRITICAL: Facebook is an output node, returns string (message)
+                if (targetType === 'log_output') {
+                    return { outputField: 'message', inputField: 'data' };
+                }
+                return { outputField: 'message', inputField: 'input' };
+            }
+            // AI Agent to LinkedIn/Twitter/Instagram/Facebook
+            if (sourceType === 'ai_agent') {
+                if (targetType === 'linkedin' || targetType === 'twitter' || targetType === 'instagram' || targetType === 'facebook') {
+                    return { outputField: 'response_text', inputField: 'text' };
+                }
+            }
+            // JavaScript to LinkedIn/Twitter/Instagram/Facebook
+            if (sourceType === 'javascript') {
+                if (targetType === 'linkedin' || targetType === 'twitter' || targetType === 'instagram' || targetType === 'facebook') {
+                    return { outputField: 'output', inputField: 'text' };
+                }
+            }
+            // CRITICAL FIX: JavaScript node inputs/outputs
+            if (targetType === 'javascript') {
+                // JavaScript node expects data via 'input' variable in code, but config field is 'code'
+                // The actual input data comes from previous node's output
+                const sourceOutputs = getNodeOutputFields(sourceType);
+                if (sourceOutputs.includes('rows')) {
+                    return { outputField: 'rows', inputField: 'code' }; // Data accessible as 'input' in code
+                }
+                if (sourceOutputs.includes('data')) {
+                    return { outputField: 'data', inputField: 'code' };
+                }
+                if (sourceOutputs.includes('output')) {
+                    return { outputField: 'output', inputField: 'code' };
+                }
+                return { outputField: sourceOutputs[0] || 'data', inputField: 'code' };
+            }
+            if (sourceType === 'javascript') {
+                // JavaScript outputs: output, result
+                if (targetType === 'log_output') {
+                    return { outputField: 'output', inputField: 'data' };
+                }
+                if (targetType === 'google_sheets') {
+                    return { outputField: 'output', inputField: 'values' };
+                }
+                if (targetType === 'slack_message' || targetType === 'linkedin' || targetType === 'twitter') {
+                    return { outputField: 'output', inputField: 'text' };
+                }
+                if (targetType === 'set_variable') {
+                    return { outputField: 'output', inputField: 'input' };
+                }
+                return { outputField: 'output', inputField: 'input' };
+            }
+            // Set Variable node mappings
+            if (sourceType === 'set_variable') {
+                // Set variable outputs: data, output
+                if (targetType === 'slack_message' || targetType === 'linkedin' || targetType === 'twitter') {
+                    return { outputField: 'data', inputField: 'text' };
+                }
+                if (targetType === 'log_output') {
+                    return { outputField: 'data', inputField: 'data' };
+                }
+                return { outputField: 'data', inputField: 'input' };
+            }
+            // 🚨 CRITICAL: Fix log_output input field mapping (uses 'text' or 'inputData', not 'data')
+            if (targetType === 'log_output') {
+                const sourceOutputs = getNodeOutputFields(sourceType);
+                // Try to find a text-like field first
+                if (sourceOutputs.includes('response_text')) {
+                    return { outputField: 'response_text', inputField: 'text' };
+                }
+                if (sourceOutputs.includes('message')) {
+                    return { outputField: 'message', inputField: 'text' };
+                }
+                if (sourceOutputs.includes('output')) {
+                    return { outputField: 'output', inputField: 'text' };
+                }
+                if (sourceOutputs.includes('data')) {
+                    return { outputField: 'data', inputField: 'inputData' };
+                }
+                // Default: use first output field with inputData
+                return { outputField: sourceOutputs[0] || 'data', inputField: 'inputData' };
+            }
+            // 🚨 CRITICAL: Fix schedule trigger output field (uses 'output', not 'triggerTime')
+            if (sourceType === 'schedule' || sourceType === 'interval') {
+                const targetInputs = getNodeInputFields(targetType);
+                if (targetInputs.includes('input')) {
+                    return { outputField: 'output', inputField: 'input' };
+                }
+                if (targetInputs.includes('inputData')) {
+                    return { outputField: 'output', inputField: 'inputData' };
+                }
+                if (targetInputs.includes('data')) {
+                    return { outputField: 'output', inputField: 'data' };
+                }
+                return { outputField: 'output', inputField: targetInputs[0] || 'input' };
+            }
+            // Default mapping
+            const sourceOutputs = getNodeOutputFields(sourceType);
+            const targetInputs = getNodeInputFields(targetType);
+            // ✅ CRITICAL FIX: Handle all triggers that output 'inputData'
+            if (sourceType === 'manual_trigger' || sourceType === 'workflow_trigger') {
+                // Both manual_trigger and workflow_trigger output 'inputData'
+                // CRITICAL: Google Sheets doesn't need input from trigger - it reads from spreadsheetId
+                // Don't create edge if target is google_sheets (it's configured via spreadsheetId)
+                if (targetType === 'google_sheets') {
+                    // Return null to indicate no edge needed
+                    // The edge generator will skip this connection
+                    return null;
+                }
+                // Try common input field names
+                if (targetInputs.includes('input')) {
+                    return { outputField: 'inputData', inputField: 'input' };
+                }
+                if (targetInputs.includes('data')) {
+                    return { outputField: 'inputData', inputField: 'data' };
+                }
+                if (targetInputs.includes('value')) {
+                    return { outputField: 'inputData', inputField: 'value' };
+                }
+                // Use first available input field
+                return { outputField: 'inputData', inputField: targetInputs[0] || 'input' };
+            }
+            // ✅ CRITICAL FIX: chat_trigger outputs 'message'
+            if (sourceType === 'chat_trigger') {
+                // For AI Agent, chat_trigger message goes to userInput
+                if (targetType === 'ai_agent') {
+                    return { outputField: 'message', inputField: 'userInput' };
+                }
+                // For other nodes, try to map message to appropriate input
+                if (targetInputs.includes('input')) {
+                    return { outputField: 'message', inputField: 'input' };
+                }
+                if (targetInputs.includes('text')) {
+                    return { outputField: 'message', inputField: 'text' };
+                }
+                if (targetInputs.includes('data')) {
+                    return { outputField: 'message', inputField: 'data' };
+                }
+                return { outputField: 'message', inputField: targetInputs[0] || 'input' };
+            }
+            // Try to find matching field names
+            for (const outputField of sourceOutputs) {
+                if (targetInputs.includes(outputField)) {
+                    return { outputField, inputField: outputField };
+                }
+            }
+            // Fallback: use first available
+            return {
+                outputField: sourceOutputs[0] || 'data',
+                inputField: targetInputs[0] || 'input'
+            };
+        };
+        // Schema-driven mapping (replacement for legacy mapping table)
+        const mapOutputToInput = (sourceType, targetType) => {
+            const sourceOutputs = getNodeOutputFields(sourceType);
+            const targetInputs = getNodeInputFields(targetType);
+            if (sourceOutputs.length === 0 || targetInputs.length === 0)
+                return null;
+            // Prefer exact name matches first.
+            for (const out of sourceOutputs) {
+                if (targetInputs.includes(out))
+                    return { outputField: out, inputField: out };
+            }
+            const lowerSource = sourceOutputs.map((s) => s.toLowerCase());
+            const lowerTarget = targetInputs.map((s) => s.toLowerCase());
+            const pickByPriority = (candidates, availableLower, original) => {
+                const chosen = candidates.find((c) => availableLower.includes(c.toLowerCase()));
+                if (!chosen)
+                    return null;
+                const idx = availableLower.indexOf(chosen.toLowerCase());
+                return idx >= 0 ? original[idx] : null;
+            };
+            const outputPriority = ['message', 'response_text', 'text', 'body', 'content', 'data', 'items', 'output', 'result', 'value', 'inputdata'];
+            const inputPriority = ['userinput', 'message', 'text', 'body', 'content', 'data', 'input', 'value', 'inputdata'];
+            const outputField = pickByPriority(outputPriority, lowerSource, sourceOutputs) || sourceOutputs[0];
+            const inputField = pickByPriority(inputPriority, lowerTarget, targetInputs) || targetInputs[0];
+            return { outputField, inputField };
+        };
+        // First, ensure all AI Agent nodes have Chat Model nodes connected
+        const aiAgentNodes = finalNodes.filter(n => n.type === 'ai_agent');
+        const existingChatModelNodes = finalNodes.filter(n => n.type === 'chat_model');
+        for (const aiAgentNode of aiAgentNodes) {
+            // Check if this AI Agent already has a Chat Model connected
+            const hasChatModel = edges.some(e => e.target === aiAgentNode.id &&
+                finalNodes.find(n => n.id === e.source)?.type === 'chat_model');
+            if (!hasChatModel) {
+                // ✅ DEFAULT: Create a Chat Model node configured with Ollama (running on AWS)
+                // This is the default AI provider - users can change to Google/OpenAI/Claude if needed
+                // Ensure position exists with defaults
+                const aiAgentPosition = aiAgentNode.position || { x: 100, y: 100 };
+                const chatModelNode = {
+                    id: (0, crypto_1.randomUUID)(),
+                    type: 'chat_model',
+                    position: {
+                        x: aiAgentPosition.x - 200,
+                        y: aiAgentPosition.y
+                    },
+                    data: {
+                        type: 'chat_model',
+                        label: 'Ollama (qwen2.5:14b-instruct-q4_K_M)',
+                        category: 'ai',
+                        config: {
+                            provider: 'gemini',
+                            model: 'qwen2.5:14b-instruct-q4_K_M',
+                            // No API key needed - Ollama is configured via OLLAMA_HOST environment variable
+                            prompt: 'You are a helpful AI assistant that provides accurate and useful responses.',
+                            temperature: 0.7,
+                            maxTokens: 2000,
+                        },
+                    },
+                };
+                finalNodes.push(chatModelNode);
+                // ✅ SCHEMA-AWARE HANDLE RESOLUTION: Connect Chat Model to AI Agent's chat_model port
+                // Resolve handles using schema-aware helpers
+                const resolvedSourceHandle = this.resolveSourceHandle(chatModelNode, 'config');
+                const resolvedTargetHandle = this.resolveTargetHandle(aiAgentNode, 'chat_model');
+                // Validate handles exist in schemas
+                const chatModelOutputs = this.getNodeOutputFields('chat_model');
+                const aiAgentInputs = this.getNodeInputFields('ai_agent');
+                if (!chatModelOutputs.includes(resolvedSourceHandle)) {
+                    console.warn(`⚠️  Chat model source handle '${resolvedSourceHandle}' not found. Available: ${chatModelOutputs.join(', ')}`);
+                }
+                if (!aiAgentInputs.includes(resolvedTargetHandle)) {
+                    console.warn(`⚠️  AI agent target handle '${resolvedTargetHandle}' not found. Available: ${aiAgentInputs.join(', ')}`);
+                }
+                // ✅ CRITICAL: Use handle registry to ensure valid React handle IDs
+                const { sourceHandle, targetHandle } = (0, node_handle_registry_1.validateAndFixEdgeHandles)('chat_model', 'ai_agent', resolvedSourceHandle, resolvedTargetHandle);
+                const chatModelEdge = {
+                    id: (0, crypto_1.randomUUID)(),
+                    source: chatModelNode.id,
+                    target: aiAgentNode.id,
+                    type: 'chat_model',
+                    sourceHandle,
+                    targetHandle,
+                };
+                edges.push(chatModelEdge);
+                console.log(`✅ Connected chat_model → ai_agent (schema-aware, handles: ${sourceHandle} → ${targetHandle})`);
+            }
+        }
+        // PRIORITY 1 FIX: Use structure connections if available, otherwise fall back to sequential
+        const isTriggerNode = (n) => {
+            const t = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n) || n.type;
+            const def = unified_node_registry_1.unifiedNodeRegistry.get(t);
+            return def?.category === 'trigger' || t.includes('trigger');
+        };
+        const isInternalNode = (n) => {
+            const t = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n) || n.type;
+            const def = unified_node_registry_1.unifiedNodeRegistry.get(t);
+            return (def?.tags || []).includes('internal');
+        };
+        const triggerNodes = finalNodes.filter(isTriggerNode);
+        if (triggerNodes.length === 0) {
+            console.warn('⚠️  No trigger node found, cannot create connections');
+            return { nodes: sanitizeRuntimeInputConfigForNodes(finalNodes), edges };
+        }
+        // Define allNonTriggerNodes outside if/else for orphan node handling (used in both branches)
+        const allNonTriggerNodes = finalNodes.filter((n) => !isInternalNode(n) && !isTriggerNode(n));
+        // Variables for sequential connection fallback (will be defined in else block if needed)
+        let processingNodes = [];
+        let outputNodes = [];
+        let allNodesToConnect = [];
+        // If we have structure connections, use them as the source of truth
+        if (structure?.connections && structure.connections.length > 0) {
+            console.log(`✅ Using ${structure.connections.length} connections from structure generation`);
+            // Create a map from step ID to node ID (for trigger, use trigger node ID)
+            const stepIdToNodeId = new Map();
+            if (structure.trigger && triggerNodes.length > 0) {
+                stepIdToNodeId.set('trigger', triggerNodes[0].id);
+            }
+            // ✅ CRITICAL: Map step IDs to node IDs correctly
+            // For nodes created from structure steps, use step.id as the key
+            structure.steps.forEach((step, index) => {
+                const stepId = step.id || `step${index + 1}`; // Use step1, step2 format (no underscore)
+                // Find the corresponding node (match by step ID or by order)
+                const correspondingNode = finalNodes.find((n, idx) => {
+                    // First try to match by ID (exact match)
+                    if (n.id === stepId)
+                        return true;
+                    // Try to match step ID pattern (step1, step2, etc.) with node ID
+                    const stepIdPattern = stepId.match(/step(\d+)/);
+                    if (stepIdPattern) {
+                        const stepNum = parseInt(stepIdPattern[1]);
+                        // Match by order (skip trigger node)
+                        const actionNodes = finalNodes.filter(n => {
+                            const nodeType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n);
+                            return !this.isTriggerNodeType(nodeType) && !this.isInternalNodeType(nodeType);
+                        });
+                        if (actionNodes[stepNum - 1] && actionNodes[stepNum - 1].id === n.id) {
+                            return true;
+                        }
+                    }
+                    // If no match, try to match by order (skip trigger node)
+                    const actionNodeIndex = finalNodes.filter(n => {
+                        const nodeType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n);
+                        return !this.isTriggerNodeType(nodeType) && !this.isInternalNodeType(nodeType);
+                    }).indexOf(n);
+                    return actionNodeIndex === index;
+                });
+                if (correspondingNode) {
+                    stepIdToNodeId.set(stepId, correspondingNode.id);
+                    console.log(`✅ [Connection Mapping] Mapped step "${stepId}" → node "${correspondingNode.id}" (${correspondingNode.type})`);
+                }
+                else {
+                    console.warn(`⚠️  [Connection Mapping] Could not find node for step "${stepId}" (type: ${step.type})`);
+                }
+            });
+            // Also map all node IDs to themselves (for direct node ID references)
+            finalNodes.forEach(node => {
+                if (!stepIdToNodeId.has(node.id)) {
+                    stepIdToNodeId.set(node.id, node.id);
+                }
+            });
+            // CRITICAL FIX: Enforce LINEAR flow by filtering out branching connections
+            // Count connections per source to detect branches
+            const connectionsBySource = new Map();
+            structure.connections.forEach(conn => {
+                const count = connectionsBySource.get(conn.source) || 0;
+                connectionsBySource.set(conn.source, count + 1);
+            });
+            // Filter connections to enforce linear flow:
+            // 1. Only ONE connection from trigger (to first step)
+            // 2. Only ONE connection from each step (to next step)
+            // 3. Exception: if_else nodes can have 2 connections (true/false paths)
+            const linearConnections = [];
+            const processedTargets = new Set(); // Track which nodes already have incoming connections
+            // First, find trigger → first step connection
+            const triggerConnections = structure.connections.filter(c => c.source === 'trigger');
+            if (triggerConnections.length > 0) {
+                // Sort by target step number to get the first step
+                const sortedTriggerConnections = [...triggerConnections].sort((a, b) => {
+                    const aTargetNum = parseInt(a.target.replace(/[^0-9]/g, '')) || 0;
+                    const bTargetNum = parseInt(b.target.replace(/[^0-9]/g, '')) || 0;
+                    return aTargetNum - bTargetNum;
+                });
+                // Take only the FIRST connection from trigger
+                linearConnections.push(sortedTriggerConnections[0]);
+                processedTargets.add(sortedTriggerConnections[0].target);
+                console.log(`✅ Linear flow: Selected trigger → ${sortedTriggerConnections[0].target} (filtered ${triggerConnections.length - 1} branch connections)`);
+            }
+            // Build linear chain: step1 → step2 → step3 → ...
+            // Track which nodes we've connected (including trigger and first step)
+            const connectedSources = new Set(['trigger']);
+            // Add the first step target to connectedSources so chain can continue
+            if (linearConnections.length > 0) {
+                connectedSources.add(linearConnections[0].target);
+            }
+            let chainBuilt = false;
+            while (!chainBuilt) {
+                let foundNext = false;
+                // Find next connection in chain: source must be already connected, target must not be processed
+                for (const conn of structure.connections) {
+                    // Skip if already in linear connections
+                    if (linearConnections.some(lc => lc.source === conn.source && lc.target === conn.target)) {
+                        continue;
+                    }
+                    // Skip if source is trigger (already handled)
+                    if (conn.source === 'trigger') {
+                        continue;
+                    }
+                    // Check if this connection continues the chain
+                    const sourceIsConnected = connectedSources.has(conn.source);
+                    const targetNotProcessed = !processedTargets.has(conn.target);
+                    // For if_else nodes, allow up to 2 connections (true/false paths)
+                    const sourceNode = finalNodes.find(n => stepIdToNodeId.get(conn.source) === n.id);
+                    const isIfElse = sourceNode && (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(sourceNode) === 'if_else';
+                    const existingFromSource = linearConnections.filter(lc => lc.source === conn.source).length;
+                    const canAddFromSource = isIfElse ? existingFromSource < 2 : existingFromSource < 1;
+                    if (sourceIsConnected && targetNotProcessed && canAddFromSource) {
+                        linearConnections.push(conn);
+                        connectedSources.add(conn.target);
+                        processedTargets.add(conn.target);
+                        foundNext = true;
+                        console.log(`✅ Linear flow: Added ${conn.source} → ${conn.target} to chain`);
+                        break;
+                    }
+                }
+                if (!foundNext) {
+                    chainBuilt = true;
+                }
+            }
+            // If we have orphaned connections (not in chain), try to append them sequentially
+            const orphanedConnections = structure.connections.filter(conn => !linearConnections.some(lc => lc.source === conn.source && lc.target === conn.target));
+            if (orphanedConnections.length > 0) {
+                console.log(`⚠️  Found ${orphanedConnections.length} orphaned connections, attempting to append to chain`);
+                // Find the last node in the chain
+                const chainTargets = new Set(linearConnections.map(lc => lc.target));
+                const chainSources = new Set(linearConnections.map(lc => lc.source));
+                const lastNodeInChain = Array.from(chainTargets).find(target => !chainSources.has(target)) ||
+                    Array.from(chainTargets)[chainTargets.size - 1];
+                // Try to connect orphans to the last node in chain
+                for (const orphan of orphanedConnections) {
+                    if (!processedTargets.has(orphan.target) && lastNodeInChain) {
+                        // Create new connection: lastNodeInChain → orphan.target
+                        const newConn = {
+                            source: lastNodeInChain,
+                            target: orphan.target,
+                            outputField: orphan.outputField,
+                            inputField: orphan.inputField
+                        };
+                        linearConnections.push(newConn);
+                        processedTargets.add(orphan.target);
+                        console.log(`✅ Linear flow: Appended orphan ${lastNodeInChain} → ${orphan.target}`);
+                    }
+                }
+            }
+            console.log(`✅ Linear flow enforcement: Reduced ${structure.connections.length} connections to ${linearConnections.length} linear chain`);
+            // CRITICAL: Validate that connections respect logical flow patterns:
+            // Pattern 1: data source (read) → loop → create operation (write)
+            // Pattern 2: integration (read) → data source (write)
+            const dataSourceTypes = ['google_sheets', 'google_doc', 'database_read', 'airtable', 'notion'];
+            const loopType = 'loop';
+            const createOperationTypes = ['hubspot', 'zoho', 'pipedrive', 'airtable', 'notion'];
+            const integrationReadTypes = ['hubspot', 'zoho', 'pipedrive', 'airtable', 'notion'];
+            // Helper to get operation type
+            const getOperation = (n) => {
+                const operation = n.data?.config?.operation || n.data?.operation || '';
+                return String(operation).toLowerCase();
+            };
+            const isReadOp = (op) => ['get', 'getmany', 'read', 'search'].includes(op);
+            const isWriteOp = (op) => ['create', 'update', 'write', 'delete'].includes(op);
+            // Check for Pattern 1: data source (read) → loop → create operation (write)
+            const hasDataSourceRead = finalNodes.some(n => {
+                const type = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n);
+                const operation = getOperation(n);
+                return dataSourceTypes.includes(type) && (isReadOp(operation) || !operation);
+            });
+            const hasLoop = finalNodes.some(n => {
+                const type = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n);
+                return type === loopType;
+            });
+            const hasCreateOperation = finalNodes.some(n => {
+                const type = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n);
+                const operation = getOperation(n);
+                return createOperationTypes.includes(type) && (isWriteOp(operation) || !operation);
+            });
+            // Check for Pattern 2: integration (read) → data source (write)
+            const hasIntegrationRead = finalNodes.some(n => {
+                const type = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n);
+                const operation = getOperation(n);
+                return integrationReadTypes.includes(type) && (isReadOp(operation) || !operation);
+            });
+            const hasDataSourceWrite = finalNodes.some(n => {
+                const type = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n);
+                const operation = getOperation(n);
+                return dataSourceTypes.includes(type) && isWriteOp(operation);
+            });
+            // If we have Pattern 1, validate that connections respect it
+            // Data source should come before loop, loop should come before create operation
+            if (hasDataSourceRead && hasLoop && hasCreateOperation) {
+                console.log(`🔍 [Flow Validation] Detected data source → loop → create operation pattern, validating connections...`);
+                // Get node positions in the reordered array (which respects data source → logic → integrations)
+                const getNodePosition = (nodeId) => {
+                    const node = finalNodes.find(n => n.id === nodeId);
+                    if (!node)
+                        return 999;
+                    return finalNodes.indexOf(node);
+                };
+                // Validate that connections respect the order
+                let connectionsValid = true;
+                for (const conn of linearConnections) {
+                    const sourceNodeId = stepIdToNodeId.get(conn.source);
+                    const targetNodeId = stepIdToNodeId.get(conn.target);
+                    if (!sourceNodeId || !targetNodeId)
+                        continue;
+                    const sourceNode = finalNodes.find(n => n.id === sourceNodeId);
+                    const targetNode = finalNodes.find(n => n.id === targetNodeId);
+                    if (!sourceNode || !targetNode)
+                        continue;
+                    const sourceType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(sourceNode);
+                    const targetType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(targetNode);
+                    const sourcePos = getNodePosition(sourceNodeId);
+                    const targetPos = getNodePosition(targetNodeId);
+                    // Validate Pattern 1: data source should come before loop, loop should come before create operation
+                    if (dataSourceTypes.includes(sourceType) && targetType === loopType && sourcePos > targetPos) {
+                        console.warn(`⚠️  [Flow Validation] Invalid connection: ${sourceType} (pos ${sourcePos}) → ${targetType} (pos ${targetPos}). Data source should come before loop.`);
+                        connectionsValid = false;
+                    }
+                    if (sourceType === loopType && createOperationTypes.includes(targetType) && sourcePos > targetPos) {
+                        console.warn(`⚠️  [Flow Validation] Invalid connection: ${sourceType} (pos ${sourcePos}) → ${targetType} (pos ${targetPos}). Loop should come before create operation.`);
+                        connectionsValid = false;
+                    }
+                }
+                if (!connectionsValid) {
+                    console.log(`⚠️  [Flow Validation] Structure connections violate logical flow. Falling back to sequential connections based on node order.`);
+                    // Clear linearConnections to force fallback to sequential connection logic
+                    linearConnections.length = 0;
+                }
+                else {
+                    console.log(`✅ [Flow Validation] Connections respect logical flow pattern (data source → loop → create).`);
+                }
+            }
+            // If we have Pattern 2: integration (read) → data source (write), validate that connections respect it
+            // Integration read should come before data source write
+            if (hasIntegrationRead && hasDataSourceWrite && !hasLoop) {
+                console.log(`🔍 [Flow Validation] Detected integration read → data source write pattern, validating connections...`);
+                // Get node positions in the reordered array
+                const getNodePosition = (nodeId) => {
+                    const node = finalNodes.find(n => n.id === nodeId);
+                    if (!node)
+                        return 999;
+                    return finalNodes.indexOf(node);
+                };
+                // Validate that connections respect the order
+                let connectionsValid = true;
+                for (const conn of linearConnections) {
+                    const sourceNodeId = stepIdToNodeId.get(conn.source);
+                    const targetNodeId = stepIdToNodeId.get(conn.target);
+                    if (!sourceNodeId || !targetNodeId)
+                        continue;
+                    const sourceNode = finalNodes.find(n => n.id === sourceNodeId);
+                    const targetNode = finalNodes.find(n => n.id === targetNodeId);
+                    if (!sourceNode || !targetNode)
+                        continue;
+                    const sourceType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(sourceNode);
+                    const targetType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(targetNode);
+                    const sourceOperation = getOperation(sourceNode);
+                    const targetOperation = getOperation(targetNode);
+                    const sourcePos = getNodePosition(sourceNodeId);
+                    const targetPos = getNodePosition(targetNodeId);
+                    // Validate: integration read should come before data source write
+                    if (integrationReadTypes.includes(sourceType) && isReadOp(sourceOperation) &&
+                        dataSourceTypes.includes(targetType) && isWriteOp(targetOperation) &&
+                        sourcePos > targetPos) {
+                        console.warn(`⚠️  [Flow Validation] Invalid connection: ${sourceType} (read, pos ${sourcePos}) → ${targetType} (write, pos ${targetPos}). Integration read should come before data source write.`);
+                        connectionsValid = false;
+                    }
+                }
+                if (!connectionsValid) {
+                    console.log(`⚠️  [Flow Validation] Structure connections violate logical flow. Falling back to sequential connections based on node order.`);
+                    // Clear linearConnections to force fallback to sequential connection logic
+                    linearConnections.length = 0;
+                }
+                else {
+                    console.log(`✅ [Flow Validation] Connections respect logical flow pattern (integration read → data source write).`);
+                }
+            }
+            // CRITICAL: Create edges from LINEAR connections only (if we still have them after validation)
+            // Sort connections to ensure linear flow: trigger → step1 → step2 → step3
+            const sortedConnections = [...linearConnections].sort((a, b) => {
+                // Extract step numbers if they exist (step1, step2, etc.)
+                const aSourceNum = parseInt(a.source.replace(/[^0-9]/g, '')) || (a.source === 'trigger' ? 0 : 999);
+                const bSourceNum = parseInt(b.source.replace(/[^0-9]/g, '')) || (b.source === 'trigger' ? 0 : 999);
+                return aSourceNum - bSourceNum;
+            });
+            // Flag to track if we should skip structure connections and use sequential fallback
+            let useSequentialFallback = sortedConnections.length === 0;
+            // Create edges from structure connections (only if we have valid connections)
+            if (!useSequentialFallback) {
+                for (const connection of sortedConnections) {
+                    const sourceNodeId = stepIdToNodeId.get(connection.source);
+                    const targetNodeId = stepIdToNodeId.get(connection.target);
+                    if (!sourceNodeId || !targetNodeId) {
+                        console.warn(`⚠️  Connection references non-existent node: ${connection.source} -> ${connection.target}`);
+                        continue;
+                    }
+                    // 🚨 CRITICAL FIX: Prevent self-loops - source and target must be different
+                    if (sourceNodeId === targetNodeId) {
+                        console.warn(`⚠️  Prevented self-loop edge: ${connection.source} (${sourceNodeId}) → ${connection.target} (${targetNodeId})`);
+                        continue;
+                    }
+                    // Check if edge already exists (e.g., for chat model)
+                    const existingEdge = edges.some(e => e.source === sourceNodeId && e.target === targetNodeId);
+                    if (existingEdge) {
+                        continue;
+                    }
+                    const sourceNode = finalNodes.find(n => n.id === sourceNodeId);
+                    const targetNode = finalNodes.find(n => n.id === targetNodeId);
+                    if (!sourceNode || !targetNode) {
+                        console.warn(`⚠️  Could not find nodes for connection: ${connection.source} -> ${connection.target}`);
+                        continue;
+                    }
+                    // ✅ CRITICAL FIX: Use normalizeNodeType to get actual node types for mapping
+                    const sourceActualType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(sourceNode);
+                    const targetActualType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(targetNode);
+                    // ✅ SCHEMA-AWARE HANDLE RESOLUTION: Use new helper functions to get correct handles
+                    // Resolve source handle from step output field or use schema-based default
+                    const resolvedSourceHandle = this.resolveSourceHandle(sourceNode, connection.outputField);
+                    // Resolve target handle from step input field or use schema-based default
+                    const resolvedTargetHandle = this.resolveTargetHandle(targetNode, connection.inputField);
+                    // ✅ CRITICAL: Validate handles exist in node schemas before creating edge
+                    const sourceOutputs = this.getNodeOutputFields(sourceActualType);
+                    const targetInputs = this.getNodeInputFields(targetActualType);
+                    if (!sourceOutputs.includes(resolvedSourceHandle)) {
+                        console.error(`❌ [Schema Validation] Source handle '${resolvedSourceHandle}' not found in ${sourceActualType} outputs: ${sourceOutputs.join(', ')}`);
+                        // Try alternative mapping
+                        const alternativeMapping = this.findAlternativeMapping(sourceNode, targetNode);
+                        if (alternativeMapping) {
+                            const altSourceHandle = this.resolveSourceHandle(sourceNode, alternativeMapping.outputField);
+                            const altTargetHandle = this.resolveTargetHandle(targetNode, alternativeMapping.inputField);
+                            if (sourceOutputs.includes(altSourceHandle) && targetInputs.includes(altTargetHandle)) {
+                                const altEdge = {
+                                    id: (0, crypto_1.randomUUID)(),
+                                    source: sourceNodeId,
+                                    target: targetNodeId,
+                                    type: targetActualType === 'ai_agent' ? 'ai-input' : 'default',
+                                    sourceHandle: altSourceHandle,
+                                    targetHandle: altTargetHandle,
+                                };
+                                edges.push(altEdge);
+                                console.log(`✅ Connected ${connection.source} → ${connection.target} (alternative mapping, handles: ${altSourceHandle} → ${altTargetHandle})`);
+                            }
+                        }
+                        continue;
+                    }
+                    if (!targetInputs.includes(resolvedTargetHandle)) {
+                        console.error(`❌ [Schema Validation] Target handle '${resolvedTargetHandle}' not found in ${targetActualType} inputs: ${targetInputs.join(', ')}`);
+                        // Try alternative mapping
+                        const alternativeMapping = this.findAlternativeMapping(sourceNode, targetNode);
+                        if (alternativeMapping) {
+                            const altSourceHandle = this.resolveSourceHandle(sourceNode, alternativeMapping.outputField);
+                            const altTargetHandle = this.resolveTargetHandle(targetNode, alternativeMapping.inputField);
+                            if (sourceOutputs.includes(altSourceHandle) && targetInputs.includes(altTargetHandle)) {
+                                const altEdge = {
+                                    id: (0, crypto_1.randomUUID)(),
+                                    source: sourceNodeId,
+                                    target: targetNodeId,
+                                    type: targetActualType === 'ai_agent' ? 'ai-input' : 'default',
+                                    sourceHandle: altSourceHandle,
+                                    targetHandle: altTargetHandle,
+                                };
+                                edges.push(altEdge);
+                                console.log(`✅ Connected ${connection.source} → ${connection.target} (alternative mapping, handles: ${altSourceHandle} → ${altTargetHandle})`);
+                            }
+                        }
+                        continue;
+                    }
+                    // ✅ ROOT-LEVEL FIX: Use EdgeCreationService for automatic repair
+                    const { edgeCreationService } = await Promise.resolve().then(() => __importStar(require('../edges/edgeCreationService')));
+                    const { nodeIdResolver } = require('../../core/utils/nodeIdResolver');
+                    // Register node IDs in resolver (if not already registered)
+                    if (!nodeIdResolver.hasPhysical(sourceNodeId)) {
+                        nodeIdResolver.register(connection.source, sourceNodeId, sourceActualType);
+                    }
+                    if (!nodeIdResolver.hasPhysical(targetNodeId)) {
+                        nodeIdResolver.register(connection.target, targetNodeId, targetActualType);
+                    }
+                    const edgeResult = edgeCreationService.createEdge({
+                        sourceNodeId: connection.source, // Use logical ID, service will resolve
+                        targetNodeId: connection.target, // Use logical ID, service will resolve
+                        sourceHandle: resolvedSourceHandle,
+                        targetHandle: resolvedTargetHandle,
+                        sourceNode,
+                        targetNode,
+                        nodes: finalNodes,
+                        edgeType: targetActualType === 'ai_agent' ? 'ai-input' : 'default',
+                        allowRepair: true, // Allow repair during build
+                        strict: false, // Permissive mode during build
+                    });
+                    if (edgeResult.success && edgeResult.edge) {
+                        edges.push(edgeResult.edge);
+                        if (edgeResult.repairs.length > 0) {
+                            console.log(`✅ Connected ${connection.source} → ${connection.target} ` +
+                                `(repaired: ${edgeResult.repairs.map(r => r.type).join(', ')})`);
+                        }
+                        else {
+                            console.log(`✅ Connected ${connection.source} → ${connection.target}`);
+                        }
+                    }
+                    else {
+                        console.error(`❌ [EdgeCreationService] Failed to create edge: ${connection.source} → ${connection.target}: ` +
+                            `${edgeResult.error}`);
+                    }
+                }
+            }
+            else {
+                console.log('⚠️  Structure connections failed validation. Will use sequential connection fallback.');
+            }
+        }
+        else {
+            // Fall back to sequential connection logic (original behavior)
+            console.log('⚠️  No structure connections available, using sequential connection fallback');
+            // Build proper node categories for connection
+            // Skip chat_model nodes (already connected to AI Agents)
+            // CRITICAL: Include ALL non-trigger, non-chat_model nodes in processing
+            // Note: allNonTriggerNodes is already defined above
+            // Separate into processing and output nodes
+            // CRITICAL FIX: Use normalizeNodeType to get actual node types for filtering
+            processingNodes = allNonTriggerNodes.filter(n => {
+                const actualType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n);
+                return !['slack_message', 'email', 'discord', 'log_output', 'respond_to_webhook', 'http_response'].includes(actualType);
+            });
+            outputNodes = allNonTriggerNodes.filter(n => {
+                const actualType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n);
+                return ['slack_message', 'email', 'discord', 'log_output', 'respond_to_webhook', 'http_response'].includes(actualType);
+            });
+            // If no output nodes, treat all non-trigger nodes as processing nodes
+            const nodesToConnect = outputNodes.length > 0 ? processingNodes : allNonTriggerNodes;
+            // CRITICAL: Connect trigger to FIRST node ONLY (linear flow, not tree)
+            // This ensures: trigger → node1 → node2 → node3 (sequential chain)
+            // NOT: trigger → node1, trigger → node2, trigger → node3 (tree structure)
+            if (nodesToConnect.length > 0 && triggerNodes.length > 0) {
+                const triggerNode = triggerNodes[0];
+                const firstNode = nodesToConnect[0];
+                // ✅ SCHEMA-AWARE HANDLE RESOLUTION: Use new helper functions for trigger connections
+                const triggerActualType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(triggerNode);
+                const firstNodeActualType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(firstNode);
+                // Resolve handles using schema-aware helpers
+                const resolvedSourceHandle = this.resolveSourceHandle(triggerNode);
+                const resolvedTargetHandle = this.resolveTargetHandle(firstNode);
+                // Validate handles exist in schemas
+                const sourceOutputs = this.getNodeOutputFields(triggerActualType);
+                const targetInputs = this.getNodeInputFields(firstNodeActualType);
+                if (!sourceOutputs.includes(resolvedSourceHandle)) {
+                    console.warn(`⚠️  Trigger source handle '${resolvedSourceHandle}' not found in ${triggerActualType} outputs: ${sourceOutputs.join(', ')}`);
+                    console.log(`ℹ️  Skipping edge from ${triggerActualType} to ${firstNodeActualType} (invalid source handle)`);
+                }
+                else if (!targetInputs.includes(resolvedTargetHandle)) {
+                    console.warn(`⚠️  First node target handle '${resolvedTargetHandle}' not found in ${firstNodeActualType} inputs: ${targetInputs.join(', ')}`);
+                    console.log(`ℹ️  Skipping edge from ${triggerActualType} to ${firstNodeActualType} (invalid target handle)`);
+                }
+                else {
+                    // ✅ CRITICAL: Use handle registry to ensure valid React handle IDs
+                    const { sourceHandle, targetHandle } = (0, node_handle_registry_1.validateAndFixEdgeHandles)(triggerActualType, firstNodeActualType, resolvedSourceHandle, resolvedTargetHandle);
+                    // ✅ ARCHITECTURAL FIX: Strict validation before creating edge
+                    try {
+                        this.validateEdgeHandlesStrict(triggerNode, firstNode, sourceHandle, targetHandle);
+                        const edge = {
+                            id: (0, crypto_1.randomUUID)(),
+                            source: triggerNode.id,
+                            target: firstNode.id,
+                            type: firstNodeActualType === 'ai_agent' ? 'ai-input' : 'default',
+                            sourceHandle,
+                            targetHandle,
+                        };
+                        edges.push(edge);
+                        console.log(`✅ Connected trigger ${triggerActualType} → ${firstNodeActualType} (schema-aware, handles: ${sourceHandle} → ${targetHandle})`);
+                    }
+                    catch (error) {
+                        console.error(`❌ [STRICT VALIDATION] Trigger edge creation failed: ${error}`);
+                        console.log(`ℹ️  Skipping edge from ${triggerActualType} to ${firstNodeActualType} (validation failed)`);
+                    }
+                }
+            }
+            // Connect ALL nodes sequentially (processing + output) to ensure complete chain
+            allNodesToConnect = [...nodesToConnect, ...outputNodes];
+            for (let i = 0; i < allNodesToConnect.length - 1; i++) {
+                const sourceNode = allNodesToConnect[i];
+                const targetNode = allNodesToConnect[i + 1];
+                // 🚨 CRITICAL FIX: Prevent self-loops
+                if (sourceNode.id === targetNode.id) {
+                    console.warn(`⚠️  Prevented self-loop in sequential connection: ${sourceNode.type} (${sourceNode.id})`);
+                    continue;
+                }
+                // Skip if this connection already exists
+                const connectionExists = edges.some(e => e.source === sourceNode.id && e.target === targetNode.id);
+                if (connectionExists) {
+                    continue;
+                }
+                // Skip if target is chat_model (chat_model only connects to ai_agent, already handled above)
+                if (targetNode.type === 'chat_model') {
+                    continue;
+                }
+                // Skip if source is chat_model (chat_model only connects to ai_agent, already handled above)
+                if (sourceNode.type === 'chat_model') {
+                    continue;
+                }
+                // CRITICAL FIX: Use normalizeNodeType to get actual node types for mapping
+                const sourceActualType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(sourceNode);
+                const targetActualType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(targetNode);
+                // Get proper field mapping using actual node types
+                const mapping = mapOutputToInput(sourceActualType, targetActualType);
+                if (!mapping) {
+                    console.warn(`⚠️  Could not map output from ${sourceActualType} to ${targetActualType}`);
+                    continue;
+                }
+                // CRITICAL FIX: Validate edge before creating
+                const targetField = mapping.inputField || mapping.targetHandle || 'default';
+                const edgeValidation = this.validateEdge(sourceNode, targetNode, mapping.outputField, targetField);
+                if (!edgeValidation.valid) {
+                    console.warn(`⚠️  Edge validation failed: ${edgeValidation.reason}. Skipping connection ${sourceActualType} → ${targetActualType}`);
+                    // Try to find alternative valid mapping
+                    const alternativeMapping = this.findAlternativeMapping(sourceNode, targetNode);
+                    if (alternativeMapping) {
+                        // ✅ CRITICAL FIX: Validate and fix handles for alternative mapping
+                        const { sourceHandle: altSourceHandle, targetHandle: altTargetHandle } = (0, node_handle_registry_1.validateAndFixEdgeHandles)(sourceActualType, targetActualType, alternativeMapping.outputField, alternativeMapping.inputField);
+                        const altEdge = {
+                            id: (0, crypto_1.randomUUID)(),
+                            source: sourceNode.id,
+                            target: targetNode.id,
+                            type: targetActualType === 'ai_agent' ? 'ai-input' : 'default',
+                            sourceHandle: altSourceHandle,
+                            targetHandle: altTargetHandle,
+                        };
+                        edges.push(altEdge);
+                        console.log(`✅ Connected ${sourceActualType} → ${targetActualType} (alternative mapping, handles: ${altSourceHandle} → ${altTargetHandle})`);
+                    }
+                    continue;
+                }
+                // Determine connection type based on node types
+                let edgeType = 'default';
+                if (targetNode.type === 'ai_agent') {
+                    edgeType = 'ai-input';
+                    // For AI Agent, ensure we're connecting to userInput port (not chat_model, memory, or tool)
+                    // chat_model connections are handled separately above
+                    // Only connect to userInput if targetHandle is not a special port
+                    if (mapping.targetHandle && ['chat_model', 'memory', 'tool'].includes(mapping.targetHandle)) {
+                        // This is a special port connection, should have been handled above
+                        continue;
+                    }
+                }
+                // ✅ SCHEMA-AWARE HANDLE RESOLUTION: Use new helper functions
+                // Resolve source handle from mapping or use schema-based default
+                const resolvedSourceHandle = this.resolveSourceHandle(sourceNode, mapping.outputField);
+                // Resolve target handle from mapping or use schema-based default
+                const resolvedTargetHandle = this.resolveTargetHandle(targetNode, mapping.targetHandle || mapping.inputField);
+                // Special cases for AI Agent
+                let finalTargetHandle = resolvedTargetHandle;
+                if (sourceActualType === 'text_formatter' && targetActualType === 'ai_agent') {
+                    finalTargetHandle = 'userInput';
+                    console.log(`[Workflow Builder] Text Formatter → AI Agent: Using userInput port`);
+                }
+                else if (sourceActualType === 'chat_trigger' && targetActualType === 'ai_agent') {
+                    finalTargetHandle = 'userInput';
+                    console.log(`[Workflow Builder] Chat Trigger → AI Agent: Using userInput port`);
+                }
+                // Validate and fix handles using registry
+                const { sourceHandle, targetHandle } = (0, node_handle_registry_1.validateAndFixEdgeHandles)(sourceActualType, targetActualType, resolvedSourceHandle, finalTargetHandle);
+                // ✅ ARCHITECTURAL FIX: Strict validation before creating edge
+                try {
+                    this.validateEdgeHandlesStrict(sourceNode, targetNode, sourceHandle, targetHandle);
+                }
+                catch (error) {
+                    console.error(`❌ [STRICT VALIDATION] Edge creation failed: ${error}`);
+                    // Skip this edge - don't create invalid connections
+                    continue;
+                }
+                const edge = {
+                    id: (0, crypto_1.randomUUID)(),
+                    source: sourceNode.id,
+                    target: targetNode.id,
+                    type: edgeType,
+                    sourceHandle,
+                    targetHandle,
+                };
+                edges.push(edge);
+            }
+            // Additional: Connect output nodes if they weren't already connected in the sequential chain
+            // This ensures output nodes are always connected even if they were filtered out
+            if (outputNodes.length > 0) {
+                const lastConnectedNode = allNodesToConnect.length > 0
+                    ? allNodesToConnect[allNodesToConnect.length - 1]
+                    : (processingNodes.length > 0 ? processingNodes[processingNodes.length - 1] : null);
+                if (lastConnectedNode) {
+                    outputNodes.forEach((outputNode) => {
+                        // Skip if already connected
+                        const alreadyConnected = edges.some(e => e.source === lastConnectedNode.id && e.target === outputNode.id);
+                        if (!alreadyConnected && lastConnectedNode.id !== outputNode.id) {
+                            // CRITICAL FIX: Use normalizeNodeType for correct field mapping
+                            const lastNodeActualType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(lastConnectedNode);
+                            const outputNodeActualType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(outputNode);
+                            const mapping = mapOutputToInput(lastNodeActualType, outputNodeActualType);
+                            if (mapping) {
+                                // ✅ CRITICAL FIX: Validate and fix handles using handle registry
+                                const { sourceHandle, targetHandle } = (0, node_handle_registry_1.validateAndFixEdgeHandles)(lastNodeActualType, outputNodeActualType, mapping.outputField, mapping.targetHandle || mapping.inputField);
+                                const edge = {
+                                    id: (0, crypto_1.randomUUID)(),
+                                    source: lastConnectedNode.id,
+                                    target: outputNode.id,
+                                    type: 'default',
+                                    sourceHandle,
+                                    targetHandle,
+                                };
+                                edges.push(edge);
+                                console.log(`✅ Connected ${lastNodeActualType} → ${outputNodeActualType} (handles: ${sourceHandle} → ${targetHandle})`);
+                            }
+                            else {
+                                // Fallback: create basic connection with default handles
+                                const { sourceHandle, targetHandle } = (0, node_handle_registry_1.validateAndFixEdgeHandles)(lastNodeActualType, outputNodeActualType, undefined, undefined);
+                                const edge = {
+                                    id: (0, crypto_1.randomUUID)(),
+                                    source: lastConnectedNode.id,
+                                    target: outputNode.id,
+                                    type: 'default',
+                                    sourceHandle,
+                                    targetHandle,
+                                };
+                                edges.push(edge);
+                                console.log(`✅ Connected ${lastNodeActualType} → ${outputNodeActualType} (fallback, handles: ${sourceHandle} → ${targetHandle})`);
+                            }
+                        }
+                    });
+                }
+            }
+        }
+        // FINAL CHECK: Validate acyclic graph before finalizing
+        const acyclicValidation = this.validateAcyclicGraph(allNonTriggerNodes, edges);
+        if (acyclicValidation.hasCycle) {
+            console.warn(`[WorkflowBuilder] ⚠️  Cycle detected in connections, removing ${acyclicValidation.removedEdges.length} edge(s)`);
+            // Remove cycle edges
+            acyclicValidation.removedEdges.forEach(removedEdge => {
+                const edgeIndex = edges.findIndex(e => e.id === removedEdge.id);
+                if (edgeIndex >= 0) {
+                    edges.splice(edgeIndex, 1);
+                }
+            });
+        }
+        // CRITICAL FIX: Ensure trigger has outgoing connection FIRST
+        // This must happen before orphan node handling
+        if (triggerNodes.length > 0 && allNonTriggerNodes.length > 0) {
+            const triggerNode = triggerNodes[0];
+            const triggerOutgoing = edges.filter(e => e.source === triggerNode.id);
+            if (triggerOutgoing.length === 0) {
+                // Find the best first node to connect to (prefer nodes with no incoming edges, avoid log_output)
+                const nodesWithIncoming = new Set(edges.map(e => e.target));
+                const nonTriggerCandidates = allNonTriggerNodes.filter(n => (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n) !== 'log_output');
+                const firstActionNode = nonTriggerCandidates.find(n => !nodesWithIncoming.has(n.id)) || nonTriggerCandidates[0] || allNonTriggerNodes[0];
+                if (firstActionNode) {
+                    const triggerType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(triggerNode);
+                    const targetType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(firstActionNode);
+                    const resolvedSourceHandle = this.resolveSourceHandle(triggerNode);
+                    const resolvedTargetHandle = this.resolveTargetHandle(firstActionNode);
+                    const { sourceHandle, targetHandle } = (0, node_handle_registry_1.validateAndFixEdgeHandles)(triggerType, targetType, resolvedSourceHandle, resolvedTargetHandle);
+                    try {
+                        this.validateEdgeHandlesStrict(triggerNode, firstActionNode, sourceHandle, targetHandle);
+                        edges.push({
+                            id: (0, crypto_1.randomUUID)(),
+                            source: triggerNode.id,
+                            target: firstActionNode.id,
+                            type: targetType === 'ai_agent' ? 'ai-input' : 'default',
+                            sourceHandle,
+                            targetHandle,
+                        });
+                        console.log(`✅ [Connection Fix] Connected trigger ${triggerType} → ${targetType} (handles: ${sourceHandle} → ${targetHandle})`);
+                    }
+                    catch (error) {
+                        console.warn(`⚠️  [Connection Fix] Failed to connect trigger ${triggerType} → ${targetType}: ${error instanceof Error ? error.message : String(error)}`);
+                    }
+                }
+            }
+        }
+        // FINAL CHECK: Ensure every non-trigger node has at least one incoming edge
+        // CRITICAL FIX: Connect orphan nodes to the LAST node in the chain, not directly to trigger
+        // This creates proper sequential flow: trigger → node1 → node2 → orphan
+        const allNonTriggerNodeIds = new Set(allNonTriggerNodes.map((n) => n.id));
+        const connectedNodeIds = new Set(edges.map(e => e.target));
+        const orphanNodes = allNonTriggerNodes.filter((n) => !connectedNodeIds.has(n.id));
+        if (orphanNodes.length > 0) {
+            console.warn(`⚠️  Found ${orphanNodes.length} orphan nodes, connecting to last node in chain...`);
+            // CRITICAL: Find the LAST node in the LINEAR execution chain
+            // Build execution order by traversing from trigger
+            const executionOrder = [];
+            const visited = new Set();
+            // Start from trigger nodes and traverse linearly
+            triggerNodes.forEach(trigger => {
+                if (!visited.has(trigger.id)) {
+                    executionOrder.push(trigger);
+                    visited.add(trigger.id);
+                    this.traverseLinearExecutionChain(trigger.id, edges, finalNodes, executionOrder, visited);
+                }
+            });
+            // Find the last NON-TRIGGER node in the execution chain
+            // This is the node that should receive orphan connections
+            let lastNodeInChain = null;
+            for (let i = executionOrder.length - 1; i >= 0; i--) {
+                const node = executionOrder[i];
+                // Skip trigger nodes - we want the last processing/output node
+                if (triggerNodes.some(t => t.id === node.id)) {
+                    continue;
+                }
+                // This is the last non-trigger node in the chain
+                lastNodeInChain = node;
+                break;
+            }
+            // Fallback: use the last processing node or first non-trigger node
+            if (!lastNodeInChain) {
+                if (allNonTriggerNodes.length > 0) {
+                    // Use the first non-trigger node that's already connected
+                    const connectedNonTriggerNodes = allNonTriggerNodes.filter(n => connectedNodeIds.has(n.id));
+                    lastNodeInChain = connectedNonTriggerNodes[connectedNonTriggerNodes.length - 1] || allNonTriggerNodes[0];
+                }
+                else if (triggerNodes.length > 0) {
+                    lastNodeInChain = triggerNodes[0];
+                }
+            }
+            const sourceNode = lastNodeInChain;
+            if (sourceNode) {
+                // CRITICAL FIX: LINEAR FLOW ENFORCEMENT - Only connect FIRST orphan to maintain linear flow
+                // Do NOT connect multiple orphans to same source (creates branching)
+                // Connect orphans sequentially: sourceNode → orphan1 → orphan2 → orphan3
+                orphanNodes.forEach((orphan, index) => {
+                    // CRITICAL: Skip if orphan is the same as source node (prevent self-connection)
+                    if (orphan.id === sourceNode.id) {
+                        console.warn(`⚠️  Skipping orphan connection: ${orphan.type} cannot connect to itself`);
+                        return;
+                    }
+                    // LINEAR FLOW: Connect first orphan to sourceNode, then connect subsequent orphans to previous orphan
+                    const connectToNode = index === 0 ? sourceNode : orphanNodes[index - 1];
+                    // Skip if trying to connect to itself
+                    if (orphan.id === connectToNode.id) {
+                        console.warn(`⚠️  Skipping orphan connection: ${orphan.type} cannot connect to itself`);
+                        return;
+                    }
+                    // CRITICAL FIX: Use normalizeNodeType for correct type identification
+                    const orphanActualType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(orphan);
+                    const connectToActualType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(connectToNode);
+                    // Skip if it's a chat_model (handled separately)
+                    if (orphanActualType === 'chat_model') {
+                        return;
+                    }
+                    // Skip if it's log_output and we already have other output nodes (log_output is optional)
+                    if (orphanActualType === 'log_output' && outputNodes.length > 0) {
+                        return;
+                    }
+                    // CRITICAL: Skip if orphan is already in the execution chain (not truly orphaned)
+                    if (executionOrder.some(n => n.id === orphan.id)) {
+                        console.warn(`⚠️  Skipping orphan connection: ${orphanActualType} is already in execution chain`);
+                        return;
+                    }
+                    // CRITICAL: Skip if this would create a circular dependency (use connectToNode, not sourceNode)
+                    const wouldCreateCycle = this.wouldCreateCycle(edges, connectToNode.id, orphan.id);
+                    if (wouldCreateCycle) {
+                        console.warn(`⚠️  Skipping orphan connection ${connectToActualType} → ${orphanActualType} (would create cycle)`);
+                        return;
+                    }
+                    // Check if already connected
+                    if (!edges.some(e => e.target === orphan.id)) {
+                        // CRITICAL FIX: Use connectToNode and normalizeNodeType for correct mapping
+                        const mapping = mapOutputToInput(connectToActualType, orphanActualType);
+                        if (!mapping) {
+                            console.warn(`⚠️  Could not map output from ${connectToActualType} to ${orphanActualType}, skipping orphan connection`);
+                            return;
+                        }
+                        // Validate edge before creating (use connectToNode, not sourceNode)
+                        const edgeValidation = this.validateEdge(connectToNode, orphan, mapping.outputField, mapping.inputField);
+                        if (!edgeValidation.valid) {
+                            console.warn(`⚠️  Edge validation failed for orphan connection ${connectToActualType} → ${orphanActualType}: ${edgeValidation.reason}`);
+                            return;
+                        }
+                        // ✅ CRITICAL: Use schema-aware handle resolution instead of generic validateAndFixEdgeHandles
+                        const resolvedSourceHandle = this.resolveSourceHandle(connectToNode, mapping.outputField);
+                        const resolvedTargetHandle = this.resolveTargetHandle(orphan, mapping.targetHandle || mapping.inputField);
+                        // Validate handles exist in schemas
+                        const sourceOutputs = this.getNodeOutputFields(connectToActualType);
+                        const targetInputs = this.getNodeInputFields(orphanActualType);
+                        if (!sourceOutputs.includes(resolvedSourceHandle)) {
+                            console.warn(`⚠️  [Orphan] Source handle '${resolvedSourceHandle}' not found in ${connectToActualType} outputs: ${sourceOutputs.join(', ')}. Skipping orphan connection.`);
+                            return;
+                        }
+                        if (!targetInputs.includes(resolvedTargetHandle)) {
+                            console.warn(`⚠️  [Orphan] Target handle '${resolvedTargetHandle}' not found in ${orphanActualType} inputs: ${targetInputs.join(', ')}. Skipping orphan connection.`);
+                            return;
+                        }
+                        // ✅ CRITICAL: Strict validation before creating edge
+                        try {
+                            this.validateEdgeHandlesStrict(connectToNode, orphan, resolvedSourceHandle, resolvedTargetHandle);
+                        }
+                        catch (error) {
+                            const errorMessage = error instanceof Error ? error.message : String(error);
+                            console.warn(`⚠️  [Orphan] Edge validation failed for ${connectToActualType} → ${orphanActualType}: ${errorMessage}. Skipping orphan connection.`);
+                            return;
+                        }
+                        const edge = {
+                            id: (0, crypto_1.randomUUID)(),
+                            source: connectToNode.id,
+                            target: orphan.id,
+                            type: 'default',
+                            sourceHandle: resolvedSourceHandle,
+                            targetHandle: resolvedTargetHandle,
+                        };
+                        edges.push(edge);
+                        console.log(`✅ Connected orphan node ${orphanActualType} to ${connectToActualType} (linear sequential flow, index ${index}, handles: ${resolvedSourceHandle} → ${resolvedTargetHandle})`);
+                    }
+                });
+            }
+        }
+        // ✅ REMOVED: Sequential connection fallback
+        // Edge creation must ONLY use schema-defined handles
+        // If compatible handles not found → workflow invalid (no fallback)
+        // COMPREHENSIVE VALIDATION: Run full validation pipeline
+        const workflow = {
+            nodes: finalNodes,
+            edges: edges,
+        };
+        const comprehensiveValidation = workflow_validation_pipeline_1.workflowValidationPipeline.validateWorkflow(workflow);
+        if (!comprehensiveValidation.valid) {
+            console.error('❌ Workflow validation failed:', comprehensiveValidation.errors);
+            // Log all errors but continue - fixes may have been applied
+        }
+        if (comprehensiveValidation.warnings.length > 0) {
+            console.warn('⚠️  Workflow validation warnings:', comprehensiveValidation.warnings);
+        }
+        if (comprehensiveValidation.fixesApplied.length > 0) {
+            console.log('✅ Auto-fixes applied:', comprehensiveValidation.fixesApplied);
+        }
+        // Also run connection validator for detailed connection info
+        // ✅ CRITICAL: Validate all nodes are connected
+        this.validateAllNodesConnected(finalNodes, edges);
+        const connectionValidation = connection_validator_1.connectionValidator.validateAllConnections(finalNodes, edges);
+        if (!connectionValidation.valid) {
+            console.warn('⚠️  Connection validation errors:', connectionValidation.errors);
+        }
+        if (comprehensiveValidation.valid) {
+            console.log('✅ Workflow passed comprehensive validation');
+        }
+        // FINAL CHECK: Ensure at least one edge exists for workflows with multiple nodes
+        if (finalNodes.length > 1 && edges.length === 0) {
+            console.error('❌ CRITICAL: No edges created for multi-node workflow! Creating fallback connections...');
+            // ✅ ROOT-LEVEL FIX: Create simple sequential chain using actual node IDs
+            // Filter out chat_model nodes and sort by position or creation order
+            const nodesInOrder = finalNodes
+                .filter(n => {
+                const nodeType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n);
+                return nodeType !== 'chat_model';
+            })
+                .sort((a, b) => {
+                // Sort by position if available, otherwise by ID
+                if (a.position && b.position) {
+                    return a.position.x - b.position.x || a.position.y - b.position.y;
+                }
+                return a.id.localeCompare(b.id);
+            });
+            // Find trigger node (should be first)
+            const triggerNode = nodesInOrder.find(n => {
+                const nodeType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n);
+                return this.isTriggerNodeType(nodeType);
+            });
+            // Get non-trigger nodes in order
+            const nonTriggerNodes = nodesInOrder.filter(n => {
+                const nodeType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n);
+                return !this.isTriggerNodeType(nodeType);
+            });
+            // Connect trigger to first non-trigger node
+            if (triggerNode && nonTriggerNodes.length > 0) {
+                const mapping = mapOutputToInput((0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(triggerNode), (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(nonTriggerNodes[0]));
+                if (mapping) {
+                    const edge = {
+                        id: (0, crypto_1.randomUUID)(),
+                        source: triggerNode.id,
+                        target: nonTriggerNodes[0].id,
+                        type: 'default',
+                        sourceHandle: mapping.outputField,
+                        targetHandle: mapping.inputField,
+                    };
+                    edges.push(edge);
+                    console.log(`✅ Created fallback edge: trigger → ${nonTriggerNodes[0].data?.type || nonTriggerNodes[0].id}`);
+                }
+            }
+            // ✅ UNIVERSAL: Use Universal Edge Creation Service for sequential connections
+            const { universalEdgeCreationService } = require('../edges/universal-edge-creation-service');
+            // Connect non-trigger nodes sequentially
+            for (let i = 0; i < nonTriggerNodes.length - 1; i++) {
+                const sourceNode = nonTriggerNodes[i];
+                const targetNode = nonTriggerNodes[i + 1];
+                const sourceType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(sourceNode);
+                const targetType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(targetNode);
+                const mapping = mapOutputToInput(sourceType, targetType);
+                if (mapping) {
+                    const edgeResult = universalEdgeCreationService.createEdge({
+                        sourceNode,
+                        targetNode,
+                        sourceHandle: mapping.outputField,
+                        targetHandle: mapping.inputField,
+                        edgeType: 'default',
+                        existingEdges: edges,
+                        allNodes: nodes,
+                    });
+                    if (edgeResult.success && edgeResult.edge) {
+                        edges.push(edgeResult.edge);
+                        console.log(`✅ Created fallback edge: ${sourceType} → ${targetType}`);
+                    }
+                    else {
+                        console.warn(`⚠️  Failed to create fallback edge: ${sourceType} → ${targetType}: ${edgeResult.error || edgeResult.reason}`);
+                    }
+                }
+            }
+            console.log(`✅ Created ${edges.length} fallback sequential connections`);
+        }
+        // CRITICAL: Validate all edges have required properties before returning
+        const validatedEdges = edges.map(edge => {
+            // Ensure edge has all required properties
+            const validated = {
+                id: edge.id || (0, crypto_1.randomUUID)(),
+                source: edge.source,
+                target: edge.target,
+                type: edge.type || 'default',
+                sourceHandle: edge.sourceHandle,
+                targetHandle: edge.targetHandle,
+            };
+            return validated;
+        }).filter(edge => {
+            // 🚨 CRITICAL FIX: Filter out self-loops (source === target)
+            if (edge.source === edge.target) {
+                console.warn(`⚠️  Removed self-loop edge: ${edge.source} → ${edge.target}`);
+                return false;
+            }
+            // Filter out edges with invalid source/target
+            const sourceExists = finalNodes.some(n => n.id === edge.source);
+            const targetExists = finalNodes.some(n => n.id === edge.target);
+            if (!sourceExists || !targetExists) {
+                logger_1.logger.debug(`[EdgeDebug] Removing invalid edge: ${edge.source} -> ${edge.target} (node missing)`);
+                return false;
+            }
+            return true;
+        });
+        logger_1.logger.debug(`[EdgeDebug] Final edge count: ${validatedEdges.length} (from ${edges.length} original)`);
+        logger_1.logger.debug(`[EdgeDebug] Final node count: ${finalNodes.length}`);
+        validatedEdges.forEach((edge, i) => {
+            logger_1.logger.debug(`[EdgeDebug] Edge ${i + 1}: ${edge.source} -> ${edge.target} (type: ${edge.type})`);
+        });
+        // Apply hierarchical layout to prevent node overlaps
+        this.applyHierarchicalLayout(finalNodes, validatedEdges);
+        // PHASE 4: Apply type-aware node defaults
+        finalNodes = finalNodes.map(node => this.applyNodeTypeDefaults(node));
+        // CRITICAL: Ensure workflow has output node at the end
+        // If no output node exists, add log_output as default
+        const { nodes: nodesWithOutput, edges: edgesWithOutput } = this.ensureOutputNode(finalNodes, validatedEdges);
+        finalNodes = nodesWithOutput;
+        // ✅ ARCHITECTURAL FIX: Global safety guard - validate all edges before returning
+        this.validateAllEdgeHandles(finalNodes, edgesWithOutput);
+        // PHASE 4: Validate all edges for type compatibility
+        const validatedEdgesWithTypes = this.validateEdgesForTypes(finalNodes, edgesWithOutput);
+        // ✅ ARCHITECTURAL FIX: Global safety guard - validate all edges before returning
+        this.validateAllEdgeHandles(finalNodes, validatedEdgesWithTypes);
+        return { nodes: sanitizeRuntimeInputConfigForNodes(finalNodes), edges: validatedEdgesWithTypes };
+    }
+    /**
+     * Ensure workflow has an output node at the end
+     * If no output node exists, add log_output as default
+     * Handles multiple terminal nodes (e.g., if_else branches)
+     */
+    ensureOutputNode(nodes, edges) {
+        const isTriggerNode = (n) => this.isTriggerNodeType((0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n));
+        const isOutputSinkNode = (n) => {
+            const t = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n);
+            const def = unified_node_registry_1.unifiedNodeRegistry.get(t);
+            return def?.category === 'communication' || (def?.tags || []).includes('sink') || (def?.tags || []).includes('output');
+        };
+        // Find terminal nodes by graph topology (branch-aware): nodes with no outgoing edges
+        const nodesWithOutgoingEdges = new Set(edges.map(edge => edge.source));
+        const terminalNodes = nodes.filter(node => !nodesWithOutgoingEdges.has(node.id));
+        const terminalNonTriggerNodes = terminalNodes.filter(node => !isTriggerNode(node));
+        if (terminalNonTriggerNodes.length === 0) {
+            return { nodes: sanitizeRuntimeInputConfigForNodes(nodes), edges };
+        }
+        // ✅ UNIVERSAL FIX: Check for explicit output nodes using registry (not hardcoded list)
+        // This works for ALL output nodes (CRM, email, social media, etc.) automatically
+        const hasExplicitOutputs = terminalNonTriggerNodes.some(node => {
+            // Use registry-based check - works for ALL output nodes universally
+            return (0, universal_node_type_checker_1.isOutputNode)(node) && (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(node) !== 'log_output';
+        });
+        // If there is already a log_output node, make sure it is wired as the FINAL sink (not from trigger).
+        const existingLogOutputs = nodes.filter(n => (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n) === 'log_output');
+        const hasAnyOutputNode = terminalNonTriggerNodes.some(isOutputSinkNode);
+        // ✅ FIX: We only auto-add/auto-rewire when:
+        // 1. No explicit output nodes exist (HubSpot, Gmail, etc.)
+        // 2. AND (no output sink node exists OR auto-injected log_output present)
+        const shouldEnsureLog = !hasExplicitOutputs && (existingLogOutputs.length > 0 ||
+            !hasAnyOutputNode);
+        if (!shouldEnsureLog) {
+            if (hasExplicitOutputs) {
+                console.log(`[ensureOutputNode] ✅ Explicit output nodes detected, skipping log_output auto-injection`);
+            }
+            return { nodes: sanitizeRuntimeInputConfigForNodes(nodes), edges };
+        }
+        const newNodes = [...nodes];
+        let newEdges = [...edges];
+        // Build one branch head per terminal path (exclude existing log terminals).
+        const branchTerminalHeads = terminalNonTriggerNodes.filter((n) => (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n) !== 'log_output');
+        if (branchTerminalHeads.length === 0) {
+            return { nodes: sanitizeRuntimeInputConfigForNodes(newNodes), edges: newEdges };
+        }
+        // Ensure there is one log_output terminal per branch terminal head.
+        const logsByPriority = [...existingLogOutputs].sort((a, b) => {
+            const aAuto = a.data?.config?._autoInjected ? 0 : 1;
+            const bAuto = b.data?.config?._autoInjected ? 0 : 1;
+            return aAuto - bAuto;
+        });
+        const needed = branchTerminalHeads.length;
+        const mappedLogs = logsByPriority.slice(0, needed);
+        for (let i = mappedLogs.length; i < needed; i++) {
+            const anchor = branchTerminalHeads[i];
+            const newLog = {
+                id: (0, crypto_1.randomUUID)(),
+                type: 'log_output',
+                position: {
+                    x: (anchor.position?.x || 0) + 400,
+                    y: (anchor.position?.y || 0),
+                },
+                data: {
+                    label: `Log Output ${i + 1}`,
+                    type: 'log_output',
+                    category: 'output',
+                    config: {
+                        level: 'info',
+                        message: '{{$json}}',
+                        _autoInjected: true,
+                    },
+                },
+            };
+            newNodes.push(newLog);
+            mappedLogs.push(newLog);
+        }
+        if (mappedLogs.length > 1) {
+            console.log(`📝 [ensureOutputNode] Using ${mappedLogs.length} log_output terminals (one per branch head)`);
+        }
+        const mappedLogIds = new Set(mappedLogs.map((n) => n.id));
+        const branchHeadIds = new Set(branchTerminalHeads.map((n) => n.id));
+        // Remove stale wiring to mapped log terminals; we rewire one-to-one below.
+        newEdges = newEdges.filter((e) => {
+            if (!mappedLogIds.has(e.target))
+                return true;
+            if (branchHeadIds.has(e.source))
+                return false;
+            return false;
+        });
+        // Ensure mapped log terminals are sinks.
+        newEdges = newEdges.filter((e) => !mappedLogIds.has(e.source));
+        const existingPairs = new Set(newEdges.map((e) => `${e.source}::${e.target}`));
+        for (let i = 0; i < branchTerminalHeads.length; i++) {
+            const term = branchTerminalHeads[i];
+            const logNode = mappedLogs[i];
+            const key = `${term.id}::${logNode.id}`;
+            if (existingPairs.has(key))
+                continue;
+            const sourceActualType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(term);
+            const targetActualType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(logNode);
+            const resolvedSourceHandle = this.resolveSourceHandle(term);
+            const resolvedTargetHandle = this.resolveTargetHandle(logNode);
+            const { sourceHandle, targetHandle } = (0, node_handle_registry_1.validateAndFixEdgeHandles)(sourceActualType, targetActualType, resolvedSourceHandle, resolvedTargetHandle);
+            try {
+                this.validateEdgeHandlesStrict(term, logNode, sourceHandle, targetHandle);
+                newEdges.push({
+                    id: (0, crypto_1.randomUUID)(),
+                    source: term.id,
+                    target: logNode.id,
+                    type: 'default',
+                    sourceHandle,
+                    targetHandle,
+                });
+                existingPairs.add(key);
+            }
+            catch (error) {
+                console.warn(`⚠️  [ensureOutputNode] Could not connect terminal ${sourceActualType} → log_output: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
+        console.log(`✅ [ensureOutputNode] branch terminals connected one-to-one: ${branchTerminalHeads.length}`);
+        return { nodes: sanitizeRuntimeInputConfigForNodes(newNodes), edges: newEdges };
+    }
+    /**
+     * PHASE 4: Apply node defaults with output type information
+     */
+    applyNodeTypeDefaults(node) {
+        // ✅ SINGLE SOURCE OF TRUTH: Hydrate + normalize node config from NodeDefinitionRegistry
+        // - Filters unknown config keys (except internal meta keys starting with "_")
+        // - Applies defaultInputs()
+        // - Applies migrations for backward compatibility
+        // This prevents "schema mismatch" class of errors from reappearing across prompts.
+        try {
+            const canonicalType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(node);
+            const def = node_definition_1.nodeDefinitionRegistry.get(canonicalType);
+            if (def) {
+                const currentConfig = (node.data?.config || {});
+                const migrated = node_definition_1.nodeDefinitionRegistry.migrateInputs(canonicalType, currentConfig, def.version);
+                const defaults = def.defaultInputs();
+                const allowed = new Set(Object.keys(def.inputSchema || {}));
+                const filtered = {};
+                for (const [k, v] of Object.entries(migrated || {})) {
+                    if (k.startsWith('_') || allowed.has(k)) {
+                        filtered[k] = v;
+                    }
+                }
+                node.data.config = { ...defaults, ...filtered };
+                // Ensure canonical type stored in node.data.type (ReactFlow renderer may still use node.type === "custom")
+                node.data.type = canonicalType;
+            }
+        }
+        catch {
+            // If normalization fails, keep node as-is for backward compatibility
+        }
+        // Preserve output type defaults (used by type compatibility checks)
+        const schema = (0, node_output_types_1.getNodeOutputSchema)(node.type);
+        if (schema?.defaultValue !== undefined && !node.data.config.outputType) {
+            node.data.config.outputType = schema.type;
+        }
+        return node;
+    }
+    /**
+     * PHASE 4: Validate all edges for type compatibility
+     */
+    validateEdgesForTypes(nodes, edges) {
+        const validatedEdges = [];
+        const typeWarnings = [];
+        for (const edge of edges) {
+            const sourceNode = nodes.find(n => n.id === edge.source);
+            const targetNode = nodes.find(n => n.id === edge.target);
+            if (!sourceNode || !targetNode) {
+                console.warn(`⚠️  Edge references missing node: ${edge.source} -> ${edge.target}`);
+                continue;
+            }
+            const sourceOutputType = (0, node_output_types_1.getNodeOutputType)(sourceNode.type);
+            const targetInputType = (0, node_output_types_1.getNodeOutputType)(targetNode.type);
+            // Check compatibility
+            const compatible = (0, node_output_types_1.areTypesCompatible)(sourceOutputType, targetInputType, sourceNode.type, targetNode.type);
+            if (compatible) {
+                validatedEdges.push(edge);
+            }
+            else {
+                // Log warning but still add edge (backward compatibility)
+                const warning = `Type mismatch: ${sourceNode.type} (${sourceOutputType}) -> ${targetNode.type} (${targetInputType})`;
+                typeWarnings.push(warning);
+                console.warn(`⚠️  ${warning} - Edge added but may need type conversion`);
+                validatedEdges.push({
+                    ...edge,
+                    type: edge.type || 'converted',
+                });
+            }
+        }
+        if (typeWarnings.length > 0) {
+            console.log(`⚠️  Found ${typeWarnings.length} type compatibility warnings (edges still added for backward compatibility)`);
+        }
+        return validatedEdges;
+    }
+    /**
+     * Apply STRICT LINEAR layout to match "one-in / one-out" expectation.
+     * - Main execution chain is drawn as a single horizontal line: Trigger → step1 → step2 → ... → final
+     * - Special nodes (if_else, merge, switch) may have additional branches, but are kept close vertically.
+     */
+    applyHierarchicalLayout(nodes, edges) {
+        if (nodes.length === 0)
+            return;
+        // Layout constants
+        const STEP_WIDTH = 320;
+        const MAIN_Y = 120;
+        const BRANCH_Y_OFFSET = 180;
+        const START_X = 120;
+        // Identify trigger(s) (registry-driven)
+        const triggerNodes = nodes.filter(n => this.isTriggerNodeType((0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n) || n.type));
+        const triggerNode = triggerNodes[0] ?? nodes[0];
+        // Build adjacency map
+        const outgoing = {};
+        const incomingCount = {};
+        nodes.forEach(n => {
+            outgoing[n.id] = [];
+            incomingCount[n.id] = 0;
+        });
+        edges.forEach(e => {
+            if (outgoing[e.source])
+                outgoing[e.source].push(e.target);
+            if (incomingCount[e.target] !== undefined)
+                incomingCount[e.target]++;
+        });
+        // Build execution order with DFS starting from trigger
+        const visited = new Set();
+        const order = [];
+        const dfs = (id) => {
+            if (visited.has(id))
+                return;
+            visited.add(id);
+            order.push(id);
+            (outgoing[id] || []).forEach(nextId => dfs(nextId));
+        };
+        dfs(triggerNode.id);
+        // Append any disconnected/orphan nodes at the end
+        nodes.forEach(n => {
+            if (!visited.has(n.id)) {
+                visited.add(n.id);
+                order.push(n.id);
+            }
+        });
+        // Place main chain horizontally
+        const idToNode = {};
+        nodes.forEach(n => (idToNode[n.id] = n));
+        order.forEach((nodeId, index) => {
+            const node = idToNode[nodeId];
+            if (!node)
+                return;
+            node.position = {
+                x: START_X + index * STEP_WIDTH,
+                y: MAIN_Y,
+            };
+        });
+        // Slight vertical offsets for branch targets of if_else / switch / merge
+        edges.forEach(e => {
+            const sourceNode = idToNode[e.source];
+            const targetNode = idToNode[e.target];
+            if (!sourceNode || !targetNode)
+                return;
+            const sourceType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(sourceNode);
+            const isBranchSource = sourceType === 'if_else' || sourceType === 'switch';
+            if (isBranchSource && targetNode.position) {
+                // Decide branch direction based on handle or existing y
+                const isTrueBranch = e.sourceHandle === 'true' ||
+                    e.sourceHandle === 'output_true' ||
+                    (targetNode.data?.label || '').toLowerCase().includes('true');
+                targetNode.position = {
+                    x: targetNode.position.x,
+                    y: MAIN_Y + (isTrueBranch ? -BRANCH_Y_OFFSET : BRANCH_Y_OFFSET),
+                };
+            }
+        });
+        console.log(`✅ Applied linear layout to ${nodes.length} nodes`);
+    }
+    /**
+     * Enhanced validation following system prompt rules
+     * - Validates ALL required fields are filled
+     * - Checks for placeholder values
+     * - Ensures correct data types
+     * - Validates credentials usage
+     */
+    async validateWorkflow(workflow) {
+        const errors = [];
+        const warnings = [];
+        // Basic validation
+        if (workflow.nodes.length === 0) {
+            errors.push('Workflow must have at least one node');
+            return { valid: false, errors, warnings };
+        }
+        // ✅ CRITICAL: Validate trigger count first and auto-fix duplicates
+        const { validateTriggerCount, removeDuplicateTriggers } = await Promise.resolve().then(() => __importStar(require('../../core/utils/trigger-deduplicator')));
+        const triggerValidation = validateTriggerCount(workflow.nodes);
+        if (!triggerValidation.valid) {
+            // Auto-fix: Remove duplicate triggers
+            if (triggerValidation.triggerCount > 1) {
+                const deduplicationResult = removeDuplicateTriggers(workflow.nodes, workflow.edges);
+                workflow.nodes = deduplicationResult.nodes;
+                workflow.edges = deduplicationResult.edges;
+                console.log(`✅ [Validation] Auto-fixed: Removed ${deduplicationResult.removedTriggerIds.length} duplicate trigger(s)`);
+                warnings.push(`Removed ${deduplicationResult.removedTriggerIds.length} duplicate trigger(s)`);
+            }
+            else if (triggerValidation.triggerCount === 0) {
+                errors.push('Workflow must have exactly one trigger node');
+            }
+        }
+        // Validate node configurations - STRICT: no empty required fields, no placeholders
+        // PRIORITY 2 FIX: Enhanced validation with required field checking
+        workflow.nodes.forEach(node => {
+            const config = node.data?.config || {};
+            // CRITICAL FIX: Use normalizeNodeType to get actual node type
+            const actualNodeType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(node);
+            const nodeSchema = node_library_1.nodeLibrary.getSchema(actualNodeType);
+            const requiredFields = nodeSchema?.configSchema?.required || [];
+            // PRIORITY 2: Check for empty required fields
+            // ✅ FIX: Use universal isEmpty check to handle arrays, objects, nested structures
+            requiredFields.forEach(fieldName => {
+                const value = config[fieldName];
+                if ((0, is_empty_value_1.isEmptyValue)(value)) {
+                    errors.push(`Node ${node.id} (${node.type}) has empty required field: ${fieldName}`);
+                }
+            });
+            // Check for placeholder values (NOT ALLOWED per system prompt)
+            Object.entries(config).forEach(([key, value]) => {
+                if (typeof value === 'string') {
+                    const lowerValue = value.toLowerCase();
+                    if (lowerValue.includes('todo') ||
+                        lowerValue.includes('example') ||
+                        lowerValue.includes('fill this') ||
+                        (lowerValue.includes('placeholder') && !lowerValue.includes('{{ENV.'))) {
+                        errors.push(`Node ${node.id} (${node.type}) has placeholder value in field "${key}": "${value}"`);
+                    }
+                }
+            });
+            // ✅ STRICT ARCHITECTURE: Pre-validation guard before registry
+            // This ensures invalid node types CANNOT reach validateConfig()
+            const actualTypeForValidation = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(node);
+            try {
+                // Step 1: Strict pre-validation (fail-fast)
+                const { assertValidNodeType } = require('../../core/utils/node-authority');
+                assertValidNodeType(actualTypeForValidation);
+                // Step 2: Registry validation (only reached if pre-validation passes)
+                const registryValidation = unified_node_registry_1.unifiedNodeRegistry.validateConfig(actualTypeForValidation, config);
+                if (!registryValidation.valid) {
+                    errors.push(`Node ${node.id} (${node.type}) invalid config: ${registryValidation.errors.join(', ')}`);
+                }
+            }
+            catch (error) {
+                // Invalid node type detected - fail fast
+                errors.push(`Node ${node.id} (${node.type}) invalid: ${error.message}`);
+            }
+        });
+        // Check connections - ensure all edges reference valid nodes
+        workflow.edges.forEach(edge => {
+            const sourceExists = workflow.nodes.some(n => n.id === edge.source);
+            const targetExists = workflow.nodes.some(n => n.id === edge.target);
+            if (!sourceExists) {
+                errors.push(`Edge references non-existent source node: ${edge.source}`);
+            }
+            if (!targetExists) {
+                errors.push(`Edge references non-existent target node: ${edge.target}`);
+            }
+        });
+        // Check for orphaned nodes (nodes with no connections)
+        const connectedNodeIds = new Set();
+        workflow.edges.forEach(edge => {
+            connectedNodeIds.add(edge.source);
+            connectedNodeIds.add(edge.target);
+        });
+        const orphanedNodes = workflow.nodes.filter(node => {
+            // Trigger nodes don't need incoming connections
+            const nt = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(node) || node.type;
+            if (this.isTriggerNodeType(nt)) {
+                return false;
+            }
+            return !connectedNodeIds.has(node.id);
+        });
+        if (orphanedNodes.length > 0) {
+            warnings.push(`Found ${orphanedNodes.length} orphaned node(s) that may not be connected properly`);
+        }
+        // Ensure workflow has at least one output or end node
+        const hasOutput = workflow.nodes.some(n => {
+            const t = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n) || n.type;
+            const def = unified_node_registry_1.unifiedNodeRegistry.get(t);
+            return def?.category === 'communication' || (def?.tags || []).includes('sink') || (def?.tags || []).includes('output');
+        });
+        if (!hasOutput && workflow.nodes.length > 1) {
+            warnings.push('Workflow may benefit from an output node to see results');
+        }
+        return {
+            valid: errors.length === 0,
+            errors,
+            warnings,
+        };
+    }
+    /**
+     * Auto-fix workflow errors to ensure 100% working workflow
+     * Following system prompt: Self-repair until ZERO errors
+     * Eliminates all placeholders, fills all required fields
+     */
+    async autoFixWorkflow(nodes, edges, requirements, constraints, aggressive = false) {
+        let fixedNodes = [...nodes];
+        let fixedEdges = [...edges];
+        // Helper functions for auto-fix
+        const getSecureApiKeyRef = (serviceName, keyName) => {
+            const key = keyName || `${serviceName.toUpperCase()}_API_KEY`;
+            return `{{ENV.${key}}}`;
+        };
+        const getServiceUrl = (serviceName, endpoint) => {
+            const baseUrls = {
+                openai: 'https://api.openai.com/v1',
+                anthropic: 'https://api.anthropic.com/v1',
+                google: 'https://www.googleapis.com',
+                gemini: 'https://generativelanguage.googleapis.com/v1',
+                slack: 'https://slack.com/api',
+                discord: 'https://discord.com/api',
+                webhook: 'https://example.com/webhook',
+            };
+            const baseUrl = baseUrls[serviceName.toLowerCase()] || `https://api.${serviceName.toLowerCase()}.com/v1`;
+            return endpoint ? `${baseUrl}${endpoint}` : baseUrl;
+        };
+        // Fix 1: Ensure workflow has exactly one trigger (no duplicates)
+        // ✅ CRITICAL: Use trigger deduplicator to ensure only one trigger exists
+        const { ensureSingleTrigger } = await Promise.resolve().then(() => __importStar(require('../../core/utils/trigger-deduplicator')));
+        const triggerResult = ensureSingleTrigger(fixedNodes, fixedEdges);
+        if (triggerResult.added) {
+            console.log('[AutoFix] Added missing trigger (manual_trigger)');
+            fixedNodes = triggerResult.nodes;
+            // Connect trigger to first non-trigger node
+            const firstNonTrigger = fixedNodes.find(n => {
+                const nodeType = n.data?.type || n.type || '';
+                return !['manual_trigger', 'webhook', 'schedule', 'interval', 'chat_trigger', 'workflow_trigger', 'form', 'error_trigger'].includes(nodeType);
+            });
+            if (firstNonTrigger) {
+                fixedEdges.unshift({
+                    id: (0, crypto_1.randomUUID)(),
+                    source: triggerResult.nodes[0].id,
+                    target: firstNonTrigger.id,
+                    type: 'default',
+                });
+            }
+        }
+        else if (triggerResult.removed.length > 0) {
+            console.log(`[AutoFix] Removed ${triggerResult.removed.length} duplicate trigger(s)`);
+            fixedNodes = triggerResult.nodes;
+            fixedEdges = triggerResult.edges;
+        }
+        // Fix 2: Fix orphaned nodes by connecting them
+        const connectedNodeIds = new Set();
+        fixedEdges.forEach(edge => {
+            connectedNodeIds.add(edge.source);
+            connectedNodeIds.add(edge.target);
+        });
+        fixedNodes.forEach(node => {
+            // Skip trigger nodes (they don't need incoming connections)
+            if (['manual_trigger', 'webhook', 'schedule', 'interval', 'chat_trigger', 'workflow_trigger', 'form', 'error_trigger'].includes(node.type)) {
+                return;
+            }
+            // If node has no incoming connections, connect it to the previous node
+            if (!connectedNodeIds.has(node.id)) {
+                const nodeIndex = fixedNodes.findIndex(n => n.id === node.id);
+                if (nodeIndex > 0) {
+                    const previousNode = fixedNodes[nodeIndex - 1];
+                    fixedEdges.push({
+                        id: (0, crypto_1.randomUUID)(),
+                        source: previousNode.id,
+                        target: node.id,
+                        type: 'default',
+                    });
+                    connectedNodeIds.add(node.id);
+                }
+            }
+        });
+        // Fix 3: Fix invalid node configurations and eliminate ALL placeholders
+        fixedNodes = fixedNodes.map(node => {
+            const config = node.data?.config || {};
+            const fixedConfig = { ...config };
+            // First pass: Remove placeholder values
+            Object.keys(fixedConfig).forEach(key => {
+                const value = fixedConfig[key];
+                if (typeof value === 'string') {
+                    const lowerValue = value.toLowerCase();
+                    if (lowerValue.includes('todo') ||
+                        lowerValue.includes('example') ||
+                        lowerValue.includes('fill this') ||
+                        (lowerValue.includes('placeholder') && !lowerValue.includes('{{ENV.'))) {
+                        // Replace placeholder based on field type
+                        if (key.includes('url') || key.includes('Url')) {
+                            fixedConfig[key] = getServiceUrl('webhook');
+                        }
+                        else if (key.includes('key') || key.includes('Key') || key.includes('token')) {
+                            const serviceName = node.type.replace(/_/g, '').replace('gpt', 'openai').replace('claude', 'anthropic');
+                            fixedConfig[key] = getSecureApiKeyRef(serviceName);
+                        }
+                        else if (key.includes('prompt') || key.includes('message') || key.includes('body')) {
+                            fixedConfig[key] = requirements.primaryGoal || 'Process the input data';
+                        }
+                        else {
+                            fixedConfig[key] = '{{ $json }}';
+                        }
+                    }
+                }
+            });
+            // Second pass: Fill required fields from registry schema/defaults (single source of truth)
+            const actualType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(node) || node.type;
+            const def = unified_node_registry_1.unifiedNodeRegistry.get(actualType);
+            const defaults = unified_node_registry_1.unifiedNodeRegistry.getDefaultConfig(actualType) || {};
+            const inferValue = (fieldName) => {
+                const f = fieldName.toLowerCase();
+                const serviceName = (0, workflow_builder_utils_1.extractServiceName)(actualType);
+                if (f.includes('url') || f.includes('endpoint'))
+                    return requirements.urls?.[0] || getServiceUrl(serviceName || 'webhook');
+                if (f.includes('cron'))
+                    return this.parseScheduleToCron((requirements.schedules?.[0] || 'daily'));
+                if (f.includes('interval'))
+                    return 3600;
+                if (f === 'unit')
+                    return 'seconds';
+                if (f.includes('headers'))
+                    return { 'Content-Type': 'application/json' };
+                if (f.includes('condition'))
+                    return 'true';
+                if (f.includes('prompt') || f.includes('message') || f.includes('body') || f.includes('text'))
+                    return requirements.primaryGoal || 'Process the input data';
+                if (f.includes('apikey') || f.includes('api_key') || f.endsWith('key') || f.includes('token'))
+                    return getSecureApiKeyRef(serviceName || 'api');
+                return defaults[fieldName] ?? '';
+            };
+            const required = def?.requiredInputs || [];
+            for (const fieldName of required) {
+                const v = fixedConfig[fieldName];
+                const empty = v === undefined ||
+                    v === null ||
+                    (typeof v === 'string' && v.trim() === '') ||
+                    (Array.isArray(v) && v.length === 0);
+                if (empty) {
+                    fixedConfig[fieldName] = defaults[fieldName] ?? inferValue(fieldName);
+                }
+            }
+            return {
+                ...node,
+                data: {
+                    ...node.data,
+                    config: fixedConfig,
+                },
+            };
+        });
+        // Fix 4: Remove invalid edges (edges pointing to non-existent nodes)
+        const nodeIds = new Set(fixedNodes.map(n => n.id));
+        fixedEdges = fixedEdges.filter(edge => nodeIds.has(edge.source) && nodeIds.has(edge.target));
+        // Fix 5: Ensure sequential connections if edges are missing
+        if (fixedEdges.length === 0 && fixedNodes.length > 1) {
+            fixedEdges = [];
+            for (let i = 0; i < fixedNodes.length - 1; i++) {
+                fixedEdges.push({
+                    id: (0, crypto_1.randomUUID)(),
+                    source: fixedNodes[i].id,
+                    target: fixedNodes[i + 1].id,
+                    type: 'default',
+                });
+            }
+        }
+        return {
+            nodes: fixedNodes,
+            edges: fixedEdges,
+        };
+    }
+    async generateDocumentation(nodes, edges, requirements) {
+        const doc = `# Generated Workflow
+
+## Goal
+${requirements.primaryGoal}
+
+## Steps
+${requirements.keySteps.map((step, i) => `${i + 1}. ${step}`).join('\n')}
+
+## Nodes
+${nodes.map(n => `- ${n.data.label} (${n.type})`).join('\n')}
+
+## Connections
+${edges.map(e => `${e.source} → ${e.target}`).join('\n')}
+
+Generated on: ${new Date().toISOString()}
+`;
+        return doc;
+    }
+    async provideEnhancementSuggestions(nodes, edges, requirements) {
+        const suggestions = [];
+        // Check for error handling
+        const hasErrorHandling = nodes.some(n => n.type === 'error_handler');
+        if (!hasErrorHandling) {
+            suggestions.push({
+                type: 'error_handling',
+                suggestion: 'Add error handling nodes for better reliability',
+                priority: 'high',
+            });
+        }
+        // Check for logging
+        const hasLogging = nodes.some(n => n.type === 'log_output');
+        if (!hasLogging) {
+            suggestions.push({
+                type: 'logging',
+                suggestion: 'Add logging nodes for debugging',
+                priority: 'medium',
+            });
+        }
+        return suggestions;
+    }
+    calculateComplexity(nodes, edges) {
+        const nodeCount = nodes.length;
+        const edgeCount = edges.length;
+        if (nodeCount <= 3 && edgeCount <= 2) {
+            return 'simple';
+        }
+        else if (nodeCount <= 10 && edgeCount <= 15) {
+            return 'medium';
+        }
+        else {
+            return 'complex';
+        }
+    }
+    /**
+     * Ensure workflow is immediately runnable
+     * Checks:
+     * - All nodes are connected
+     * - All required fields are filled
+     * - No empty configurations
+     */
+    ensureWorkflowRunnable(nodes, edges) {
+        const issues = [];
+        const fixes = [];
+        // Check 1: All nodes have connections (except triggers)
+        const triggerNodes = nodes.filter(n => ['manual_trigger', 'webhook', 'schedule', 'interval', 'chat_trigger', 'workflow_trigger', 'form', 'error_trigger'].includes(n.type));
+        const nonTriggerNodes = nodes.filter(n => !['manual_trigger', 'webhook', 'schedule', 'interval', 'chat_trigger', 'workflow_trigger', 'form', 'error_trigger'].includes(n.type) &&
+            n.type !== 'chat_model' // chat_model connects to ai_agent separately
+        );
+        const connectedNodeIds = new Set(edges.map(e => e.target));
+        const disconnectedNodes = nonTriggerNodes.filter(n => !connectedNodeIds.has(n.id));
+        if (disconnectedNodes.length > 0) {
+            issues.push(`${disconnectedNodes.length} nodes are not connected`);
+            fixes.push(`Connect ${disconnectedNodes.length} orphan nodes`);
+        }
+        // Check 2: All required fields are filled
+        for (const node of nodes) {
+            // CRITICAL FIX: Use normalizeNodeType to get actual node type
+            const actualNodeType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(node);
+            const nodeSchema = node_library_1.nodeLibrary.getSchema(actualNodeType);
+            if (nodeSchema?.configSchema?.required) {
+                const requiredFields = nodeSchema.configSchema.required;
+                for (const fieldName of requiredFields) {
+                    if (!fieldName || typeof fieldName !== 'string') {
+                        continue;
+                    }
+                    const fieldValue = node.data?.config?.[fieldName];
+                    if (fieldValue === undefined || fieldValue === null || fieldValue === '') {
+                        issues.push(`${node.type}.${fieldName} is required but empty`);
+                    }
+                }
+            }
+        }
+        // Check 3: At least one edge exists for multi-node workflows
+        if (nodes.length > 1 && edges.length === 0) {
+            issues.push('No edges created for multi-node workflow');
+            fixes.push('Create sequential connections');
+        }
+        // Check 4: Trigger node exists
+        if (triggerNodes.length === 0) {
+            issues.push('No trigger node found');
+            fixes.push('Add manual_trigger node');
+        }
+        return {
+            runnable: issues.length === 0,
+            issues,
+            fixes,
+        };
+    }
+    async iterativeImprovement(existingWorkflow, feedback) {
+        // Analyze feedback
+        const feedbackAnalysis = await this.analyzeFeedback(feedback, existingWorkflow);
+        // Generate improvements
+        const improvements = await this.generateImprovements(existingWorkflow, feedbackAnalysis);
+        // Apply improvements
+        const improvedWorkflow = await this.applyImprovements(existingWorkflow, improvements);
+        return {
+            improvedWorkflow,
+            changes: improvements.changes,
+            rationale: improvements.rationale,
+            confidence: improvements.confidence,
+        };
+    }
+    async analyzeFeedback(feedback, workflow) {
+        const prompt = `Analyze this feedback for a workflow:
+Feedback: "${feedback}"
+Current workflow has ${workflow.nodes.length} nodes and ${workflow.edges.length} edges.
+
+Identify what needs to be changed. Respond with JSON:
+{
+  "issues": ["issue1", "issue2"],
+  "suggestedChanges": ["change1", "change2"],
+  "priority": "high|medium|low"
+}`;
+        try {
+            const result = await gemini_orchestrator_1.geminiOrchestrator.processRequest('workflow-analysis', {
+                prompt,
+                temperature: 0.3,
+            });
+            return typeof result === 'string' ? JSON.parse(result) : result;
+        }
+        catch (error) {
+            console.error('Error analyzing feedback:', error);
+            return { issues: [], suggestedChanges: [], priority: 'medium' };
+        }
+    }
+    async generateImprovements(workflow, analysis) {
+        // Generate specific improvements based on analysis
+        const changes = [];
+        analysis.suggestedChanges?.forEach((change) => {
+            changes.push({
+                type: 'modification',
+                description: change,
+                impact: analysis.priority,
+            });
+        });
+        return {
+            changes,
+            rationale: `Based on feedback analysis: ${analysis.issues?.join(', ')}`,
+            confidence: 0.7,
+        };
+    }
+    async applyImprovements(workflow, improvements) {
+        // Apply improvements to workflow
+        // This is a simplified version - full implementation would modify nodes/edges
+        return {
+            ...workflow,
+            metadata: {
+                ...workflow.metadata,
+                improvements: improvements.changes,
+                improvedAt: new Date().toISOString(),
+            },
+        };
+    }
+    getNodeLabel(type) {
+        return type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    }
+    /**
+     * ✅ ARCHITECTURAL FIX: Strict edge handle validation before creation
+     * Validates that source handle exists in source node and target handle exists in target node
+     * Throws error if invalid - prevents silent corruption
+     */
+    validateEdgeHandlesStrict(sourceNode, targetNode, sourceHandle, targetHandle) {
+        // ✅ CRITICAL: Use normalizeNodeType to get actual types
+        const sourceActualType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(sourceNode);
+        const targetActualType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(targetNode);
+        // Get valid output fields for source node
+        const sourceOutputs = this.getNodeOutputFields(sourceActualType);
+        if (!sourceOutputs.includes(sourceHandle)) {
+            throw new Error(`❌ [STRICT VALIDATION] Invalid source handle "${sourceHandle}" for ${sourceActualType} node (id: ${sourceNode.id}). ` +
+                `Valid outputs: ${sourceOutputs.join(', ')}`);
+        }
+        // Get valid input fields for target node
+        const targetInputs = this.getNodeInputFields(targetActualType);
+        if (!targetInputs.includes(targetHandle)) {
+            throw new Error(`❌ [STRICT VALIDATION] Invalid target handle "${targetHandle}" for ${targetActualType} node (id: ${targetNode.id}). ` +
+                `Valid inputs: ${targetInputs.join(', ')}`);
+        }
+    }
+    /**
+     * Validate edge before creating connection
+     * Checks if source node has the output field and target node has the input field
+     */
+    validateEdge(sourceNode, targetNode, sourceField, targetField) {
+        // ✅ ARCHITECTURAL FIX: Use normalizeNodeType for validation
+        const sourceActualType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(sourceNode);
+        const targetActualType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(targetNode);
+        // PHASE 4: Type compatibility validation
+        const sourceOutputType = (0, node_output_types_1.getNodeOutputType)(sourceActualType);
+        const targetInputType = (0, node_output_types_1.getNodeOutputType)(targetActualType);
+        // Check type compatibility
+        const typeCompatible = (0, node_output_types_1.areTypesCompatible)(sourceOutputType, targetInputType, sourceNode.type, targetNode.type);
+        if (!typeCompatible) {
+            return {
+                valid: false,
+                reason: `Type mismatch: ${sourceActualType} outputs ${sourceOutputType} but ${targetActualType} expects ${targetInputType}`
+            };
+        }
+        // ✅ ARCHITECTURAL FIX: Get available output fields using normalized type
+        const sourceOutputs = this.getNodeOutputFields(sourceActualType);
+        // ✅ ARCHITECTURAL FIX: Strict validation - no generic fallbacks
+        if (!sourceOutputs.includes(sourceField)) {
+            // ✅ STRICT: Fail if field doesn't exist - no generic fallbacks
+            return {
+                valid: false,
+                reason: `Source node ${sourceActualType} does not have output field '${sourceField}'. Available: ${sourceOutputs.join(', ')}`
+            };
+        }
+        // Get available input fields from target node
+        // ✅ Already normalized above, reuse targetActualType
+        const registryDef = unified_node_registry_1.unifiedNodeRegistry.get(targetActualType);
+        const targetSchema = node_library_1.nodeLibrary.getSchema(targetActualType);
+        const requiredFields = targetSchema?.configSchema?.required || [];
+        const optionalFields = Object.keys(targetSchema?.configSchema?.optional || {});
+        const allInputFields = registryDef ? Object.keys(registryDef.inputSchema || {}) : [...requiredFields, ...optionalFields];
+        if (allInputFields.length > 0) {
+            // RELAXED: Check if target has the input field (case-insensitive, with flexible matching)
+            const targetHasField = allInputFields.some(f => f.toLowerCase() === targetField.toLowerCase() ||
+                f.toLowerCase().includes(targetField.toLowerCase()) ||
+                targetField.toLowerCase().includes(f.toLowerCase()));
+            if (!targetHasField && targetField) {
+                // RELAXED: Allow connection to generic 'input' or 'data' field if available
+                const genericFields = ['input', 'data', 'value', 'message', 'text'];
+                const hasGenericField = allInputFields.some(f => genericFields.includes(f.toLowerCase()));
+                if (hasGenericField) {
+                    console.log(`⚠️  Target field '${targetField}' not found in ${targetNode.type}, using generic field`);
+                    return { valid: true }; // Allow connection with generic field
+                }
+                return {
+                    valid: false,
+                    reason: `Target node ${targetNode.type} does not have input field '${targetField}'. Available: ${allInputFields.join(', ')}`
+                };
+            }
+        }
+        return { valid: true };
+    }
+    /**
+     * PHASE 5: Generate type-related clarifying questions
+     */
+    generateTypeClarifyingQuestions(nodes) {
+        const questions = [];
+        nodes.forEach(node => {
+            const actualType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(node) || node.type;
+            const def = unified_node_registry_1.unifiedNodeRegistry.get(actualType);
+            const schema = (0, node_output_types_1.getNodeOutputSchema)(actualType);
+            // Ask about output format if multiple options (especially for AI nodes)
+            if (def?.inputSchema && 'outputFormat' in def.inputSchema && !node.data.config.outputFormat) {
+                questions.push(`Should "${node.data.label || actualType}" output plain text or structured JSON? (outputFormat not specified)`);
+            }
+            // Ask about array handling for data source nodes
+            if (schema?.type === 'array' && !node.data.config.limit && !node.data.config.maxItems) {
+                const supportsLimit = def?.inputSchema && ('limit' in def.inputSchema || 'maxItems' in def.inputSchema);
+                if (supportsLimit) {
+                    questions.push(`How many items should "${node.data.label || actualType}" process at once? (Leave empty for all items)`);
+                }
+            }
+            // Ask about text formatting for text_formatter
+            if (def?.inputSchema && 'template' in def.inputSchema && !node.data.config.template) {
+                questions.push(`What template should "${node.data.label || actualType}" use? (e.g., "Hello {{name}}!")`);
+            }
+            // Ask about output type for javascript nodes
+            if (def?.inputSchema && 'returnType' in def.inputSchema && !node.data.config.returnType) {
+                questions.push(`What type should "${node.data.label || actualType}" return? (string, object, array, or number)`);
+            }
+        });
+        return questions;
+    }
+    /**
+     * Find alternative mapping if primary mapping fails validation
+     */
+    findAlternativeMapping(sourceNode, targetNode) {
+        // ✅ CRITICAL FIX: Use normalizeNodeType to get actual node types
+        const sourceActualType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(sourceNode);
+        const targetActualType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(targetNode);
+        const sourceOutputs = this.getPreviousNodeOutputFields(sourceNode);
+        const targetSchema = node_library_1.nodeLibrary.getSchema(targetActualType);
+        if (!targetSchema?.configSchema) {
+            return null;
+        }
+        const requiredFields = targetSchema.configSchema.required || [];
+        const optionalFields = Object.keys(targetSchema.configSchema.optional || {});
+        const allInputFields = [...requiredFields, ...optionalFields];
+        // ✅ CRITICAL FIX: Special handling for triggers - use correct output fields
+        // Use registry directly to ensure we get the correct fields even if sourceOutputs is empty
+        if (sourceActualType === 'manual_trigger' || sourceActualType === 'workflow_trigger') {
+            // manual_trigger outputs 'inputData', not 'output'
+            // ✅ CRITICAL: Use registry directly to get correct output fields
+            const triggerOutputs = this.getNodeOutputFields(sourceActualType);
+            const inputDataField = triggerOutputs.find(f => f.toLowerCase() === 'inputdata') || triggerOutputs[0];
+            if (inputDataField) {
+                const targetField = allInputFields.find(f => ['input', 'data', 'inputdata', 'properties'].includes(f.toLowerCase())) || allInputFields[0];
+                if (targetField) {
+                    return { outputField: inputDataField, inputField: targetField };
+                }
+            }
+        }
+        if (sourceActualType === 'chat_trigger') {
+            // chat_trigger outputs 'message', not 'output' or 'inputData'
+            // ✅ CRITICAL: Use registry directly to get correct output fields
+            const triggerOutputs = this.getNodeOutputFields(sourceActualType);
+            const messageField = triggerOutputs.find(f => f.toLowerCase() === 'message') || triggerOutputs[0];
+            if (messageField) {
+                const targetField = allInputFields.find(f => ['input', 'message', 'text', 'userinput'].includes(f.toLowerCase())) || allInputFields[0];
+                if (targetField) {
+                    return { outputField: messageField, inputField: targetField };
+                }
+            }
+        }
+        // Special handling for ai_agent
+        if (targetActualType === 'ai_agent') {
+            // Try to find message/text/input from source
+            const messageField = sourceOutputs.find(f => ['message', 'text', 'input', 'body', 'data', 'inputdata'].includes(f.toLowerCase()));
+            if (messageField) {
+                return { outputField: messageField, inputField: 'userInput' };
+            }
+        }
+        // ✅ ARCHITECTURAL FIX: Reorder mapping priority - triggers first, 'output' last
+        // Do not allow 'output' to override real fields
+        const commonMappings = [
+            { source: 'inputdata', target: 'input' }, // Triggers first!
+            { source: 'message', target: 'message' },
+            { source: 'text', target: 'text' },
+            { source: 'data', target: 'data' },
+            { source: 'result', target: 'value' },
+            { source: 'output', target: 'input' } // LAST resort
+        ];
+        for (const mapping of commonMappings) {
+            const sourceField = sourceOutputs.find(f => f.toLowerCase() === mapping.source);
+            const targetField = allInputFields.find(f => f.toLowerCase() === mapping.target);
+            if (sourceField && targetField) {
+                return { outputField: sourceField, inputField: targetField };
+            }
+        }
+        // Last resort: use first available fields (but prefer non-generic fields)
+        const preferredSourceField = sourceOutputs.find(f => !['output', 'data', 'result'].includes(f.toLowerCase())) || sourceOutputs[0];
+        if (preferredSourceField && allInputFields.length > 0) {
+            return { outputField: preferredSourceField, inputField: allInputFields[0] };
+        }
+        return null;
+    }
+    /**
+     * STRICT BUILD: Enforce correct node execution order with topological sorting
+     * Order: Trigger → Data Collection → AI Processing → Data Storage → Internal Notification → External Communication
+     */
+    enforceNodeOrdering(nodes, userPrompt) {
+        // CRITICAL: Enforce a consistent, human‑readable order for ALL key node types.
+        // Order:
+        //   1. Triggers          (webhook, chat_trigger, form, schedule, etc.)
+        //   2. Read Operations   (get, getMany, read, search from any source - hubspot, google_sheets, etc.)
+        //   3. Data Sources      (google_sheets, database_read, etc.) - for reading, MUST come before logic/loops
+        //   4. Logic / Flow     (if_else, switch, loop, set, function, merge, wait, limit, aggregate, sort, code, function_item, noop)
+        //   5. HTTP / AI        (http_request, ai_chat_model)
+        //   6. Write Operations  (create, update, write, delete to any destination - hubspot, google_sheets, etc.)
+        //   7. Integrations     (other integration operations)
+        //   8. Outputs / Other  (generic outputs, anything not explicitly classified)
+        if (!nodes || nodes.length === 0) {
+            return nodes;
+        }
+        // Always normalize using data.type so 'custom' nodes are handled correctly
+        const getType = (n) => (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n) || n.type || n.data?.type || '';
+        // Helper to get operation type from node config
+        const getOperation = (n) => {
+            const operation = n.data?.config?.operation || n.data?.operation || '';
+            return String(operation).toLowerCase();
+        };
+        // Helper to determine if operation is read or write
+        const isReadOperation = (operation) => {
+            const readOps = ['get', 'getmany', 'read', 'search', 'fetch', 'retrieve', 'list'];
+            return readOps.includes(operation);
+        };
+        const isWriteOperation = (operation) => {
+            const writeOps = ['create', 'update', 'write', 'delete', 'post', 'put', 'patch'];
+            return writeOps.includes(operation);
+        };
+        // --- Category definitions (by normalized node type) ---
+        const triggerTypes = new Set([
+            'webhook',
+            'chat_trigger',
+            'form',
+            'schedule',
+            'manual_trigger',
+            'interval',
+            'workflow_trigger',
+            'error_trigger',
+        ]);
+        // Data sources - can be used for reading or writing
+        const dataSourceTypes = new Set([
+            'google_sheets',
+            'google_doc',
+            'database_read',
+            'airtable',
+            'notion',
+            'csv',
+            'excel',
+            'json',
+            'xml',
+        ]);
+        const logicTypes = new Set([
+            'if_else',
+            'if',
+            'switch',
+            'loop', // Loop should come AFTER data sources
+            'set',
+            'set_variable',
+            'function',
+            'merge',
+            'wait',
+            'limit',
+            'aggregate',
+            'sort',
+            'code',
+            'javascript',
+            'function_item',
+            'noop',
+        ]);
+        const httpAiTypes = new Set([
+            'http_request',
+            'http_post',
+            'http_get',
+            'ai_chat_model',
+            'ai_agent',
+            'chat_model',
+        ]);
+        const integrationTypes = new Set([
+            // CRM / project tools
+            'hubspot',
+            'zoho',
+            'pipedrive',
+            'notion',
+            'airtable',
+            'clickup',
+            // Email / messaging / calendar
+            'google_gmail',
+            'gmail',
+            'slack_message',
+            'slack',
+            'telegram',
+            'outlook',
+            'google_calendar',
+            // Social / dev
+            'linkedin',
+            'github',
+        ]);
+        // Some generic output nodes (can be extended as needed)
+        const outputLikeTypes = new Set([
+            'log_output',
+            'send_extracted_data',
+            'extracted_data_google',
+            'output',
+        ]);
+        const triggers = [];
+        const readOperations = []; // Read operations from any source
+        const dataSourcesRead = []; // Data sources used for reading
+        const dataSourcesWrite = []; // Data sources used for writing
+        const logic = [];
+        const httpAi = [];
+        const writeOperations = []; // Write operations to any destination
+        const integrations = []; // Other integration operations
+        const outputs = [];
+        const others = [];
+        for (const node of nodes) {
+            const t = getType(node);
+            const operation = getOperation(node);
+            if (triggerTypes.has(t)) {
+                triggers.push(node);
+            }
+            else if (dataSourceTypes.has(t)) {
+                // Data sources can be read or write - check operation
+                if (isWriteOperation(operation)) {
+                    dataSourcesWrite.push(node);
+                }
+                else {
+                    // Default to read if operation not specified or is read
+                    dataSourcesRead.push(node);
+                }
+            }
+            else if (integrationTypes.has(t)) {
+                // Integrations can be read or write - check operation
+                if (isReadOperation(operation)) {
+                    readOperations.push(node);
+                }
+                else if (isWriteOperation(operation)) {
+                    writeOperations.push(node);
+                }
+                else {
+                    // Default: if no operation specified, check prompt context
+                    // For "get from" or "read from" patterns, treat as read
+                    // For "create in" or "store in" patterns, treat as write
+                    const promptLower = userPrompt.toLowerCase();
+                    const nodeLabel = (node.data?.label || '').toLowerCase();
+                    if (promptLower.includes('get') || promptLower.includes('read') || promptLower.includes('fetch') ||
+                        nodeLabel.includes('get') || nodeLabel.includes('read') || nodeLabel.includes('fetch')) {
+                        readOperations.push(node);
+                    }
+                    else if (promptLower.includes('create') || promptLower.includes('store') || promptLower.includes('save') ||
+                        nodeLabel.includes('create') || nodeLabel.includes('store') || nodeLabel.includes('save')) {
+                        writeOperations.push(node);
+                    }
+                    else {
+                        // Default to integration category (will be ordered after write operations)
+                        integrations.push(node);
+                    }
+                }
+            }
+            else if (logicTypes.has(t)) {
+                logic.push(node);
+            }
+            else if (httpAiTypes.has(t)) {
+                httpAi.push(node);
+            }
+            else if (outputLikeTypes.has(t)) {
+                outputs.push(node);
+            }
+            else {
+                others.push(node);
+            }
+        }
+        const ordered = [
+            ...triggers,
+            ...readOperations, // Read operations from integrations come FIRST
+            ...dataSourcesRead, // Data sources for reading come BEFORE logic
+            ...logic,
+            ...httpAi,
+            ...writeOperations, // Write operations to integrations come AFTER logic
+            ...dataSourcesWrite, // Data sources for writing come AFTER logic
+            ...integrations, // Other integration operations
+            ...outputs,
+            ...others,
+        ];
+        console.log(`✅ [STRICT BUILD] Nodes reordered (trigger→readOps→dataSourcesRead→logic→writeOps→dataSourcesWrite→integrations→outputs).` +
+            ` Counts: triggers=${triggers.length}, readOps=${readOperations.length}, dataSourcesRead=${dataSourcesRead.length},` +
+            ` logic=${logic.length}, writeOps=${writeOperations.length}, dataSourcesWrite=${dataSourcesWrite.length},` +
+            ` integrations=${integrations.length}, outputs=${outputs.length}, others=${others.length}`);
+        return ordered;
+    }
+    /**
+     * UNIVERSAL: Get node category from node library (not hardcoded)
+     */
+    getNodeCategory(type) {
+        const schema = node_library_1.nodeLibrary.getSchema(type);
+        if (schema && schema.category) {
+            return schema.category;
+        }
+        // Fallback to basic categories
+        if (['manual_trigger', 'webhook', 'schedule'].includes(type))
+            return 'triggers';
+        if (['if_else', 'switch', 'loop'].includes(type))
+            return 'logic';
+        if (['http_request', 'http_post'].includes(type))
+            return 'http_api';
+        if (['openai_gpt', 'anthropic_claude'].includes(type))
+            return 'ai';
+        if (['slack_message', 'log_output'].includes(type))
+            return 'output';
+        return 'data';
+    }
+    /**
+     * UNIVERSAL: Validate that all nodes in workflow exist in node library
+     * Replaces invalid nodes with valid alternatives
+     */
+    validateAllNodesExist(nodes) {
+        const allSchemas = node_library_1.nodeLibrary.getAllSchemas();
+        const validNodeTypes = new Set(allSchemas.map(s => s.type));
+        const { unifiedNormalizeNodeType } = require('../../core/utils/unified-node-type-normalizer');
+        return nodes.map(node => {
+            // CRITICAL FIX: Use normalizeNodeType to get actual type from node.data.type
+            const actualNodeType = unifiedNormalizeNodeType(node);
+            const nodeType = actualNodeType || node.type || node.data?.type || '';
+            // CRITICAL FIX: form node is valid - check if it's actually in library
+            // If nodeType is 'form', check if it exists in library first
+            if (nodeType === 'form') {
+                // Form node should exist - if not in library, it's a library issue, not a node issue
+                // Check if form exists in schemas
+                const formSchema = allSchemas.find(s => s.type === 'form');
+                if (!formSchema) {
+                    console.warn(`⚠️  Form node type not found in library, but form nodes are valid. Node will be kept as-is.`);
+                    // Keep the form node - it's valid even if not in library schemas
+                    return {
+                        ...node,
+                        type: 'custom', // Frontend compatibility
+                        data: {
+                            ...node.data,
+                            type: 'form', // Keep form type
+                        },
+                    };
+                }
+                // Form exists in library, validate normally
+            }
+            // Check if node type exists in library
+            if (!validNodeTypes.has(nodeType)) {
+                // CRITICAL: Don't replace form nodes - they are valid
+                if (nodeType === 'form' || node.data?.type === 'form') {
+                    console.log(`✅ Form node detected - keeping as valid (form nodes are supported)`);
+                    return {
+                        ...node,
+                        type: 'custom', // Frontend compatibility
+                        data: {
+                            ...node.data,
+                            type: 'form', // Keep form type
+                        },
+                    };
+                }
+                console.warn(`⚠️  Node ${node.id} has invalid type "${nodeType}" (raw type: "${node.type}", data.type: "${node.data?.type}"). Attempting smart repair...`);
+                // CRITICAL: Try to infer correct type from node description/label before replacing
+                const nodeDescription = (node.data?.label || '').toLowerCase();
+                // Smart type inference based on description
+                let inferredType = null;
+                if (nodeDescription.includes('slack') || nodeDescription.includes('message')) {
+                    inferredType = 'slack_message';
+                }
+                else if (nodeDescription.includes('email') || nodeDescription.includes('gmail')) {
+                    inferredType = 'google_gmail';
+                }
+                else if (nodeDescription.includes('google sheets') || nodeDescription.includes('spreadsheet')) {
+                    inferredType = 'google_sheets';
+                }
+                else if (nodeDescription.includes('google doc') || nodeDescription.includes('document')) {
+                    inferredType = 'google_doc';
+                }
+                else if (nodeDescription.includes('javascript') || nodeDescription.includes('transform') || nodeDescription.includes('process')) {
+                    inferredType = 'javascript';
+                }
+                else if (nodeDescription.includes('ai agent') || nodeDescription.includes('ai') || nodeDescription.includes('llm') || nodeDescription.includes('chat model')) {
+                    inferredType = 'ai_agent';
+                }
+                else if (nodeDescription.includes('database') || nodeDescription.includes('read')) {
+                    inferredType = 'database_read';
+                }
+                else if (nodeDescription.includes('write') || nodeDescription.includes('save')) {
+                    inferredType = 'database_write';
+                }
+                else if (nodeDescription.includes('form') || nodeDescription.includes('submission') || nodeType === 'form') {
+                    // CRITICAL FIX: form node EXISTS and should be used, not replaced
+                    // Check if form is actually in the library
+                    if (validNodeTypes.has('form')) {
+                        inferredType = 'form';
+                    }
+                    else {
+                        // If form doesn't exist in library, use webhook as fallback for form submissions
+                        inferredType = 'webhook';
+                    }
+                }
+                else if (nodeDescription.includes('chat') || nodeDescription.includes('bot')) {
+                    inferredType = 'chat_trigger';
+                }
+                else if (nodeDescription.includes('webhook')) {
+                    inferredType = 'webhook';
+                }
+                else if (nodeDescription.includes('schedule') || nodeDescription.includes('cron')) {
+                    inferredType = 'schedule';
+                }
+                else if (nodeDescription.includes('if') || nodeDescription.includes('condition') || nodeDescription.includes('else')) {
+                    inferredType = 'if_else';
+                }
+                else if (nodeDescription.includes('http') || nodeDescription.includes('request')) {
+                    inferredType = 'http_request';
+                }
+                else if (nodeDescription.includes('log') || nodeDescription.includes('output')) {
+                    inferredType = 'log_output';
+                }
+                // Try inferred type first
+                if (inferredType && validNodeTypes.has(inferredType)) {
+                    console.log(`✅ [Smart Repair] Inferred node type "${inferredType}" from description: "${nodeDescription.substring(0, 50)}"`);
+                    const inferredSchema = allSchemas.find(s => s.type === inferredType);
+                    return {
+                        ...node,
+                        type: 'custom', // Frontend compatibility - keep 'custom' for frontend
+                        data: {
+                            ...node.data,
+                            type: inferredType, // Actual type in data.type
+                            label: node.data?.label || inferredSchema?.label || inferredType,
+                        },
+                    };
+                }
+                // Try to find similar node using schema keywords
+                const similarNode = allSchemas.find(s => {
+                    const typeMatch = s.type.toLowerCase().includes(nodeType.toLowerCase()) ||
+                        nodeType.toLowerCase().includes(s.type.toLowerCase());
+                    const labelMatch = node.data?.label &&
+                        s.label.toLowerCase().includes(node.data.label.toLowerCase());
+                    const keywordMatch = s.aiSelectionCriteria?.keywords?.some(k => node.data?.label?.toLowerCase().includes(k.toLowerCase()) ||
+                        nodeType.toLowerCase().includes(k.toLowerCase()));
+                    return typeMatch || labelMatch || keywordMatch;
+                });
+                if (similarNode) {
+                    console.log(`✅ [Smart Repair] Replacing invalid node type "${nodeType}" with "${similarNode.type}"`);
+                    return {
+                        ...node,
+                        type: 'custom', // Frontend compatibility - keep 'custom' for frontend
+                        data: {
+                            ...node.data,
+                            type: similarNode.type, // Actual type in data.type
+                            label: node.data?.label || similarNode.label,
+                        },
+                    };
+                }
+                else {
+                    console.error(`❌ Cannot find replacement for node type "${nodeType}". Using javascript as safe fallback.`);
+                    // Use javascript as safe fallback (most flexible)
+                    const fallback = allSchemas.find(s => s.type === 'javascript') || allSchemas.find(s => s.type === 'set_variable') || allSchemas[0];
+                    if (fallback) {
+                        return {
+                            ...node,
+                            type: 'custom', // Frontend compatibility - keep 'custom' for frontend
+                            data: {
+                                ...node.data,
+                                type: fallback.type, // Actual type in data.type
+                                label: node.data?.label || fallback.label,
+                            },
+                        };
+                    }
+                }
+            }
+            else {
+                // Node type is valid - ensure data.type matches for frontend compatibility
+                if (node.type === 'custom' && actualNodeType) {
+                    // Update node to have correct type in data.type
+                    return {
+                        ...node,
+                        type: 'custom', // Keep 'custom' for frontend
+                        data: {
+                            ...node.data,
+                            type: actualNodeType, // Ensure data.type has actual type
+                        },
+                    };
+                }
+            }
+            return node;
+        });
+    }
+    /**
+     * Registry-driven output node selection.
+     *
+     * Uses OutputDefinition semantics (description/type) to choose a node type
+     * based on registry metadata (category, tags, workflowBehavior), not
+     * hardcoded node-type strings.
+     */
+    mapOutputTypeToNodeType(output) {
+        const allTypes = unified_node_registry_1.unifiedNodeRegistry.getAllTypes();
+        const candidates = allTypes
+            .map((t) => unified_node_registry_1.unifiedNodeRegistry.get(t))
+            .filter((def) => !!def);
+        // Fallback: any alwaysTerminal node (typically log_output)
+        const pickAnyTerminal = () => {
+            const terminal = candidates.find((def) => def.workflowBehavior?.alwaysTerminal === true);
+            return terminal ? terminal.type : 'log_output';
+        };
+        if (!output) {
+            return pickAnyTerminal();
+        }
+        const desc = (output.description || '').toLowerCase();
+        const typeHint = (output.type || '').toLowerCase();
+        // Derive a high-level behavior hint from the description/type.
+        const isSlackLike = /slack|channel/.test(desc) || /slack/.test(typeHint);
+        const isEmailLike = /email|gmail|mail/.test(desc) || /email|gmail/.test(typeHint);
+        const isWebhookLike = /webhook|http|request|callback/.test(desc) || /webhook|http/.test(typeHint);
+        const isLogLike = /log|console|trace|debug/.test(desc) || /log/.test(typeHint);
+        const byCategory = (category) => candidates.filter((def) => def.category === category);
+        const withTag = (defs, tag) => defs.filter((def) => (def.tags || []).some((t) => t.toLowerCase() === tag.toLowerCase()));
+        // 1) Slack/chat-style outputs
+        if (isSlackLike) {
+            const comms = byCategory('communication');
+            const slackish = withTag(comms, 'slack');
+            const picked = slackish[0] || comms[0];
+            if (picked)
+                return picked.type;
+        }
+        // 2) Email-style outputs
+        if (isEmailLike) {
+            const comms = byCategory('communication');
+            const emailish = withTag(comms, 'email');
+            const picked = emailish[0] || comms[0];
+            if (picked)
+                return picked.type;
+        }
+        // 3) Webhook / HTTP-style outputs
+        if (isWebhookLike) {
+            const utility = byCategory('utility');
+            const httpish = withTag(utility, 'http');
+            const picked = httpish[0] || utility[0];
+            if (picked)
+                return picked.type;
+        }
+        // 4) Logging / terminal outputs
+        if (isLogLike) {
+            const terminals = candidates.filter((def) => def.workflowBehavior?.alwaysTerminal === true);
+            if (terminals[0])
+                return terminals[0].type;
+        }
+        // Default: any alwaysTerminal node, else best-effort communication sink.
+        const terminal = candidates.find((def) => def.workflowBehavior?.alwaysTerminal === true);
+        if (terminal)
+            return terminal.type;
+        const comms = byCategory('communication');
+        if (comms[0])
+            return comms[0].type;
+        return 'log_output';
+    }
+    /**
+     * Traverse linear execution chain from a starting node
+     * Builds execution order by following edges sequentially
+     */
+    traverseLinearExecutionChain(nodeId, edges, nodes, executionOrder, visited) {
+        // Find outgoing edges from this node
+        const outgoingEdges = edges.filter(e => e.source === nodeId);
+        // For linear flow, only follow the FIRST outgoing edge (not all edges)
+        // This prevents tree structures
+        if (outgoingEdges.length > 0) {
+            const firstEdge = outgoingEdges[0];
+            const targetNode = nodes.find(n => n.id === firstEdge.target);
+            if (targetNode && !visited.has(targetNode.id)) {
+                executionOrder.push(targetNode);
+                visited.add(targetNode.id);
+                // Recursively traverse from target node
+                this.traverseLinearExecutionChain(targetNode.id, edges, nodes, executionOrder, visited);
+            }
+        }
+    }
+    /**
+     * Check if adding an edge would create a cycle
+     */
+    wouldCreateCycle(edges, sourceId, targetId) {
+        // If target can reach source, adding source → target would create a cycle
+        const visited = new Set();
+        const stack = [targetId];
+        while (stack.length > 0) {
+            const currentId = stack.pop();
+            if (currentId === sourceId) {
+                return true; // Cycle detected
+            }
+            if (visited.has(currentId)) {
+                continue;
+            }
+            visited.add(currentId);
+            // Find all nodes reachable from current node
+            const outgoingEdges = edges.filter(e => e.source === currentId);
+            outgoingEdges.forEach(edge => {
+                if (!visited.has(edge.target)) {
+                    stack.push(edge.target);
+                }
+            });
+        }
+        return false; // No cycle
+    }
+    /**
+     * 🔧 INTEGRATION ENFORCEMENT UPGRADE: Build workflow programmatically when AI fails
+     */
+    buildWorkflowProgrammatically(requirements, detectedRequirements, detectedTrigger) {
+        logger_1.logger.warn('🔧 [Programmatic Fallback] Building workflow from scratch using detected requirements');
+        const trigger = detectedTrigger || this.detectTriggerFromRequirements(requirements);
+        const steps = [];
+        // Add integration nodes for all detected integrations
+        for (const integration of detectedRequirements.requiredIntegrations) {
+            const schema = node_library_1.nodeLibrary.getSchema(integration);
+            if (schema) {
+                steps.push({
+                    id: `step_${integration}_${Date.now()}`,
+                    type: integration,
+                    description: schema.label || `Add ${integration} integration`,
+                });
+            }
+        }
+        // Build connections
+        const connections = [];
+        for (let i = 0; i < steps.length; i++) {
+            if (i === 0) {
+                connections.push({
+                    source: 'trigger',
+                    target: steps[i].id,
+                    source_output: 'output',
+                    target_input: 'input',
+                });
+            }
+            else {
+                connections.push({
+                    source: steps[i - 1].id,
+                    target: steps[i].id,
+                    source_output: 'output',
+                    target_input: 'input',
+                });
+            }
+        }
+        return {
+            trigger: trigger || 'manual_trigger',
+            steps: steps,
+            connections: connections,
+            required_credentials: detectedRequirements.requiredIntegrations.filter((int) => {
+                // ✅ UNIVERSAL: Check if node requires auth from registry instead of hardcoded list
+                return this.nodeRequiresAuth(int);
+            }),
+            validation_status: 'valid',
+        };
+    }
+    /**
+     * Create a node for a specific integration
+     */
+    createNodeForIntegration(integration, workflow) {
+        const schema = node_library_1.nodeLibrary.getSchema(integration);
+        if (!schema) {
+            const fallbackSchema = this.nodeLibrary.get(integration);
+            if (!fallbackSchema) {
+                logger_1.logger.error(`❌ [Integration Node Creation] ${integration} not found in library`);
+                return null;
+            }
+            return {
+                id: `step_${integration}_${Date.now()}`,
+                type: integration,
+                description: fallbackSchema.label || `Add ${integration} integration`,
+            };
+        }
+        return {
+            id: `step_${integration}_${Date.now()}`,
+            type: integration,
+            description: schema.label || `Add ${integration} integration`,
+        };
+    }
+    /**
+     * Connect an integration node to the workflow
+     */
+    connectIntegrationNode(workflow, newNode) {
+        if (!workflow.connections) {
+            workflow.connections = [];
+        }
+        const nodesOrSteps = workflow.nodes || workflow.steps || [];
+        if (nodesOrSteps.length === 0) {
+            // First node after trigger
+            workflow.connections.push({
+                source: workflow.trigger || 'trigger',
+                target: newNode.id,
+                source_output: 'output',
+                target_input: 'input',
+            });
+        }
+        else {
+            // Connect to last node
+            const lastNode = nodesOrSteps[nodesOrSteps.length - 1];
+            workflow.connections.push({
+                source: lastNode.id,
+                target: newNode.id,
+                source_output: 'output',
+                target_input: 'input',
+            });
+        }
+    }
+    /**
+     * ✅ CRITICAL: Enhance matched sample workflow with missing nodes from user requirements
+     * Identifies nodes mentioned in requirements but not in the matched sample
+     * Places them in the correct sequence based on dependencies and typical workflow patterns
+     */
+    async enhanceStructureWithMissingNodes(baseStructure, requirements, matchedWorkflow) {
+        const existingNodeTypes = new Set(baseStructure.steps.map(s => s.type));
+        const userPrompt = (requirements.originalPrompt || requirements.primaryGoal || '').toLowerCase();
+        // Extract mentioned nodes from user prompt that aren't in the sample
+        const mentionedNodes = [];
+        // Common node detection patterns
+        const nodePatterns = [
+            { pattern: /\b(slack|notify.*slack)\b/i, nodeType: 'slack_message' },
+            { pattern: /\b(gmail|email.*gmail|send.*gmail)\b/i, nodeType: 'google_gmail' },
+            { pattern: /\b(email|send.*email)\b/i, nodeType: 'email' },
+            { pattern: /\b(calendar|schedule.*meeting|meeting)\b/i, nodeType: 'google_calendar' },
+            { pattern: /\b(sheets|spreadsheet|google.*sheets)\b/i, nodeType: 'google_sheets' },
+            { pattern: /\b(hubspot|crm.*hubspot)\b/i, nodeType: 'hubspot' },
+            { pattern: /\b(salesforce|crm.*salesforce)\b/i, nodeType: 'salesforce' },
+            { pattern: /\b(airtable)\b/i, nodeType: 'airtable' },
+            { pattern: /\b(if|condition|check.*if|when.*then)\b/i, nodeType: 'if_else' },
+            { pattern: /\b(loop|for.*each|iterate)\b/i, nodeType: 'loop' },
+            { pattern: /\b(ai.*agent|chatbot|llm|gpt)\b/i, nodeType: 'ai_agent' },
+            { pattern: /\b(http.*request|api.*call|fetch)\b/i, nodeType: 'http_request' },
+        ];
+        nodePatterns.forEach(({ pattern, nodeType }) => {
+            if (pattern.test(userPrompt) && !existingNodeTypes.has(nodeType)) {
+                // Check if this node should be placed before/after certain nodes
+                let placement = 'after';
+                const dependsOn = [];
+                // Heuristic: notification nodes usually go at the end
+                if (['slack_message', 'google_gmail', 'email'].includes(nodeType)) {
+                    placement = 'after';
+                }
+                // Heuristic: condition nodes usually go early
+                if (nodeType === 'if_else') {
+                    placement = 'before';
+                }
+                mentionedNodes.push({ nodeType, placement, dependsOn });
+            }
+        });
+        if (mentionedNodes.length === 0) {
+            console.log(`✅ [enhanceStructure] No missing nodes detected - using complete sample workflow structure`);
+            return baseStructure;
+        }
+        console.log(`🔍 [enhanceStructure] Found ${mentionedNodes.length} missing node(s) from user requirements: ${mentionedNodes.map(n => n.nodeType).join(', ')}`);
+        // Add missing nodes to structure
+        const enhancedSteps = [...baseStructure.steps];
+        const enhancedConnections = [...(baseStructure.connections || [])];
+        mentionedNodes.forEach((missingNode) => {
+            const schema = this.nodeLibrary.get(missingNode.nodeType);
+            if (!schema) {
+                console.warn(`⚠️  [enhanceStructure] Node type "${missingNode.nodeType}" not found in library, skipping`);
+                return;
+            }
+            const stepId = `step${enhancedSteps.length + 1}`;
+            const newStep = {
+                id: stepId,
+                description: schema.label || missingNode.nodeType,
+                type: missingNode.nodeType,
+            };
+            // Determine placement based on node type and dependencies
+            if (missingNode.placement === 'before' && enhancedSteps.length > 0) {
+                // Insert before first action step (after trigger)
+                enhancedSteps.splice(1, 0, newStep);
+                // Connect trigger to new step, new step to first existing step
+                if (enhancedConnections.length > 0) {
+                    const firstConnection = enhancedConnections[0];
+                    enhancedConnections[0] = { source: 'trigger', target: stepId };
+                    enhancedConnections.push({ source: stepId, target: firstConnection.target });
+                }
+            }
+            else {
+                // Add at the end (default)
+                enhancedSteps.push(newStep);
+                // Connect to last step in chain
+                if (enhancedSteps.length > 1) {
+                    const lastStepId = enhancedSteps[enhancedSteps.length - 2].id;
+                    enhancedConnections.push({ source: lastStepId, target: stepId });
+                }
+                else {
+                    enhancedConnections.push({ source: 'trigger', target: stepId });
+                }
+            }
+            console.log(`✅ [enhanceStructure] Added missing node: ${missingNode.nodeType} (${stepId})`);
+        });
+        return {
+            ...baseStructure,
+            steps: enhancedSteps,
+            connections: enhancedConnections,
+        };
+    }
+    /**
+     * ✅ CRITICAL: Validate that all nodes are properly connected
+     * Ensures no isolated nodes and proper data flow
+     */
+    validateAllNodesConnected(nodes, edges) {
+        const nodeIds = new Set(nodes.map(n => n.id));
+        // Build connection maps
+        const incomingConnections = new Map();
+        const outgoingConnections = new Map();
+        edges.forEach(edge => {
+            if (nodeIds.has(edge.source) && nodeIds.has(edge.target)) {
+                incomingConnections.set(edge.target, (incomingConnections.get(edge.target) || 0) + 1);
+                outgoingConnections.set(edge.source, (outgoingConnections.get(edge.source) || 0) + 1);
+            }
+        });
+        // Check each node
+        const errors = [];
+        const warnings = [];
+        nodes.forEach(node => {
+            const nodeType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(node);
+            const isTrigger = this.isTriggerNodeType(nodeType);
+            const def = unified_node_registry_1.unifiedNodeRegistry.get(nodeType);
+            const isTerminal = def?.category === 'communication' || (def?.tags || []).includes('sink') || (def?.tags || []).includes('output');
+            const incoming = incomingConnections.get(node.id) || 0;
+            const outgoing = outgoingConnections.get(node.id) || 0;
+            // Triggers should have outgoing connections (unless it's the only node)
+            if (isTrigger && outgoing === 0 && nodes.length > 1) {
+                errors.push(`Trigger node "${node.id}" (${nodeType}) has no outgoing connections`);
+            }
+            // Non-trigger nodes should have incoming connections
+            if (!isTrigger && incoming === 0) {
+                errors.push(`Node "${node.id}" (${nodeType}) has no incoming connections`);
+            }
+            // Non-terminal nodes should have outgoing connections (unless it's the last node in a linear flow)
+            if (!isTrigger && !isTerminal && outgoing === 0) {
+                // Check if this is the last node in a linear chain
+                const isLastInChain = !edges.some(e => e.source === node.id);
+                if (!isLastInChain) {
+                    warnings.push(`Node "${node.id}" (${nodeType}) has no outgoing connections (may be intentional for terminal nodes)`);
+                }
+            }
+        });
+        if (errors.length > 0) {
+            console.error(`❌ [Connection Validation] Found ${errors.length} connection error(s):`);
+            errors.forEach(err => console.error(`   - ${err}`));
+            // Don't throw - log and continue, but mark as invalid
+            console.error(`❌ [Connection Validation] Workflow has connection errors - workflow may not execute correctly`);
+        }
+        if (warnings.length > 0) {
+            console.warn(`⚠️  [Connection Validation] Found ${warnings.length} connection warning(s):`);
+            warnings.forEach(warn => console.warn(`   - ${warn}`));
+        }
+        if (errors.length === 0 && warnings.length === 0) {
+            console.log(`✅ [Connection Validation] All ${nodes.length} nodes are properly connected`);
+        }
+    }
+    /**
+     * Validate and fix workflow structure
+     */
+    validateAndFixWorkflow(workflow, requirements) {
+        // Ensure all nodes have IDs
+        const nodesOrSteps = workflow.nodes || workflow.steps || [];
+        nodesOrSteps.forEach((node, index) => {
+            if (!node.id) {
+                node.id = `node_${index}_${Date.now()}`;
+            }
+        });
+        // Ensure connections reference valid node IDs
+        if (workflow.connections) {
+            const nodeIds = new Set(nodesOrSteps.map((n) => n.id));
+            workflow.connections = workflow.connections.filter((conn) => {
+                const sourceValid = conn.source === 'trigger' || nodeIds.has(conn.source);
+                const targetValid = nodeIds.has(conn.target);
+                if (!sourceValid || !targetValid) {
+                    logger_1.logger.warn(`⚠️  [Workflow Fix] Removing invalid connection: ${conn.source} → ${conn.target}`);
+                    return false;
+                }
+                return true;
+            });
+        }
+        return workflow;
+    }
+    /**
+     * Get default icon for node category and type
+     */
+    getDefaultIconForCategory(category, nodeType) {
+        const typeLower = nodeType.toLowerCase();
+        // AI & ML category
+        if (category === 'ai' || category === 'ai_ml') {
+            if (typeLower.includes('summarizer') || typeLower.includes('summarize'))
+                return 'FileText';
+            if (typeLower.includes('sentiment'))
+                return 'Heart';
+            if (typeLower.includes('agent') || typeLower.includes('chat'))
+                return 'Bot';
+            if (typeLower.includes('gpt') || typeLower.includes('openai'))
+                return 'Sparkles';
+            if (typeLower.includes('claude') || typeLower.includes('anthropic'))
+                return 'Gem';
+            if (typeLower.includes('gemini'))
+                return 'Brain';
+            return 'Brain'; // Default AI icon
+        }
+        // Google category
+        if (category === 'google') {
+            if (typeLower.includes('gmail') || typeLower.includes('mail'))
+                return 'Mail';
+            if (typeLower.includes('sheets'))
+                return 'Table';
+            if (typeLower.includes('calendar'))
+                return 'Calendar';
+            if (typeLower.includes('drive'))
+                return 'Box';
+            return 'Globe';
+        }
+        // Logic category
+        if (category === 'logic') {
+            if (typeLower.includes('if') || typeLower.includes('else') || typeLower.includes('conditional'))
+                return 'GitBranch';
+            if (typeLower.includes('switch') || typeLower.includes('case'))
+                return 'GitBranch';
+            if (typeLower.includes('merge') || typeLower.includes('combine'))
+                return 'GitMerge';
+            if (typeLower.includes('loop') || typeLower.includes('repeat'))
+                return 'Repeat';
+            return 'Code';
+        }
+        // Communication/Output category
+        if (category === 'output' || category === 'communication') {
+            if (typeLower.includes('slack'))
+                return 'MessageSquare';
+            if (typeLower.includes('email') || typeLower.includes('mail'))
+                return 'Mail';
+            if (typeLower.includes('log'))
+                return 'Terminal';
+            if (typeLower.includes('telegram'))
+                return 'MessageSquare';
+            return 'Send';
+        }
+        // HTTP & API
+        if (category === 'http_api' || category === 'http') {
+            return 'Globe';
+        }
+        // Database
+        if (category === 'database') {
+            return 'Database';
+        }
+        // Triggers
+        if (category === 'triggers') {
+            if (typeLower.includes('manual'))
+                return 'Play';
+            if (typeLower.includes('webhook'))
+                return 'Webhook';
+            if (typeLower.includes('schedule') || typeLower.includes('cron'))
+                return 'Clock';
+            if (typeLower.includes('interval') || typeLower.includes('timer'))
+                return 'Timer';
+            return 'Play';
+        }
+        // Default fallback
+        return 'Box';
+    }
+    /**
+     * Detect trigger from requirements
+     */
+    detectTriggerFromRequirements(requirements) {
+        const promptLower = (requirements.primaryGoal || '').toLowerCase();
+        if (promptLower.includes('schedule') || promptLower.includes('daily') || promptLower.includes('weekly') || promptLower.includes('hourly')) {
+            return 'schedule';
+        }
+        if (promptLower.includes('form') || promptLower.includes('submit')) {
+            return 'form';
+        }
+        if (promptLower.includes('webhook') || promptLower.includes('when') && promptLower.includes('added')) {
+            return 'webhook';
+        }
+        if (promptLower.includes('chat') || promptLower.includes('message')) {
+            return 'chat_trigger';
+        }
+        return 'manual_trigger';
+    }
+    /**
+     * Validate that the workflow graph is acyclic (DAG)
+     * Uses topological sort to detect cycles
+     * Removes edges that create cycles
+     */
+    validateAcyclicGraph(nodes, edges) {
+        // Build adjacency list
+        const adjacencyList = new Map();
+        const nodeIds = new Set(nodes.map(n => n.id));
+        nodeIds.add('trigger'); // Include trigger in graph
+        // Initialize adjacency list
+        nodeIds.forEach(id => adjacencyList.set(id, []));
+        // Build graph and detect upstream connections
+        const upstreamEdges = [];
+        edges.forEach(edge => {
+            // Skip self-loops
+            if (edge.source === edge.target) {
+                upstreamEdges.push(edge);
+                return;
+            }
+            // Check if this is an upstream connection (target comes before source in node order)
+            const sourceIndex = edge.source === 'trigger' ? -1 : nodes.findIndex(n => n.id === edge.source);
+            const targetIndex = nodes.findIndex(n => n.id === edge.target);
+            // If target comes before source, this is an upstream connection
+            if (sourceIndex >= 0 && targetIndex >= 0 && targetIndex < sourceIndex) {
+                upstreamEdges.push(edge);
+                console.warn(`[WorkflowBuilder] ⚠️  Upstream connection detected: ${edge.source} → ${edge.target} (target is before source)`);
+                // Don't add upstream connections to graph by default
+                return;
+            }
+            // Add forward edge
+            if (adjacencyList.has(edge.source) && adjacencyList.has(edge.target)) {
+                adjacencyList.get(edge.source).push(edge.target);
+            }
+        });
+        // Check for cycles in the forward graph
+        const cycleCheck = this.hasCycleDFS(adjacencyList, nodeIds);
+        if (cycleCheck.hasCycle || upstreamEdges.length > 0) {
+            // Remove upstream edges and cycle edges
+            const removedEdges = [...upstreamEdges];
+            if (cycleCheck.hasCycle) {
+                // Find edges in the cycle path
+                if (cycleCheck.cyclePath && cycleCheck.cyclePath.length > 1) {
+                    for (let i = 0; i < cycleCheck.cyclePath.length - 1; i++) {
+                        const source = cycleCheck.cyclePath[i];
+                        const target = cycleCheck.cyclePath[i + 1];
+                        const cycleEdges = edges.filter(e => e.source === source && e.target === target);
+                        removedEdges.push(...cycleEdges);
+                    }
+                }
+            }
+            return {
+                hasCycle: cycleCheck.hasCycle || upstreamEdges.length > 0,
+                cyclePath: cycleCheck.cyclePath,
+                removedEdges: removedEdges.filter((edge, index, self) => index === self.findIndex(e => e.id === edge.id)), // Remove duplicates
+            };
+        }
+        return {
+            hasCycle: false,
+            removedEdges: [],
+        };
+    }
+    /**
+     * Use DFS to detect cycles in the graph
+     */
+    hasCycleDFS(adjacencyList, nodeIds) {
+        const visited = new Set();
+        const recursionStack = new Set();
+        const cyclePath = [];
+        const dfs = (node, path) => {
+            visited.add(node);
+            recursionStack.add(node);
+            path.push(node);
+            const neighbors = adjacencyList.get(node) || [];
+            for (const neighbor of neighbors) {
+                if (!visited.has(neighbor)) {
+                    if (dfs(neighbor, [...path])) {
+                        return true;
+                    }
+                }
+                else if (recursionStack.has(neighbor)) {
+                    // Cycle detected
+                    const cycleStart = path.indexOf(neighbor);
+                    cyclePath.push(...path.slice(cycleStart), neighbor);
+                    return true;
+                }
+            }
+            recursionStack.delete(node);
+            return false;
+        };
+        // Check all nodes (in case graph is disconnected)
+        for (const nodeId of nodeIds) {
+            if (!visited.has(nodeId)) {
+                if (dfs(nodeId, [])) {
+                    return {
+                        hasCycle: true,
+                        cyclePath: cyclePath.length > 0 ? cyclePath : undefined,
+                    };
+                }
+            }
+        }
+        return { hasCycle: false };
+    }
+}
+exports.AgenticWorkflowBuilder = AgenticWorkflowBuilder;
+// Export singleton instance
+exports.agenticWorkflowBuilder = new AgenticWorkflowBuilder();

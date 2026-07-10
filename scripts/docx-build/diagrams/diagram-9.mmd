@@ -1,0 +1,57 @@
+flowchart TB
+  subgraph ControlPlane["Control plane - owned primarily by worker"]
+    ROUTER["Public routes, Cognito auth,<br/>delegation clients"]
+    FLAGS["worker .env<br/>ENABLED, CANARY=100, service URLs/keys"]
+    GATES["Retirement gates<br/>CRUD local writes disabled<br/>vault writes disabled"]
+    REGISTRY["Unified Node Registry<br/>node contracts and executors"]
+    GRAPH["Unified Graph Orchestrator<br/>all edge mutation and validation"]
+    FLAGS --> ROUTER
+    GATES --> ROUTER
+    REGISTRY --> GRAPH
+  end
+
+  subgraph InternalServices["Delegated internal services"]
+    AI["ai-generator :3002"]
+    ENG["execution-engine :3003"]
+    CRED["credential-service :3004"]
+    NOTIF["notification-service :3005"]
+    TRIG["trigger-service :3006"]
+    CRUD["workflow-crud-service :3007"]
+  end
+
+  subgraph DataPlane["Data plane"]
+    RUNTIME["Worker node runtime<br/>topological traversal + credential injection"]
+    RDS["RDS tables<br/>workflows, workflow_versions, executions,<br/>execution_steps, connections, unified_credentials, notifications"]
+    REDIS["Redis<br/>engine queue, processing set, locks,<br/>cache and WS pub/sub"]
+    EXT["External provider API calls<br/>Gmail, Slack, Gemini, CRM, webhooks"]
+  end
+
+  subgraph Rollback["No-redeploy rollback"]
+    OFF["Set affected *_ENABLED=false"]
+    RESTART["systemctl restart ctrlchecks-worker"]
+    LOCAL["Worker retained implementation<br/>takes the route"]
+    OFF --> RESTART --> LOCAL
+  end
+
+  ROUTER --> AI
+  ROUTER --> ENG
+  ROUTER --> CRED
+  ROUTER --> NOTIF
+  ROUTER --> TRIG
+  ROUTER --> CRUD
+  GRAPH --> RDS
+  REGISTRY --> RUNTIME
+  ENG --> REDIS
+  ENG --> RDS
+  CRED --> RDS
+  NOTIF --> RDS
+  NOTIF --> REDIS
+  TRIG --> RDS
+  CRUD --> RDS
+  RUNTIME --> RDS
+  RUNTIME --> REDIS
+  RUNTIME --> EXT
+  AI --> EXT
+  CRED --> EXT
+  NOTIF --> EXT
+  LOCAL -.-> RUNTIME

@@ -1,0 +1,9 @@
+﻿flowchart LR
+    Browser[React Frontend] --> Worker[Worker API<br/>Express + services]
+    Worker --> AI[AI Providers<br/>Gemini/model gateway]
+    Worker --> Registry[Unified Node Registry<br/>Schemas, credentials, field contracts]
+    Worker --> Runtime[Execution Engine<br/>Dynamic node executor]
+    Worker --> RDS[(AWS RDB/RDS<br/>PostgreSQL-compatible persistence)]
+    Runtime --> Vault[Credential Vault / Resolver]
+    Runtime --> External[External Apps and APIs<br/>Google, Gmail, Slack, HTTP, DBs, AI tools]
+    Runtime --> Audit[Logs, checkpoints, runtime input audit]

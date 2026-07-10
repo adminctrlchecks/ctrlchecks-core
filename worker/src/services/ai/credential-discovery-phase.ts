@@ -352,18 +352,28 @@ export class CredentialDiscoveryPhase {
           });
           if (satisfied) {
             console.log(`[CredentialDiscovery] ✅ Credential satisfied from node config for ${nodeId} (${nodeType})`);
-            // Validate the credentialId actually exists in DB — prevents ghost UUIDs from deleted connections
+            // Validate the referenced connection actually exists and is active in DB —
+            // prevents ghost UUIDs from deleted/revoked connections reporting satisfied.
             if (userId) {
               const nodeConfig = (node.data?.config || {}) as Record<string, unknown>;
-              const credentialId = String(nodeConfig.credentialId || nodeConfig.credentialRef || '').trim();
+              const connectionRefs = (node.data?.connectionRefs || {}) as Record<string, unknown>;
+              const credentialId = String(
+                nodeConfig.credentialId ||
+                nodeConfig.credentialRef ||
+                connectionRefs[contract.provider] ||
+                connectionRefs[`${contract.provider}_connection`] ||
+                connectionRefs[`${contract.provider}_api_key`] ||
+                connectionRefs[`${contract.provider}_oauth2`] ||
+                ''
+              ).trim();
               if (credentialId) {
                 const rows = await queryAsService(
-                  `SELECT 1 FROM connections WHERE user_id = $1 AND id = $2 LIMIT 1`,
+                  `SELECT 1 FROM connections WHERE user_id = $1 AND id = $2 AND status = 'active' LIMIT 1`,
                   [userId, credentialId]
                 );
                 if (!rows.length) {
                   satisfied = false;
-                  console.log(`[CredentialDiscovery] ❌ credentialId "${credentialId}" not found in DB — treating as missing`);
+                  console.log(`[CredentialDiscovery] ❌ credential/connection "${credentialId}" not found or inactive — treating as missing`);
                 }
               }
             }

@@ -1,0 +1,49 @@
+flowchart TB
+  subgraph Frontend["Frontend workflow data access"]
+    UI["Workflow builder / workflow list"]
+    WRITE["Canonical mutations<br/>save, delete, rollback"]
+    READ["awsClient.from('workflows').select(...)"]
+    HISTORY["Dedicated version-history API"]
+    UI --> WRITE
+    UI --> READ
+    UI --> HISTORY
+  end
+
+  subgraph Worker["worker :3001"]
+    SAVE["POST /api/save-workflow<br/>normalize + validate"]
+    MUTATE["DELETE /api/workflows/:id<br/>POST .../rollback"]
+    VERSIONS["GET /api/workflows/:id/versions"]
+    CLIENT["workflow-crud-service-client<br/>CANARY=100"]
+    GATE["WORKFLOW_CRUD_LOCAL_WRITES_DISABLED=true"]
+    DBPROXY["GET /api/db/workflows<br/>dbProxyGet passthrough"]
+    UNAVAILABLE["503 WORKFLOW_CRUD_SERVICE_UNAVAILABLE"]
+  end
+
+  subgraph Service["workflow-crud-service :3007"]
+    CRUD["POST/GET/DELETE /workflows"]
+    VERSIONING["GET versions<br/>POST rollback"]
+  end
+
+  subgraph Data["AWS RDS PostgreSQL"]
+    WF[("workflows")]
+    WV[("workflow_versions")]
+  end
+
+  WRITE --> SAVE
+  WRITE --> MUTATE
+  HISTORY --> VERSIONS
+  SAVE --> CLIENT
+  MUTATE --> CLIENT
+  VERSIONS --> CLIENT
+  CLIENT -->|x-service-key + x-user-id| CRUD
+  CLIENT -->|x-service-key + x-user-id| VERSIONING
+  CRUD --> WF
+  CRUD --> WV
+  VERSIONING --> WF
+  VERSIONING --> WV
+
+  READ -->|Cognito JWT| DBPROXY
+  DBPROXY -->|accepted gap: direct SELECT| WF
+
+  CLIENT -->|remote write returns null| GATE
+  GATE --> UNAVAILABLE

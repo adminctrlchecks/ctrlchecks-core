@@ -1,0 +1,185 @@
+{
+  "name": "Test Twitter/X - Supported Operations",
+  "description": "Tests only the Twitter operations currently supported by the backend/UI contract: user/getMe, search/recent, tweet/create, tweet/get, and tweet/delete. Requires an active Twitter/X OAuth connection.",
+  "nodes": [
+    {
+      "id": "node_1",
+      "type": "custom",
+      "position": { "x": 100, "y": 350 },
+      "data": {
+        "type": "manual_trigger",
+        "label": "Start Test",
+        "category": "triggers",
+        "icon": "Play",
+        "config": {}
+      }
+    },
+    {
+      "id": "node_2",
+      "type": "custom",
+      "position": { "x": 400, "y": 100 },
+      "data": {
+        "type": "twitter",
+        "label": "Twitter - Get My Profile",
+        "category": "social",
+        "icon": "Twitter",
+        "config": {
+          "resource": "user",
+          "operation": "getMe"
+        }
+      }
+    },
+    {
+      "id": "node_3",
+      "type": "custom",
+      "position": { "x": 700, "y": 100 },
+      "data": {
+        "type": "log_output",
+        "label": "Log Profile",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "level": "info",
+          "message": "Twitter profile: id={{$json.data.id}} username={{$json.data.username}} name={{$json.data.name}}"
+        }
+      }
+    },
+    {
+      "id": "node_4",
+      "type": "custom",
+      "position": { "x": 400, "y": 300 },
+      "data": {
+        "type": "twitter",
+        "label": "Twitter - Search Recent Tweets",
+        "category": "social",
+        "icon": "Search",
+        "config": {
+          "resource": "search",
+          "operation": "recent",
+          "query": "workflow automation"
+        }
+      }
+    },
+    {
+      "id": "node_5",
+      "type": "custom",
+      "position": { "x": 700, "y": 300 },
+      "data": {
+        "type": "log_output",
+        "label": "Log Search",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "level": "info",
+          "message": "Twitter search: result_count={{$json.meta.result_count}} first_tweet={{$json.data[0].text}}"
+        }
+      }
+    },
+    {
+      "id": "node_6",
+      "type": "custom",
+      "position": { "x": 400, "y": 520 },
+      "data": {
+        "type": "twitter",
+        "label": "Twitter - Create Test Tweet",
+        "category": "social",
+        "icon": "Edit3",
+        "config": {
+          "resource": "tweet",
+          "operation": "create",
+          "text": "Testing CtrlChecks Twitter workflow automation. Delete step should remove this tweet after validation."
+        }
+      }
+    },
+    {
+      "id": "node_7",
+      "type": "custom",
+      "position": { "x": 700, "y": 520 },
+      "data": {
+        "type": "log_output",
+        "label": "Log Created Tweet",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "level": "info",
+          "message": "Twitter tweet created: tweetId={{$json.data.id}} text={{$json.data.text}}"
+        }
+      }
+    },
+    {
+      "id": "node_8",
+      "type": "custom",
+      "position": { "x": 1000, "y": 520 },
+      "data": {
+        "type": "twitter",
+        "label": "Twitter - Get Created Tweet",
+        "category": "social",
+        "icon": "Twitter",
+        "config": {
+          "resource": "tweet",
+          "operation": "get",
+          "tweetId": "{{$json.data.id}}"
+        }
+      }
+    },
+    {
+      "id": "node_9",
+      "type": "custom",
+      "position": { "x": 1300, "y": 520 },
+      "data": {
+        "type": "log_output",
+        "label": "Log Retrieved Tweet",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "level": "info",
+          "message": "Twitter tweet retrieved: tweetId={{$json.data.id}} text={{$json.data.text}}"
+        }
+      }
+    },
+    {
+      "id": "node_10",
+      "type": "custom",
+      "position": { "x": 1600, "y": 520 },
+      "data": {
+        "type": "twitter",
+        "label": "Twitter - Delete Created Tweet",
+        "category": "social",
+        "icon": "Trash2",
+        "config": {
+          "resource": "tweet",
+          "operation": "delete",
+          "tweetId": "{{$json.data.id}}"
+        }
+      }
+    },
+    {
+      "id": "node_11",
+      "type": "custom",
+      "position": { "x": 1900, "y": 520 },
+      "data": {
+        "type": "log_output",
+        "label": "Log Deleted Tweet",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "level": "info",
+          "message": "Twitter delete result: deleted={{$json.data.deleted}}"
+        }
+      }
+    }
+  ],
+  "edges": [
+    { "id": "edge_1", "source": "node_1", "target": "node_2" },
+    { "id": "edge_2", "source": "node_2", "target": "node_3" },
+    { "id": "edge_3", "source": "node_1", "target": "node_4" },
+    { "id": "edge_4", "source": "node_4", "target": "node_5" },
+    { "id": "edge_5", "source": "node_1", "target": "node_6" },
+    { "id": "edge_6", "source": "node_6", "target": "node_7" },
+    { "id": "edge_7", "source": "node_6", "target": "node_8" },
+    { "id": "edge_8", "source": "node_8", "target": "node_9" },
+    { "id": "edge_9", "source": "node_8", "target": "node_10" },
+    { "id": "edge_10", "source": "node_10", "target": "node_11" }
+  ],
+  "viewport": { "x": 0, "y": 0, "zoom": 0.7 }
+}

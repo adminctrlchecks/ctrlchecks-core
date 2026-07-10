@@ -1,0 +1,11 @@
+﻿flowchart LR
+    Browser[Browser<br/>React frontend] --> Worker[Worker API<br/>privileged server boundary]
+    Worker --> Registry[Unified Node Registry<br/>node schemas + contracts]
+    Worker --> AI[AI Providers<br/>Gemini/model gateway]
+    Worker --> RDS[(AWS RDB/RDS<br/>workflow, execution,<br/>users, billing, audit)]
+    Worker --> Vault[Credential Vault / Resolver<br/>connection metadata + tokens]
+    Worker --> Runtime[Execution Engine<br/>topological graph execution]
+    Runtime --> Value[Runtime AI Value Engine<br/>intent + lineage + contracts]
+    Runtime --> Providers[External Apps and APIs<br/>Google, Gmail, Slack,<br/>HTTP, DBs, AI tools]
+    Runtime --> Realtime[WebSocket + logs<br/>debug and status updates]
+    Realtime --> Browser

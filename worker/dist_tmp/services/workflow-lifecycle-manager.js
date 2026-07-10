@@ -1,0 +1,2352 @@
+"use strict";
+/**
+ * Workflow Lifecycle Manager
+ *
+ * Orchestrates the complete workflow lifecycle:
+ * 1. Generate workflow graph (DAG only)
+ * 2. Discover required credentials (AFTER graph creation)
+ * 3. Return graph + credentials to frontend
+ * 4. Inject credentials into nodes (via attach-credentials endpoint)
+ * 5. Validate workflow is ready for execution
+ *
+ * This ensures:
+ * - No credentials asked before generation
+ * - Credential discovery only runs AFTER graph creation
+ * - Strict connector isolation
+ * - Deterministic workflow planning
+ */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.workflowLifecycleManager = exports.WorkflowLifecycleManager = void 0;
+exports.shouldRequireCredential = shouldRequireCredential;
+exports.needsSummarizationNode = needsSummarizationNode;
+exports.isSummarizationNodeType = isSummarizationNodeType;
+exports.detectLogoutIntent = detectLogoutIntent;
+exports.applyEmailTransportExclusivity = applyEmailTransportExclusivity;
+const credential_discovery_phase_1 = require("./ai/credential-discovery-phase");
+const workflow_validation_pipeline_1 = require("./ai/workflow-validation-pipeline");
+const connector_registry_1 = require("./connectors/connector-registry");
+const node_library_1 = require("./nodes/node-library");
+const unified_node_registry_1 = require("../core/registry/unified-node-registry");
+const unified_node_type_normalizer_1 = require("../core/utils/unified-node-type-normalizer");
+// resolveNodeType delegates to unified-node-registry.resolveAlias (single source of truth)
+const node_type_resolver_util_1 = require("../core/utils/node-type-resolver-util");
+const node_resolver_1 = require("./ai/node-resolver");
+const aws_db_client_1 = require("../core/database/aws-db-client");
+const smart_planner_adapter_1 = require("./ai/smart-planner-adapter");
+const planner_prompt_merge_1 = require("./ai/planner-prompt-merge");
+// ✅ UNIFIED ORCHESTRATION: Import orchestrator for edge-safe node injection
+const orchestration_1 = require("../core/orchestration");
+const execution_order_manager_1 = require("../core/orchestration/execution-order-manager");
+const node_capability_dedupe_1 = require("../core/utils/node-capability-dedupe");
+const placeholder_filter_1 = require("../core/utils/placeholder-filter");
+const fill_mode_resolver_1 = require("../core/utils/fill-mode-resolver");
+const workflow_save_validator_1 = require("../core/validation/workflow-save-validator");
+const registry_field_contract_1 = require("../core/validation/registry-field-contract");
+const structure_materializer_1 = require("./ai/structure-materializer");
+const intent_structural_projection_1 = require("./ai/intent-structural-projection");
+const workflow_config_hydrator_1 = require("../core/validation/workflow-config-hydrator");
+const structured_workflow_prompt_1 = require("./ai/structured-workflow-prompt");
+const plan_chain_prune_1 = require("./ai/plan-chain-prune");
+const schema_input_control_1 = require("../core/utils/schema-input-control");
+const field_ownership_1 = require("../core/utils/field-ownership");
+/**
+ * Credential gate helper (spec task 6).
+ *
+ * Returns true ONLY when:
+ * - The field has ownership === 'credential' in the registry, AND
+ * - The field's current toggle state (_fieldModes) is 'manual_static'
+ *   (meaning the user has explicitly chosen to supply this credential manually).
+ *
+ * This prevents prompting for credentials that are resolved via vault or runtime.
+ */
+function shouldRequireCredential(nodeType, fieldName, fieldModes) {
+    const fieldDef = unified_node_registry_1.unifiedNodeRegistry.get(nodeType)?.inputSchema?.[fieldName];
+    if (!fieldDef || fieldDef.ownership !== 'credential')
+        return false;
+    const userMode = fieldModes[fieldName];
+    return userMode === 'manual_static';
+}
+/** Trigger-style nodes only — used to avoid narrowing planner output to trigger-only when variation metadata is wrong. */
+function isTriggerishNodeType(nodeType) {
+    try {
+        const def = unified_node_registry_1.unifiedNodeRegistry.get(nodeType);
+        if (def?.category === 'trigger')
+            return true;
+    }
+    catch {
+        /* ignore */
+    }
+    return /trigger|schedule|webhook|interval|respond_to_webhook/i.test(nodeType);
+}
+function needsSummarizationNode(prompt) {
+    const p = (prompt || '').toLowerCase();
+    return (p.includes('summarize') ||
+        p.includes('summarise') ||
+        p.includes('summary') ||
+        p.includes('summarization'));
+}
+function isSummarizationNodeType(nodeType) {
+    const t = (0, node_type_resolver_util_1.resolveNodeType)(nodeType);
+    return t === 'ai_chat_model' || t === 'text_summarizer';
+}
+// Minimal structural/system node set that may be present even when an
+// authoritative semantic chain is enforced.
+const SYSTEM_ALLOWED_TYPES = new Set([
+    'manual_trigger',
+    'log_output',
+]);
+const ENABLE_INTENT_AUTHORITY_GUARDS = process.env.ENABLE_INTENT_AUTHORITY_GUARDS !== 'false';
+function getIntentAuthorityMode() {
+    const raw = String(process.env.INTENT_AUTHORITY_ENFORCEMENT_MODE || 'strict').toLowerCase();
+    if (raw === 'shadow' || raw === 'warn' || raw === 'strict')
+        return raw;
+    return 'strict';
+}
+function shouldHardBlockIntentAuthorityViolation() {
+    if (!ENABLE_INTENT_AUTHORITY_GUARDS)
+        return false;
+    const mode = getIntentAuthorityMode();
+    return mode === 'strict' || mode === 'warn';
+}
+function detectLogoutIntent(prompt) {
+    const p = (prompt || '').toLowerCase();
+    return /\blog\s*out\b|\blogout\b|\bsign\s*out\b|\bsignout\b/.test(p);
+}
+function applyEmailTransportExclusivity(nodeTypes, prompt) {
+    // 'email' is not a canonical type — google_gmail is the only email node.
+    // Just deduplicate and return; no exclusivity logic needed.
+    return [...new Set((nodeTypes || []).map((t) => (0, node_type_resolver_util_1.resolveNodeType)(t)))];
+}
+/**
+ * Workflow Lifecycle Manager
+ *
+ * Manages the complete workflow lifecycle from generation to execution readiness.
+ */
+class WorkflowLifecycleManager {
+    /**
+     * Self-healing gate (spec task 24).
+     * Validates the workflow BEFORE credential evaluation.
+     * If invalid, attempts repair via reconcileWorkflow.
+     * Throws if repair fails.
+     */
+    async validateAndHealBeforeCredentials(workflow) {
+        const validation = orchestration_1.unifiedGraphOrchestrator.validateWorkflow(workflow);
+        if (validation.valid)
+            return { workflow, healed: false };
+        // Snapshot all node config values before reconcile (structural-only guard)
+        const configSnapshot = new Map();
+        for (const node of workflow.nodes) {
+            configSnapshot.set(node.id, { ...(node.data?.config || {}) });
+        }
+        // Attempt repair
+        const repaired = orchestration_1.unifiedGraphOrchestrator.reconcileWorkflow(workflow);
+        const revalidation = orchestration_1.unifiedGraphOrchestrator.validateWorkflow(repaired.workflow);
+        if (!revalidation.valid) {
+            throw new Error(`SELF_HEAL_FAILED: ${revalidation.errors.join('; ')}`);
+        }
+        // ✅ FIX: Assert reconcileWorkflow did not modify any node config field values.
+        // reconcileWorkflow is structural-only (edges, execution order) and must never
+        // touch node.data.config. Log a warning if any config value changed.
+        for (const node of repaired.workflow.nodes) {
+            const before = configSnapshot.get(node.id);
+            if (!before)
+                continue;
+            const after = node.data?.config || {};
+            for (const [field, beforeValue] of Object.entries(before)) {
+                const afterValue = after[field];
+                if (afterValue !== beforeValue) {
+                    console.warn(`[WorkflowLifecycle] ⚠️ reconcileWorkflow modified config field "${field}" on node ${node.id}: ` +
+                        `"${String(beforeValue)}" → "${String(afterValue)}". Restoring original value.`);
+                    // Restore the original value — structural repairs must not touch config
+                    after[field] = beforeValue;
+                }
+            }
+        }
+        return { workflow: repaired.workflow, healed: true };
+    }
+    async enforceIntentCoverageGuards(workflow, prompt, options) {
+        const authoritativeSet = new Set((options?.authoritativeNodeTypes || []).map((t) => (0, node_type_resolver_util_1.resolveNodeType)(t)));
+        const hasAuthoritativeChain = authoritativeSet.size > 0;
+        // When chain is authoritative, do not inject semantic summarizer nodes unless explicitly allowed.
+        if (hasAuthoritativeChain &&
+            !authoritativeSet.has('ai_chat_model') &&
+            !authoritativeSet.has('text_summarizer') &&
+            !authoritativeSet.has('ai_service')) {
+            return workflow;
+        }
+        if (!needsSummarizationNode(prompt)) {
+            return workflow;
+        }
+        const hasSummarizer = workflow.nodes.some((n) => isSummarizationNodeType(n.data?.type || n.type));
+        if (hasSummarizer) {
+            return workflow;
+        }
+        const order = execution_order_manager_1.executionOrderManager.initialize(workflow);
+        const orderedIds = execution_order_manager_1.executionOrderManager.getOrderedNodeIds(order);
+        const orderedNodes = orderedIds
+            .map((id) => workflow.nodes.find((n) => n.id === id))
+            .filter((n) => !!n);
+        const lastDataOrTransform = [...orderedNodes].reverse().find((node) => {
+            const type = (0, node_type_resolver_util_1.resolveNodeType)(node.data?.type || node.type);
+            const def = unified_node_registry_1.unifiedNodeRegistry.get(type);
+            return def?.category === 'data' || def?.category === 'transformation' || def?.category === 'ai';
+        });
+        const firstCommunication = orderedNodes.find((node) => {
+            const type = (0, node_type_resolver_util_1.resolveNodeType)(node.data?.type || node.type);
+            const def = unified_node_registry_1.unifiedNodeRegistry.get(type);
+            return def?.category === 'output' || def?.category === 'social_media' || def?.category === 'communication';
+        });
+        const referenceNodeId = firstCommunication?.id ||
+            lastDataOrTransform?.id ||
+            orderedNodes[orderedNodes.length - 1]?.id;
+        if (!referenceNodeId) {
+            return workflow;
+        }
+        const { randomUUID } = await Promise.resolve().then(() => __importStar(require('crypto')));
+        const summarizerNode = {
+            id: randomUUID(),
+            type: 'custom',
+            position: { x: 0, y: 0 },
+            data: {
+                type: 'ai_chat_model',
+                label: 'AI Summarizer',
+                category: 'ai',
+                config: {
+                    operation: 'summarize',
+                    _fillMode: {
+                        prompt: 'runtime_ai',
+                        text: 'runtime_ai',
+                    },
+                },
+            },
+        };
+        const injection = await orchestration_1.unifiedGraphOrchestrator.injectNode(workflow, summarizerNode, {
+            type: 'missing',
+            position: firstCommunication ? 'before' : 'after',
+            referenceNodeId,
+            reason: 'Intent coverage guard: prompt requires summarization capability',
+        });
+        if (injection.errors.length > 0) {
+            throw new Error(`Intent coverage guard failed to inject summarizer: ${injection.errors.join('; ')}`);
+        }
+        return injection.workflow;
+    }
+    /**
+     * When mandatory node chain exists but the prompt lacks an explicit architecture block,
+     * synthesize Goal + numbered chain + terminal for the deterministic pipeline.
+     */
+    buildEffectiveStructuredPromptForPipeline(plannerPrompt, constraints) {
+        const originalPrompt = constraints?.originalPrompt || plannerPrompt;
+        let selectedStructuredPrompt = constraints?.selectedStructuredPrompt || plannerPrompt;
+        const chain = (0, plan_chain_prune_1.pruneProposedPlanChain)(constraints?.mandatoryNodeTypes || []);
+        if (chain.length >= 2 &&
+            !(0, structured_workflow_prompt_1.structuredPromptAlreadyHasArchitecture)(selectedStructuredPrompt)) {
+            const nar = selectedStructuredPrompt.trim() &&
+                selectedStructuredPrompt.trim() !== String(plannerPrompt || '').trim()
+                ? selectedStructuredPrompt
+                : undefined;
+            selectedStructuredPrompt = (0, structured_workflow_prompt_1.formatArchitecturalWorkflowPrompt)({
+                goal: originalPrompt,
+                proposedNodeChain: chain,
+                narrativeContext: nar,
+                includeRegistryFillContract: true,
+            });
+        }
+        return { selectedStructuredPrompt, originalPrompt };
+    }
+    /**
+     * Generate workflow using WorkflowGenerationPipeline — the single universal pipeline.
+     * No deterministic fallback. No dual paths. WorkflowGenerationPipeline handles its own
+     * internal fallback (manual_trigger → ai_chat_model → log_output) when needed.
+     */
+    async generateWorkflowWithNewPipeline(userPrompt, constraints, onProgress) {
+        const { WorkflowGenerationPipeline } = await Promise.resolve().then(() => __importStar(require('./ai/pipeline/workflow-generation-pipeline')));
+        const { randomUUID } = await Promise.resolve().then(() => __importStar(require('crypto')));
+        const pipelineUser = (constraints?.selectedStructuredPrompt && String(constraints.selectedStructuredPrompt).trim()) ||
+            userPrompt;
+        const pipelineResult = await new WorkflowGenerationPipeline().run({
+            userPrompt: pipelineUser,
+            userId: 'lifecycle',
+            correlationId: randomUUID(),
+            mandatoryNodeTypes: constraints?.mandatoryNodeTypes,
+            onStageComplete: onProgress
+                ? (stageName, progress) => {
+                    try {
+                        onProgress(0, stageName, progress);
+                    }
+                    catch (_) { }
+                }
+                : undefined,
+        });
+        if (!pipelineResult.ok) {
+            throw new Error(`Pipeline failed: ${pipelineResult.error} — ${pipelineResult.message}`);
+        }
+        // CapabilityOptionsNeeded — should not happen in lifecycle context (no UI interaction)
+        if (pipelineResult.needsCapabilitySelection) {
+            throw new Error('Pipeline requires capability selection — not supported in lifecycle context');
+        }
+        const result = pipelineResult;
+        return {
+            workflow: result.workflow,
+            documentation: 'Workflow generated via WorkflowGenerationPipeline',
+            suggestions: (result.validationIssues || [])
+                .filter((i) => i.severity === 'warning')
+                .map((i) => ({ type: 'warning', message: i.description })),
+            estimatedComplexity: 'medium',
+            systemPrompt: undefined,
+            requirements: undefined,
+            requiredCredentials: [],
+            confidenceScore: { score: 0.9, factors: ['WorkflowGenerationPipeline', 'build manifest'] },
+            analysis: undefined,
+        };
+    }
+    /**
+     * Generate workflow graph and discover credentials
+     *
+     * This is the FIRST phase - generates the workflow DAG only.
+     * Credential discovery runs AFTER graph creation.
+     *
+     * @param userPrompt - User's workflow description
+     * @param constraints - Optional constraints (current workflow, execution history, etc.)
+     * @param onProgress - Optional progress callback for streaming updates
+     * @returns Workflow graph + required credentials
+     */
+    async generateWorkflowGraph(userPrompt, constraints, onProgress) {
+        console.log('[WorkflowLifecycle] Step 1: Generating workflow graph...');
+        if (constraints?.mandatoryNodeTypes && constraints.mandatoryNodeTypes.length > 0) {
+            console.log(`[WorkflowLifecycle] 🔒 mandatoryNodeTypes (from intent/variant): ${constraints.mandatoryNodeTypes.join(', ')}`);
+        }
+        if (constraints?.originalPrompt) {
+            console.log(`[WorkflowLifecycle] 📝 originalPrompt (for config filler): "${constraints.originalPrompt.slice(0, 80)}..."`);
+        }
+        const selectedStructuredForPlanner = constraints?.selectedStructuredPrompt || userPrompt;
+        const originalForPlanner = (constraints?.originalPrompt || '').trim() || userPrompt;
+        const primaryPlannerPrompt = (0, planner_prompt_merge_1.mergePrimaryPlannerPrompt)(originalForPlanner, selectedStructuredForPlanner);
+        console.log(`[WorkflowLifecycle] 🧭 primaryPlannerPrompt (merged original + structured, first 120 chars): "${primaryPlannerPrompt.slice(0, 120)}..."`);
+        // Optional STEP 0: Planner-driven spec (Smart Planner)
+        let plannerSpec;
+        try {
+            plannerSpec = await (0, smart_planner_adapter_1.planWorkflowSpecFromPrompt)(primaryPlannerPrompt);
+            if (plannerSpec) {
+                console.log('[WorkflowLifecycle] Smart Planner spec detected - using planner-driven node hints.');
+            }
+        }
+        catch (error) {
+            console.error('[WorkflowLifecycle] Smart Planner failed (non-fatal):', error);
+        }
+        // STEP 0: Resolve required nodes from prompt using NodeResolver (legacy) OR planner hints
+        console.log('[WorkflowLifecycle] Step 0: Resolving required nodes from prompt...');
+        const nodeResolver = new node_resolver_1.NodeResolver(node_library_1.nodeLibrary);
+        let resolution;
+        if (plannerSpec) {
+            // Derive required node types from planner spec (trigger + data_sources + actions + storage + transformations)
+            const nodeIds = new Set();
+            // Trigger mapping
+            if (plannerSpec.trigger === 'manual') {
+                nodeIds.add('manual_trigger');
+            }
+            else if (plannerSpec.trigger === 'schedule') {
+                nodeIds.add('schedule');
+            }
+            else if (plannerSpec.trigger === 'webhook') {
+                nodeIds.add('webhook');
+            }
+            else if (plannerSpec.trigger === 'event') {
+                // Keep generic trigger; specific event triggers can be added later
+                nodeIds.add('manual_trigger');
+            }
+            // Data sources / storage / actions: provider name before dot
+            plannerSpec.data_sources.forEach((s) => nodeIds.add(s.split('.')[0]));
+            plannerSpec.storage.forEach((s) => nodeIds.add(s.split('.')[0]));
+            plannerSpec.actions.forEach((a) => nodeIds.add(a.split('.')[0]));
+            // Transformations: map planner transformation names (capabilities) to concrete node types
+            // ✅ IMPORTANT: Only include loop if user explicitly requests iteration (planner may over-suggest)
+            const promptLower = primaryPlannerPrompt.toLowerCase();
+            const promptRequestsLoop = promptLower.includes('for each') ||
+                promptLower.includes('foreach') ||
+                promptLower.includes('iterate') ||
+                promptLower.includes('loop') ||
+                promptLower.includes('each row') ||
+                promptLower.includes('per row');
+            plannerSpec.transformations.forEach((t) => {
+                const tf = String(t || '').toLowerCase().trim();
+                if (!tf)
+                    return;
+                if (tf === 'loop') {
+                    if (promptRequestsLoop)
+                        nodeIds.add('loop');
+                    return;
+                }
+                // Map summarization capability to deterministic LLM transformer node
+                if (tf === 'summarize' || tf === 'summarise' || tf === 'summary' || tf === 'summarization') {
+                    nodeIds.add('ai_chat_model'); // Canonical transformer for summarize in this repo
+                    return;
+                }
+                // If planner outputs a real node type, keep it
+                if (node_library_1.nodeLibrary.getSchema(tf)) {
+                    nodeIds.add(tf);
+                }
+            });
+            // CRITICAL: mentioned_only services must NOT become nodes (e.g., google_gmail in Gmail-in-Sheets)
+            // ✅ CRITICAL FIX: Resolve mentioned_only types to canonical types for proper matching
+            const { resolveNodeType } = require('../core/utils/node-type-resolver-util');
+            plannerSpec.mentioned_only.forEach((m) => {
+                const rawType = m.split('.')[0];
+                // Resolve to canonical type (handles aliases)
+                const canonicalType = resolveNodeType(rawType, false);
+                // Check both raw type and canonical type
+                if (nodeIds.has(rawType)) {
+                    console.log(`[WorkflowLifecycle] Removing mentioned_only node from required set: ${rawType} (canonical: ${canonicalType})`);
+                    nodeIds.delete(rawType);
+                }
+                if (nodeIds.has(canonicalType)) {
+                    console.log(`[WorkflowLifecycle] Removing mentioned_only node from required set: ${canonicalType}`);
+                    nodeIds.delete(canonicalType);
+                }
+            });
+            const plannerNodeIds = Array.from(nodeIds);
+            console.log(`[WorkflowLifecycle] Planner-driven required node(s): ${plannerNodeIds.join(', ')}`);
+            resolution = {
+                success: true,
+                nodeIds: plannerNodeIds,
+                errors: [],
+                warnings: [],
+            };
+            // ✅ AUTHORITATIVE: When mandatoryNodeTypes from summarize-layer exist, treat them as the node set.
+            // Intersect planner nodes with mandatory, or use mandatory if no overlap (same rule as NodeResolver path).
+            if (constraints?.mandatoryNodeTypes && constraints.mandatoryNodeTypes.length > 0) {
+                const hasActionMandatory = constraints.mandatoryNodeTypes.some((m) => !isTriggerishNodeType(m));
+                if (hasActionMandatory) {
+                    // In plan-driven workflows, mandatoryNodeTypes from summarize/planner are authoritative.
+                    // This prevents resolver/planner side-expansion from injecting unrelated nodes (e.g., ollama).
+                    resolution = { ...resolution, nodeIds: [...constraints.mandatoryNodeTypes] };
+                    console.log(`[WorkflowLifecycle] ✅ Strict mandatoryNodeTypes override (planner path): ${resolution.nodeIds.join(', ')}`);
+                }
+                else {
+                    const mandatorySet = new Set(constraints.mandatoryNodeTypes);
+                    const filteredNodeIds = resolution.nodeIds.filter((id) => mandatorySet.has(id));
+                    if (filteredNodeIds.length > 0) {
+                        const plannerHasActions = resolution.nodeIds.some((id) => !isTriggerishNodeType(id));
+                        const filteredOnlyTriggers = filteredNodeIds.every((id) => isTriggerishNodeType(id));
+                        const mandatoryMostlyTriggers = constraints.mandatoryNodeTypes.every((m) => isTriggerishNodeType(m));
+                        const wouldDropActions = plannerHasActions && filteredOnlyTriggers && filteredNodeIds.length < resolution.nodeIds.length;
+                        if (wouldDropActions && mandatoryMostlyTriggers) {
+                            console.warn(`[WorkflowLifecycle] ⚠️ Skipping mandatory ∩ planner: would keep only triggers while planner has actions. Keeping planner nodes: ${resolution.nodeIds.join(', ')}`);
+                        }
+                        else {
+                            console.log(`[WorkflowLifecycle] ✅ Overriding planner result with intersection of mandatoryNodeTypes: ${filteredNodeIds.join(', ')}`);
+                            resolution = { ...resolution, nodeIds: filteredNodeIds };
+                        }
+                    }
+                    else {
+                        const plannerHasActions = resolution.nodeIds.some((id) => !isTriggerishNodeType(id));
+                        const mandatoryOnlyTriggers = constraints.mandatoryNodeTypes.every((m) => isTriggerishNodeType(m));
+                        if (plannerHasActions && mandatoryOnlyTriggers) {
+                            console.warn(`[WorkflowLifecycle] ⚠️ Planner has no overlap with trigger-only mandatoryNodeTypes; keeping planner nodes: ${resolution.nodeIds.join(', ')}`);
+                        }
+                        else {
+                            console.warn(`[WorkflowLifecycle] ⚠️ Planner result has no overlap with mandatoryNodeTypes. Using mandatoryNodeTypes: ${constraints.mandatoryNodeTypes.join(', ')}`);
+                            resolution = { ...resolution, nodeIds: [...constraints.mandatoryNodeTypes] };
+                        }
+                    }
+                }
+            }
+        }
+        else {
+            // Legacy NodeResolver: use merged prompt so required nodes match full user intent (not only short variation)
+            const promptForResolution = primaryPlannerPrompt;
+            const contextPrompt = undefined;
+            resolution = nodeResolver.resolvePrompt(promptForResolution, contextPrompt, {
+                explicitNodeTypes: constraints?.explicitNodeTypes,
+                blockedNodeTypes: constraints?.blockedNodeTypes,
+            });
+            // ✅ ROOT-LEVEL FIX: When mandatory node types are known (from summarize-layer / selected variation),
+            // treat them as the single source of truth for required nodes.
+            if (constraints?.mandatoryNodeTypes && constraints.mandatoryNodeTypes.length > 0) {
+                const hasActionMandatory = constraints.mandatoryNodeTypes.some((m) => !isTriggerishNodeType(m));
+                if (hasActionMandatory) {
+                    resolution = {
+                        ...resolution,
+                        nodeIds: [...constraints.mandatoryNodeTypes],
+                    };
+                    console.log(`[WorkflowLifecycle] ✅ Strict mandatoryNodeTypes override (resolver path): ${resolution.nodeIds.join(', ')}`);
+                }
+                else {
+                    const mandatorySet = new Set(constraints.mandatoryNodeTypes);
+                    const filteredNodeIds = resolution.nodeIds.filter((id) => mandatorySet.has(id));
+                    if (filteredNodeIds.length > 0) {
+                        const resolverHasActions = resolution.nodeIds.some((id) => !isTriggerishNodeType(id));
+                        const filteredOnlyTriggers = filteredNodeIds.every((id) => isTriggerishNodeType(id));
+                        const mandatoryMostlyTriggers = constraints.mandatoryNodeTypes.every((m) => isTriggerishNodeType(m));
+                        const wouldDropActions = resolverHasActions && filteredOnlyTriggers && filteredNodeIds.length < resolution.nodeIds.length;
+                        if (wouldDropActions && mandatoryMostlyTriggers) {
+                            console.warn(`[WorkflowLifecycle] ⚠️ Skipping mandatory ∩ resolver: would keep only triggers while resolver has actions. Keeping: ${resolution.nodeIds.join(', ')}`);
+                        }
+                        else {
+                            console.log(`[WorkflowLifecycle] ✅ Overriding NodeResolver result with intersection of mandatoryNodeTypes: ${filteredNodeIds.join(', ')}`);
+                            resolution = {
+                                ...resolution,
+                                nodeIds: filteredNodeIds,
+                            };
+                        }
+                    }
+                    else {
+                        const resolverHasActions = resolution.nodeIds.some((id) => !isTriggerishNodeType(id));
+                        const mandatoryOnlyTriggers = constraints.mandatoryNodeTypes.every((m) => isTriggerishNodeType(m));
+                        if (resolverHasActions && mandatoryOnlyTriggers) {
+                            console.warn(`[WorkflowLifecycle] ⚠️ NodeResolver has no overlap with trigger-only mandatoryNodeTypes; keeping resolver nodes: ${resolution.nodeIds.join(', ')}`);
+                        }
+                        else {
+                            console.warn(`[WorkflowLifecycle] ⚠️  NodeResolver result has no overlap with mandatoryNodeTypes. Using mandatoryNodeTypes as required nodes instead: ${constraints.mandatoryNodeTypes.join(', ')}`);
+                            resolution = {
+                                ...resolution,
+                                nodeIds: [...constraints.mandatoryNodeTypes],
+                            };
+                        }
+                    }
+                }
+            }
+            if (!resolution.success && resolution.errors.length > 0) {
+                console.error('[WorkflowLifecycle] Node resolution failed:', resolution.errors);
+                // Continue anyway - workflow builder may still generate valid workflow
+            }
+            else {
+                console.log(`[WorkflowLifecycle] Node resolution: ${resolution.nodeIds.length} required node(s): ${resolution.nodeIds.join(', ')}`);
+            }
+        }
+        // Merge conditional chain for age/vote/eligibility intents so STEP 1.5b can inject missing nodes
+        const promptForIntent = ((constraints?.originalPrompt || '') + ' ' + primaryPlannerPrompt).toLowerCase();
+        const needsConditional = /\b(age|eligible|vote|voting|verify|check|condition|if|else)\b/.test(promptForIntent);
+        const hasAuthoritativeMandatory = (constraints?.mandatoryNodeTypes?.length || 0) > 0;
+        if (needsConditional && !hasAuthoritativeMandatory) {
+            const conditionalChain = ['form', 'if_else', 'log_output'];
+            resolution = {
+                ...resolution,
+                nodeIds: [...new Set([...resolution.nodeIds, ...conditionalChain])],
+            };
+            console.log(`[WorkflowLifecycle] Required nodes (merged with conditional chain): ${resolution.nodeIds.join(', ')}`);
+        }
+        else if (needsConditional && hasAuthoritativeMandatory) {
+            console.log('[WorkflowLifecycle] Intent telemetry: skipped conditional auto-merge due to authoritative mandatory node chain');
+        }
+        // STEP 1: Generate workflow graph (DAG only, no credentials)
+        // ✅ PRODUCTION: Always use new deterministic pipeline architecture
+        // ✅ MIGRATION: Legacy builder fallback removed - single production path
+        console.log('[WorkflowLifecycle] Using new deterministic pipeline architecture');
+        const { selectedStructuredPrompt, originalPrompt } = this.buildEffectiveStructuredPromptForPipeline(userPrompt, constraints);
+        console.log(`[WorkflowLifecycle] generateWorkflowGraph - structured (variation): "${selectedStructuredPrompt.substring(0, 100)}..."`);
+        if (constraints?.selectedStructuredPrompt) {
+            console.log(`[WorkflowLifecycle] ✅ Merged primaryPlannerPrompt used for planner/variant build; original preserved for config/resolution`);
+        }
+        // Pass pipeline options; mandatoryNodeTypes/registryTags from summarize-layer are the authoritative node set.
+        const pipelineConstraints = {
+            ...constraints,
+            selectedStructuredPrompt,
+            originalPrompt,
+            mandatoryNodeTypes: constraints?.mandatoryNodeTypes ?? [],
+            registryTags: constraints?.registryTags ?? [],
+        };
+        const generationResult = await this.generateWorkflowWithNewPipeline(primaryPlannerPrompt, pipelineConstraints, onProgress);
+        let workflow = generationResult.workflow;
+        const { mergeOriginalUserPromptMetadata } = await Promise.resolve().then(() => __importStar(require('./ai/structure-materializer')));
+        workflow = mergeOriginalUserPromptMetadata(workflow, originalPrompt) ?? workflow;
+        console.log(`[WorkflowLifecycle] Graph generated: ${workflow.nodes.length} nodes, ${workflow.edges.length} edges`);
+        // STEP 1.5a: If Smart Planner is active, drop any nodes that correspond to mentioned_only services
+        // ✅ CRITICAL FIX: Don't remove nodes that are actually needed (have connections or are in resolved nodes)
+        if (plannerSpec && plannerSpec.mentioned_only && plannerSpec.mentioned_only.length > 0) {
+            // ✅ CRITICAL FIX: Resolve mentioned_only types to canonical types for proper matching
+            // This handles aliases (e.g., "gmail" -> "google_gmail")
+            const { resolveNodeType } = require('../core/utils/node-type-resolver-util');
+            const mentionedOnlyTypes = new Set(plannerSpec.mentioned_only.map((m) => {
+                const rawType = m.split('.')[0];
+                // Resolve to canonical type (handles aliases)
+                const canonicalType = resolveNodeType(rawType, false);
+                return canonicalType;
+            }));
+            console.log(`[WorkflowLifecycle] mentioned_only types (canonical): ${Array.from(mentionedOnlyTypes).join(', ')}`);
+            // Build set of node IDs that are actually connected (have edges)
+            const connectedNodeIds = new Set();
+            workflow.edges.forEach((edge) => {
+                if (edge.source)
+                    connectedNodeIds.add(edge.source);
+                if (edge.target)
+                    connectedNodeIds.add(edge.target);
+            });
+            const originalNodeCount = workflow.nodes.length;
+            const filteredNodes = workflow.nodes.filter((node) => {
+                const nodeType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(node);
+                // ✅ CRITICAL FIX: Resolve node type to canonical form for comparison
+                const canonicalNodeType = resolveNodeType(nodeType, false);
+                if (mentionedOnlyTypes.has(canonicalNodeType)) {
+                    // ✅ CRITICAL: Don't remove if node is connected (has edges) - it's actually being used
+                    if (connectedNodeIds.has(node.id)) {
+                        console.log(`[WorkflowLifecycle] Keeping mentioned_only node ${nodeType} (canonical: ${canonicalNodeType}, nodeId=${node.id}) - node is connected and needed`);
+                        return true; // Keep the node
+                    }
+                    // ✅ CRITICAL: Don't remove if node has config (user has configured it)
+                    const hasConfig = node.data?.config && Object.keys(node.data.config).length > 0;
+                    if (hasConfig) {
+                        console.log(`[WorkflowLifecycle] Keeping mentioned_only node ${nodeType} (canonical: ${canonicalNodeType}, nodeId=${node.id}) - node has configuration`);
+                        return true; // Keep the node
+                    }
+                    console.log(`[WorkflowLifecycle] Removing node for mentioned_only service: ${nodeType} (canonical: ${canonicalNodeType}, nodeId=${node.id}) - not connected and no config`);
+                    return false;
+                }
+                return true;
+            });
+            if (filteredNodes.length !== originalNodeCount) {
+                const removedCount = originalNodeCount - filteredNodes.length;
+                // Remove any edges that referenced removed nodes
+                const remainingIds = new Set(filteredNodes.map((n) => n.id));
+                const filteredEdges = workflow.edges.filter((edge) => remainingIds.has(edge.source) && remainingIds.has(edge.target));
+                console.log(`[WorkflowLifecycle] Planner filter removed ${removedCount} mentioned_only node(s); edges now: ${filteredEdges.length}`);
+                workflow = {
+                    ...workflow,
+                    nodes: filteredNodes,
+                    edges: filteredEdges,
+                };
+            }
+        }
+        // STEP 1.5b: Ensure all resolved nodes are in the workflow
+        // ✅ UNIFIED ORCHESTRATION: Use orchestrator to inject nodes (creates edges automatically)
+        // This fixes cases where the workflow builder's node filter removed required nodes
+        if (resolution.success && resolution.nodeIds.length > 0) {
+            const promptUsedForResolution = constraints?.selectedStructuredPrompt || userPrompt;
+            // Normalize existing node types to canonical forms for comparison
+            const existingNodeTypes = workflow.nodes.map((node) => {
+                const normalized = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(node);
+                // Also resolve aliases to canonical form (e.g., "gmail" → "google_gmail")
+                return (0, node_type_resolver_util_1.resolveNodeType)(normalized);
+            });
+            // ✅ Get current execution order to determine injection positions
+            let currentExecutionOrder = execution_order_manager_1.executionOrderManager.initialize(workflow);
+            const orderedNodeIds = execution_order_manager_1.executionOrderManager.getOrderedNodeIds(currentExecutionOrder);
+            // ✅ Find reference nodes by category (registry-driven)
+            const triggerNode = workflow.nodes.find((n) => {
+                const nodeType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n);
+                const nodeDef = unified_node_registry_1.unifiedNodeRegistry.get(nodeType);
+                return nodeDef?.category === 'trigger';
+            });
+            // ✅ Group nodes by category for smart injection positioning (using registry categories)
+            const dataSourceNodes = workflow.nodes.filter((n) => {
+                const nodeType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n);
+                const nodeDef = unified_node_registry_1.unifiedNodeRegistry.get(nodeType);
+                return nodeDef?.category === 'data'; // ✅ Valid category: 'data'
+            });
+            const transformationNodes = workflow.nodes.filter((n) => {
+                const nodeType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n);
+                const nodeDef = unified_node_registry_1.unifiedNodeRegistry.get(nodeType);
+                return nodeDef?.category === 'transformation' || nodeDef?.category === 'ai'; // ✅ Valid categories: 'transformation' | 'ai'
+            });
+            const outputNodes = workflow.nodes.filter((n) => {
+                const nodeType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n);
+                const nodeDef = unified_node_registry_1.unifiedNodeRegistry.get(nodeType);
+                return nodeDef?.category === 'output' || nodeDef?.category === 'social_media' || nodeDef?.category === 'communication';
+            });
+            // ✅ Determine last node in each category for injection positioning
+            const lastDataSource = dataSourceNodes.length > 0
+                ? dataSourceNodes[dataSourceNodes.length - 1]
+                : triggerNode;
+            const lastTransformation = transformationNodes.length > 0
+                ? transformationNodes[transformationNodes.length - 1]
+                : lastDataSource;
+            const lastOutput = outputNodes.length > 0
+                ? outputNodes[outputNodes.length - 1]
+                : lastTransformation;
+            // ✅ UNIVERSAL: Load AI-specified nodes context check (once, outside loop)
+            const aiSpecifiedNodesContext = constraints?._aiSpecifiedNodesContext;
+            let isNodeAISpecifiedFn = null;
+            if (aiSpecifiedNodesContext) {
+                const { isNodeAISpecified } = await Promise.resolve().then(() => __importStar(require('../core/utils/ai-specified-nodes-context')));
+                isNodeAISpecifiedFn = isNodeAISpecified;
+            }
+            // ✅ Collect nodes to inject (batch for efficiency)
+            const nodesToInject = [];
+            const authoritativeSet = new Set((constraints?.mandatoryNodeTypes || []).map((t) => (0, node_type_resolver_util_1.resolveNodeType)(t)));
+            const hasAuthoritativeChain = authoritativeSet.size > 0;
+            for (const nodeType of resolution.nodeIds) {
+                // Resolve nodeType to canonical form (handles aliases like "gmail" → "google_gmail")
+                const resolvedNodeType = (0, node_type_resolver_util_1.resolveNodeType)(nodeType);
+                // Authoritative-chain guard: block semantic post-plan injection for unplanned nodes.
+                if (hasAuthoritativeChain &&
+                    !authoritativeSet.has(resolvedNodeType) &&
+                    !SYSTEM_ALLOWED_TYPES.has(resolvedNodeType)) {
+                    console.log(`[WorkflowLifecycle] Intent telemetry: blocked post-plan node injection for ${resolvedNodeType} (not in authoritative chain)`);
+                    if (shouldHardBlockIntentAuthorityViolation()) {
+                        continue;
+                    }
+                }
+                // ✅ UNIVERSAL: Check if node is already specified by AI (prevent duplicate injection)
+                // If AI already specified this node in StructuredIntent, skip keyword-based injection
+                if (aiSpecifiedNodesContext && isNodeAISpecifiedFn) {
+                    if (isNodeAISpecifiedFn(aiSpecifiedNodesContext, resolvedNodeType)) {
+                        console.log(`[WorkflowLifecycle] ✅ Node ${nodeType} (canonical: ${resolvedNodeType}) already specified by AI - skipping keyword-based injection`);
+                        continue;
+                    }
+                }
+                // Check if this canonical type already exists in the workflow
+                if (!existingNodeTypes.includes(resolvedNodeType)) {
+                    // ✅ SAFETY LAYER 1: Verify schema exists before adding (prevents unregistered types like linkedin_post)
+                    const schema = node_library_1.nodeLibrary.getSchema(resolvedNodeType);
+                    if (!schema) {
+                        console.warn(`[WorkflowLifecycle] ⚠️  Skipping node injection: ${nodeType} (resolved to ${resolvedNodeType}) - schema not found. This node type is not registered.`);
+                        continue; // Skip this node - it's not a valid registered type
+                    }
+                    // ✅ SAFETY LAYER 2: Capability-based deduplication (prevents duplicate AI nodes like ai_chat_model + ai_agent)
+                    // Branching nodes skip coarse dedupe so if_else is never dropped when an AI node exists
+                    const newDedupeKey = (0, node_capability_dedupe_1.getNodeCapabilityDedupeKey)(resolvedNodeType);
+                    if (newDedupeKey !== null) {
+                        const existingNodeWithSameCapability = workflow.nodes.find((n) => {
+                            const existingNodeType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n);
+                            const existingResolvedType = (0, node_type_resolver_util_1.resolveNodeType)(existingNodeType);
+                            const existingKey = (0, node_capability_dedupe_1.getNodeCapabilityDedupeKey)(existingResolvedType);
+                            return existingKey !== null && existingKey === newDedupeKey;
+                        });
+                        if (existingNodeWithSameCapability) {
+                            const existingNodeType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(existingNodeWithSameCapability);
+                            const existingResolvedType = (0, node_type_resolver_util_1.resolveNodeType)(existingNodeType);
+                            console.log(`[WorkflowLifecycle] 🔍 Skipping duplicate capability: ${nodeType} (resolved to ${resolvedNodeType}, dedupe: ${newDedupeKey}) - ${existingResolvedType} already provides this capability`);
+                            continue; // Skip this node - capability already provided by existing node
+                        }
+                    }
+                    // ✅ Only inject if node is explicitly mentioned in the prompt (avoids adding e.g. instagram when user only said "Gmail")
+                    if (!this.isNodeMentionedInPrompt(resolvedNodeType, promptUsedForResolution)) {
+                        console.log(`[WorkflowLifecycle] 🔍 Skipping injection: ${resolvedNodeType} not mentioned in selected prompt (matched only by generic keyword)`);
+                        continue;
+                    }
+                    console.log(`[WorkflowLifecycle] ✅ Adding missing resolved node via orchestrator: ${nodeType} (canonical: ${resolvedNodeType})`);
+                    // Use resolved canonical type for schema lookup (schema already verified above)
+                    if (schema) {
+                        const { randomUUID } = require('crypto');
+                        const newNode = {
+                            id: randomUUID(),
+                            type: 'custom',
+                            position: { x: 0, y: 0 },
+                            data: {
+                                type: resolvedNodeType, // Use canonical type, not alias
+                                label: schema.label,
+                                category: schema.category,
+                                config: {},
+                            },
+                        };
+                        // ✅ REGISTRY-DRIVEN: Determine injection position based on node category
+                        const nodeDef = unified_node_registry_1.unifiedNodeRegistry.get(resolvedNodeType);
+                        const category = nodeDef?.category || ''; // ✅ Use registry category (validated type)
+                        let referenceNodeId;
+                        let position = 'after';
+                        // ✅ UNIVERSAL: Use registry category to determine injection position
+                        // Valid categories: 'trigger' | 'data' | 'ai' | 'communication' | 'logic' | 'transformation' | 'utility'
+                        if (category === 'trigger') {
+                            // Triggers should be first - inject at start
+                            referenceNodeId = triggerNode?.id || orderedNodeIds[0] || '';
+                            position = 'before';
+                        }
+                        else if (category === 'data') {
+                            // Data sources: after trigger or after last data source
+                            referenceNodeId = lastDataSource?.id || triggerNode?.id || orderedNodeIds[0] || '';
+                            position = 'after';
+                        }
+                        else if (category === 'transformation' || category === 'ai') {
+                            // Transformations/AI: after last data source or after last transformation
+                            referenceNodeId = lastTransformation?.id || lastDataSource?.id || triggerNode?.id || orderedNodeIds[0] || '';
+                            position = 'after';
+                        }
+                        else if (category === 'output' || category === 'social_media' || category === 'communication') {
+                            // Outputs/Communication: after last transformation or after last output
+                            referenceNodeId = lastOutput?.id || lastTransformation?.id || lastDataSource?.id || triggerNode?.id || orderedNodeIds[0] || '';
+                            position = 'after';
+                        }
+                        else if (category === 'logic' || category === 'utility') {
+                            // Logic/Utility: after last transformation or after last output
+                            referenceNodeId = lastTransformation?.id || lastDataSource?.id || triggerNode?.id || orderedNodeIds[0] || '';
+                            position = 'after';
+                        }
+                        else {
+                            // Default: inject after last node in execution order
+                            referenceNodeId = orderedNodeIds[orderedNodeIds.length - 1] || triggerNode?.id || '';
+                            position = 'after';
+                        }
+                        if (referenceNodeId) {
+                            nodesToInject.push({
+                                node: newNode,
+                                context: {
+                                    type: 'missing', // ✅ Use 'missing' type for lifecycle resolved nodes
+                                    position,
+                                    referenceNodeId,
+                                    reason: `Lifecycle resolved node: ${resolvedNodeType} (category: ${category})`,
+                                },
+                            });
+                            // Add to existingNodeTypes to prevent duplicates in same loop
+                            existingNodeTypes.push(resolvedNodeType);
+                        }
+                        else {
+                            console.warn(`[WorkflowLifecycle] ⚠️  Cannot inject node ${resolvedNodeType}: No valid reference node found`);
+                        }
+                    }
+                }
+                else {
+                    console.log(`[WorkflowLifecycle] Skipping duplicate node: ${nodeType} (canonical: ${resolvedNodeType}) - already exists in workflow`);
+                }
+            }
+            // ✅ UNIFIED ORCHESTRATION: Inject all nodes via orchestrator (creates edges automatically)
+            for (const { node, context } of nodesToInject) {
+                try {
+                    const injectionResult = await orchestration_1.unifiedGraphOrchestrator.injectNode(workflow, node, context);
+                    workflow = injectionResult.workflow;
+                    currentExecutionOrder = injectionResult.executionOrder;
+                    if (injectionResult.errors.length > 0) {
+                        console.warn(`[WorkflowLifecycle] ⚠️  Node injection errors for ${node.data?.type}: ${injectionResult.errors.join(', ')}`);
+                    }
+                    if (injectionResult.warnings.length > 0) {
+                        console.log(`[WorkflowLifecycle] ℹ️  Node injection warnings for ${node.data?.type}: ${injectionResult.warnings.join(', ')}`);
+                    }
+                    console.log(`[WorkflowLifecycle] ✅ Injected missing required node: ${node.data?.type} (requiredNodeIds enforcement)`);
+                }
+                catch (error) {
+                    console.error(`[WorkflowLifecycle] ❌ Failed to inject node ${node.data?.type}: ${error?.message || 'Unknown error'}`);
+                    // Continue with other nodes even if one fails
+                }
+            }
+            // ✅ CRITICAL: Validate workflow after all injections (fail fast if broken)
+            if (nodesToInject.length > 0) {
+                const validation = orchestration_1.unifiedGraphOrchestrator.validateWorkflow(workflow, currentExecutionOrder);
+                if (!validation.valid) {
+                    console.error(`[WorkflowLifecycle] ❌ Workflow validation failed after node injection:`);
+                    validation.errors.forEach(err => console.error(`[WorkflowLifecycle]   - ${err}`));
+                    // ✅ FAIL FAST: Don't continue with broken graph
+                    throw new Error(`Workflow structure invalid after lifecycle node injection: ${validation.errors.join('; ')}. ` +
+                        `This indicates a pipeline contract violation - edges were not created correctly.`);
+                }
+                else {
+                    console.log(`[WorkflowLifecycle] ✅ Workflow validation passed after injecting ${nodesToInject.length} node(s)`);
+                }
+            }
+        }
+        // STEP 2: Deduplicate nodes by canonical type BEFORE normalization
+        // This prevents duplicate nodes like "gmail" and "google_gmail" from existing simultaneously
+        console.log('[WorkflowLifecycle] Step 2: Deduplicating nodes by canonical type...');
+        workflow = this.deduplicateNodesByCanonicalType(workflow);
+        // STEP 2.1: Normalize all node types to canonical forms (replace aliases)
+        console.log('[WorkflowLifecycle] Step 2.1: Normalizing all node types to canonical forms...');
+        workflow = this.normalizeAllNodeTypesToCanonical(workflow);
+        workflow = this.applyEmailTransportExclusivityToWorkflow(workflow, originalPrompt);
+        // STEP 2.5: Validate workflow structure
+        console.log('[WorkflowLifecycle] Step 2.5: Validating workflow structure...');
+        const validation = workflow_validation_pipeline_1.workflowValidationPipeline.validateWorkflow(workflow);
+        let finalWorkflow = workflow;
+        // STEP 2.6: Ensure final workflow also has canonical types (after validation fixes)
+        finalWorkflow = this.normalizeAllNodeTypesToCanonical(finalWorkflow);
+        finalWorkflow = this.applyEmailTransportExclusivityToWorkflow(finalWorkflow, originalPrompt);
+        // STEP 2.62: Authoritative semantic subset gate
+        finalWorkflow = this.enforceAuthoritativeSemanticSubset(finalWorkflow, constraints?.mandatoryNodeTypes ?? [], originalPrompt);
+        // STEP 2.65: Intent-based config filling (form fields, etc.) using originalPrompt so age/vote → age field
+        try {
+            const { intelligentConfigFiller } = await Promise.resolve().then(() => __importStar(require('./ai/intelligent-config-filler')));
+            finalWorkflow = await intelligentConfigFiller.fillConfigurationsFromPrompt(finalWorkflow, selectedStructuredPrompt, originalPrompt);
+            finalWorkflow = (0, structure_materializer_1.materializeStructuralFields)(finalWorkflow);
+            finalWorkflow = (0, intent_structural_projection_1.applyStructuralIntentAlignment)(finalWorkflow);
+            finalWorkflow = (0, workflow_config_hydrator_1.hydrateRequiredConfigFromRegistryDefaults)(finalWorkflow);
+            const { hydrateFormFieldsFromLlmIfEnabled } = await Promise.resolve().then(() => __importStar(require('./ai/form-fields-structural-llm')));
+            finalWorkflow = await hydrateFormFieldsFromLlmIfEnabled(finalWorkflow);
+            const { repairIfElseConditionsFromUpstreamForm } = await Promise.resolve().then(() => __importStar(require('../core/orchestration/repair-ifelse-form-conditions')));
+            finalWorkflow = repairIfElseConditionsFromUpstreamForm(finalWorkflow);
+            console.log('[WorkflowLifecycle] ✅ Intent-based config filling applied (originalPrompt used for form/age fields)');
+        }
+        catch (err) {
+            console.warn('[WorkflowLifecycle] Intent-based config filling failed (non-fatal):', err instanceof Error ? err.message : err);
+        }
+        // STEP 2.5: Final Gmail integrity check
+        // NOTE: When Smart Planner is active, we trust planner roles (mentioned_only vs data_source)
+        // and SKIP legacy Gmail integrity enforcement to avoid over-creating gmail nodes.
+        if (!plannerSpec) {
+            try {
+                const finalNodeTypes = finalWorkflow.nodes.map((node) => (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(node));
+                nodeResolver.assertGmailIntegrity(userPrompt, finalNodeTypes);
+                console.log('[WorkflowLifecycle] ✅ Gmail integrity check passed');
+            }
+            catch (error) {
+                console.error('[WorkflowLifecycle] Gmail integrity check failed:', error.message);
+                // Don't fail - just log the error. The workflow may still be valid.
+            }
+        }
+        else {
+            console.log('[WorkflowLifecycle] Skipping legacy Gmail integrity check (Smart Planner active).');
+        }
+        // STEP 2.7: Intent-critical coverage guards (compile-time semantic completeness)
+        const guardPrompt = [originalPrompt, selectedStructuredPrompt].filter(Boolean).join('\n');
+        finalWorkflow = await this.enforceIntentCoverageGuards(finalWorkflow, guardPrompt, {
+            authoritativeNodeTypes: constraints?.mandatoryNodeTypes ?? [],
+        });
+        // STEP 3: Discover credentials (ONLY AFTER graph creation)
+        // ✅ CRITICAL: Pass userId to check vault during discovery
+        console.log('[WorkflowLifecycle] Step 3: Discovering required credentials...');
+        // Get userId for vault lookup
+        let userId = constraints?.vaultUserId;
+        if (!userId && constraints?.authToken) {
+            try {
+                const db = (0, aws_db_client_1.getDbClient)();
+                const { data: { user }, error: authError } = await db.auth.getUser(constraints.authToken);
+                if (!authError && user) {
+                    userId = user.id;
+                }
+            }
+            catch (error) {
+                console.warn('[WorkflowLifecycle] Could not resolve userId from auth token for vault lookup:', error);
+            }
+        }
+        if (!userId) {
+            // ✅ IMPORTANT: Never call tokenless db.auth.getUser() on backend; it can stall without a session.
+            console.warn('[WorkflowLifecycle] No vaultUserId/authToken provided; credential vault checks will be skipped.');
+        }
+        // ── Self-healing gate (spec task 24) ─────────────────────────────────
+        // Validate and repair the workflow BEFORE credential evaluation.
+        // The credential step must only be reached when validateWorkflow returns valid: true.
+        try {
+            const healResult = await this.validateAndHealBeforeCredentials(finalWorkflow);
+            finalWorkflow = healResult.workflow;
+            if (healResult.healed) {
+                console.log('[WorkflowLifecycle] ✅ Self-healing gate: workflow was repaired before credential evaluation');
+            }
+        }
+        catch (healError) {
+            console.error('[WorkflowLifecycle] ❌ Self-healing gate failed:', healError);
+            throw healError;
+        }
+        const credentialDiscovery = await credential_discovery_phase_1.credentialDiscoveryPhase.discoverCredentials(finalWorkflow, userId);
+        console.log(`[WorkflowLifecycle] Credential discovery complete: ${credentialDiscovery.requiredCredentials.length} credential(s) required`);
+        console.log(`[WorkflowLifecycle] Satisfied: ${credentialDiscovery.satisfiedCredentials?.length || 0}, Missing: ${credentialDiscovery.missingCredentials?.length || 0}`);
+        // ── _fieldModes credential gate (spec task 6) ────────────────────────
+        // Filter requiredCredentials: only surface a credential when the corresponding
+        // field's _fieldModes toggle is 'manual_static'. Fields in buildtime_ai_once or
+        // runtime_ai mode are resolved via vault/runtime and must NOT prompt the user.
+        const gatedRequiredCredentials = credentialDiscovery.requiredCredentials.filter((cred) => {
+            // If no nodeIds, keep (conservative)
+            if (!cred.nodeIds || cred.nodeIds.length === 0)
+                return true;
+            return cred.nodeIds.some((nodeId) => {
+                const node = finalWorkflow.nodes.find((n) => n.id === nodeId);
+                if (!node)
+                    return false;
+                const nodeType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(node);
+                const fieldModes = node.data?.config?._fieldModes ?? {};
+                // Check each credential field for this node
+                const nodeDef = unified_node_registry_1.unifiedNodeRegistry.get(nodeType);
+                if (!nodeDef)
+                    return true; // conservative: keep if no def
+                const credFields = Object.entries(nodeDef.inputSchema ?? {})
+                    .filter(([, fd]) => fd?.ownership === 'credential')
+                    .map(([name]) => name);
+                if (credFields.length === 0)
+                    return true;
+                return credFields.some((fieldName) => shouldRequireCredential(nodeType, fieldName, fieldModes));
+            });
+        });
+        if (gatedRequiredCredentials.length !== credentialDiscovery.requiredCredentials.length) {
+            console.log(`[WorkflowLifecycle] _fieldModes gate: reduced required credentials from ${credentialDiscovery.requiredCredentials.length} to ${gatedRequiredCredentials.length}`);
+            credentialDiscovery.requiredCredentials = gatedRequiredCredentials;
+        }
+        // ─────────────────────────────────────────────────────────────────────
+        credentialDiscovery.requiredCredentials.forEach((cred) => {
+            const status = cred.satisfied ? '✅ SATISFIED' : '❌ MISSING';
+            console.log(`  - ${cred.displayName} (${cred.provider}/${cred.type}) ${status} for nodes: ${cred.nodeIds.join(', ')}`);
+        });
+        // ✅ UX FIX: If OAuth credentials are already connected (satisfied in vault),
+        // inject a non-secret credential reference into node config so the UI can
+        // display that the node is "connected" without asking for secrets.
+        // (Actual tokens remain in `google_oauth_tokens` and are resolved at execution time.)
+        finalWorkflow = this.autoInjectSatisfiedCredentialRefs(finalWorkflow, credentialDiscovery);
+        // ✅ CRITICAL FIX: Ensure all nodes referenced by credentials exist in workflow
+        // This fixes the issue where nodes are removed but credentials are still discovered for them
+        const existingNodeIds = new Set(finalWorkflow.nodes.map((n) => n.id));
+        const missingNodeIds = new Set();
+        credentialDiscovery.requiredCredentials.forEach(cred => {
+            cred.nodeIds.forEach(nodeId => {
+                if (!existingNodeIds.has(nodeId)) {
+                    missingNodeIds.add(nodeId);
+                }
+            });
+        });
+        if (missingNodeIds.size > 0) {
+            console.warn(`[WorkflowLifecycle] ⚠️  Credentials discovered for ${missingNodeIds.size} missing node(s). These nodes may have been incorrectly removed.`);
+            console.warn(`[WorkflowLifecycle] Missing node IDs: ${Array.from(missingNodeIds).join(', ')}`);
+            // Try to re-add missing nodes based on credential node types
+            const nodeTypesToAdd = new Set();
+            credentialDiscovery.requiredCredentials.forEach(cred => {
+                cred.nodeTypes.forEach(nodeType => {
+                    // Check if any node of this type exists
+                    const hasNodeType = finalWorkflow.nodes.some((n) => (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n) === nodeType);
+                    if (!hasNodeType) {
+                        nodeTypesToAdd.add(nodeType);
+                    }
+                });
+            });
+            // REMOVED: Synthetic node generation logic
+            // Node types must exist in NodeLibrary - no synthetic nodes allowed
+            if (nodeTypesToAdd.size > 0) {
+                console.warn(`[WorkflowLifecycle] ⚠️  Credentials discovered for ${nodeTypesToAdd.size} missing node type(s) but synthetic node generation is disabled`);
+                console.warn(`[WorkflowLifecycle] Missing node types: ${Array.from(nodeTypesToAdd).join(', ')}`);
+                console.warn(`[WorkflowLifecycle] These node types must be present in the workflow before credentials can be attached`);
+            }
+        }
+        // STEP 4: Discover node inputs (AFTER graph generation)
+        console.log('[WorkflowLifecycle] Step 4: Discovering required node inputs...');
+        const nodeInputs = this.discoverNodeInputs(finalWorkflow);
+        return {
+            workflow: finalWorkflow,
+            requiredCredentials: credentialDiscovery,
+            requiredInputs: nodeInputs,
+            validation,
+            documentation: generationResult.documentation,
+            suggestions: generationResult.suggestions,
+            estimatedComplexity: generationResult.estimatedComplexity,
+            analysis: generationResult.analysis,
+        };
+    }
+    applyEmailTransportExclusivityToWorkflow(workflow, prompt) {
+        const nodeTypes = workflow.nodes.map((n) => (0, node_type_resolver_util_1.resolveNodeType)((0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n)));
+        const allowedTypes = new Set(applyEmailTransportExclusivity(nodeTypes, prompt));
+        const filteredNodes = workflow.nodes.filter((n) => {
+            const t = (0, node_type_resolver_util_1.resolveNodeType)((0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n));
+            return allowedTypes.has(t);
+        });
+        if (filteredNodes.length === workflow.nodes.length) {
+            return workflow;
+        }
+        const remainingIds = new Set(filteredNodes.map((n) => n.id));
+        const filteredEdges = workflow.edges.filter((e) => remainingIds.has(e.source) && remainingIds.has(e.target));
+        console.log('[WorkflowLifecycle] Intent telemetry: pruned email/gmail overlap by exclusivity guard');
+        return { ...workflow, nodes: filteredNodes, edges: filteredEdges };
+    }
+    enforceAuthoritativeSemanticSubset(workflow, mandatoryNodeTypes, prompt) {
+        if (!ENABLE_INTENT_AUTHORITY_GUARDS) {
+            return workflow;
+        }
+        const mandatory = (mandatoryNodeTypes || []).map((t) => (0, node_type_resolver_util_1.resolveNodeType)(t));
+        if (mandatory.length === 0)
+            return workflow;
+        const authoritativeSet = new Set(mandatory);
+        const unexpected = workflow.nodes
+            .map((n) => (0, node_type_resolver_util_1.resolveNodeType)((0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n)))
+            .filter((t) => !authoritativeSet.has(t) && !SYSTEM_ALLOWED_TYPES.has(t));
+        if (unexpected.length > 0) {
+            const msg = `Authoritative chain violation: unexpected semantic node(s) present: ${[...new Set(unexpected)].join(', ')}`;
+            console.warn(`[WorkflowLifecycle] Intent telemetry: ${msg}`);
+            if (shouldHardBlockIntentAuthorityViolation()) {
+                throw new Error(msg);
+            }
+        }
+        if (detectLogoutIntent(prompt)) {
+            const hasLogoutCapableNode = workflow.nodes.some((n) => {
+                const t = (0, node_type_resolver_util_1.resolveNodeType)((0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n));
+                return t === 'javascript' || t === 'http_request';
+            });
+            if (!hasLogoutCapableNode) {
+                const msg = 'Logout intent detected but no canonical logout-capable node is present. Add an explicit javascript or http_request step for logout action.';
+                console.warn(`[WorkflowLifecycle] Intent telemetry: ${msg}`);
+                if (shouldHardBlockIntentAuthorityViolation()) {
+                    throw new Error(msg);
+                }
+            }
+        }
+        return workflow;
+    }
+    /**
+     * Normalize all node types in workflow to canonical forms (replace aliases)
+     * This ensures all nodes use canonical types (e.g., "google_gmail" instead of "gmail")
+     *
+     * @param workflow - Workflow to normalize
+     * @returns Workflow with all node types normalized to canonical forms
+     */
+    /**
+     * Deduplicate nodes by canonical type
+     * Removes duplicate nodes that resolve to the same canonical type (e.g., "gmail" and "google_gmail")
+     * Keeps the first occurrence and removes subsequent duplicates
+     */
+    deduplicateNodesByCanonicalType(workflow) {
+        const hasBranchingNode = workflow.nodes.some((n) => {
+            const nodeType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(n);
+            const def = unified_node_registry_1.unifiedNodeRegistry.get((0, node_type_resolver_util_1.resolveNodeType)(nodeType || ''));
+            return def?.isBranching === true;
+        });
+        const seenCanonicalTypes = new Map(); // dedupeKey -> nodeId (first occurrence)
+        const nodesToKeep = [];
+        const nodesToRemove = [];
+        let duplicateCount = 0;
+        for (const node of workflow.nodes) {
+            const nodeType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(node);
+            if (!nodeType || nodeType === 'custom') {
+                // Keep nodes without valid types (they'll be handled elsewhere)
+                nodesToKeep.push(node);
+                continue;
+            }
+            // Resolve to canonical type (handles aliases like "gmail" → "google_gmail")
+            const canonicalType = (0, node_type_resolver_util_1.resolveNodeType)(nodeType);
+            const incomingBranchEdges = hasBranchingNode
+                ? workflow.edges.filter((e) => e.target === node.id).filter((e) => {
+                    const edgeType = String(e.type || e.sourceHandle || '').toLowerCase();
+                    return edgeType === 'true' || edgeType === 'false' || edgeType.startsWith('case_');
+                })
+                : [];
+            // Branch-aware dedupe key:
+            // - In branching workflows, allow same canonical node type on different branch ports.
+            // - In linear workflows (or non-branch edges), keep original canonical dedupe behavior.
+            const dedupeKey = incomingBranchEdges.length > 0
+                ? `${canonicalType}::${incomingBranchEdges
+                    .map((e) => `${e.source}:${String(e.type || e.sourceHandle || 'main').toLowerCase()}`)
+                    .sort()
+                    .join('|')}`
+                : canonicalType;
+            if (seenCanonicalTypes.has(dedupeKey)) {
+                // Duplicate found - mark for removal
+                const firstNodeId = seenCanonicalTypes.get(dedupeKey);
+                nodesToRemove.push(node.id);
+                duplicateCount++;
+                console.log(`[WorkflowLifecycle] 🚫 Removing duplicate node: ${node.id} (type: "${nodeType}" → canonical: "${canonicalType}", key: "${dedupeKey}") ` +
+                    `- keeping first occurrence: ${firstNodeId}`);
+            }
+            else {
+                // First occurrence of this canonical type - keep it
+                seenCanonicalTypes.set(dedupeKey, node.id);
+                nodesToKeep.push(node);
+            }
+        }
+        if (duplicateCount > 0) {
+            console.log(`[WorkflowLifecycle] ✅ Deduplicated ${duplicateCount} duplicate node(s) by canonical type`);
+            // Remove edges connected to duplicate nodes
+            const nodesToRemoveSet = new Set(nodesToRemove);
+            const filteredEdges = workflow.edges.filter((edge) => !nodesToRemoveSet.has(edge.source) && !nodesToRemoveSet.has(edge.target));
+            return {
+                ...workflow,
+                nodes: nodesToKeep,
+                edges: filteredEdges,
+            };
+        }
+        return workflow;
+    }
+    /**
+     * ✅ INJECTION GUARD: True if the prompt explicitly mentions this node (type, label, or distinctive keyword).
+     * Used to avoid injecting nodes that were resolved only via generic keywords (e.g. "send" → instagram when user said "Gmail").
+     */
+    isNodeMentionedInPrompt(nodeType, prompt) {
+        const promptLower = prompt.toLowerCase();
+        const schema = node_library_1.nodeLibrary.getSchema(nodeType);
+        if (schema?.label && promptLower.includes(schema.label.toLowerCase()))
+            return true;
+        const typeAsWords = nodeType.replace(/_/g, ' ');
+        if (promptLower.includes(typeAsWords) || promptLower.includes(nodeType))
+            return true;
+        const distinctive = { google_gmail: 'gmail', slack_message: 'slack', instagram: 'instagram', outlook: 'outlook', telegram: 'telegram', linkedin: 'linkedin', manual_trigger: 'manual', workflow_trigger: 'workflow' };
+        if (distinctive[nodeType] && promptLower.includes(distinctive[nodeType]))
+            return true;
+        return false;
+    }
+    normalizeAllNodeTypesToCanonical(workflow) {
+        let normalizedCount = 0;
+        const normalizedNodes = workflow.nodes.map((node) => {
+            const originalType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(node);
+            if (!originalType || originalType === 'custom') {
+                return node; // Skip nodes without valid types
+            }
+            // ✅ CRITICAL: Force canonicalization even when alias schemas are registered.
+            // `resolveNodeType()` resolves aliases like "gmail" → "google_gmail" using the
+            // NodeTypeResolver which has the alias mapping. This ensures all aliases are
+            // collapsed to canonical types for downstream connector logic and APIs.
+            const canonicalFromLibrary = node_library_1.nodeLibrary.getCanonicalType(originalType);
+            const canonicalFromResolver = (0, node_type_resolver_util_1.resolveNodeType)(originalType);
+            // Use resolver result if it's different (resolved an alias), otherwise use library result
+            const canonicalType = (canonicalFromResolver !== originalType)
+                ? canonicalFromResolver
+                : (canonicalFromLibrary || originalType);
+            // Only update if type changed (was an alias)
+            if (canonicalType !== originalType) {
+                normalizedCount++;
+                console.log(`[WorkflowLifecycle] Normalizing node ${node.id}: "${originalType}" → "${canonicalType}"`);
+                // Update node with canonical type
+                if (node.data) {
+                    node.data.type = canonicalType;
+                }
+                else {
+                    node.data = { type: canonicalType };
+                }
+                // Ensure type is set to 'custom' for frontend compatibility
+                node.type = 'custom';
+            }
+            else {
+                // Already canonical, but ensure data.type is set correctly
+                if (node.data) {
+                    if (!node.data.type || node.data.type !== canonicalType) {
+                        node.data.type = canonicalType;
+                    }
+                }
+                else {
+                    node.data = { type: canonicalType };
+                }
+                node.type = 'custom';
+            }
+            return node;
+        });
+        if (normalizedCount > 0) {
+            console.log(`[WorkflowLifecycle] ✅ Normalized ${normalizedCount} node type(s) to canonical forms`);
+        }
+        else {
+            console.log(`[WorkflowLifecycle] ✅ All ${normalizedNodes.length} node type(s) already in canonical form`);
+        }
+        return {
+            ...workflow,
+            nodes: normalizedNodes,
+        };
+    }
+    /**
+     * Auto-inject non-secret credential references for satisfied credentials.
+     *
+     * This improves UX: node properties show `credentialId` for OAuth-connected services,
+     * but no secrets are stored in node config.
+     */
+    autoInjectSatisfiedCredentialRefs(workflow, credentialDiscovery) {
+        const satisfied = credentialDiscovery?.satisfiedCredentials || [];
+        if (!Array.isArray(satisfied) || satisfied.length === 0) {
+            return workflow;
+        }
+        // Map: nodeId -> array of satisfied creds that reference it
+        const credsByNodeId = new Map();
+        for (const cred of satisfied) {
+            const nodeIds = Array.isArray(cred.nodeIds) ? cred.nodeIds : [];
+            for (const nodeId of nodeIds) {
+                if (!credsByNodeId.has(nodeId))
+                    credsByNodeId.set(nodeId, []);
+                credsByNodeId.get(nodeId).push(cred);
+            }
+        }
+        const updatedNodes = workflow.nodes.map((node) => {
+            const nodeId = node.id;
+            const nodeType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(node);
+            const credsForNode = credsByNodeId.get(nodeId) || [];
+            if (credsForNode.length === 0)
+                return node;
+            const config = { ...(node.data?.config || {}) };
+            for (const cred of credsForNode) {
+                // Only auto-inject credentialId for OAuth connectors (google, etc.)
+                if (cred.type === 'oauth' && cred.provider) {
+                    // Use provider vaultKey as stable reference; attach-inputs will also generate
+                    // scoped credentialIds later if needed.
+                    if (!config.credentialId) {
+                        config.credentialId = cred.vaultKey || cred.provider;
+                    }
+                }
+            }
+            return {
+                ...node,
+                data: {
+                    ...(node.data || {}),
+                    config,
+                },
+            };
+        });
+        return { ...workflow, nodes: updatedNodes };
+    }
+    /**
+     * Discover required node inputs from workflow graph
+     *
+     * This discovers runtime configuration fields (templates, channels, recipients, etc.)
+     * that are NOT credentials. These are separate from credentials.
+     *
+     * @param workflow - Complete workflow graph
+     * @returns Discovered node inputs
+     */
+    discoverNodeInputs(workflow) {
+        console.log('[WorkflowLifecycle] config_scan_started', {
+            nodeCount: workflow.nodes?.length || 0,
+        });
+        const inputs = [];
+        const perNodeMissingFields = [];
+        for (const node of workflow.nodes) {
+            const nodeType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(node);
+            const schema = node_library_1.nodeLibrary.getSchema(nodeType);
+            if (!schema) {
+                continue;
+            }
+            const nodeLabel = node.data?.label || schema.label;
+            const existingConfig = node.data?.config || {};
+            const nodeMissingFields = [];
+            const unifiedDefinition = unified_node_registry_1.unifiedNodeRegistry.get(nodeType);
+            const definitionInputSchema = unifiedDefinition?.inputSchema;
+            const unifiedInputSchema = definitionInputSchema || {};
+            for (const [fieldName, fieldDef] of Object.entries(unifiedInputSchema)) {
+                if ((0, field_ownership_1.isCredentialOwnership)(fieldName, fieldDef) || (0, field_ownership_1.isStructuralOwnership)(fieldName, fieldDef)) {
+                    continue;
+                }
+                const effectiveMode = (0, fill_mode_resolver_1.resolveEffectiveFieldFillMode)(fieldName, definitionInputSchema, existingConfig);
+                if (effectiveMode === 'runtime_ai') {
+                    continue;
+                }
+                const requiredForSelectedOperation = (0, registry_field_contract_1.computeFieldRequiredBeforeExecution)(nodeType, fieldName, fieldDef, existingConfig);
+                if (!requiredForSelectedOperation) {
+                    continue;
+                }
+                const existingValue = existingConfig[fieldName];
+                const hasConcreteValue = existingValue !== undefined &&
+                    existingValue !== null &&
+                    !(typeof existingValue === 'string' && existingValue.trim() === '') &&
+                    !(Array.isArray(existingValue) && existingValue.length === 0) &&
+                    !(typeof existingValue === 'object' && !Array.isArray(existingValue) && Object.keys(existingValue).length === 0) &&
+                    !(0, placeholder_filter_1.isPlaceholderValue)(existingValue);
+                if (hasConcreteValue) {
+                    continue;
+                }
+                nodeMissingFields.push(fieldName);
+                const controlMetadata = (0, schema_input_control_1.getInputControlMetadata)(fieldName, fieldDef);
+                inputs.push({
+                    nodeId: node.id,
+                    nodeType,
+                    nodeLabel,
+                    fieldName,
+                    fieldType: fieldDef.type || 'string',
+                    inputType: controlMetadata.inputType,
+                    options: controlMetadata.options,
+                    placeholder: controlMetadata.placeholder,
+                    uiWidget: controlMetadata.uiWidget,
+                    description: fieldDef.description || fieldName,
+                    required: requiredForSelectedOperation,
+                    defaultValue: fieldDef.default,
+                    examples: fieldDef.examples,
+                    ownership: fieldDef.ownership || 'value',
+                    fillModeDefault: fieldDef.fillMode?.default,
+                    supportsRuntimeAI: fieldDef.fillMode?.supportsRuntimeAI !== false,
+                    supportsBuildtimeAI: fieldDef.fillMode?.supportsBuildtimeAI !== false,
+                });
+            }
+            if (nodeMissingFields.length > 0) {
+                perNodeMissingFields.push({
+                    nodeId: node.id,
+                    nodeType,
+                    missingFields: nodeMissingFields,
+                });
+            }
+        }
+        console.log('[WorkflowLifecycle] nodes_detected', {
+            nodeCount: workflow.nodes?.length || 0,
+        });
+        console.log('[WorkflowLifecycle] missing_fields_per_node', perNodeMissingFields);
+        // ✅ ORGANIZATION: Group inputs by node type for better organization
+        // This helps identify which nodes of the same type need the same fields
+        const inputsByNodeType = new Map();
+        for (const input of inputs) {
+            if (!inputsByNodeType.has(input.nodeType)) {
+                inputsByNodeType.set(input.nodeType, []);
+            }
+            inputsByNodeType.get(input.nodeType).push(input);
+        }
+        // Log organized summary
+        console.log(`[WorkflowLifecycle] Discovered ${inputs.length} node input(s) required, organized by type:`);
+        for (const [nodeType, typeInputs] of inputsByNodeType.entries()) {
+            const nodeIds = [...new Set(typeInputs.map(i => i.nodeId))];
+            const fieldNames = [...new Set(typeInputs.map(i => i.fieldName))];
+            console.log(`  - ${nodeType}: ${typeInputs.length} input(s) across ${nodeIds.length} node(s) [${nodeIds.join(', ')}] - fields: ${fieldNames.join(', ')}`);
+        }
+        return { inputs };
+    }
+    /**
+     * Check if a field is a credential field (not a node input)
+     *
+     * OAuth-based connectors (google_gmail, slack, etc.) must NEVER expose credential fields.
+     * They only use OAuth buttons, not form fields.
+     */
+    isCredentialField(fieldName, nodeType) {
+        const fieldNameLower = fieldName.toLowerCase();
+        // ✅ CRITICAL: Exclude configuration fields that are NOT credentials
+        // These fields should be allowed as node inputs
+        const isConfigurationField = fieldNameLower === 'webhookurl' || fieldNameLower === 'webhook_url' || // Webhook URL is configuration, not credential
+            fieldNameLower === 'callbackurl' || fieldNameLower === 'callback_url' || // OAuth callback URL is configuration
+            fieldNameLower === 'redirecturl' || fieldNameLower === 'redirect_url' || // OAuth redirect URL is configuration
+            fieldNameLower.includes('message') || // Message fields are not credentials
+            fieldNameLower.includes('channel') || // Channel fields are not credentials
+            fieldNameLower.includes('text') || // Text fields are not credentials
+            fieldNameLower.includes('subject') || // Subject fields are not credentials
+            fieldNameLower.includes('body') || // Body fields are not credentials
+            fieldNameLower.includes('to') || // To fields are not credentials
+            fieldNameLower.includes('from'); // From fields are not credentials
+        if (isConfigurationField) {
+            return false; // Configuration fields are NOT credentials, so they can be node inputs
+        }
+        // ✅ STRICT: Only detect ACTUAL credential fields
+        // APIs, OAuths, Secrets, Passwords, Tokens, Keys
+        const credentialPatterns = [
+            'api_key', 'apikey', 'apiKey', 'api-key',
+            'apitoken', 'api_token', 'api-token', 'apiToken',
+            'apisecret', 'api_secret', 'api-secret', 'apiSecret',
+            'token', 'access_token', 'refresh_token', 'accessToken', 'refreshToken',
+            'secret', 'password', 'client_secret', 'clientSecret',
+            'oauth', 'client_id', 'clientId',
+            'credential', 'credentials', 'credentialId', 'credential_id',
+            'bearer', 'authorization', 'auth_token', 'authToken',
+            'private_key', 'privateKey', 'public_key', 'publicKey',
+            'bottoken', 'bot_token',
+            'secrettoken', 'secret_token',
+        ];
+        // ✅ STRICT: Check if field name matches any credential pattern
+        if (credentialPatterns.some(pattern => fieldNameLower.includes(pattern))) {
+            // Double-check: exclude webhook URLs and message tokens
+            if (fieldNameLower.includes('webhook') && fieldNameLower.includes('url')) {
+                return false; // webhookUrl is configuration
+            }
+            if (fieldNameLower.includes('message') && fieldNameLower.includes('token')) {
+                return false; // messageToken is not a credential
+            }
+            return true;
+        }
+        // ✅ ADDITIONAL: Check for exact matches (case-insensitive)
+        const exactMatches = [
+            'apikey', 'api_key', 'apiKey',
+            'apitoken', 'api_token', 'apiToken',
+            'apisecret', 'api_secret', 'apiSecret',
+            'accesstoken', 'access_token', 'accessToken',
+            'refreshtoken', 'refresh_token', 'refreshToken',
+            'credentialid', 'credential_id', 'credentialId',
+            'bottoken', 'bot_token',
+            'secrettoken', 'secret_token',
+            // Note: webhookurl removed - it's configuration, not credential
+        ];
+        if (exactMatches.some(match => fieldNameLower === match || fieldNameLower.replace(/[_-]/g, '') === match.replace(/[_-]/g, ''))) {
+            return true;
+        }
+        // ✅ CRITICAL: Check connector registry for OAuth connectors
+        // OAuth connectors (google_gmail, slack) must NEVER show credential fields in inputs
+        const connector = connector_registry_1.connectorRegistry.getConnectorByNodeType(nodeType);
+        if (connector) {
+            const credentialContract = connector.credentialContract;
+            // If connector uses OAuth, ALL credential-related fields are excluded
+            if (credentialContract.type === 'oauth') {
+                // OAuth connectors never expose credential fields - they use OAuth buttons
+                const vaultKey = credentialContract.vaultKey?.toLowerCase() || '';
+                const provider = credentialContract.provider?.toLowerCase() || '';
+                // Exclude any field that matches OAuth provider or vault key
+                if (fieldNameLower.includes(vaultKey) ||
+                    fieldNameLower.includes(provider) ||
+                    vaultKey.includes(fieldNameLower) ||
+                    provider.includes(fieldNameLower)) {
+                    return true;
+                }
+                // Exclude OAuth-specific field names
+                if (fieldNameLower.includes('google') && nodeType === 'google_gmail') {
+                    return true; // Google OAuth fields are never inputs
+                }
+            }
+            // For non-OAuth connectors (SMTP), still check vault key
+            const vaultKey = credentialContract.vaultKey?.toLowerCase() || '';
+            if (vaultKey && (fieldNameLower.includes(vaultKey) || vaultKey.includes(fieldNameLower))) {
+                return true;
+            }
+        }
+        return false;
+    }
+    sanitizeCredentialOwnedMutations(nodeType, nodeId, originalConfig, mutatedConfig) {
+        const def = unified_node_registry_1.unifiedNodeRegistry.get(nodeType);
+        if (!def?.inputSchema)
+            return mutatedConfig;
+        const allowedFields = new Set(['credentialId']);
+        for (const [fieldName, fieldDef] of Object.entries(def.inputSchema)) {
+            if ((0, field_ownership_1.isCredentialOwnership)(fieldName, fieldDef)) {
+                allowedFields.add(fieldName);
+            }
+        }
+        const safeConfig = { ...mutatedConfig };
+        const allKeys = new Set([
+            ...Object.keys(originalConfig || {}),
+            ...Object.keys(mutatedConfig || {}),
+        ]);
+        const revertedFields = [];
+        const hasChanged = (before, after) => {
+            if (before === after)
+                return false;
+            try {
+                return JSON.stringify(before) !== JSON.stringify(after);
+            }
+            catch {
+                return true;
+            }
+        };
+        for (const key of allKeys) {
+            if (allowedFields.has(key))
+                continue;
+            const before = originalConfig?.[key];
+            const after = mutatedConfig?.[key];
+            if (!hasChanged(before, after))
+                continue;
+            revertedFields.push(key);
+            if (before === undefined) {
+                delete safeConfig[key];
+            }
+            else {
+                safeConfig[key] = before;
+            }
+        }
+        if (revertedFields.length > 0) {
+            console.warn(`[WorkflowLifecycle] Reverted non-credential config mutations for node ${nodeId} (${nodeType}): ${revertedFields.join(', ')}`);
+        }
+        return safeConfig;
+    }
+    /**
+     * Inject credentials into workflow nodes
+     *
+     * This is the SECOND phase - called after user provides credentials.
+     * Uses connector registry to determine correct credential fields for each node.
+     *
+     * @param workflow - Workflow graph (from generateWorkflowGraph)
+     * @param credentials - User-provided credentials (vaultKey -> value or credentialId -> value)
+     * @returns Workflow with credentials injected
+     */
+    async injectCredentials(workflow, credentials, 
+    /** Required for post-injection discovery: vault OAuth checks (header-connected Google, etc.). */
+    userId) {
+        console.log('[WorkflowLifecycle] Injecting credentials into workflow...');
+        console.log(`[WorkflowLifecycle] Credentials provided: ${Object.keys(credentials).join(', ')}`);
+        const extractCredentialValue = (value) => {
+            if (typeof value === 'string') {
+                return value.trim() || null;
+            }
+            if (typeof value === 'object' && value !== null) {
+                const obj = value;
+                return obj.value || obj.answer || obj.text || null;
+            }
+            return null;
+        };
+        // Inject credentials into nodes using connector registry
+        const updatedNodes = workflow.nodes.map((node) => {
+            const nodeType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(node);
+            const originalConfig = { ...(node.data?.config || {}) };
+            const config = { ...originalConfig };
+            let updated = false;
+            // Get connector for this node type
+            const connector = connector_registry_1.connectorRegistry.getConnectorByNodeType(nodeType);
+            if (!connector) {
+                // No connector found - try to match credentials by field name
+                const schema = node_library_1.nodeLibrary.getSchema(nodeType);
+                if (schema && schema.configSchema) {
+                    const requiredFields = schema.configSchema.required || [];
+                    const optionalFields = Object.keys(schema.configSchema.optional || {});
+                    const allFields = [...requiredFields, ...optionalFields]; // ✅ Check both required and optional
+                    Object.entries(credentials).forEach(([key, value]) => {
+                        const credValue = extractCredentialValue(value);
+                        if (!credValue)
+                            return;
+                        const keyLower = key.toLowerCase();
+                        // ✅ CRITICAL: Check allFields (required + optional) to find credential fields
+                        allFields.forEach((fieldName) => {
+                            const fieldLower = fieldName.toLowerCase();
+                            // Match if key contains field name or vice versa, or if field is a credential field
+                            if (keyLower.includes(fieldLower) ||
+                                fieldLower.includes(keyLower.replace(/[^a-z0-9]/g, '')) ||
+                                fieldLower.includes('apikey') ||
+                                fieldLower.includes('api_key') ||
+                                fieldLower.includes('apitoken') ||
+                                fieldLower.includes('api_token') ||
+                                (fieldLower.includes('key') && !fieldLower.includes('public') && !fieldLower.includes('private')) ||
+                                (fieldLower.includes('token') && !fieldLower.includes('refresh'))) {
+                                // ✅ FIX: Only write if not already set (preserve AI-assigned values)
+                                if (!config[fieldName] || config[fieldName] === '') {
+                                    config[fieldName] = credValue;
+                                    updated = true;
+                                    console.log(`[WorkflowLifecycle] Applied ${fieldName} to node ${node.id} (${nodeType}) via field matching`);
+                                }
+                                else {
+                                    console.log(`[WorkflowLifecycle] ⏭️ Skipped ${fieldName} on node ${node.id} (${nodeType}) — already set`);
+                                }
+                            }
+                        });
+                    });
+                }
+                if (!updated)
+                    return node;
+                const safeConfig = this.sanitizeCredentialOwnedMutations(nodeType, node.id, originalConfig, config);
+                return { ...node, data: { ...node.data, config: safeConfig } };
+            }
+            // Use connector's credential contract to inject credentials
+            const credentialContract = connector.credentialContract;
+            const vaultKey = credentialContract.vaultKey;
+            // Find matching credential value
+            let credentialValue = null;
+            // Try vaultKey first (e.g., "slack", "smtp", "discord")
+            if (credentials[vaultKey]) {
+                credentialValue = extractCredentialValue(credentials[vaultKey]);
+            }
+            // Try provider + type combination (e.g., "slack_webhook")
+            if (!credentialValue) {
+                const credentialId = `${credentialContract.provider}_${credentialContract.type}`;
+                if (credentials[credentialId]) {
+                    credentialValue = extractCredentialValue(credentials[credentialId]);
+                }
+                // Also try uppercase version
+                const credentialIdUpper = credentialId.toUpperCase();
+                if (!credentialValue && credentials[credentialIdUpper]) {
+                    credentialValue = extractCredentialValue(credentials[credentialIdUpper]);
+                }
+            }
+            // Try display name normalized (e.g., "Slack Webhook URL" -> "slack_webhook_url")
+            if (!credentialValue) {
+                const displayNameKey = credentialContract.displayName.toLowerCase().replace(/[^a-z0-9]/g, '_');
+                if (credentials[displayNameKey]) {
+                    credentialValue = extractCredentialValue(credentials[displayNameKey]);
+                }
+                // Also try uppercase version
+                const displayNameKeyUpper = displayNameKey.toUpperCase();
+                if (!credentialValue && credentials[displayNameKeyUpper]) {
+                    credentialValue = extractCredentialValue(credentials[displayNameKeyUpper]);
+                }
+            }
+            // Try any key that contains provider or vaultKey (e.g., "my_slack_url")
+            if (!credentialValue) {
+                for (const [key, value] of Object.entries(credentials)) {
+                    const keyLower = key.toLowerCase();
+                    if (keyLower.includes(vaultKey.toLowerCase()) ||
+                        keyLower.includes(credentialContract.provider.toLowerCase())) {
+                        credentialValue = extractCredentialValue(value);
+                        if (credentialValue)
+                            break;
+                    }
+                }
+            }
+            // Try explicit credential key formats (e.g., "SLACK_WEBHOOK_URL", "slack_webhook_url")
+            if (!credentialValue && credentialContract.type === 'webhook') {
+                const providerUpper = credentialContract.provider.toUpperCase();
+                const explicitKeys = [
+                    `${providerUpper}_WEBHOOK_URL`,
+                    `${providerUpper}_WEBHOOK`,
+                    `${credentialContract.provider}_webhook_url`,
+                    `${credentialContract.provider}_webhook`,
+                ];
+                for (const explicitKey of explicitKeys) {
+                    if (credentials[explicitKey]) {
+                        const extractedValue = extractCredentialValue(credentials[explicitKey]);
+                        // ✅ WORLD-CLASS: Validate webhook URL before accepting
+                        if (extractedValue) {
+                            const { validateWebhookUrl } = require('../core/validation/webhook-url-validator');
+                            const urlValidation = validateWebhookUrl(extractedValue);
+                            if (!urlValidation.valid) {
+                                console.error(`[WorkflowLifecycle] ❌ Invalid webhook URL for ${explicitKey}: ${urlValidation.error}`);
+                                throw new Error(`Invalid webhook URL: ${urlValidation.error}`);
+                            }
+                            credentialValue = extractedValue;
+                            if (credentialValue)
+                                break;
+                        }
+                    }
+                    // Also try case-insensitive match
+                    const matchingKey = Object.keys(credentials).find(k => k.toLowerCase() === explicitKey.toLowerCase());
+                    if (matchingKey) {
+                        const extractedValue = extractCredentialValue(credentials[matchingKey]);
+                        // ✅ WORLD-CLASS: Validate webhook URL before accepting
+                        if (extractedValue) {
+                            const { validateWebhookUrl } = require('../core/validation/webhook-url-validator');
+                            const urlValidation = validateWebhookUrl(extractedValue);
+                            if (!urlValidation.valid) {
+                                console.error(`[WorkflowLifecycle] ❌ Invalid webhook URL for ${matchingKey}: ${urlValidation.error}`);
+                                throw new Error(`Invalid webhook URL: ${urlValidation.error}`);
+                            }
+                            credentialValue = extractedValue;
+                            if (credentialValue)
+                                break;
+                        }
+                    }
+                }
+            }
+            // Webhook-specific fallback: look for provider-specific webhook/url keys
+            // This fixes cases where frontend sends "webhookUrl" or "slack_webhook_url"
+            // without including the provider name, and ensures Slack URL is still injected.
+            // IMPORTANT: Only match if key contains BOTH provider AND webhook/url to avoid conflicts
+            if (!credentialValue && credentialContract.type === 'webhook') {
+                const providerLower = credentialContract.provider.toLowerCase();
+                for (const [key, value] of Object.entries(credentials)) {
+                    const keyLower = key.toLowerCase();
+                    // Must contain provider AND (webhook OR url)
+                    if (keyLower.includes(providerLower) &&
+                        (keyLower.includes('webhook') || keyLower.includes('url'))) {
+                        const extractedValue = extractCredentialValue(value);
+                        // ✅ WORLD-CLASS: Validate webhook URL before accepting
+                        if (extractedValue) {
+                            const { validateWebhookUrl } = require('../core/validation/webhook-url-validator');
+                            const urlValidation = validateWebhookUrl(extractedValue);
+                            if (!urlValidation.valid) {
+                                console.error(`[WorkflowLifecycle] ❌ Invalid webhook URL for ${key}: ${urlValidation.error}`);
+                                throw new Error(`Invalid webhook URL: ${urlValidation.error}`);
+                            }
+                            credentialValue = extractedValue;
+                            if (credentialValue)
+                                break;
+                        }
+                    }
+                }
+            }
+            // ✅ ROOT-LEVEL: Check for node-specific credential fields (cred_${nodeId}_${fieldName})
+            // This ensures credentials go to the correct node based on question ID format
+            for (const [key, value] of Object.entries(credentials)) {
+                const keyLower = key.toLowerCase();
+                const idEsc = node.id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const credNodePrefix = new RegExp(`^cred_${idEsc}_`, 'i');
+                // ✅ ROOT-LEVEL: Match node-specific credential format: cred_${nodeId}_${fieldName} (case-insensitive on prefix)
+                if (credNodePrefix.test(key)) {
+                    const fieldName = key.replace(credNodePrefix, '');
+                    const credValue = extractCredentialValue(value);
+                    if (credValue) {
+                        // ✅ WORLD-CLASS: Validate webhook URLs before accepting
+                        if (fieldName.toLowerCase().includes('webhook') || fieldName.toLowerCase().includes('url')) {
+                            const { validateWebhookUrl } = require('../core/validation/webhook-url-validator');
+                            const urlValidation = validateWebhookUrl(credValue);
+                            if (!urlValidation.valid) {
+                                console.error(`[WorkflowLifecycle] ❌ Invalid webhook URL for ${fieldName}: ${urlValidation.error}`);
+                                throw new Error(`Invalid webhook URL: ${urlValidation.error}`);
+                            }
+                        }
+                        // Get node schema to validate field exists
+                        const schema = node_library_1.nodeLibrary.getSchema(nodeType);
+                        const unifiedDefInject = unified_node_registry_1.unifiedNodeRegistry.get(nodeType);
+                        const unifiedFieldNames = unifiedDefInject?.inputSchema ? Object.keys(unifiedDefInject.inputSchema) : [];
+                        if (schema && schema.configSchema) {
+                            const requiredFields = schema.configSchema.required || [];
+                            const optionalFields = Object.keys(schema.configSchema.optional || {});
+                            const allFields = [...new Set([...requiredFields, ...optionalFields, ...unifiedFieldNames])];
+                            // ✅ ROOT-LEVEL: Only apply if field exists in schema (prevents invalid fields)
+                            if (allFields.includes(fieldName)) {
+                                config[fieldName] = credValue;
+                                updated = true;
+                                console.log(`[WorkflowLifecycle] ✅ Applied node-specific credential ${fieldName} = ${credValue.substring(0, 20)}... to node ${node.id} (${nodeType})`);
+                            }
+                            else {
+                                console.warn(`[WorkflowLifecycle] ⚠️ Field ${fieldName} not found in schema for ${nodeType}, skipping`);
+                            }
+                        }
+                        else {
+                            // No schema - apply anyway (for backward compatibility)
+                            config[fieldName] = credValue;
+                            updated = true;
+                            console.log(`[WorkflowLifecycle] ✅ Applied node-specific credential ${fieldName} to node ${node.id} (${nodeType}) - no schema validation`);
+                        }
+                    }
+                }
+                // ✅ ROOT-LEVEL: Also support legacy formats for backward compatibility
+                else if (keyLower === `req_${node.id.toLowerCase()}_credentialid` ||
+                    keyLower === `${node.id.toLowerCase()}_credentialid`) {
+                    const credValue = extractCredentialValue(value);
+                    if (credValue) {
+                        config.credentialId = credValue;
+                        updated = true;
+                        console.log(`[WorkflowLifecycle] Applied credentialId = ${credValue} to node ${node.id} (${nodeType})`);
+                    }
+                }
+            }
+            // ✅ WORLD-CLASS: Extract credentials from node input when viewing/editing
+            // This ensures credentials provided via comprehensive questions are properly connected
+            // Note: Inputs are stored in config, not a separate input property
+            const nodeInput = node.data?.input || {};
+            for (const [inputKey, inputValue] of Object.entries(nodeInput)) {
+                const inputKeyLower = inputKey.toLowerCase();
+                // ✅ Match credential fields from input (e.g., from comprehensive questions)
+                if (inputKeyLower.includes('apikey') ||
+                    inputKeyLower.includes('api_key') ||
+                    inputKeyLower.includes('accesstoken') ||
+                    inputKeyLower.includes('access_token') ||
+                    inputKeyLower.includes('webhook') ||
+                    inputKeyLower.includes('credentialid') ||
+                    inputKeyLower.includes('credential_id')) {
+                    // Extract field name from input key
+                    // Format: "cred_nodeId_fieldName" or "req_nodeId_fieldName" or just "fieldName"
+                    let fieldName = inputKey;
+                    if (inputKeyLower.startsWith('cred_') || inputKeyLower.startsWith('req_')) {
+                        const parts = inputKey.split('_');
+                        if (parts.length >= 3) {
+                            fieldName = parts.slice(2).join('_'); // Extract field name after nodeId
+                        }
+                    }
+                    // ✅ Only apply if not already in config (config takes precedence)
+                    if (!config[fieldName] && inputValue) {
+                        const credValue = extractCredentialValue(inputValue);
+                        if (credValue) {
+                            // Validate field exists in schema
+                            const schema = node_library_1.nodeLibrary.getSchema(nodeType);
+                            if (schema && schema.configSchema) {
+                                const requiredFields = schema.configSchema.required || [];
+                                const optionalFields = Object.keys(schema.configSchema.optional || {});
+                                const allFields = [...requiredFields, ...optionalFields];
+                                if (allFields.includes(fieldName)) {
+                                    config[fieldName] = credValue;
+                                    updated = true;
+                                    console.log(`[WorkflowLifecycle] ✅ Extracted credential ${fieldName} from node input for node ${node.id} (${nodeType})`);
+                                }
+                            }
+                            else {
+                                // No schema - apply anyway (for backward compatibility)
+                                config[fieldName] = credValue;
+                                updated = true;
+                                console.log(`[WorkflowLifecycle] ✅ Extracted credential ${fieldName} from node input for node ${node.id} (${nodeType}) - no schema validation`);
+                            }
+                        }
+                    }
+                }
+            }
+            // ✅ ROOT-LEVEL: Also check for generic credentialId (backward compatibility)
+            const credentialIdKey = Object.keys(credentials).find(key => key.toLowerCase() === 'credentialid' ||
+                (key.toLowerCase().endsWith('_credentialid') && !key.toLowerCase().includes('_')));
+            if (credentialIdKey && !config.credentialId) {
+                const credentialIdValue = extractCredentialValue(credentials[credentialIdKey]);
+                if (credentialIdValue) {
+                    config.credentialId = credentialIdValue;
+                    updated = true;
+                    console.log(`[WorkflowLifecycle] Applied generic credentialId = ${credentialIdValue} to node ${node.id} (${nodeType})`);
+                }
+            }
+            if (credentialValue) {
+                // Get node schema to find credential fields
+                const schema = node_library_1.nodeLibrary.getSchema(nodeType);
+                if (schema && schema.configSchema) {
+                    const requiredFields = schema.configSchema.required || [];
+                    const optionalFields = Object.keys(schema.configSchema.optional || {});
+                    const allFields = [...requiredFields, ...optionalFields];
+                    // ✅ PRIORITY 1: Use credentialFieldName from connector if specified (data-driven mapping)
+                    // This takes precedence - HubSpot uses credentialFieldName: 'apiKey'
+                    if (credentialContract.credentialFieldName && allFields.includes(credentialContract.credentialFieldName)) {
+                        // ✅ WORLD-CLASS: Validate webhook URLs before accepting
+                        const fieldNameLower = credentialContract.credentialFieldName.toLowerCase();
+                        if (fieldNameLower.includes('webhook') || fieldNameLower.includes('url')) {
+                            const { validateWebhookUrl } = require('../core/validation/webhook-url-validator');
+                            const urlValidation = validateWebhookUrl(credentialValue);
+                            if (!urlValidation.valid) {
+                                console.error(`[WorkflowLifecycle] ❌ Invalid webhook URL for ${credentialContract.credentialFieldName}: ${urlValidation.error}`);
+                                throw new Error(`Invalid webhook URL: ${urlValidation.error}`);
+                            }
+                        }
+                        // ✅ FIX: Only write if field is not already set (preserve AI-assigned values)
+                        if (!config[credentialContract.credentialFieldName] || config[credentialContract.credentialFieldName] === '') {
+                            config[credentialContract.credentialFieldName] = credentialValue;
+                            updated = true;
+                            console.log(`[WorkflowLifecycle] ✅ Applied ${credentialContract.credentialFieldName} to ${nodeType} node ${node.id} (data-driven from connector)`);
+                        }
+                        else {
+                            console.log(`[WorkflowLifecycle] ⏭️ Skipped ${credentialContract.credentialFieldName} on ${nodeType} node ${node.id} — already set (preserving AI-assigned value)`);
+                        }
+                    }
+                    // ✅ PRIORITY 2: If credentialId field exists in schema, also set it (for reference)
+                    if (allFields.includes('credentialId') && !config.credentialId) {
+                        config.credentialId = credentialValue;
+                        updated = true;
+                        console.log(`[WorkflowLifecycle] Also applied credentialId to node ${node.id} (${nodeType})`);
+                    }
+                    // ✅ PRIORITY 3: For api_key type, also inject into apiKey/accessToken if not already set
+                    if (credentialContract.type === 'api_key' && !config.apiKey && !config.accessToken) {
+                        if (allFields.includes('apiKey') && !config.apiKey) {
+                            config.apiKey = credentialValue;
+                            updated = true;
+                            console.log(`[WorkflowLifecycle] ✅ Applied apiKey value to ${nodeType} node ${node.id}`);
+                        }
+                        if (allFields.includes('accessToken') && !config.accessToken) {
+                            config.accessToken = credentialValue;
+                            updated = true;
+                            console.log(`[WorkflowLifecycle] ✅ Applied accessToken value to ${nodeType} node ${node.id}`);
+                        }
+                    }
+                    // Map credential to node config fields based on connector type
+                    if (credentialContract.type === 'webhook' && credentialContract.provider === 'slack') {
+                        // ✅ WORLD-CLASS: Validate webhook URL before accepting
+                        const { validateWebhookUrl } = require('../core/validation/webhook-url-validator');
+                        const urlValidation = validateWebhookUrl(credentialValue);
+                        if (!urlValidation.valid) {
+                            console.error(`[WorkflowLifecycle] ❌ Invalid Slack webhook URL: ${urlValidation.error}`);
+                            throw new Error(`Invalid Slack webhook URL: ${urlValidation.error}`);
+                        }
+                        // ✅ FIX: Only write if webhookUrl is not already set (preserve AI-assigned values)
+                        if (!config.webhookUrl || config.webhookUrl === '') {
+                            config.webhookUrl = credentialValue;
+                            updated = true;
+                        }
+                        else {
+                            console.log(`[WorkflowLifecycle] ⏭️ Skipped webhookUrl on ${nodeType} node ${node.id} — already set (preserving AI-assigned value)`);
+                        }
+                    }
+                    else if (credentialContract.type === 'oauth') {
+                        // ✅ ENHANCED: OAuth credentials are stored in vault, not in node config
+                        // Store a reference to the vault key for OAuth providers
+                        // This works for: Google, Microsoft, Twitter, Instagram, YouTube, Facebook, GitHub, LinkedIn, Salesforce, Zoho
+                        if (allFields.includes('credentialRef')) {
+                            // ✅ FIX: Only write if not already set (preserve AI-assigned values)
+                            if (!config.credentialRef || config.credentialRef === '') {
+                                config.credentialRef = vaultKey;
+                                updated = true;
+                            }
+                        }
+                        else if (allFields.includes('credentialId')) {
+                            // Some OAuth nodes use credentialId instead of credentialRef
+                            if (!config.credentialId || config.credentialId === '') {
+                                config.credentialId = vaultKey;
+                                updated = true;
+                            }
+                        }
+                        else if (allFields.includes('accessToken')) {
+                            // For OAuth, accessToken can be stored if provided
+                            if (!config.accessToken || config.accessToken === '') {
+                                config.accessToken = credentialValue;
+                                updated = true;
+                            }
+                        }
+                        else {
+                            // Fallback: store vault key reference
+                            if (!config.credentialRef || config.credentialRef === '') {
+                                config.credentialRef = vaultKey;
+                                updated = true;
+                            }
+                        }
+                        console.log(`[WorkflowLifecycle] Applied OAuth credential reference (vaultKey: ${vaultKey}) to ${nodeType} node ${node.id}`);
+                    }
+                    else if (credentialContract.type === 'api_key' && credentialContract.provider === 'smtp') {
+                        // SMTP credentials - check for host, username, password
+                        // This is a simplified version - in production, you'd parse the credential object
+                        if (typeof credentials[vaultKey] === 'object') {
+                            const smtpCreds = credentials[vaultKey];
+                            // ✅ FIX: Only write if not already set (preserve AI-assigned values)
+                            if (smtpCreds.host && (!config.host || config.host === '')) {
+                                config.host = smtpCreds.host;
+                                updated = true;
+                            }
+                            if (smtpCreds.username && (!config.username || config.username === '')) {
+                                config.username = smtpCreds.username;
+                                updated = true;
+                            }
+                            if (smtpCreds.password && (!config.password || config.password === '')) {
+                                config.password = smtpCreds.password;
+                                updated = true;
+                            }
+                            if (smtpCreds.port && (!config.port || config.port === '')) {
+                                config.port = smtpCreds.port;
+                                updated = true;
+                            }
+                        }
+                        else {
+                            // Single value - try to match to common fields
+                            // ✅ FIX: Only write if not already set (preserve AI-assigned values)
+                            if (requiredFields.includes('host') && (!config.host || config.host === '')) {
+                                config.host = credentialValue;
+                                updated = true;
+                            }
+                            if (requiredFields.includes('username') && (!config.username || config.username === '')) {
+                                config.username = credentialValue;
+                                updated = true;
+                            }
+                            if (requiredFields.includes('password') && (!config.password || config.password === '')) {
+                                config.password = credentialValue;
+                                updated = true;
+                            }
+                        }
+                    }
+                    else if (credentialContract.credentialFieldName && allFields.includes(credentialContract.credentialFieldName)) {
+                        // ✅ PERMANENT SOLUTION: Data-driven credential field mapping
+                        // Use credentialFieldName from connector if specified (replaces hardcoded if-else blocks)
+                        // ✅ FIX: Only write if field is not already set (preserve AI-assigned values)
+                        if (!config[credentialContract.credentialFieldName] || config[credentialContract.credentialFieldName] === '') {
+                            config[credentialContract.credentialFieldName] = credentialValue;
+                            updated = true;
+                            console.log(`[WorkflowLifecycle] ✅ Applied ${credentialContract.credentialFieldName} to ${nodeType} node ${node.id} (data-driven from connector)`);
+                        }
+                        else {
+                            console.log(`[WorkflowLifecycle] ⏭️ Skipped ${credentialContract.credentialFieldName} on ${nodeType} node ${node.id} — already set (preserving AI-assigned value)`);
+                        }
+                    }
+                    else if (credentialContract.type === 'api_key') {
+                        // ✅ Generic api_key handler: Try common field names
+                        // First try apiKey (most common)
+                        if (allFields.includes('apiKey')) {
+                            // ✅ FIX: Only write if not already set (preserve AI-assigned values)
+                            if (!config.apiKey || config.apiKey === '') {
+                                config.apiKey = credentialValue;
+                                updated = true;
+                                console.log(`[WorkflowLifecycle] Applied apiKey to ${nodeType} node ${node.id}`);
+                            }
+                            else {
+                                console.log(`[WorkflowLifecycle] ⏭️ Skipped apiKey on ${nodeType} node ${node.id} — already set`);
+                            }
+                        }
+                        // Then try apiToken (for Pipedrive-like services)
+                        else if (allFields.includes('apiToken')) {
+                            // ✅ FIX: Only write if not already set (preserve AI-assigned values)
+                            if (!config.apiToken || config.apiToken === '') {
+                                config.apiToken = credentialValue;
+                                updated = true;
+                                console.log(`[WorkflowLifecycle] Applied apiToken to ${nodeType} node ${node.id}`);
+                            }
+                            else {
+                                console.log(`[WorkflowLifecycle] ⏭️ Skipped apiToken on ${nodeType} node ${node.id} — already set`);
+                            }
+                        }
+                        // Fallback: search for any field containing 'key' or 'token'
+                        else {
+                            for (const field of allFields) {
+                                const fieldLower = field.toLowerCase();
+                                if (fieldLower.includes('apikey') ||
+                                    fieldLower.includes('api_key') ||
+                                    fieldLower.includes('apitoken') ||
+                                    fieldLower.includes('api_token') ||
+                                    (fieldLower.includes('key') && !fieldLower.includes('public') && !fieldLower.includes('private')) ||
+                                    (fieldLower.includes('token') && !fieldLower.includes('refresh'))) {
+                                    // ✅ FIX: Only write if not already set (preserve AI-assigned values)
+                                    if (!config[field] || config[field] === '') {
+                                        config[field] = credentialValue;
+                                        updated = true;
+                                        console.log(`[WorkflowLifecycle] Applied ${field} to ${nodeType} node ${node.id}`);
+                                    }
+                                    else {
+                                        console.log(`[WorkflowLifecycle] ⏭️ Skipped ${field} on ${nodeType} node ${node.id} — already set`);
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    else {
+                        // Generic credential injection - try to match to all fields (required + optional)
+                        // ✅ CRITICAL: Check allFields, not just requiredFields, to find credential fields in optional fields
+                        for (const field of allFields) {
+                            const fieldLower = field.toLowerCase();
+                            if (fieldLower.includes('credential') ||
+                                fieldLower.includes('token') ||
+                                fieldLower.includes('key') ||
+                                fieldLower.includes('secret')) {
+                                // ✅ FIX: Only write if not already set (preserve AI-assigned values)
+                                if (!config[field] || config[field] === '') {
+                                    config[field] = credentialValue;
+                                    updated = true;
+                                    console.log(`[WorkflowLifecycle] Applied ${field} to node ${node.id} (${nodeType})`);
+                                }
+                                else {
+                                    console.log(`[WorkflowLifecycle] ⏭️ Skipped ${field} on node ${node.id} (${nodeType}) — already set`);
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            // ✅ CRITICAL: Also check for non-credential config fields from credentials
+            // Some fields like "from" (for Gmail) might be provided during credential collection
+            // but should be stored in node config, not as credentials
+            Object.entries(credentials).forEach(([key, value]) => {
+                const credValue = extractCredentialValue(value);
+                if (!credValue)
+                    return;
+                const keyLower = key.toLowerCase();
+                const schema = node_library_1.nodeLibrary.getSchema(nodeType);
+                if (!schema?.configSchema)
+                    return;
+                const allFields = [
+                    ...(schema.configSchema.required || []),
+                    ...Object.keys(schema.configSchema.optional || {})
+                ];
+                // Check if this key matches a config field (not a credential field)
+                for (const fieldName of allFields) {
+                    const fieldLower = fieldName.toLowerCase();
+                    // Skip if this is a credential field
+                    if (this.isCredentialField(fieldName, nodeType)) {
+                        continue;
+                    }
+                    // ✅ ENHANCED: Better field name matching
+                    // Match exact field name
+                    const exactMatch = keyLower === fieldLower;
+                    // Match with node ID prefix: req_<nodeId>_<field> or <nodeId>_<field>
+                    const nodeIdMatch = keyLower === `req_${node.id}_${fieldLower}` ||
+                        keyLower === `${node.id}_${fieldLower}` ||
+                        keyLower.endsWith(`_${fieldLower}`) ||
+                        keyLower.startsWith(`${fieldLower}_`);
+                    // Match partial (field name contained in key or vice versa)
+                    const partialMatch = (keyLower.includes(fieldLower) && fieldLower.length > 2) ||
+                        (fieldLower.includes(keyLower.replace(/[^a-z0-9]/g, '')) && keyLower.length > 2);
+                    // ✅ SPECIAL CASE: For Gmail "from" field, be more permissive
+                    const isGmailFromField = nodeType === 'google_gmail' && fieldLower === 'from';
+                    const isFromKey = keyLower === 'from' || keyLower.endsWith('_from') || keyLower.includes('_from_');
+                    if (exactMatch || nodeIdMatch || partialMatch || (isGmailFromField && isFromKey)) {
+                        // Only set if not already set
+                        if (!config[fieldName] || config[fieldName] === '') {
+                            config[fieldName] = credValue;
+                            updated = true;
+                            console.log(`[WorkflowLifecycle] ✅ Applied config field ${fieldName} = ${credValue} to node ${node.id} (${nodeType}) from key: ${key}`);
+                        }
+                        break;
+                    }
+                }
+            });
+            if (!updated)
+                return node;
+            const safeConfig = this.sanitizeCredentialOwnedMutations(nodeType, node.id, originalConfig, config);
+            return { ...node, data: { ...node.data, config: safeConfig } };
+        });
+        const workflowWithCredentials = {
+            ...workflow,
+            nodes: updatedNodes,
+        };
+        console.log(`[WorkflowLifecycle] Updated ${updatedNodes.filter((n, i) => n !== workflow.nodes[i]).length} node(s) with credentials`);
+        // Validate workflow after credential injection
+        console.log('[WorkflowLifecycle] Validating workflow after credential injection...');
+        // ✅ WORLD-CLASS: Use WorkflowValidationPipeline (SINGLE SOURCE OF TRUTH)
+        const validation = workflow_validation_pipeline_1.workflowValidationPipeline.validateWorkflow(workflowWithCredentials);
+        // ✅ CRITICAL: Check credentials FIRST - this is the primary purpose of credential injection
+        // Workflow structure validation errors are less critical and can be fixed later
+        const credentialDiscovery = await credential_discovery_phase_1.credentialDiscoveryPhase.discoverCredentials(workflowWithCredentials, userId);
+        // ✅ CRITICAL: Only filter for credentials that are required AND not satisfied
+        const missingCredentials = credentialDiscovery.requiredCredentials.filter(cred => cred.required && !cred.satisfied);
+        const errors = [];
+        // ✅ PRIMARY CHECK: Credential satisfaction (this is what we're here for)
+        console.log(`[WorkflowLifecycle] Credential check: ${credentialDiscovery.requiredCredentials.length} required, ${missingCredentials.length} missing`);
+        if (missingCredentials.length > 0) {
+            const missingNames = missingCredentials.map(c => c.displayName).join(', ');
+            console.log(`[WorkflowLifecycle] ❌ Missing credentials: ${missingNames}`);
+            errors.push(`Missing required credentials: ${missingNames}`);
+        }
+        else {
+            console.log('[WorkflowLifecycle] ✅ All required credentials are satisfied');
+        }
+        // ✅ SECONDARY CHECK: Workflow structure validation (warnings, not blockers for credential injection)
+        if (!validation.valid) {
+            console.log(`[WorkflowLifecycle] ⚠️ Workflow validation found ${validation.errors.length} error(s) (non-blocking for credential injection):`, validation.errors);
+            // Only add critical workflow errors that would prevent saving
+            // Don't block credential injection for minor structure issues
+            validation.errors.forEach((err) => {
+                // Only include critical severity errors (high/medium are warnings for credential injection)
+                // Also ignore common non-blocking warnings
+                if ((err.includes('critical') || err.includes('required') || err.includes('missing')) &&
+                    !err.includes('no outgoing connection') &&
+                    !err.includes('no output nodes') &&
+                    !err.includes('no incoming connection')) {
+                    errors.push(err);
+                }
+            });
+        }
+        else {
+            console.log('[WorkflowLifecycle] ✅ Workflow validation passed');
+        }
+        // ✅ SUCCESS if credentials are satisfied (even if workflow has minor validation issues)
+        // The workflow structure can be fixed in a separate step
+        const success = missingCredentials.length === 0;
+        console.log(`[WorkflowLifecycle] Credential injection result: ${success ? 'SUCCESS' : 'FAILED'} (missing credentials: ${missingCredentials.length}, workflow errors: ${errors.length - missingCredentials.length})`);
+        if (!success) {
+            console.log(`[WorkflowLifecycle] Errors:`, errors);
+        }
+        return {
+            workflow: workflowWithCredentials,
+            validation,
+            success,
+            errors: errors.length > 0 ? errors : undefined,
+        };
+    }
+    /**
+     * Validate workflow is ready for execution
+     *
+     * Checks that:
+     * - All required credentials are injected
+     * - Workflow structure is valid
+     * - No missing required fields
+     *
+     * @param workflow - Workflow to validate
+     * @param userId - Optional user ID for credential vault checks
+     * @returns Validation result
+     */
+    async validateExecutionReady(workflow, userId) {
+        console.log('[WorkflowLifecycle] Validating workflow execution readiness...');
+        const errors = [];
+        const missingCredentialMessages = [];
+        // Validate workflow structure
+        // ✅ WORLD-CLASS: Use WorkflowValidationPipeline (SINGLE SOURCE OF TRUTH)
+        const validation = workflow_validation_pipeline_1.workflowValidationPipeline.validateWorkflow(workflow);
+        const validationIssues = [];
+        for (const [layerName, layerResult] of validation.layerResults.entries()) {
+            const details = layerResult.details || {};
+            for (const violation of details.orderViolations || []) {
+                validationIssues.push({
+                    type: 'linear_flow',
+                    layer: layerName,
+                    severity: violation.severity || (layerResult.valid ? 'warning' : 'error'),
+                    ...violation,
+                });
+            }
+            for (const nodeId of details.orphanNodes || []) {
+                const node = workflow.nodes.find(n => n.id === nodeId);
+                validationIssues.push({
+                    type: 'orphan_node',
+                    layer: layerName,
+                    severity: layerResult.valid ? 'warning' : 'error',
+                    nodeId,
+                    nodeType: node ? (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(node) : '',
+                    nodeLabel: node?.data?.label || nodeId,
+                    issue: 'Node is not connected to the executable workflow path',
+                });
+            }
+            for (const nodeId of details.disconnectedNodes || []) {
+                const node = workflow.nodes.find(n => n.id === nodeId);
+                validationIssues.push({
+                    type: 'disconnected_node',
+                    layer: layerName,
+                    severity: layerResult.valid ? 'warning' : 'error',
+                    nodeId,
+                    nodeType: node ? (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(node) : '',
+                    nodeLabel: node?.data?.label || nodeId,
+                    issue: 'Node is disconnected from the workflow',
+                });
+            }
+        }
+        if (!validation.valid) {
+            errors.push(...validation.errors);
+        }
+        const structuralReadiness = (0, workflow_save_validator_1.validateStructuralReadiness)(workflow.nodes, { strict: true });
+        if (structuralReadiness.errors.length > 0) {
+            errors.push(...structuralReadiness.errors);
+        }
+        // Capture before credential errors are added so callers can distinguish structural vs credential failures
+        const structurallyValid = errors.length === 0;
+        // ✅ CRITICAL: Check credentials with vault lookup
+        const credentialDiscovery = await credential_discovery_phase_1.credentialDiscoveryPhase.discoverCredentials(workflow, userId);
+        // ✅ CRITICAL: Only validate MISSING credentials - satisfied ones are already in vault
+        const missingCredentials = credentialDiscovery.missingCredentials || [];
+        // ✅ PRODUCTION: Strict validation - verify MISSING credentials are INJECTED into nodes
+        // Satisfied credentials (already in vault) don't need injection
+        for (const cred of missingCredentials) {
+            if (cred.required && !cred.satisfied) {
+                // Check if credential is present in ALL nodes that require it
+                let allNodesHaveCredential = true;
+                const missingNodeIds = [];
+                for (const nodeId of cred.nodeIds) {
+                    const node = workflow.nodes.find(n => n.id === nodeId);
+                    if (!node) {
+                        missingNodeIds.push(nodeId);
+                        allNodesHaveCredential = false;
+                        continue;
+                    }
+                    const config = node.data?.config || {};
+                    const nodeType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(node);
+                    // Get connector for this node to determine expected credential fields
+                    const connector = connector_registry_1.connectorRegistry.getConnectorByNodeType(nodeType);
+                    let found = false;
+                    if (connector && connector.credentialContract.vaultKey === cred.vaultKey) {
+                        // Check for credential reference or actual credential value
+                        // For OAuth: check for credentialRef or access_token
+                        // For webhook: check for webhookUrl
+                        // For SMTP: check for host, username, password
+                        if (cred.type === 'oauth') {
+                            found = !!(config.credentialRef === cred.vaultKey ||
+                                config.access_token ||
+                                config.refresh_token);
+                        }
+                        else if (cred.type === 'webhook') {
+                            found = !!(config.webhookUrl || config.webhook_url);
+                        }
+                        else if (cred.type === 'api_key') {
+                            // SMTP or other API key types
+                            if (cred.provider === 'smtp') {
+                                found = !!(config.host && (config.username || config.password));
+                            }
+                            else {
+                                found = !!(config.apiKey || config.api_key || config.token);
+                            }
+                        }
+                        else {
+                            // Generic check for any credential-like field
+                            const vaultKeyLower = cred.vaultKey.toLowerCase();
+                            found = Object.keys(config).some(key => {
+                                const keyLower = key.toLowerCase();
+                                const value = config[key];
+                                return (keyLower.includes(vaultKeyLower) ||
+                                    keyLower.includes(cred.provider.toLowerCase())) &&
+                                    value &&
+                                    typeof value === 'string' &&
+                                    value.trim().length > 0 &&
+                                    !value.startsWith('{{ENV.');
+                            });
+                        }
+                    }
+                    else {
+                        // Fallback: check for any credential-like field
+                        const vaultKeyLower = cred.vaultKey.toLowerCase();
+                        found = Object.keys(config).some(key => {
+                            const keyLower = key.toLowerCase();
+                            const value = config[key];
+                            return (keyLower.includes(vaultKeyLower) ||
+                                keyLower.includes(cred.provider.toLowerCase())) &&
+                                value &&
+                                typeof value === 'string' &&
+                                value.trim().length > 0 &&
+                                !value.startsWith('{{ENV.');
+                        });
+                    }
+                    if (!found) {
+                        missingNodeIds.push(nodeId);
+                        allNodesHaveCredential = false;
+                    }
+                }
+                if (!allNodesHaveCredential) {
+                    missingCredentialMessages.push(`${cred.displayName} (missing in nodes: ${missingNodeIds.join(', ')})`);
+                }
+            }
+        }
+        if (missingCredentialMessages.length > 0) {
+            errors.push(`Missing required credentials: ${missingCredentialMessages.join(', ')}`);
+        }
+        return {
+            ready: errors.length === 0,
+            errors,
+            missingCredentials: missingCredentialMessages, // Return string array, not CredentialRequirement[]
+            structurallyValid,
+            validationIssues,
+        };
+    }
+    /**
+     * Post-graph enrichment for plan-driven workflows: vault-aware credential discovery,
+     * satisfied OAuth ref injection, node input scan, validation pipeline.
+     * Mirrors steps after graph creation in generateWorkflowGraph without planner/DSL.
+     */
+    async finalizePlanDrivenWorkflow(workflow, userId) {
+        let finalWorkflow = (0, structure_materializer_1.materializeStructuralFields)(workflow);
+        finalWorkflow = (0, intent_structural_projection_1.applyStructuralIntentAlignment)(finalWorkflow);
+        finalWorkflow = (0, workflow_config_hydrator_1.hydrateRequiredConfigFromRegistryDefaults)(finalWorkflow);
+        const credentialDiscovery = await credential_discovery_phase_1.credentialDiscoveryPhase.discoverCredentials(finalWorkflow, userId);
+        finalWorkflow = this.autoInjectSatisfiedCredentialRefs(finalWorkflow, credentialDiscovery);
+        const nodeInputs = this.discoverNodeInputs(finalWorkflow);
+        const validation = workflow_validation_pipeline_1.workflowValidationPipeline.validateWorkflow(finalWorkflow);
+        return {
+            workflow: finalWorkflow,
+            requiredCredentials: credentialDiscovery,
+            requiredInputs: nodeInputs,
+            validation,
+            documentation: 'Built from structured workflow plan (plan-driven)',
+            suggestions: [],
+            estimatedComplexity: 'medium',
+        };
+    }
+}
+exports.WorkflowLifecycleManager = WorkflowLifecycleManager;
+// Export singleton instance
+exports.workflowLifecycleManager = new WorkflowLifecycleManager();

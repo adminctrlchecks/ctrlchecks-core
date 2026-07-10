@@ -1,0 +1,11 @@
+﻿flowchart TD
+    API[Worker APIs] --> DB_CLIENT[worker/src/core/database/aws-db-client.ts<br/>PostgREST-style facade backed by pg.Pool]
+    DB_CLIENT --> POOL[worker/src/core/database/db-pool.ts<br/>Connection pooling]
+    POOL --> RDS[(AWS RDB/RDS<br/>PostgreSQL-compatible database)]
+
+    RDS --> WORKFLOWS[Workflows and graph state]
+    RDS --> EXECUTIONS[Execution records, checkpoints, logs]
+    RDS --> USERS[Users, roles, auth-linked records]
+    RDS --> CREDS[Credential metadata and encrypted/vault-managed connection records]
+    RDS --> BILLING[Subscription and payment records]
+    RDS --> AUDIT[AI editor, runtime input, admin and security audit data]

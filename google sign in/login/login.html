@@ -1,0 +1,69 @@
+<div class="overlay" (click)="onBackgroundClick()">
+
+  <div class="login-container" (click)="$event.stopPropagation()">
+
+    <div class="login-card">
+
+      <h2 class="title">Welcome Back</h2>
+      <p class="subtitle">Login to continue</p>
+
+      <form (ngSubmit)="onLogin()" #loginForm="ngForm">
+
+       
+        <div class="input-group">
+          <label>Email</label>
+          <input type="email" name="email" [(ngModel)]="email" required />
+        </div>
+
+        <div class="input-group">
+          <label>Password</label>
+
+          <div class="password-wrapper">
+            <input
+              [type]="showPassword ? 'text' : 'password'"
+              name="password"
+              [(ngModel)]="password"
+              required
+              minlength="6"
+            />
+
+            <span class="toggle-eye" (click)="showPassword = !showPassword">
+              <img
+                *ngIf="!showPassword"
+                src="https://cdn-icons-png.flaticon.com/512/159/159604.png"
+              />
+              <img
+                *ngIf="showPassword"
+                src="https://cdn-icons-png.flaticon.com/128/565/565655.png"
+              />
+            </span>
+          </div>
+        </div>
+
+        <button class="btn-login" type="submit" [disabled]="loginForm.invalid">
+          Login
+        </button>
+
+        <p class="login-error" *ngIf="error">{{ error }}</p>
+
+        <div id="googleLoginBtn" class="google-wrapper"></div>
+        <p class="login-error" *ngIf="googleError">{{ googleError }}</p>
+
+        <div class="links">
+          <a routerLink="/register">New User? Click to register.</a>
+          <a routerLink="/forgot-password">Forgot password?</a>
+        </div>
+
+      </form>
+
+    </div>
+  </div>
+
+</div>
+
+<div class="success-overlay" *ngIf="showDialog"></div>
+<div class="success-dialog" *ngIf="showDialog">
+  <h2>Login Successful!</h2>
+  <p>Welcome back! You have successfully logged in.</p>
+  <button (click)="closeDialog()">OK</button>
+</div>

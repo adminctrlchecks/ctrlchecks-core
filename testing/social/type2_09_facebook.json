@@ -1,0 +1,120 @@
+{
+  "name": "Test Facebook — Get Profile + List Pages",
+  "description": "Tests Facebook profile and page retrieval. Requires Facebook account connected in /connections.",
+  "nodes": [
+    {
+      "id": "node_1",
+      "type": "custom",
+      "position": { "x": 100, "y": 300 },
+      "data": {
+        "type": "manual_trigger",
+        "label": "Start Test",
+        "category": "triggers",
+        "icon": "Play",
+        "config": {}
+      }
+    },
+    {
+      "id": "node_2",
+      "type": "custom",
+      "position": { "x": 400, "y": 150 },
+      "data": {
+        "type": "facebook",
+        "label": "Facebook — Get My Profile",
+        "category": "social",
+        "icon": "Facebook",
+        "config": {
+          "resource": "profile",
+          "operation": "get",
+          "fields": "id,name,email,picture"
+        }
+      }
+    },
+    {
+      "id": "node_3",
+      "type": "custom",
+      "position": { "x": 700, "y": 150 },
+      "data": {
+        "type": "log_output",
+        "label": "Log: Profile",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "level": "info",
+          "message": "Facebook Profile → id={{$json.id}} | name={{$json.name}} | email={{$json.email}}"
+        }
+      }
+    },
+    {
+      "id": "node_4",
+      "type": "custom",
+      "position": { "x": 400, "y": 350 },
+      "data": {
+        "type": "facebook",
+        "label": "Facebook — List My Pages",
+        "category": "social",
+        "icon": "BookOpen",
+        "config": {
+          "resource": "page",
+          "operation": "list",
+          "fields": "id,name,category,fan_count,access_token"
+        }
+      }
+    },
+    {
+      "id": "node_5",
+      "type": "custom",
+      "position": { "x": 700, "y": 350 },
+      "data": {
+        "type": "log_output",
+        "label": "Log: Pages",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "level": "info",
+          "message": "Facebook Pages → count={{$json.data.length}} | first page: {{$json.data[0].name}} ({{$json.data[0].category}})"
+        }
+      }
+    },
+    {
+      "id": "node_6",
+      "type": "custom",
+      "position": { "x": 400, "y": 550 },
+      "data": {
+        "type": "facebook",
+        "label": "Facebook — Create Test Post on Page",
+        "category": "social",
+        "icon": "Edit",
+        "config": {
+          "resource": "page",
+          "operation": "post",
+          "message": "Testing ctrlchecks workflow automation platform. #automation #ctrlchecks"
+        }
+      }
+    },
+    {
+      "id": "node_7",
+      "type": "custom",
+      "position": { "x": 700, "y": 550 },
+      "data": {
+        "type": "log_output",
+        "label": "Log: Post Result",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "level": "info",
+          "message": "Facebook Post → id={{$json.id}} | success"
+        }
+      }
+    }
+  ],
+  "edges": [
+    { "id": "edge_1", "source": "node_1", "target": "node_2" },
+    { "id": "edge_2", "source": "node_2", "target": "node_3" },
+    { "id": "edge_3", "source": "node_1", "target": "node_4" },
+    { "id": "edge_4", "source": "node_4", "target": "node_5" },
+    { "id": "edge_5", "source": "node_1", "target": "node_6" },
+    { "id": "edge_6", "source": "node_6", "target": "node_7" }
+  ],
+  "viewport": { "x": 0, "y": 0, "zoom": 0.85 }
+}

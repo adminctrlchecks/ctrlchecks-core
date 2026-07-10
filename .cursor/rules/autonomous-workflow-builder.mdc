@@ -1,0 +1,160 @@
+---
+description: Autonomous AI workflow builder system - converts natural language prompts into executable workflows
+globs: worker/src/services/ai/*.ts,worker/src/api/generate-workflow.ts,worker/src/services/workflow-lifecycle-manager.ts
+---
+
+# Autonomous Workflow Builder System
+
+## Overview
+
+The autonomous workflow builder converts natural language prompts into complete, executable workflows following a strict multi-phase pipeline. The system is implemented in [workflow-builder.ts](mdc:worker/src/services/ai/workflow-builder.ts) and orchestrated by [workflow-lifecycle-manager.ts](mdc:worker/src/services/workflow-lifecycle-manager.ts).
+
+## Core Principle
+
+**IMPLEMENT, DON'T DESCRIBE** - Always generate executable workflows, never descriptions.
+
+## Generation Pipeline
+
+### Phase 0: Pre-processing
+- **Prompt Normalization**: Clean and standardize user input
+- **Intent Classification**: Determine workflow type (chatbot, data sync, notification, automation)
+- **Node Resolution**: Identify required nodes from prompt keywords (e.g., "Gmail" → `google_gmail`)
+
+### Phase 1: Understanding & Planning
+1. **System Prompt Generation**: Create 20-30 word summary
+2. **Requirements Extraction**:
+   - Trigger type
+   - Required integrations
+   - Data sources
+   - Output destinations
+   - Credentials needed
+   - URLs/APIs
+   - Schedules
+
+### Phase 2: Structure Generation
+- **Pattern Matching**: Search similar workflows in training data
+- **Canonical Example Selection**: Use pre-built examples if match found
+- **Structure Generation**: Build workflow structure (Trigger → Steps → Outputs)
+- **Node Selection**: Select nodes based on capability match, inputs/outputs, priority rules
+
+### Phase 3: Node Configuration
+- **Node Ordering**: Enforce execution order (Trigger → Data → Storage → Notifications → Communication)
+- **Configuration**: Set all required fields using `{{field}}` template syntax
+- **Defaults**: Provide sensible defaults when possible
+
+### Phase 4: Connection & Validation
+- **Connection Creation**: Wire nodes with proper data flow
+- **Data Contract Validation**: Ensure output types match input types
+- **Node Compatibility**: Validate nodes can work together
+- **Workflow Validation**: Comprehensive validation with auto-fix:
+  - No orphan/disconnected nodes
+  - All required fields filled
+  - Proper data flow
+  - No circular dependencies
+
+### Phase 5: Credential Discovery
+- **Credential Identification**: Discover required credentials AFTER graph creation
+- **Vault Checking**: Check if credentials exist in user's vault
+- **Missing Credential Reporting**: List what needs configuration
+
+## Available Node Types
+
+### Triggers
+- `webhook` - HTTP request trigger
+- `chat_trigger` - Chat message trigger
+- `form` - Form submission trigger
+- `schedule` - Cron-based time trigger
+- `manual_trigger` - Manual execution
+- `interval` - Recurring interval trigger
+- `workflow_trigger` - Triggered by another workflow
+- `error_trigger` - Error-based trigger
+
+### Logic & Flow Control
+- `if_else` - Conditional branching
+- `switch` - Multi-case branching
+- `set_variable` - Set variable values
+- `javascript` - Custom JavaScript code
+- `merge` - Combine data streams
+- `wait` - Delay execution
+- `filter` - Filter array items
+- `loop` - Iterate over arrays
+- `limit` - Limit number of items
+- `aggregate` - Group/aggregate data
+- `sort` - Sort items
+- `noop` - No operation placeholder
+
+### HTTP & API
+- `http_request` - Make HTTP requests
+- `ai_chat_model` - AI chat model calls
+- `ai_agent` - Autonomous AI agent node
+
+### Integrations
+- `hubspot`, `zoho`, `pipedrive` - CRM systems
+- `notion`, `airtable`, `clickup` - Project management
+- `gmail`, `outlook` - Email services
+- `slack`, `telegram` - Messaging
+- `google_calendar` - Calendar
+- `linkedin`, `github` - Social/professional
+- `google_sheets` - Data storage
+
+## Validation Rules
+
+### MUST ENFORCE
+1. **All required fields filled** - No null, no empty strings, use defaults or mappings
+2. **Every input has source** - All inputs (except trigger's initial) must have incoming connection
+3. **No disconnected nodes** - Every node reachable from trigger via connections
+4. **Data flow consistency** - Output type matches expected input type
+5. **No circular connections** - Graph must be acyclic
+
+### Auto-Fix Rules
+- Missing field → Infer from context or use default
+- Invalid connection → Reconnect using compatible outputs
+- Validation failure → Rebuild with stricter rules
+
+## Output Format
+
+```json
+{
+  "summary": "string - short description",
+  "nodes": [
+    {
+      "id": "unique_node_id",
+      "type": "node_type",
+      "config": { ... }
+    }
+  ],
+  "connections": [
+    {
+      "source": "node_id",
+      "target": "node_id",
+      "source_output": "output_field",
+      "target_input": "input_field"
+    }
+  ],
+  "required_credentials": ["service1", "service2"],
+  "validation_status": "valid" | "needs_attention"
+}
+```
+
+## Key Files
+
+- [workflow-builder.ts](mdc:worker/src/services/ai/workflow-builder.ts) - Main generation logic
+- [workflow-lifecycle-manager.ts](mdc:worker/src/services/workflow-lifecycle-manager.ts) - Orchestrates lifecycle
+- [workflow-validator.ts](mdc:worker/src/services/ai/workflow-validator.ts) - Validation logic
+- [generate-workflow.ts](mdc:worker/src/api/generate-workflow.ts) - API endpoint
+- [WORKFLOW_GENERATION_SYSTEM_PROMPT.md](mdc:worker/src/services/ai/WORKFLOW_GENERATION_SYSTEM_PROMPT.md) - System prompts
+
+## Error Handling
+
+- **Graceful degradation**: If AI services unavailable, use rule-based fallbacks
+- **Connection errors**: Continue with original prompt if normalization fails
+- **Validation failures**: Auto-repair attempts before reporting errors
+- **Missing credentials**: Generate workflow but mark as needing credentials
+
+## Critical Directives
+
+1. **Zero broken links** - All nodes must be connected
+2. **Complete configurations** - No placeholders, no empty required fields
+3. **Correct IO mapping** - Every input mapped to existing output
+4. **Self-repair** - Automatically fix common issues
+5. **Production-ready** - Workflows must be executable immediately

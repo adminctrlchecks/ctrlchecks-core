@@ -1,0 +1,187 @@
+{
+  "name": "Test Notion — Search + Get User + List Databases + Create Page",
+  "description": "Tests Notion search, user info, database listing, and page creation. Requires Notion account connected in /connections with pages/databases shared with the integration.",
+  "nodes": [
+    {
+      "id": "node_1",
+      "type": "custom",
+      "position": { "x": 100, "y": 400 },
+      "data": {
+        "type": "manual_trigger",
+        "label": "Start Test",
+        "category": "triggers",
+        "icon": "Play",
+        "config": {}
+      }
+    },
+    {
+      "id": "node_2",
+      "type": "custom",
+      "position": { "x": 400, "y": 150 },
+      "data": {
+        "type": "notion",
+        "label": "Notion — Search All Content",
+        "category": "productivity",
+        "icon": "BookOpen",
+        "config": {
+          "resource": "search",
+          "operation": "search",
+          "query": "test"
+        }
+      }
+    },
+    {
+      "id": "node_3",
+      "type": "custom",
+      "position": { "x": 700, "y": 150 },
+      "data": {
+        "type": "log_output",
+        "label": "Log: Search Results",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "level": "info",
+          "message": "Notion Search → results={{$json.results.length}} | first result: {{$json.results[0].object}} - {{$json.results[0].id}}"
+        }
+      }
+    },
+    {
+      "id": "node_4",
+      "type": "custom",
+      "position": { "x": 400, "y": 350 },
+      "data": {
+        "type": "notion",
+        "label": "Notion — Get Integration User (Me)",
+        "category": "productivity",
+        "icon": "User",
+        "config": {
+          "resource": "user",
+          "operation": "getMe"
+        }
+      }
+    },
+    {
+      "id": "node_5",
+      "type": "custom",
+      "position": { "x": 700, "y": 350 },
+      "data": {
+        "type": "log_output",
+        "label": "Log: User Info",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "level": "info",
+          "message": "Notion User → type={{$json.type}} | name={{$json.name}} | id={{$json.id}}"
+        }
+      }
+    },
+    {
+      "id": "node_6",
+      "type": "custom",
+      "position": { "x": 400, "y": 550 },
+      "data": {
+        "type": "notion",
+        "label": "Notion — List All Databases",
+        "category": "productivity",
+        "icon": "Database",
+        "config": {
+          "resource": "database",
+          "operation": "list"
+        }
+      }
+    },
+    {
+      "id": "node_7",
+      "type": "custom",
+      "position": { "x": 700, "y": 550 },
+      "data": {
+        "type": "log_output",
+        "label": "Log: Databases",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "level": "info",
+          "message": "Notion Databases → count={{$json.results.length}} | first db: {{$json.results[0].title[0].plain_text}}"
+        }
+      }
+    },
+    {
+      "id": "node_8",
+      "type": "custom",
+      "position": { "x": 400, "y": 750 },
+      "data": {
+        "type": "notion",
+        "label": "Notion — Create Test Page",
+        "category": "productivity",
+        "icon": "FilePlus",
+        "config": {
+          "resource": "page",
+          "operation": "create",
+          "parentId": "YOUR_NOTION_DATABASE_ID",
+          "title": "ctrlchecks Test Page (safe to delete)",
+          "content": "This page was created by the ctrlchecks workflow platform for testing purposes."
+        }
+      }
+    },
+    {
+      "id": "node_9",
+      "type": "custom",
+      "position": { "x": 700, "y": 750 },
+      "data": {
+        "type": "log_output",
+        "label": "Log: Page Created",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "level": "info",
+          "message": "Notion Page Created → id={{$json.id}} | url={{$json.url}} | title={{$json.properties.title.title[0].plain_text}}"
+        }
+      }
+    },
+    {
+      "id": "node_10",
+      "type": "custom",
+      "position": { "x": 400, "y": 950 },
+      "data": {
+        "type": "notion",
+        "label": "Notion — Query Database",
+        "category": "productivity",
+        "icon": "Search",
+        "config": {
+          "resource": "database",
+          "operation": "query",
+          "databaseId": "YOUR_NOTION_DATABASE_ID",
+          "pageSize": 5
+        }
+      }
+    },
+    {
+      "id": "node_11",
+      "type": "custom",
+      "position": { "x": 700, "y": 950 },
+      "data": {
+        "type": "log_output",
+        "label": "Log: Query Results",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "level": "info",
+          "message": "Notion DB Query → results={{$json.results.length}} | has_more={{$json.has_more}}"
+        }
+      }
+    }
+  ],
+  "edges": [
+    { "id": "edge_1", "source": "node_1", "target": "node_2" },
+    { "id": "edge_2", "source": "node_2", "target": "node_3" },
+    { "id": "edge_3", "source": "node_1", "target": "node_4" },
+    { "id": "edge_4", "source": "node_4", "target": "node_5" },
+    { "id": "edge_5", "source": "node_1", "target": "node_6" },
+    { "id": "edge_6", "source": "node_6", "target": "node_7" },
+    { "id": "edge_7", "source": "node_1", "target": "node_8" },
+    { "id": "edge_8", "source": "node_8", "target": "node_9" },
+    { "id": "edge_9", "source": "node_1", "target": "node_10" },
+    { "id": "edge_10", "source": "node_10", "target": "node_11" }
+  ],
+  "viewport": { "x": 0, "y": 0, "zoom": 0.75 }
+}

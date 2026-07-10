@@ -1,0 +1,87 @@
+{
+  "name": "Test Slack — Send Message to Channel",
+  "description": "Tests sending a message to a Slack channel. Can use Bot Token (via /connections) or a direct Incoming Webhook URL. Configure either the channel + bot token path, or the webhookUrl path.",
+  "nodes": [
+    {
+      "id": "node_1",
+      "type": "custom",
+      "position": { "x": 100, "y": 300 },
+      "data": {
+        "type": "manual_trigger",
+        "label": "Start Test",
+        "category": "triggers",
+        "icon": "Play",
+        "config": {}
+      }
+    },
+    {
+      "id": "node_2",
+      "type": "custom",
+      "position": { "x": 400, "y": 150 },
+      "data": {
+        "type": "slack_message",
+        "label": "Slack — Send Message (Bot Token)",
+        "category": "communication",
+        "icon": "MessageSquare",
+        "config": {
+          "channel": "YOUR_SLACK_CHANNEL",
+          "message": "ctrlchecks workflow test message. Platform integration test at timestamp {{$json.timestamp}}. Please ignore.",
+          "text": "ctrlchecks workflow test message"
+        }
+      }
+    },
+    {
+      "id": "node_3",
+      "type": "custom",
+      "position": { "x": 700, "y": 150 },
+      "data": {
+        "type": "log_output",
+        "label": "Log: Bot Token Send Result",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "level": "info",
+          "message": "Slack Bot Token → ok={{$json.ok}} | channel={{$json.channel}} | ts={{$json.ts}}"
+        }
+      }
+    },
+    {
+      "id": "node_4",
+      "type": "custom",
+      "position": { "x": 400, "y": 350 },
+      "data": {
+        "type": "slack_message",
+        "label": "Slack — Send via Incoming Webhook",
+        "category": "communication",
+        "icon": "Webhook",
+        "config": {
+          "webhookUrl": "https://hooks.slack.com/services/YOUR_WEBHOOK_URL",
+          "message": "ctrlchecks workflow test via Incoming Webhook. Platform integration test. Please ignore.",
+          "text": "ctrlchecks test"
+        }
+      }
+    },
+    {
+      "id": "node_5",
+      "type": "custom",
+      "position": { "x": 700, "y": 350 },
+      "data": {
+        "type": "log_output",
+        "label": "Log: Webhook Send Result",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "level": "info",
+          "message": "Slack Webhook → status={{$json.status}} | result={{$json.ok}}"
+        }
+      }
+    }
+  ],
+  "edges": [
+    { "id": "edge_1", "source": "node_1", "target": "node_2" },
+    { "id": "edge_2", "source": "node_2", "target": "node_3" },
+    { "id": "edge_3", "source": "node_1", "target": "node_4" },
+    { "id": "edge_4", "source": "node_4", "target": "node_5" }
+  ],
+  "viewport": { "x": 0, "y": 0, "zoom": 0.9 }
+}

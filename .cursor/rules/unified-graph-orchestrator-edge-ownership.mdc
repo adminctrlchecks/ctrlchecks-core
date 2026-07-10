@@ -1,0 +1,147 @@
+---
+alwaysApply: true
+---
+
+# Unified Graph Orchestrator – Single Source of Truth for Edges
+
+## Core Mandate
+
+- All workflow edge creation, removal, or modification **must** go through the unified graph orchestration layer:
+  - [`unified-graph-orchestrator.ts`](mdc:worker/src/core/orchestration/unified-graph-orchestrator.ts)
+  - [`execution-order-manager.ts`](mdc:worker/src/core/orchestration/execution-order-manager.ts)
+  - [`edge-reconciliation-engine.ts`](mdc:worker/src/core/orchestration/edge-reconciliation-engine.ts)
+- **Never** modify `workflow.edges` directly in feature code.  
+  - Forbidden patterns (anywhere in the codebase):
+    - `workflow.edges.push(...)`
+    - `workflow.edges = [...]`
+    - Mutating an individual edge object in place to rewire connections
+- **Never** rely on ad-hoc edge construction in policies or lifecycle helpers. All structural changes must be expressed as node-level operations and reconciled centrally.
+
+## Allowed Orchestrator Operations
+
+When you need to work with graphs, use only these entry points from
+[`unified-graph-orchestrator.ts`](mdc:worker/src/core/orchestration/unified-graph-orchestrator.ts):
+
+1. **Initial graph construction**
+   - Use `initializeWorkflow(nodes)` to:
+     - Create the initial `Workflow` object from a node list.
+     - Compute execution order via [`execution-order-manager.ts`](mdc:worker/src/core/orchestration/execution-order-manager.ts).
+     - Create all edges via [`edge-reconciliation-engine.ts`](mdc:worker/src/core/orchestration/edge-reconciliation-engine.ts).
+   - This is the **only** acceptable way to create the first set of edges for a workflow.
+
+2. **Node insertion**
+   - Use `injectNode(workflow, node, context)` to add a node:
+     - `context` must describe intent (e.g., `"safety"`, `"lifecycle_resolve"`, `"policy"`) and relative position (`"before" | "after" | "replace"` plus `referenceNodeId`).
+     - The orchestrator will:
+       - Update execution order.
+       - Reconcile edges so the new node is wired correctly.
+   - Typical callers:
+     - Safety node injector (`injectSafetyNodes`).
+     - Error-branch injector.
+     - Workflow lifecycle when re-adding “resolved” nodes such as Gmail/Ollama.
+
+3. **Node removal**
+   - Use `removeNode(workflow, nodeId)` to delete a node:
+     - Do **not** manually splice nodes or filter edges in policies.
+     - The orchestrator will:
+       - Update execution order.
+       - Remove now-invalid edges.
+       - Reconcile remaining edges.
+
+4. **Edge repair / normalization**
+   - Use `reconcileWorkflow(workflow)` when:
+     - You suspect edges might be stale after a complex series of node operations.
+     - You have imported or migrated a graph and need to normalize edges to the canonical execution order.
+
+5. **Validation**
+   - Always call `validateWorkflow(workflow, executionOrder?)` after:
+     - DSL compilation.
+     - Minimal workflow policy application.
+     - Safety / error-branch injection.
+     - Workflow lifecycle adjustments (e.g., adding resolved Gmail/Ollama nodes).
+   - Treat violations such as:
+     - Multiple triggers.
+     - Orphaned nodes.
+     - Cycles.
+     - Edge/execution-order mismatches.
+     as **pipeline contract errors**, not soft warnings.
+
+## Registry-Driven Behavior (No Hardcoding)
+
+- All orchestrator decisions **must** be driven by
+  [`unified-node-registry.ts`](mdc:worker/src/core/registry/unified-node-registry.ts):
+  - Node category: trigger, data source, transformation, output, utility.
+  - Branching behavior: `isBranching`, outgoing ports (`true`/`false`, `case_1..n`).
+  - Merge semantics: nodes tagged with `merge`.
+  - Handle contracts: resolved via `universalHandleResolver` and
+    [`universal-edge-creation-service.ts`](mdc:worker/src/services/edges/universal-edge-creation-service.ts).
+- Do **not** special-case node types with if/switch on string names (e.g., `"gmail"`, `"ollama"`, `"google_sheets"`). Instead:
+  - Query the registry for capabilities and tags.
+  - Let the orchestrator and edge reconciliation engine derive connections generically.
+
+## File-Specific Guidance
+
+### `workflow-dsl-compiler.ts`
+
+- After building the node list from DSL:
+  - Call `unifiedGraphOrchestrator.initializeWorkflow(nodes)` once.
+  - Use the orchestrator’s `workflow.edges` as the single source of truth.
+- Never build edges directly from DSL execution steps.
+
+### `workflow-lifecycle-manager.ts`
+
+- **Do NOT** append nodes directly:
+  - Replace patterns like:
+    - `workflow = { ...workflow, nodes: [...workflow.nodes, newNode] }`
+  - With:
+    - `const result = unifiedGraphOrchestrator.injectNode(workflow, newNode, context);`
+    - `workflow = result.workflow;`
+- After “resolved node” insertion (e.g., Gmail/Ollama from planner or credentials), **always** call:
+  - `const validation = unifiedGraphOrchestrator.validateWorkflow(workflow, result.executionOrder);`
+  - Fail fast if `!validation.valid` instead of passing a broken graph downstream.
+
+### `minimal-workflow-policy.ts`
+
+- The policy may:
+  - Decide which node **types/IDs** are required or forbidden.
+  - Decide which edges conceptually belong to the minimal path.
+- It may **not**:
+  - Directly mutate `workflow.edges`.
+  - Manually splice nodes out of the graph.
+- Implementation pattern:
+  - Compute a list of node IDs to remove.
+  - For each, call `removeNode(workflow, nodeId)` via the orchestrator.
+  - After removals, call `reconcileWorkflow(workflow)` once.
+
+### Safety and Error Branch Injectors
+
+- All safety and error-handling nodes must be inserted via:
+  - `injectNode(workflow, node, context)`
+  - Followed by `reconcileWorkflow(workflow)` as needed.
+- No direct edge wiring for:
+  - Error triggers.
+  - Log/alert nodes.
+  - Limit/aggregate/guard nodes before AI.
+
+## Testing & Invariants
+
+- Edge-focused tests must assert that:
+  - There is exactly one reachable trigger.
+  - All non-trigger nodes are reachable from a trigger.
+  - There are no cycles (DAG enforcement).
+  - Branching/merge in-degree/out-degree rules match registry contracts.
+- For any new feature that changes nodes:
+  - Add tests that:
+    - Use DSL or intent-driven pipelines to build workflows.
+    - Pass the resulting graph through `validateWorkflow`.
+    - Assert **zero** structural errors and that all edges were created without manual wiring.
+
+## Summary
+
+- **Single orchestrator, single registry**:
+  - `unifiedGraphOrchestrator` + `unifiedNodeRegistry` are the only authorities on edges and execution order.
+- **No manual edges**:
+  - Feature code and policies operate on nodes and high-level intent; they never “hand-wire” edges.
+- **Validate aggressively**:
+  - Any structural violation is a pipeline contract error that must be fixed at the orchestration layer, not patched per-workflow.
+

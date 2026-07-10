@@ -1,0 +1,150 @@
+import express, { NextFunction, Request, Response } from "express";
+import cors from "cors";
+import { join } from "path";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
+import dotenv from "dotenv";
+
+import categoryRoutes from "./routers/category.routes";
+import productRoutes from "./routers/product.routes";
+import loginRoutes from "./routers/login.routes";
+import cartRoutes from "./routers/cart.routes";
+import checkoutRoutes from "./routers/checkout.routes";
+import shippingRoutes from "./routers/shipping.routes";
+import orderRoutes from "./routers/order.routes";
+import paymentRoutes from "./routers/payment.routes";
+import invoiceRoutes from "./routers/invoice.routes";
+import reviewRoutes from "./routers/review.routes";
+import contactRoutes from "./routers/contact.routes";
+
+const app = express();
+app.disable("x-powered-by");
+app.set("trust proxy", 1);
+dotenv.config();
+
+const hasDatabaseUrl = Boolean(String(process.env.DATABASE_URL || "").trim());
+
+const requiredEnvVars = [
+  ...(
+    hasDatabaseUrl
+      ? []
+      : ["DB_HOST", "DB_USER", "DB_PASS", "DB_NAME"]
+  ),
+  "JWT_SECRET",
+  "RAZORPAY_KEY_ID",
+  "RAZORPAY_KEY_SECRET",
+  "RAZORPAY_WEBHOOK_SECRET",
+];
+
+const missingEnvVars = requiredEnvVars.filter(
+  (key) => !String(process.env[key] || "").trim()
+);
+
+if (missingEnvVars.length) {
+  throw new Error(`Missing required environment variables: ${missingEnvVars.join(", ")}`);
+}
+
+const defaultAllowedOrigins = [
+  "https://lifeionizersindia.com",
+  "https://www.lifeionizersindia.com",
+  "http://localhost:4200",
+];
+
+const envAllowedOrigins = String(process.env.CORS_ALLOWED_ORIGINS || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+const allowedOrigins = new Set([...defaultAllowedOrigins, ...envAllowedOrigins]);
+
+function isLocalDevOrigin(origin: string): boolean {
+  return (
+    /^http:\/\/localhost:\d+$/.test(origin) ||
+    /^http:\/\/127\.0\.0\.1:\d+$/.test(origin)
+  );
+}
+
+app.use(
+  helmet({
+    crossOriginOpenerPolicy: {
+      policy: "same-origin-allow-popups",
+    },
+  })
+);
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.has(origin) || isLocalDevOrigin(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error("Not allowed by CORS"));
+    },
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+    optionsSuccessStatus: 204,
+  })
+);
+
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 500,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 50,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use(globalLimiter);
+app.use("/api/auth", authLimiter);
+
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: false, limit: "1mb" }));
+
+app.get("/healthz", (_req: Request, res: Response) => {
+  return res.status(200).json({ status: "ok" });
+});
+
+const imagesPath = join(__dirname, "../assets/images");
+app.use(
+  "/assets/images",
+  express.static(imagesPath, {
+    setHeaders: (res) => {
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    },
+  })
+);
+
+app.use("/api/categories", categoryRoutes);
+app.use("/api/products", productRoutes);
+app.use("/api/auth", loginRoutes);
+app.use("/api/cart", cartRoutes);
+app.use("/api/checkout", checkoutRoutes);
+app.use("/api/shipping", shippingRoutes);
+app.use("/api/orders", orderRoutes);
+app.use("/api/payment", paymentRoutes);
+app.use("/api/invoice", invoiceRoutes);
+app.use("/api/reviews", reviewRoutes);
+app.use("/api/contact", contactRoutes);
+
+app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  if (err?.message === "Not allowed by CORS") {
+    return res.status(403).json({ message: "CORS blocked this origin" });
+  }
+
+  console.error("UNHANDLED APP ERROR:", err);
+  return res.status(500).json({ message: "Server error" });
+});
+
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log("Server running on port", PORT);
+});

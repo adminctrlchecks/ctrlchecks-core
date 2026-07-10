@@ -1,0 +1,12 @@
+﻿flowchart LR
+    USER[User] --> UI[React/Vite Frontend<br/>Workflow canvas, wizard, docs, debug UI]
+    UI --> API[Worker API<br/>Express routes and middleware]
+    API --> AI[AI Planning and Runtime Resolution<br/>Gemini/model gateway + deterministic contracts]
+    API --> REGISTRY[Unified Node Registry<br/>Node schemas, credentials, operations, contracts]
+    API --> EXEC[Execution Engine<br/>Dynamic node executor + graph orchestration]
+    API --> DB[(AWS RDB/RDS<br/>PostgreSQL-compatible persistence)]
+    EXEC --> DB
+    EXEC --> VAULT[Credential Vault / Connection Resolver]
+    EXEC --> PROVIDERS[External Providers<br/>Google, Gmail, Slack, HTTP APIs, databases, AI models]
+    EXEC --> OBS[Runtime Logs, Audit, Checkpoints, WebSocket Updates]
+    OBS --> UI

@@ -160,7 +160,16 @@ export class CredentialResolver {
           // Validate the credentialId actually exists in DB — prevents ghost UUIDs from deleted connections
           if (configResolved && userId) {
             const nodeConfig = (node.data?.config || {}) as Record<string, unknown>;
-            const credentialId = String(nodeConfig.credentialId || nodeConfig.credentialRef || '').trim();
+            const connectionRefs = (node.data?.connectionRefs || {}) as Record<string, unknown>;
+            const credentialId = String(
+              nodeConfig.credentialId ||
+              nodeConfig.credentialRef ||
+              connectionRefs[contract.provider] ||
+              connectionRefs[`${contract.provider}_connection`] ||
+              connectionRefs[`${contract.provider}_api_key`] ||
+              connectionRefs[`${contract.provider}_oauth2`] ||
+              ''
+            ).trim();
             if (credentialId) {
               const db = getDbClient();
               const { data } = await db
@@ -168,6 +177,7 @@ export class CredentialResolver {
                 .select('id')
                 .eq('user_id', userId)
                 .eq('id', credentialId)
+                .eq('status', 'active')
                 .limit(1);
               if (!data?.length) {
                 configResolved = false;

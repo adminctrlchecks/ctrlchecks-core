@@ -1,0 +1,8 @@
+﻿flowchart TD
+    APP[React 18 + Vite app] --> ROUTES[Application routes<br/>Dashboard, workflow editor, docs, auth surfaces]
+    ROUTES --> CANVAS[Workflow canvas<br/>Nodes, edges, layout, selection]
+    CANVAS --> PROPS[Properties panel<br/>Schema-driven fields, AI editor, docs panel]
+    PROPS --> WIZARD[Autonomous workflow wizard<br/>Prompt, clarification, credentials, input ownership]
+    CANVAS --> DEBUG[Execution console and debug output<br/>JSON/tree/table/schema views]
+    WIZARD --> API_CLIENT[Worker API clients<br/>Generation, attach inputs, attach credentials, execute, node definitions]
+    DEBUG --> API_CLIENT

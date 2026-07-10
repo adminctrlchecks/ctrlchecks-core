@@ -1,0 +1,41 @@
+flowchart TB
+  WEB["Vercel-hosted frontend<br/>www.ctrlchecks.ai"]
+  RDS["AWS RDS PostgreSQL"]
+  REDIS["Redis"]
+
+  subgraph EC2["Single EC2 host: ubuntu@3.7.115.58"]
+    NGINX["Nginx<br/>public :443"]
+
+    subgraph ActiveUnits["Active CtrlChecks systemd application units"]
+      W["ctrlchecks-worker<br/>:3001"]
+      AI["ctrlchecks-ai-generator<br/>127.0.0.1:3002"]
+      EE["ctrlchecks-execution-engine<br/>127.0.0.1:3003<br/>consumer enabled"]
+      CS["ctrlchecks-credential-service<br/>127.0.0.1:3004"]
+      NS["ctrlchecks-notification-service<br/>127.0.0.1:3005"]
+      TS["ctrlchecks-trigger-service<br/>127.0.0.1:3006"]
+      WC["ctrlchecks-workflow-crud-service<br/>127.0.0.1:3007"]
+    end
+
+    LEGACY["ctrlchecks-execution-worker<br/>legacy unit: stopped + disabled"]
+
+    NGINX -->|proxy HTTP :3001| W
+    NGINX -->|Upgrade /ws/| W
+    W -->|loopback| AI
+    W -->|loopback| EE
+    W -->|loopback| CS
+    W -->|loopback| NS
+    W -->|loopback| TS
+    W -->|loopback| WC
+    EE -->|loopback callback :3001| W
+  end
+
+  WEB -->|HTTPS / WSS| NGINX
+  W --> RDS
+  W --> REDIS
+  EE --> RDS
+  EE --> REDIS
+  CS --> RDS
+  NS --> RDS
+  NS --> REDIS
+  TS --> RDS
+  WC --> RDS

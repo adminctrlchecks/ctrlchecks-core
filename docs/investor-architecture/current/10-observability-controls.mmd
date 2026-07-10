@@ -1,0 +1,14 @@
+﻿flowchart TD
+    Runs[Workflow runs] --> Logs[Execution logs<br/>status, timing, errors]
+    Runs --> AIUsage[AI usage<br/>prompt, tokens, model cost]
+    Runs --> RuntimeAudit[Runtime input audit<br/>generated, repaired, blocked]
+    Runs --> ProviderMetrics[Provider metrics<br/>latency, retries, failures]
+    Logs --> Dash[Admin/investor dashboards]
+    AIUsage --> Dash
+    RuntimeAudit --> Dash
+    ProviderMetrics --> Dash
+    Dash --> Controls[Control points<br/>quotas, rate limits,
+COGS, SLA, enterprise audit]
+    Controls --> Policy[Operational policy<br/>circuit breakers,
+customer limits,
+reliability targets]

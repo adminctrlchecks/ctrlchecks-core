@@ -1,0 +1,50 @@
+flowchart TB
+  subgraph Initiators["Trigger initiators"]
+    WEBHOOK["External webhook sender"]
+    FORM["Public form submitter"]
+    CHAT["Chat participant"]
+    CLOCK["Worker node-cron scheduler"]
+  end
+
+  subgraph WorkerBoundary["worker :3001 public boundary"]
+    WWEB["POST /api/webhook-trigger/:workflowId"]
+    WFORM["POST /api/form-trigger/:workflowId/:nodeId/submit"]
+    WCHAT["POST /api/chat-trigger/:workflowId/:nodeId/message"]
+    WSCHED["SchedulerService dispatch"]
+    WEXEC["POST /api/execute-workflow<br/>internal trigger header"]
+    WINTERNAL["POST /api/internal/engine-execute"]
+  end
+
+  subgraph TriggerService["trigger-service :3006 - CANARY=100"]
+    TWEB["POST /triggers/webhook/:workflowId"]
+    TFORM["POST /triggers/form/:workflowId/:nodeId/submit"]
+    TCHAT["POST /triggers/chat/:workflowId/:nodeId/message"]
+    TSCHED["POST /triggers/schedule/:workflowId"]
+    VALIDATE["Validate active workflow,<br/>signature, payload, and trigger config"]
+  end
+
+  subgraph ExecutionPath["Shared asynchronous execution path"]
+    RDS[("RDS executions row")]
+    ENGINE["execution-engine :3003<br/>POST /execute"]
+    QUEUE["Redis<br/>workflow:execution:engine-queue"]
+    CONSUMER["Engine consumer"]
+  end
+
+  WEBHOOK --> WWEB -->|x-service-key| TWEB
+  FORM --> WFORM -->|x-service-key| TFORM
+  CHAT --> WCHAT -->|x-service-key| TCHAT
+  CLOCK --> WSCHED -->|x-service-key| TSCHED
+  TWEB --> VALIDATE
+  TFORM --> VALIDATE
+  TCHAT --> VALIDATE
+  TSCHED --> VALIDATE
+  VALIDATE -->|insert trigger input and execution identity| RDS
+  VALIDATE -->|fire-and-forget internal execution request| WEXEC
+  WEXEC -->|100% delegation, POST /execute| ENGINE
+  ENGINE --> QUEUE
+  QUEUE --> CONSUMER
+  CONSUMER -->|x-internal-engine-key| WINTERNAL
+
+  FIX2["FIX-2: form payload is recognized and normalized;<br/>the trigger node does not re-enter waiting state"]
+  FIX2 -.-> TFORM
+  FIX2 -.-> WINTERNAL

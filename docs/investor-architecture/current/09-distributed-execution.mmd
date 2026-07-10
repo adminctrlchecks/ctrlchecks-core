@@ -1,0 +1,17 @@
+﻿flowchart LR
+    Users[Users / triggers] --> LB[Nginx / load balancer]
+    LB --> W1[Worker replica 1]
+    LB --> W2[Worker replica 2]
+    LB --> WN[Worker replica N]
+    W1 --> RDS[(AWS RDB/RDS<br/>durable platform state)]
+    W2 --> RDS
+    WN --> RDS
+    W1 --> Redis[Redis<br/>cache, locks, sessions]
+    W2 --> Redis
+    WN --> Redis
+    W1 --> Queue[Kafka / queue path<br/>long-running or high-volume work]
+    W2 --> Queue
+    Queue --> Exec[Distributed execution workers]
+    Exec --> Providers[External providers]
+    Exec --> RDS
+    HPA[Kubernetes HPA<br/>scale on load] --> WN

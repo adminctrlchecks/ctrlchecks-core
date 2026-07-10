@@ -1,0 +1,50 @@
+flowchart TB
+  subgraph Frontend["Frontend"]
+    USER["User describes an automation"]
+    WIZ["AutonomousAgentWizard"]
+    USER --> WIZ
+  end
+
+  subgraph Worker["worker :3001 - pipeline authority"]
+    API["POST /api/generate-workflow"]
+    CATALOG["Build catalog from<br/>Unified Node Registry"]
+    HYDRATE["Registry hydration<br/>types, defaults, ports, schemas"]
+    GRAPH["Unified Graph Orchestrator<br/>initialize + reconcile"]
+    CRED["Credential discovery<br/>owner scoped, non-blocking"]
+    FINAL["validateWorkflow()<br/>one reconcile/repair attempt"]
+    JSON["Sealed workflow JSON<br/>nodes, edges, metadata, manifest"]
+  end
+
+  subgraph AIGenerator["ai-generator :3002 - remote LLM stages"]
+    INTENT["1. Intent"]
+    CAP["2. Capability selection"]
+    STRUCT["3. Structural prompt"]
+    NODE["4. Node selection"]
+    EDGE["5. Edge reasoning"]
+    VALID["6. Semantic validation"]
+    PROP["7. Property population"]
+    INTENT --> CAP --> STRUCT --> NODE --> EDGE --> VALID --> PROP
+  end
+
+  GEMINI["Gemini model APIs"]
+
+  WIZ -->|prompt + JWT| API
+  API --> CATALOG
+  CATALOG -->|catalog + constraints<br/>x-service-key| INTENT
+  INTENT --> GEMINI
+  CAP --> GEMINI
+  STRUCT --> GEMINI
+  NODE --> GEMINI
+  EDGE --> GEMINI
+  VALID --> GEMINI
+  PROP --> GEMINI
+  PROP -->|ordered nodes, edges,<br/>validation and values| HYDRATE
+  HYDRATE --> GRAPH
+  GRAPH --> CRED
+  CRED --> FINAL
+  FINAL --> JSON
+  JSON -->|NDJSON progress or JSON response| WIZ
+
+  POLICY["Registry hydration and all edge mutation<br/>happen in the worker, never in the frontend"]
+  POLICY -.-> HYDRATE
+  POLICY -.-> GRAPH

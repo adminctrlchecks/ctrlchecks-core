@@ -1,0 +1,49 @@
+flowchart LR
+  subgraph Frontend["Browser and external callers"]
+    B["Frontend / trigger caller<br/>Cognito JWT where required"]
+  end
+
+  subgraph Worker["worker :3001 - only public API boundary"]
+    GW["Express router + auth + rate limits"]
+    AIC["AI stage clients"]
+    CRDC["workflow-crud-service-client"]
+    CREDC["credential-service-client<br/>+ OAuth proxy"]
+    ENGC["execution-engine-client"]
+    TRIGC["trigger-service-client"]
+    TERM["dispatchExecutionNotifications"]
+    FAIL["Fail closed when required<br/>503 service unavailable"]
+  end
+
+  subgraph Microservices["Loopback services"]
+    AI["ai-generator :3002"]
+    CRUD["workflow-crud-service :3007"]
+    CRED["credential-service :3004"]
+    ENG["execution-engine :3003"]
+    TRIG["trigger-service :3006"]
+    NOTIF["notification-service :3005"]
+  end
+
+  B -->|all HTTPS requests| GW
+  GW -->|POST /api/generate-workflow| AIC
+  AIC -->|POST /generate/* + x-service-key| AI
+
+  GW -->|POST /api/save-workflow<br/>PUT, POST, or DELETE /api/workflows/*| CRDC
+  CRDC -->|/workflows* + x-service-key| CRUD
+
+  GW -->|/api/credential-connections/*<br/>and /api/oauth/*| CREDC
+  CREDC -->|/connections or /oauth + x-service-key| CRED
+
+  GW -->|POST /api/execute-workflow| ENGC
+  ENGC -->|POST /execute + x-service-key| ENG
+  ENG -.->|POST /api/internal/engine-execute<br/>x-internal-engine-key| GW
+
+  GW -->|public webhook, form, chat;<br/>worker scheduler| TRIGC
+  TRIGC -->|POST /triggers/* + x-service-key| TRIG
+  TRIG -->|internal async execution request| GW
+
+  GW -->|terminal success or failure| TERM
+  TERM -->|POST /notifications/* + x-service-key| NOTIF
+
+  ENG -->|unavailable| FAIL
+  CRUD -->|write unavailable and gate=true| FAIL
+  CRED -->|vault write unavailable and gate=true| FAIL

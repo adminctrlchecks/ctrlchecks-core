@@ -9,9 +9,9 @@
 #   - SSH key at Guide/Worker/ctrlchecks-backend.pem
 #   - rsync available (falls back to tar+scp if not)
 #
-# DNS / HTTPS activation (one-time, after DNS A record app.ctrlchecks.ai -> 3.7.115.58):
+# DNS / HTTPS activation (one-time, after DNS A record www.ctrlchecks.ai -> 3.7.115.58):
 #   ssh -i Guide/Worker/ctrlchecks-backend.pem ubuntu@3.7.115.58 \
-#     "sudo certbot --nginx -d app.ctrlchecks.ai --non-interactive --agree-tos -m YOUR_EMAIL"
+#     "sudo certbot --nginx -d www.ctrlchecks.ai --non-interactive --agree-tos -m YOUR_EMAIL"
 
 set -euo pipefail
 
@@ -63,7 +63,7 @@ echo "✅ Files deployed."
 # ── 4. Smoke test ─────────────────────────────────────────────────────────────
 echo "▶ Smoke testing via Host header…"
 STATUS=$(ssh $SSH_OPTS "$SERVER_USER@$SERVER_HOST" \
-  "curl -s -o /dev/null -w '%{http_code}' -H 'Host: app.ctrlchecks.ai' http://localhost/")
+  "curl -s -o /dev/null -w '%{http_code}' -H 'Host: www.ctrlchecks.ai' http://localhost/")
 
 if [[ "$STATUS" == "200" ]]; then
   echo "✅ SPA serving: HTTP 200 from nginx"
@@ -76,8 +76,8 @@ echo "────────────────────────�
 echo "Deployment complete."
 echo ""
 echo "Next step — HTTPS activation (requires DNS A record first):"
-echo "  1. Add DNS A record: app.ctrlchecks.ai → 3.7.115.58"
+echo "  1. Add DNS A record: www.ctrlchecks.ai → 3.7.115.58"
 echo "  2. SSH in and run:"
-echo "     sudo certbot --nginx -d app.ctrlchecks.ai --non-interactive --agree-tos -m admin@ctrlchecks.ai"
-echo "  3. Verify: curl -fsS https://app.ctrlchecks.ai | head -5"
+echo "     sudo certbot --nginx -d www.ctrlchecks.ai --non-interactive --agree-tos -m admin@ctrlchecks.ai"
+echo "  3. Verify: curl -fsS https://www.ctrlchecks.ai | head -5"
 echo "────────────────────────────────────────────────────────────────"

@@ -1,0 +1,56 @@
+{
+  "name": "Test Microsoft Teams — Send Channel Message",
+  "description": "Tests sending a message to a Microsoft Teams channel. Requires Microsoft account connected in /connections. Fill in teamId and channelId before running.",
+  "nodes": [
+    {
+      "id": "node_1",
+      "type": "custom",
+      "position": { "x": 100, "y": 250 },
+      "data": {
+        "type": "manual_trigger",
+        "label": "Start Test",
+        "category": "triggers",
+        "icon": "Play",
+        "config": {}
+      }
+    },
+    {
+      "id": "node_2",
+      "type": "custom",
+      "position": { "x": 400, "y": 250 },
+      "data": {
+        "type": "microsoft_teams",
+        "label": "Teams — Send Channel Message",
+        "category": "communication",
+        "icon": "MessageSquare",
+        "config": {
+          "operation": "sendMessage",
+          "teamId": "YOUR_TEAM_ID",
+          "channelId": "YOUR_CHANNEL_ID",
+          "message": "ctrlchecks workflow platform test message. Automated integration test. Please ignore.",
+          "contentType": "text"
+        }
+      }
+    },
+    {
+      "id": "node_3",
+      "type": "custom",
+      "position": { "x": 700, "y": 250 },
+      "data": {
+        "type": "log_output",
+        "label": "Log: Message Result",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "level": "info",
+          "message": "Teams Message → id={{$json.id}} | createdDateTime={{$json.createdDateTime}} | webUrl={{$json.webUrl}}"
+        }
+      }
+    }
+  ],
+  "edges": [
+    { "id": "edge_1", "source": "node_1", "target": "node_2" },
+    { "id": "edge_2", "source": "node_2", "target": "node_3" }
+  ],
+  "viewport": { "x": 0, "y": 0, "zoom": 1.0 }
+}

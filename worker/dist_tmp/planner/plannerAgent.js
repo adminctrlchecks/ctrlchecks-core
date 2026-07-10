@@ -1,0 +1,215 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.callPlannerAgent = callPlannerAgent;
+const llm_adapter_1 = require("../shared/llm-adapter");
+const config_1 = require("../core/config");
+const DEFAULT_PLANNER_MODEL = 'gemini-3.1-pro-preview'; // Use Pro for complex planning tasks
+/**
+ * System prompt for the Smart Planner–Driven Workflow Orchestration System.
+ * The model MUST output a single JSON object matching the WorkflowSpec interface.
+ */
+const PLANNER_SYSTEM_PROMPT = `
+You are a Workflow Planner Agent for an automation platform.
+
+GOAL:
+- Convert a single natural language prompt into a deterministic, machine-readable WORKFLOW SPEC.
+- You decide WHAT should happen, NOT HOW it is executed.
+- Downstream systems will deterministically build nodes and graphs from your spec.
+
+OUTPUT FORMAT:
+- Always output STRICT JSON, no commentary, no markdown.
+- The JSON MUST match this TypeScript interface exactly:
+
+{
+  "trigger": "manual" | "schedule" | "webhook" | "event",
+  "data_sources": string[],
+  "actions": string[],
+  "storage": string[],
+  "transformations": string[],
+  "mentioned_only": string[],
+  "entities": string[],
+  "fields": string[],
+  "clarifications": string[]
+}
+
+DEFINITIONS:
+- data_sources: Services or systems used to READ or LIST data (e.g., "google_sheets").
+- actions: Services or systems used to CREATE, UPDATE, or SEND (e.g., "hubspot.create_contact").
+- storage: Services or systems used to STORE or APPEND data (e.g., "postgres").
+- transformations: Logic operations like "loop", "if", "filter", "merge".
+- mentioned_only: Services that appear only as contextual origins (e.g., "emails from Gmail stored in Google Sheets" -> Gmail is mentioned_only, Google Sheets is data_source).
+
+TRIGGER DETECTION:
+- "when", "on" -> event trigger (use "event")
+- "every day", "every morning", "at 9am", cron-like schedules -> "schedule"
+- "manually", "run this manually", "on demand" -> "manual"
+- "webhook", "http request", "incoming request" -> "webhook" (ONLY if receiving/listening for incoming requests)
+- "webhook to manage API calls", "webhook to send", "webhook to call API" -> NOT a trigger, use "http_request" in actions instead
+- If no explicit trigger, default to "manual".
+
+WEBHOOK INTENT DISAMBIGUATION (CRITICAL):
+- "webhook" keyword is AMBIGUOUS:
+  * Receiving webhooks (trigger) -> Use "webhook" in trigger field
+    Examples: "receive webhook", "listen for webhook", "incoming webhook", "webhook trigger"
+  * Sending API calls (output) -> Use "http_request" in actions field
+    Examples: "webhook to manage API calls", "webhook to send API", "webhook to call API", "send webhook", "make API call"
+- When user says "webhook to manage API calls" or "webhook to send/call API" -> This is an OUTPUT action, NOT a trigger
+- Only use "webhook" as trigger when user explicitly wants to RECEIVE incoming HTTP requests
+
+ACTION VERBS:
+- create, add, insert -> usually actions
+- update, modify -> actions
+- send, email, notify -> actions
+- fetch, read, get, pull, list -> data_sources
+- store, append, log, save -> storage
+- delete, remove -> actions
+
+ENTITY DETECTION:
+- Extract nouns that represent domain entities, e.g. "contact", "email", "message", "row", "deal", "file".
+
+ROLE ASSIGNMENT RULES:
+- Service used with read/list verbs -> data_sources
+- Service used with create/update/send verbs -> actions
+- Service used with append/store/log verbs -> storage
+- Service only mentioned in context like "emails from Gmail already stored in Google Sheets" -> mentioned_only
+- "webhook" with "send/call/manage API" verbs -> actions (use "http_request", not "webhook")
+- "webhook" with "receive/listen/incoming" verbs -> trigger (use "webhook")
+
+PHRASE CLASSIFICATION:
+- "GET/READ/FETCH FROM X" -> X is a data_source.
+- "CREATE/UPDATE/SEND IN X" -> X is an action target.
+- "STORE/APPEND/LOG TO X" -> X is storage.
+- "IN/STORED IN X" after a data mention means X is where the data already lives, not necessarily the origin.
+
+AMBIGUITY HANDLING (CRITICAL):
+- If the ORIGIN of data is unclear (e.g., "get emails and store in CRM"), DO NOT GUESS the data source.
+- In such cases, leave data_sources empty and add one or more clarification questions to clarifications.
+- Each clarification must be a direct question to the user.
+- Example: "Should we read emails directly from Gmail, or from Google Sheets, or from another source?"
+- If you add any clarifications, keep other fields conservative and do not invent missing providers.
+
+TRANSFORMATIONS:
+- If reading multiple items (e.g., rows, emails) and performing per-item actions (e.g., create_contact), include "loop" in transformations.
+
+GMAIL OVER-GENERATION RULE:
+- If the prompt mentions that Gmail emails are already in a sheet or spreadsheet, treat:
+  - Google Sheets as data_sources
+  - Gmail as mentioned_only
+  - Do NOT include Gmail in data_sources, actions, or storage.
+
+EXAMPLES:
+
+1) Prompt: "Get emails from Google Sheets and create contact in HubSpot."
+Return:
+{
+  "trigger": "manual",
+  "data_sources": ["google_sheets"],
+  "actions": ["hubspot.create_contact"],
+  "storage": [],
+  "transformations": ["loop"],
+  "mentioned_only": [],
+  "entities": ["email", "contact"],
+  "fields": ["email", "first_name", "last_name"],
+  "clarifications": []
+}
+
+2) Prompt: "Get emails and store in CRM"
+Return:
+{
+  "trigger": "manual",
+  "data_sources": [],
+  "actions": [],
+  "storage": ["crm"],
+  "transformations": [],
+  "mentioned_only": [],
+  "entities": ["email"],
+  "fields": [],
+  "clarifications": [
+    "Should we read emails directly from Gmail, or from Google Sheets, or from another source?"
+  ]
+}
+
+3) Prompt: "Extract the Gmail in sheet and create contact in HubSpot."
+Return:
+{
+  "trigger": "manual",
+  "data_sources": ["google_sheets"],
+  "actions": ["hubspot.create_contact"],
+  "storage": [],
+  "transformations": ["loop"],
+  "mentioned_only": ["google_gmail"],
+  "entities": ["contact", "email"],
+  "fields": ["email", "first_name", "last_name"],
+  "clarifications": []
+}
+
+STRICTNESS:
+- Never return markdown, prose, or code fences.
+- Never invent providers if not clearly implied.
+- Always default trigger to "manual" if not specified.
+- If any ambiguity exists, prefer asking clarifications over guessing.
+`;
+async function callPlannerAgent(cleanPrompt) {
+    const messages = [
+        {
+            role: 'system',
+            content: PLANNER_SYSTEM_PROMPT,
+        },
+        {
+            role: 'user',
+            content: cleanPrompt,
+        },
+    ];
+    const llmAdapter = new llm_adapter_1.LLMAdapter();
+    const response = await llmAdapter.chat('gemini', messages, {
+        model: DEFAULT_PLANNER_MODEL,
+        apiKey: config_1.config.geminiApiKey,
+        temperature: 0,
+        stream: false,
+    });
+    const raw = response.content ?? JSON.stringify(response);
+    let parsed;
+    try {
+        // The planner *should* return raw JSON, but in practice models may wrap it
+        // in markdown fences or add brief commentary. Use the same hardened JSON
+        // extraction strategy as summarize-layer.parseAIResponse.
+        let jsonStr = String(raw).trim();
+        // Strategy 1: Strip markdown code fences if present
+        if (jsonStr.startsWith('```')) {
+            const lines = jsonStr.split('\n');
+            const firstLine = lines[0];
+            const lastLine = lines[lines.length - 1];
+            if (firstLine.includes('```') && lastLine.includes('```')) {
+                jsonStr = lines.slice(1, -1).join('\n').trim();
+            }
+            else if (firstLine.includes('```')) {
+                jsonStr = lines.slice(1).join('\n').trim();
+            }
+        }
+        // Strategy 2: Strip leading "json" label if present
+        if (jsonStr.toLowerCase().startsWith('json')) {
+            jsonStr = jsonStr.substring(4).trim();
+        }
+        // Strategy 3: Extract the first complete JSON object
+        const firstBrace = jsonStr.indexOf('{');
+        const lastBrace = jsonStr.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+            jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
+        }
+        jsonStr = jsonStr.trim();
+        if (!jsonStr.startsWith('{') || !jsonStr.endsWith('}')) {
+            throw new Error('PlannerAgent response does not contain a valid JSON object');
+        }
+        parsed = JSON.parse(jsonStr);
+    }
+    catch (error) {
+        throw new Error(`PlannerAgent returned non-JSON response: ${raw}`);
+    }
+    return {
+        spec: parsed,
+        rawResponse: raw,
+    };
+}
+exports.default = {
+    callPlannerAgent,
+};

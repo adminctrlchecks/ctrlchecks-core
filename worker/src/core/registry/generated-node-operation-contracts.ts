@@ -38,7 +38,9 @@ export const GENERATED_NODE_OPERATION_VALUES: Record<string, string[]> = {
   mailgun: ['send_email'],
   math: ['add', 'divide', 'multiply', 'subtract'],
   microsoft_dynamics: ['createRecord', 'deleteRecord', 'fetchXml', 'getRecord', 'getRecords', 'updateRecord'],
-  mongodb: ['delete', 'find', 'insert', 'update'],
+  // 'find' listed first — this array's first entry becomes the field default,
+  // and defaulting a fresh node to a destructive delete would be a bad surprise.
+  mongodb: ['find', 'insertOne', 'updateOne', 'deleteOne'],
   netlify: ['create_deploy', 'get_deploy', 'get_site', 'list_deploys', 'list_sites'],
   notion: ['appendChildren', 'archive', 'create', 'delete', 'get', 'getMe', 'list', 'listChildren', 'query', 'restore', 'search', 'update'],
   odoo: ['createRecord', 'deleteRecord', 'executeMethod', 'getRecords', 'updateRecord'],

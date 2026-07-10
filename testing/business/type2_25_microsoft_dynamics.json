@@ -1,0 +1,161 @@
+{
+  "name": "Test Microsoft Dynamics — List Accounts + Contacts + Leads",
+  "description": "Tests listing key Dynamics 365 CRM entities. Requires Microsoft account connected in /connections with Dynamics permissions. Fill in organizationUrl.",
+  "nodes": [
+    {
+      "id": "node_1",
+      "type": "custom",
+      "position": { "x": 100, "y": 350 },
+      "data": {
+        "type": "manual_trigger",
+        "label": "Start Test",
+        "category": "triggers",
+        "icon": "Play",
+        "config": {}
+      }
+    },
+    {
+      "id": "node_2",
+      "type": "custom",
+      "position": { "x": 400, "y": 150 },
+      "data": {
+        "type": "microsoft_dynamics",
+        "label": "Dynamics — List 5 Accounts",
+        "category": "crm",
+        "icon": "Building",
+        "config": {
+          "operation": "list",
+          "entity": "accounts",
+          "organizationUrl": "YOUR_DYNAMICS_ORG_URL",
+          "top": 5,
+          "select": "name,telephone1,emailaddress1,websiteurl"
+        }
+      }
+    },
+    {
+      "id": "node_3",
+      "type": "custom",
+      "position": { "x": 700, "y": 150 },
+      "data": {
+        "type": "log_output",
+        "label": "Log: Accounts",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "level": "info",
+          "message": "Dynamics Accounts → count={{$json.value.length}} | first: {{$json.value[0].name}}"
+        }
+      }
+    },
+    {
+      "id": "node_4",
+      "type": "custom",
+      "position": { "x": 400, "y": 350 },
+      "data": {
+        "type": "microsoft_dynamics",
+        "label": "Dynamics — List 5 Contacts",
+        "category": "crm",
+        "icon": "User",
+        "config": {
+          "operation": "list",
+          "entity": "contacts",
+          "organizationUrl": "YOUR_DYNAMICS_ORG_URL",
+          "top": 5,
+          "select": "fullname,emailaddress1,telephone1,jobtitle"
+        }
+      }
+    },
+    {
+      "id": "node_5",
+      "type": "custom",
+      "position": { "x": 700, "y": 350 },
+      "data": {
+        "type": "log_output",
+        "label": "Log: Contacts",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "level": "info",
+          "message": "Dynamics Contacts → count={{$json.value.length}} | first: {{$json.value[0].fullname}} ({{$json.value[0].jobtitle}})"
+        }
+      }
+    },
+    {
+      "id": "node_6",
+      "type": "custom",
+      "position": { "x": 400, "y": 550 },
+      "data": {
+        "type": "microsoft_dynamics",
+        "label": "Dynamics — List 5 Leads",
+        "category": "crm",
+        "icon": "Target",
+        "config": {
+          "operation": "list",
+          "entity": "leads",
+          "organizationUrl": "YOUR_DYNAMICS_ORG_URL",
+          "top": 5,
+          "select": "fullname,emailaddress1,companyname,statuscode"
+        }
+      }
+    },
+    {
+      "id": "node_7",
+      "type": "custom",
+      "position": { "x": 700, "y": 550 },
+      "data": {
+        "type": "log_output",
+        "label": "Log: Leads",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "level": "info",
+          "message": "Dynamics Leads → count={{$json.value.length}} | first: {{$json.value[0].fullname}} at {{$json.value[0].companyname}}"
+        }
+      }
+    },
+    {
+      "id": "node_8",
+      "type": "custom",
+      "position": { "x": 400, "y": 750 },
+      "data": {
+        "type": "microsoft_dynamics",
+        "label": "Dynamics — List 5 Opportunities",
+        "category": "crm",
+        "icon": "TrendingUp",
+        "config": {
+          "operation": "list",
+          "entity": "opportunities",
+          "organizationUrl": "YOUR_DYNAMICS_ORG_URL",
+          "top": 5,
+          "select": "name,estimatedvalue,statecode,closedatetime"
+        }
+      }
+    },
+    {
+      "id": "node_9",
+      "type": "custom",
+      "position": { "x": 700, "y": 750 },
+      "data": {
+        "type": "log_output",
+        "label": "Log: Opportunities",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "level": "info",
+          "message": "Dynamics Opportunities → count={{$json.value.length}} | first: {{$json.value[0].name}} (${{$json.value[0].estimatedvalue}})"
+        }
+      }
+    }
+  ],
+  "edges": [
+    { "id": "edge_1", "source": "node_1", "target": "node_2" },
+    { "id": "edge_2", "source": "node_2", "target": "node_3" },
+    { "id": "edge_3", "source": "node_1", "target": "node_4" },
+    { "id": "edge_4", "source": "node_4", "target": "node_5" },
+    { "id": "edge_5", "source": "node_1", "target": "node_6" },
+    { "id": "edge_6", "source": "node_6", "target": "node_7" },
+    { "id": "edge_7", "source": "node_1", "target": "node_8" },
+    { "id": "edge_8", "source": "node_8", "target": "node_9" }
+  ],
+  "viewport": { "x": 0, "y": 0, "zoom": 0.8 }
+}

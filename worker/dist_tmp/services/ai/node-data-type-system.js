@@ -1,0 +1,505 @@
+"use strict";
+/**
+ * Node Data Type System
+ *
+ * Defines data types and validates type compatibility between nodes.
+ *
+ * Types:
+ * - text: String data
+ * - array: Array of items
+ * - object: JSON object
+ * - binary: Binary data (files, images, etc.)
+ *
+ * Each node declares:
+ * - inputType: What type of data it accepts
+ * - outputType: What type of data it produces
+ *
+ * Before connecting nodes:
+ * - Validate type compatibility
+ * - Attempt auto-transform if mismatch
+ * - Reject workflow if transformation not possible
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.nodeDataTypeSystem = exports.NodeDataTypeSystem = exports.DataType = void 0;
+exports.getNodeTypeInfo = getNodeTypeInfo;
+exports.checkTypeCompatibility = checkTypeCompatibility;
+exports.validateWorkflowTypes = validateWorkflowTypes;
+const node_library_1 = require("../nodes/node-library");
+const unified_node_type_normalizer_1 = require("../../core/utils/unified-node-type-normalizer");
+var DataType;
+(function (DataType) {
+    DataType["TEXT"] = "text";
+    DataType["ARRAY"] = "array";
+    DataType["OBJECT"] = "object";
+    DataType["BINARY"] = "binary";
+    DataType["ANY"] = "any";
+})(DataType || (exports.DataType = DataType = {}));
+/**
+ * Node Data Type System
+ * Manages data types and type compatibility for workflow nodes
+ */
+class NodeDataTypeSystem {
+    constructor() {
+        this.typeRegistry = new Map();
+        this.initializeTypeRegistry();
+    }
+    /**
+     * Initialize type registry from node library
+     */
+    initializeTypeRegistry() {
+        console.log('[NodeDataTypeSystem] Initializing type registry...');
+        // Get all schemas from library
+        const allSchemas = node_library_1.nodeLibrary.getAllSchemas();
+        for (const schema of allSchemas) {
+            const nodeType = schema.type;
+            const typeInfo = this.inferNodeTypeInfo(nodeType, schema);
+            this.typeRegistry.set(nodeType, typeInfo);
+        }
+        console.log(`[NodeDataTypeSystem] ✅ Type registry initialized: ${this.typeRegistry.size} nodes`);
+    }
+    /**
+     * Infer node type information from schema
+     * ✅ CRITICAL: Prefers NodeLibrary nodeCapability contracts over heuristics
+     */
+    inferNodeTypeInfo(nodeType, schema) {
+        const nodeTypeLower = nodeType.toLowerCase();
+        // Default type info
+        let inputType = DataType.ANY;
+        let outputType = DataType.TEXT;
+        // ✅ STEP 1: Prefer NodeLibrary nodeCapability contract if available
+        if (schema?.nodeCapability) {
+            const cap = schema.nodeCapability;
+            // Map NodeLibrary capability types to DataType enum
+            const mapCapType = (capType) => {
+                if (Array.isArray(capType)) {
+                    return capType.map(t => {
+                        if (t === 'text')
+                            return DataType.TEXT;
+                        if (t === 'array')
+                            return DataType.ARRAY;
+                        if (t === 'object')
+                            return DataType.OBJECT;
+                        return DataType.ANY;
+                    });
+                }
+                if (capType === 'text')
+                    return DataType.TEXT;
+                if (capType === 'array')
+                    return DataType.ARRAY;
+                if (capType === 'object')
+                    return DataType.OBJECT;
+                return DataType.ANY;
+            };
+            inputType = mapCapType(cap.inputType || DataType.ANY);
+            outputType = mapCapType(cap.outputType || DataType.TEXT);
+            // If we got a valid contract, return early (skip heuristics)
+            if (cap.inputType && cap.outputType) {
+                return {
+                    nodeType,
+                    inputType,
+                    outputType,
+                    acceptsArray: cap.acceptsArray || (Array.isArray(inputType) && inputType.includes(DataType.ARRAY)),
+                    requiresScalar: cap.producesArray === false || outputType === DataType.TEXT || outputType === DataType.OBJECT,
+                };
+            }
+        }
+        // ✅ STEP 2: Fallback to heuristics (for nodes without explicit contracts)
+        // Data Producers (output: array or object)
+        if (this.isDataProducer(nodeTypeLower)) {
+            outputType = DataType.ARRAY; // Most data sources produce arrays
+            // Specific producers
+            if (nodeTypeLower.includes('sheets') || nodeTypeLower.includes('csv') || nodeTypeLower.includes('excel')) {
+                outputType = DataType.ARRAY; // Array of rows
+            }
+            else if (nodeTypeLower.includes('database') || nodeTypeLower.includes('postgres') || nodeTypeLower.includes('mysql')) {
+                outputType = DataType.ARRAY; // Array of records
+            }
+            else if (nodeTypeLower.includes('http') || nodeTypeLower.includes('api')) {
+                outputType = DataType.OBJECT; // JSON response
+            }
+        }
+        // Data Transformers (input: text/array, output: text)
+        if (this.isDataTransformer(nodeTypeLower)) {
+            inputType = [DataType.TEXT, DataType.ARRAY]; // Can accept both
+            outputType = DataType.TEXT;
+            // Specific transformers
+            if (nodeTypeLower.includes('summarizer') || nodeTypeLower.includes('summarize')) {
+                inputType = [DataType.TEXT, DataType.ARRAY];
+                outputType = DataType.TEXT;
+            }
+            else if (nodeTypeLower.includes('classifier') || nodeTypeLower.includes('classify')) {
+                inputType = [DataType.TEXT, DataType.OBJECT];
+                outputType = DataType.OBJECT; // Classification result
+            }
+            else if (nodeTypeLower.includes('transform') || nodeTypeLower.includes('format')) {
+                inputType = DataType.ANY;
+                outputType = DataType.TEXT;
+            }
+            /**
+             * ✅ CRITICAL ARCHITECTURAL FIX (AI PIPELINE):
+             *
+             * For LLM-like transformer nodes (ollama, openai_gpt, anthropic_claude, google_gemini, ai_chat_model),
+             * the output must be typed as TEXT, not ANY. The ai_chat_model node already declares
+             * inputType [text, array] via its nodeCapability in NodeLibrary, but this legacy
+             * heuristic type system previously inferred `ANY` for some of these providers.
+             *
+             * This caused structural type errors when connecting:
+             *   ollama (any) → ai_chat_model (text | array)
+             *
+             * By hard-normalizing all LLM transformers to TEXT output here, we guarantee that:
+             * - All LLM providers produce TEXT in the type system
+             * - Connections between LLM providers and ai_chat_model are always type-compatible
+             * - The fix is universal for all workflows using these nodes.
+             */
+            const llmNodeTypes = [
+                'ollama',
+                'openai_gpt',
+                'anthropic_claude',
+                'google_gemini',
+                'ai_chat_model',
+            ];
+            if (llmNodeTypes.includes(nodeTypeLower)) {
+                inputType = [DataType.TEXT, DataType.ARRAY];
+                outputType = DataType.TEXT;
+            }
+        }
+        // Output Actions (input: text/object)
+        if (this.isOutputAction(nodeTypeLower)) {
+            inputType = [DataType.TEXT, DataType.OBJECT];
+            outputType = DataType.TEXT; // Output actions typically don't produce data
+            // Specific outputs
+            if (nodeTypeLower.includes('gmail') || nodeTypeLower.includes('email')) {
+                inputType = [DataType.TEXT, DataType.OBJECT]; // Email body/text
+            }
+            else if (nodeTypeLower.includes('slack') || nodeTypeLower.includes('discord')) {
+                inputType = [DataType.TEXT, DataType.OBJECT]; // Message text/object
+            }
+            else if (nodeTypeLower.includes('database_write') || nodeTypeLower.includes('sheets_write')) {
+                inputType = [DataType.ARRAY, DataType.OBJECT]; // Write operations accept arrays/objects
+                outputType = DataType.OBJECT; // Write confirmation
+            }
+        }
+        // Triggers (output: any)
+        if (this.isTrigger(nodeTypeLower)) {
+            inputType = DataType.ANY; // Triggers don't accept input
+            outputType = DataType.ANY; // Triggers can output any type
+        }
+        // Conditions (input: any, output: any)
+        if (this.isCondition(nodeTypeLower)) {
+            inputType = DataType.ANY;
+            outputType = DataType.ANY; // Conditions pass through data
+        }
+        // Loop (input: array, output: scalar)
+        if (nodeTypeLower === 'loop') {
+            inputType = DataType.ARRAY;
+            outputType = DataType.TEXT; // Loop processes array items one by one
+        }
+        return {
+            nodeType,
+            inputType,
+            outputType,
+            acceptsArray: Array.isArray(inputType) ? inputType.includes(DataType.ARRAY) : inputType === DataType.ARRAY,
+            requiresScalar: outputType === DataType.TEXT || outputType === DataType.OBJECT,
+        };
+    }
+    /**
+     * Get type information for a node
+     */
+    getNodeTypeInfo(nodeType) {
+        const normalized = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeTypeString)(nodeType);
+        return this.typeRegistry.get(normalized) || null;
+    }
+    /**
+     * Check type compatibility between two nodes
+     */
+    checkTypeCompatibility(sourceType, targetInputType) {
+        // If source is ANY, treat it as a wildcard (compatible with any target).
+        // This prevents recurring structural failures like:
+        //   manual_trigger (any) → ai_chat_model (text | array)
+        if (sourceType === DataType.ANY) {
+            return { compatible: true, requiresTransform: false };
+        }
+        // If target accepts ANY, always compatible
+        if (targetInputType === DataType.ANY) {
+            return { compatible: true, requiresTransform: false };
+        }
+        // If target accepts array of types, check if source type is in array
+        if (Array.isArray(targetInputType)) {
+            if (targetInputType.includes(sourceType)) {
+                return { compatible: true, requiresTransform: false };
+            }
+            // Check if transformation is possible
+            const transformType = this.findCompatibleType(sourceType, targetInputType);
+            if (transformType) {
+                return {
+                    compatible: true,
+                    requiresTransform: true,
+                    transformType,
+                    reason: `Type ${sourceType} can be transformed to ${transformType} for compatibility`,
+                };
+            }
+            return {
+                compatible: false,
+                requiresTransform: false,
+                reason: `Type ${sourceType} is not compatible with target types: ${targetInputType.join(', ')}`,
+            };
+        }
+        // Single target type
+        if (sourceType === targetInputType) {
+            return { compatible: true, requiresTransform: false };
+        }
+        // Check if transformation is possible
+        const transformType = this.findCompatibleType(sourceType, [targetInputType]);
+        if (transformType) {
+            return {
+                compatible: true,
+                requiresTransform: true,
+                transformType,
+                reason: `Type ${sourceType} can be transformed to ${transformType} for compatibility`,
+            };
+        }
+        return {
+            compatible: false,
+            requiresTransform: false,
+            reason: `Type ${sourceType} is not compatible with target type: ${targetInputType}`,
+        };
+    }
+    /**
+     * Find compatible type through transformation
+     */
+    findCompatibleType(sourceType, targetTypes) {
+        // Direct match
+        if (targetTypes.includes(sourceType)) {
+            return sourceType;
+        }
+        // Transformation rules
+        // array → text (join/stringify)
+        if (sourceType === DataType.ARRAY && targetTypes.includes(DataType.TEXT)) {
+            return DataType.TEXT;
+        }
+        // object → text (stringify)
+        if (sourceType === DataType.OBJECT && targetTypes.includes(DataType.TEXT)) {
+            return DataType.TEXT;
+        }
+        // array → object (first item or wrap)
+        if (sourceType === DataType.ARRAY && targetTypes.includes(DataType.OBJECT)) {
+            return DataType.OBJECT;
+        }
+        // text → array (split/parse)
+        if (sourceType === DataType.TEXT && targetTypes.includes(DataType.ARRAY)) {
+            return DataType.ARRAY;
+        }
+        // object → array (wrap in array)
+        if (sourceType === DataType.OBJECT && targetTypes.includes(DataType.ARRAY)) {
+            return DataType.ARRAY;
+        }
+        return null;
+    }
+    /**
+     * Validate type compatibility for entire workflow
+     */
+    validateWorkflowTypes(nodes, edges) {
+        console.log('[NodeDataTypeSystem] Validating workflow type compatibility...');
+        const errors = [];
+        const warnings = [];
+        const incompatibleEdges = [];
+        const suggestedTransforms = [];
+        // Build node type map
+        const nodeTypeMap = new Map();
+        for (const node of nodes) {
+            const nodeType = (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(node);
+            const typeInfo = this.getNodeTypeInfo(nodeType);
+            if (typeInfo) {
+                nodeTypeMap.set(node.id, typeInfo);
+            }
+            else {
+                warnings.push(`Node ${node.id} (${nodeType}) has no type information`);
+            }
+        }
+        // Validate each edge
+        for (const edge of edges) {
+            const sourceTypeInfo = nodeTypeMap.get(edge.source);
+            const targetTypeInfo = nodeTypeMap.get(edge.target);
+            if (!sourceTypeInfo || !targetTypeInfo) {
+                warnings.push(`Edge ${edge.id}: Missing type information for source or target node`);
+                continue;
+            }
+            const sourceOutputType = sourceTypeInfo.outputType;
+            const targetInputType = targetTypeInfo.inputType;
+            const compatibility = this.checkTypeCompatibility(sourceOutputType, targetInputType);
+            if (!compatibility.compatible) {
+                errors.push(`Type mismatch: ${edge.source} (${sourceOutputType}) → ${edge.target} (${targetInputType}): ${compatibility.reason}`);
+                incompatibleEdges.push({
+                    edgeId: edge.id,
+                    source: edge.source,
+                    target: edge.target,
+                    sourceType: sourceOutputType,
+                    targetType: Array.isArray(targetInputType) ? targetInputType[0] : targetInputType,
+                    reason: compatibility.reason || 'Type mismatch',
+                });
+            }
+            else if (compatibility.requiresTransform) {
+                warnings.push(`Type transformation required: ${edge.source} (${sourceOutputType}) → ${edge.target} (${targetInputType}): ${compatibility.reason}`);
+                suggestedTransforms.push({
+                    edgeId: edge.id,
+                    transformType: compatibility.transformType,
+                    reason: compatibility.reason || 'Type transformation needed',
+                });
+            }
+        }
+        const valid = errors.length === 0;
+        if (valid) {
+            console.log(`[NodeDataTypeSystem] ✅ Workflow type validation passed`);
+        }
+        else {
+            console.error(`[NodeDataTypeSystem] ❌ Workflow type validation failed: ${errors.length} errors`);
+        }
+        return {
+            valid,
+            errors,
+            warnings,
+            incompatibleEdges,
+            suggestedTransforms,
+        };
+    }
+    /**
+     * Auto-transform workflow to fix type mismatches
+     */
+    autoTransformWorkflow(nodes, edges, suggestedTransforms) {
+        console.log('[NodeDataTypeSystem] Auto-transforming workflow to fix type mismatches...');
+        const addedTransformers = [];
+        const newNodes = [...nodes];
+        const newEdges = [];
+        const transformNodeMap = new Map(); // edgeId → transformNodeId
+        // Create transform nodes for each suggested transform
+        for (const transform of suggestedTransforms) {
+            const edge = edges.find(e => e.id === transform.edgeId);
+            if (!edge)
+                continue;
+            // Determine transform node type based on transform type
+            const transformNodeType = this.getTransformNodeType(transform.transformType);
+            if (!transformNodeType) {
+                console.warn(`[NodeDataTypeSystem] ⚠️  Cannot determine transform node type for ${transform.transformType}`);
+                continue;
+            }
+            // Create transform node
+            const transformNode = {
+                id: `transform_${edge.id}_${Date.now()}`,
+                type: transformNodeType,
+                position: { x: 0, y: 0 }, // Will be laid out by frontend
+                data: {
+                    type: transformNodeType,
+                    label: `Transform: ${transform.transformType}`,
+                    category: 'transformers',
+                    config: {
+                        transformType: transform.transformType,
+                        reason: transform.reason,
+                    },
+                },
+            };
+            newNodes.push(transformNode);
+            addedTransformers.push(transformNode.id);
+            transformNodeMap.set(edge.id, transformNode.id);
+            // Update edges: source → transform → target (schema-driven)
+            const sourceNode = nodes.find(n => n.id === edge.source);
+            const targetNode = nodes.find(n => n.id === edge.target);
+            if (sourceNode && targetNode) {
+                const { resolveCompatibleHandles } = require('./schema-driven-connection-resolver');
+                // ✅ FIXED: Resolve source → transform (no fallback)
+                // If compatible handles not found → workflow invalid
+                const sourceToTransform = resolveCompatibleHandles(sourceNode, transformNode);
+                if (!sourceToTransform.success || !sourceToTransform.sourceHandle || !sourceToTransform.targetHandle) {
+                    throw new Error(`Cannot connect source → transform: ${sourceToTransform.error || 'No compatible handles found'}. Edge creation must ONLY use schema-defined handles.`);
+                }
+                newEdges.push({
+                    id: `${edge.id}_source_to_transform`,
+                    source: edge.source,
+                    target: transformNode.id,
+                    sourceHandle: sourceToTransform.sourceHandle,
+                    targetHandle: sourceToTransform.targetHandle,
+                });
+                // ✅ FIXED: Resolve transform → target (no fallback)
+                // If compatible handles not found → workflow invalid
+                const transformToTarget = resolveCompatibleHandles(transformNode, targetNode);
+                if (!transformToTarget.success || !transformToTarget.sourceHandle || !transformToTarget.targetHandle) {
+                    throw new Error(`Cannot connect transform → target: ${transformToTarget.error || 'No compatible handles found'}. Edge creation must ONLY use schema-defined handles.`);
+                }
+                newEdges.push({
+                    id: `${edge.id}_transform_to_target`,
+                    source: transformNode.id,
+                    target: edge.target,
+                    sourceHandle: transformToTarget.sourceHandle,
+                    targetHandle: transformToTarget.targetHandle,
+                });
+            }
+        }
+        // Add original edges that don't need transformation
+        for (const edge of edges) {
+            if (!transformNodeMap.has(edge.id)) {
+                newEdges.push(edge);
+            }
+        }
+        console.log(`[NodeDataTypeSystem] ✅ Auto-transformation complete: ${addedTransformers.length} transform nodes added`);
+        return {
+            nodes: newNodes,
+            edges: newEdges,
+            addedTransformers,
+        };
+    }
+    /**
+     * Get transform node type for a data type transformation
+     */
+    getTransformNodeType(transformType) {
+        switch (transformType) {
+            case DataType.TEXT:
+                return 'format'; // Format array/object to text
+            case DataType.ARRAY:
+                return 'transform'; // Transform text/object to array
+            case DataType.OBJECT:
+                return 'transform'; // Transform array/text to object
+            default:
+                return 'transform'; // Generic transform
+        }
+    }
+    // Helper methods for node categorization
+    isDataProducer(nodeType) {
+        return nodeType.includes('sheets') || nodeType.includes('database') ||
+            nodeType.includes('postgres') || nodeType.includes('mysql') ||
+            nodeType.includes('http') || nodeType.includes('api') ||
+            nodeType.includes('csv') || nodeType.includes('excel') ||
+            nodeType.includes('airtable') || nodeType.includes('notion');
+    }
+    isDataTransformer(nodeType) {
+        return nodeType.includes('summarizer') || nodeType.includes('classifier') ||
+            nodeType.includes('transform') || nodeType.includes('format') ||
+            nodeType.includes('ollama') || nodeType.includes('openai') ||
+            nodeType.includes('anthropic') || nodeType.includes('gemini');
+    }
+    isOutputAction(nodeType) {
+        return nodeType.includes('gmail') || nodeType.includes('email') ||
+            nodeType.includes('slack') || nodeType.includes('discord') ||
+            nodeType.includes('notification') || nodeType.includes('webhook') ||
+            nodeType.includes('database_write') || nodeType.includes('sheets_write');
+    }
+    isTrigger(nodeType) {
+        return nodeType.includes('trigger') || nodeType === 'schedule' ||
+            nodeType === 'webhook' || nodeType === 'form';
+    }
+    isCondition(nodeType) {
+        return nodeType.includes('if_else') || nodeType.includes('switch') ||
+            nodeType.includes('condition');
+    }
+}
+exports.NodeDataTypeSystem = NodeDataTypeSystem;
+// Export singleton instance
+exports.nodeDataTypeSystem = new NodeDataTypeSystem();
+// Export convenience functions
+function getNodeTypeInfo(nodeType) {
+    return exports.nodeDataTypeSystem.getNodeTypeInfo(nodeType);
+}
+function checkTypeCompatibility(sourceType, targetInputType) {
+    return exports.nodeDataTypeSystem.checkTypeCompatibility(sourceType, targetInputType);
+}
+function validateWorkflowTypes(nodes, edges) {
+    return exports.nodeDataTypeSystem.validateWorkflowTypes(nodes, edges);
+}

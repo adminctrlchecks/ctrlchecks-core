@@ -1,0 +1,40 @@
+sequenceDiagram
+  actor User
+  participant Browser as Connections UI
+  participant Worker as worker :3001
+  participant Cred as credential-service :3004
+  participant RDS as RDS connections and unified_credentials
+  participant Provider as OAuth / external provider
+  participant Runtime as worker credential resolver
+
+  User->>Browser: Create, update, test, or remove a connection
+  Browser->>Worker: /api/credential-connections/* + Cognito JWT
+  Worker->>Cred: /connections* + x-service-key + x-user-id
+  Cred->>RDS: Encrypt and persist credentials plus metadata
+  RDS-->>Cred: Connection record without exposed secrets
+  Cred-->>Worker: CRUD result
+  Worker-->>Browser: Masked connection status
+
+  rect rgb(244, 248, 255)
+    Browser->>Worker: GET public worker OAuth start URL
+    Worker->>Cred: GET /oauth/provider/start + internal identity
+    Cred-->>Browser: 302 to provider authorization page
+    Browser->>Provider: User grants scopes
+    Provider-->>Browser: Redirect to worker.ctrlchecks.ai callback
+    Browser->>Worker: GET/POST /api/oauth/provider/callback
+    Worker->>Cred: Proxy callback
+    Cred->>Provider: Synchronous code-for-token exchange
+    Provider-->>Cred: Access/refresh tokens and expiry
+    Cred->>RDS: Encrypted upsert
+    Cred-->>Browser: Relay success page / returnTo
+  end
+
+  rect rgb(248, 255, 248)
+    Runtime->>RDS: Resolve workflow-owner credential at execution time
+    RDS-->>Runtime: Encrypted secret row
+    Runtime->>Runtime: Decrypt and inject into in-memory node config
+    Runtime->>Provider: Execute node with scoped secret
+  end
+
+  Note over Browser,Runtime: Secrets are never returned to frontend code.
+  Note over Worker,Cred: Accepted gap: some OAuth handlers can remain worker-local.

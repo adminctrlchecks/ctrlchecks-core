@@ -716,7 +716,10 @@ export default function WorkflowBuilder() {
 
         if (!saveResponse.ok) {
           const errorData = await saveResponse.json().catch(() => ({ error: 'Save failed' }));
-          throw new Error(errorData.error || errorData.message || 'Failed to save workflow');
+          // errorData.message carries the specific validation reasons (e.g. "Cannot save
+          // workflow: operation is required"); errorData.error is just the generic label
+          // ("Workflow validation failed") and was masking the useful part.
+          throw new Error(errorData.message || errorData.error || 'Failed to save workflow');
         }
 
         const saveResult = await saveResponse.json();

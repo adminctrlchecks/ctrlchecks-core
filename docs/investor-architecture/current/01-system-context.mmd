@@ -1,0 +1,12 @@
+﻿flowchart LR
+    U[Users<br/>Builders, operators, admins] --> FE[CtrlChecks Frontend<br/>React 18 + Vite<br/>Workflow canvas, wizard, docs, debug]
+    FE --> API[Worker API<br/>Express<br/>Generation, save, execute, admin]
+    API --> GEN[AI Workflow Generation<br/>Intent, capability selection,<br/>graph build, validation]
+    API --> REG[Unified Node Registry<br/>Schemas, operations,<br/>credentials, field contracts]
+    API --> RUNTIME[Execution Runtime<br/>Graph orchestration,<br/>dynamic node executor]
+    RUNTIME --> VALUE[Universal Runtime AI Value Engine<br/>multi-field generation,<br/>repair, validation, audit]
+    API --> DB[(AWS RDB/RDS<br/>PostgreSQL-compatible<br/>canonical platform persistence)]
+    VALUE --> DB
+    RUNTIME --> EXT[External Providers<br/>Google, Gmail, Slack,<br/>HTTP APIs, databases, AI models]
+    RUNTIME --> OBS[Logs, checkpoints,<br/>runtime input audit,<br/>WebSocket updates]
+    OBS --> FE

@@ -1,0 +1,73 @@
+# Docker Compose for AWS Deployment with Ollama
+# Optimized for GPU instances (g4dn.xlarge or larger)
+
+version: '3.8'
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ctrlchecks-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_KEEP_ALIVE=24h
+      - OLLAMA_MAX_LOADED_MODELS=5
+      - OLLAMA_NUM_PARALLEL=3
+      - OLLAMA_HOST=0.0.0.0:11434
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    command: serve
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - ctrlchecks-network
+
+  backend:
+    image: node:18-alpine
+    container_name: ctrlchecks-backend
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./worker:/app
+      - /app/node_modules
+    working_dir: /app
+    environment:
+      - NODE_ENV=production
+      - OLLAMA_HOST=http://ollama:11434
+      - DATABASE_URL=${DATABASE_URL}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - PORT=3001
+      - CORS_ORIGIN=${CORS_ORIGIN:-*}
+    depends_on:
+      ollama:
+        condition: service_healthy
+    command: sh -c "npm install && npm run build && npm start"
+    restart: unless-stopped
+    networks:
+      - ctrlchecks-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  ollama_data:
+    driver: local
+
+networks:
+  ctrlchecks-network:
+    driver: bridge

@@ -1,0 +1,287 @@
+{
+  "generated_at": "2026-02-09T14:00:48.404Z",
+  "total_workflows": 345,
+  "node_coverage": [
+    {
+      "node": "schedule",
+      "count": 111
+    },
+    {
+      "node": "manual_trigger",
+      "count": 108
+    },
+    {
+      "node": "google_sheets",
+      "count": 100
+    },
+    {
+      "node": "slack_message",
+      "count": 92
+    },
+    {
+      "node": "log_output",
+      "count": 67
+    },
+    {
+      "node": "if_else",
+      "count": 61
+    },
+    {
+      "node": "webhook",
+      "count": 57
+    },
+    {
+      "node": "email",
+      "count": 56
+    },
+    {
+      "node": "database_write",
+      "count": 53
+    },
+    {
+      "node": "form",
+      "count": 51
+    },
+    {
+      "node": "http_request",
+      "count": 50
+    },
+    {
+      "node": "database_read",
+      "count": 47
+    },
+    {
+      "node": "javascript",
+      "count": 39
+    },
+    {
+      "node": "ai_agent",
+      "count": 39
+    },
+    {
+      "node": "google_gmail",
+      "count": 31
+    },
+    {
+      "node": "text_formatter",
+      "count": 21
+    },
+    {
+      "node": "discord",
+      "count": 15
+    },
+    {
+      "node": "linkedin",
+      "count": 15
+    },
+    {
+      "node": "set_variable",
+      "count": 14
+    },
+    {
+      "node": "chat_trigger",
+      "count": 13
+    },
+    {
+      "node": "error_handler",
+      "count": 11
+    },
+    {
+      "node": "respond_to_webhook",
+      "count": 9
+    },
+    {
+      "node": "google_doc",
+      "count": 8
+    },
+    {
+      "node": "twitter",
+      "count": 8
+    },
+    {
+      "node": "merge_data",
+      "count": 7
+    },
+    {
+      "node": "supabase",
+      "count": 5
+    },
+    {
+      "node": "instagram",
+      "count": 5
+    },
+    {
+      "node": "interval",
+      "count": 4
+    },
+    {
+      "node": "postgresql",
+      "count": 4
+    },
+    {
+      "node": "date_time",
+      "count": 3
+    },
+    {
+      "node": "wait",
+      "count": 3
+    },
+    {
+      "node": "json_parser",
+      "count": 3
+    },
+    {
+      "node": "switch",
+      "count": 3
+    },
+    {
+      "node": "google_drive",
+      "count": 3
+    },
+    {
+      "node": "set",
+      "count": 3
+    },
+    {
+      "node": "loop",
+      "count": 3
+    },
+    {
+      "node": "filter",
+      "count": 3
+    },
+    {
+      "node": "chat_model",
+      "count": 3
+    },
+    {
+      "node": "memory",
+      "count": 3
+    },
+    {
+      "node": "slack_webhook",
+      "count": 3
+    },
+    {
+      "node": "telegram",
+      "count": 3
+    },
+    {
+      "node": "microsoft_teams",
+      "count": 3
+    },
+    {
+      "node": "facebook",
+      "count": 3
+    },
+    {
+      "node": "hubspot",
+      "count": 3
+    },
+    {
+      "node": "salesforce",
+      "count": 3
+    },
+    {
+      "node": "zoho_crm",
+      "count": 3
+    },
+    {
+      "node": "pipedrive",
+      "count": 3
+    },
+    {
+      "node": "freshdesk",
+      "count": 3
+    },
+    {
+      "node": "intercom",
+      "count": 3
+    },
+    {
+      "node": "mailchimp",
+      "count": 3
+    },
+    {
+      "node": "activecampaign",
+      "count": 3
+    }
+  ],
+  "category_coverage": [
+    {
+      "category": "Node Coverage",
+      "count": 57
+    },
+    {
+      "category": "Integration",
+      "count": 39
+    },
+    {
+      "category": "Notification",
+      "count": 30
+    },
+    {
+      "category": "Automation",
+      "count": 30
+    },
+    {
+      "category": "Data Processing",
+      "count": 29
+    },
+    {
+      "category": "Social Media",
+      "count": 20
+    },
+    {
+      "category": "Form Processing",
+      "count": 20
+    },
+    {
+      "category": "Webhook",
+      "count": 20
+    },
+    {
+      "category": "AI Processing",
+      "count": 20
+    },
+    {
+      "category": "Data Sync",
+      "count": 10
+    },
+    {
+      "category": "API Integration",
+      "count": 10
+    },
+    {
+      "category": "Transformation",
+      "count": 10
+    },
+    {
+      "category": "Conditional",
+      "count": 10
+    },
+    {
+      "category": "Multi-Step",
+      "count": 10
+    },
+    {
+      "category": "AI Agent",
+      "count": 10
+    },
+    {
+      "category": "Error Handling",
+      "count": 10
+    },
+    {
+      "category": "Scheduled",
+      "count": 10
+    }
+  ],
+  "complexity_distribution": {
+    "Simple": 142,
+    "Medium": 170,
+    "High": 17,
+    "Complex": 16
+  },
+  "missing_nodes": []
+}

@@ -1,0 +1,51 @@
+flowchart TB
+  subgraph Producers["Execution event producers"]
+    RUNTIME["Worker execution runtime<br/>state manager + VisualizationService"]
+    ENGINE["execution-engine consumer"]
+  end
+
+  subgraph RedisLayer["Redis event layer"]
+    EXECCH["ws:exec:events<br/>publish / subscribe"]
+    NTFCH["ntf:userId<br/>in-app publish"]
+  end
+
+  subgraph Worker["worker :3001"]
+    BRIDGE["WsRedisBridge<br/>dedicated subscriber connection"]
+    WSS["WebSocket server<br/>/ws/executions"]
+    STATUS["GET /api/execution-status/:id"]
+    METRICS["GET /metrics<br/>delegation counters"]
+  end
+
+  subgraph Frontend["Frontend"]
+    NGINX["Nginx /ws/<br/>Upgrade + Connection headers"]
+    HOOK["useExecutionStatus<br/>WSS first"]
+    POLL["3-second polling fallback"]
+  end
+
+  subgraph Notifications["notification-service :3005"]
+    DISPATCH["Email / in-app / webhook dispatch"]
+    SES["AWS SES"]
+    NRDS[("RDS notifications")]
+    OUT["Customer HTTPS webhook<br/>3 attempts + SSRF guard"]
+  end
+
+  OPS["Operator on EC2"]
+  SVCMETRICS["Per-service /metrics and journald"]
+
+  RUNTIME -->|local broadcast| WSS
+  RUNTIME -->|publish| EXECCH
+  ENGINE -->|publish running/failed| EXECCH
+  EXECCH --> BRIDGE
+  BRIDGE --> WSS
+  WSS --> NGINX -->|WSS| HOOK
+  HOOK -->|disconnected| POLL
+  POLL --> STATUS
+
+  RUNTIME -->|terminal, best effort| DISPATCH
+  DISPATCH --> SES
+  DISPATCH --> NRDS
+  DISPATCH --> NTFCH
+  DISPATCH --> OUT
+
+  OPS -->|curl localhost:3001/metrics| METRICS
+  OPS --> SVCMETRICS

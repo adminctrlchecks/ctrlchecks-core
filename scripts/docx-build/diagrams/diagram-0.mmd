@@ -1,0 +1,60 @@
+flowchart TB
+  subgraph Frontend["Frontend and identity"]
+    U["Engineers and business users"]
+    FE["React 18 + Vite<br/>www.ctrlchecks.ai"]
+    COG["AWS Cognito<br/>access JWT"]
+    U -->|uses| FE
+    FE <-->|sign-in and token refresh| COG
+  end
+
+  subgraph PublicEdge["Public API edge"]
+    NG["Nginx<br/>TLS :443"]
+    W["worker :3001<br/>API gateway + orchestration + runtime"]
+    NG -->|HTTP proxy and WebSocket upgrade| W
+  end
+
+  subgraph Microservices["Internal microservices on 127.0.0.1"]
+    AI["ai-generator :3002"]
+    EE["execution-engine :3003"]
+    CS["credential-service :3004"]
+    NS["notification-service :3005"]
+    TS["trigger-service :3006"]
+    WC["workflow-crud-service :3007"]
+  end
+
+  subgraph DataStores["Managed and host data services"]
+    RDS["AWS RDS PostgreSQL"]
+    REDIS["Redis<br/>queues, locks, cache, pub/sub"]
+    SES["AWS SES"]
+  end
+
+  subgraph External["External providers"]
+    APIS["Gmail, Slack, GitHub, Salesforce,<br/>Gemini and other node APIs"]
+    HOOKS["Customer webhook endpoints"]
+  end
+
+  FE -->|HTTPS + Cognito JWT| NG
+  W -->|internal HTTP + x-service-key| AI
+  W -->|internal HTTP + x-service-key| EE
+  W -->|internal HTTP + x-service-key| CS
+  W -->|internal HTTP + x-service-key| NS
+  W -->|internal HTTP + x-service-key| TS
+  W -->|internal HTTP + x-service-key| WC
+  EE -.->|x-internal-engine-key callback| W
+
+  W --> RDS
+  W --> REDIS
+  AI -->|LLM calls| APIS
+  EE --> RDS
+  EE --> REDIS
+  CS --> RDS
+  CS -->|OAuth token exchange| APIS
+  NS --> RDS
+  NS --> REDIS
+  NS --> SES
+  NS --> HOOKS
+  TS --> RDS
+  WC --> RDS
+  W -->|node execution| APIS
+
+  POLICY["Network invariant:<br/>the browser has no route to :3002-:3007"]

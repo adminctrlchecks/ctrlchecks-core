@@ -17,6 +17,8 @@ import NodeUsageCard from './NodeUsageCard';
 import FormNodeSettings from './FormNodeSettings';
 import ScheduleTrigger from './ScheduleTrigger';
 import FacebookConnectionStatus from '@/components/FacebookConnectionStatus';
+import MysqlQueryEditor from './MysqlQueryEditor';
+import MongoCollectionSelect from './MongoCollectionSelect';
 import { awsClient } from '@/integrations/aws/client';
 import { ENDPOINTS } from '@/config/endpoints';
 import {
@@ -2055,6 +2057,28 @@ export default function PropertiesPanel({
               </div>
             )}
           </div>
+        );
+      }
+
+      case 'mysqlQueryEditor': {
+        const connectionRefs = (selectedNode.data as any)?.connectionRefs as Record<string, string> | undefined;
+        return (
+          <MysqlQueryEditor
+            value={value as string}
+            onChange={(val) => handleConfigChange(field.key, val)}
+            connectionId={connectionRefs?.mysql_connection}
+          />
+        );
+      }
+
+      case 'mongoCollectionSelect': {
+        const connectionRefs = (selectedNode.data as any)?.connectionRefs as Record<string, string> | undefined;
+        return (
+          <MongoCollectionSelect
+            value={value as string}
+            onChange={(val) => handleConfigChange(field.key, val)}
+            connectionId={connectionRefs?.mongodb_connection}
+          />
         );
       }
 

@@ -1,0 +1,39 @@
+# CtrlChecks.ai Terraform Configuration
+# Copy this to terraform.tfvars and customize
+
+# AWS Configuration
+aws_region = "us-east-1"
+environment = "prod"
+project_name = "ctrlchecks"
+
+# Network Configuration
+vpc_cidr = "10.0.0.0/16"
+public_subnet_cidrs = ["10.0.1.0/24", "10.0.2.0/24"]
+private_subnet_cidrs = ["10.0.10.0/24", "10.0.20.0/24"]
+allowed_cidr_blocks = ["0.0.0.0/0"]  # Restrict in production
+
+# EC2 Configuration
+worker_instance_type = "t3.medium"
+ollama_instance_type = "g4dn.xlarge"  # GPU for AI workloads
+key_pair_name = "ctrlchecks-keypair"  # Update with your key pair name
+
+# Domain Configuration - ctrlchecks.ai
+domain_name = "ctrlchecks.ai"
+frontend_origin_domain = "ctrlchecks-frontend.s3.amazonaws.com"
+cloudfront_aliases = ["ctrlchecks.ai", "www.ctrlchecks.ai"]
+create_dns_records = true  # Set to true to create DNS records
+
+# Database Configuration (if not using Supabase)
+# db_name = "ctrlchecks"
+# db_username = "ctrlchecks"
+# db_password = "CHANGE_ME"
+# db_instance_class = "db.t3.micro"
+
+# Terraform Backend (uncomment and configure)
+# terraform {
+#   backend "s3" {
+#     bucket = "ctrlchecks-terraform-state"
+#     key    = "infrastructure/terraform.tfstate"
+#     region = "us-east-1"
+#   }
+# }

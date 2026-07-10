@@ -254,14 +254,21 @@ async function executeOperation(
 export async function runMongoDBNode(context: NodeExecutionContext): Promise<any> {
   const { inputs } = context;
 
+  // The saved "MongoDB Connection String" credential (mongodb_connection) stores the
+  // full URI in its `username` field and an optional DB-name override in `password`
+  // (see credential-type-registry.ts). Detect that shape here so a linked Connection
+  // resolves correctly instead of being read as a literal host-mode username/password.
+  const rawUsername = typeof inputs.username === 'string' ? inputs.username.trim() : '';
+  const usernameIsConnectionString = /^mongodb(\+srv)?:\/\//.test(rawUsername);
+
   // Extract credentials
   const credentials: MongoDBCredentials = {
-    connectionString: inputs.connectionString,
+    connectionString: inputs.connectionString || (usernameIsConnectionString ? rawUsername : undefined),
     host: inputs.host,
     port: inputs.port || 27017,
-    username: inputs.username,
-    password: inputs.password,
-    database: inputs.database,
+    username: usernameIsConnectionString ? undefined : inputs.username,
+    password: usernameIsConnectionString ? undefined : inputs.password,
+    database: inputs.database || (usernameIsConnectionString ? inputs.password : undefined),
     authSource: inputs.authSource || 'admin',
     ssl: inputs.ssl === true,
   };

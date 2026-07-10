@@ -79,7 +79,7 @@ async function run() {
   };
 
   const saveRes = await post('/api/save-workflow', {
-    workflow: { ...minimalWorkflow, name: 'live-test-harness', trigger: 'manual' },
+    ...minimalWorkflow, name: 'live-test-harness', trigger: 'manual',
   });
   const savedId = (saveRes.body as any)?.workflow?.id ?? (saveRes.body as any)?.id;
   const saveOk = saveRes.status === 200 && !!savedId;

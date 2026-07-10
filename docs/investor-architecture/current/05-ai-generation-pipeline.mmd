@@ -1,0 +1,11 @@
+﻿flowchart LR
+    Prompt[User intent] --> Intent[Intent extraction<br/>trigger, actions, constraints]
+    Intent --> Cap[Capability selection<br/>registry-backed choices]
+    Cap --> Blueprint[Structural blueprint<br/>plain-language plan]
+    Blueprint --> Nodes[Node selection<br/>canonical node types]
+    Nodes --> Edges[Edge reasoning<br/>order, branches, merges]
+    Edges --> Validate[Graph + semantic validation]
+    Validate --> Populate[Property population<br/>build-time AI fields]
+    Populate --> Creds[Credential discovery]
+    Creds --> Manifest[Field ownership manifest<br/>manual_static, buildtime_ai_once,<br/>runtime_ai, credential, system]
+    Manifest --> Workflow[Executable workflow graph]

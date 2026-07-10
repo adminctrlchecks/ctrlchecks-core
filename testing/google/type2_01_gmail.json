@@ -1,0 +1,89 @@
+{
+  "name": "Test Google Gmail — Send + List",
+  "description": "Tests Gmail send and list. Sequential: Send Email → log → List Inbox → log. Gmail list returns only message IDs (Google API design) — use a separate get operation for full content. Requires Google account connected in /connections.",
+  "nodes": [
+    {
+      "id": "node_1",
+      "type": "custom",
+      "position": { "x": 100, "y": 300 },
+      "data": {
+        "type": "manual_trigger",
+        "label": "Start Test",
+        "category": "triggers",
+        "icon": "Play",
+        "config": {}
+      }
+    },
+    {
+      "id": "node_2",
+      "type": "custom",
+      "position": { "x": 400, "y": 300 },
+      "data": {
+        "type": "google_gmail",
+        "label": "Gmail — Send Email",
+        "category": "communication",
+        "icon": "Mail",
+        "config": {
+          "operation": "send",
+          "recipientEmails": "vusalashivakumar@gmail.com",
+          "recipientSource": "manual_entry",
+          "subject": "ctrlchecks Workflow Test Email",
+          "body": "This is an automated test email from the ctrlchecks workflow platform. Gmail integration is working correctly."
+        }
+      }
+    },
+    {
+      "id": "node_3",
+      "type": "custom",
+      "position": { "x": 700, "y": 300 },
+      "data": {
+        "type": "log_output",
+        "label": "Log: Send Result",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "level": "info",
+          "message": "Gmail Send → success={{success}} | sentCount={{sentCount}} | to={{to}} | messageId={{messageId}}"
+        }
+      }
+    },
+    {
+      "id": "node_4",
+      "type": "custom",
+      "position": { "x": 1000, "y": 300 },
+      "data": {
+        "type": "google_gmail",
+        "label": "Gmail — List Inbox (10 messages)",
+        "category": "communication",
+        "icon": "Inbox",
+        "config": {
+          "operation": "list",
+          "maxResults": 10,
+          "query": "in:inbox"
+        }
+      }
+    },
+    {
+      "id": "node_5",
+      "type": "custom",
+      "position": { "x": 1300, "y": 300 },
+      "data": {
+        "type": "log_output",
+        "label": "Log: List Result",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "level": "info",
+          "message": "Gmail List → count={{count}} | Note: Gmail API list returns IDs only — full content needs a get operation per message"
+        }
+      }
+    }
+  ],
+  "edges": [
+    { "id": "edge_1", "source": "node_1", "target": "node_2" },
+    { "id": "edge_2", "source": "node_2", "target": "node_3" },
+    { "id": "edge_3", "source": "node_3", "target": "node_4" },
+    { "id": "edge_4", "source": "node_4", "target": "node_5" }
+  ],
+  "viewport": { "x": 0, "y": 0, "zoom": 0.75 }
+}

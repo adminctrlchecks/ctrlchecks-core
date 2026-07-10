@@ -1,0 +1,310 @@
+"use strict";
+/**
+ * Node Selection Stage — AI-First Pipeline
+ *
+ * Selects node types from the Node_Catalog based on structured intent.
+ * NO keyword pre-filter. NO tag matching. Pure AI selection.
+ * Post-LLM: validates selected types against registry; discards unknowns.
+ *
+ * Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 8.1, 8.2, 8.3
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.runNodeSelectionStage = runNodeSelectionStage;
+exports.enforceRegistrySelectionContract = enforceRegistrySelectionContract;
+const gemini_orchestrator_1 = require("../gemini-orchestrator");
+const system_prompt_builder_1 = require("../system-prompt-builder");
+const unified_node_registry_1 = require("../../../core/registry/unified-node-registry");
+const logger_1 = require("../../../core/logger");
+const pipeline_observability_1 = require("../pipeline-observability");
+const node_selection_stage_client_1 = require("./node-selection-stage-client");
+// ─── Node Selection Stage ─────────────────────────────────────────────────────
+async function runNodeSelectionStage(intent, nodeCatalog, correlationId, structuralPrompt, constraints) {
+    const startedAt = Date.now();
+    const inputSummary = `actions=${intent.actions.length}, triggerType=${intent.triggerType}`;
+    logger_1.logger.info({ event: 'ai_pipeline_stage_start', stage: 'node_selection', correlationId, inputSummary });
+    const { systemPrompt } = system_prompt_builder_1.systemPromptBuilder.build({
+        stage: 'node_selection',
+        nodeCatalog,
+        userIntent: intent.intent,
+        stageContext: {
+            selectedNodeConstraintsByStep: constraints?.selectedNodeConstraintsByStep,
+            selectedNodeConstraintsFlat: constraints?.selectedNodeConstraintsFlat,
+        },
+    });
+    const model = 'gemini-3.5-flash';
+    const temperature = 0.1;
+    logger_1.logger.info({ event: 'ai_pipeline_llm_call', stage: 'node_selection', correlationId, model, temperature });
+    const message = `STRUCTURED_INTENT:\n${JSON.stringify(intent, null, 2)}${structuralPrompt ? `\n\nWORKFLOW_BLUEPRINT:\n${structuralPrompt}` : ''}`;
+    const promptTokens = Math.ceil(systemPrompt.length / 4);
+    let llmCall = { model, temperature, promptTokens, completionTokens: 0 };
+    let text = '';
+    let structuredResponse = null;
+    let parsed = null;
+    const remote = await (0, node_selection_stage_client_1.runNodeSelectionJsonRemote)({
+        systemPrompt,
+        message,
+        correlationId,
+    });
+    if (remote?.ok) {
+        parsed = remote.selectedNodes;
+        text = JSON.stringify({ selectedNodes: remote.selectedNodes });
+        llmCall = remote.llmCall;
+    }
+    else {
+        if (remote && !remote.ok) {
+            logger_1.logger.warn({
+                event: 'ai_pipeline_stage_warn',
+                stage: 'node_selection',
+                correlationId,
+                reason: `ai-generator returned ${remote.code} - falling back to local`,
+            });
+        }
+        try {
+            const raw = await gemini_orchestrator_1.geminiOrchestrator.processRequest('node-suggestion', { system: systemPrompt, message }, {
+                model,
+                temperature,
+                cache: false,
+                structuredOutput: {
+                    mimeType: 'application/json',
+                    schema: system_prompt_builder_1.NODE_SELECTION_OUTPUT_SCHEMA,
+                },
+            });
+            structuredResponse = raw;
+            text = typeof raw === 'string' ? raw : JSON.stringify(raw);
+        }
+        catch (err) {
+            logger_1.logger.error({ event: 'ai_pipeline_stage_error', stage: 'node_selection', correlationId, error: 'LLM_CALL_FAILED', message: String(err) });
+            return { ok: false, code: 'INVALID_LLM_RESPONSE', rawResponse: String(err), durationMs: Date.now() - startedAt };
+        }
+        parsed = parseNodeSelection(structuredResponse) ?? parseNodeSelection(text);
+        llmCall = {
+            model,
+            temperature,
+            promptTokens,
+            completionTokens: Math.ceil(text.length / 4),
+        };
+    }
+    if (!parsed) {
+        (0, pipeline_observability_1.incrementPipelineCounter)('node_selection_structured_decode_fail');
+        // Retry once with schema reminder (compat path).
+        logger_1.logger.warn({ event: 'ai_pipeline_stage_retry', stage: 'node_selection', correlationId, reason: 'STRUCTURED_DECODE_FAILED' });
+        let text2;
+        let raw2;
+        try {
+            const retryPrompt = systemPrompt + '\n\nCRITICAL: Return ONLY valid JSON. No markdown, no explanation.';
+            raw2 = await gemini_orchestrator_1.geminiOrchestrator.processRequest('node-suggestion', { system: retryPrompt, message }, {
+                model,
+                temperature,
+                cache: false,
+                structuredOutput: {
+                    mimeType: 'application/json',
+                    schema: system_prompt_builder_1.NODE_SELECTION_OUTPUT_SCHEMA,
+                },
+            });
+            text2 = typeof raw2 === 'string' ? raw2 : JSON.stringify(raw2);
+        }
+        catch (err) {
+            logger_1.logger.error({ event: 'ai_pipeline_stage_error', stage: 'node_selection', correlationId, error: 'LLM_RETRY_FAILED', message: String(err) });
+            return { ok: false, code: 'INVALID_LLM_RESPONSE', rawResponse: String(err), durationMs: Date.now() - startedAt };
+        }
+        parsed = parseNodeSelection(raw2) ?? parseNodeSelection(text2);
+        llmCall = {
+            model,
+            temperature,
+            promptTokens,
+            completionTokens: Math.ceil(text2.length / 4),
+        };
+        if (!parsed) {
+            logger_1.logger.error({ event: 'ai_pipeline_stage_error', stage: 'node_selection', correlationId, error: 'INVALID_LLM_RESPONSE', llmResponse: text2 });
+            logger_1.logger.warn({
+                event: 'ai_pipeline_stage_fallback',
+                stage: 'node_selection',
+                correlationId,
+                reason: 'DETERMINISTIC_RECOVERY_FROM_INTENT_AND_REQUIRED_TYPES',
+            });
+            (0, pipeline_observability_1.incrementPipelineCounter)('node_selection_deterministic_recovery_used');
+            parsed = buildDeterministicSelectionFromIntent(intent, constraints);
+            text = text2;
+            if (!parsed) {
+                return { ok: false, code: 'INVALID_LLM_RESPONSE', rawResponse: text2, durationMs: Date.now() - startedAt };
+            }
+        }
+    }
+    const validNodes = enforceRegistrySelectionContract(parsed, correlationId, constraints);
+    const durationMs = Date.now() - startedAt;
+    if (validNodes.length === 0) {
+        // No fallback to keyword matching — return structured error
+        logger_1.logger.error({ event: 'ai_pipeline_stage_error', stage: 'node_selection', correlationId, error: 'NO_VALID_NODES', llmResponse: text });
+        return { ok: false, code: 'NO_VALID_NODES', rawResponse: text, durationMs };
+    }
+    logger_1.logger.info({
+        event: 'ai_pipeline_stage_end',
+        stage: 'node_selection',
+        correlationId,
+        outputSummary: `selectedNodes=${validNodes.length}`,
+        durationMs,
+    });
+    return {
+        ok: true,
+        selectedNodes: validNodes,
+        durationMs,
+        llmCall,
+    };
+}
+function stripMarkdownFences(text) {
+    return text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+}
+function parseNodeSelection(input) {
+    if (input && typeof input === 'object') {
+        return validateNodeSelectionObject(input);
+    }
+    if (typeof input !== 'string') {
+        return null;
+    }
+    try {
+        const cleaned = stripMarkdownFences(input);
+        const start = cleaned.indexOf('{');
+        const end = cleaned.lastIndexOf('}');
+        if (start === -1 || end === -1)
+            return null;
+        const obj = JSON.parse(cleaned.substring(start, end + 1));
+        return validateNodeSelectionObject(obj);
+    }
+    catch {
+        return null;
+    }
+}
+function validateNodeSelectionObject(obj) {
+    if (!obj || typeof obj !== 'object' || !Array.isArray(obj.selectedNodes)) {
+        return null;
+    }
+    const validRoles = ['trigger', 'action', 'logic', 'terminal'];
+    const parsed = [];
+    for (const raw of obj.selectedNodes) {
+        if (!raw || typeof raw !== 'object')
+            continue;
+        const type = String(raw.type || '').trim();
+        const role = String(raw.role || '').trim();
+        const reason = String(raw.reason || '').trim();
+        if (!type || !validRoles.includes(role) || !reason)
+            continue;
+        parsed.push({ type, role, reason });
+    }
+    return parsed.length > 0 ? parsed : null;
+}
+function buildDeterministicSelectionFromIntent(intent, constraints) {
+    const selected = [];
+    const seen = new Set();
+    const triggerType = resolveTriggerType(intent.triggerType);
+    if (triggerType) {
+        selected.push({
+            type: triggerType,
+            role: 'trigger',
+            reason: 'Recovered trigger from structured intent',
+        });
+        seen.add(triggerType);
+    }
+    for (const rawType of constraints?.requiredNodeTypes || []) {
+        const canonical = unified_node_registry_1.unifiedNodeRegistry.resolveAlias(rawType) || rawType;
+        const def = unified_node_registry_1.unifiedNodeRegistry.get(canonical);
+        if (!def)
+            continue;
+        const isBranching = def.isBranching === true;
+        if (!isBranching && seen.has(canonical))
+            continue;
+        selected.push({
+            type: canonical,
+            role: deriveNodeRole(canonical),
+            reason: 'Recovered from user-confirmed capability selection',
+        });
+        seen.add(canonical);
+    }
+    return selected.length > 0 ? selected : null;
+}
+function enforceRegistrySelectionContract(parsed, correlationId, constraints) {
+    const allowedSet = new Set((constraints?.selectedNodeConstraintsFlat || [])
+        .map((t) => unified_node_registry_1.unifiedNodeRegistry.resolveAlias(t) || t)
+        .filter(Boolean));
+    const requiredTypes = [...new Set((constraints?.requiredNodeTypes || []).map((t) => unified_node_registry_1.unifiedNodeRegistry.resolveAlias(t) || t).filter(Boolean))];
+    const kept = [];
+    for (const node of parsed) {
+        const canonical = unified_node_registry_1.unifiedNodeRegistry.resolveAlias(node.type) || node.type;
+        const def = unified_node_registry_1.unifiedNodeRegistry.get(canonical);
+        if (!def) {
+            logger_1.logger.warn({ event: 'ai_pipeline_unknown_node_type', stage: 'node_selection', correlationId, unknownType: node.type });
+            continue;
+        }
+        if (allowedSet.size > 0 && !allowedSet.has(canonical)) {
+            logger_1.logger.warn({
+                event: 'ai_pipeline_node_not_allowed_by_capability_selection',
+                stage: 'node_selection',
+                correlationId,
+                nodeType: canonical,
+            });
+            continue;
+        }
+        const typeCount = kept.filter((n) => n.type === canonical).length + 1;
+        kept.push({
+            type: canonical,
+            role: deriveNodeRole(canonical),
+            reason: node.reason,
+            nodeId: `node_${canonical}_${typeCount}`,
+        });
+    }
+    // Guarantee exactly one trigger in final stage output.
+    const triggerNodes = kept.filter((n) => n.role === 'trigger');
+    const firstTrigger = triggerNodes[0];
+    const withoutExtraTriggers = kept.filter((n, idx) => n.role !== 'trigger' || n === firstTrigger || (n.role === 'trigger' && idx === kept.indexOf(firstTrigger)));
+    if (!firstTrigger) {
+        const fallbackTrigger = unified_node_registry_1.unifiedNodeRegistry.resolveAlias('manual_trigger') || 'manual_trigger';
+        if (unified_node_registry_1.unifiedNodeRegistry.get(fallbackTrigger)) {
+            withoutExtraTriggers.unshift({
+                type: fallbackTrigger,
+                role: 'trigger',
+                reason: 'Required trigger selected from registry',
+                nodeId: `node_${fallbackTrigger}_1`,
+            });
+        }
+    }
+    const seen = new Set(withoutExtraTriggers.map((n) => n.type));
+    for (const reqType of requiredTypes) {
+        const def = unified_node_registry_1.unifiedNodeRegistry.get(reqType);
+        if (!def)
+            continue;
+        // Branching nodes (switch, if_else) are exempt from type-deduplication —
+        // multiple instances of the same branching type are required for nested workflows.
+        const isBranching = def.isBranching === true;
+        if (!isBranching && seen.has(reqType))
+            continue;
+        const reqTypeCount = withoutExtraTriggers.filter((n) => n.type === reqType).length + 1;
+        withoutExtraTriggers.push({
+            type: reqType,
+            role: deriveNodeRole(reqType),
+            reason: 'Required by user-confirmed capability selection',
+            nodeId: `node_${reqType}_${reqTypeCount}`,
+        });
+        seen.add(reqType);
+    }
+    return withoutExtraTriggers;
+}
+function deriveNodeRole(nodeType) {
+    if (unified_node_registry_1.unifiedNodeRegistry.isTrigger(nodeType))
+        return 'trigger';
+    const category = String(unified_node_registry_1.unifiedNodeRegistry.getCategory(nodeType) || '').toLowerCase();
+    if (category === 'logic')
+        return 'logic';
+    // Use registry flag instead of hardcoded type name
+    if (unified_node_registry_1.unifiedNodeRegistry.get(nodeType)?.workflowBehavior?.alwaysTerminal === true)
+        return 'terminal';
+    return 'action';
+}
+function resolveTriggerType(triggerType) {
+    const canonical = unified_node_registry_1.unifiedNodeRegistry.resolveAlias(triggerType) || triggerType;
+    if (unified_node_registry_1.unifiedNodeRegistry.isTrigger(canonical) && unified_node_registry_1.unifiedNodeRegistry.get(canonical)) {
+        return canonical;
+    }
+    const manual = unified_node_registry_1.unifiedNodeRegistry.resolveAlias('manual_trigger') || 'manual_trigger';
+    return unified_node_registry_1.unifiedNodeRegistry.isTrigger(manual) && unified_node_registry_1.unifiedNodeRegistry.get(manual)
+        ? manual
+        : null;
+}

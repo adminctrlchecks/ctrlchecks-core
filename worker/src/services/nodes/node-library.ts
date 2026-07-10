@@ -9350,18 +9350,28 @@ export class NodeLibrary {
         optional: {
           operation: {
             type: 'string',
-            description: 'Operation: find, insert, update, delete',
-            examples: ['find', 'insert', 'update', 'delete'],
+            description: 'Operation: find, insertOne, updateOne, deleteOne',
+            examples: ['find', 'insertOne', 'updateOne', 'deleteOne'],
           },
           collection: {
             type: 'string',
             description: 'Collection name',
             examples: ['users', 'products'],
           },
-          query: {
+          filter: {
             type: 'object',
-            description: 'MongoDB query',
+            description: 'MongoDB filter used by find/updateOne/deleteOne to match documents',
             examples: [{ name: 'John' }],
+          },
+          document: {
+            type: 'object',
+            description: 'Document to insert (insertOne only)',
+            examples: [{ name: 'John', status: 'active' }],
+          },
+          update: {
+            type: 'object',
+            description: 'MongoDB update operators applied to the matched document (updateOne only)',
+            examples: [{ $set: { status: 'active' } }],
           },
         },
       },
@@ -9381,17 +9391,17 @@ export class NodeLibrary {
         {
           name: 'find_documents',
           description: 'Find documents in a collection',
-          config: { operation: 'find', collection: 'users', query: { status: 'active' } },
+          config: { operation: 'find', collection: 'users', filter: { status: 'active' } },
         },
         {
           name: 'insert_document',
           description: 'Insert a new document',
-          config: { operation: 'insert', collection: 'users', document: { name: '{{$json.name}}', email: '{{$json.email}}' } },
+          config: { operation: 'insertOne', collection: 'users', document: { name: '{{$json.name}}', email: '{{$json.email}}' } },
         },
         {
           name: 'update_document',
           description: 'Update an existing document',
-          config: { operation: 'update', collection: 'users', query: { _id: '{{$json.userId}}' }, update: { $set: { name: '{{$json.name}}' } } },
+          config: { operation: 'updateOne', collection: 'users', filter: { _id: '{{$json.userId}}' }, update: { $set: { name: '{{$json.name}}' } } },
         },
       ],
       validationRules: [],

@@ -1,0 +1,13 @@
+﻿flowchart TD
+    A[1 Frontend boot + auth] --> B[2 Worker API boundary]
+    B --> C[3 Worker bootstrap<br/>routes, middleware, registry]
+    C --> D[4 Registry/schema load<br/>node contracts, credentials, operations]
+    D --> E[5 Request handling<br/>validate + delegate]
+    E --> F[6 AI planning/generation<br/>intent to workflow]
+    F --> G[7 Graph orchestration<br/>DAG validation]
+    G --> H[8 Save to AWS RDB/RDS<br/>workflow graph + metadata]
+    H --> I[9 Credentials/configuration<br/>manual, credential, system fields]
+    I --> J[10 Runtime value generation<br/>runtime_ai fields resolved]
+    J --> K[11 Execution<br/>node-by-node providers]
+    K --> L[12 Observability<br/>logs, checkpoints, audit]
+    L --> M[13 Monitoring/results<br/>user/admin review]

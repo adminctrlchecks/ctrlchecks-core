@@ -1,0 +1,843 @@
+"use strict";
+/**
+ * ✅ EXECUTION ORDER MANAGER
+ *
+ * Maintains a dynamic, always-up-to-date execution order that reflects the actual workflow structure.
+ *
+ * Key Features:
+ * 1. Registry-Driven: Uses unifiedNodeRegistry to determine node capabilities, dependencies, and execution semantics
+ * 2. Dynamic Updates: Automatically updates when nodes are injected/removed
+ * 3. Topological Ordering: Ensures correct execution sequence
+ * 4. Dependency Tracking: Tracks node dependencies using registry metadata
+ *
+ * This is the SINGLE SOURCE OF TRUTH for execution order in the system.
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.executionOrderManager = void 0;
+const unified_node_registry_1 = require("../registry/unified-node-registry");
+const unified_node_type_normalizer_1 = require("../utils/unified-node-type-normalizer");
+class ExecutionOrderManagerImpl {
+    getNodeType(node) {
+        return (0, unified_node_type_normalizer_1.unifiedNormalizeNodeType)(node);
+    }
+    /**
+     * Initialize execution order from workflow graph
+     * ✅ 3-TIER ORDER-FIRST APPROACH: DSL → Registry → Array Order
+     */
+    initialize(workflow, dslExecutionOrder) {
+        const nodes = workflow.nodes || [];
+        const edges = workflow.edges || [];
+        if (nodes.length === 0) {
+            return {
+                nodeIds: [],
+                dependencies: new Map(),
+                metadata: {
+                    terminalNodeIds: [],
+                    branchingNodeIds: [],
+                    mergeNodeIds: [],
+                },
+            };
+        }
+        // ✅ TIER 1: Use DSL execution steps (PRIMARY SOURCE OF TRUTH)
+        if (dslExecutionOrder && dslExecutionOrder.length > 0) {
+            const tier1Result = this.buildOrderFromDSLSteps(workflow, dslExecutionOrder);
+            if (tier1Result.nodeIds.length === nodes.length) {
+                console.log(`[ExecutionOrderManager] ✅ TIER 1: Using DSL execution order (${tier1Result.nodeIds.length} nodes)`);
+                return tier1Result;
+            }
+            else {
+                console.warn(`[ExecutionOrderManager] ⚠️  TIER 1: DSL order incomplete (${tier1Result.nodeIds.length}/${nodes.length} nodes), falling back to TIER 2`);
+            }
+        }
+        // ✅ TIER 2: Edge-aware ordering — only fires when edges already exist.
+        // When edges exist: topological sort first (respects actual wiring), category sort as cycle fallback.
+        // When NO edges exist: input node array IS the LLM-generated semantic order — trust it directly.
+        // Category sort is intentionally skipped for edgeless workflows because the heuristic (ai:4 > google:5)
+        // destroys the correct data-flow order the LLM already computed (e.g. google_sheets before text_summarizer).
+        if (edges.length > 0) {
+            const topoResult = this.buildOrderFromTopology(workflow);
+            if (topoResult && topoResult.nodeIds.length === nodes.length) {
+                console.log(`[ExecutionOrderManager] ✅ TIER 2: Using edge-topology order (${topoResult.nodeIds.length} nodes)`);
+                return topoResult;
+            }
+            const tier2Result = this.buildOrderFromCategories(workflow);
+            if (tier2Result.nodeIds.length === nodes.length) {
+                console.log(`[ExecutionOrderManager] ✅ TIER 2: Using registry-driven category order (${tier2Result.nodeIds.length} nodes)`);
+                return tier2Result;
+            }
+            console.warn(`[ExecutionOrderManager] ⚠️  TIER 2: Category order incomplete (${tier2Result.nodeIds.length}/${nodes.length} nodes), falling back to TIER 3`);
+        }
+        // ✅ TIER 3: Preserve node array order.
+        // LLM and DSL compiler both produce nodes in correct semantic order: trigger → data → transform → output.
+        // Used for all edgeless workflows (initial confirm build) and as final fallback.
+        console.log(`[ExecutionOrderManager] ✅ TIER 3: Using node array order (${nodes.length} nodes)`);
+        return this.buildOrderFromNodeArray(workflow);
+    }
+    /**
+     * Insert node into execution order at correct position
+     * Uses registry to determine where node should execute
+     */
+    insertNode(order, node, positionHint = 'after', referenceNodeId) {
+        const nodeType = this.getNodeType(node);
+        const nodeDef = unified_node_registry_1.unifiedNodeRegistry.get(nodeType);
+        const category = nodeDef?.category || '';
+        // Determine insertion position using registry
+        let insertIndex = -1;
+        if (referenceNodeId && positionHint !== 'replace') {
+            const refIndex = order.nodeIds.indexOf(referenceNodeId);
+            if (refIndex >= 0) {
+                insertIndex = positionHint === 'before' ? refIndex : refIndex + 1;
+            }
+        }
+        // If no reference or reference not found, use registry-based positioning
+        if (insertIndex < 0) {
+            insertIndex = this.findInsertionPosition(order, node, category);
+        }
+        // Insert node
+        const newOrder = [...order.nodeIds];
+        if (positionHint === 'replace' && referenceNodeId) {
+            const refIndex = newOrder.indexOf(referenceNodeId);
+            if (refIndex >= 0) {
+                newOrder[refIndex] = node.id;
+            }
+            else {
+                newOrder.splice(insertIndex, 0, node.id);
+            }
+        }
+        else {
+            newOrder.splice(insertIndex, 0, node.id);
+        }
+        // Update dependencies
+        const newDependencies = new Map(order.dependencies);
+        const nodeDeps = this.getDependencies(node.id, { nodes: [node], edges: [] });
+        newDependencies.set(node.id, nodeDeps);
+        // Update metadata
+        const newMetadata = { ...order.metadata };
+        if (nodeDef?.isBranching) {
+            if (!newMetadata.branchingNodeIds.includes(node.id)) {
+                newMetadata.branchingNodeIds = [...newMetadata.branchingNodeIds, node.id];
+            }
+        }
+        if (category === 'trigger') {
+            newMetadata.triggerNodeId = node.id;
+        }
+        return {
+            nodeIds: newOrder,
+            dependencies: newDependencies,
+            metadata: newMetadata,
+        };
+    }
+    /**
+     * Remove node from execution order
+     */
+    removeNode(order, nodeId) {
+        const newOrder = order.nodeIds.filter(id => id !== nodeId);
+        const newDependencies = new Map(order.dependencies);
+        newDependencies.delete(nodeId);
+        // Remove from dependencies of other nodes
+        newDependencies.forEach((deps, key) => {
+            if (deps.includes(nodeId)) {
+                newDependencies.set(key, deps.filter(id => id !== nodeId));
+            }
+        });
+        // Update metadata
+        const newMetadata = { ...order.metadata };
+        newMetadata.branchingNodeIds = newMetadata.branchingNodeIds.filter(id => id !== nodeId);
+        newMetadata.mergeNodeIds = newMetadata.mergeNodeIds.filter(id => id !== nodeId);
+        newMetadata.terminalNodeIds = newMetadata.terminalNodeIds.filter(id => id !== nodeId);
+        if (newMetadata.triggerNodeId === nodeId) {
+            delete newMetadata.triggerNodeId;
+        }
+        return {
+            nodeIds: newOrder,
+            dependencies: newDependencies,
+            metadata: newMetadata,
+        };
+    }
+    /**
+     * Get execution order as array of node IDs
+     */
+    getOrderedNodeIds(order) {
+        return order.nodeIds;
+    }
+    /**
+     * Get dependencies for a node (what must execute before it)
+     * Uses registry to determine dependencies
+     */
+    getDependencies(nodeId, workflow) {
+        const node = workflow.nodes.find(n => n.id === nodeId);
+        if (!node)
+            return [];
+        const nodeType = this.getNodeType(node);
+        const nodeDef = unified_node_registry_1.unifiedNodeRegistry.get(nodeType);
+        const category = nodeDef?.category || '';
+        // Registry-driven dependency rules
+        if (category === 'trigger') {
+            return []; // Triggers have no dependencies
+        }
+        // Find nodes that should execute before this node
+        const dependencies = [];
+        // Data sources depend on triggers
+        if (category === 'data') {
+            const triggers = workflow.nodes.filter(n => {
+                const t = this.getNodeType(n);
+                return unified_node_registry_1.unifiedNodeRegistry.get(t)?.category === 'trigger';
+            });
+            dependencies.push(...triggers.map(n => n.id));
+        }
+        // Transformations depend on data sources (or previous transformations)
+        if (category === 'transformation' || category === 'ai') {
+            const dataSources = workflow.nodes.filter(n => {
+                const t = this.getNodeType(n);
+                const def = unified_node_registry_1.unifiedNodeRegistry.get(t);
+                return def?.category === 'data' || def?.category === 'transformation' || def?.category === 'ai';
+            });
+            dependencies.push(...dataSources.map(n => n.id));
+        }
+        // Outputs depend on transformations/data sources
+        if (category === 'communication' || nodeType === 'log_output') {
+            const sources = workflow.nodes.filter(n => {
+                const t = this.getNodeType(n);
+                const def = unified_node_registry_1.unifiedNodeRegistry.get(t);
+                return def?.category === 'transformation' || def?.category === 'ai' || def?.category === 'data';
+            });
+            dependencies.push(...sources.map(n => n.id));
+        }
+        // Also check edges for explicit dependencies
+        const incomingEdges = (workflow.edges || []).filter(e => e.target === nodeId);
+        incomingEdges.forEach(edge => {
+            if (!dependencies.includes(edge.source)) {
+                dependencies.push(edge.source);
+            }
+        });
+        return dependencies;
+    }
+    /**
+     * Registry-driven: Check if edge should create dependency
+     */
+    shouldCreateDependency(source, target) {
+        const sourceType = this.getNodeType(source);
+        const targetType = this.getNodeType(target);
+        const sourceDef = unified_node_registry_1.unifiedNodeRegistry.get(sourceType);
+        const targetDef = unified_node_registry_1.unifiedNodeRegistry.get(targetType);
+        if (!sourceDef || !targetDef)
+            return false;
+        const sourceCategory = sourceDef.category;
+        const targetCategory = targetDef.category;
+        // Registry-driven dependency rules
+        // Triggers can connect to data sources
+        if (sourceCategory === 'trigger' && targetCategory === 'data')
+            return true;
+        // Data sources can connect to transformations
+        if (sourceCategory === 'data' && (targetCategory === 'transformation' || targetCategory === 'ai'))
+            return true;
+        // Transformations can connect to other transformations or outputs
+        if (sourceCategory === 'transformation' || sourceCategory === 'ai') {
+            if (targetCategory === 'transformation' || targetCategory === 'ai' || targetCategory === 'communication')
+                return true;
+        }
+        // Any node can connect to merge
+        if (targetType === 'merge' || (targetDef.tags || []).includes('merge'))
+            return true;
+        // Branching nodes (if_else, switch) can connect to multiple targets
+        if (sourceDef.isBranching)
+            return true;
+        return false;
+    }
+    /**
+     * Registry-driven: Get node priority for topological sort
+     * Lower number = higher priority (executes first)
+     */
+    getNodePriority(node) {
+        const nodeType = this.getNodeType(node);
+        const nodeDef = unified_node_registry_1.unifiedNodeRegistry.get(nodeType);
+        const category = nodeDef?.category || '';
+        // Priority order: trigger (0) < data (1) < transformation (2) < output (3)
+        const priorityMap = {
+            'trigger': 0,
+            'data': 1,
+            'transformation': 2,
+            'ai': 2,
+            'communication': 3,
+            'utility': 3,
+            'logic': 1, // Logic nodes (if_else, switch) execute early
+        };
+        return priorityMap[category] ?? 99;
+    }
+    /**
+     * Find insertion position for node based on registry category
+     */
+    findInsertionPosition(order, node, category) {
+        const nodeType = this.getNodeType(node);
+        const nodeDef = unified_node_registry_1.unifiedNodeRegistry.get(nodeType);
+        const priority = this.getNodePriority(node);
+        // Find first node with equal or higher priority
+        for (let i = 0; i < order.nodeIds.length; i++) {
+            // Would need workflow to get node types, but for now use simple insertion
+            // This will be refined when we have workflow context
+        }
+        // Default: insert at end
+        return order.nodeIds.length;
+    }
+    /**
+     * ✅ CRITICAL FIX: Build implicit dependencies from DSL structure when no edges exist
+     * Order: trigger → data → transformation/ai → communication/output
+     * This ensures correct execution order for workflows created from DSL
+     *
+     * Creates a linear chain: trigger → first data → first transformation → first output
+     * If multiple nodes in a category, creates dependencies from all previous category nodes
+     */
+    buildImplicitDependencies(nodes, dependencies, inDegree) {
+        // Categorize nodes by ROLE using capabilities (registry + capability registry)
+        const triggerNodes = [];
+        const dataNodes = [];
+        const transformationNodes = [];
+        const outputNodes = [];
+        nodes.forEach(node => {
+            const nodeType = this.getNodeType(node);
+            const nodeDef = unified_node_registry_1.unifiedNodeRegistry.get(nodeType);
+            const category = nodeDef?.category || '';
+            // ✅ AI-FIRST: Prioritize AI-determined category from metadata (Gemini's role mapping)
+            // This is the PRIMARY source of truth for multi-capability nodes
+            const nodeMetadata = (node.data?.metadata || {});
+            const aiDeterminedCategory = nodeMetadata.aiDeterminedCategory; // From Gemini's role mapping
+            // ✅ FALLBACK: Check intendedCapability from metadata (DSL flows)
+            const { NodeMetadataHelper } = require('../../core/types/node-metadata');
+            const metadata = NodeMetadataHelper.getMetadata(node);
+            const intendedCapability = metadata?.dsl?.intendedCapability;
+            // ✅ AI-FIRST: Determine trigger role first (separate from category)
+            const isTriggerRole = nodeDef?.category === 'trigger' ||
+                (nodeMetadata.aiRole && nodeMetadata.aiRole.toLowerCase() === 'trigger') ||
+                category === 'trigger';
+            // ✅ AI-FIRST: Use AI-determined category if available
+            let isDataSourceRole = false;
+            let isTransformationRole = false;
+            let isOutputRole = false;
+            if (aiDeterminedCategory) {
+                // Use AI-determined category directly
+                isDataSourceRole = aiDeterminedCategory === 'dataSource';
+                isTransformationRole = aiDeterminedCategory === 'transformation';
+                isOutputRole = aiDeterminedCategory === 'output';
+                console.log(`[ExecutionOrder] Using AI-determined category for ${nodeType}: ${aiDeterminedCategory} (from role: ${nodeMetadata.aiRole})`);
+            }
+            else {
+                // ✅ FALLBACK: Use intendedCapability if available (DSL flows)
+                // Otherwise fall back to capability-based classification
+                let capabilities = [];
+                try {
+                    // Lazy import to avoid hard dependency at startup
+                    // eslint-disable-next-line @typescript-eslint/no-var-requires
+                    const { nodeCapabilityRegistryDSL } = require('../../services/ai/node-capability-registry-dsl');
+                    capabilities = nodeCapabilityRegistryDSL.getCapabilities(nodeType) || [];
+                }
+                catch {
+                    capabilities = [];
+                }
+                const capsLower = capabilities.map(c => c.toLowerCase());
+                // ✅ FALLBACK: Use intendedCapability if available, otherwise capability-based
+                isDataSourceRole = intendedCapability === 'data_source' || (capsLower.includes('data_source') ||
+                    capsLower.includes('read_data') ||
+                    category === 'data');
+                isTransformationRole = intendedCapability === 'transformation' || (capsLower.includes('transformation') ||
+                    capsLower.includes('ai_processing') ||
+                    category === 'ai' ||
+                    category === 'transformation' ||
+                    category === 'logic');
+                // ✅ FALLBACK: Use intendedCapability if available, otherwise capability-based
+                isOutputRole = intendedCapability === 'output' || ((!isDataSourceRole && (capsLower.includes('output') ||
+                    capsLower.includes('write_data') ||
+                    capsLower.includes('send_email') ||
+                    capsLower.includes('send_post') ||
+                    capsLower.includes('send_message') ||
+                    capsLower.includes('notification') ||
+                    capsLower.includes('terminal') ||
+                    category === 'communication' ||
+                    category === 'utility')) ||
+                    nodeType === 'log_output' // log_output is always output, even if it has data_source capability
+                );
+            }
+            if (isTriggerRole) {
+                triggerNodes.push(node);
+            }
+            else if (isDataSourceRole) {
+                dataNodes.push(node);
+            }
+            else if (isTransformationRole) {
+                transformationNodes.push(node);
+            }
+            else if (isOutputRole) {
+                outputNodes.push(node);
+            }
+        });
+        // Build implicit dependencies based on DSL structure:
+        // Create linear chain: trigger → data → transformation → output
+        // 1. Data nodes depend on trigger nodes (all triggers → all data nodes)
+        if (triggerNodes.length > 0 && dataNodes.length > 0) {
+            dataNodes.forEach(dataNode => {
+                triggerNodes.forEach(triggerNode => {
+                    const currentDeps = dependencies.get(dataNode.id) || [];
+                    if (!currentDeps.includes(triggerNode.id)) {
+                        dependencies.set(dataNode.id, [...currentDeps, triggerNode.id]);
+                        inDegree.set(dataNode.id, (inDegree.get(dataNode.id) || 0) + 1);
+                    }
+                });
+            });
+        }
+        // 2. Transformation nodes depend on data nodes (or trigger if no data)
+        if (transformationNodes.length > 0) {
+            const sourceNodes = dataNodes.length > 0 ? dataNodes : triggerNodes;
+            if (sourceNodes.length > 0) {
+                transformationNodes.forEach(transformationNode => {
+                    sourceNodes.forEach(sourceNode => {
+                        const currentDeps = dependencies.get(transformationNode.id) || [];
+                        if (!currentDeps.includes(sourceNode.id)) {
+                            dependencies.set(transformationNode.id, [...currentDeps, sourceNode.id]);
+                            inDegree.set(transformationNode.id, (inDegree.get(transformationNode.id) || 0) + 1);
+                        }
+                    });
+                });
+            }
+        }
+        // 3. Output nodes depend on transformation nodes (or data if no transformation, or trigger if neither)
+        // ✅ CRITICAL: Separate log_output from other outputs - log_output depends on ALL other outputs
+        const logOutputNodes = outputNodes.filter(n => {
+            const nodeType = this.getNodeType(n);
+            return nodeType === 'log_output';
+        });
+        const nonLogOutputNodes = outputNodes.filter(n => {
+            const nodeType = this.getNodeType(n);
+            return nodeType !== 'log_output';
+        });
+        // 3a. Non-log_output outputs depend on transformation/data/trigger
+        if (nonLogOutputNodes.length > 0) {
+            const sourceNodes = transformationNodes.length > 0
+                ? transformationNodes
+                : (dataNodes.length > 0 ? dataNodes : triggerNodes);
+            if (sourceNodes.length > 0) {
+                nonLogOutputNodes.forEach(outputNode => {
+                    sourceNodes.forEach(sourceNode => {
+                        const currentDeps = dependencies.get(outputNode.id) || [];
+                        if (!currentDeps.includes(sourceNode.id)) {
+                            dependencies.set(outputNode.id, [...currentDeps, sourceNode.id]);
+                            inDegree.set(outputNode.id, (inDegree.get(outputNode.id) || 0) + 1);
+                        }
+                    });
+                });
+            }
+        }
+        // 3b. log_output depends on ALL non-log_output outputs (or transformation/data/trigger if no other outputs)
+        if (logOutputNodes.length > 0) {
+            const sourceNodes = nonLogOutputNodes.length > 0
+                ? nonLogOutputNodes
+                : (transformationNodes.length > 0
+                    ? transformationNodes
+                    : (dataNodes.length > 0 ? dataNodes : triggerNodes));
+            if (sourceNodes.length > 0) {
+                logOutputNodes.forEach(logOutputNode => {
+                    sourceNodes.forEach(sourceNode => {
+                        const currentDeps = dependencies.get(logOutputNode.id) || [];
+                        if (!currentDeps.includes(sourceNode.id)) {
+                            dependencies.set(logOutputNode.id, [...currentDeps, sourceNode.id]);
+                            inDegree.set(logOutputNode.id, (inDegree.get(logOutputNode.id) || 0) + 1);
+                        }
+                    });
+                });
+            }
+        }
+    }
+    /**
+     * ✅ TIER 1: Build execution order from DSL execution steps (PRIMARY SOURCE OF TRUTH)
+     * Maps stepRef to nodeId and sorts by explicit order from DSL
+     */
+    buildOrderFromDSLSteps(workflow, dslExecutionOrder) {
+        const nodes = workflow.nodes || [];
+        const dependencies = new Map();
+        // Build map: stepRef → nodeId
+        const stepRefToNodeId = new Map();
+        const nodeIdToStep = new Map();
+        // Map trigger node
+        const triggerNode = nodes.find(n => {
+            const nodeType = this.getNodeType(n);
+            const nodeDef = unified_node_registry_1.unifiedNodeRegistry.get(nodeType);
+            return nodeDef?.category === 'trigger';
+        });
+        if (triggerNode) {
+            const triggerStep = dslExecutionOrder.find(s => s.stepRef === 'trigger');
+            if (triggerStep) {
+                stepRefToNodeId.set('trigger', triggerNode.id);
+                nodeIdToStep.set(triggerNode.id, triggerStep);
+            }
+        }
+        // Map data source, transformation, and output nodes by DSL ID
+        // Access metadata from node.data.config (NodeMetadataHelper format)
+        const { NodeMetadataHelper } = require('../types/node-metadata');
+        for (const node of nodes) {
+            const nodeMetadata = NodeMetadataHelper.getMetadata(node);
+            const dslId = nodeMetadata?.dsl?.dslId;
+            const stepRef = dslId || node.data?.stepRef;
+            if (stepRef) {
+                const step = dslExecutionOrder.find(s => s.stepRef === stepRef);
+                if (step) {
+                    stepRefToNodeId.set(stepRef, node.id);
+                    nodeIdToStep.set(node.id, step);
+                }
+            }
+        }
+        // Sort nodes by DSL execution order
+        let orderedNodeIds = dslExecutionOrder
+            .map(step => stepRefToNodeId.get(step.stepRef))
+            .filter((nodeId) => nodeId !== undefined);
+        // ✅ FIX: Ensure log_output is always last (safety check even if DSL order is wrong)
+        const logOutputNodeIds = orderedNodeIds.filter(id => {
+            const node = nodes.find(n => n.id === id);
+            const nodeType = node ? this.getNodeType(node) : '';
+            return nodeType === 'log_output';
+        });
+        const nonLogOutputNodeIds = orderedNodeIds.filter(id => {
+            const node = nodes.find(n => n.id === id);
+            const nodeType = node ? this.getNodeType(node) : '';
+            return nodeType !== 'log_output';
+        });
+        // Reorder: non-log_output nodes first, then log_output nodes
+        orderedNodeIds = [...nonLogOutputNodeIds, ...logOutputNodeIds];
+        // Build dependencies from DSL dependsOn
+        for (const step of dslExecutionOrder) {
+            const nodeId = stepRefToNodeId.get(step.stepRef);
+            if (!nodeId || !step.dependsOn)
+                continue;
+            const stepDependencies = step.dependsOn
+                .map(depStepRef => stepRefToNodeId.get(depStepRef))
+                .filter((depNodeId) => depNodeId !== undefined);
+            if (stepDependencies.length > 0) {
+                dependencies.set(nodeId, stepDependencies);
+            }
+        }
+        // Build metadata
+        const triggerNodeId = orderedNodeIds.find(id => {
+            const step = nodeIdToStep.get(id);
+            return step?.stepType === 'trigger';
+        });
+        const terminalNodes = nodes.filter(n => {
+            const nodeType = this.getNodeType(n);
+            const nodeDef = unified_node_registry_1.unifiedNodeRegistry.get(nodeType);
+            const tags = nodeDef?.tags || [];
+            return tags.includes('terminal') || nodeDef?.category === 'utility';
+        });
+        const branchingNodes = nodes.filter(n => {
+            const nodeType = this.getNodeType(n);
+            const nodeDef = unified_node_registry_1.unifiedNodeRegistry.get(nodeType);
+            return nodeDef?.isBranching === true;
+        });
+        const mergeNodes = nodes.filter(n => {
+            const nodeType = this.getNodeType(n);
+            return nodeType === 'merge' || (unified_node_registry_1.unifiedNodeRegistry.get(nodeType)?.tags || []).includes('merge');
+        });
+        return {
+            nodeIds: orderedNodeIds,
+            dependencies,
+            metadata: {
+                triggerNodeId,
+                terminalNodeIds: terminalNodes.map(n => n.id),
+                branchingNodeIds: branchingNodes.map(n => n.id),
+                mergeNodeIds: mergeNodes.map(n => n.id),
+            },
+        };
+    }
+    /**
+     * ✅ TIER 2 (topology): Topological sort using actual edges.
+     * Respects branching structure — nodes downstream of if_else stay after it.
+     * Returns null if a cycle is detected (falls back to category sort).
+     */
+    buildOrderFromTopology(workflow) {
+        const nodes = workflow.nodes || [];
+        const edges = workflow.edges || [];
+        // Build adjacency: nodeId → [successors]
+        const successors = new Map();
+        const inDegree = new Map();
+        for (const n of nodes) {
+            successors.set(n.id, []);
+            inDegree.set(n.id, 0);
+        }
+        for (const e of edges) {
+            const src = String(e.source || '');
+            const tgt = String(e.target || '');
+            if (!src || !tgt || src === tgt)
+                continue;
+            if (!successors.has(src) || !successors.has(tgt))
+                continue;
+            successors.get(src).push(tgt);
+            inDegree.set(tgt, (inDegree.get(tgt) || 0) + 1);
+        }
+        // Kahn's algorithm (BFS topological sort)
+        const queue = [];
+        for (const [id, deg] of inDegree) {
+            if (deg === 0)
+                queue.push(id);
+        }
+        const ordered = [];
+        const visited = new Set();
+        while (queue.length > 0) {
+            const id = queue.shift();
+            if (visited.has(id))
+                continue;
+            visited.add(id);
+            ordered.push(id);
+            for (const next of (successors.get(id) || [])) {
+                const newDeg = (inDegree.get(next) || 0) - 1;
+                inDegree.set(next, newDeg);
+                if (newDeg === 0)
+                    queue.push(next);
+            }
+        }
+        // Cycle detected — can't produce a valid order
+        if (ordered.length !== nodes.length)
+            return null;
+        const nodeById = new Map(nodes.map((n) => [n.id, n]));
+        const sortedNodes = ordered.map((id) => nodeById.get(id)).filter(Boolean);
+        const dependencies = new Map();
+        for (const e of edges) {
+            const src = String(e.source || '');
+            const tgt = String(e.target || '');
+            if (!src || !tgt)
+                continue;
+            const deps = dependencies.get(tgt) || [];
+            if (!deps.includes(src))
+                deps.push(src);
+            dependencies.set(tgt, deps);
+        }
+        const triggerNode = sortedNodes.find((n) => {
+            const nodeDef = unified_node_registry_1.unifiedNodeRegistry.get(this.getNodeType(n));
+            return nodeDef?.category === 'trigger';
+        });
+        const branchingNodes = sortedNodes.filter((n) => {
+            const nodeDef = unified_node_registry_1.unifiedNodeRegistry.get(this.getNodeType(n));
+            return nodeDef?.isBranching === true;
+        });
+        const mergeNodes = sortedNodes.filter((n) => {
+            const nt = this.getNodeType(n);
+            return nt === 'merge' || (unified_node_registry_1.unifiedNodeRegistry.get(nt)?.tags || []).includes('merge');
+        });
+        const terminalNodes = sortedNodes.filter((n) => {
+            const nt = this.getNodeType(n);
+            const nodeDef = unified_node_registry_1.unifiedNodeRegistry.get(nt);
+            return (nodeDef?.tags || []).includes('terminal') || nodeDef?.category === 'utility';
+        });
+        return {
+            nodeIds: ordered,
+            dependencies,
+            metadata: {
+                triggerNodeId: triggerNode?.id,
+                terminalNodeIds: terminalNodes.map((n) => n.id),
+                branchingNodeIds: branchingNodes.map((n) => n.id),
+                mergeNodeIds: mergeNodes.map((n) => n.id),
+            },
+        };
+    }
+    /**
+     * ✅ TIER 2: Build execution order from registry-driven category ordering (SECONDARY FALLBACK)
+     * Sorts by category: trigger → data → transformation → output → log_output (ALWAYS LAST)
+     */
+    buildOrderFromCategories(workflow) {
+        const nodes = workflow.nodes || [];
+        const dependencies = new Map();
+        // Category priority: trigger (0) → data (1) → logic/branching (2) → http_api (3) → transformation (4) → output (5) → utility (6)
+        // ✅ FIX: logic nodes (switch, if_else) must come BEFORE output/http_api nodes so branch targets
+        // never appear before the branching node in execution order.
+        // ✅ FIX: log_output gets special priority (999) to ensure it's always last
+        const categoryPriority = {
+            trigger: 0,
+            data: 1,
+            logic: 2, // switch, if_else — must precede their branch targets
+            http_api: 3, // http_request — branch target, comes after switch
+            transformation: 4,
+            output: 5,
+            utility: 6,
+            google: 5, // google_gmail, google_sheets — output category
+            ai: 4,
+            crm: 5,
+            social: 5,
+            devops: 5,
+            ecommerce: 5,
+            productivity: 5,
+            database: 3,
+            file: 3,
+            queue: 3,
+            cache: 3,
+            auth: 1,
+            flow: 2,
+            microsoft: 5,
+            social_media: 5, // normalized from 'social' — Instagram, Twitter, LinkedIn
+            authentication: 1, // same tier as auth
+            storage: 5, // cloud storage (S3, Google Drive)
+            payment: 5, // Stripe and payment processors
+            cms: 5, // Notion, WordPress content management
+        };
+        // Sort nodes by category priority, with log_output always last
+        const sortedNodes = [...nodes].sort((a, b) => {
+            const nodeTypeA = this.getNodeType(a);
+            const nodeTypeB = this.getNodeType(b);
+            // ✅ FIX: log_output always goes to the end
+            if (nodeTypeA === 'log_output' && nodeTypeB !== 'log_output') {
+                return 1; // log_output goes after
+            }
+            if (nodeTypeA !== 'log_output' && nodeTypeB === 'log_output') {
+                return -1; // log_output goes after
+            }
+            if (nodeTypeA === 'log_output' && nodeTypeB === 'log_output') {
+                return 0; // Both are log_output, preserve order
+            }
+            const nodeDefA = unified_node_registry_1.unifiedNodeRegistry.get(nodeTypeA);
+            const nodeDefB = unified_node_registry_1.unifiedNodeRegistry.get(nodeTypeB);
+            const categoryA = nodeDefA?.category || 'utility';
+            const categoryB = nodeDefB?.category || 'utility';
+            const priorityA = categoryPriority[categoryA] ?? 99;
+            const priorityB = categoryPriority[categoryB] ?? 99;
+            if (priorityA !== priorityB) {
+                return priorityA - priorityB;
+            }
+            // If same category, preserve original order
+            return 0;
+        });
+        const orderedNodeIds = sortedNodes.map(n => n.id);
+        // Build dependencies: each node depends on previous node in same category or previous category
+        for (let i = 1; i < sortedNodes.length; i++) {
+            const currentNode = sortedNodes[i];
+            const previousNode = sortedNodes[i - 1];
+            const currentDeps = dependencies.get(currentNode.id) || [];
+            if (!currentDeps.includes(previousNode.id)) {
+                dependencies.set(currentNode.id, [...currentDeps, previousNode.id]);
+            }
+        }
+        // Build metadata
+        const triggerNode = sortedNodes.find(n => {
+            const nodeType = this.getNodeType(n);
+            const nodeDef = unified_node_registry_1.unifiedNodeRegistry.get(nodeType);
+            return nodeDef?.category === 'trigger';
+        });
+        const terminalNodes = sortedNodes.filter(n => {
+            const nodeType = this.getNodeType(n);
+            const nodeDef = unified_node_registry_1.unifiedNodeRegistry.get(nodeType);
+            const tags = nodeDef?.tags || [];
+            return tags.includes('terminal') || nodeDef?.category === 'utility';
+        });
+        const branchingNodes = sortedNodes.filter(n => {
+            const nodeType = this.getNodeType(n);
+            const nodeDef = unified_node_registry_1.unifiedNodeRegistry.get(nodeType);
+            return nodeDef?.isBranching === true;
+        });
+        const mergeNodes = sortedNodes.filter(n => {
+            const nodeType = this.getNodeType(n);
+            return nodeType === 'merge' || (unified_node_registry_1.unifiedNodeRegistry.get(nodeType)?.tags || []).includes('merge');
+        });
+        return {
+            nodeIds: orderedNodeIds,
+            dependencies,
+            metadata: {
+                triggerNodeId: triggerNode?.id,
+                terminalNodeIds: terminalNodes.map(n => n.id),
+                branchingNodeIds: branchingNodes.map(n => n.id),
+                mergeNodeIds: mergeNodes.map(n => n.id),
+            },
+        };
+    }
+    /**
+     * ✅ TIER 3: Build execution order from node array order (LAST RESORT)
+     * DSL compiler already creates nodes in correct order: trigger → data → transformation → output
+     * ✅ FIX: Ensure log_output is always moved to the end
+     */
+    buildOrderFromNodeArray(workflow) {
+        const nodes = workflow.nodes || [];
+        const dependencies = new Map();
+        // ✅ FIX: Place alwaysTerminal nodes (e.g. log_output) at the end — registry-driven, no hardcoding
+        const terminalNodes = [];
+        const otherNodes = [];
+        for (const node of nodes) {
+            const nodeType = this.getNodeType(node);
+            const def = unified_node_registry_1.unifiedNodeRegistry.get(nodeType);
+            if (def?.workflowBehavior?.alwaysTerminal === true) {
+                terminalNodes.push(node);
+            }
+            else {
+                otherNodes.push(node);
+            }
+        }
+        // ✅ FIX: Place alwaysTerminal nodes at the end
+        const sortedNodes = [...otherNodes, ...terminalNodes];
+        const orderedNodeIds = sortedNodes.map(n => n.id);
+        // Build dependencies: each node depends on previous node
+        for (let i = 1; i < nodes.length; i++) {
+            const currentNode = nodes[i];
+            const previousNode = nodes[i - 1];
+            dependencies.set(currentNode.id, [previousNode.id]);
+        }
+        // Build metadata
+        const triggerNode = nodes.find(n => {
+            const nodeType = this.getNodeType(n);
+            const nodeDef = unified_node_registry_1.unifiedNodeRegistry.get(nodeType);
+            return nodeDef?.category === 'trigger';
+        });
+        const metadataTerminalNodes = nodes.filter(n => {
+            const nodeType = this.getNodeType(n);
+            const nodeDef = unified_node_registry_1.unifiedNodeRegistry.get(nodeType);
+            const tags = nodeDef?.tags || [];
+            return tags.includes('terminal') || nodeDef?.category === 'utility';
+        });
+        const branchingNodes = nodes.filter(n => {
+            const nodeType = this.getNodeType(n);
+            const nodeDef = unified_node_registry_1.unifiedNodeRegistry.get(nodeType);
+            return nodeDef?.isBranching === true;
+        });
+        const mergeNodes = nodes.filter(n => {
+            const nodeType = this.getNodeType(n);
+            return nodeType === 'merge' || (unified_node_registry_1.unifiedNodeRegistry.get(nodeType)?.tags || []).includes('merge');
+        });
+        return {
+            nodeIds: orderedNodeIds,
+            dependencies,
+            metadata: {
+                triggerNodeId: triggerNode?.id,
+                terminalNodeIds: metadataTerminalNodes.map(n => n.id),
+                branchingNodeIds: branchingNodes.map(n => n.id),
+                mergeNodeIds: mergeNodes.map(n => n.id),
+            },
+        };
+    }
+}
+// Export singleton instance
+exports.executionOrderManager = new ExecutionOrderManagerImpl();
+/**
+ * ✅ UNIVERSAL STARTUP VALIDATION: Warn if any registered node category is absent from the
+ * TIER 2 priority map. This ensures new node types added to the registry are never silently
+ * mis-ordered. Runs once at module load time — zero runtime cost during execution.
+ */
+(function validateCategoryPriorityCoverage() {
+    // The canonical priority map (must match buildOrderFromCategories exactly)
+    const KNOWN_PRIORITIES = {
+        trigger: 0, data: 1, auth: 1, authentication: 1, logic: 2, flow: 2,
+        http_api: 3, database: 3, file: 3, queue: 3, cache: 3,
+        ai: 4, transformation: 4,
+        output: 5, communication: 5, google: 5, crm: 5, social: 5,
+        social_media: 5, devops: 5, ecommerce: 5, productivity: 5, microsoft: 5,
+        storage: 5, payment: 5, cms: 5,
+        utility: 6,
+    };
+    try {
+        const allTypes = unified_node_registry_1.unifiedNodeRegistry.getAllTypes();
+        const unseenCategories = new Set();
+        for (const t of allTypes) {
+            const def = unified_node_registry_1.unifiedNodeRegistry.get(t);
+            const cat = def?.category?.toLowerCase();
+            if (cat && !(cat in KNOWN_PRIORITIES) && cat !== 'log_output') {
+                unseenCategories.add(cat);
+            }
+        }
+        if (unseenCategories.size > 0) {
+            console.warn(`[ExecutionOrderManager] ⚠️  TIER 2 category priority map is missing entries for: ` +
+                `[${Array.from(unseenCategories).join(', ')}]. ` +
+                `These categories will fall back to priority 99. Add them to categoryPriority in buildOrderFromCategories.`);
+        }
+    }
+    catch {
+        // Registry may not be initialized yet at module load — skip silently
+    }
+})();

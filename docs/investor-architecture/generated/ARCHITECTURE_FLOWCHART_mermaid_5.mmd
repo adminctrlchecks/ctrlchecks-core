@@ -1,0 +1,15 @@
+﻿flowchart TD
+    INDEX[worker/src/index.ts<br/>Express bootstrap] --> ROUTES[API routes]
+    ROUTES --> GENERATION[Workflow generation APIs]
+    ROUTES --> ATTACH[Attach inputs and credentials]
+    ROUTES --> EXECUTION[Execute workflow APIs]
+    ROUTES --> ADMIN[Admin, billing, catalog, auth, docs APIs]
+
+    GENERATION --> PIPELINE[AI workflow pipeline<br/>Intent, selection, validation, population]
+    PIPELINE --> REGISTRY[Unified node registry]
+    ATTACH --> REGISTRY
+    EXECUTION --> ORCH[Graph orchestration and dynamic executor]
+    ORCH --> CONTRACT_ENGINE[Runtime field contract engine]
+    ORCH --> NODE_EXECUTORS[Node executors and providers]
+    ROUTES --> DB[(AWS RDB/RDS)]
+    ORCH --> DB
