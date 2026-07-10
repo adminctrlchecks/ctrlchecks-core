@@ -4,35 +4,34 @@ export const microsoftTeamsDoc: NodeDoc = {
   "slug": "microsoft_teams",
   "displayName": "Microsoft Teams",
   "category": "Communication",
-  "logoUrl": "/icons/nodes/microsoft_teams.svg",
-  "description": "Send messages to Microsoft Teams",
-  "credentialType": "Microsoft Credential",
+  "logoUrl": "/integrations-logos/Microsoft-Teams.svg",
+  "description": "Send messages to Microsoft Teams through an incoming webhook URL.",
+  "credentialType": "Incoming Webhook URL",
   "credentialSetupSteps": [
-    "What this is: The Microsoft Teams connection lets CtrlChecks access your Microsoft Teams account safely without putting secrets in workflow fields.",
-    "Where to start: Microsoft Teams account settings or developer settings.",
-    "How to connect: In CtrlChecks, open Connections -> Add Connection -> Microsoft Teams, then sign in or paste the secret value requested there.",
-    "Example: the token format shown by Microsoft Teams.",
-    "Important: Treat tokens, passwords, API keys, and client secrets like bank passwords. Store them in Connections, not in regular workflow fields.",
-    "Test it: Save the connection, run a simple Microsoft Teams step, and confirm CtrlChecks can reach the account."
+    "What this is: The Microsoft Teams node sends directly to an Incoming Webhook URL for one Teams channel.",
+    "Where to start: Open Microsoft Teams, choose the target channel, then open channel integrations or connectors.",
+    "How to configure: Create or select Incoming Webhook, copy the webhook URL, and paste it into the node's Webhook URL field.",
+    "Important: This node does not use Microsoft OAuth or Microsoft Graph team/channel IDs.",
+    "Test it: Run a simple workflow with a short message and confirm it appears in the configured Teams channel."
   ],
-  "credentialDocsUrl": "https://docs.microsoft.com/en-us/graph/api/resources/mail-api-overview",
+  "credentialDocsUrl": "https://learn.microsoft.com/en-us/microsoftteams/platform/webhooks-and-connectors/how-to/connectors-using",
   "resources": [
     {
       "name": "Configuration",
-      "description": "Microsoft Teams is configured directly with input fields.",
+      "description": "Microsoft Teams is configured with the webhook URL and message text.",
       "operations": [
         {
           "name": "Execute",
           "value": "default",
-          "description": "Send a message to a Microsoft Teams channel or chat.",
+          "description": "Send a message to a Microsoft Teams channel through an incoming webhook URL.",
           "fields": [
             {
               "name": "Webhook Url",
               "internalKey": "webhookUrl",
               "type": "url",
               "required": true,
-              "description": "Teams webhook URL",
-              "helpText": "What this field is: The Incoming Webhook URL for the Microsoft Teams channel you want to post to.\nWhere to find it: In Teams → right-click the channel → Connectors → Incoming Webhook → Configure → copy the URL.\nExample: https://outlook.office.com/webhook/xxx.../IncomingWebhook/...",
+              "description": "Teams incoming webhook URL",
+              "helpText": "What this field is: The Incoming Webhook URL for the Microsoft Teams channel you want to post to.\nWhere to find it: In Teams, open the target channel integrations/connectors, create or select Incoming Webhook, then copy the URL.\nExample: https://outlook.office.com/webhook/xxx.../IncomingWebhook/...",
               "placeholder": "https://outlook.office.com/webhook/...",
               "example": "https://outlook.office.com/webhook/..."
             },
@@ -42,29 +41,26 @@ export const microsoftTeamsDoc: NodeDoc = {
               "type": "textarea",
               "required": true,
               "description": "Message text",
-              "helpText": "What this field is: Message text.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: {{$json.message}}.\nTip: Use {{$json.message}} when this value comes from an earlier step.",
+              "helpText": "What this field is: The text sent to the Teams channel through the webhook.\nHow to fill it: Type the message or map text from an earlier workflow step.\nExample: {{$json.message}}.",
               "placeholder": "{{$json.message}}",
               "example": "{{$json.message}}"
             }
           ],
           "outputExample": {
-            "id": "1705123456789",
-            "etag": "1705123456789",
-            "type": "message",
-            "createdDateTime": "2025-01-15T10:00:00Z",
-            "body": {
-              "content": "Sprint completed ✅"
+            "success": true,
+            "teams": {
+              "status": 200,
+              "response": "1"
             }
           },
-          "outputDescription": "id: Teams message ID. createdDateTime: When the message was created. body.content: The message text.",
+          "outputDescription": "success: True when Teams accepted the webhook request. teams.status: HTTP status returned by Teams. teams.response: Raw Teams webhook response text.",
           "usageExample": {
             "scenario": "Post a sprint completion summary to a Teams channel",
             "inputValues": {
-              "teamId": "{{$env.TEAMS_TEAM_ID}}",
-              "channelId": "{{$env.TEAMS_CHANNEL_ID}}",
-              "message": "🏁 Sprint {{$json.sprintName}} completed!\n\n**Delivered:** {{$json.storiesCompleted}} stories\n**Velocity:** {{$json.velocity}} points"
+              "webhookUrl": "{{$env.TEAMS_WEBHOOK_URL}}",
+              "message": "Sprint {{$json.sprintName}} completed!\n\nDelivered: {{$json.storiesCompleted}} stories\nVelocity: {{$json.velocity}} points"
             },
-            "expectedOutput": "The message is posted in Teams. Use `{{$json.id}}` to reply or reference the message."
+            "expectedOutput": "The message is posted in Teams and the node returns the webhook HTTP status."
           },
           "externalDocsUrl": "https://learn.microsoft.com/en-us/microsoftteams/platform/webhooks-and-connectors/how-to/connectors-using"
         }
@@ -73,19 +69,19 @@ export const microsoftTeamsDoc: NodeDoc = {
   ],
   "commonErrors": [
     {
-      "error": "Authentication failed",
-      "cause": "The saved credential, token, API key, or OAuth grant is missing, expired, or lacks the required scope.",
-      "fix": "Reconnect the service in CtrlChecks → Connections, then re-run the Microsoft Teams node."
+      "error": "Teams: webhookUrl and message are required",
+      "cause": "The webhook URL or message field is empty, or an expression resolved to an empty value.",
+      "fix": "Fill Webhook URL and Message, then verify any mapped upstream value is present."
     },
     {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
+      "error": "Teams webhook failed",
+      "cause": "Microsoft Teams rejected the incoming webhook request or the URL is invalid.",
+      "fix": "Create a fresh Incoming Webhook URL for the target channel and paste the complete URL into the node."
     },
     {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
+      "error": "Teams error",
+      "cause": "The request could not be sent to the webhook URL.",
+      "fix": "Check the webhook URL, network access, and that the Teams webhook connector is still enabled."
     }
   ],
   "relatedNodes": []

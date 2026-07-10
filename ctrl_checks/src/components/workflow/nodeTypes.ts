@@ -2691,7 +2691,6 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     defaultConfig: {},
     configFields: [
       { key: 'webhookUrl', label: 'Webhook URL', type: 'text', placeholder: 'https://outlook.office.com/webhook/...', required: true, helpText: 'Get from Teams channel Connectors' },
-      { key: 'title', label: 'Title', type: 'text', placeholder: 'Workflow Notification', defaultValue: 'Workflow Notification', helpText: 'Title for the Microsoft Teams message card. Appears as a header above the message. Default: Workflow Notification. Can be customized per message' },
       { key: 'message', label: 'Message', type: 'textarea', placeholder: 'Your workflow completed successfully!', required: true, helpText: 'Message content to send to Microsoft Teams. Supports basic formatting. Can include template variables like {{input}}. Examples: "Workflow completed successfully!", "User {{input.userName}} completed task"' },
     ],
   },

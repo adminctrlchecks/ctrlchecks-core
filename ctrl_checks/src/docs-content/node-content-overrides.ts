@@ -350,13 +350,13 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
 
   microsoft_teams: {
     default: {
-      description: 'Send a message to a Microsoft Teams channel or chat.',
-      outputExample: { id: '1705123456789', etag: '1705123456789', type: 'message', createdDateTime: '2025-01-15T10:00:00Z', body: { content: 'Sprint completed ✅' } },
-      outputDescription: 'id: Teams message ID. createdDateTime: When the message was created. body.content: The message text.',
+      description: 'Send a message to a Microsoft Teams channel through an incoming webhook URL.',
+      outputExample: { success: true, teams: { status: 200, response: '1' } },
+      outputDescription: 'success: True when the webhook accepted the request. teams.status: HTTP status returned by Teams. teams.response: Raw Teams webhook response text.',
       usageExample: {
         scenario: 'Post a sprint completion summary to a Teams channel',
-        inputValues: { teamId: '{{$env.TEAMS_TEAM_ID}}', channelId: '{{$env.TEAMS_CHANNEL_ID}}', message: '🏁 Sprint {{$json.sprintName}} completed!\n\n**Delivered:** {{$json.storiesCompleted}} stories\n**Velocity:** {{$json.velocity}} points' },
-        expectedOutput: 'The message is posted in Teams. Use `{{$json.id}}` to reply or reference the message.',
+        inputValues: { webhookUrl: '{{$env.TEAMS_WEBHOOK_URL}}', message: 'Sprint {{$json.sprintName}} completed!\n\nDelivered: {{$json.storiesCompleted}} stories\nVelocity: {{$json.velocity}} points' },
+        expectedOutput: 'The message is posted in Teams and the node returns the webhook HTTP status.',
       },
     },
   },

@@ -5205,31 +5205,31 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
   },
   microsoft_teams: {
     webhookUrl: {
-      title: 'Microsoft Teams Webhook URL – Step-by-Step',
+      title: 'Microsoft Teams Webhook URL - Step-by-Step',
       steps: [
-        '1️⃣ Open Microsoft Teams',
+        '1. Open Microsoft Teams',
         '   Open Teams app or web',
         '   Go to your team/channel',
         '',
-        '2️⃣ Go to Channel Settings',
+        '2. Go to Channel Settings',
         '   Click "..." next to channel name',
         '   Click "Connectors"',
         '',
-        '3️⃣ Find Incoming Webhook',
+        '3. Find Incoming Webhook',
         '   Search for "Incoming Webhook"',
         '   Click "Configure"',
         '',
-        '4️⃣ Configure Webhook',
+        '4. Configure Webhook',
         '   Give it a name',
         '   Optionally upload image',
         '   Click "Create"',
         '',
-        '5️⃣ Copy Webhook URL',
+        '5. Copy Webhook URL',
         '   You\'ll see the Webhook URL',
         '   Format: https://outlook.office.com/webhook/...',
         '   Copy the entire URL',
         '',
-        '6️⃣ Store Securely',
+        '6. Store Securely',
         '   Paste it into the Webhook URL field above',
         '   Never share publicly',
         '',
@@ -5238,25 +5238,15 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       ],
       example: 'https://outlook.office.com/webhook/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx@xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/IncomingWebhook/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
     },
-    title: {
-      title: 'How to set Title?',
-      steps: [
-        'Title appears at the top of the Teams message card.',
-        '',
-        'Example: "Workflow Notification"',
-        'Leave empty if you don’t need a title.'
-      ],
-      example: 'Workflow Notification'
-    },
     message: {
       title: 'How to write Message?',
       steps: [
         'Message is the main content sent to Teams.',
         '',
-        'You can include basic formatting and emojis.',
+        'The webhook sends this value as the text field.',
         'Use dynamic values like {{input.field}} if needed.'
       ],
-      example: '✅ Task completed successfully'
+      example: 'Task completed successfully'
     }
   },
   salesforce: {

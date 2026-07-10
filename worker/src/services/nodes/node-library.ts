@@ -8521,7 +8521,7 @@ export class NodeLibrary {
       commonPatterns: [],
       validationRules: [],
       capabilities: ['notification.send', 'teams.send'],
-      providers: ['microsoft'],
+      providers: [],
       keywords: [
         'teams', 'microsoft teams', 'ms teams', 'teams message',
         'teams integration', 'teams api', 'teams webhook', 'teams channel'

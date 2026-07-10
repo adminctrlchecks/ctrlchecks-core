@@ -428,15 +428,12 @@ Formatting: **bold**, *italic*, \`code\`, and standard Discord markdown all work
 
   microsoft_teams: {
     '*': {
-      teamId: `What this field is: The ID of the Microsoft Teams team to post in.
-Where to find it: In Teams, right-click the team name → Get link to team. Open the URL — it contains a groupId parameter. That value is your team ID.
-Example: a1b2c3d4-e5f6-7890-abcd-ef1234567890`,
-      channelId: `What this field is: The ID of the specific channel within the team.
-Where to find it: Right-click the channel name → Get link to channel. The URL contains a channel parameter with the ID.
-Example: 19:abc123@thread.tacv2`,
-      content: `What this field is: The message to send in the Teams channel.
-Supports basic HTML formatting.
-Example: 📋 New ticket: <b>{{$json.ticketTitle}}</b> — Priority: {{$json.priority}} — Assigned to: {{$json.assignee}}`,
+      webhookUrl: `What this field is: The Microsoft Teams incoming webhook URL for the channel that should receive the message.
+Where to find it: In Teams, open the target channel integrations/connectors, create or select Incoming Webhook, then copy the URL.
+Example: https://outlook.office.com/webhook/.../IncomingWebhook/...`,
+      message: `What this field is: The text posted to the Teams channel through the webhook.
+How to fill it: Type the message directly or map text from an earlier workflow step.
+Example: Sprint {{$json.sprintName}} completed with {{$json.storiesCompleted}} stories delivered.`,
     },
   },
 

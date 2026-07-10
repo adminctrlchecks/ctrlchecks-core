@@ -704,8 +704,8 @@ export const nodeDocManifest = [
     "slug": "microsoft_teams",
     "displayName": "Microsoft Teams",
     "category": "Communication",
-    "description": "Send messages to Microsoft Teams Use this node when a workflow needs microsoft teams behavior with schema-driven inputs from the CtrlChecks node registry.",
-    "logoUrl": "/icons/nodes/microsoft_teams.svg"
+    "description": "Send messages to Microsoft Teams through an incoming webhook URL.",
+    "logoUrl": "/integrations-logos/Microsoft-Teams.svg"
   },
   {
     "slug": "whatsapp_cloud",

@@ -7,7 +7,7 @@ export const microsoftTeamsSearchIndex = [
     "slug": "microsoft_teams",
     "category": "Communication",
     "href": "/docs/nodes/microsoft_teams",
-    "text": "Microsoft Teams Send messages to Microsoft Teams Use this node when a workflow needs microsoft teams behavior with schema-driven inputs from the CtrlChecks node registry. Communication"
+    "text": "Microsoft Teams Send messages to Microsoft Teams through an incoming webhook URL. Communication"
   },
   {
     "type": "operation",
@@ -15,7 +15,7 @@ export const microsoftTeamsSearchIndex = [
     "slug": "microsoft_teams",
     "category": "Communication",
     "href": "/docs/nodes/microsoft_teams#operation-configure",
-    "text": "Microsoft Teams Configuration Configure Configure with the Microsoft Teams node using the configured input fields. configure"
+    "text": "Microsoft Teams Configuration Configure Send a webhook message to a Teams channel. configure"
   },
   {
     "type": "field",

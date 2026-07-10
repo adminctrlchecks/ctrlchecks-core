@@ -14,6 +14,21 @@ export function overrideMicrosoftTeams(
 ): UnifiedNodeDefinition {
   return {
     ...def,
+    description: 'Send messages to Microsoft Teams through an incoming webhook URL',
+    requiredInputs: ['webhookUrl', 'message'],
+    operationContracts: [{
+      operation: 'default',
+      label: 'Send Webhook Message',
+      requiredFields: ['webhookUrl', 'message'],
+      optionalFields: [],
+      credentialProviders: [],
+      outputFields: ['success', 'teams'],
+      status: 'implemented',
+    }],
+    credentialSchema: {
+      requirements: [],
+      credentialFields: [],
+    },
     execute: async (context) => {
       return await executeViaLegacyExecutor({ context, schema });
     },
