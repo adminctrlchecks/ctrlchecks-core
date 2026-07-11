@@ -2587,25 +2587,40 @@ Output: {
     ],
   },
 
-  whatsapp_cloud: {
-    overview: 'Send WhatsApp messages using Meta WhatsApp Cloud API. Requires phone number ID and access token from Meta developers. Perfect for business messaging, notifications, or customer communication.',
-    inputs: ['phoneNumberId', 'accessToken', 'to', 'message'],
-    outputs: ['messageId', 'status'],
-    example: `Phone Number ID: 123456789012345
-Access Token: EAAG...
-To: 1234567890 (with country code, no +)
+  whatsapp: {
+    overview: 'Send WhatsApp messages via the WhatsApp Business API. Connect a WhatsApp/Facebook account under Connections — credentials are resolved automatically. Perfect for business messaging, notifications, or customer communication.',
+    inputs: ['to', 'message', 'messageType'],
+    outputs: ['messageId', 'data'],
+    example: `To: +1234567890
 Message: "Hello from CtrlChecks!"
 
 Output: {
   messageId: "wamid.xxx",
-  status: "sent"
+  data: { ... }
 }`,
     tips: [
-      'Get credentials from Meta for Developers',
-      'Phone number must include country code (no +)',
-      'Business phone number required',
-      'Access token required for API access',
-      'Use for business messaging and notifications',
+      'Connect a WhatsApp account under Connections — no API keys entered on the node itself',
+      'Phone numbers should be in E.164 format, e.g. +12345678900',
+      'First message to a new contact must use an approved message template',
+      'Supports interactive buttons/lists, contacts, and campaigns in addition to plain text',
+    ],
+  },
+
+  // Deprecated alias for 'whatsapp' — kept only for workflows saved before the merge.
+  whatsapp_cloud: {
+    overview: 'Deprecated — use the WhatsApp node instead. This node is kept only for backward compatibility with existing workflows and behaves identically to WhatsApp under the hood.',
+    inputs: ['to', 'message', 'messageType'],
+    outputs: ['messageId', 'data'],
+    example: `To: +1234567890
+Message: "Hello from CtrlChecks!"
+
+Output: {
+  messageId: "wamid.xxx",
+  data: { ... }
+}`,
+    tips: [
+      'Deprecated — replace with the WhatsApp node in new workflows',
+      'Connect a WhatsApp account under Connections — no API keys entered on the node itself',
     ],
   },
 

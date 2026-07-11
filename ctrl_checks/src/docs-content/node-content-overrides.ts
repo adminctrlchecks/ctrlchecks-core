@@ -341,15 +341,29 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
     },
   },
 
-  whatsapp_cloud: {
+  whatsapp: {
     default: {
-      description: 'Send a WhatsApp message via the Meta WhatsApp Cloud API.',
+      description: 'Send a WhatsApp message via the WhatsApp Business API.',
       outputExample: { messaging_product: 'whatsapp', contacts: [{ input: '+1234567890', wa_id: '1234567890' }], messages: [{ id: 'wamid.abc123' }] },
       outputDescription: 'contacts: Array of recipient contact objects. messages[0].id: The WhatsApp message ID.',
       usageExample: {
         scenario: 'Send an order confirmation via WhatsApp after a Shopify purchase',
         inputValues: { to: '{{$json.customerPhone}}', text: 'Hi {{$json.customerName}} 👋 Your order #{{$json.orderId}} has been confirmed! Expected delivery: {{$json.deliveryDate}}.' },
         expectedOutput: 'WhatsApp message is delivered. Track delivery status using the message ID.',
+      },
+    },
+  },
+
+  // Deprecated alias for 'whatsapp' — kept only for workflows saved before the merge.
+  whatsapp_cloud: {
+    default: {
+      description: 'Deprecated — use the WhatsApp node instead. Kept for backward compatibility with existing workflows.',
+      outputExample: { messaging_product: 'whatsapp', contacts: [{ input: '+1234567890', wa_id: '1234567890' }], messages: [{ id: 'wamid.abc123' }] },
+      outputDescription: 'contacts: Array of recipient contact objects. messages[0].id: The WhatsApp message ID.',
+      usageExample: {
+        scenario: 'Existing workflows created before the WhatsApp Cloud → WhatsApp merge',
+        inputValues: { to: '{{$json.customerPhone}}', message: 'Hi {{$json.customerName}} 👋 Your order #{{$json.orderId}} has been confirmed!' },
+        expectedOutput: 'WhatsApp message is delivered, identical behavior to the WhatsApp node.',
       },
     },
   },

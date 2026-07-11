@@ -922,7 +922,7 @@ export const specificGuides: Record<string, GuideOverride> = {
       'Enter the Access Token and Phone Number ID into the fields and click Save.',
     ],
     fieldGuides: {
-      apiKey: {
+      token: {
         label: 'Access Token',
         description: 'Meta System User access token for WhatsApp Cloud API calls.',
         whereToFind: 'developers.facebook.com → your app → WhatsApp → API Setup → Temporary Access Token (for testing), or Meta Business Settings → System Users → Generate Token (for production).',

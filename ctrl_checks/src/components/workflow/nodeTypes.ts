@@ -2870,17 +2870,22 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     ],
   },
   {
+    // Deprecated alias for the 'whatsapp' node — kept only so existing saved
+    // workflows referencing this type still render/edit correctly. The
+    // backend (core/registry/overrides/whatsapp-cloud.ts) now delegates
+    // execution and credentials to the 'whatsapp' node's Facebook OAuth flow;
+    // it never reads accessToken/phoneNumberId from node config. Do not add
+    // this node type for new workflows — use 'whatsapp' instead.
     type: 'whatsapp_cloud',
-    label: 'WhatsApp Cloud API',
+    label: 'WhatsApp Cloud (Deprecated)',
     category: 'output',
     icon: 'MessageCircle',
-    description: 'WhatsApp message',
-    defaultConfig: {},
+    description: 'Deprecated — use the WhatsApp node instead. Kept for backward compatibility with existing workflows.',
+    defaultConfig: { to: '', message: '', messageType: 'text' },
     configFields: [
-      { key: 'phoneNumberId', label: 'Phone Number ID', type: 'text', placeholder: '123456789012345', required: true, helpText: 'How to get Phone Number ID: 1) Go to https://developers.facebook.com and sign in 2) Select your Meta App (or create a new one) 3) Click "WhatsApp" in the left sidebar 4) Click "API Setup" tab 5) Scroll down to the "From" section 6) Find "Phone number ID" - it is displayed as a long numeric string 7) Click "Copy" or manually copy the Phone Number ID 8) Paste it into this field' },
-      { key: 'accessToken', label: 'Access Token', type: 'text', placeholder: 'EAAG...', required: true, helpText: 'How to get WhatsApp Access Token: For Testing (Temporary): 1) Go to https://developers.facebook.com and sign in 2) Select your Meta App 3) Click "WhatsApp" → "API Setup" 4) Find "Temporary access token" section 5) Click "Copy" button next to the token (Note: expires in 24 hours). For Production (Permanent - Recommended): 1) Go to https://business.facebook.com 2) Navigate to "Business Settings" → "Users" → "System Users" 3) Click "Add" to create a new system user 4) Enter name, click "Create System User" 5) Click on system user → "Assign Assets" → Select your Meta App → Assign permission: whatsapp_business_messaging 6) Click "Generate New Token" → Select app and permission → Click "Generate Token" 7) IMPORTANT: Copy the token immediately - you will not see it again! 8) Paste it securely into this field' },
-      { key: 'to', label: 'Recipient Number', type: 'text', placeholder: '1234567890', required: true, helpText: 'How to get Recipient Number: 1) Get the recipient WhatsApp phone number 2) Format: Country code + phone number (NO + symbol, NO spaces, NO dashes) 3) Examples: US number +1 (234) 567-8900 becomes 12345678900, India number +91 98765 43210 becomes 919876543210 4) The number must be registered on WhatsApp 5) Can use template variables: {{input.phoneNumber}} (must output in correct format)' },
-      { key: 'message', label: 'Message', type: 'textarea', placeholder: 'Hello from CtrlChecks!', required: true, helpText: 'How to write Message: 1) Write your message text here 2) Plain text only - WhatsApp Cloud API supports text messages 3) Emojis are allowed (e.g., 🎉 ✅ 🚀 📱) 4) Use template variables for dynamic content: {{input}} for all data, {{input.fieldName}} for specific fields (e.g., {{input.customerName}}, {{input.orderId}}) 5) Line breaks: Use \\n for new lines in the message 6) 24-hour window: Text messages work only if customer messaged you within last 24 hours 7) For outbound messages: If customer has not messaged you in 24 hours, you must use approved WhatsApp message templates' },
+      { key: 'to', label: 'To (phone number)', type: 'text', placeholder: '+1234567890', required: true, helpText: 'Recipient phone number in E.164 format, e.g. +12345678900.' },
+      { key: 'message', label: 'Message', type: 'textarea', placeholder: 'Hello from CtrlChecks!', required: true, helpText: 'Message text. Supports template variables like {{input.fieldName}}.' },
+      { key: 'messageType', label: 'Message Type', type: 'select', options: [{ label: 'Text', value: 'text' }, { label: 'Template', value: 'template' }], defaultValue: 'text', required: false, helpText: 'Connect a WhatsApp account under Connections — credentials are resolved automatically, not entered here.' },
     ],
   },
   {

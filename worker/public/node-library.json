@@ -2382,9 +2382,7 @@
     ],
     "requiredConfig": [
       "resource",
-      "operation",
-      "phoneNumberId",
-      "to"
+      "operation"
     ],
     "optionalConfig": [
       "resource",
@@ -2392,10 +2390,7 @@
       "phoneNumberId",
       "to",
       "text",
-      "message",
-      "mediaUrl",
-      "apiKey",
-      "credentialId"
+      "mediaUrl"
     ],
     "credentialType": null,
     "capabilities": []

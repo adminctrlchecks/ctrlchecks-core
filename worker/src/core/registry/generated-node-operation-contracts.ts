@@ -64,7 +64,9 @@ export const GENERATED_NODE_OPERATION_VALUES: Record<string, string[]> = {
   typeform: ['create_form', 'get_form', 'get_responses'],
   vercel: ['deploy', 'list_deployments'],
   whatsapp: ['markAsRead', 'sendContact', 'sendInteractiveButtons', 'sendInteractiveCTA', 'sendInteractiveList', 'sendLocation', 'sendMedia', 'sendTemplate', 'sendText'],
-  whatsapp_cloud: ['sendContact', 'sendLocation', 'sendMedia', 'sendReaction', 'sendTemplate', 'sendText'],
+  // whatsapp_cloud intentionally omitted: it's a deprecated alias for `whatsapp`
+  // (overrides/whatsapp-cloud.ts) and must keep whatsapp's full operation set,
+  // not a separately-generated narrower one.
   woocommerce: ['create', 'delete', 'get', 'update'],
   wordpress: ['create_post', 'delete_post', 'get_posts', 'update_post'],
   workday: ['create', 'get_by_id', 'get_many', 'update'],

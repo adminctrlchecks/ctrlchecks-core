@@ -709,9 +709,9 @@ export const nodeDocManifest = [
   },
   {
     "slug": "whatsapp_cloud",
-    "displayName": "WhatsApp Cloud",
+    "displayName": "WhatsApp Cloud (Deprecated)",
     "category": "Communication",
-    "description": "Send messages via WhatsApp Cloud API Use this node when a workflow needs whatsapp cloud behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Deprecated — use the WhatsApp node instead. Kept for backward compatibility with existing workflows.",
     "logoUrl": "/icons/nodes/whatsapp_cloud.svg"
   },
   {

@@ -8541,14 +8541,22 @@ export class NodeLibrary {
     };
   }
 
+  /**
+   * Deprecated — kept only so existing saved workflows referencing type
+   * 'whatsapp_cloud' keep resolving in the registry (see
+   * core/registry/overrides/whatsapp-cloud.ts, which delegates execution and
+   * credentials to the 'whatsapp' node). Not offered to the AI/wizard for new
+   * workflows (empty aiSelectionCriteria/keywords) — use createWhatsappSchema
+   * for anything new.
+   */
   private createWhatsappCloudSchema(): NodeSchema {
     return {
       type: 'whatsapp_cloud',
-      label: 'WhatsApp Cloud',
+      label: 'WhatsApp Cloud (deprecated)',
       category: 'output',
-      description: 'Send messages via WhatsApp Cloud API',
+      description: 'Deprecated — use the WhatsApp node instead. Kept only for backward compatibility with existing workflows.',
       configSchema: {
-        required: ['resource', 'operation', 'phoneNumberId', 'to'],
+        required: ['resource', 'operation'],
         optional: {
           resource: {
             type: 'string',
@@ -8559,12 +8567,12 @@ export class NodeLibrary {
           operation: {
             type: 'string',
             description: 'WhatsApp operation',
-            examples: ['sendText', 'sendMedia', 'sendLocation', 'sendContact', 'sendReaction', 'sendTemplate'],
+            examples: ['sendText', 'sendMedia', 'sendLocation', 'sendContact', 'sendTemplate'],
             default: 'sendText',
           },
           phoneNumberId: {
             type: 'string',
-            description: 'WhatsApp Phone Number ID (required for message operations)',
+            description: 'WhatsApp Phone Number ID (auto-resolved if absent)',
           },
           to: {
             type: 'string',
@@ -8576,50 +8584,24 @@ export class NodeLibrary {
             description: 'Text content (for sendText)',
             examples: ['{{$json.message}}'],
           },
-          message: {
-            type: 'string',
-            description: 'Alias for text (legacy)',
-          },
           mediaUrl: {
             type: 'string',
             description: 'Media URL (for sendMedia)',
           },
-          // Credential fields (for credential discovery and injection)
-          apiKey: {
-            type: 'string',
-            description: 'WhatsApp Cloud API Token (required for authentication)',
-            examples: ['your-whatsapp-api-token'],
-          },
-          credentialId: {
-            type: 'string',
-            description: 'ID of the stored credential to use',
-            examples: ['whatsapp_api_123'],
-          },
         },
       },
       aiSelectionCriteria: {
-        whenToUse: ['User mentions WhatsApp', 'WhatsApp messaging'],
-        whenNotToUse: ['Other messaging platforms'],
-        keywords: [
-          'whatsapp', 'whats app', 'whatsapp message', 'whatsapp send',
-          'send whatsapp', 'whatsapp notification', 'whatsapp chat',
-          'whatsapp api', 'whatsapp integration', 'whatsapp cloud',
-          'whatsapp cloud api', 'whatsapp business'
-        ],
-        useCases: ['WhatsApp messaging'],
-        intentDescription: 'WhatsApp Cloud API integration node that sends messages via WhatsApp Cloud API. Sends text messages, media, locations, contacts, and templates to WhatsApp users. Used for WhatsApp messaging, WhatsApp automation, and WhatsApp-based notifications.',
-        intentCategories: ['whatsapp', 'messaging', 'communication', 'notification', 'mobile_messaging'],
+        whenToUse: [],
+        whenNotToUse: ['Always — this node is deprecated, use the WhatsApp node instead'],
+        keywords: ['deprecated_whatsapp_cloud_legacy_alias'],
+        useCases: ['Legacy workflows created before the WhatsApp Cloud → WhatsApp merge only'],
+        intentDescription: 'Deprecated alias for the WhatsApp node. Never select this for new workflows — use "whatsapp" instead.',
+        intentCategories: [],
       },
       commonPatterns: [],
       validationRules: [],
       capabilities: ['notification.send', 'whatsapp.send'],
-      providers: ['whatsapp'],
-      keywords: [
-        'whatsapp', 'whats app', 'whatsapp message', 'whatsapp send',
-        'send whatsapp', 'whatsapp notification', 'whatsapp chat',
-        'whatsapp api', 'whatsapp integration', 'whatsapp cloud',
-        'whatsapp cloud api', 'whatsapp business'
-      ],
+      keywords: ['deprecated_whatsapp_cloud_legacy_alias'],
     };
   }
 

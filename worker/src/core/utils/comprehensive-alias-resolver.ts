@@ -146,7 +146,9 @@ export const COMPREHENSIVE_NODE_ALIAS_REGISTRY: Record<string, string[]> = {
     'ms teams message',
   ],
 
-  'whatsapp_cloud': [
+  // Phrases resolve to 'whatsapp' (the full-featured node), not the deprecated
+  // 'whatsapp_cloud' alias — see core/registry/overrides/whatsapp-cloud.ts.
+  'whatsapp': [
     'whatsapp',
     'wa',
     'send whatsapp',
