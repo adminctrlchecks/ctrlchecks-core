@@ -373,13 +373,13 @@ Generate the complete, executable workflow with ALL configurations and unified c
         "vaultKey": "google/oauth"
       },
       {
-        "id": "slack_webhook",
-        "type": "slack/webhook",
-        "displayName": "Slack Webhook URL",
-        "description": "Required to send notifications to Slack",
+        "id": "slack_oauth",
+        "type": "slack/oauth",
+        "displayName": "Slack OAuth2",
+        "description": "Required to send Slack bot notifications",
         "requiredBy": ["notify_team"],
         "provider": "slack",
-        "vaultKey": "slack/webhook"
+        "vaultKey": "slack"
       }
     ],
     "note": "All credentials will be collected in a single step after workflow generation"
@@ -420,7 +420,7 @@ Generate the complete, executable workflow with ALL configurations and unified c
 
 ### COMMUNICATION NODES:
 - `google_gmail` - Send emails via Gmail (requires Google OAuth)
-- `slack_message` - Send Slack messages (requires Slack Webhook URL)
+- `slack_message` - Send Slack messages (requires Slack OAuth connection)
 - `smtp_email` - Send emails via SMTP
 
 ### LOGIC NODES:
@@ -512,7 +512,7 @@ For prompt: "If someone fills out my 'Contact Us' Form, have the AI Agent check 
 
 ### Credentials (Unified):
 - Google OAuth (Gmail) - for `google_gmail` node
-- Slack Webhook URL - for `slack_message` node
+- Slack OAuth connection - for `slack_message` node
 
 **Present credentials ONCE, in a single container, after workflow generation.**
 

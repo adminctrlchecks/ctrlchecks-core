@@ -18,7 +18,7 @@ export default async function analyzeWorkflowRequirements(req: Request, res: Res
       
       Examples:
       - "Read from Google Sheet" -> Requires: "google_sheet_url" (URL) and "sheet_name" (Tab Name)
-      - "Send message to Slack" -> Requires: Slack Webhook URL or Channel ID
+      - "Send message to Slack" -> Requires: Slack OAuth connection and Channel ID/name
       - "Email me everyday" -> Requires: Email Address
       
       Specific Rules:

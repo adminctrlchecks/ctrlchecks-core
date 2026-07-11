@@ -197,9 +197,9 @@ export class EnhancedNodeReference {
    */
   private getCredentialDescription(credType: string): string {
     const descriptions: Record<string, string> = {
-      'slackApi': 'Slack Bot Token or Webhook URL',
-      'slackBotToken': 'Slack Bot Token',
-      'slackWebhookUrl': 'Slack Webhook URL',
+      'slackApi': 'Slack OAuth2',
+      'slackBotToken': 'Slack OAuth bot token',
+      'slackWebhookUrl': 'Slack Incoming Webhook URL',
       'googleSheetsOAuth2Api': 'Google OAuth2 (connected from Connections)',
       'googleOAuth2': 'Google OAuth2 (connected from Connections)',
       'smtp': 'SMTP server credentials',

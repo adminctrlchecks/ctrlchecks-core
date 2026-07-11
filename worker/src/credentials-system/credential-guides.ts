@@ -311,6 +311,26 @@ export const specificGuides: Record<string, GuideOverride> = {
     ],
     docsUrl: 'https://api.slack.com/authentication',
   },
+  slack_webhook: {
+    summary: 'Save a Slack Incoming Webhook URL so CtrlChecks can post simple messages to one configured channel.',
+    prerequisites: [
+      'A Slack workspace where you can create or manage Slack apps.',
+      'Permission to enable Incoming Webhooks and add one to the target channel.',
+    ],
+    steps: [
+      'Open api.slack.com/apps and select your Slack app, or create a new app.',
+      'Open Incoming Webhooks and turn Activate Incoming Webhooks on.',
+      'Click Add New Webhook to Workspace, choose the channel, and click Allow.',
+      'Copy the webhook URL that starts with https://hooks.slack.com/services/.',
+      'Paste that URL into the Incoming Webhook URL field below and save the connection.',
+    ],
+    troubleshooting: [
+      'invalid_payload means the message text resolved to an invalid or empty payload.',
+      'channel_not_found or posting to the wrong place means the saved webhook belongs to a different channel; create a new webhook for the intended channel.',
+      'Never paste this URL into normal workflow fields or public logs; anyone with it can post to that Slack channel.',
+    ],
+    docsUrl: 'https://api.slack.com/messaging/webhooks',
+  },
 
   // ─── Zoom ─────────────────────────────────────────────────────────────────────
 

@@ -111,8 +111,8 @@ export const NODE_LAYMAN_DESCRIPTIONS: Record<string, string> = {
   http_post:          "Sends data to a URL — like filling out and submitting a web form programmatically",
 
   // ── Communication / Output ────────────────────────────────────────────────
-  slack_message:              "Sends a message to a Slack channel or person — great for notifications",
-  slack_webhook:              "Posts a message to Slack using a simple webhook URL — no app setup needed",
+  slack_message:              "Sends messages using a Slack app or bot connection",
+  slack_webhook:              "Posts simple messages through a saved Slack Incoming Webhook",
   chat_send:                  "Sends a reply in a chat conversation — works with a chat trigger to create a bot",
   discord:                    "Sends messages to a Discord channel using a bot token connection",
   discord_webhook:            "Posts a message to a Discord channel using a saved webhook URL connection",

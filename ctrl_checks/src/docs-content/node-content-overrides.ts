@@ -188,7 +188,7 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
       outputDescription: 'ok: true if the message was sent successfully. ts: Message timestamp (Slack message ID). channel: The channel ID where the message was sent. message.text: The message text that was posted.',
       usageExample: {
         scenario: 'Alert the #deployments channel when a workflow completes or fails',
-        inputValues: { channel: '#deployments', text: '✅ Deploy complete for `{{$json.version}}` at {{$now}}' },
+        inputValues: { channel: '#deployments', message: 'Deploy complete for `{{$json.version}}` at {{$now}}' },
         expectedOutput: 'The message appears in the specified channel. Use `{{$json.ts}}` to reference or thread the message later.',
       },
     },
@@ -421,12 +421,12 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
 
   slack_webhook: {
     default: {
-      description: 'Send a message to Slack using an Incoming Webhook URL — no OAuth required.',
+      description: 'Send a message to Slack using a saved Incoming Webhook connection.',
       outputExample: { success: true, status: 200, response: 'ok' },
       outputDescription: 'success: true if Slack accepted the message. status: HTTP response code. response: "ok" indicates success.',
       usageExample: {
         scenario: 'Post a quick alert to Slack without setting up a full bot integration',
-        inputValues: { webhookUrl: '{{$env.SLACK_WEBHOOK_URL}}', text: '🔔 New sign-up: {{$json.email}} at {{$now}}' },
+        inputValues: { message: 'New sign-up: {{$json.email}} at {{$now}}' },
         expectedOutput: 'Message appears in the configured channel. This is the simplest way to send Slack messages.',
       },
     },

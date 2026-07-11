@@ -5119,91 +5119,47 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
   },
   // Communication Services
   slack_message: {
-    webhookUrl: {
-      title: 'Slack Webhook URL – Step-by-Step',
-      url: 'https://api.slack.com/apps',
+    channel: {
+      title: 'Slack Channel',
+      url: 'https://api.slack.com/methods/chat.postMessage',
       steps: [
-        '1️⃣ Open Slack API',
-        '   Go to 👉 https://api.slack.com/apps',
-        '   Sign in with your Slack workspace',
-        '',
-        '2️⃣ Create New App',
-        '   Click "Create New App"',
-        '   Choose "From scratch"',
-        '   Give it a name and select workspace',
-        '',
-        '3️⃣ Enable Incoming Webhooks',
-        '   In app settings, click "Incoming Webhooks"',
-        '   Toggle "Activate Incoming Webhooks"',
-        '',
-        '4️⃣ Add New Webhook',
-        '   Click "Add New Webhook to Workspace"',
-        '   Select channel to post to',
-        '   Click "Allow"',
-        '',
-        '5️⃣ Copy Webhook URL',
-        '   You\'ll see the Webhook URL',
-        '   Format: https://hooks.slack.com/services/...',
-        '   Copy the entire URL',
-        '',
-        '6️⃣ Store Securely',
-        '   Paste it into the Webhook URL field above',
-        '   Never share publicly',
-        '',
-        'Example format:',
-        '[YOUR_SLACK_WEBHOOK_URL] - Format: https://hooks.slack.com/services/...'
+        'Use a channel name such as #general, a channel ID such as C01234567, or a user ID for direct messages.',
+        'For private channels, invite the connected Slack bot before running the workflow.',
+        'Use Slack channel details to copy a stable channel ID when names may change.'
       ],
-      example: '[YOUR_SLACK_WEBHOOK_URL]'
+      example: '#alerts'
+    },
+    message: {
+      title: 'Slack Message',
+      steps: [
+        'Write the message text to send with chat.postMessage.',
+        'Slack markdown such as *bold*, _italic_, and `code` is supported.',
+        'Use template values like {{input.orderId}} for dynamic content.'
+      ],
+      example: 'New order: {{input.orderId}}'
+    },
+    blocks: {
+      title: 'Slack Blocks JSON',
+      url: 'https://app.slack.com/block-kit-builder',
+      steps: [
+        'Use Slack Block Kit Builder to design rich message blocks.',
+        'Copy the JSON array and paste it into Blocks.',
+        'Keep Message filled as fallback text for notifications.'
+      ],
+      example: '[{"type":"section","text":{"type":"mrkdwn","text":"Hello"}}]'
     }
   },
   slack_webhook: {
-    webhookUrl: {
-      title: 'Slack Webhook URL – Step-by-Step',
-      url: 'https://api.slack.com/apps',
+    message: {
+      title: 'Slack Webhook Message',
       steps: [
-        '1️⃣ Open Slack API',
-        '   Go to 👉 https://api.slack.com/apps',
-        '   Sign in with your Slack workspace',
-        '',
-        '2️⃣ Create New App',
-        '   Click "Create New App"',
-        '   Choose "From scratch"',
-        '',
-        '3️⃣ Enable Incoming Webhooks',
-        '   In app settings, click "Incoming Webhooks"',
-        '   Toggle "Activate Incoming Webhooks"',
-        '',
-        '4️⃣ Add New Webhook',
-        '   Click "Add New Webhook to Workspace"',
-        '   Select channel',
-        '   Click "Allow"',
-        '',
-        '5️⃣ Copy Webhook URL',
-        '   Copy the Webhook URL',
-        '   Format: https://hooks.slack.com/services/...',
-        '',
-        '6️⃣ Store Securely',
-        '   Paste it into the Webhook URL field above',
-        '',
-        'Example format:',
-        '[YOUR_SLACK_WEBHOOK_URL] - Format: https://hooks.slack.com/services/...'
+        'Write the simple text payload sent through the selected Slack Incoming Webhook connection.',
+        'The webhook URL is stored in Connections, not in this node field.',
+        'Slack markdown and template values like {{input.field}} are supported.'
       ],
-      example: '[YOUR_SLACK_WEBHOOK_URL]'
-    },
-    text: {
-      title: 'How to write Text?',
-      steps: [
-        'Text is the message sent to Slack.',
-        '',
-        'You can use Slack markdown and emojis.',
-        'Example: "New user registered 🎉"',
-        '',
-        'Tip: Insert dynamic values like {{input.field}}.'
-      ],
-      example: 'New user registered successfully 🎉'
+      example: 'New user registered: {{input.email}}'
     }
-  },
-  microsoft_teams: {
+  },  microsoft_teams: {
     webhookUrl: {
       title: 'Microsoft Teams Webhook URL - Step-by-Step',
       steps: [

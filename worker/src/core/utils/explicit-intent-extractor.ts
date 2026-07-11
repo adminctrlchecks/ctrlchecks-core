@@ -19,7 +19,7 @@ import { AliasKeyword } from '../../services/ai/summarize-layer';
  */
 const SERVICE_KEYWORD_MAP: Record<string, string[]> = {
   // Communication Services
-  'slack_message': ['slack', 'slack message', 'slack webhook', 'slack notification', 'slack channel'],
+  'slack_message': ['slack', 'slack message', 'slack notification', 'slack channel'],
   'discord': ['discord', 'discord bot', 'discord webhook', 'discord message', 'discord channel'],
   'telegram': ['telegram', 'telegram bot', 'telegram message', 'telegram channel'],
   'google_gmail': ['gmail', 'google mail', 'google gmail', 'email', 'send email'],

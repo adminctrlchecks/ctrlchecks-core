@@ -1,87 +1,76 @@
 import type { NodeDoc } from '../types';
 
 export const slackWebhookDoc: NodeDoc = {
-  "slug": "slack_webhook",
-  "displayName": "Slack Webhook",
-  "category": "Communication",
-  "logoUrl": "/icons/nodes/slack_webhook.svg",
-  "description": "Send messages via Slack webhook",
-  "credentialType": "Slack Webhook URL",
-  "credentialSetupSteps": [
-    "What this is: The Slack Webhook connection lets CtrlChecks access your Slack Webhook account safely without putting secrets in workflow fields.",
-    "Where to start: Slack app -> Incoming Webhooks -> Add New Webhook to Workspace.",
-    "How to connect: In CtrlChecks, open Connections -> Add Connection -> Slack Webhook, then sign in or paste the secret value requested there.",
-    "Example: https://hooks.slack.com/services/T000/B000/XXXX.",
-    "Important: Treat tokens, passwords, API keys, and client secrets like bank passwords. Store them in Connections, not in regular workflow fields.",
-    "Test it: Save the connection, run a simple Slack Webhook step, and confirm CtrlChecks can reach the account."
+  slug: 'slack_webhook',
+  displayName: 'Slack Webhook',
+  category: 'Communication',
+  logoUrl: '/icons/nodes/slack_webhook.svg',
+  description: 'Send simple messages through a Slack Incoming Webhook.',
+  credentialType: 'Slack Incoming Webhook',
+  credentialSetupSteps: [
+    'What this is: A Slack Incoming Webhook connection stores the webhook URL securely outside normal workflow fields.',
+    'Where to start: Open api.slack.com/apps, select or create an app, then open Incoming Webhooks.',
+    'Turn Activate Incoming Webhooks on, click Add New Webhook to Workspace, choose the target channel, and click Allow.',
+    'Copy the URL that starts with https://hooks.slack.com/services/ and save it in CtrlChecks -> Connections -> Add Connection -> Slack Incoming Webhook.',
+    'Use Slack Webhook for simple channel-bound notifications. Use Slack for OAuth bot messages, channel targeting, and Block Kit payloads.',
   ],
-  "credentialDocsUrl": "https://api.slack.com/messaging/webhooks",
-  "resources": [
+  credentialDocsUrl: 'https://api.slack.com/messaging/webhooks',
+  resources: [
     {
-      "name": "Configuration",
-      "description": "Slack Webhook is configured directly with input fields.",
-      "operations": [
+      name: 'Configuration',
+      description: 'Slack Webhook sends through the selected Slack Incoming Webhook connection.',
+      operations: [
         {
-          "name": "Execute",
-          "value": "default",
-          "description": "Send a message to Slack using an Incoming Webhook URL — no OAuth required.",
-          "fields": [
+          name: 'Execute',
+          value: 'default',
+          description: 'Send a simple text payload to the channel configured by the saved webhook.',
+          fields: [
             {
-              "name": "Webhook Url",
-              "internalKey": "webhookUrl",
-              "type": "url",
-              "required": true,
-              "description": "Slack webhook URL",
-              "helpText": "What this field is: The Incoming Webhook URL that posts messages to a specific Slack channel.\nWhere to find it: api.slack.com/apps → your app → Incoming Webhooks → copy the URL.\nExample: https://hooks.slack.com/services/T00000/B00000/xxxx...\nNote: Keep this URL private — anyone with it can post to your channel.",
-              "placeholder": "https://hooks.slack.com/services/...",
-              "example": "https://hooks.slack.com/services/..."
+              name: 'Message',
+              internalKey: 'message',
+              type: 'textarea',
+              required: true,
+              description: 'Message text to send through the selected Incoming Webhook.',
+              helpText: 'Type the message text or use values from earlier workflow steps. Slack markdown such as *bold* and `code` is supported.',
+              placeholder: 'New sign-up: {{$json.email}}',
+              example: 'New sign-up: {{$json.email}}',
             },
-            {
-              "name": "Message",
-              "internalKey": "message",
-              "type": "textarea",
-              "required": true,
-              "description": "Message text",
-              "helpText": "What this field is: Message text.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: {{$json.message}}.\nTip: Use {{$json.message}} when this value comes from an earlier step.",
-              "placeholder": "{{$json.message}}",
-              "example": "{{$json.message}}"
-            }
           ],
-          "outputExample": {
-            "success": true,
-            "status": 200,
-            "response": "ok"
+          outputExample: {
+            id: 'ok',
+            status: 'sent',
+            provider: 'slack_webhook',
+            message: 'New sign-up: customer@example.com',
           },
-          "outputDescription": "success: true if Slack accepted the message. status: HTTP response code. response: \"ok\" indicates success.",
-          "usageExample": {
-            "scenario": "Post a quick alert to Slack without setting up a full bot integration",
-            "inputValues": {
-              "webhookUrl": "{{$env.SLACK_WEBHOOK_URL}}",
-              "text": "🔔 New sign-up: {{$json.email}} at {{$now}}"
+          outputDescription: 'status is sent or failed. id is Slack webhook response text when available. message is the resolved text sent to Slack.',
+          usageExample: {
+            scenario: 'Post a quick alert to a fixed Slack channel',
+            inputValues: {
+              message: 'New sign-up: {{$json.email}} at {{$now}}',
             },
-            "expectedOutput": "Message appears in the configured channel. This is the simplest way to send Slack messages."
+            expectedOutput: 'The message appears in the Slack channel selected when the Incoming Webhook was created.',
           },
-          "externalDocsUrl": "https://api.slack.com/messaging/webhooks"
-        }
-      ]
-    }
+          externalDocsUrl: 'https://api.slack.com/messaging/webhooks',
+        },
+      ],
+    },
   ],
-  "commonErrors": [
+  commonErrors: [
     {
-      "error": "Authentication failed",
-      "cause": "The saved credential, token, API key, or OAuth grant is missing, expired, or lacks the required scope.",
-      "fix": "Reconnect the service in CtrlChecks → Connections, then re-run the Slack Webhook node."
+      error: 'Slack Webhook node: Webhook URL is required',
+      cause: 'No Slack Incoming Webhook connection was selected or available for the node.',
+      fix: 'Create a Slack Incoming Webhook connection in CtrlChecks Connections, then select it on the node.',
     },
     {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
+      error: 'invalid_payload',
+      cause: 'The message resolved to an invalid or empty Slack webhook payload.',
+      fix: 'Fill the Message field and verify any template variables resolve to text.',
     },
     {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
+      error: 'wrong channel',
+      cause: 'Incoming Webhooks are bound to the channel selected during Slack setup.',
+      fix: 'Create and select a different Slack Incoming Webhook connection for the desired channel.',
+    },
   ],
-  "relatedNodes": []
+  relatedNodes: ['slack_message'],
 };

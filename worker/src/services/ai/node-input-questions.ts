@@ -325,9 +325,9 @@ export const NODE_QUESTIONS: Record<string, NodeQuestion[]> = {
       required: true,
     },
     {
-      id: 'slack_text',
+      id: 'slack_message',
       prompt: 'What message should we send to Slack?',
-      target: 'text',
+      target: 'message',
       type: 'string',
       required: true,
     },

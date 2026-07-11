@@ -1,119 +1,117 @@
 import type { NodeDoc } from '../types';
 
 export const slackMessageDoc: NodeDoc = {
-  "slug": "slack_message",
-  "displayName": "Slack",
-  "category": "Communication",
-  "logoUrl": "/icons/nodes/slack_message.svg",
-  "description": "Send messages to Slack channels or users",
-  "credentialType": "Slack OAuth",
-  "credentialSetupSteps": [
-    "What this is: The Slack connection lets CtrlChecks access your Slack account safely without putting secrets in workflow fields.",
-    "Where to start: api.slack.com/apps -> your app -> OAuth & Permissions -> Bot User OAuth Token.",
-    "How to connect: In CtrlChecks, open Connections -> Add Connection -> Slack, then sign in or paste the secret value requested there.",
-    "Example: xoxb-....",
-    "Important: In Slack, invite the bot to each private channel with /invite @YourBotName before sending messages.",
-    "Important: Treat tokens, passwords, API keys, and client secrets like bank passwords. Store them in Connections, not in regular workflow fields.",
-    "Test it: Save the connection, run a simple Slack step, and confirm CtrlChecks can reach the account."
+  slug: 'slack_message',
+  displayName: 'Slack',
+  category: 'Communication',
+  logoUrl: '/icons/nodes/slack_message.svg',
+  description: 'Send messages using a Slack app/bot connection.',
+  credentialType: 'Slack OAuth2',
+  credentialSetupSteps: [
+    'What this is: A Slack OAuth2 connection lets CtrlChecks post messages through your Slack app/bot without storing tokens in workflow fields.',
+    'Where to start: Create or select a Slack app at api.slack.com/apps, then open OAuth & Permissions.',
+    'Add the Bot Token Scope chat:write. Add channels:read or users:read only if your workspace setup needs channel or user lookup.',
+    'Install the app to your workspace and connect it in CtrlChecks through Connections -> Add Connection -> Slack.',
+    'Invite the bot to private channels before sending messages: /invite @YourBotName.',
+    'Use the Slack node for bot/API messages, channel targeting, and optional Block Kit payloads. Use Slack Webhook for a saved Incoming Webhook URL.',
   ],
-  "credentialDocsUrl": "https://api.slack.com/authentication/basics",
-  "resources": [
+  credentialDocsUrl: 'https://api.slack.com/authentication',
+  resources: [
     {
-      "name": "Configuration",
-      "description": "Slack is configured directly with input fields.",
-      "operations": [
+      name: 'Configuration',
+      description: 'Slack sends through the selected Slack OAuth2 connection.',
+      operations: [
         {
-          "name": "Execute",
-          "value": "default",
-          "description": "Send a message to a Slack channel or direct message.",
-          "fields": [
+          name: 'Execute',
+          value: 'default',
+          description: 'Send a message to a Slack channel or direct message with chat.postMessage.',
+          fields: [
             {
-              "name": "Channel",
-              "internalKey": "channel",
-              "type": "string",
-              "required": true,
-              "description": "Slack channel or user ID",
-              "helpText": "What this field is: The Slack channel where the message will be posted.\nWhere to find it: In Slack, open the channel, choose View channel details, and copy the channel ID from the About section.\nHow to fill it: Use a channel name like #general, or a channel ID like C1234567890.\nExample: #notifications or C1234567890.\nTip: Use the ID when the channel might be renamed.",
-              "placeholder": "#general",
-              "example": "#general"
+              name: 'Channel',
+              internalKey: 'channel',
+              type: 'string',
+              required: false,
+              description: 'Slack channel name, channel ID, or user ID. Required when using OAuth bot sending.',
+              helpText: 'Use #general, a channel ID like C01234567, or a user ID. Channel IDs are safer when channels may be renamed.',
+              placeholder: '#general',
+              example: '#deployments',
             },
             {
-              "name": "Blocks",
-              "internalKey": "blocks",
-              "type": "string",
-              "required": false,
-              "description": "Slack blocks JSON (optional)",
-              "helpText": "What this field is: Slack Block Kit content for rich message layouts with sections, buttons, images, or dividers.\nHow to fill it: Enter a structured data array in [ ] brackets using Slack Block Kit format.\nExample: [{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*New lead:* {{$json.name}}\"}}].\nTip: Use app.slack.com/block-kit-builder to design the layout, then paste the result here.",
-              "placeholder": "[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"Hello\"}}]",
-              "example": "[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"Hello\"}}]"
+              name: 'Message',
+              internalKey: 'message',
+              type: 'textarea',
+              required: true,
+              description: 'Message text to send to Slack.',
+              helpText: 'Slack supports simple formatting such as *bold*, _italic_, `code`, and line breaks. Use this as fallback text when sending Blocks.',
+              placeholder: 'Deployment complete for {{$json.version}}',
+              example: 'Deployment complete for {{$json.version}}',
             },
             {
-              "name": "Text",
-              "internalKey": "text",
-              "type": "textarea",
-              "required": true,
-              "description": "Message text (alias for message)",
-              "helpText": "What this field is: The Slack message text.\nHow to fill it: Type the message. Slack supports simple formatting such as *bold*, _italic_, and line breaks.\nExample: New lead from {{$json.name}} ({{$json.email}}).\nTip: Use this field even when using Blocks so Slack has fallback text for notifications.",
-              "placeholder": "Hello {{$json.name}}"
+              name: 'Blocks',
+              internalKey: 'blocks',
+              type: 'json',
+              required: false,
+              description: 'Optional Slack Block Kit JSON array.',
+              helpText: 'Paste a Block Kit JSON array from app.slack.com/block-kit-builder. The message field remains the notification fallback text.',
+              placeholder: '[{"type":"section","text":{"type":"mrkdwn","text":"Hello"}}]',
+              example: '[{"type":"section","text":{"type":"mrkdwn","text":"Hello"}}]',
             },
             {
-              "name": "Username",
-              "internalKey": "username",
-              "type": "string",
-              "required": false,
-              "description": "Bot username",
-              "helpText": "What this field is: The sender name Slack shows for this message.\nHow to fill it: Type a short display name, or leave blank to use the bot default name.\nExample: CtrlChecks Bot or Deployment Alert.\nTip: Some Slack apps do not allow overriding the bot name.",
-              "placeholder": "Enter Username"
+              name: 'Bot Name',
+              internalKey: 'username',
+              type: 'string',
+              required: false,
+              description: 'Optional sender name override, if the Slack app allows customized bot messages.',
+              placeholder: 'CtrlChecks Bot',
             },
             {
-              "name": "Icon Emoji",
-              "internalKey": "iconEmoji",
-              "type": "string",
-              "required": false,
-              "description": "Icon emoji",
-              "helpText": "What this field is: The emoji Slack shows as the bot icon for this message.\nHow to fill it: Type a Slack emoji code with colons on both sides.\nExample: :rocket: or :warning:.\nTip: Leave blank to use the bot default icon.",
-              "placeholder": "Enter Icon Emoji"
-            }
+              name: 'Icon Emoji',
+              internalKey: 'iconEmoji',
+              type: 'string',
+              required: false,
+              description: 'Optional sender icon emoji override, if the Slack app allows customized bot messages.',
+              placeholder: ':rocket:',
+            },
           ],
-          "outputExample": {
-            "ok": true,
-            "ts": "1704067200.123456",
-            "channel": "C01234ABCDE",
-            "message": {
-              "text": "Deployment complete ✅",
-              "user": "U01234"
-            }
+          outputExample: {
+            id: '1704067200.123456',
+            status: 'sent',
+            provider: 'slack',
+            ok: true,
+            channel: 'C01234ABCDE',
+            ts: '1704067200.123456',
+            message: 'Deployment complete',
           },
-          "outputDescription": "ok: true if the message was sent successfully. ts: Message timestamp (Slack message ID). channel: The channel ID where the message was sent. message.text: The message text that was posted.",
-          "usageExample": {
-            "scenario": "Alert the #deployments channel when a workflow completes or fails",
-            "inputValues": {
-              "channel": "#deployments",
-              "text": "✅ Deploy complete for `{{$json.version}}` at {{$now}}"
+          outputDescription: 'id/ts identify the Slack message. channel is the Slack channel returned by chat.postMessage. status is sent or failed.',
+          usageExample: {
+            scenario: 'Alert the deployments channel when a workflow completes',
+            inputValues: {
+              channel: '#deployments',
+              message: 'Deploy complete for `{{$json.version}}` at {{$now}}',
             },
-            "expectedOutput": "The message appears in the specified channel. Use `{{$json.ts}}` to reference or thread the message later."
+            expectedOutput: 'The message appears in the target channel from the connected Slack bot.',
           },
-          "externalDocsUrl": "https://api.slack.com/messaging/webhooks"
-        }
-      ]
-    }
+          externalDocsUrl: 'https://api.slack.com/methods/chat.postMessage',
+        },
+      ],
+    },
   ],
-  "commonErrors": [
+  commonErrors: [
     {
-      "error": "Authentication failed",
-      "cause": "The saved credential, token, API key, or OAuth grant is missing, expired, or lacks the required scope.",
-      "fix": "Reconnect the service in CtrlChecks → Connections, then re-run the Slack node."
+      error: 'channel_not_found',
+      cause: 'The bot is not in the channel, or the channel value is incorrect.',
+      fix: 'Invite the bot to the channel or use the channel ID from Slack channel details.',
     },
     {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
+      error: 'not_authed',
+      cause: 'The selected Slack OAuth2 connection is missing, expired, or not injected.',
+      fix: 'Reconnect Slack in CtrlChecks Connections and select that connection on the node.',
     },
     {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
+      error: 'invalid_blocks',
+      cause: 'The Blocks field is not valid Slack Block Kit JSON.',
+      fix: 'Validate the JSON array in Slack Block Kit Builder and keep Message filled as fallback text.',
+    },
   ],
-  "relatedNodes": []
+  relatedNodes: ['slack_webhook'],
 };

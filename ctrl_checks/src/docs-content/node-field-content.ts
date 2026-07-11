@@ -154,7 +154,7 @@ Example: Dear {{$json.name}}, please find your invoice attached. Total due: \${{
 How to fill it: Use the channel name with # like #general, or the channel ID like C01234567.
 Where to find the channel ID: Right-click the channel name in Slack → View channel details → scroll to the bottom — the ID is shown there. It is safer to use the ID in case the channel is renamed.
 Example: #notifications or C01234567`,
-      text: `What this field is: The message text that will appear in the Slack channel.
+      message: `What this field is: The message text that will appear in the Slack channel.
 Example: New lead from {{$json.name}} ({{$json.email}}) — signed up at {{$json.createdAt}}.
 Formatting tips: *bold text*, _italic text_, \`code\`, and line breaks work in Slack messages.`,
     },

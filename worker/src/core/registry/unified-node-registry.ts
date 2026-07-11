@@ -1097,7 +1097,8 @@ export class UnifiedNodeRegistry implements INodeRegistry {
     // Google OAuth
     google:        { credentialTypeId: 'google_oauth2',        label: 'Google OAuth2',            authType: 'oauth2' },
     // Communication / messaging
-    slack:         { credentialTypeId: 'slack_oauth2',         label: 'Slack Connection',         authType: 'oauth2' },
+    slack:         { credentialTypeId: 'slack_oauth2',         label: 'Slack OAuth2',             authType: 'oauth2' },
+    slack_webhook: { credentialTypeId: 'slack_webhook',        label: 'Slack Incoming Webhook',   authType: 'api_key' },
     discord:         { credentialTypeId: 'discord_bot_token',    label: 'Discord Bot Token',        authType: 'bearer_token' },
     discord_webhook: { credentialTypeId: 'discord_webhook',      label: 'Discord Webhook URL',      authType: 'api_key' },
     telegram:      { credentialTypeId: 'telegram_bot_token',   label: 'Telegram Bot Token',       authType: 'api_key' },
@@ -1604,7 +1605,11 @@ export class UnifiedNodeRegistry implements INodeRegistry {
       keys.add('google_drive');
       keys.add('gmail');
     }
-    if (nodeType === 'slack_message' || nodeType === 'slack_webhook') {
+    if (nodeType === 'slack_message') {
+      keys.add('slack');
+    }
+    if (nodeType === 'slack_webhook') {
+      keys.add('slack_webhook');
       keys.add('slack');
     }
     if (nodeType === 'openai_gpt' || nodeType === 'chat_model') keys.add('openai');

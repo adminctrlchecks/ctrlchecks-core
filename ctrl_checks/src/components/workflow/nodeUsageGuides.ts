@@ -790,18 +790,16 @@ Sends a notification email.`,
   },
 
   slack_message: {
-    overview: 'Send messages to Slack channels. Supports rich formatting, blocks, and custom bot appearance.',
-    inputs: ['message content'],
-    outputs: ['message_id', 'channel'],
-    example: `Webhook URL: https://hooks.slack.com/services/...
-Channel: #alerts
+    overview: 'Send messages to Slack channels through a Slack OAuth app/bot connection. Supports Block Kit and optional bot appearance overrides when the app allows them.',
+    inputs: ['channel', 'message', 'blocks (optional)', 'username/iconEmoji (optional)'],
+    outputs: ['id', 'status', 'channel', 'ts', 'message'],
+    example: `Channel: #alerts
 Message: "New order: {{input.orderId}} - Total: {{input.total}}"
-Icon: :robot_face:
+Blocks: []
 
-Sends formatted alert to Slack channel.`,
-    tips: ['Create webhook at api.slack.com', 'Use emoji for visual appeal', 'Blocks for rich formatting'],
+Sends a bot message through chat.postMessage.`,
+    tips: ['Select a Slack OAuth2 connection', 'Invite the bot to private channels', 'Use Slack Webhook for a saved Incoming Webhook URL'],
   },
-
   discord_webhook: {
     overview: 'Send messages to Discord channels via a selected webhook connection. Great for notifications and alerts.',
     inputs: ['message', 'username (optional)', 'avatarUrl (optional)'],
@@ -962,16 +960,14 @@ Output: HMAC signature`,
   },
 
   slack_webhook: {
-    overview: 'Simple Slack webhook for quick messages. Less features than Slack Message but easier to set up.',
-    inputs: ['webhookUrl', 'text'],
-    outputs: ['status', 'response'],
-    example: `Webhook URL: https://hooks.slack.com/services/...
-Text: "Workflow completed at {{input.timestamp}}"
+    overview: 'Send simple Slack messages through a saved Slack Incoming Webhook connection.',
+    inputs: ['message'],
+    outputs: ['id', 'status', 'provider', 'message'],
+    example: `Message: "Workflow completed at {{input.timestamp}}"
 
-Sends simple text message to Slack.`,
-    tips: ['Simplest Slack integration', 'No blocks or rich formatting', 'Good for basic alerts'],
+Sends a simple text payload to the webhook channel.`,
+    tips: ['Save the Incoming Webhook URL as a Connection', 'The target channel is chosen when the webhook is created in Slack', 'Use Slack for OAuth bot sending and Block Kit'],
   },
-
   google_doc: {
     overview: 'Read, create, or update Google Docs documents. Extract text content from existing documents, create new documents, or add content to existing ones. The read operation extracts ALL text including paragraphs, tables, and lists.',
     inputs: ['documentId or full URL (required for read/update)', 'title (required for create)', 'content (required for create/update)'],

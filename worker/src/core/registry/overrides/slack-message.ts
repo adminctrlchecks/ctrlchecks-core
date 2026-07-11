@@ -1,7 +1,9 @@
 /**
- * ✅ SLACK MESSAGE NODE - Migrated to Registry
- * 
- * Sends messages to Slack channels.
+ * Slack Message node metadata override.
+ *
+ * Slack Message is the OAuth/bot sender. Incoming webhook URLs are handled by
+ * slack_webhook, but the legacy executor still accepts old saved webhookUrl
+ * configs for backward compatibility.
  */
 
 import type { UnifiedNodeDefinition } from '../../types/unified-node-contract';
@@ -14,20 +16,6 @@ export function overrideSlackMessage(
 ): UnifiedNodeDefinition {
   const inputSchema = {
     ...def.inputSchema,
-    // Webhook URL is a config value (not an auth secret) — ownership='value' keeps it
-    // in the node properties panel where the user can type it directly.
-    // The field-ownership.ts URL guard (webhook_url helpCategory) already returns 'value'.
-    webhookUrl: def.inputSchema.webhookUrl
-      ? {
-          ...def.inputSchema.webhookUrl,
-          ownership: 'value' as const,
-          fillMode: {
-            default: 'manual_static' as const,
-            supportsRuntimeAI: false,
-            supportsBuildtimeAI: false,
-          },
-        }
-      : def.inputSchema.webhookUrl,
     channel: def.inputSchema.channel
       ? {
           ...def.inputSchema.channel,
@@ -39,7 +27,6 @@ export function overrideSlackMessage(
           },
         }
       : def.inputSchema.channel,
-    // Canonical body: NodeLibrary documents `text` as alias for `message`; one strict requirement only.
     message: def.inputSchema.message
       ? {
           ...def.inputSchema.message,
@@ -53,20 +40,6 @@ export function overrideSlackMessage(
           essentialForExecution: true,
         }
       : def.inputSchema.message,
-    text: def.inputSchema.text
-      ? {
-          ...def.inputSchema.text,
-          ownership: 'value' as const,
-          fillMode: {
-            default: 'buildtime_ai_once' as const,
-            supportsRuntimeAI: true,
-            supportsBuildtimeAI: true,
-          },
-          role: 'short_summary' as const,
-          aliasOf: 'message',
-          essentialForExecution: false,
-        }
-      : def.inputSchema.text,
     blocks: def.inputSchema.blocks
       ? {
           ...def.inputSchema.blocks,
@@ -102,28 +75,43 @@ export function overrideSlackMessage(
         }
       : def.inputSchema.iconEmoji,
   };
+
   return {
     ...def,
+    description: 'Send messages using a Slack app/bot connection.',
     inputSchema,
-    requiredInputs: (def.requiredInputs || []).filter((field) => field !== 'webhookUrl'),
+    requiredInputs: ['message'],
+    operationContracts: [{
+      operation: 'default',
+      label: 'Send Slack Message',
+      requiredFields: ['message'],
+      optionalFields: ['channel', 'blocks', 'username', 'iconEmoji'],
+      conditionallyRequiredFields: [{ field: 'channel', when: { auth: 'slack_oauth2' } }],
+      credentialProviders: ['slack'],
+      outputFields: ['id', 'status', 'provider', 'ok', 'channel', 'ts', 'message', 'error'],
+      status: 'implemented',
+      forbiddenFields: ['webhookUrl', 'botToken', 'accessToken', 'access_token', 'token'],
+    }],
     credentialSchema: {
       requirements: [
         {
           provider: 'slack',
           category: 'oauth',
           required: false,
-          description: 'Slack OAuth bot token for chat.postMessage. Alternatively provide webhookUrl for Incoming Webhooks.',
+          description: 'Slack OAuth bot token for chat.postMessage.',
           credentialTypeId: 'slack_oauth2',
+          credentialTypeIds: ['slack_oauth2'],
+          authType: 'oauth2' as const,
+          label: 'Slack OAuth2',
+          testable: true,
         },
       ],
-      credentialFields: Array.from(new Set([...(def.credentialSchema?.credentialFields || []), 'accessToken', 'botToken'])),
+      credentialFields: ['accessToken', 'access_token', 'botToken', 'bot_token', 'token'],
     },
     tags: Array.from(
       new Set([...(def.tags || []), 'communication', 'output', 'slack'])
     ),
     execute: async (context) => {
-      // Use legacy executor for now (complex Slack API integration)
-      // TODO: Port full Slack message logic to registry when time permits
       return await executeViaLegacyExecutor({ context, schema });
     },
   };

@@ -3978,19 +3978,14 @@ export class NodeLibrary {
       providers: ['slack'],
       keywords: [
         'slack', 'slack message', 'slack channel', 'slack workspace',
-        'slack webhook', 'slack bot', 'slack api', 'slack integration'
+        'slack bot', 'slack api', 'slack integration'
       ],
       configSchema: {
         required: ['message'],
         optional: {
-          webhookUrl: {
-            type: 'string',
-            description: 'Slack incoming webhook URL',
-            examples: ['https://hooks.slack.com/services/...'],
-          },
           channel: {
             type: 'string',
-            description: 'Slack channel or user ID',
+            description: 'Slack channel or user ID. Required when using the Slack OAuth bot connection.',
             examples: ['#general', '@username', '{{$json.channel}}'],
             fillMode: { default: 'buildtime_ai_once', supportsRuntimeAI: true, supportsBuildtimeAI: true },
           },
@@ -4004,19 +3999,14 @@ export class NodeLibrary {
             description: 'Slack blocks JSON (optional)',
             examples: ['[{"type":"section","text":{"type":"mrkdwn","text":"Hello"}}]'],
           },
-          text: {
-            type: 'string',
-            description: 'Message text (alias for message)',
-            fillMode: { default: 'buildtime_ai_once', supportsRuntimeAI: true, supportsBuildtimeAI: true },
-          },
           username: {
             type: 'string',
-            description: 'Bot username',
+            description: 'Bot username override, if the Slack app allows customized bot names',
             fillMode: { default: 'buildtime_ai_once', supportsRuntimeAI: false, supportsBuildtimeAI: true },
           },
           iconEmoji: {
             type: 'string',
-            description: 'Icon emoji',
+            description: 'Bot icon emoji override, if the Slack app allows customized bot icons',
           },
         },
       },
@@ -4031,11 +4021,11 @@ export class NodeLibrary {
         ],
         keywords: [
           'slack', 'slack message', 'slack channel', 'slack workspace',
-          'slack webhook', 'slack bot', 'slack api', 'slack integration'
+          'slack bot', 'slack api', 'slack integration'
         ],
         useCases: ['Team notifications', 'Alerts', 'Reports'],
         // ✅ ROOT-LEVEL: Semantic intent description for AI understanding
-        intentDescription: 'Slack message node that sends messages to Slack channels or users via Slack webhooks or API. Sends notifications, alerts, and reports to Slack workspaces. Used for team notifications, alert systems, and Slack-based communication workflows.',
+        intentDescription: 'Slack message node that sends messages to Slack channels or users via a Slack OAuth bot connection and chat.postMessage. Sends notifications, alerts, and reports to Slack workspaces. Used for team notifications, alert systems, and Slack-based communication workflows.',
         intentCategories: ['slack', 'communication', 'notification', 'team_collaboration'],
       },
       commonPatterns: [],
@@ -8429,16 +8419,11 @@ export class NodeLibrary {
       category: 'output',
       description: 'Send messages via Slack webhook',
       configSchema: {
-        required: ['webhookUrl', 'message'],
+        required: ['message'],
         optional: {
-          webhookUrl: {
-            type: 'string',
-            description: 'Slack webhook URL',
-            examples: ['https://hooks.slack.com/services/...'],
-          },
           message: {
             type: 'string',
-            description: 'Message text',
+            description: 'Message text to send through the selected Slack Incoming Webhook connection',
             examples: ['{{$json.message}}'],
           },
         },
@@ -8459,7 +8444,7 @@ export class NodeLibrary {
       commonPatterns: [],
       validationRules: [],
       capabilities: ['notification.send', 'slack.send'],
-      providers: ['slack'],
+      providers: ['slack_webhook'],
       keywords: [
         'slack webhook', 'slack webhook node', 'webhook slack', 'slack webhook message',
         'slack webhook send', 'send slack webhook', 'slack webhook notification',

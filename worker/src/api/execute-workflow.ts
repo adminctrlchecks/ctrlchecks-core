@@ -13775,7 +13775,7 @@ export async function executeNodeLegacy(
       const channel = getStringProperty(config, 'channel', '');
       const username = getStringProperty(config, 'username', 'CtrlChecks Bot');
       const iconEmoji = getStringProperty(config, 'iconEmoji', ':zap:');
-      const message = getStringProperty(config, 'message', '');
+      const message = getStringProperty(config, 'message', '') || getStringProperty(config, 'text', '');
       const blocksJson = getStringProperty(config, 'blocks', '[]');
 
       if (!webhookUrl) {
@@ -13795,7 +13795,7 @@ export async function executeNodeLegacy(
       if (!webhookUrl && !botToken) {
         return {
           ...inputObj,
-          _error: 'Slack Message node: Webhook URL or Slack OAuth bot token is required',
+          _error: 'Slack Message node: Slack OAuth bot token is required',
         };
       }
 
@@ -13943,20 +13943,22 @@ export async function executeNodeLegacy(
 
     case 'slack_webhook': {
       // Slack Webhook node - simplified webhook for basic messages
-      let webhookUrl = getStringProperty(config, 'webhookUrl', '');
-      const text = getStringProperty(config, 'text', '');
+      let webhookUrl =
+        getStringProperty(config, 'webhookUrl', '') ||
+        getStringProperty(config, 'webhook_url', '') ||
+        getStringProperty(config, 'url', '');
+      const text = getStringProperty(config, 'message', '') || getStringProperty(config, 'text', '');
 
       if (!webhookUrl) {
-        const stored = await retrieveDashboardCredential({
+        const parsed = await retrieveRuntimeCredentialObject({
           userId,
           currentUserId,
           workflowId,
           nodeId: node.id,
           nodeType: type,
-          key: 'slack',
+          keys: ['slack_webhook', 'slack'],
         });
-        const parsed = parseCredentialValue(stored);
-        webhookUrl = parsed.webhookUrl || parsed.url || parsed.value || stored || '';
+        webhookUrl = pickCredentialValue(parsed, ['webhookUrl', 'webhook_url', 'url']) || '';
       }
 
       if (!webhookUrl) {

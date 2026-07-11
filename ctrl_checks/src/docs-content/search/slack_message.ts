@@ -2,75 +2,43 @@ import type { DocsSearchIndexItem } from '../search-index';
 
 export const slackMessageSearchIndex = [
   {
-    "type": "node",
-    "title": "Slack",
-    "slug": "slack_message",
-    "category": "Communication",
-    "href": "/docs/nodes/slack_message",
-    "text": "Slack Send messages to Slack channels or users Use this node when a workflow needs slack behavior with schema-driven inputs from the CtrlChecks node registry. Communication"
+    type: 'node',
+    title: 'Slack',
+    slug: 'slack_message',
+    category: 'Communication',
+    href: '/docs/nodes/slack_message',
+    text: 'Slack Send messages using a Slack OAuth app or bot connection with chat.postMessage.',
   },
   {
-    "type": "operation",
-    "title": "Slack: Configure",
-    "slug": "slack_message",
-    "category": "Communication",
-    "href": "/docs/nodes/slack_message#operation-configure",
-    "text": "Slack Configuration Configure Configure with the Slack node using the configured input fields. configure"
+    type: 'operation',
+    title: 'Slack: Send Slack Message',
+    slug: 'slack_message',
+    category: 'Communication',
+    href: '/docs/nodes/slack_message#operation-configure',
+    text: 'Send a Slack message to a channel or direct message using the selected Slack OAuth2 connection.',
   },
   {
-    "type": "field",
-    "title": "Slack: Webhook Url",
-    "slug": "slack_message",
-    "category": "Communication",
-    "href": "/docs/nodes/slack_message#operation-configure",
-    "text": "Slack Configuration Configure Webhook Url webhookUrl Slack incoming webhook URL"
+    type: 'field',
+    title: 'Slack: Channel',
+    slug: 'slack_message',
+    category: 'Communication',
+    href: '/docs/nodes/slack_message#operation-configure',
+    text: 'Channel channel Slack channel name, channel ID, or user ID for chat.postMessage.',
   },
   {
-    "type": "field",
-    "title": "Slack: Channel",
-    "slug": "slack_message",
-    "category": "Communication",
-    "href": "/docs/nodes/slack_message#operation-configure",
-    "text": "Slack Configuration Configure Channel channel Slack channel or user ID"
+    type: 'field',
+    title: 'Slack: Message',
+    slug: 'slack_message',
+    category: 'Communication',
+    href: '/docs/nodes/slack_message#operation-configure',
+    text: 'Message message Text to send to Slack.',
   },
   {
-    "type": "field",
-    "title": "Slack: Message",
-    "slug": "slack_message",
-    "category": "Communication",
-    "href": "/docs/nodes/slack_message#operation-configure",
-    "text": "Slack Configuration Configure Message message Message text to send to Slack"
+    type: 'field',
+    title: 'Slack: Blocks',
+    slug: 'slack_message',
+    category: 'Communication',
+    href: '/docs/nodes/slack_message#operation-configure',
+    text: 'Blocks blocks Optional Slack Block Kit JSON array.',
   },
-  {
-    "type": "field",
-    "title": "Slack: Blocks",
-    "slug": "slack_message",
-    "category": "Communication",
-    "href": "/docs/nodes/slack_message#operation-configure",
-    "text": "Slack Configuration Configure Blocks blocks Slack blocks JSON (optional)"
-  },
-  {
-    "type": "field",
-    "title": "Slack: Text",
-    "slug": "slack_message",
-    "category": "Communication",
-    "href": "/docs/nodes/slack_message#operation-configure",
-    "text": "Slack Configuration Configure Text text Message text (alias for message)"
-  },
-  {
-    "type": "field",
-    "title": "Slack: Username",
-    "slug": "slack_message",
-    "category": "Communication",
-    "href": "/docs/nodes/slack_message#operation-configure",
-    "text": "Slack Configuration Configure Username username Bot username"
-  },
-  {
-    "type": "field",
-    "title": "Slack: Icon Emoji",
-    "slug": "slack_message",
-    "category": "Communication",
-    "href": "/docs/nodes/slack_message#operation-configure",
-    "text": "Slack Configuration Configure Icon Emoji iconEmoji Icon emoji"
-  }
 ] satisfies DocsSearchIndexItem[];

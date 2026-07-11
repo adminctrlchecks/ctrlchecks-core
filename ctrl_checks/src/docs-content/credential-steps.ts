@@ -48,6 +48,16 @@ export const credentialSteps: Record<string, CredentialGuide> = {
     ],
     docsUrl: 'https://api.slack.com/messaging/webhooks',
   },
+  'Slack Incoming Webhook': {
+    steps: [
+      'Go to api.slack.com/apps and sign in. Select your existing app, or create a new Slack app.',
+      'Open Incoming Webhooks and turn Activate Incoming Webhooks on.',
+      'Click Add New Webhook to Workspace, select the target channel, and click Allow.',
+      'Copy the webhook URL that starts with https://hooks.slack.com/services/.',
+      'In CtrlChecks, open Connections -> Add Connection -> Slack Incoming Webhook, paste the URL, and save.',
+    ],
+    docsUrl: 'https://api.slack.com/messaging/webhooks',
+  },
 
   // ─── OpenAI ────────────────────────────────────────────────────
   'OpenAI API Key': {

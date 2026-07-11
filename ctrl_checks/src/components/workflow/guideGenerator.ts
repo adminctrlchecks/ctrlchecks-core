@@ -2266,7 +2266,7 @@ function generateSpreadsheetIDGuide(): FieldGuide {
 
 function generateWebhookURLGuide(nodeType: string, fieldLabel: string): FieldGuide {
   const serviceGuides: Record<string, FieldGuide> = {
-    slack_message: {
+    slack_webhook: {
       title: 'How to get Slack Webhook URL?',
       url: 'https://api.slack.com/apps',
       steps: [

@@ -9,7 +9,7 @@ export interface NodeCredentialRequirement {
   requiredCredentials: CredentialField[];
   optionalCredentials?: CredentialField[];
   authMethod: 'oauth' | 'api_key' | 'webhook' | 'token' | 'none';
-  oauthProvider?: 'google' | 'linkedin' | 'github' | 'microsoft';
+  oauthProvider?: 'google' | 'linkedin' | 'github' | 'microsoft' | 'slack';
 }
 
 export interface CredentialField {
@@ -32,23 +32,37 @@ export const NODE_CREDENTIAL_REQUIREMENTS: Map<string, NodeCredentialRequirement
   ['slack_message', {
     nodeType: 'slack_message',
     requiredCredentials: [{
-      fieldName: 'webhookUrl',
-      displayName: 'Slack Webhook URL',
-      type: 'url',
-      description: 'Slack incoming webhook URL for sending messages',
-      placeholder: 'https://hooks.slack.com/services/...',
-      helpText: 'Create a webhook in Slack: Apps → Incoming Webhooks → Add New Webhook',
+      fieldName: 'accessToken',
+      displayName: 'Slack OAuth2',
+      type: 'oauth',
+      description: 'Slack OAuth bot connection for chat.postMessage',
+      helpText: 'Connect Slack in Connections, then invite the bot to any private channel it should post to.',
       validation: (value: string) => {
-        if (!value) return 'Webhook URL is required';
-        if (!value.startsWith('https://hooks.slack.com/')) {
-          return 'Invalid Slack webhook URL format';
-        }
+        if (!value) return 'Slack OAuth connection is required';
+        return true;
+      },
+    }],
+    authMethod: 'oauth',
+    oauthProvider: 'slack',
+  }],
+
+  ['slack_webhook', {
+    nodeType: 'slack_webhook',
+    requiredCredentials: [{
+      fieldName: 'webhookUrl',
+      displayName: 'Slack Incoming Webhook',
+      type: 'url',
+      description: 'Slack Incoming Webhook URL for simple channel-bound messages',
+      placeholder: 'https://hooks.slack.com/services/...',
+      helpText: 'Create a Slack Incoming Webhook and save the URL as a connection.',
+      validation: (value: string) => {
+        if (!value) return 'Slack Incoming Webhook URL is required';
+        if (!value.startsWith('https://hooks.slack.com/')) return 'Invalid Slack webhook URL format';
         return true;
       },
     }],
     authMethod: 'webhook',
   }],
-
   // ============================================
   // LINKEDIN NODES
   // ============================================

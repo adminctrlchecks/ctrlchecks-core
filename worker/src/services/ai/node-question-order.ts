@@ -1541,21 +1541,12 @@ export const NODE_QUESTION_CONFIGS: Record<string, NodeQuestionConfig> = {
     credentialProvider: 'slack',
     questions: [
       {
-        id: 'slack_webhookUrl',
-        field: 'webhookUrl',
-        prompt: 'What is the Slack webhook URL?',
-        type: 'string',
-        required: true,
-        askOrder: 0,
-        example: 'https://hooks.slack.com/services/...',
-      },
-      {
         id: 'slack_channel',
         field: 'channel',
         prompt: 'Which Slack channel should we post to?',
         type: 'string',
-        required: false,
-        askOrder: 1,
+        required: true,
+        askOrder: 0,
         example: '#general',
         placeholder: '#channel-name or @username',
       },
@@ -1565,7 +1556,7 @@ export const NODE_QUESTION_CONFIGS: Record<string, NodeQuestionConfig> = {
         prompt: 'What message should we send?',
         type: 'string',
         required: true,
-        askOrder: 2,
+        askOrder: 1,
         example: 'New lead: {{$json.email}}',
       },
       {
@@ -1574,7 +1565,7 @@ export const NODE_QUESTION_CONFIGS: Record<string, NodeQuestionConfig> = {
         prompt: 'Slack blocks JSON (optional)',
         type: 'json',
         required: false,
-        askOrder: 3,
+        askOrder: 2,
       },
       {
         id: 'slack_username',

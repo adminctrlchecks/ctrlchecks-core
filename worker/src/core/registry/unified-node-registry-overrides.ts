@@ -40,6 +40,7 @@ import { overrideLimit } from './overrides/limit';
 import { overrideAggregate } from './overrides/aggregate';
 import { overrideHttpRequest } from './overrides/http-request';
 import { overrideSlackMessage } from './overrides/slack-message';
+import { overrideSlackWebhook } from './overrides/slack-webhook';
 import { overrideGoogleSheets } from './overrides/google-sheets';
 import { overrideAirtable } from './overrides/airtable';
 import { overrideNotion } from './overrides/notion';
@@ -188,6 +189,7 @@ const overridesByType: Record<string, OverrideFn> = {
   aggregate: overrideAggregate,
   http_request: overrideHttpRequest,
   slack_message: overrideSlackMessage,
+  slack_webhook: overrideSlackWebhook,
   google_sheets: overrideGoogleSheets,
   airtable: overrideAirtable,
   notion: overrideNotion,

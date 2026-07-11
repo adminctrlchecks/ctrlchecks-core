@@ -2880,8 +2880,7 @@ export class AgenticWorkflowBuilder {
     if (selectedServices.outputChannel) {
       const channel = selectedServices.outputChannel.toLowerCase();
       if (channel.includes('slack')) {
-        // Use webhook URL for Slack (more common and easier to set up)
-        credentials.push('SLACK_WEBHOOK_URL');
+        credentials.push(channel.includes('webhook') ? 'SLACK_WEBHOOK_URL' : 'SLACK_OAUTH_CONNECTION');
       } else if (channel.includes('discord')) {
         credentials.push('DISCORD_WEBHOOK_URL');
       } else if (channel.includes('email') || channel.includes('smtp')) {
@@ -2963,8 +2962,8 @@ export class AgenticWorkflowBuilder {
       
       // Check for platforms in prompt
       if (promptLower.includes('slack')) {
-        // Use webhook URL for Slack (more common and easier to set up)
-        if (!credentials.includes('SLACK_WEBHOOK_URL')) credentials.push('SLACK_WEBHOOK_URL');
+        const slackCredential = promptLower.includes('webhook') ? 'SLACK_WEBHOOK_URL' : 'SLACK_OAUTH_CONNECTION';
+        if (!credentials.includes(slackCredential)) credentials.push(slackCredential);
       }
       if (promptLower.includes('discord')) {
         if (!credentials.includes('DISCORD_WEBHOOK_URL')) credentials.push('DISCORD_WEBHOOK_URL');
@@ -2994,8 +2993,8 @@ export class AgenticWorkflowBuilder {
       requirements.platforms.forEach(platform => {
         const platformLower = platform.toLowerCase();
         if (platformLower.includes('slack')) {
-          // Use webhook URL for Slack (more common and easier to set up)
-          if (!credentials.includes('SLACK_WEBHOOK_URL')) credentials.push('SLACK_WEBHOOK_URL');
+          const slackCredential = platformLower.includes('webhook') ? 'SLACK_WEBHOOK_URL' : 'SLACK_OAUTH_CONNECTION';
+          if (!credentials.includes(slackCredential)) credentials.push(slackCredential);
         }
         if (platformLower.includes('discord')) {
           if (!credentials.includes('DISCORD_WEBHOOK_URL')) credentials.push('DISCORD_WEBHOOK_URL');
@@ -3010,10 +3009,11 @@ export class AgenticWorkflowBuilder {
     // Normalize credential names to avoid duplicates (e.g., SLACK_TOKEN vs SLACK_BOT_TOKEN)
     const normalizeCredentialName = (name: string): string => {
       const upper = name.toUpperCase();
-      // Normalize Slack token variations to SLACK_BOT_TOKEN
+      // Normalize Slack token variations to Slack OAuth connection
       if (upper.includes('SLACK') && upper.includes('TOKEN') && !upper.includes('WEBHOOK')) {
-        return 'SLACK_BOT_TOKEN';
+        return 'SLACK_OAUTH_CONNECTION';
       }
+      if (upper.includes('SLACK') && upper.includes('OAUTH')) return 'SLACK_OAUTH_CONNECTION';
       // Normalize Slack webhook variations
       if (upper.includes('SLACK') && upper.includes('WEBHOOK')) {
         return 'SLACK_WEBHOOK_URL';
@@ -9795,8 +9795,8 @@ return {
         'google_bigquery': ['query', 'projectId', 'datasetId'],
         
         // Communication
-        'slack_message': ['webhookUrl', 'channel', 'message', 'text', 'blocks', 'username', 'iconEmoji'],
-        'slack_webhook': ['webhookUrl', 'message', 'text'],
+        'slack_message': ['channel', 'message', 'blocks', 'username', 'iconEmoji'],
+        'slack_webhook': ['message'],
         'email': ['to', 'subject', 'text', 'html', 'from', 'smtpHost', 'smtpPort'],
         'discord': ['channelId', 'message', 'botToken'],
         'discord_webhook': ['webhookUrl', 'message'],

@@ -370,6 +370,28 @@ export const credentialTypeDefinitions: CredentialTypeDefinition[] = addCredenti
     refresh: { enabled: false, refreshBeforeSeconds: 300 },
     maskFields: ['access_token', 'refresh_token', 'authed_user'],
   },
+  {
+    id: 'slack_webhook',
+    provider: 'slack_webhook',
+    displayName: 'Slack Incoming Webhook',
+    authType: 'api_key',
+    inputFields: [
+      {
+        name: 'webhookUrl',
+        label: 'Incoming Webhook URL',
+        type: 'url',
+        required: true,
+        secret: true,
+        placeholder: 'https://hooks.slack.com/services/...',
+        helpText: 'Create this in Slack app settings -> Incoming Webhooks -> Add New Webhook to Workspace, then copy the URL.',
+      },
+    ],
+    form: { layout: 'stacked', submitLabel: 'Save Webhook', testLabel: 'Test Slack Webhook' },
+    validation: { requiredFields: ['webhookUrl'] },
+    injection: [{ target: 'header', name: 'X-Slack-Webhook', valueTemplate: '{{webhookUrl}}' }],
+    refresh: { enabled: false, refreshBeforeSeconds: 0 },
+    maskFields: ['webhookUrl', 'webhook_url', 'url'],
+  },
 
   // ─── Zoom ───────────────────────────────────────────────────────────────────
   {

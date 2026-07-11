@@ -104,10 +104,10 @@ export class ConnectorRegistry {
     });
 
     // ============================================
-    // SLACK CONNECTOR
+    // SLACK OAUTH CONNECTOR
     // ============================================
     this.register({
-      id: 'slack_webhook',
+      id: 'slack_oauth',
       provider: 'slack',
       service: 'slack',
       capabilities: [
@@ -115,19 +115,44 @@ export class ConnectorRegistry {
         'slack.send',
         'message.send',
       ],
-      keywords: ['slack', 'slack message', 'slack notification'],
+      keywords: ['slack', 'slack bot', 'slack oauth', 'slack message', 'slack notification'],
       credentialContract: {
         provider: 'slack',
-        type: 'webhook',
+        type: 'oauth',
+        scopes: ['chat:write'],
         vaultKey: 'slack',
-        displayName: 'Slack Webhook URL',
+        displayName: 'Slack OAuth2',
         required: true,
-        credentialFieldName: 'webhookUrl', // ✅ PERMANENT: Data-driven mapping
+        credentialFieldName: 'accessToken',
       },
-      nodeTypes: ['slack_message', 'slack_webhook'],
-      description: 'Send messages to Slack via webhook',
+      nodeTypes: ['slack_message'],
+      description: 'Send messages to Slack via OAuth bot connection',
     });
 
+    // ============================================
+    // SLACK WEBHOOK CONNECTOR
+    // ============================================
+    this.register({
+      id: 'slack_webhook',
+      provider: 'slack_webhook',
+      service: 'slack',
+      capabilities: [
+        'notification.send',
+        'slack.send',
+        'message.send',
+      ],
+      keywords: ['slack webhook', 'incoming webhook', 'slack notification'],
+      credentialContract: {
+        provider: 'slack_webhook',
+        type: 'webhook',
+        vaultKey: 'slack_webhook',
+        displayName: 'Slack Incoming Webhook',
+        required: true,
+        credentialFieldName: 'webhookUrl',
+      },
+      nodeTypes: ['slack_webhook'],
+      description: 'Send messages to Slack via incoming webhook',
+    });
     // ============================================
     // MAILGUN CONNECTOR
     // ============================================
