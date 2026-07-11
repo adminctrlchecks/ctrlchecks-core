@@ -718,7 +718,7 @@ export const nodeDocManifest = [
     "slug": "twilio",
     "displayName": "Twilio",
     "category": "Communication",
-    "description": "Send SMS/Voice via Twilio Use this node when a workflow needs twilio behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Send SMS messages via a Twilio account connection. Use this node when a workflow needs twilio behavior with schema-driven inputs from the CtrlChecks node registry.",
     "logoUrl": "/icons/nodes/twilio.svg"
   },
   {

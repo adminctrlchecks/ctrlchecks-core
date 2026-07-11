@@ -3210,17 +3210,20 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
   },
   {
     type: 'twilio',
-    label: 'Twilio SMS',
+    label: 'Twilio',
     category: 'output',
     icon: 'Send',
-    description: 'Twilio SMS',
+    description: 'Send SMS messages via a Twilio account connection.',
     defaultConfig: {},
+    // Account SID + Auth Token are credential-owned: resolved from the selected
+    // Twilio Account Credentials connection at execution time, never shown as
+    // normal config fields here.
     configFields: [
-      { key: 'accountSid', label: 'Account SID', type: 'text', placeholder: 'AC...', required: true, helpText: 'How to get Twilio Account SID: 1) Go to console.twilio.com 2) Sign in or create an account 3) Your Account SID is displayed on the dashboard (starts with AC) 4) Copy and paste it here' },
-      { key: 'authToken', label: 'Auth Token', type: 'text', placeholder: '...', required: true, helpText: 'How to get Twilio Auth Token: 1) In Twilio Console dashboard 2) Your Auth Token is displayed (click "show" to reveal) 3) Copy the token immediately - you won\'t see it again! 4) Paste it here securely' },
-      { key: 'from', label: 'From Number', type: 'text', placeholder: '+1234567890', required: true, helpText: 'Your Twilio phone number in E.164 format (includes + and country code). Find it in Twilio Console → Phone Numbers. Examples: +1234567890, +441234567890. Must be a verified Twilio number' },
       { key: 'to', label: 'To Number', type: 'text', placeholder: '+1234567890', required: true, helpText: 'Recipient phone number in E.164 format (includes + and country code). Supports template variables. Examples: +1234567890, +441234567890, {{input.phoneNumber}}. Must include country code' },
       { key: 'message', label: 'Message', type: 'textarea', placeholder: 'Hello from CtrlChecks!', required: true, helpText: 'SMS message text to send. Maximum 1600 characters (Twilio limit). Can include template variables like {{input}}. Examples: "Hello from CtrlChecks!", "Your code is {{input.code}}"' },
+      { key: 'from', label: 'From Number', type: 'text', placeholder: '+1234567890', required: false, helpText: 'Your Twilio phone number in E.164 format (includes + and country code). Find it in Twilio Console → Phone Numbers. Required unless Messaging Service SID is set. Examples: +1234567890, +441234567890. Must be a verified Twilio number' },
+      { key: 'messagingServiceSid', label: 'Messaging Service SID', type: 'text', placeholder: 'MG...', required: false, helpText: 'Optional: send using a Twilio Messaging Service instead of a single From number. Find it in Twilio Console → Messaging → Services. Use either From or Messaging Service SID.' },
+      { key: 'mediaUrl', label: 'Media URL (MMS)', type: 'text', placeholder: 'https://example.com/image.jpg', required: false, helpText: 'Optional: publicly accessible URL of an image, GIF, or other media file to send as an MMS attachment.' },
     ],
   },
   {

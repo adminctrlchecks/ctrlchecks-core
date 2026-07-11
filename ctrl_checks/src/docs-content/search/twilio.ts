@@ -7,7 +7,7 @@ export const twilioSearchIndex = [
     "slug": "twilio",
     "category": "Communication",
     "href": "/docs/nodes/twilio",
-    "text": "Twilio Send SMS/Voice via Twilio Use this node when a workflow needs twilio behavior with schema-driven inputs from the CtrlChecks node registry. Communication"
+    "text": "Twilio Send SMS messages via a Twilio account connection. Use this node when a workflow needs twilio behavior with schema-driven inputs from the CtrlChecks node registry. Communication"
   },
   {
     "type": "operation",
@@ -43,18 +43,18 @@ export const twilioSearchIndex = [
   },
   {
     "type": "field",
-    "title": "Twilio: Account Sid",
+    "title": "Twilio: Messaging Service SID",
     "slug": "twilio",
     "category": "Communication",
     "href": "/docs/nodes/twilio#operation-configure",
-    "text": "Twilio Configuration Configure Account Sid accountSid Twilio Account SID (optional if stored in Twilio vault credential JSON)"
+    "text": "Twilio Configuration Configure Messaging Service SID messagingServiceSid Send via a Twilio Messaging Service instead of a single From number"
   },
   {
     "type": "field",
-    "title": "Twilio: Auth Token",
+    "title": "Twilio: Media URL",
     "slug": "twilio",
     "category": "Communication",
     "href": "/docs/nodes/twilio#operation-configure",
-    "text": "Twilio Configuration Configure Auth Token authToken Twilio Auth Token (optional if provided via vault)"
+    "text": "Twilio Configuration Configure Media URL mediaUrl Publicly accessible media URL to send as an MMS attachment"
   }
 ] satisfies DocsSearchIndexItem[];

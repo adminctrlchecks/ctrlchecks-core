@@ -533,6 +533,8 @@ function mergeRuntimeCredentials(config: Record<string, unknown>, credentials: R
     ['secretKey', 'apiKey'],           // Stripe: credential 'secretKey' → generic 'apiKey'
     ['apiKey', 'secretKey'],           // Reverse: 'apiKey' also exposed as 'secretKey'
     ['authToken', 'token'],            // Twilio: authToken alias for generic token consumers
+    ['username', 'accountSid'],        // Twilio: vault 'username' (Account SID) → node 'accountSid'
+    ['password', 'authToken'],         // Twilio: vault 'password' (Auth Token) → node 'authToken'
     ['webhook_url', 'webhookUrl'],
     ['headerName', 'webhookUrl'],      // Discord/Slack webhooks: vault 'headerName' (the URL field) → node 'webhookUrl'
     ['apiToken', 'apiKey'],            // ClickUp: vault 'apiToken' → node 'apiKey'
@@ -4725,11 +4727,15 @@ export async function executeNodeLegacy(
     }
 
     case 'twilio': {
-      // ✅ Twilio node - send SMS via Twilio REST API
-      // Credentials: config.authToken + config.accountSid OR vault key "twilio"
+      // ✅ Twilio node - send SMS/MMS via Twilio REST API
+      // Credentials: resolved from the Twilio Account Credentials connection into
+      // config.accountSid/config.authToken (mergeRuntimeCredentials 'username'→'accountSid',
+      // 'password'→'authToken' aliases), with legacy config fields / vault key "twilio" as fallback.
       const toRaw = getStringProperty(config, 'to', '');
       const msgRaw = getStringProperty(config, 'message', '');
       const fromRaw = getStringProperty(config, 'from', '');
+      const messagingServiceSid = (getStringProperty(config, 'messagingServiceSid', '') || '').trim();
+      const mediaUrlRaw = getStringProperty(config, 'mediaUrl', '');
 
       if (!toRaw || !msgRaw) {
         return { ...inputObj, _error: 'Twilio: to and message are required' };
@@ -4747,11 +4753,24 @@ export async function executeNodeLegacy(
             ? (resolveWithSchema(fromRaw, execContext, 'string') as string)
             : String(resolveTypedValue(fromRaw, execContext)))
         : '';
+      const mediaUrl = mediaUrlRaw
+        ? (typeof resolveWithSchema(mediaUrlRaw, execContext, 'string') === 'string'
+            ? (resolveWithSchema(mediaUrlRaw, execContext, 'string') as string)
+            : String(resolveTypedValue(mediaUrlRaw, execContext)))
+        : '';
+
+      const e164Pattern = /^\+[1-9]\d{1,14}$/;
+      if (!e164Pattern.test(to)) {
+        return { ...inputObj, _error: `Twilio: "to" must be a valid E.164 phone number (e.g. +14155552671), got "${to}"` };
+      }
+      if (from && !e164Pattern.test(from)) {
+        return { ...inputObj, _error: `Twilio: "from" must be a valid E.164 phone number (e.g. +14155552671), got "${from}"` };
+      }
 
       let accountSid = (getStringProperty(config, 'accountSid', '') || '').trim();
       let authToken = (getStringProperty(config, 'authToken', '') || '').trim();
 
-      // Vault fallback: value can be JSON ({accountSid, authToken, from}) or "sid:token" or token-only
+      // Vault fallback: value can be JSON ({accountSid|username, authToken|password, from}) or "sid:token" or token-only
       if (!authToken || !accountSid) {
         try {
           const { retrieveCredential } = await import('../core/utils/credential-retriever');
@@ -4765,8 +4784,8 @@ export async function executeNodeLegacy(
             if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
               try {
                 const parsed = JSON.parse(trimmed) as any;
-                accountSid = accountSid || String(parsed.accountSid || parsed.sid || '').trim();
-                authToken = authToken || String(parsed.authToken || parsed.token || '').trim();
+                accountSid = accountSid || String(parsed.accountSid || parsed.sid || parsed.username || '').trim();
+                authToken = authToken || String(parsed.authToken || parsed.token || parsed.password || '').trim();
                 if (!from && parsed.from) from = String(parsed.from).trim();
               } catch {
                 // fall back below
@@ -4788,16 +4807,23 @@ export async function executeNodeLegacy(
       }
 
       if (!accountSid || !authToken) {
-        return { ...inputObj, _error: 'Twilio: missing accountSid/authToken. Provide in node config or attach vault credential "twilio".' };
+        return { ...inputObj, _error: 'Twilio: missing Account SID/Auth Token. Attach a Twilio Account Credentials connection (Account SID + Auth Token from console.twilio.com).' };
       }
 
-      if (!from) {
-        return { ...inputObj, _error: 'Twilio: from is required (Twilio phone number).' };
+      if (!from && !messagingServiceSid) {
+        return { ...inputObj, _error: 'Twilio: either "from" (a Twilio phone number) or "messagingServiceSid" is required.' };
       }
 
       try {
         const url = `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(accountSid)}/Messages.json`;
-        const body = new URLSearchParams({ To: to, From: from, Body: message });
+        const params: Record<string, string> = { To: to, Body: message };
+        if (messagingServiceSid) {
+          params.MessagingServiceSid = messagingServiceSid;
+        } else {
+          params.From = from;
+        }
+        if (mediaUrl) params.MediaUrl = mediaUrl;
+        const body = new URLSearchParams(params);
         const basic = Buffer.from(`${accountSid}:${authToken}`).toString('base64');
         const resp = await fetch(url, {
           method: 'POST',
@@ -4811,7 +4837,13 @@ export async function executeNodeLegacy(
         if (!resp.ok) {
           return { ...inputObj, _error: `Twilio send failed (${resp.status})`, _errorDetails: data };
         }
-        return { ...inputObj, success: true, twilio: data };
+        return {
+          ...inputObj,
+          success: true,
+          sid: (data as any)?.sid || '',
+          status: (data as any)?.status || '',
+          twilio: data,
+        };
       } catch (e) {
         return { ...inputObj, _error: `Twilio error: ${e instanceof Error ? e.message : String(e)}` };
       }

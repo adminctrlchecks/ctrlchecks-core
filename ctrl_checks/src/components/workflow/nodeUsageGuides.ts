@@ -2610,22 +2610,23 @@ Output: {
   },
 
   twilio: {
-    overview: 'Send SMS messages using Twilio. Requires Account SID, Auth Token, and a Twilio phone number. Perfect for SMS notifications, alerts, or two-factor authentication.',
-    inputs: ['accountSid', 'authToken', 'from', 'to', 'message'],
-    outputs: ['messageId', 'status', 'price'],
+    overview: 'Send SMS or MMS messages using a Twilio account connection. Requires a From number or Messaging Service SID. Perfect for SMS notifications, alerts, or two-factor authentication.',
+    inputs: ['to', 'message', 'from', 'messagingServiceSid', 'mediaUrl'],
+    outputs: ['sid', 'status', 'twilio'],
     example: `From: +1234567890
 To: +1987654321
 Message: "Hello from CtrlChecks!"
 
 Output: {
-  messageId: "SM1234567890abcdef",
-  status: "sent",
-  price: "0.0075"
+  sid: "SM1234567890abcdef",
+  status: "queued",
+  twilio: { sid, status, to, from, body, price, ... }
 }`,
     tips: [
       'Phone numbers in E.164 format (include + and country code)',
-      'Get credentials from Twilio Console',
-      'Must have a verified Twilio phone number',
+      "Connect your Twilio account from the node's connection picker (Account SID + Auth Token)",
+      'Use either a From number or a Messaging Service SID',
+      'Set Media URL to send an MMS attachment',
       'Message limit: 1600 characters',
       'Supports template variables',
     ],

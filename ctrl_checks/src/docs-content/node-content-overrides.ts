@@ -356,12 +356,17 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
 
   twilio: {
     default: {
-      description: 'Send an SMS message via Twilio.',
-      outputExample: { sid: 'SM1234abcd5678efgh', status: 'queued', to: '+15551234567', from: '+15559876543', body: 'Your verification code is 4821.' },
-      outputDescription: 'sid: Twilio message SID for tracking. status: Message delivery status (queued, sent, delivered, failed). to / from: Recipient and sender phone numbers.',
+      description: 'Send an SMS message via a Twilio account connection.',
+      outputExample: {
+        success: true,
+        sid: 'SM1234abcd5678efgh',
+        status: 'queued',
+        twilio: { sid: 'SM1234abcd5678efgh', status: 'queued', to: '+15551234567', from: '+15559876543', body: 'Your verification code is 4821.' },
+      },
+      outputDescription: 'sid / status: Twilio message SID and delivery status (queued, sent, delivered, failed), flattened for convenience. twilio: the full raw Twilio API response.',
       usageExample: {
         scenario: 'Send a 2FA SMS verification code to a user who is logging in',
-        inputValues: { to: '{{$json.phoneNumber}}', body: 'Your CtrlChecks verification code is {{$json.otpCode}}. Expires in 10 minutes.' },
+        inputValues: { to: '{{$json.phoneNumber}}', message: 'Your CtrlChecks verification code is {{$json.otpCode}}. Expires in 10 minutes.' },
         expectedOutput: 'SMS is queued. Use `{{$json.sid}}` to check delivery status via the Twilio console.',
       },
     },

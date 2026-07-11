@@ -298,21 +298,17 @@ Tip: Use {{$json.phone}} if the number comes from a form or database in an earli
       from: `What this field is: Your Twilio phone number — the number the SMS will be sent FROM.
 Where to find it: Log in to console.twilio.com → Phone Numbers → Manage → Active Numbers. Copy one of your Twilio numbers.
 Example: +15005550006
-Note: This must be a number you own in Twilio — you cannot use a personal number here.`,
-      body: `What this field is: The text message the recipient will receive.
+Note: This must be a number you own in Twilio — you cannot use a personal number here. Required unless Messaging Service SID is set.`,
+      message: `What this field is: The text message the recipient will receive.
 Important: Standard SMS is limited to 160 characters. Messages over 160 characters are split and billed per part.
 Example: Hi {{$json.name}}, your verification code is {{$json.code}}. It expires in 10 minutes. Do not share this code.
 Tip: Use {{$json.field}} to personalize with data from an earlier step.`,
-    },
-    '*': {
-      accountSid: `What this field is: Your Twilio Account SID — a unique identifier for your Twilio account.
-Where to find it: Log in to console.twilio.com → the Dashboard shows Account SID right at the top. It starts with AC.
-Example: ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-Note: The Account SID is not secret — it is safe to store in config. But the Auth Token is secret.`,
-      authToken: `What this field is: Your Twilio Auth Token — the password for your Twilio account.
-Where to find it: console.twilio.com → Dashboard → click "Show" next to Auth Token.
-Keep this private — do not share it or commit it to code.
-Example: your32characterauthtokenhere1234`,
+      messagingServiceSid: `What this field is: The SID of a Twilio Messaging Service, used to send from a pool of numbers instead of one fixed From number.
+Where to find it: console.twilio.com → Messaging → Services.
+Example: MGxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+Use either From or Messaging Service SID, not both.`,
+      mediaUrl: `What this field is: A public URL of an image, GIF, or other media file to attach to the message (sends as MMS instead of SMS).
+Example: https://example.com/image.jpg`,
     },
   },
 

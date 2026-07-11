@@ -945,7 +945,7 @@ export const specificGuides: Record<string, GuideOverride> = {
   // ─── Twilio ───────────────────────────────────────────────────────────────────
 
   twilio_api_key: {
-    summary: 'Get your Twilio Account SID and Auth Token to send SMS, make calls, and use other Twilio services.',
+    summary: 'Get your Twilio Account SID and Auth Token to send SMS and MMS messages.',
     prerequisites: [
       'A Twilio account at console.twilio.com (free trial includes credits).',
       'A Twilio phone number to use as the sender (from Phone Numbers → Manage → Active Numbers).',
@@ -957,14 +957,16 @@ export const specificGuides: Record<string, GuideOverride> = {
       'Click "Show" next to Auth Token to reveal it, then copy it.',
       'Enter both values into the fields and click Save.',
     ],
+    // Keys match credential-type-registry.ts twilio_api_key inputFields ('username' = Account SID,
+    // 'password' = Auth Token) — CredentialGuidePanel looks up fieldGuides by inputField.name.
     fieldGuides: {
-      accountSid: {
+      username: {
         label: 'Account SID',
         description: 'Twilio Account SID — identifies your Twilio account.',
         whereToFind: 'console.twilio.com main dashboard → Account Info section. Starts with AC.',
         example: 'AC...',
       },
-      authToken: {
+      password: {
         label: 'Auth Token',
         description: 'Twilio Auth Token — secret credential paired with Account SID.',
         whereToFind: 'console.twilio.com main dashboard → Account Info section → click "Show" to reveal.',

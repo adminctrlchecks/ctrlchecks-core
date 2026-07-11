@@ -8628,13 +8628,17 @@ export class NodeLibrary {
       type: 'twilio',
       label: 'Twilio',
       category: 'output',
-      description: 'Send SMS/Voice via Twilio',
+      description: 'Send SMS messages via a Twilio account connection.',
       configSchema: {
+        // Account SID + Auth Token are credential-owned: resolved from the selected
+        // Twilio Account Credentials connection at execution time (see
+        // PROVIDER_CREDENTIAL_MAP / execute-workflow.ts case 'twilio'), never
+        // declared as normal config fields here.
         required: ['to', 'message'],
         optional: {
           to: {
             type: 'string',
-            description: 'Recipient phone number',
+            description: 'Recipient phone number, E.164 format (e.g. +14155552671)',
             examples: ['+1234567890'],
           },
           message: {
@@ -8644,38 +8648,39 @@ export class NodeLibrary {
           },
           from: {
             type: 'string',
-            description: 'Sender phone number',
+            description: 'Sender phone number, E.164 format. Required unless messagingServiceSid is set.',
             examples: ['+1234567890'],
           },
-          accountSid: {
+          messagingServiceSid: {
             type: 'string',
-            description: 'Twilio Account SID (optional if stored in Twilio vault credential JSON)',
-            examples: ['ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'],
+            description: 'Twilio Messaging Service SID to send from instead of a single From number (optional; use either from or messagingServiceSid)',
+            examples: ['MGxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'],
           },
-          authToken: {
+          mediaUrl: {
             type: 'string',
-            description: 'Twilio Auth Token (optional if provided via vault)',
+            description: 'Publicly accessible media URL to send as an MMS attachment (optional)',
+            examples: ['https://example.com/image.jpg'],
           },
         },
       },
       aiSelectionCriteria: {
-        whenToUse: ['User mentions Twilio', 'SMS/Voice messaging'],
-        whenNotToUse: ['Other messaging platforms'],
+        whenToUse: ['User mentions Twilio', 'SMS/MMS messaging'],
+        whenNotToUse: ['Other messaging platforms', 'Voice calls (not supported by this node)'],
         keywords: [
-          'twilio', 'twilio sms', 'twilio voice', 'twilio message',
-          'twilio api', 'twilio integration', 'twilio phone', 'twilio call'
+          'twilio', 'twilio sms', 'twilio mms', 'twilio message',
+          'twilio api', 'twilio integration', 'twilio phone'
         ],
-        useCases: ['SMS/Voice messaging'],
-        intentDescription: 'Twilio integration node that sends SMS and voice messages via Twilio API. Sends text messages (SMS) and makes voice calls to phone numbers. Used for SMS messaging, voice calls, and Twilio-based communication workflows.',
-        intentCategories: ['twilio', 'sms', 'voice', 'communication', 'mobile_messaging'],
+        useCases: ['SMS/MMS messaging'],
+        intentDescription: 'Twilio integration node that sends SMS and MMS text messages via the Twilio Messages API. Used for SMS notifications, alerts, and Twilio-based text messaging workflows.',
+        intentCategories: ['twilio', 'sms', 'mms', 'communication', 'mobile_messaging'],
       },
       commonPatterns: [],
       validationRules: [],
-      capabilities: ['notification.send', 'twilio.sms', 'twilio.voice'],
+      capabilities: ['notification.send', 'twilio.sms'],
       providers: ['twilio'],
       keywords: [
-        'twilio', 'twilio sms', 'twilio voice', 'twilio message',
-        'twilio api', 'twilio integration', 'twilio phone', 'twilio call'
+        'twilio', 'twilio sms', 'twilio mms', 'twilio message',
+        'twilio api', 'twilio integration', 'twilio phone'
       ],
     };
   }

@@ -2421,8 +2421,8 @@
       "to",
       "message",
       "from",
-      "accountSid",
-      "authToken"
+      "messagingServiceSid",
+      "mediaUrl"
     ],
     "credentialType": null,
     "capabilities": []
