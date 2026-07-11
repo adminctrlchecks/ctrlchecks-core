@@ -1498,12 +1498,10 @@
       "result"
     ],
     "requiredConfig": [
-      "operation",
-      "accessToken"
+      "operation"
     ],
     "optionalConfig": [
       "operation",
-      "accessToken",
       "topic",
       "duration",
       "startTime",

@@ -90,6 +90,8 @@ export const INTEGRATION_LOGO_MAP: Record<string, string> = {
 
   // Communication
   slack:            '/integrations-logos/Slack.svg',
+  zoom:             '/integrations-logos/Zoom.svg',
+  zoom_video:       '/integrations-logos/Zoom.svg',
   twilio:           '/integrations-logos/Twilio.svg',
   sendgrid:         '/integrations-logos/Sendgrid.svg',
   mailgun:          '/integrations-logos/Mailgun.svg',

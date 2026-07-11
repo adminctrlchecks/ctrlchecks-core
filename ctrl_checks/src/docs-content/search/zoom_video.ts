@@ -2,251 +2,59 @@ import type { DocsSearchIndexItem } from '../search-index';
 
 export const zoomVideoSearchIndex = [
   {
-    "type": "node",
-    "title": "Zoom Video",
-    "slug": "zoom_video",
-    "category": "Communication",
-    "href": "/docs/nodes/zoom_video",
-    "text": "Zoom Video Create and manage Zoom meetings via the Zoom API Use this node when a workflow needs zoom video behavior with schema-driven inputs from the CtrlChecks node registry. Communication"
+    title: 'Zoom Video',
+    slug: 'zoom_video',
+    type: 'node' as const,
+    category: 'Communication',
+    href: '/docs/nodes/zoom_video',
+    text: 'Zoom Video Create and manage Zoom meetings using a Zoom OAuth connection. Operations createMeeting listMeetings getMeeting updateMeeting deleteMeeting. Requires Zoom OAuth2 connection.',
   },
   {
-    "type": "operation",
-    "title": "Zoom Video: Create Meeting",
-    "slug": "zoom_video",
-    "category": "Communication",
-    "href": "/docs/nodes/zoom_video#operation-createMeeting",
-    "text": "Zoom Video Operations Create Meeting Create Meeting with the Zoom Video node using the configured input fields. createMeeting"
+    title: 'Zoom Video: Create Meeting',
+    slug: 'zoom_video',
+    type: 'operation' as const,
+    category: 'Communication',
+    href: '/docs/nodes/zoom_video#operation-createMeeting',
+    text: 'Create a Zoom meeting with topic startTime and duration using a selected Zoom OAuth2 connection.',
   },
   {
-    "type": "field",
-    "title": "Zoom Video: Access Token",
-    "slug": "zoom_video",
-    "category": "Communication",
-    "href": "/docs/nodes/zoom_video#operation-createMeeting",
-    "text": "Zoom Video Operations Create Meeting Access Token accessToken Zoom OAuth 2.0 access token"
+    title: 'Zoom Video: List Meetings',
+    slug: 'zoom_video',
+    type: 'operation' as const,
+    category: 'Communication',
+    href: '/docs/nodes/zoom_video#operation-listMeetings',
+    text: 'List scheduled Zoom meetings for the connected user.',
   },
   {
-    "type": "field",
-    "title": "Zoom Video: Topic",
-    "slug": "zoom_video",
-    "category": "Communication",
-    "href": "/docs/nodes/zoom_video#operation-createMeeting",
-    "text": "Zoom Video Operations Create Meeting Topic topic Meeting topic/title"
+    title: 'Zoom Video: Get Meeting',
+    slug: 'zoom_video',
+    type: 'operation' as const,
+    category: 'Communication',
+    href: '/docs/nodes/zoom_video#operation-getMeeting',
+    text: 'Get Zoom meeting details by meetingId.',
   },
   {
-    "type": "field",
-    "title": "Zoom Video: Duration",
-    "slug": "zoom_video",
-    "category": "Communication",
-    "href": "/docs/nodes/zoom_video#operation-createMeeting",
-    "text": "Zoom Video Operations Create Meeting Duration duration Meeting duration in minutes"
+    title: 'Zoom Video: Update Meeting',
+    slug: 'zoom_video',
+    type: 'operation' as const,
+    category: 'Communication',
+    href: '/docs/nodes/zoom_video#operation-updateMeeting',
+    text: 'Update a Zoom meeting by meetingId with optional topic duration or startTime.',
   },
   {
-    "type": "field",
-    "title": "Zoom Video: Start Time",
-    "slug": "zoom_video",
-    "category": "Communication",
-    "href": "/docs/nodes/zoom_video#operation-createMeeting",
-    "text": "Zoom Video Operations Create Meeting Start Time startTime Scheduled start time in ISO 8601 format (leave blank for instant meeting)"
+    title: 'Zoom Video: Delete Meeting',
+    slug: 'zoom_video',
+    type: 'operation' as const,
+    category: 'Communication',
+    href: '/docs/nodes/zoom_video#operation-deleteMeeting',
+    text: 'Delete a Zoom meeting by meetingId.',
   },
   {
-    "type": "field",
-    "title": "Zoom Video: Meeting Id",
-    "slug": "zoom_video",
-    "category": "Communication",
-    "href": "/docs/nodes/zoom_video#operation-createMeeting",
-    "text": "Zoom Video Operations Create Meeting Meeting Id meetingId Zoom meeting ID (required for get, delete, update operations)"
+    title: 'Zoom OAuth2 Connection',
+    slug: 'zoom_video',
+    type: 'field' as const,
+    category: 'Communication',
+    href: '/docs/nodes/zoom_video#credentials',
+    text: 'Connect Zoom through the generic OAuth flow. Required scopes meeting:write:meeting meeting:read:meeting meeting:read:list_meetings user:read:user. Redirect URI https://worker.ctrlchecks.ai/api/credential-connections/oauth/callback.',
   },
-  {
-    "type": "operation",
-    "title": "Zoom Video: List Meetings",
-    "slug": "zoom_video",
-    "category": "Communication",
-    "href": "/docs/nodes/zoom_video#operation-listMeetings",
-    "text": "Zoom Video Operations List Meetings List Meetings with the Zoom Video node using the configured input fields. listMeetings"
-  },
-  {
-    "type": "field",
-    "title": "Zoom Video: Access Token",
-    "slug": "zoom_video",
-    "category": "Communication",
-    "href": "/docs/nodes/zoom_video#operation-listMeetings",
-    "text": "Zoom Video Operations List Meetings Access Token accessToken Zoom OAuth 2.0 access token"
-  },
-  {
-    "type": "field",
-    "title": "Zoom Video: Topic",
-    "slug": "zoom_video",
-    "category": "Communication",
-    "href": "/docs/nodes/zoom_video#operation-listMeetings",
-    "text": "Zoom Video Operations List Meetings Topic topic Meeting topic/title"
-  },
-  {
-    "type": "field",
-    "title": "Zoom Video: Duration",
-    "slug": "zoom_video",
-    "category": "Communication",
-    "href": "/docs/nodes/zoom_video#operation-listMeetings",
-    "text": "Zoom Video Operations List Meetings Duration duration Meeting duration in minutes"
-  },
-  {
-    "type": "field",
-    "title": "Zoom Video: Start Time",
-    "slug": "zoom_video",
-    "category": "Communication",
-    "href": "/docs/nodes/zoom_video#operation-listMeetings",
-    "text": "Zoom Video Operations List Meetings Start Time startTime Scheduled start time in ISO 8601 format (leave blank for instant meeting)"
-  },
-  {
-    "type": "field",
-    "title": "Zoom Video: Meeting Id",
-    "slug": "zoom_video",
-    "category": "Communication",
-    "href": "/docs/nodes/zoom_video#operation-listMeetings",
-    "text": "Zoom Video Operations List Meetings Meeting Id meetingId Zoom meeting ID (required for get, delete, update operations)"
-  },
-  {
-    "type": "operation",
-    "title": "Zoom Video: Get Meeting",
-    "slug": "zoom_video",
-    "category": "Communication",
-    "href": "/docs/nodes/zoom_video#operation-getMeeting",
-    "text": "Zoom Video Operations Get Meeting Get Meeting with the Zoom Video node using the configured input fields. getMeeting"
-  },
-  {
-    "type": "field",
-    "title": "Zoom Video: Access Token",
-    "slug": "zoom_video",
-    "category": "Communication",
-    "href": "/docs/nodes/zoom_video#operation-getMeeting",
-    "text": "Zoom Video Operations Get Meeting Access Token accessToken Zoom OAuth 2.0 access token"
-  },
-  {
-    "type": "field",
-    "title": "Zoom Video: Topic",
-    "slug": "zoom_video",
-    "category": "Communication",
-    "href": "/docs/nodes/zoom_video#operation-getMeeting",
-    "text": "Zoom Video Operations Get Meeting Topic topic Meeting topic/title"
-  },
-  {
-    "type": "field",
-    "title": "Zoom Video: Duration",
-    "slug": "zoom_video",
-    "category": "Communication",
-    "href": "/docs/nodes/zoom_video#operation-getMeeting",
-    "text": "Zoom Video Operations Get Meeting Duration duration Meeting duration in minutes"
-  },
-  {
-    "type": "field",
-    "title": "Zoom Video: Start Time",
-    "slug": "zoom_video",
-    "category": "Communication",
-    "href": "/docs/nodes/zoom_video#operation-getMeeting",
-    "text": "Zoom Video Operations Get Meeting Start Time startTime Scheduled start time in ISO 8601 format (leave blank for instant meeting)"
-  },
-  {
-    "type": "field",
-    "title": "Zoom Video: Meeting Id",
-    "slug": "zoom_video",
-    "category": "Communication",
-    "href": "/docs/nodes/zoom_video#operation-getMeeting",
-    "text": "Zoom Video Operations Get Meeting Meeting Id meetingId Zoom meeting ID (required for get, delete, update operations)"
-  },
-  {
-    "type": "operation",
-    "title": "Zoom Video: Delete Meeting",
-    "slug": "zoom_video",
-    "category": "Communication",
-    "href": "/docs/nodes/zoom_video#operation-deleteMeeting",
-    "text": "Zoom Video Operations Delete Meeting Delete Meeting with the Zoom Video node using the configured input fields. deleteMeeting"
-  },
-  {
-    "type": "field",
-    "title": "Zoom Video: Access Token",
-    "slug": "zoom_video",
-    "category": "Communication",
-    "href": "/docs/nodes/zoom_video#operation-deleteMeeting",
-    "text": "Zoom Video Operations Delete Meeting Access Token accessToken Zoom OAuth 2.0 access token"
-  },
-  {
-    "type": "field",
-    "title": "Zoom Video: Topic",
-    "slug": "zoom_video",
-    "category": "Communication",
-    "href": "/docs/nodes/zoom_video#operation-deleteMeeting",
-    "text": "Zoom Video Operations Delete Meeting Topic topic Meeting topic/title"
-  },
-  {
-    "type": "field",
-    "title": "Zoom Video: Duration",
-    "slug": "zoom_video",
-    "category": "Communication",
-    "href": "/docs/nodes/zoom_video#operation-deleteMeeting",
-    "text": "Zoom Video Operations Delete Meeting Duration duration Meeting duration in minutes"
-  },
-  {
-    "type": "field",
-    "title": "Zoom Video: Start Time",
-    "slug": "zoom_video",
-    "category": "Communication",
-    "href": "/docs/nodes/zoom_video#operation-deleteMeeting",
-    "text": "Zoom Video Operations Delete Meeting Start Time startTime Scheduled start time in ISO 8601 format (leave blank for instant meeting)"
-  },
-  {
-    "type": "field",
-    "title": "Zoom Video: Meeting Id",
-    "slug": "zoom_video",
-    "category": "Communication",
-    "href": "/docs/nodes/zoom_video#operation-deleteMeeting",
-    "text": "Zoom Video Operations Delete Meeting Meeting Id meetingId Zoom meeting ID (required for get, delete, update operations)"
-  },
-  {
-    "type": "operation",
-    "title": "Zoom Video: Update Meeting",
-    "slug": "zoom_video",
-    "category": "Communication",
-    "href": "/docs/nodes/zoom_video#operation-updateMeeting",
-    "text": "Zoom Video Operations Update Meeting Update Meeting with the Zoom Video node using the configured input fields. updateMeeting"
-  },
-  {
-    "type": "field",
-    "title": "Zoom Video: Access Token",
-    "slug": "zoom_video",
-    "category": "Communication",
-    "href": "/docs/nodes/zoom_video#operation-updateMeeting",
-    "text": "Zoom Video Operations Update Meeting Access Token accessToken Zoom OAuth 2.0 access token"
-  },
-  {
-    "type": "field",
-    "title": "Zoom Video: Topic",
-    "slug": "zoom_video",
-    "category": "Communication",
-    "href": "/docs/nodes/zoom_video#operation-updateMeeting",
-    "text": "Zoom Video Operations Update Meeting Topic topic Meeting topic/title"
-  },
-  {
-    "type": "field",
-    "title": "Zoom Video: Duration",
-    "slug": "zoom_video",
-    "category": "Communication",
-    "href": "/docs/nodes/zoom_video#operation-updateMeeting",
-    "text": "Zoom Video Operations Update Meeting Duration duration Meeting duration in minutes"
-  },
-  {
-    "type": "field",
-    "title": "Zoom Video: Start Time",
-    "slug": "zoom_video",
-    "category": "Communication",
-    "href": "/docs/nodes/zoom_video#operation-updateMeeting",
-    "text": "Zoom Video Operations Update Meeting Start Time startTime Scheduled start time in ISO 8601 format (leave blank for instant meeting)"
-  },
-  {
-    "type": "field",
-    "title": "Zoom Video: Meeting Id",
-    "slug": "zoom_video",
-    "category": "Communication",
-    "href": "/docs/nodes/zoom_video#operation-updateMeeting",
-    "text": "Zoom Video Operations Update Meeting Meeting Id meetingId Zoom meeting ID (required for get, delete, update operations)"
-  }
 ] satisfies DocsSearchIndexItem[];

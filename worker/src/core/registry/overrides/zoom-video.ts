@@ -26,17 +26,6 @@ export function overrideZoomVideo(
           },
         }
       : def.inputSchema.operation,
-    accessToken: def.inputSchema.accessToken
-      ? {
-          ...def.inputSchema.accessToken,
-          ownership: 'credential' as const,
-          fillMode: {
-            default: 'manual_static' as const,
-            supportsRuntimeAI: false,
-            supportsBuildtimeAI: false,
-          },
-        }
-      : def.inputSchema.accessToken,
     topic: def.inputSchema.topic
       ? {
           ...def.inputSchema.topic,
@@ -87,6 +76,28 @@ export function overrideZoomVideo(
   return {
     ...def,
     inputSchema,
+    credentialSchema: {
+      requirements: [
+        {
+          provider: 'zoom',
+          category: 'oauth',
+          required: true,
+          description: 'Zoom OAuth2 connection used to create and manage meetings.',
+          credentialTypeId: 'zoom_oauth2',
+          credentialTypeIds: ['zoom_oauth2'],
+          authType: 'oauth2',
+          label: 'Zoom OAuth2',
+          testable: true,
+          requiredScopes: [
+            'meeting:write:meeting',
+            'meeting:read:meeting',
+            'meeting:read:list_meetings',
+            'user:read:user',
+          ],
+        },
+      ],
+      credentialFields: [],
+    },
     tags: Array.from(
       new Set([...(def.tags || []), 'communication', 'video_conferencing', 'zoom', 'meeting'])
     ),

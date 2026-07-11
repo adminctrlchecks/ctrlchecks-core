@@ -431,7 +431,7 @@ export const nodeDocManifest = [
     "slug": "zoom_video",
     "displayName": "Zoom Video",
     "category": "Communication",
-    "description": "Create and manage Zoom meetings via the Zoom API Use this node when a workflow needs zoom video behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Create and manage Zoom meetings using a Zoom OAuth connection. Use this node to create, list, get, update, or delete Zoom meetings with schema-driven inputs.",
     "logoUrl": "/icons/nodes/zoom_video.svg"
   },
   {

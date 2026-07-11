@@ -316,7 +316,7 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
   },
 
   zoom_video: {
-    create: {
+    createMeeting: {
       description: 'Create a new Zoom meeting and get the join link.',
       outputExample: { id: 81234567890, uuid: 'abcdef...', topic: 'Q4 Planning', start_url: 'https://zoom.us/s/81234567890', join_url: 'https://zoom.us/j/81234567890', start_time: '2025-01-20T14:00:00Z' },
       outputDescription: 'id: Zoom meeting ID. join_url: The URL to share with attendees. start_url: The host link to start the meeting. start_time: Scheduled start time.',

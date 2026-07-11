@@ -473,15 +473,13 @@ export const credentialSteps: Record<string, CredentialGuide> = {
   // ─── Zoom ──────────────────────────────────────────────────────
   'Zoom Credential': {
     steps: [
-      'Go to marketplace.zoom.us and sign in with your Zoom account.',
-      'Click "Develop" (top right) → Build App → choose "Server-to-Server OAuth" (for automated/background access).',
-      'Give the app a name (e.g. CtrlChecks) → Create.',
-      'On the app page, note your Account ID, Client ID, and Client Secret.',
-      'Under "Scopes", add: meeting:write:admin (to create meetings), meeting:read:admin (to list meetings). Click Continue.',
-      'In CtrlChecks → left menu → Connections → Add Connection → Zoom → paste Account ID, Client ID, and Client Secret → Save.',
-      'Run a test step (e.g. create a meeting) to confirm the connection works.',
+      'In CtrlChecks, open the Zoom node credential picker and click + Add, or go to Connections -> Add Connection -> Zoom OAuth2.',
+      'A Zoom authorization window opens through the generic CtrlChecks OAuth callback.',
+      'Sign in to Zoom and approve the requested scopes: meeting:write:meeting, meeting:read:meeting, meeting:read:list_meetings, and user:read:user.',
+      'After Zoom redirects back, choose the saved Zoom OAuth2 connection in the node.',
+      'Run List Meetings or Create Meeting to confirm the connection works.',
     ],
-    docsUrl: 'https://developers.zoom.us/docs/internal-apps/s2s-oauth/',
+    docsUrl: 'https://developers.zoom.us/docs/integrations/oauth/',
   },
 
   // ─── Microsoft Teams ───────────────────────────────────────────
@@ -1085,7 +1083,8 @@ Object.assign(credentialSteps, {
   'Facebook OAuth': credentialSteps['Facebook Credential'],
   'Twitter OAuth': credentialSteps['Twitter API Key'],
   'Notion OAuth': credentialSteps['Notion API Key'],
-  'Zoom OAuth': oauthSteps('Zoom', 'https://marketplace.zoom.us/develop/create', 'meeting:write, meeting:read', 'zoom', 'Zoom'),
+  'Zoom OAuth': credentialSteps['Zoom Credential'],
+  'Zoom OAuth2': credentialSteps['Zoom Credential'],
   'HubSpot OAuth': credentialSteps['HubSpot API Key'],
   'Shopify OAuth': credentialSteps['Shopify API Key'],
   'Calendly OAuth': credentialSteps['Calendly API Key'],
@@ -1104,6 +1103,7 @@ Object.assign(credentialSteps, {
   facebook_oauth: credentialSteps['Facebook Credential'],
   notion_oauth: credentialSteps['Notion API Key'],
   zoom_oauth: credentialSteps['Zoom Credential'],
+  zoom_oauth2: credentialSteps['Zoom Credential'],
   salesforce_oauth: credentialSteps['Salesforce Credential'],
   microsoft_oauth: credentialSteps['Microsoft Credential'],
   hubspot_oauth: credentialSteps['HubSpot API Key'],
@@ -1175,6 +1175,7 @@ Object.assign(credentialSteps, {
   facebook_oauth: credentialSteps['Facebook Credential'],
   notion_oauth: credentialSteps['Notion API Key'],
   zoom_oauth: credentialSteps['Zoom Credential'],
+  zoom_oauth2: credentialSteps['Zoom Credential'],
   salesforce_oauth: credentialSteps['Salesforce Credential'],
   microsoft_oauth: credentialSteps['Microsoft Credential'],
   hubspot_oauth: credentialSteps['HubSpot API Key'],

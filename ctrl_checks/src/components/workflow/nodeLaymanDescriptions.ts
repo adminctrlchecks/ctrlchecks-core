@@ -126,7 +126,7 @@ export const NODE_LAYMAN_DESCRIPTIONS: Record<string, string> = {
   email:                      "Sends an email through your own SMTP mail server — for when you don't use Gmail or a delivery service",
   outlook:                    "Sends an email from your connected Microsoft Outlook account",
   twilio:                     "Sends SMS or MMS text messages via your connected Twilio account",
-  zoom_video:                 "Creates Zoom meetings, retrieves recordings, or manages meeting participants",
+  zoom_video:                 "Creates, lists, updates, and deletes Zoom meetings",
   database_write:             "Writes a record to your database — like inserting a new row into a table",
   log_output:                 "Writes a message to your workflow's log for debugging or auditing",
   email_sequence_sender:      "Sends a series of emails in a timed sequence — like a drip campaign",

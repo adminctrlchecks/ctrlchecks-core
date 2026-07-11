@@ -1152,7 +1152,7 @@ export class UnifiedNodeRegistry implements INodeRegistry {
     cloudflare:    { credentialTypeId: 'cloudflare_api_key',   label: 'Cloudflare API Key',       authType: 'bearer_token' },
     dropbox:       { credentialTypeId: 'dropbox_oauth2',       label: 'Dropbox Connection',       authType: 'oauth2' },
     microsoft:     { credentialTypeId: 'microsoft_oauth2',     label: 'Microsoft Connection',     authType: 'oauth2' },
-    zoom:          { credentialTypeId: 'zoom_oauth2',          label: 'Zoom Connection',          authType: 'oauth2' },
+    zoom:          { credentialTypeId: 'zoom_oauth2',          label: 'Zoom OAuth2',              authType: 'oauth2' },
     // Databases
     postgresql:    { credentialTypeId: 'postgresql_connection', label: 'PostgreSQL Connection',   authType: 'basic_auth' },
     mysql:         { credentialTypeId: 'mysql_connection',     label: 'MySQL Connection',         authType: 'basic_auth' },

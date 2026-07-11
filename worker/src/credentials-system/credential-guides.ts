@@ -335,7 +335,7 @@ export const specificGuides: Record<string, GuideOverride> = {
   // ─── Zoom ─────────────────────────────────────────────────────────────────────
 
   zoom_oauth2: {
-    summary: 'Connect your Zoom account with OAuth to create meetings, list recordings, and manage users.',
+    summary: 'Connect your Zoom account with OAuth to create, list, read, update, and delete meetings.',
     prerequisites: [
       'A Zoom account (Pro, Business, or Enterprise) at zoom.us.',
       'Permission to install Zoom marketplace apps for your account.',
@@ -343,10 +343,11 @@ export const specificGuides: Record<string, GuideOverride> = {
     steps: [
       'Click "Connect Zoom" below.',
       'Sign in to Zoom and approve the requested permissions.',
-      'Return to CtrlChecks — the connection will appear as active.',
+      'Return to CtrlChecks; the connection will appear as active.',
     ],
     troubleshooting: [
-      'Account admin blocked OAuth app installs — ask your Zoom account admin to enable app marketplace installs at zoom.us/account/app_marketplace.',
+      'Account admin blocked OAuth app installs - ask your Zoom account admin to enable app marketplace installs at zoom.us/account/app_marketplace.',
+      'If the callback fails, confirm the Zoom Marketplace app allow list contains the generic worker callback URL.',
     ],
     docsUrl: 'https://developers.zoom.us/docs/api/',
   },
