@@ -2759,7 +2759,7 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     label: 'Telegram',
     category: 'output',
     icon: 'Send',
-    description: 'Telegram message',
+    description: 'Send messages to Telegram chats, groups, or channels using a bot connection.',
     defaultConfig: {
       messageType: 'text',
       parseMode: 'HTML',
@@ -2767,14 +2767,6 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
       disableNotification: false,
     },
     configFields: [
-      {
-        key: 'botToken',
-        label: 'Bot Token',
-        type: 'text',
-        placeholder: '123456:ABC-DEF...',
-        required: true,
-        helpText: 'How to get Bot Token:\n1) Open Telegram app and search for @BotFather\n2) Start a conversation with @BotFather by sending /start command\n3) Create a new bot by sending /newbot command\n4) Provide a bot name (e.g., "My Workflow Bot")\n5) Provide a bot username that must end with "bot" (e.g., "myworkflow_bot")\n6) @BotFather will respond with your Bot Token in format: "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"\n7) Copy the Bot Token immediately - keep it secret as anyone with it can control your bot\n8) Paste it into this field - this token authenticates your bot for sending messages',
-      },
       {
         key: 'chatId',
         label: 'Chat ID',
@@ -2794,12 +2786,10 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
           { label: 'Document', value: 'document' },
           { label: 'Audio', value: 'audio' },
           { label: 'Animation (GIF)', value: 'animation' },
-          { label: 'Location', value: 'location' },
-          { label: 'Poll', value: 'poll' },
         ],
         defaultValue: 'text',
         required: true,
-        helpText: 'How to get Message Type:\n1) Select the type of message you want to send on Telegram\n2) TEXT: Send plain text message (requires Message Text field)\n3) PHOTO: Send an image (requires Media URL, optional Caption)\n4) VIDEO: Send a video file (requires Media URL, optional Caption)\n5) DOCUMENT: Send any file type (requires Media URL, optional Caption)\n6) AUDIO: Send an audio file (requires Media URL, optional Caption)\n7) ANIMATION: Send a GIF animation (requires Media URL, optional Caption)\n8) LOCATION: Send geographic location (requires latitude and longitude)\n9) POLL: Send a poll question (requires question and options)',
+        helpText: 'How to get Message Type:\n1) Select the type of message you want to send on Telegram\n2) TEXT: Send plain text message (requires Message Text field)\n3) PHOTO: Send an image (requires Media URL, optional Caption)\n4) VIDEO: Send a video file (requires Media URL, optional Caption)\n5) DOCUMENT: Send any file type (requires Media URL, optional Caption)\n6) AUDIO: Send an audio file (requires Media URL, optional Caption)\n7) ANIMATION: Send a GIF animation (requires Media URL, optional Caption)',
       },
       {
         key: 'message',

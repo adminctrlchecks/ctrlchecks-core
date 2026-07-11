@@ -340,7 +340,7 @@ export const nodeDocManifest = [
     "slug": "telegram",
     "displayName": "Telegram",
     "category": "Communication",
-    "description": "Send messages to Telegram chats using Telegram Bot API Use this node when a workflow needs telegram behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Send messages to Telegram chats, groups, or channels using a bot connection. Use this node when a workflow needs telegram behavior with schema-driven inputs from the CtrlChecks node registry.",
     "logoUrl": "/icons/nodes/telegram.svg"
   },
   {

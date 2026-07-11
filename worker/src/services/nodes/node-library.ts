@@ -4608,22 +4608,14 @@ export class NodeLibrary {
       type: 'telegram',
       label: 'Telegram',
       category: 'output',
-      description: 'Send messages to Telegram chats using Telegram Bot API',
+      description: 'Send messages to Telegram chats, groups, or channels using a bot connection.',
       configSchema: {
         // Only user-facing config fields that should block execution when missing
         required: ['chatId', 'messageType'],
         optional: {
-          // NOTE: botToken is treated as a credential field and should be supplied
-          // via credentials/connector, not as a normal config input.
-          botToken: {
-            type: 'string',
-            description: 'Telegram Bot Token (stored as credential, not user input at runtime)',
-          },
-          credentialId: {
-            type: 'string',
-            description: 'Stored credential reference for Telegram bot token',
-            examples: ['cred_123'],
-          },
+          // Bot token is credential-owned: it is resolved from the selected Telegram Bot
+          // Token connection at execution time (see PROVIDER_CREDENTIAL_MAP / execute-workflow.ts
+          // case 'telegram'), never declared as a normal config field here.
           chatId: {
             type: 'string',
             description: 'Target chat or channel ID (numeric, can be negative for channels)',
@@ -4632,7 +4624,7 @@ export class NodeLibrary {
           messageType: {
             type: 'string',
             description: 'Telegram message type',
-            examples: ['text', 'photo', 'video', 'document', 'audio', 'animation', 'location', 'poll'],
+            examples: ['text', 'photo', 'video', 'document', 'audio', 'animation'],
             default: 'text',
           },
           message: {
@@ -4722,9 +4714,9 @@ export class NodeLibrary {
         {
           field: 'messageType',
           validator: (value: any) =>
-            ['text', 'photo', 'video', 'document', 'audio', 'animation', 'location', 'poll'].includes(value),
+            ['text', 'photo', 'video', 'document', 'audio', 'animation'].includes(value),
           errorMessage:
-            'Telegram messageType must be one of: text, photo, video, document, audio, animation, location, poll',
+            'Telegram messageType must be one of: text, photo, video, document, audio, animation',
         },
       ],
       // Capability metadata for connector resolution

@@ -7,7 +7,7 @@ export const telegramSearchIndex = [
     "slug": "telegram",
     "category": "Communication",
     "href": "/docs/nodes/telegram",
-    "text": "Telegram Send messages to Telegram chats using Telegram Bot API Use this node when a workflow needs telegram behavior with schema-driven inputs from the CtrlChecks node registry. Communication"
+    "text": "Telegram Send messages to Telegram chats, groups, or channels using a bot connection. Use this node when a workflow needs telegram behavior with schema-driven inputs from the CtrlChecks node registry. Communication"
   },
   {
     "type": "operation",
@@ -32,22 +32,6 @@ export const telegramSearchIndex = [
     "category": "Communication",
     "href": "/docs/nodes/telegram#operation-configure",
     "text": "Telegram Configuration Configure Message Type messageType Telegram message type"
-  },
-  {
-    "type": "field",
-    "title": "Telegram: Bot Token",
-    "slug": "telegram",
-    "category": "Communication",
-    "href": "/docs/nodes/telegram#operation-configure",
-    "text": "Telegram Configuration Configure Bot Token botToken Telegram Bot Token (stored as credential, not user input at runtime)"
-  },
-  {
-    "type": "field",
-    "title": "Telegram: Credential Id",
-    "slug": "telegram",
-    "category": "Communication",
-    "href": "/docs/nodes/telegram#operation-configure",
-    "text": "Telegram Configuration Configure Credential Id credentialId Stored credential reference for Telegram bot token"
   },
   {
     "type": "field",

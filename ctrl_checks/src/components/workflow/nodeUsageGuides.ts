@@ -2568,11 +2568,10 @@ Output: {
   },
 
   telegram: {
-    overview: 'Send messages to Telegram chats using Telegram Bot API. Get bot token from @BotFather on Telegram. Perfect for notifications, alerts, or chatbot integrations.',
-    inputs: ['botToken', 'chatId', 'message'],
+    overview: 'Send messages to Telegram chats, groups, or channels using a bot connection. Create the connection with a bot token from @BotFather. Perfect for notifications, alerts, or chatbot integrations.',
+    inputs: ['chatId', 'message'],
     outputs: ['messageId', 'timestamp'],
-    example: `Bot Token: 123456:ABC-DEF...
-Chat ID: 123456789
+    example: `Chat ID: 123456789
 Message: "Hello from CtrlChecks!"
 
 Output: {
@@ -2580,7 +2579,7 @@ Output: {
   timestamp: "2024-01-15T10:30:00Z"
 }`,
     tips: [
-      'Get bot token from @BotFather on Telegram',
+      'Connect a Telegram Bot Token in Connections — get the token from @BotFather on Telegram',
       'Chat ID: User ID or group chat ID',
       'Bot must be added to chat first',
       'Supports basic text messages',

@@ -1119,8 +1119,6 @@
       "messageType"
     ],
     "optionalConfig": [
-      "botToken",
-      "credentialId",
       "chatId",
       "messageType",
       "message",

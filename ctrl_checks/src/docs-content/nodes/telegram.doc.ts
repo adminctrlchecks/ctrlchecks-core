@@ -5,7 +5,7 @@ export const telegramDoc: NodeDoc = {
   "displayName": "Telegram",
   "category": "Communication",
   "logoUrl": "/icons/nodes/telegram.svg",
-  "description": "Send messages to Telegram chats using Telegram Bot API",
+  "description": "Send messages to Telegram chats, groups, or channels using a bot connection.",
   "credentialType": "Telegram Bot Token",
   "credentialSetupSteps": [
     "What this is: The Telegram connection lets CtrlChecks access your Telegram account safely without putting secrets in workflow fields.",
@@ -26,15 +26,6 @@ export const telegramDoc: NodeDoc = {
           "value": "default",
           "description": "Send a message to a Telegram chat, group, or channel via a bot.",
           "fields": [
-            {
-              "name": "Bot Token",
-              "internalKey": "botToken",
-              "type": "string",
-              "required": false,
-              "description": "Telegram Bot Token (stored as credential, not user input at runtime)",
-              "helpText": "What this field is: Telegram Bot Token.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: token_....\nTip: Use {{$json.botToken}} when this value comes from an earlier step.",
-              "placeholder": "token_..."
-            },
             {
               "name": "Chat Id",
               "internalKey": "chatId",

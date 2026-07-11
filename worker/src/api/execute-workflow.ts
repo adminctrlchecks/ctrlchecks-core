@@ -16577,10 +16577,27 @@ export async function executeNodeLegacy(
       const messageType = getStringProperty(config, 'messageType', 'text').toLowerCase();
       const chatId = getStringProperty(config, 'chatId', '');
       const message = getStringProperty(config, 'message', '');
-      const parseMode = getStringProperty(config, 'parseMode', 'HTML');
+      const rawParseMode = getStringProperty(config, 'parseMode', 'HTML');
+      const parseMode = rawParseMode.toLowerCase() === 'none' ? undefined : rawParseMode;
       const disableWebPagePreview = !!(config as any).disableWebPagePreview;
       const mediaUrl = getStringProperty(config, 'mediaUrl', '');
       const caption = getStringProperty(config, 'caption', '');
+      const replyToMessageId = (config as any).replyToMessageId;
+      const replyMarkup = (config as any).replyMarkup;
+      const disableNotification = !!(config as any).disableNotification;
+      const protectContent = !!(config as any).protectContent;
+      const allowSendingWithoutReply = !!(config as any).allowSendingWithoutReply;
+
+      const optionalPayloadFields: Record<string, unknown> = {};
+      if (replyToMessageId !== undefined && replyToMessageId !== null && replyToMessageId !== '') {
+        optionalPayloadFields.reply_to_message_id = replyToMessageId;
+        if (allowSendingWithoutReply) optionalPayloadFields.allow_sending_without_reply = true;
+      }
+      if (replyMarkup !== undefined && replyMarkup !== null && replyMarkup !== '') {
+        optionalPayloadFields.reply_markup = replyMarkup;
+      }
+      if (disableNotification) optionalPayloadFields.disable_notification = true;
+      if (protectContent) optionalPayloadFields.protect_content = true;
 
       if (!chatId) {
         return { ...inputObj, _error: 'Telegram: chatId is required' };
@@ -16640,8 +16657,9 @@ export async function executeNodeLegacy(
             body: JSON.stringify({
               chat_id: resolvedChatId,
               text: resolvedMessage,
-              parse_mode: parseMode,
+              ...(parseMode ? { parse_mode: parseMode } : {}),
               disable_web_page_preview: disableWebPagePreview,
+              ...optionalPayloadFields,
             }),
           });
           const data = await resp.json().catch(() => null);
@@ -16651,7 +16669,7 @@ export async function executeNodeLegacy(
           return { ...inputObj, success: true, telegram: data };
         }
 
-        // Minimal media support (photo/video/document) via URL
+        // Media support (photo/video/document/audio/animation) via URL
         if (!resolvedMediaUrl) {
           return { ...inputObj, _error: `Telegram: mediaUrl is required for messageType "${messageType}"` };
         }
@@ -16660,13 +16678,20 @@ export async function executeNodeLegacy(
           messageType === 'photo' ? 'sendPhoto'
           : messageType === 'video' ? 'sendVideo'
           : messageType === 'document' ? 'sendDocument'
+          : messageType === 'audio' ? 'sendAudio'
+          : messageType === 'animation' ? 'sendAnimation'
           : null;
 
         if (!endpoint) {
-          return { ...inputObj, _error: `Telegram: Unsupported messageType "${messageType}" (supported: text, photo, video, document)` };
+          return { ...inputObj, _error: `Telegram: Unsupported messageType "${messageType}" (supported: text, photo, video, document, audio, animation)` };
         }
 
-        const payload: any = { chat_id: resolvedChatId, caption: resolvedCaption };
+        const payload: any = {
+          chat_id: resolvedChatId,
+          caption: resolvedCaption,
+          ...(parseMode ? { parse_mode: parseMode } : {}),
+          ...optionalPayloadFields,
+        };
         payload[messageType] = resolvedMediaUrl;
 
         const resp = await fetch(`${baseUrl}/${endpoint}`, {

@@ -173,11 +173,6 @@ Example: 987654321 (personal) or -100123456789 (group)`,
 Example: Hello {{$json.name}}, your appointment is confirmed for {{$json.date}} at {{$json.time}}.
 Tip: Use {{$json.field}} to include data from an earlier workflow step. Telegram supports basic Markdown formatting.`,
     },
-    '*': {
-      botToken: `What this field is: The secret token that identifies your Telegram bot.
-Where to get it: Open Telegram, search for @BotFather, and start a chat. Type /newbot, follow the steps (give it a name and a username ending in "bot"). BotFather will send you the token — it looks like 123456789:ABCdef-GHIjkl.
-Keep it private — anyone with this token can control your bot.`,
-    },
   },
 
   linkedin: {
