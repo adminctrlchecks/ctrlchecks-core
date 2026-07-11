@@ -383,12 +383,12 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
   sendgrid: {
     default: {
       description: 'Send a transactional or marketing email via SendGrid.',
-      outputExample: { statusCode: 202, body: '', headers: { 'x-message-id': 'ABC123' } },
-      outputDescription: 'statusCode: HTTP 202 means the message was accepted. headers[x-message-id]: SendGrid message ID for tracking in the SendGrid Activity Feed.',
+      outputExample: { success: true, status: 202, messageId: 'ABC123' },
+      outputDescription: 'success: true when SendGrid accepts the message. status: HTTP 202 means accepted. messageId: SendGrid message ID from the x-message-id response header for tracking in the SendGrid Activity Feed.',
       usageExample: {
         scenario: 'Send a receipt email after a successful payment',
         inputValues: { to: '{{$json.customerEmail}}', from: 'receipts@yourapp.com', subject: 'Your receipt for order #{{$json.orderId}}', html: '<h1>Thank you!</h1><p>You paid ${{$json.amount}} on {{$json.date}}.</p>' },
-        expectedOutput: 'Email is accepted by SendGrid for delivery. Track via the x-message-id in the SendGrid Activity Feed.',
+        expectedOutput: 'Email is accepted by SendGrid for delivery. Track via `{{$json.messageId}}` in the SendGrid Activity Feed.',
       },
     },
   },

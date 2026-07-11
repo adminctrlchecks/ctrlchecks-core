@@ -36,15 +36,31 @@ export const sendgridNodeDefinition: NodeDefinition = {
     html: {
       type: 'string',
       required: false,
-      description: 'HTML body of the email',
+      description: 'HTML body of the email. If both text and HTML are provided, SendGrid receives both content versions.',
       default: '',
     },
   },
 
   outputSchema: {
-    default: {
+    success: {
+      type: 'boolean',
+      description: 'Whether SendGrid accepted the message',
+    },
+    status: {
+      type: 'number',
+      description: 'HTTP status returned by SendGrid; 202 means accepted',
+    },
+    messageId: {
+      type: 'string',
+      description: 'SendGrid x-message-id response header value',
+    },
+    _error: {
+      type: 'string',
+      description: 'Error message when the send fails',
+    },
+    _errorDetails: {
       type: 'object',
-      description: 'SendGrid send response',
+      description: 'Parsed SendGrid error response when available',
     },
   },
 

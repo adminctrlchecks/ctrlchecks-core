@@ -55,6 +55,6 @@ export const sendgridSearchIndex = [
     "slug": "sendgrid",
     "category": "Communication",
     "href": "/docs/nodes/sendgrid#operation-send_email",
-    "text": "SendGrid Operations Send Email Html html HTML body of the email (overrides plain text for HTML clients)"
+    "text": "SendGrid Operations Send Email Html html HTML body of the email. If both text and HTML are provided, SendGrid receives both content versions."
   }
 ] satisfies DocsSearchIndexItem[];

@@ -71,20 +71,18 @@ export const sendgridDoc: NodeDoc = {
               "internalKey": "html",
               "type": "textarea",
               "required": false,
-              "description": "HTML body of the email (overrides plain text for HTML clients)",
-              "helpText": "What this field is: HTML body of the email.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: <p>Your message</p>.\nTip: Use {{$json.html}} when this value comes from an earlier step.",
+              "description": "HTML body of the email. If both text and HTML are provided, SendGrid receives both content versions.",
+              "helpText": "What this field is: HTML body of the email.\nHow to fill it: Type the HTML message to send. You can include values from earlier workflow steps.\nExample: <p>Your message</p>.\nTip: Use {{$json.html}} when this value comes from an earlier step.",
               "placeholder": "<p>Your message</p>",
               "example": "<p>Your message</p>"
             }
           ],
           "outputExample": {
-            "statusCode": 202,
-            "body": "",
-            "headers": {
-              "x-message-id": "ABC123"
-            }
+            "success": true,
+            "status": 202,
+            "messageId": "ABC123"
           },
-          "outputDescription": "statusCode: HTTP 202 means the message was accepted. headers[x-message-id]: SendGrid message ID for tracking in the SendGrid Activity Feed.",
+          "outputDescription": "success: true when SendGrid accepts the message. status: HTTP 202 means accepted. messageId: SendGrid message ID from the x-message-id response header for tracking in the SendGrid Activity Feed.",
           "usageExample": {
             "scenario": "Send a receipt email after a successful payment",
             "inputValues": {
@@ -93,7 +91,7 @@ export const sendgridDoc: NodeDoc = {
               "subject": "Your receipt for order #{{$json.orderId}}",
               "html": "<h1>Thank you!</h1><p>You paid ${{$json.amount}} on {{$json.date}}.</p>"
             },
-            "expectedOutput": "Email is accepted by SendGrid for delivery. Track via the x-message-id in the SendGrid Activity Feed."
+            "expectedOutput": "Email is accepted by SendGrid for delivery. Track via {{$json.messageId}} in the SendGrid Activity Feed."
           },
           "externalDocsUrl": "https://docs.sendgrid.com/api-reference/mail-send/mail-send"
         }

@@ -373,8 +373,10 @@ Where to verify: SendGrid dashboard → Settings → Sender Authentication → v
 Example: hello@yourcompany.com`,
       subject: `What this field is: The email subject line.
 Example: Welcome to {{$json.productName}} — here's how to get started`,
-      body: `What this field is: The full email content in HTML or plain text.
-Example: <p>Hi {{$json.name}},</p><p>Thank you for signing up! Click below to verify your email.</p>`,
+      text: `What this field is: The plain text email body sent to recipients.
+Example: Hi {{$json.name}}, thank you for signing up!`,
+      html: `What this field is: Optional HTML email body. If provided, SendGrid receives both text/plain and text/html content when Text is also filled.
+Example: <p>Hi {{$json.name}},</p><p>Thank you for signing up!</p>`,
     },
   },
 
