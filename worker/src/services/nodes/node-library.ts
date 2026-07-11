@@ -8555,6 +8555,8 @@ export class NodeLibrary {
       label: 'WhatsApp Cloud (deprecated)',
       category: 'output',
       description: 'Deprecated — use the WhatsApp node instead. Kept only for backward compatibility with existing workflows.',
+      // Legacy alias of whatsapp — kept for existing workflows only, hidden from the node picker.
+      internalOnly: true,
       configSchema: {
         required: ['resource', 'operation'],
         optional: {
