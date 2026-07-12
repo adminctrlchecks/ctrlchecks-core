@@ -72,6 +72,16 @@ const PROVIDER_COLORS: Record<string, string> = {
   odoo:           'bg-purple-100 text-purple-600',
   contentful:     'bg-orange-100 text-orange-600',
   wordpress:      'bg-sky-100 text-sky-700',
+  sap:            'bg-blue-100 text-blue-700',
+  workday:        'bg-orange-100 text-orange-600',
+  oracle_database: 'bg-red-100 text-red-700',
+  netlify:        'bg-teal-100 text-teal-600',
+  chargebee:      'bg-orange-100 text-orange-500',
+  google_cloud_storage: 'bg-blue-100 text-blue-600',
+  sql_server:     'bg-red-100 text-red-600',
+  timescaledb:    'bg-yellow-100 text-yellow-700',
+  schedulewise:   'bg-teal-100 text-teal-600',
+  smtp:           'bg-slate-100 text-slate-600',
 };
 
 const PROVIDER_INITIALS: Record<string, string> = {
@@ -91,6 +101,16 @@ const PROVIDER_INITIALS: Record<string, string> = {
   gemini: 'Gm', vercel: 'Vc', jenkins: 'Jk', odoo: 'Od',
   contentful: 'Cf',
   wordpress: 'WP',
+  sap: 'SAP',
+  workday: 'Wd',
+  oracle_database: 'Or',
+  netlify: 'Nf',
+  chargebee: 'Cb',
+  google_cloud_storage: 'GCS',
+  sql_server: 'SQL',
+  timescaledb: 'Ts',
+  schedulewise: 'Sw',
+  smtp: '@',
 };
 
 const PROVIDER_LOGO_ALIASES: Record<string, string> = {
@@ -105,6 +125,7 @@ const PROVIDER_LOGO_ALIASES: Record<string, string> = {
   discord_webhook: 'discord',
   gemini: 'google_gemini',
   jenkins: 'jenkins',
+  slack_webhook: 'slack',
 };
 
 const SIMPLE_ICON_SLUGS: Record<string, string> = {
@@ -125,6 +146,15 @@ const SIMPLE_ICON_SLUGS: Record<string, string> = {
   mistral: 'mistralai',
   vercel: 'vercel',
   odoo: 'odoo',
+  zendesk: 'zendesk',
+  sap: 'sap',
+  workday: 'workday',
+  oracle_database: 'oracle',
+  netlify: 'netlify',
+  chargebee: 'chargebee',
+  google_cloud_storage: 'googlecloud',
+  sql_server: 'microsoftsqlserver',
+  timescaledb: 'timescale',
 };
 
 interface Props {

@@ -1613,6 +1613,174 @@ export class ConnectorRegistry {
       nodeTypes: ['schedulewise'],
       description: 'Read and manage appointments/schedules via the ScheduleWise API',
     });
+
+    // ============================================
+    // WORKDAY CONNECTOR
+    // ============================================
+    this.register({
+      id: 'workday',
+      provider: 'workday',
+      service: 'erp',
+      capabilities: ['erp.read', 'erp.write', 'workday.hr'],
+      keywords: ['workday', 'hr', 'workers', 'employees', 'hcm', 'human resources'],
+      credentialContract: {
+        provider: 'workday',
+        type: 'token',
+        vaultKey: 'workday',
+        displayName: 'Workday Connection',
+        required: true,
+        credentialFieldName: 'accessToken',
+      },
+      nodeTypes: ['workday'],
+      description: 'Read and manage Workday HR, staffing, and organizational data',
+    });
+
+    // ============================================
+    // SAP CONNECTOR
+    // ============================================
+    this.register({
+      id: 'sap',
+      provider: 'sap',
+      service: 'erp',
+      capabilities: ['erp.read', 'erp.write', 'sap.odata', 'sap.rest'],
+      keywords: ['sap', 'sap erp', 's4hana', 'sap hana', 'sap odata', 'sap business one'],
+      credentialContract: {
+        provider: 'sap',
+        type: 'token',
+        vaultKey: 'sap',
+        displayName: 'SAP Connection',
+        required: true,
+        credentialFieldName: 'accessToken',
+      },
+      nodeTypes: ['sap'],
+      description: 'Read and write SAP business objects via OData/REST APIs',
+    });
+
+    // ============================================
+    // CHARGEBEE CONNECTOR
+    // ============================================
+    this.register({
+      id: 'chargebee',
+      provider: 'chargebee',
+      service: 'billing',
+      capabilities: ['billing.read', 'billing.write', 'chargebee.subscriptions'],
+      keywords: ['chargebee', 'subscription', 'billing', 'recurring'],
+      credentialContract: {
+        provider: 'chargebee',
+        type: 'api_key',
+        vaultKey: 'chargebee',
+        displayName: 'Chargebee Connection',
+        required: true,
+        credentialFieldName: 'apiKey',
+      },
+      nodeTypes: ['chargebee'],
+      description: 'Create customers, manage subscriptions, and automate billing with Chargebee',
+    });
+
+    // ============================================
+    // GOOGLE CLOUD STORAGE CONNECTOR
+    // ============================================
+    this.register({
+      id: 'google_cloud_storage',
+      provider: 'google_cloud_storage',
+      service: 'storage',
+      capabilities: ['storage.read', 'storage.write', 'gcs.objects'],
+      keywords: ['google cloud storage', 'gcs', 'cloud storage', 'object storage'],
+      credentialContract: {
+        provider: 'google_cloud_storage',
+        type: 'api_key',
+        vaultKey: 'google_cloud_storage',
+        displayName: 'Google Cloud Storage Connection',
+        required: true,
+        credentialFieldName: 'privateKey',
+      },
+      nodeTypes: ['google_cloud_storage'],
+      description: 'Upload, download, delete, and list files in Google Cloud Storage buckets',
+    });
+
+    // ============================================
+    // NETLIFY CONNECTOR
+    // ============================================
+    this.register({
+      id: 'netlify',
+      provider: 'netlify',
+      service: 'devops',
+      capabilities: ['devops.deploy', 'netlify.sites'],
+      keywords: ['netlify', 'deploy', 'sites', 'hosting'],
+      credentialContract: {
+        provider: 'netlify',
+        type: 'token',
+        vaultKey: 'netlify',
+        displayName: 'Netlify Connection',
+        required: true,
+        credentialFieldName: 'accessToken',
+      },
+      nodeTypes: ['netlify'],
+      description: 'Deploy sites and manage builds via the Netlify REST API',
+    });
+
+    // ============================================
+    // SQL SERVER CONNECTOR
+    // ============================================
+    this.register({
+      id: 'sql_server',
+      provider: 'sql_server',
+      service: 'database',
+      capabilities: ['database.read', 'database.write', 'sql_server.query'],
+      keywords: ['sql server', 'mssql', 'microsoft sql', 't-sql'],
+      credentialContract: {
+        provider: 'sql_server',
+        type: 'basic_auth',
+        vaultKey: 'sql_server',
+        displayName: 'SQL Server Connection',
+        required: true,
+        credentialFieldName: 'password',
+      },
+      nodeTypes: ['sql_server'],
+      description: 'Connect to and query Microsoft SQL Server databases',
+    });
+
+    // ============================================
+    // TIMESCALEDB CONNECTOR
+    // ============================================
+    this.register({
+      id: 'timescaledb',
+      provider: 'timescaledb',
+      service: 'database',
+      capabilities: ['database.read', 'database.write', 'timescaledb.query'],
+      keywords: ['timescaledb', 'timescale', 'time-series', 'iot'],
+      credentialContract: {
+        provider: 'timescaledb',
+        type: 'basic_auth',
+        vaultKey: 'timescaledb',
+        displayName: 'TimescaleDB Connection',
+        required: true,
+        credentialFieldName: 'password',
+      },
+      nodeTypes: ['timescaledb'],
+      description: 'Connect to and query TimescaleDB time-series databases',
+    });
+
+    // ============================================
+    // ORACLE DATABASE CONNECTOR
+    // ============================================
+    this.register({
+      id: 'oracle_database',
+      provider: 'oracle_database',
+      service: 'database',
+      capabilities: ['database.read', 'database.write', 'oracle.query'],
+      keywords: ['oracle', 'oracle database', 'oracledb', 'plsql'],
+      credentialContract: {
+        provider: 'oracle_database',
+        type: 'basic_auth',
+        vaultKey: 'oracle_database',
+        displayName: 'Oracle Connection',
+        required: true,
+        credentialFieldName: 'password',
+      },
+      nodeTypes: ['oracle_database'],
+      description: 'Connect to and query Oracle databases',
+    });
   }
 
   /**

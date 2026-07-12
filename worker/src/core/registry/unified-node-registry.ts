@@ -1167,6 +1167,14 @@ export class UnifiedNodeRegistry implements INodeRegistry {
     ftp:           { credentialTypeId: 'ftp_credentials',      label: 'FTP Credentials',          authType: 'basic_auth' },
     odoo:          { credentialTypeId: 'odoo_credentials',     label: 'Odoo Credentials',         authType: 'basic_auth' },
     schedulewise:  { credentialTypeId: 'schedulewise_api_key', label: 'ScheduleWise Connection',  authType: 'api_key' },
+    sql_server:    { credentialTypeId: 'sql_server_connection', label: 'SQL Server Connection',   authType: 'basic_auth' },
+    timescaledb:   { credentialTypeId: 'timescaledb_connection', label: 'TimescaleDB Connection', authType: 'basic_auth' },
+    google_cloud_storage: { credentialTypeId: 'google_cloud_storage_connection', label: 'Google Cloud Storage Connection', authType: 'api_key' },
+    // ERP
+    workday:       { credentialTypeId: 'workday_connection',   label: 'Workday Connection',       authType: 'bearer_token' },
+    sap:           { credentialTypeId: 'sap_connection',       label: 'SAP Connection',           authType: 'bearer_token' },
+    chargebee:     { credentialTypeId: 'chargebee_connection', label: 'Chargebee Connection',      authType: 'api_key' },
+    netlify:       { credentialTypeId: 'netlify_api_key',      label: 'Netlify Connection',       authType: 'bearer_token' },
   };
 
   private enrichRequirementsWithCredentialType(
