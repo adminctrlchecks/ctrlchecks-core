@@ -1162,6 +1162,7 @@ export class UnifiedNodeRegistry implements INodeRegistry {
     sftp:          { credentialTypeId: 'sftp_credentials',     label: 'SFTP Credentials',         authType: 'basic_auth' },
     ftp:           { credentialTypeId: 'ftp_credentials',      label: 'FTP Credentials',          authType: 'basic_auth' },
     odoo:          { credentialTypeId: 'odoo_credentials',     label: 'Odoo Credentials',         authType: 'basic_auth' },
+    schedulewise:  { credentialTypeId: 'schedulewise_api_key', label: 'ScheduleWise Connection',  authType: 'api_key' },
   };
 
   private enrichRequirementsWithCredentialType(

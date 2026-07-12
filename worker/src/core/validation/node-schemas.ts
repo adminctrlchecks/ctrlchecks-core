@@ -131,12 +131,6 @@ export const HttpRequestNodeConfigSchema = BaseNodeConfigSchema.extend({
     .max(300000, 'Timeout cannot exceed 5 minutes'))
     .optional()
     .default(10000),
-  retryOnFail: boolStr(z.boolean()).optional().default(true),
-  maxRetries: numStr(z.number()
-    .int('Max retries must be an integer')
-    .min(0).max(10))
-    .optional()
-    .default(3),
 });
 
 export type HttpRequestNodeConfig = z.infer<typeof HttpRequestNodeConfigSchema>;

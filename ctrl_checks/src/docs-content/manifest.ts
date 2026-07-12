@@ -962,7 +962,7 @@ export const nodeDocManifest = [
   {
     "slug": "schedulewise",
     "displayName": "ScheduleWise",
-    "category": "Triggers",
+    "category": "Utility",
     "description": "ScheduleWise appointment scheduling — retrieve, create, update, and delete appointments via the ScheduleWise REST API Use this node when a workflow needs schedulewise behavior with schema-driven inputs from the CtrlChecks node registry.",
     "logoUrl": "/icons/nodes/schedulewise.svg"
   },

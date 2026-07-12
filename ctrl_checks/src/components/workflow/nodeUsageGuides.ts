@@ -636,7 +636,7 @@ Output: {
 
   graphql: {
     overview: 'Execute GraphQL queries and mutations. Send GraphQL requests to any GraphQL API endpoint with custom queries and variables.',
-    inputs: ['query variables'],
+    inputs: ['url', 'query', 'variables', 'operationName (optional)', 'headers'],
     outputs: ['data', 'errors'],
     example: `Endpoint: https://api.example.com/graphql
 Query: 
@@ -673,6 +673,21 @@ When webhook receives request:
 2. Respond with this node's configuration
 3. Caller receives the response`,
     tips: ['Use at end of webhook workflows', 'Set appropriate status codes (200, 400, 500)', 'Add headers for content type', 'Body supports template variables'],
+  },
+
+  webhook_response: {
+    overview: 'Return a custom HTTP response to an incoming webhook. Functionally identical to Respond to Webhook — use whichever label fits your workflow.',
+    inputs: ['statusCode', 'body', 'headers'],
+    outputs: ['statusCode', 'headers', 'body'],
+    example: `Status Code: 200
+Headers: {"Content-Type": "application/json"}
+Body: {"success": true, "data": "{{input}}"}
+
+When the webhook receives a request:
+1. Process the workflow
+2. Respond with this node's configuration
+3. Caller receives the response`,
+    tips: ['Use at the end of webhook workflows', 'Set appropriate status codes (200, 400, 500)', 'Add headers for content type', 'Body supports template variables'],
   },
 
   set_variable: {
@@ -739,15 +754,15 @@ Output: [
   // Output Actions
   http_post: {
     overview: 'Send data to external APIs via HTTP POST. Perfect for webhooks, API integrations, and data sync.',
-    inputs: ['url', 'headers', 'bodyTemplate'],
+    inputs: ['url', 'headers', 'body'],
     outputs: ['response', 'status'],
     example: `URL: https://api.example.com/webhook
 Headers: {"Content-Type": "application/json"}
-Body Template: {"event": "workflow_complete", "data": {{input}}}
+Body: {"event": "workflow_complete", "data": {{input}}}
 
 Sends POST request with workflow data.`,
     tips: [
-      'Use body template for dynamic content',
+      'Use {{input.x}} template variables inside the body for dynamic content',
       'Add auth headers (Bearer/API key) if needed',
       'Set Content-Type to match your body',
     ],
@@ -3262,17 +3277,18 @@ Output: {
 
   xero: {
     overview: 'Interact with Xero accounting software to manage contacts, invoices, payments, and financial data. Supports CRUD operations and queries. Perfect for accounting automation, invoice management, or Xero ecosystem integration.',
-    inputs: ['accessToken', 'tenantId', 'resource', 'operation', 'id', 'data', 'where'],
-    outputs: ['result', 'Items'],
+    inputs: ['accessToken', 'tenantId', 'resource', 'operation', 'recordId', 'payload', 'where'],
+    outputs: ['success', 'resource', 'operation', 'record', 'records', 'count', 'pagination'],
     example: `Resource: Contacts
 Operation: create
-Data: {
+Payload: {
   "Name": "Acme Corp",
   "EmailAddress": "contact@acme.com"
 }
 
 Output: {
-  result: {
+  success: true,
+  record: {
     ContactID: "12345678-1234-1234-1234-123456789012",
     Name: "Acme Corp",
     EmailAddress: "contact@acme.com"
@@ -3281,8 +3297,8 @@ Output: {
     tips: [
       'Get access token from Xero Developer Portal',
       'Tenant ID is your organization ID',
-      'Resources: Contacts, Invoices, Payments, Items, etc.',
-      'Use where clause for filtering',
+      'Resources: Contacts, Invoices, Payments, Items, Accounts',
+      'Use the where field for filtering (Xero WHERE clause syntax)',
       'OAuth2 authentication required',
     ],
   },
@@ -5397,6 +5413,27 @@ Output: {
       'API URL is your account URL, e.g. https://youraccount.api-us1.com',
       'Update and Delete require Contact ID',
       'Data (JSON) overrides Email/First Name/Last Name if both are set',
+    ],
+  },
+
+  schedulewise: {
+    overview: 'Read and manage appointments/schedules through the ScheduleWise API — list schedules, and create, update, or delete appointments.',
+    inputs: ['operation', 'dateFrom/dateTo (Get Schedules)', 'patientId', 'staffId', 'appointmentId', 'startDateTime/endDateTime', 'serviceType', 'notes', 'status'],
+    outputs: ['success', 'operation', 'data', 'executionTimeMs', 'error'],
+    example: `Operation: Get Schedules
+Date From: {{$json.startDate}}
+Date To: {{$json.endDate}}
+
+Output: {
+  success: true,
+  operation: "getSchedules",
+  data: { records: [...], count: 2 }
+}`,
+    tips: [
+      'Requires a saved ScheduleWise connection (Connections page → ScheduleWise, or paste an API key/access token directly)',
+      'Use Mock Mode to test the workflow without calling the real ScheduleWise API',
+      'Update and Delete Appointment require Appointment ID',
+      'Create Appointment requires Start/End Date-Time, Patient ID, and Staff ID',
     ],
   },
 };

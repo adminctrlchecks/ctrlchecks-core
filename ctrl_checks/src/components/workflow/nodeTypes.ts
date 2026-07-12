@@ -2548,6 +2548,7 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
       ], helpText: 'HTTP method: GET = retrieve data, POST = create/submit data, PUT = replace entire resource, PATCH = partially update resource, DELETE = remove resource. Choose based on API requirements' },
       { key: 'headers', label: 'Headers (JSON)', type: 'json', placeholder: '{"Authorization": "Bearer token"}', helpText: 'HTTP request headers in JSON format. Common headers: Authorization (Bearer token, API key), Content-Type (application/json), Accept (application/json). Format: {"Header-Name": "value"}' },
       { key: 'body', label: 'Body (JSON)', type: 'json', placeholder: '{}', helpText: 'Request body data in JSON format. Used for POST, PUT, PATCH methods. Can include template variables. Format: {"key": "value", "nested": {"key": "value"}}' },
+      { key: 'qs', label: 'Query String Params (JSON)', type: 'json', placeholder: '{"page": 1}', helpText: 'Query string parameters, appended to the URL. Format: {"paramName": "value"}. Values support template variables.' },
       { key: 'timeout', label: 'Timeout (ms)', type: 'number', defaultValue: 30000, helpText: 'Maximum time in milliseconds to wait for the API response. Default: 30 seconds. Increase for slow APIs, decrease to fail fast. If exceeded, request will timeout with error' },
     ],
   },
@@ -2594,7 +2595,7 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     configFields: [
       { key: 'url', label: 'URL', type: 'text', placeholder: 'https://api.example.com/webhook', required: true, helpText: 'Full URL of the webhook endpoint to send POST request to. Include protocol (https:// or http://). Supports template variables. Examples: https://api.example.com/webhook, https://hooks.service.com/trigger?id={{input.id}}' },
       { key: 'headers', label: 'Headers (JSON)', type: 'json', placeholder: '{}', helpText: 'HTTP request headers in JSON format. Common headers: Authorization (Bearer token, API key), Content-Type (application/json), User-Agent. Format: {"Header-Name": "value"}' },
-      { key: 'bodyTemplate', label: 'Body Template', type: 'textarea', placeholder: '{"data": "{{input}}"}', helpText: 'Request body template with template variables. Use {{input}} to include data from previous nodes. Supports JSON format. Examples: {"data": {{input}}, "user": "{{input.userId}}", "timestamp": "{{_timestamp}}"' },
+      { key: 'body', label: 'Body (JSON)', type: 'json', placeholder: '{"data": "{{input}}"}', required: true, helpText: 'POST body data. Use {{input}} to include data from previous nodes. Supports JSON format. Examples: {"data": {{input}}, "user": "{{input.userId}}", "timestamp": "{{_timestamp}}"}' },
     ],
   },
   {
@@ -9134,6 +9135,31 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
         defaultValue: false,
         helpText: 'Return synthetic data without calling the ScheduleWise API. Useful for testing.',
       },
+      {
+        key: 'timeoutSec',
+        label: 'Timeout (seconds)',
+        type: 'number',
+        defaultValue: 30,
+        helpText: 'Maximum time in seconds to wait for the ScheduleWise API response before failing.',
+      },
+      {
+        key: 'retries',
+        label: 'Retries',
+        type: 'number',
+        defaultValue: 0,
+        helpText: 'Number of times to retry on a 5xx or network error, with exponential backoff.',
+      },
+      {
+        key: 'outputFormat',
+        label: 'Output Format',
+        type: 'select',
+        defaultValue: 'json',
+        options: [
+          { label: 'JSON', value: 'json' },
+          { label: 'Raw', value: 'raw' },
+        ],
+        helpText: 'Response format. Currently the ScheduleWise integration always parses responses as JSON.',
+      },
     ],
   },
   // ============================================
@@ -11830,7 +11856,7 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
         ],
         defaultValue: 'get_many',
         required: true,
-        helpText: 'Get Many: list records with pagination. Get By ID: fetch a single record by its Workday ID. Create: add a new record (POST). Update: modify an existing record (PUT, requires Record ID).',
+        helpText: 'Get Many: list records with pagination. Get By ID: fetch a single record by its Workday ID. Create: add a new record (POST). Update: modify an existing record (PATCH, requires Record ID).',
       },
       {
         key: 'recordId',

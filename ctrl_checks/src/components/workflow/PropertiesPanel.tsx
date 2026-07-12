@@ -17,6 +17,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import NodeUsageCard from './NodeUsageCard';
 import FormNodeSettings from './FormNodeSettings';
 import ScheduleTrigger from './ScheduleTrigger';
+import ScheduleWiseSettings from './ScheduleWiseSettings';
 import FacebookConnectionStatus from '@/components/FacebookConnectionStatus';
 import MysqlQueryEditor from './MysqlQueryEditor';
 import MongoCollectionSelect from './MongoCollectionSelect';
@@ -2746,6 +2747,20 @@ export default function PropertiesPanel({
                                 }
                               }
                             }}
+                          />
+                        </div>
+                      ) : selectedNode.data.type === 'schedulewise' ? (
+                        <div className="space-y-4">
+                          <h3 className="text-xs font-medium uppercase text-muted-foreground/70 tracking-wide">
+                            Configuration
+                          </h3>
+                          <ScheduleWiseSettings
+                            config={(selectedNode.data.config || {}) as any}
+                            onConfigChange={(newConfig) => {
+                              updateNodeConfig(selectedNode.id, newConfig as any);
+                            }}
+                            nodeId={selectedNode.id}
+                            workflowId={workflowId || ''}
                           />
                         </div>
                       ) : (nodeDefinition.configFields && nodeDefinition.configFields.length > 0) ? (

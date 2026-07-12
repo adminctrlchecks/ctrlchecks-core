@@ -109,6 +109,7 @@ export const NODE_LAYMAN_DESCRIPTIONS: Record<string, string> = {
   http_request:       "Calls any web URL and gets data back — your universal connector to the internet",
   graphql:            "Queries a GraphQL API to fetch exactly the data fields you need — nothing more",
   respond_to_webhook: "Sends a response back to the app that triggered your webhook",
+  webhook_response:   "Sends a custom status code and body back to the app that triggered your webhook",
   http_post:          "Sends data to a URL — like filling out and submitting a web form programmatically",
 
   // ── Communication / Output ────────────────────────────────────────────────

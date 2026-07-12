@@ -82,6 +82,7 @@ const providerDocsUrls: Record<string, string> = {
   qdrant: 'https://qdrant.tech/documentation/cloud/authentication/',
   quickbooks: 'https://developer.intuit.com/app/developer/qbo/docs/develop/authentication-and-authorization',
   salesforce: 'https://help.salesforce.com/s/articleView?id=sf.remoteaccess_oauth_flows.htm',
+  schedulewise: 'https://developer.schedulewise.com/',
   sendgrid: 'https://docs.sendgrid.com/ui/account-and-settings/api-keys',
   shopify: 'https://shopify.dev/docs/apps/build/authentication-authorization',
   slack: 'https://api.slack.com/authentication',
@@ -2513,6 +2514,24 @@ export const credentialTypeDefinitions: CredentialTypeDefinition[] = addCredenti
     injection: [],
     refresh: { enabled: false, refreshBeforeSeconds: 0 },
     maskFields: ['password'],
+  },
+
+  // ─── ScheduleWise ─────────────────────────────────────────────────────────────
+  {
+    id: 'schedulewise_api_key',
+    provider: 'schedulewise',
+    displayName: 'ScheduleWise API Key',
+    authType: 'api_key',
+    inputFields: [
+      { name: 'apiUrl', label: 'API Base URL', type: 'text', required: false, placeholder: 'https://api.schedulewise.com/v1', helpText: 'Leave blank to use the default ScheduleWise API URL.' },
+      { name: 'accessToken', label: 'Access Token', type: 'password', required: false, secret: true, helpText: 'Bearer token from your ScheduleWise account. Provide either an Access Token or an API Key.' },
+      { name: 'apiKey', label: 'API Key', type: 'password', required: false, secret: true, helpText: 'API key from your ScheduleWise account, used if no Access Token is provided.' },
+    ],
+    form: { layout: 'stacked', submitLabel: 'Save Credentials', testLabel: 'Test ScheduleWise' },
+    validation: { requiredFields: [] },
+    injection: [{ target: 'header', name: 'Authorization', valueTemplate: 'Bearer {{accessToken}}' }],
+    refresh: { enabled: false, refreshBeforeSeconds: 0 },
+    maskFields: ['accessToken', 'apiKey'],
   },
 ]);
 

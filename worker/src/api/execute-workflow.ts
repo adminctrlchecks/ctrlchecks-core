@@ -2772,16 +2772,21 @@ async function executeScheduleWiseRequest(
   nodeId: string,
   startTime: number
 ): Promise<ScheduleWiseNodeOutput> {
-  const apiUrl = (credential.api_url || 'https://api.schedulewise.com/v1').replace(/\/$/, '');
+  // ✅ Accept snake_case (legacy raw vault entries), camelCase (managed schedulewise_api_key
+  // credential fields), and `value` (single-field manual credential entry, e.g. ManualCredentialManager
+  // storing just one field, which retrieveRuntimeCredentialObject surfaces as { value: <raw string> }).
+  const apiUrl = (credential.api_url || credential.apiUrl || 'https://api.schedulewise.com/v1').replace(/\/$/, '');
+  const accessToken = credential.access_token || credential.accessToken;
+  const apiKey = credential.api_key || credential.apiKey || (!accessToken ? credential.value : undefined);
   const timeoutSec = params.timeoutSec ?? 30;
   const maxRetries = params.retries ?? 0;
 
   // Build auth header
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (credential.access_token) {
-    headers['Authorization'] = `Bearer ${credential.access_token}`;
-  } else if (credential.api_key) {
-    headers['X-Api-Key'] = credential.api_key;
+  if (accessToken) {
+    headers['Authorization'] = `Bearer ${accessToken}`;
+  } else if (apiKey) {
+    headers['X-Api-Key'] = apiKey;
   }
 
   // Build request
@@ -3031,7 +3036,9 @@ export async function executeNodeLegacy(
     case 'webhook_response':
     case 'respond_to_webhook': {
       const body = (config as any)?.body ?? (config as any)?.responseBody ?? inputObj.body ?? inputObj;
-      const statusCodeRaw = (config as any)?.statusCode ?? (config as any)?.status ?? 200;
+      // ✅ statusCode is what the UI/runtime use; responseCode is what node-library.ts's AI-facing
+      // schema and workflow-builder.ts's field maps generate — accept both so AI-built workflows work.
+      const statusCodeRaw = (config as any)?.statusCode ?? (config as any)?.responseCode ?? (config as any)?.status ?? 200;
       const statusCode = Number(statusCodeRaw) || 200;
       const headers = (config as any)?.headers ?? {};
       return {
@@ -7028,10 +7035,34 @@ export async function executeNodeLegacy(
       const execContext = createTypedContext();
       
       // URLs are always strings
-      const resolvedUrl = typeof resolveWithSchema(url, execContext, 'string') === 'string'
+      let resolvedUrl = typeof resolveWithSchema(url, execContext, 'string') === 'string'
         ? resolveWithSchema(url, execContext, 'string') as string
         : String(resolveTypedValue(url, execContext));
-      
+
+      // ✅ Query string parameters (qs): appended to the URL when provided.
+      // config.qs can be an object (from PropertiesPanel JSON field) or a template string -
+      // don't use getStringProperty here for the same reason body/headers avoid it (loses object values).
+      const qsRaw = (config as any).qs;
+      if (qsRaw !== undefined && qsRaw !== null && qsRaw !== '') {
+        try {
+          let qsObj: any = typeof qsRaw === 'object' ? qsRaw : resolveTypedValue(String(qsRaw), execContext);
+          if (typeof qsObj === 'string') {
+            try { qsObj = JSON.parse(qsObj); } catch { qsObj = undefined; }
+          }
+          if (qsObj && typeof qsObj === 'object' && !Array.isArray(qsObj) && Object.keys(qsObj).length > 0) {
+            const parsedUrl = new URL(resolvedUrl);
+            for (const [qsKey, qsValue] of Object.entries(qsObj)) {
+              if (qsValue === undefined || qsValue === null) continue;
+              const resolvedQsValue = typeof qsValue === 'string' ? resolveTypedValue(qsValue, execContext) : qsValue;
+              parsedUrl.searchParams.set(qsKey, String(resolvedQsValue));
+            }
+            resolvedUrl = parsedUrl.toString();
+          }
+        } catch (e) {
+          logger.warn('[HTTP Request] Failed to apply qs parameters (non-fatal):', e instanceof Error ? e.message : String(e));
+        }
+      }
+
       let headers: Record<string, string> = {};
       let body: string | undefined;
 
@@ -7206,7 +7237,10 @@ export async function executeNodeLegacy(
       // GraphQL node - wraps http_request for GraphQL POST
       const url = getStringProperty(config, 'url', '');
       const query = getStringProperty(config, 'query', '');
-      const variablesJson = getStringProperty(config, 'variables', '{}');
+      const operationName = getStringProperty(config, 'operationName', '');
+      // ✅ variables can be an object (from PropertiesPanel JSON field) or a template string -
+      // don't use getStringProperty here, it returns the default '{}' for objects and silently drops them.
+      const variablesRaw: any = (config as any).variables;
       const headersJson = getStringProperty(config, 'headers', '{}');
       const execContext = createTypedContext();
 
@@ -7216,17 +7250,33 @@ export async function executeNodeLegacy(
       const resolvedUrl = typeof resolveWithSchema(url, execContext, 'string') === 'string'
         ? (resolveWithSchema(url, execContext, 'string') as string)
         : String(resolveTypedValue(url, execContext));
-      const resolvedVarsRaw = resolveTypedValue(variablesJson, execContext);
+      const resolvedOperationName = operationName
+        ? (typeof resolveWithSchema(operationName, execContext, 'string') === 'string'
+          ? (resolveWithSchema(operationName, execContext, 'string') as string)
+          : String(resolveTypedValue(operationName, execContext)))
+        : '';
+
       let variables: any = {};
       try {
-        variables = typeof resolvedVarsRaw === 'object' && resolvedVarsRaw !== null
-          ? resolvedVarsRaw
-          : JSON.parse(String(resolvedVarsRaw));
+        if (variablesRaw === undefined || variablesRaw === null || variablesRaw === '') {
+          variables = {};
+        } else if (typeof variablesRaw === 'object') {
+          variables = variablesRaw;
+        } else {
+          const resolvedVarsRaw = resolveTypedValue(String(variablesRaw), execContext);
+          variables = typeof resolvedVarsRaw === 'object' && resolvedVarsRaw !== null
+            ? resolvedVarsRaw
+            : JSON.parse(String(resolvedVarsRaw));
+        }
       } catch {
         variables = {};
       }
 
-      const body = JSON.stringify({ query: resolvedQuery, variables });
+      const graphqlPayload: Record<string, any> = { query: resolvedQuery, variables };
+      if (resolvedOperationName) {
+        graphqlPayload.operationName = resolvedOperationName;
+      }
+      const body = JSON.stringify(graphqlPayload);
       const nextConfig = { ...config, method: 'POST', url: resolvedUrl, headers: headersJson, body };
       const nextNode = {
         ...node,

@@ -566,12 +566,24 @@ export const credentialSteps: Record<string, CredentialGuide> = {
     steps: [
       'Go to developer.xero.com/app/manage and sign in with your Xero account.',
       'Click "New app" → give it a name (e.g. CtrlChecks) → select "Web app" → fill in company and website URL.',
-      'In the "Redirect URIs" field, enter: http://localhost:3001/api/oauth/xero/callback → Create app.',
+      'In the "Redirect URIs" field, enter: http://localhost:3001/api/credential-connections/oauth/callback → Create app.',
       'Copy the Client ID and Client Secret from the app configuration page.',
       'In CtrlChecks → left menu → Connections → Add Connection → Xero → click "Connect with Xero" → sign in → allow access.',
       'Run a test step (e.g. list invoices) to confirm the connection works.',
     ],
     docsUrl: 'https://developer.xero.com/documentation/getting-started-guide',
+  },
+
+  // ─── ScheduleWise ────────────────────────────────────────────────
+  'ScheduleWise Credential': {
+    steps: [
+      'Log in to your ScheduleWise account and open the API/Developer settings.',
+      'Generate an API access token (or API key) and copy it.',
+      'Note your ScheduleWise API base URL if it differs from the default (https://api.schedulewise.com/v1).',
+      'In CtrlChecks → left menu → Connections → Add Connection → ScheduleWise → paste the API Key/Access Token → Save.',
+      'In the ScheduleWise node, select the saved credential from the dropdown at the top of the node settings.',
+    ],
+    docsUrl: 'https://developer.schedulewise.com/',
   },
 
   // ─── Zendesk ───────────────────────────────────────────────────
@@ -835,15 +847,15 @@ export const credentialSteps: Record<string, CredentialGuide> = {
   },
 
   // ─── Workday ───────────────────────────────────────────────────
+  // Note: Workday has no managed Connections-page OAuth flow yet. Auth values are entered
+  // directly in the Workday node's own config fields (authType, accessToken or username/password, tenant).
   'Workday Credential': {
     steps: [
       'Log in to your Workday tenant as an administrator.',
-      'Search for "Register API Client" in the Workday search bar → open it.',
-      'Fill in the Client Name (e.g. CtrlChecks), set the Redirect URI to: http://localhost:3001/api/oauth/workday/callback',
-      'Select the required functional areas (scopes) such as Staffing or Human Resources.',
-      'Save the configuration — Workday will show you a Client ID and Client Secret. Copy both.',
-      'Note your Workday tenant URL (e.g. https://wd2.myworkday.com/yourcompany).',
-      'In CtrlChecks → left menu → Connections → Add Connection → Workday → enter Client ID, Secret, Tenant, and Instance URL → authorize.',
+      'For OAuth 2.0: search for "Register API Client" in the Workday search bar, create a client, and select the required functional areas (scopes) such as Staffing or Human Resources. Workday will show you a Bearer/access token to use — copy it.',
+      'For Basic Auth (alternative): use an existing Workday integration system user\'s username and password instead of an access token.',
+      'Note your Workday tenant identifier and REST API base URL (e.g. https://wd2-impl-services1.workday.com/ccx/api/v1/yourtenant).',
+      'In the workflow editor, open the Workday node and set Auth Type to OAuth 2.0 or Basic Auth, then paste the Access Token (or Username/Password), Tenant, and Base URL directly into the node\'s own config fields — there is no separate saved Connection for Workday yet.',
     ],
     docsUrl: 'https://community.workday.com/articles/1084547',
   },

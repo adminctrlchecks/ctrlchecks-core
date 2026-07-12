@@ -1822,22 +1822,13 @@ export class NodeLibrary {
           },
           qs: {
             type: 'object',
-            description: 'Query string parameters',
+            description: 'Query string parameters, merged onto the URL',
+            examples: [{ page: 1, limit: 20 }],
           },
           timeout: {
             type: 'number',
             description: 'Request timeout in milliseconds',
             default: 10000,
-          },
-          retryOnFail: {
-            type: 'boolean',
-            description: 'Retry on failure',
-            default: true,
-          },
-          maxRetries: {
-            type: 'number',
-            description: 'Maximum retry attempts',
-            default: 3,
           },
         },
       },
@@ -1910,9 +1901,9 @@ export class NodeLibrary {
       configSchema: {
         required: [],
         optional: {
-          responseCode: {
+          statusCode: {
             type: 'number',
-            description: 'HTTP status code',
+            description: 'HTTP status code returned to the webhook caller',
             default: 200,
             examples: [200, 201, 400, 404, 500],
           },
@@ -1952,7 +1943,7 @@ export class NodeLibrary {
         {
           name: 'success_response',
           description: 'Return success response',
-          config: { responseCode: 200, body: { status: 'success', data: '{{$json}}' } },
+          config: { statusCode: 200, body: { status: 'success', data: '{{$json}}' } },
         },
       ],
       validationRules: [],
@@ -8049,11 +8040,11 @@ export class NodeLibrary {
       category: 'http_api',
       description: 'Send response to webhook request',
       configSchema: {
-        required: ['responseCode'],
+        required: [],
         optional: {
-          responseCode: {
+          statusCode: {
             type: 'number',
-            description: 'HTTP response code',
+            description: 'HTTP status code returned to the webhook caller',
             examples: [200, 201, 400],
             default: 200,
           },
@@ -8061,6 +8052,11 @@ export class NodeLibrary {
             type: 'object',
             description: 'Response body',
             examples: ['{{$json.result}}'],
+          },
+          headers: {
+            type: 'object',
+            description: 'Response headers',
+            default: { 'Content-Type': 'application/json' },
           },
         },
       },
@@ -8104,6 +8100,16 @@ export class NodeLibrary {
             type: 'object',
             description: 'GraphQL variables',
             examples: [{ id: 1 }],
+          },
+          operationName: {
+            type: 'string',
+            description: 'GraphQL operation name, required when the query contains multiple named operations',
+            examples: ['GetUser'],
+          },
+          headers: {
+            type: 'object',
+            description: 'HTTP headers to send',
+            examples: [{ 'Authorization': 'Bearer {{$credentials.apiKey}}' }],
           },
         },
       },
@@ -11771,7 +11777,7 @@ export class NodeLibrary {
     return {
       type: 'schedulewise',
       label: 'ScheduleWise',
-      category: 'integration',
+      category: 'http_api',
       description: 'ScheduleWise appointment scheduling — retrieve, create, update, and delete appointments via the ScheduleWise REST API',
       configSchema: {
         required: ['operation'],
@@ -12085,6 +12091,7 @@ export class NodeLibrary {
       label: 'Xero',
       category: 'http_api',
       description: 'Create, fetch, update, and search Xero accounting records (contacts, invoices, items, payments, accounts).',
+      providers: ['xero'],
       configSchema: {
         required: ['accessToken', 'tenantId', 'resource', 'operation'],
         optional: {
@@ -12115,6 +12122,9 @@ export class NodeLibrary {
           order: { type: 'string', description: 'Sort order', default: '' },
           page: { type: 'number', description: 'Page number', default: 1 },
           modifiedAfter: { type: 'string', description: 'ISO date — only records modified after', default: '' },
+          summarizeErrors: { type: 'boolean', description: 'Send Xero validation errors summarized instead of per-line (Summarize-Errors header)', default: true },
+          includeArchived: { type: 'boolean', description: 'Include archived records in Get Many results', default: false },
+          unitdp: { type: 'number', description: 'Unit decimal places for currency amounts (2 or 4)', default: 2 },
         },
       },
       aiSelectionCriteria: {
@@ -12510,6 +12520,7 @@ export class NodeLibrary {
           payload: { type: 'object', description: 'Request body for create/update', default: {} },
           limit: { type: 'number', description: 'Max records', default: 50 },
           offset: { type: 'number', description: 'Records to skip', default: 0 },
+          rawPath: { type: 'string', description: 'Optional raw REST API path override, appended to baseUrl instead of the resource/recordId path', default: '' },
         },
       },
       aiSelectionCriteria: {

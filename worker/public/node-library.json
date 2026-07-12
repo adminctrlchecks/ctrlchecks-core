@@ -138,9 +138,7 @@
       "headers",
       "body",
       "qs",
-      "timeout",
-      "retryOnFail",
-      "maxRetries"
+      "timeout"
     ],
     "credentialType": null,
     "capabilities": []
@@ -159,7 +157,7 @@
     ],
     "requiredConfig": [],
     "optionalConfig": [
-      "responseCode",
+      "statusCode",
       "headers",
       "body"
     ],
@@ -2139,12 +2137,11 @@
       "data",
       "result"
     ],
-    "requiredConfig": [
-      "responseCode"
-    ],
+    "requiredConfig": [],
     "optionalConfig": [
-      "responseCode",
-      "body"
+      "statusCode",
+      "body",
+      "headers"
     ],
     "credentialType": null,
     "capabilities": []
@@ -2168,7 +2165,9 @@
     "optionalConfig": [
       "url",
       "query",
-      "variables"
+      "variables",
+      "operationName",
+      "headers"
     ],
     "credentialType": null,
     "capabilities": []
@@ -3360,7 +3359,7 @@
   },
   {
     "type": "schedulewise",
-    "category": "integration",
+    "category": "http_api",
     "inputs": [
       "input",
       "inputData"
@@ -3502,7 +3501,10 @@
       "where",
       "order",
       "page",
-      "modifiedAfter"
+      "modifiedAfter",
+      "summarizeErrors",
+      "includeArchived",
+      "unitdp"
     ],
     "credentialType": null,
     "capabilities": []
@@ -3759,7 +3761,8 @@
       "recordId",
       "payload",
       "limit",
-      "offset"
+      "offset",
+      "rawPath"
     ],
     "credentialType": null,
     "capabilities": []

@@ -1317,13 +1317,13 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
       description: 'Execute a GraphQL query against an endpoint.',
       outputExample: { data: { user: { id: '1', name: 'Alice', email: 'alice@example.com', orders: [{ id: 'ord_1', total: 99.99 }] } }, errors: null },
       outputDescription: 'data: The GraphQL response data. errors: Array of GraphQL errors if any occurred.',
-      usageExample: { scenario: 'Fetch user orders from a Shopify GraphQL API', inputValues: { endpoint: 'https://yourstore.myshopify.com/api/2024-01/graphql.json', query: 'query { customer(id: "{{$json.customerId}}") { id name email orders(first: 5) { nodes { id totalPrice } } } }', headers: '{"X-Shopify-Access-Token": "{{$env.SHOPIFY_TOKEN}}"}' }, expectedOutput: 'Returns `data.customer` with nested orders array.' },
+      usageExample: { scenario: 'Fetch user orders from a Shopify GraphQL API', inputValues: { url: 'https://yourstore.myshopify.com/api/2024-01/graphql.json', query: 'query { customer(id: "{{$json.customerId}}") { id name email orders(first: 5) { nodes { id totalPrice } } } }', headers: '{"X-Shopify-Access-Token": "{{$env.SHOPIFY_TOKEN}}"}' }, expectedOutput: 'Returns `data.customer` with nested orders array.' },
     },
     mutate: {
       description: 'Execute a GraphQL mutation to create or update data.',
       outputExample: { data: { createOrder: { id: 'new_ord_456', status: 'created' } }, errors: null },
       outputDescription: 'data: The mutation result data. errors: GraphQL errors if any.',
-      usageExample: { scenario: 'Create a new order via GraphQL mutation', inputValues: { endpoint: 'https://api.example.com/graphql', query: 'mutation CreateOrder($input: OrderInput!) { createOrder(input: $input) { id status } }', variables: '{"input": {"customerId": "{{$json.customerId}}", "items": []}}' }, expectedOutput: '`data.createOrder.id` is the new order ID.' },
+      usageExample: { scenario: 'Create a new order via GraphQL mutation', inputValues: { url: 'https://api.example.com/graphql', query: 'mutation CreateOrder($input: OrderInput!) { createOrder(input: $input) { id status } }', variables: '{"input": {"customerId": "{{$json.customerId}}", "items": []}}' }, expectedOutput: '`data.createOrder.id` is the new order ID.' },
     },
   },
 
@@ -1459,11 +1459,11 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
   webhook_response: {
     default: {
       description: 'Send a final HTTP response back to the app or service that called the webhook.',
-      outputExample: { responseCode: 200, body: { ok: true, orderId: 'ord_123' }, sent: true },
-      outputDescription: 'responseCode: HTTP status returned to the caller. body: The response payload sent back. sent: True when CtrlChecks sent the response.',
+      outputExample: { statusCode: 200, body: { ok: true, orderId: 'ord_123' }, headers: { 'Content-Type': 'application/json' } },
+      outputDescription: 'statusCode: HTTP status returned to the caller. body: The response payload sent back. headers: Response headers sent back.',
       usageExample: {
         scenario: 'Return a success message to a checkout form after creating an order',
-        inputValues: { responseCode: '200', body: '{"ok":true,"orderId":"{{$json.orderId}}"}' },
+        inputValues: { statusCode: '200', body: '{"ok":true,"orderId":"{{$json.orderId}}"}' },
         expectedOutput: 'The caller receives HTTP 200 with the order ID in the response body.',
       },
     },

@@ -226,7 +226,7 @@ const CREDENTIAL_TYPE_MAP: Record<string, string> = {
   xero: 'Xero Credential',
   zendesk: 'Zendesk API Key',
   oracle_database: 'Oracle Credential',
-  schedulewise: 'None',
+  schedulewise: 'ScheduleWise Credential',
 };
 
 /** Nodes that require no credential. */

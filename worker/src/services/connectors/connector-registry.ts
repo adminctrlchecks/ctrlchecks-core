@@ -1588,6 +1588,31 @@ export class ConnectorRegistry {
       nodeTypes: ['sftp'],
       description: 'Transfer files via SFTP using SSH authentication',
     });
+
+    // ============================================
+    // SCHEDULEWISE CONNECTOR
+    // ============================================
+    this.register({
+      id: 'schedulewise',
+      provider: 'schedulewise',
+      service: 'scheduling',
+      capabilities: [
+        'scheduling.read',
+        'scheduling.write',
+        'schedulewise.appointments',
+      ],
+      keywords: ['schedulewise', 'appointment', 'scheduling', 'booking'],
+      credentialContract: {
+        provider: 'schedulewise',
+        type: 'api_key',
+        vaultKey: 'schedulewise',
+        displayName: 'ScheduleWise API Key',
+        required: true,
+        credentialFieldName: 'apiKey',
+      },
+      nodeTypes: ['schedulewise'],
+      description: 'Read and manage appointments/schedules via the ScheduleWise API',
+    });
   }
 
   /**

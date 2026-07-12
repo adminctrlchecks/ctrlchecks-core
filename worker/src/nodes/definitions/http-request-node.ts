@@ -56,18 +56,6 @@ export const httpRequestNodeDefinition: NodeDefinition = {
       required: false,
       default: 10000,
     },
-    retryOnFail: {
-      type: 'boolean',
-      description: 'Automatically retry on failure',
-      required: false,
-      default: true,
-    },
-    maxRetries: {
-      type: 'number',
-      description: 'Maximum number of retry attempts',
-      required: false,
-      default: 3,
-    },
   },
 
   outputSchema: {
@@ -102,7 +90,5 @@ export const httpRequestNodeDefinition: NodeDefinition = {
     body: null,
     qs: {},
     timeout: 10000,
-    retryOnFail: true,
-    maxRetries: 3,
   }),
 };

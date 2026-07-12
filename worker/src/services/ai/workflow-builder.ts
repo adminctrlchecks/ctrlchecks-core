@@ -9859,9 +9859,9 @@ return {
         // HTTP
         'http_request': ['url', 'method', 'headers', 'body', 'qs'],
         'http_post': ['url', 'body', 'headers'],
-        'graphql': ['url', 'query', 'variables'],
-        'respond_to_webhook': ['responseCode', 'headers', 'body'],
-        'webhook_response': ['responseCode', 'body'],
+        'graphql': ['url', 'query', 'variables', 'operationName'],
+        'respond_to_webhook': ['statusCode', 'headers', 'body'],
+        'webhook_response': ['statusCode', 'body'],
         
         // File/Storage
         'read_binary_file': ['filePath'],
@@ -10162,8 +10162,8 @@ return {
       'http_request': 'url',
       'http_post': 'url',
       'graphql': 'url',
-      'respond_to_webhook': 'responseCode',
-      'webhook_response': 'responseCode',
+      'respond_to_webhook': 'statusCode',
+      'webhook_response': 'statusCode',
       
       // File/Storage
       'read_binary_file': 'filePath',
