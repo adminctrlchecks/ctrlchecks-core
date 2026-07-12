@@ -1151,23 +1151,47 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
   },
 
   date_time: {
+    now: {
+      description: 'Return the current date/time, optionally formatted in a timezone.',
+      outputExample: { datetime: '2026-07-12T09:00:00.000Z', timestamp: 1783855800000 },
+      outputDescription: 'datetime: Current date/time as ISO or timezone-formatted text. timestamp: Current Unix time in milliseconds.',
+      usageExample: { scenario: 'Stamp a record with the current workflow run time', inputValues: { operation: 'now', timezone: 'UTC' }, expectedOutput: 'Use `{{$json.datetime}}` as the generated timestamp.' },
+    },
     format: {
       description: 'Format a date/time value into a specific string format.',
-      outputExample: { formatted: '15 Jan 2025', original: '2025-01-15T10:00:00Z', format: 'DD MMM YYYY' },
-      outputDescription: 'formatted: The date as a formatted string. original: The original input value. format: The format string used.',
-      usageExample: { scenario: 'Format an ISO date from a database for display in an email', inputValues: { date: '{{$json.createdAt}}', format: 'MMMM D, YYYY' }, expectedOutput: 'Formatted date string like "January 15, 2025".' },
-    },
-    parse: {
-      description: 'Parse a date string into a structured object with year, month, day, etc.',
-      outputExample: { year: 2025, month: 1, day: 15, hour: 10, minute: 0, timestamp: 1736935200000, iso: '2025-01-15T10:00:00.000Z' },
-      outputDescription: 'year/month/day/hour/minute: Components of the parsed date. timestamp: Unix milliseconds. iso: ISO 8601 string.',
-      usageExample: { scenario: 'Extract the year from a date string for grouping records', inputValues: { date: '{{$json.dateString}}' }, expectedOutput: 'Use `{{$json.year}}` in SQL queries or conditional checks.' },
+      outputExample: { datetime: '2026-07-12T09:00:00.000Z' },
+      outputDescription: 'datetime: The formatted date/time string.',
+      usageExample: { scenario: 'Format an ISO date from a database for display in an email', inputValues: { date: '{{$json.createdAt}}', format: 'LOCALE', locale: 'en-US' }, expectedOutput: 'Formatted date string in `{{$json.datetime}}`.' },
     },
     add: {
-      description: 'Add or subtract time from a date (e.g. +7 days, -1 hour).',
-      outputExample: { result: '2025-01-22T10:00:00.000Z', original: '2025-01-15T10:00:00.000Z', added: { amount: 7, unit: 'days' } },
-      outputDescription: 'result: The new date after adding the specified duration. original: The input date. added: The amount and unit that was added.',
-      usageExample: { scenario: 'Calculate an expiry date 30 days from now for a trial subscription', inputValues: { date: '{{$now}}', amount: '30', unit: 'days' }, expectedOutput: 'Trial expiry date in `{{$json.result}}`.' },
+      description: 'Add time to a date.',
+      outputExample: { datetime: '2026-07-19T09:00:00.000Z' },
+      outputDescription: 'datetime: The date after adding the configured value and unit.',
+      usageExample: { scenario: 'Calculate an expiry date 30 days from now for a trial subscription', inputValues: { date: '{{$json.startedAt}}', value: '30', unit: 'days' }, expectedOutput: 'Trial expiry date in `{{$json.datetime}}`.' },
+    },
+    subtract: {
+      description: 'Subtract time from a date.',
+      outputExample: { datetime: '2026-07-05T09:00:00.000Z' },
+      outputDescription: 'datetime: The date after subtracting the configured value and unit.',
+      usageExample: { scenario: 'Find the start of a seven-day lookback window', inputValues: { date: '{{$now}}', value: '7', unit: 'days' }, expectedOutput: 'Lookback start date in `{{$json.datetime}}`.' },
+    },
+    diff: {
+      description: 'Calculate the difference between two dates.',
+      outputExample: { diff: 1440, diffMs: 86400000, unit: 'minutes' },
+      outputDescription: 'diff: Difference in the selected unit. diffMs: Difference in milliseconds. unit: Unit used for diff.',
+      usageExample: { scenario: 'Calculate minutes between order creation and fulfillment', inputValues: { date: '{{$json.createdAt}}', endDate: '{{$json.fulfilledAt}}', unit: 'minutes' }, expectedOutput: 'Difference is available as `{{$json.diff}}`.' },
+    },
+    convertTimezone: {
+      description: 'Format a date/time in the requested IANA timezone.',
+      outputExample: { datetime: '2026-07-12T14:30:00', timezone: 'Asia/Kolkata' },
+      outputDescription: 'datetime: Date/time rendered in the target timezone. timezone: Target timezone used.',
+      usageExample: { scenario: 'Convert a UTC event time to customer local time', inputValues: { date: '{{$json.eventTime}}', timezone: 'Asia/Kolkata' }, expectedOutput: 'Local time in `{{$json.datetime}}`.' },
+    },
+    getTimezoneInfo: {
+      description: 'Return timezone offset and display name for a date.',
+      outputExample: { timezone: 'Asia/Kolkata', offset: '+05:30', longName: 'India Standard Time', isoDate: '2026-07-12T09:00:00.000Z' },
+      outputDescription: 'timezone: IANA timezone. offset: GMT offset. longName: Human-readable timezone name. isoDate: Base date as ISO.',
+      usageExample: { scenario: 'Add timezone details to a scheduling confirmation', inputValues: { date: '{{$json.meetingTime}}', timezone: 'Asia/Kolkata' }, expectedOutput: 'Timezone details are available for downstream messages.' },
     },
   },
 
@@ -1191,19 +1215,19 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
 
   edit_fields: {
     default: {
-      description: 'Rename, add, remove, or transform fields in an object.',
-      outputExample: { id: 1, fullName: 'Alice Smith', emailAddress: 'alice@example.com' },
-      outputDescription: 'The resulting object after field edits, renames, and removals.',
-      usageExample: { scenario: 'Rename API response fields to match your database schema', inputValues: { operations: '[{"action": "rename", "from": "first_name", "to": "firstName"}, {"action": "remove", "field": "internal_id"}]' }, expectedOutput: 'The object with renamed fields passes to the next node.' },
+      description: 'Add or overwrite fields on the current object.',
+      outputExample: { id: 1, firstName: 'Alice', lastName: 'Smith', fullName: 'Alice Smith' },
+      outputDescription: 'The output is the original object plus each configured field value.',
+      usageExample: { scenario: 'Add a normalized fullName field before writing a record', inputValues: { fields: '{"fullName":"{{$json.firstName}} {{$json.lastName}}"}' }, expectedOutput: 'The object passes downstream with `{{$json.fullName}}` set.' },
     },
   },
 
   aggregate: {
     default: {
       description: 'Aggregate an array of items — sum, average, count, min, max, or group.',
-      outputExample: { sum: 4500, average: 900, count: 5, min: 200, max: 2000, field: 'amount' },
-      outputDescription: 'sum: Sum of all values. average: Mean value. count: Number of items. min / max: Smallest / largest value.',
-      usageExample: { scenario: 'Calculate total sales from an array of order amounts', inputValues: { items: '{{$json.orders}}', field: 'amount', operation: 'sum' }, expectedOutput: '`{{$json.sum}}` holds the total sales figure.' },
+      outputExample: { aggregate: 4500, operation: 'sum', field: 'amount' },
+      outputDescription: 'aggregate: The computed value. operation: Aggregation operation used. field: Field path used when configured.',
+      usageExample: { scenario: 'Calculate total sales from an array of order amounts', inputValues: { field: 'amount', operation: 'sum' }, expectedOutput: '`{{$json.aggregate}}` holds the total sales figure.' },
     },
   },
 
@@ -1228,30 +1252,36 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
   csv: {
     parse: {
       description: 'Parse a CSV string into an array of objects.',
-      outputExample: { rows: [{ Name: 'Alice', Email: 'alice@example.com', Plan: 'Pro' }, { Name: 'Bob', Email: 'bob@example.com', Plan: 'Free' }], headers: ['Name', 'Email', 'Plan'], rowCount: 2 },
-      outputDescription: 'rows: Array of objects where keys are column headers. headers: Column names. rowCount: Number of data rows.',
-      usageExample: { scenario: 'Parse a CSV file downloaded from Google Drive into structured data', inputValues: { csv: '{{$json.content}}', hasHeaders: 'true' }, expectedOutput: 'Each row becomes an object. Loop over `{{$json.rows}}` to process each.' },
+      outputExample: { items: [{ Name: 'Alice', Email: 'alice@example.com', Plan: 'Pro' }, { Name: 'Bob', Email: 'bob@example.com', Plan: 'Free' }], rows: [{ Name: 'Alice', Email: 'alice@example.com', Plan: 'Pro' }], headers: ['Name', 'Email', 'Plan'] },
+      outputDescription: 'items/rows: Array of parsed row objects. headers: Column names used as object keys.',
+      usageExample: { scenario: 'Parse a CSV file downloaded from Google Drive into structured data', inputValues: { csv: '{{$json.content}}', hasHeader: 'true', delimiter: ',' }, expectedOutput: 'Each row becomes an object. Loop over `{{$json.items}}` or `{{$json.rows}}` to process each.' },
     },
     generate: {
       description: 'Convert an array of objects into a CSV string.',
-      outputExample: { csv: 'Name,Email,Status\nAlice,alice@example.com,Active\nBob,bob@example.com,Inactive\n', rowCount: 2 },
-      outputDescription: 'csv: The generated CSV string. rowCount: Number of data rows in the output.',
-      usageExample: { scenario: 'Export a list of users as a CSV to upload to Google Drive', inputValues: { data: '{{$json.users}}', headers: '["Name", "Email", "Status"]' }, expectedOutput: 'CSV string in `{{$json.csv}}`. Pass to a Google Drive upload node.' },
+      outputExample: { csv: 'Name,Email,Status\nAlice,alice@example.com,Active\nBob,bob@example.com,Inactive' },
+      outputDescription: 'csv: The generated CSV string.',
+      usageExample: { scenario: 'Export a list of users as a CSV to upload to Google Drive', inputValues: { data: '{{$json.users}}', delimiter: ',' }, expectedOutput: 'CSV string in `{{$json.csv}}`. Pass to a Google Drive upload node.' },
     },
   },
 
   html: {
     parse: {
-      description: 'Parse an HTML document and extract elements or text.',
-      outputExample: { title: 'Example Domain', headings: ['Example Domain'], links: ['https://www.iana.org/domains/example'], text: 'This domain is for use in illustrative examples.' },
-      outputDescription: 'title: Page title. headings: Array of heading texts. links: Array of href values. text: Main body text.',
-      usageExample: { scenario: 'Scrape a product page to extract the title and price', inputValues: { html: '{{$json.pageContent}}', selector: '.price' }, expectedOutput: 'Extracted price in `{{$json.text}}`.' },
+      description: 'Parse an HTML document into page title, meta tags, and body HTML.',
+      outputExample: { title: 'Example Domain', meta: { description: 'Example page' }, body: '<h1>Example Domain</h1>', success: true },
+      outputDescription: 'title: Page title. meta: Meta tag content keyed by name/property. body: Inner body HTML. success: true on success.',
+      usageExample: { scenario: 'Read title and metadata from a fetched page', inputValues: { html: '{{$json.pageContent}}' }, expectedOutput: 'Use `{{$json.title}}`, `{{$json.meta}}`, or `{{$json.body}}` downstream.' },
     },
-    generate: {
-      description: 'Generate an HTML string from a template.',
-      outputExample: { html: '<h1>Welcome, Alice!</h1><p>Your order #123 has shipped.</p>' },
-      outputDescription: 'html: The generated HTML string.',
-      usageExample: { scenario: 'Generate an HTML email body from a template', inputValues: { template: '<h1>Welcome, {{name}}!</h1><p>Your order #{{orderId}} has shipped.</p>', data: '{"name": "{{$json.name}}", "orderId": "{{$json.orderId}}"}' }, expectedOutput: 'Use `{{$json.html}}` as the email body.' },
+    extract: {
+      description: 'Extract text from elements that match a CSS selector.',
+      outputExample: { results: ['$42.00'], count: 1, success: true },
+      outputDescription: 'results: Text from each matched element. count: Number of matched elements. success: true on success.',
+      usageExample: { scenario: 'Scrape a product page price', inputValues: { html: '{{$json.pageContent}}', selector: '.price' }, expectedOutput: 'Extracted values are in `{{$json.results}}`.' },
+    },
+    toText: {
+      description: 'Convert HTML body content to plain text.',
+      outputExample: { text: 'Example Domain This domain is for use in illustrative examples.', success: true },
+      outputDescription: 'text: Plain text from the body element. success: true on success.',
+      usageExample: { scenario: 'Convert downloaded HTML into plain text for an AI step', inputValues: { html: '{{$json.pageContent}}' }, expectedOutput: 'Plain text is available in `{{$json.text}}`.' },
     },
   },
 

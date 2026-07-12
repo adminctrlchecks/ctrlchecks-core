@@ -278,9 +278,22 @@ export const NODE_OUTPUT_SCHEMAS: Record<string, NodeOutputSchema> = {
     convertible: ['string', 'array']
   },
   date_time: {
-    type: 'string',
-    convertible: ['object', 'number'],
-    defaultValue: ''
+    type: 'object',
+    structure: {
+      fields: {
+        datetime: 'string',
+        timestamp: 'number',
+        diff: 'number',
+        diffMs: 'number',
+        unit: 'string',
+        timezone: 'string',
+        offset: 'string',
+        longName: 'string',
+        isoDate: 'string'
+      }
+    },
+    convertible: ['string', 'number'],
+    defaultValue: {}
   },
   math: {
     type: 'number',
@@ -288,9 +301,20 @@ export const NODE_OUTPUT_SCHEMAS: Record<string, NodeOutputSchema> = {
     defaultValue: 0
   },
   html: {
-    type: 'string',
-    convertible: ['object'],
-    defaultValue: ''
+    type: 'object',
+    structure: {
+      fields: {
+        title: 'string',
+        meta: 'object',
+        body: 'string',
+        results: 'array',
+        count: 'number',
+        text: 'string',
+        success: 'boolean'
+      }
+    },
+    convertible: ['string'],
+    defaultValue: {}
   },
   xml: {
     type: 'string',
@@ -368,9 +392,11 @@ export const NODE_OUTPUT_SCHEMAS: Record<string, NodeOutputSchema> = {
     type: 'object',
     structure: {
       fields: {
-        groups: 'array',
-        totals: 'object',
-        count: 'number'
+        aggregate: 'object',
+        text: 'string',
+        operation: 'string',
+        delimiter: 'string',
+        field: 'string'
       }
     },
     convertible: ['array', 'string']

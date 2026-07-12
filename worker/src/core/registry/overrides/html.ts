@@ -12,7 +12,7 @@ function mergeInputs(context: {
 }
 
 export function overrideHtml(def: UnifiedNodeDefinition, _schema: NodeSchema): UnifiedNodeDefinition {
-  const operationOptions = ['parse', 'extract', 'clean'].map((value) => ({
+  const operationOptions = ['parse', 'extract', 'toText'].map((value) => ({
     label: value.charAt(0).toUpperCase() + value.slice(1),
     value,
   }));
@@ -27,17 +27,14 @@ export function overrideHtml(def: UnifiedNodeDefinition, _schema: NodeSchema): U
       },
       selector: {
         type: 'string',
-        description: 'CSS selector used by extract. Omit to extract the whole document text.',
+        description: 'CSS selector used by extract.',
         required: false,
         role: 'config',
         fillMode: { default: 'buildtime_ai_once', supportsRuntimeAI: false, supportsBuildtimeAI: true },
-      },
-      attribute: {
-        type: 'string',
-        description: 'Optional attribute to extract from selected elements, e.g. href or src.',
-        required: false,
-        role: 'config',
-        fillMode: { default: 'buildtime_ai_once', supportsRuntimeAI: false, supportsBuildtimeAI: true },
+        ui: {
+          visibleIf: { field: 'operation', equals: 'extract' },
+          requiredIf: { field: 'operation', equals: 'extract' },
+        },
       },
     },
     execute: async (context) => {
@@ -49,55 +46,51 @@ export function overrideHtml(def: UnifiedNodeDefinition, _schema: NodeSchema): U
         if (!html.trim()) throw new Error('html is required');
         const $ = cheerio.load(html);
 
+        if (operation === 'toText' || operation === 'totext' || operation === 'to_text') {
+          return { success: true, output: { text: $('body').text().trim(), success: true } };
+        }
+
+        if (operation === 'extract') {
+          const selector = String(inputs.selector || '').trim();
+          if (!selector) throw new Error('selector field is required');
+          const results: string[] = [];
+          $(selector).each((_: number, el: any) => {
+            results.push($(el).text().trim());
+          });
+          return { success: true, output: { results, count: results.length, success: true } };
+        }
+
+        if (operation === 'parse') {
+          const meta: Record<string, string> = {};
+          $('meta').each((_: number, el: any) => {
+            const name = $(el).attr('name') || $(el).attr('property') || '';
+            const content = $(el).attr('content') || '';
+            if (name) meta[name] = content;
+          });
+          return {
+            success: true,
+            output: {
+              title: $('title').text(),
+              meta,
+              body: $('body').html() ?? '',
+              success: true,
+            },
+          };
+        }
+
         if (operation === 'clean') {
           $('script,style,noscript,iframe').remove();
           return {
             success: true,
             output: {
-              operation,
               html: $.html(),
               text: $.root().text().replace(/\s+/g, ' ').trim(),
+              success: true,
             },
           };
         }
 
-        if (operation === 'extract') {
-          const selector = String(inputs.selector || 'body').trim() || 'body';
-          const attribute = String(inputs.attribute || '').trim();
-          const matches = $(selector)
-            .toArray()
-            .map((el) => {
-              const node = $(el);
-              return attribute
-                ? { value: node.attr(attribute) || '', text: node.text().trim(), html: node.html() || '' }
-                : { text: node.text().trim(), html: node.html() || '' };
-            });
-          return { success: true, output: { operation, selector, attribute: attribute || undefined, matches } };
-        }
-
-        if (operation === 'parse') {
-          const title = $('title').first().text().trim();
-          const headings = $('h1,h2,h3').toArray().map((el) => ({
-            tag: el.tagName.toLowerCase(),
-            text: $(el).text().trim(),
-          }));
-          const links = $('a[href]').toArray().map((el) => ({
-            text: $(el).text().trim(),
-            href: $(el).attr('href') || '',
-          }));
-          return {
-            success: true,
-            output: {
-              operation,
-              title,
-              text: $.root().text().replace(/\s+/g, ' ').trim(),
-              headings,
-              links,
-            },
-          };
-        }
-
-        throw new Error(`Unsupported HTML operation: ${operation}`);
+        throw new Error(`Unsupported HTML operation: ${operation}. Supported: parse, extract, toText`);
       } catch (error: any) {
         return { success: false, error: { code: 'HTML_OPERATION_FAILED', message: error?.message || 'HTML operation failed' } };
       }

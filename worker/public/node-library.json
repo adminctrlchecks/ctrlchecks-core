@@ -602,8 +602,14 @@
     ],
     "optionalConfig": [
       "operation",
-      "dateValue",
-      "format"
+      "date",
+      "format",
+      "customFormat",
+      "locale",
+      "timezone",
+      "value",
+      "unit",
+      "endDate"
     ],
     "credentialType": null,
     "capabilities": []
@@ -1761,7 +1767,8 @@
     ],
     "optionalConfig": [
       "html",
-      "operation"
+      "operation",
+      "selector"
     ],
     "credentialType": null,
     "capabilities": []
@@ -1806,7 +1813,9 @@
     "optionalConfig": [
       "operation",
       "csv",
-      "data"
+      "data",
+      "delimiter",
+      "hasHeader"
     ],
     "credentialType": null,
     "capabilities": []
@@ -1850,8 +1859,7 @@
     "optionalConfig": [
       "operation",
       "field",
-      "delimiter",
-      "groupBy"
+      "delimiter"
     ],
     "credentialType": null,
     "capabilities": []

@@ -1,68 +1,53 @@
 import type { NodeDoc } from '../types';
 
 export const editFieldsDoc: NodeDoc = {
-  "slug": "edit_fields",
-  "displayName": "Edit Fields",
-  "category": "Data",
-  "logoUrl": "/icons/nodes/edit_fields.svg",
-  "description": "Edit, rename, or transform field values in data objects",
-  "credentialType": "None",
-  "credentialSetupSteps": [
-    "This node does not need a saved account connection.",
-    "Open the node settings and fill the visible input fields.",
-    "Run the workflow when the required fields are complete."
-  ],
-  "credentialDocsUrl": "https://docs.ctrlchecks.com",
-  "resources": [
+  slug: 'edit_fields',
+  displayName: 'Edit Fields',
+  category: 'Data',
+  logoUrl: '/icons/nodes/edit_fields.svg',
+  description: 'Add or overwrite fields on the current data object.',
+  credentialType: 'None',
+  credentialSetupSteps: ['This node does not need a saved account connection.'],
+  credentialDocsUrl: 'https://docs.ctrlchecks.com',
+  resources: [
     {
-      "name": "Configuration",
-      "description": "Edit Fields is configured directly with input fields.",
-      "operations": [
+      name: 'Configuration',
+      description: 'Edit Fields is configured directly with field mappings.',
+      operations: [
         {
-          "name": "Execute",
-          "value": "default",
-          "description": "Rename, add, remove, or transform fields in an object.",
-          "fields": [
+          name: 'Execute',
+          value: 'default',
+          description: 'Add configured fields to the object, overwriting existing keys when names match.',
+          fields: [
             {
-              "name": "Fields",
-              "internalKey": "fields",
-              "type": "json",
-              "required": false,
-              "description": "Field mappings and transformations",
-              "helpText": "What this field is: Structured data for Field mappings and transformations.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Edit Fields.\nExample: {\"oldField\":\"{{$json.newField}}\",\"rename\":{\"old\":\"new\"}}.\nTip: Use {{$json.fields}} when an earlier step already prepared this data.",
-              "placeholder": "{\"oldField\":\"{{$json.newField}}\",\"rename\":{\"old\":\"new\"}}",
-              "example": "{\"oldField\":\"{{$json.newField}}\",\"rename\":{\"old\":\"new\"}}"
-            }
-          ],
-          "outputExample": {
-            "id": 1,
-            "fullName": "Alice Smith",
-            "emailAddress": "alice@example.com"
-          },
-          "outputDescription": "The resulting object after field edits, renames, and removals.",
-          "usageExample": {
-            "scenario": "Rename API response fields to match your database schema",
-            "inputValues": {
-              "operations": "[{\"action\": \"rename\", \"from\": \"first_name\", \"to\": \"firstName\"}, {\"action\": \"remove\", \"field\": \"internal_id\"}]"
+              name: 'Fields',
+              internalKey: 'fields',
+              type: 'json',
+              required: false,
+              description: 'Object mapping output field names to static values or expressions.',
+              helpText: 'Example: {"fullName":"{{$json.firstName}} {{$json.lastName}}","status":"active"}.',
+              placeholder: '{"fullName":"{{$json.firstName}} {{$json.lastName}}"}',
+              example: '{"fullName":"{{$json.firstName}} {{$json.lastName}}"}',
             },
-            "expectedOutput": "The object with renamed fields passes to the next node."
+          ],
+          outputExample: { id: 1, firstName: 'Alice', lastName: 'Smith', fullName: 'Alice Smith' },
+          outputDescription: 'The output is the original object plus each configured field value.',
+          usageExample: {
+            scenario: 'Add a normalized fullName field before writing a record',
+            inputValues: { fields: '{"fullName":"{{$json.firstName}} {{$json.lastName}}"}' },
+            expectedOutput: 'The object passes downstream with `{{$json.fullName}}` set.',
           },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
-        }
-      ]
-    }
-  ],
-  "commonErrors": [
-    {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
+          externalDocsUrl: 'https://docs.ctrlchecks.com',
+        },
+      ],
     },
-    {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
   ],
-  "relatedNodes": []
+  commonErrors: [
+    {
+      error: 'Fields must be an object',
+      cause: 'The fields input resolved to something other than an object.',
+      fix: 'Use key-value rows or a JSON object such as {"status":"active"}.',
+    },
+  ],
+  relatedNodes: [],
 };

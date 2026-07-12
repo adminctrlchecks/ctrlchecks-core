@@ -1,135 +1,118 @@
 import type { NodeDoc } from '../types';
 
 export const csvDoc: NodeDoc = {
-  "slug": "csv",
-  "displayName": "CSV",
-  "category": "Data",
-  "logoUrl": "/icons/nodes/csv.svg",
-  "description": "Parse and generate CSV data",
-  "credentialType": "None",
-  "credentialSetupSteps": [
-    "This node does not need a saved account connection.",
-    "Open the node settings and fill the visible input fields.",
-    "Run the workflow when the required fields are complete."
-  ],
-  "credentialDocsUrl": "https://docs.ctrlchecks.com",
-  "resources": [
+  slug: 'csv',
+  displayName: 'CSV',
+  category: 'Data',
+  logoUrl: '/icons/nodes/csv.svg',
+  description: 'Parse CSV text into rows/items or generate CSV text from object arrays.',
+  credentialType: 'None',
+  credentialSetupSteps: ['This node does not need a saved account connection.'],
+  credentialDocsUrl: 'https://docs.ctrlchecks.com',
+  resources: [
     {
-      "name": "Operations",
-      "description": "CSV exposes operation choices directly.",
-      "operations": [
+      name: 'Operations',
+      description: 'CSV exposes operation choices directly.',
+      operations: [
         {
-          "name": "Parse",
-          "value": "parse",
-          "description": "Parse a CSV string into an array of objects.",
-          "fields": [
+          name: 'Parse',
+          value: 'parse',
+          description: 'Parse CSV text into items, rows, and headers.',
+          fields: [
             {
-              "name": "Csv",
-              "internalKey": "csv",
-              "type": "string",
-              "required": false,
-              "description": "CSV content (for parse)",
-              "helpText": "What this field is: CSV content.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: {{$json.csv}}.\nTip: This field is used for parse. Leave it blank when this operation does not need it.",
-              "placeholder": "{{$json.csv}}",
-              "example": "{{$json.csv}}"
+              name: 'CSV',
+              internalKey: 'csv',
+              type: 'textarea',
+              required: false,
+              description: 'CSV content to parse.',
+              helpText: 'Provide CSV text or an expression such as {{$json.content}}.',
+              placeholder: 'name,email\nAda,ada@example.com',
+              example: '{{$json.content}}',
             },
             {
-              "name": "Data",
-              "internalKey": "data",
-              "type": "json",
-              "required": true,
-              "description": "Data array (for generate)",
-              "helpText": "What this field is: Structured data for Data array.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by CSV.\nExample: {{$json.data}}.\nTip: Use {{$json.data}} when an earlier step already prepared this data.",
-              "placeholder": "{{$json.data}}",
-              "example": "{{$json.data}}"
-            }
+              name: 'Delimiter',
+              internalKey: 'delimiter',
+              type: 'string',
+              required: false,
+              description: 'Delimiter used to split fields. Use \\t for tab-delimited data.',
+              helpText: 'Default is comma. Semicolon, tab, and pipe are also supported.',
+              placeholder: ',',
+              example: ',',
+              defaultValue: ',',
+            },
+            {
+              name: 'Has Header',
+              internalKey: 'hasHeader',
+              type: 'boolean',
+              required: false,
+              description: 'Whether the first row contains column names.',
+              helpText: 'When false, columns are named 0, 1, 2, and so on.',
+              defaultValue: 'true',
+            },
           ],
-          "outputExample": {
-            "rows": [
-              {
-                "Name": "Alice",
-                "Email": "alice@example.com",
-                "Plan": "Pro"
-              },
-              {
-                "Name": "Bob",
-                "Email": "bob@example.com",
-                "Plan": "Free"
-              }
-            ],
-            "headers": [
-              "Name",
-              "Email",
-              "Plan"
-            ],
-            "rowCount": 2
+          outputExample: {
+            items: [{ Name: 'Alice', Email: 'alice@example.com', Plan: 'Pro' }],
+            rows: [{ Name: 'Alice', Email: 'alice@example.com', Plan: 'Pro' }],
+            headers: ['Name', 'Email', 'Plan'],
           },
-          "outputDescription": "rows: Array of objects where keys are column headers. headers: Column names. rowCount: Number of data rows.",
-          "usageExample": {
-            "scenario": "Parse a CSV file downloaded from Google Drive into structured data",
-            "inputValues": {
-              "csv": "{{$json.content}}",
-              "hasHeaders": "true"
-            },
-            "expectedOutput": "Each row becomes an object. Loop over `{{$json.rows}}` to process each."
+          outputDescription: 'items/rows: Parsed row objects. headers: Column names used as object keys.',
+          usageExample: {
+            scenario: 'Parse a CSV file downloaded from Google Drive',
+            inputValues: { csv: '{{$json.content}}', delimiter: ',', hasHeader: 'true' },
+            expectedOutput: 'Each CSV row becomes an object in `{{$json.items}}` and `{{$json.rows}}`.',
           },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
+          externalDocsUrl: 'https://docs.ctrlchecks.com',
         },
         {
-          "name": "Generate",
-          "value": "generate",
-          "description": "Convert an array of objects into a CSV string.",
-          "fields": [
+          name: 'Generate',
+          value: 'generate',
+          description: 'Generate CSV text from an array of objects.',
+          fields: [
             {
-              "name": "Csv",
-              "internalKey": "csv",
-              "type": "string",
-              "required": false,
-              "description": "CSV content (for parse)",
-              "helpText": "What this field is: CSV content.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: {{$json.csv}}.\nTip: This field is used for parse. Leave it blank when this operation does not need it.",
-              "placeholder": "{{$json.csv}}",
-              "example": "{{$json.csv}}"
+              name: 'Data',
+              internalKey: 'data',
+              type: 'json',
+              required: false,
+              description: 'Array of objects to generate. If empty, runtime uses input.items.',
+              helpText: 'Use an array expression such as {{$json.users}}, or leave blank to use upstream items.',
+              placeholder: '[{"name":"Ada","email":"ada@example.com"}]',
+              example: '{{$json.users}}',
             },
             {
-              "name": "Data",
-              "internalKey": "data",
-              "type": "json",
-              "required": true,
-              "description": "Data array (for generate)",
-              "helpText": "What this field is: Structured data for Data array.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by CSV.\nExample: {{$json.data}}.\nTip: Use {{$json.data}} when an earlier step already prepared this data.",
-              "placeholder": "{{$json.data}}",
-              "example": "{{$json.data}}"
-            }
+              name: 'Delimiter',
+              internalKey: 'delimiter',
+              type: 'string',
+              required: false,
+              description: 'Delimiter used between generated fields.',
+              helpText: 'Default is comma. Values are quoted when needed.',
+              placeholder: ',',
+              example: ',',
+              defaultValue: ',',
+            },
           ],
-          "outputExample": {
-            "csv": "Name,Email,Status\nAlice,alice@example.com,Active\nBob,bob@example.com,Inactive\n",
-            "rowCount": 2
+          outputExample: { csv: 'Name,Email,Status\nAlice,alice@example.com,Active' },
+          outputDescription: 'csv: The generated CSV string.',
+          usageExample: {
+            scenario: 'Export users as CSV before uploading a file',
+            inputValues: { data: '{{$json.users}}', delimiter: ',' },
+            expectedOutput: 'CSV text is available in `{{$json.csv}}`.',
           },
-          "outputDescription": "csv: The generated CSV string. rowCount: Number of data rows in the output.",
-          "usageExample": {
-            "scenario": "Export a list of users as a CSV to upload to Google Drive",
-            "inputValues": {
-              "data": "{{$json.users}}",
-              "headers": "[\"Name\", \"Email\", \"Status\"]"
-            },
-            "expectedOutput": "CSV string in `{{$json.csv}}`. Pass to a Google Drive upload node."
-          },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
-        }
-      ]
-    }
+          externalDocsUrl: 'https://docs.ctrlchecks.com',
+        },
+      ],
+    },
   ],
-  "commonErrors": [
+  commonErrors: [
     {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
+      error: 'Empty CSV input',
+      cause: 'Parse received an empty CSV string.',
+      fix: 'Map CSV to the csv field or pass CSV text from the previous node.',
     },
     {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
+      error: 'No data to generate',
+      cause: 'Generate received no data array and no upstream items.',
+      fix: 'Set Data to an array of objects or connect a node that outputs items.',
+    },
   ],
-  "relatedNodes": []
+  relatedNodes: [],
 };

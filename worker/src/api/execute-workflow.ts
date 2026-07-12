@@ -3426,7 +3426,7 @@ export async function executeNodeLegacy(
       })();
 
       const values = items
-        .map((it: any) => (field ? it?.[field] : it))
+        .map((it: any) => (field ? getNestedValue(it, field) : it))
         .filter((v: any) => v !== undefined && v !== null);
 
       if (operation === 'join' || operation === 'concat') {
@@ -13976,22 +13976,93 @@ export async function executeNodeLegacy(
     }
 
     case 'csv': {
-      // CSV - parse or generate. Minimal implementation without external libs.
+      // CSV - parse or generate.
       const operation = getStringProperty(config, 'operation', 'parse').toLowerCase();
       const execContext = createTypedContext();
+      const delimiterRaw = getStringProperty(config, 'delimiter', ',');
+      const delimiter = delimiterRaw === '\\t' ? '\t' : (delimiterRaw || ',');
+
+      const parseCsvLine = (line: string): string[] => {
+        const cells: string[] = [];
+        let current = '';
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i += 1) {
+          const char = line[i];
+          if (char === '"') {
+            if (inQuotes && line[i + 1] === '"') {
+              current += '"';
+              i += 1;
+            } else {
+              inQuotes = !inQuotes;
+            }
+            continue;
+          }
+          if (!inQuotes && line.startsWith(delimiter, i)) {
+            cells.push(current);
+            current = '';
+            i += delimiter.length - 1;
+            continue;
+          }
+          current += char;
+        }
+        cells.push(current);
+        return cells;
+      };
+
+      const parseCsvRows = (text: string): string[][] => {
+        const rows: string[][] = [];
+        let currentLine = '';
+        let inQuotes = false;
+        for (let i = 0; i < text.length; i += 1) {
+          const char = text[i];
+          if (char === '"') {
+            if (inQuotes && text[i + 1] === '"') {
+              currentLine += '""';
+              i += 1;
+            } else {
+              inQuotes = !inQuotes;
+              currentLine += char;
+            }
+            continue;
+          }
+          if (!inQuotes && (char === '\n' || char === '\r')) {
+            if (char === '\r' && text[i + 1] === '\n') i += 1;
+            if (currentLine.trim().length > 0) rows.push(parseCsvLine(currentLine));
+            currentLine = '';
+            continue;
+          }
+          currentLine += char;
+        }
+        if (currentLine.trim().length > 0) rows.push(parseCsvLine(currentLine));
+        return rows;
+      };
+
+      const escapeCsvCell = (value: unknown): string => {
+        const text = value === undefined || value === null ? '' : String(value);
+        const needsQuotes =
+          text.includes('"') ||
+          text.includes('\n') ||
+          text.includes('\r') ||
+          text.includes(delimiter);
+        const escaped = text.replace(/"/g, '""');
+        return needsQuotes ? `"${escaped}"` : escaped;
+      };
 
       if (operation === 'parse') {
-        const csvStr = getStringProperty(config, 'csv', '');
+        let csvStr = getStringProperty(config, 'csv', '');
+        const legacyField = getStringProperty(config, 'field', '').trim();
+        if (!csvStr && legacyField) {
+          const candidate = getNestedValue(inputObj, legacyField);
+          csvStr = typeof candidate === 'string' ? candidate : String(candidate ?? '');
+        }
         const resolved = resolveTypedValue(csvStr, execContext);
         const text = String(resolved || '');
-        const delimiterRaw = getStringProperty(config, 'delimiter', ',');
-        const delimiter = delimiterRaw === '\\t' ? '\t' : (delimiterRaw || ',');
-        const hasHeader = getBooleanProperty(config, 'hasHeader', true);
-        const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
-        if (lines.length === 0) return { ...inputObj, items: [], rows: [] };
-        const firstRow = lines[0].split(delimiter).map(h => h.trim());
+        const hasHeader = getBooleanProperty(config, 'hasHeader', getBooleanProperty(config, 'hasHeaders', true));
+        const parsedRows = parseCsvRows(text);
+        if (parsedRows.length === 0) return { ...inputObj, items: [], rows: [], headers: [] };
+        const firstRow = parsedRows[0].map(h => h.trim());
         const headers = hasHeader ? firstRow : firstRow.map((_, index) => String(index));
-        const rows = (hasHeader ? lines.slice(1) : lines).map(line => line.split(delimiter));
+        const rows = hasHeader ? parsedRows.slice(1) : parsedRows;
         const items = rows.map(cols => {
           const obj: any = {};
           headers.forEach((h, i) => (obj[h] = (cols[i] ?? '').trim()));
@@ -14002,12 +14073,21 @@ export async function executeNodeLegacy(
 
       if (operation === 'generate') {
         const dataRaw = (config as any).data ?? (inputObj as any).items ?? [];
-        const data = Array.isArray(dataRaw) ? dataRaw : [];
+        const resolvedData = typeof dataRaw === 'string' ? resolveTypedValue(dataRaw, execContext) : dataRaw;
+        let data = Array.isArray(resolvedData) ? resolvedData : [];
+        if (!Array.isArray(resolvedData) && typeof resolvedData === 'string' && resolvedData.trim().startsWith('[')) {
+          try {
+            const parsed = JSON.parse(resolvedData);
+            data = Array.isArray(parsed) ? parsed : [];
+          } catch {
+            data = [];
+          }
+        }
         if (data.length === 0) return { ...inputObj, csv: '' };
         const headers = Object.keys(data[0] || {});
         const lines = [
-          headers.join(','),
-          ...data.map((row: any) => headers.map(h => JSON.stringify(row?.[h] ?? '')).join(',')),
+          headers.map(escapeCsvCell).join(delimiter),
+          ...data.map((row: any) => headers.map(h => escapeCsvCell(row?.[h])).join(delimiter)),
         ];
         return { ...inputObj, csv: lines.join('\n') };
       }

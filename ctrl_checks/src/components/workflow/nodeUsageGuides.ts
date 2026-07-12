@@ -490,22 +490,21 @@ Output: {
   },
 
   edit_fields: {
-    overview: 'Performs multiple field operations on an object: set values, delete fields, or rename keys. More powerful than Set node for complex transformations.',
+    overview: 'Adds or overwrites configured fields on the current object. Each field value can be static or resolved from upstream data.',
     inputs: ['object to modify'],
     outputs: ['modified object'],
-    example: `Operations: [
-  {"operation": "set", "field": "status", "value": "active"},
-  {"operation": "delete", "field": "oldField"},
-  {"operation": "rename", "field": "oldName", "newName": "newName"}
-]
+    example: `Fields: {
+  "status": "active",
+  "fullName": "{{$json.firstName}} {{$json.lastName}}"
+}
 
-Input: {oldName: "John", oldField: "remove", id: 123}
-Output: {newName: "John", status: "active", id: 123}`,
-    tips: ['Operations execute in order', 'Use "set" to add/update fields', 'Use "delete" to remove fields', 'Use "rename" to change field names'],
+Input: {firstName: "John", lastName: "Smith", id: 123}
+Output: {firstName: "John", lastName: "Smith", id: 123, status: "active", fullName: "John Smith"}`,
+    tips: ['Configured fields are added or overwritten', 'Use Rename Keys to rename or remove existing keys', 'Values support {{$json.field}} expressions'],
   },
 
   aggregate: {
-    overview: 'Performs aggregation operations on arrays: sum, average, count, min, max, or join (combine items into a single text string). Can aggregate by field or group by category.',
+    overview: 'Performs aggregation operations on input.items: sum, average, count, min, max, or join. Can aggregate a named field or each item directly.',
     inputs: ['array of items'],
     outputs: ['aggregated result'],
     example: `Operation: Sum
@@ -517,14 +516,8 @@ Input: [
   {name: "Item 3", price: 15, category: "B"}
 ]
 
-Output: 45 (sum of all prices)
-
-With Group By (category):
-Output: {
-  "A": 30,
-  "B": 15
-}`,
-    tips: ['Leave field empty to aggregate items directly', 'Use delimiter with Join to create readable text', 'Use groupBy to aggregate by category', 'Supports sum, avg, count, min, max, join', 'Great for analytics, reporting, and preparing text for AI'],
+Output: {aggregate: 45, operation: "sum", field: "price"}`,
+    tips: ['Leave field empty to aggregate items directly', 'Use delimiter with Join to create readable text', 'Supports sum, avg, count, min, max, join', 'Great for analytics, reporting, and preparing text for AI'],
   },
 
   limit: {
@@ -862,9 +855,9 @@ Each step uses output from previous step.`,
   },
 
   csv: {
-    overview: 'Parse and process CSV data. Converts CSV text to JSON array for further processing.',
-    inputs: ['CSV text'],
-    outputs: ['rows', 'headers', 'count'],
+    overview: 'Parse CSV text into rows/items or generate CSV text from an array of objects.',
+    inputs: ['operation', 'csv text or data array', 'delimiter', 'hasHeader for parse'],
+    outputs: ['items/rows/headers for parse, csv for generate'],
     example: `Input CSV:
 "name,email,age
 John,john@test.com,30
@@ -874,7 +867,7 @@ Output: [
   {name: "John", email: "john@test.com", age: "30"},
   {name: "Jane", email: "jane@test.com", age: "25"}
 ]`,
-    tips: ['Set correct delimiter (comma, tab, etc)', 'Enable "has header" for column names', 'Output is JSON array'],
+    tips: ['Set correct delimiter (comma, semicolon, tab, pipe)', 'Enable hasHeader for column names', 'Generate uses the same delimiter and quotes cells when needed'],
   },
 
   // Backward-compatibility alias for legacy workflows saved before canonical CSV migration.
@@ -915,6 +908,22 @@ Operation: Now
 Timezone: UTC
 Output: Current date/time in UTC`,
     tips: ['Supports ISO 8601 date format', 'Use IANA timezone identifiers (e.g., America/New_York)', 'Leave date empty for current time', 'Custom format: YYYY-MM-DD HH:mm:ss'],
+  },
+
+  html: {
+    overview: 'Parse HTML into title/meta/body, extract text from elements with a CSS selector, or convert body content to plain text.',
+    inputs: ['operation', 'html', 'selector for extract'],
+    outputs: ['title/meta/body for parse, results/count for extract, text for toText'],
+    example: `Operation: extract
+HTML: "<html><body><h1>Order Ready</h1><p class='price'>$42</p></body></html>"
+Selector: ".price"
+
+Output: {
+  results: ["$42"],
+  count: 1,
+  success: true
+}`,
+    tips: ['Use parse for page title, meta tags, and body HTML', 'Use extract with a CSS selector for matching element text', 'Use toText to get body text without markup'],
   },
 
   math: {
@@ -2919,24 +2928,23 @@ Output: {
   // UTILITY NODES
   // ============================================
   html_extract: {
-    overview: 'Extract content from HTML using CSS selectors or tag names. Can extract text, HTML, or attributes from HTML documents. Sanitizes HTML by default to prevent XSS attacks. Perfect for web scraping, content extraction, or HTML processing.',
-    inputs: ['html', 'selector', 'sanitize', 'stripScripts', 'extractText', 'maxSize'],
-    outputs: ['content', 'elements', 'text'],
+    overview: 'Legacy alias for the canonical HTML node. Parse an HTML document, extract text from matching CSS selectors, or convert body content to plain text.',
+    inputs: ['operation', 'html', 'selector'],
+    outputs: ['title', 'meta', 'body', 'results', 'count', 'text', 'success'],
     example: `HTML: "<div class='content'><p>Hello World</p></div>"
+Operation: extract
 Selector: ".content p"
-Extract Text: false
 
 Output: {
-  content: "<p>Hello World</p>",
-  elements: [...],
-  text: "Hello World"
+  results: ["Hello World"],
+  count: 1,
+  success: true
 }`,
     tips: [
-      'Use CSS selectors for precise extraction (e.g., .class, #id, tag)',
-      'Sanitize HTML by default to prevent XSS attacks',
-      'Strip scripts and styles for security',
-      'Extract text only removes all HTML tags',
-      'Set max size to prevent memory issues with large HTML',
+      'Use the canonical html node type for new workflows',
+      'Supported operations are parse, extract, and toText',
+      'Selector is required only for extract',
+      'Use {{$json.html}} when the HTML comes from an earlier step',
     ],
   },
 

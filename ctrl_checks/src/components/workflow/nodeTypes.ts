@@ -582,7 +582,6 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
       ], defaultValue: 'sum', required: true, helpText: 'Sum: Add all values. Average: Calculate mean. Count: Count items. Min: Find minimum value. Max: Find maximum value. Join: Combine items into a single text string using a delimiter. If Field is specified, operation applies to that field; otherwise applies to items directly' },
       { key: 'field', label: 'Field (optional)', type: 'text', placeholder: 'price', helpText: 'Field to aggregate (leave empty to aggregate items directly)' },
       { key: 'delimiter', label: 'Delimiter (for Join)', type: 'text', placeholder: '\\n', defaultValue: '\\n', helpText: 'Used only for Join operation. Example: \\n for new lines, ", " for comma-separated.' },
-      { key: 'groupBy', label: 'Group By (optional)', type: 'text', placeholder: 'category', helpText: 'Field to group by' },
     ],
   },
   {
@@ -609,9 +608,9 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     category: 'data',
     icon: 'Edit3',
     description: 'Edit fields',
-    defaultConfig: { operations: '[]' },
+    defaultConfig: { fields: {} },
     configFields: [
-      { key: 'operations', label: 'Operations (JSON)', type: 'json', placeholder: '[{"operation": "set", "field": "name", "value": "John"}]', required: true, helpText: 'Array of operations: set, delete, rename' },
+      { key: 'fields', label: 'Fields', type: 'keyValue', placeholder: '{"fullName":"{{$json.firstName}} {{$json.lastName}}"}', helpText: 'Output field names and values to add or overwrite. Values can use expressions such as {{$json.email}}.' },
     ],
   },
   {
@@ -4074,19 +4073,15 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     category: 'utility',
     icon: 'Code',
     description: 'HTML extract',
-    defaultConfig: { operation: 'extract', sanitize: true, stripScripts: true },
+    defaultConfig: { operation: 'parse' },
     configFields: [
       { key: 'operation', label: 'Operation', type: 'select', options: [
         { label: 'Parse', value: 'parse' },
         { label: 'Extract', value: 'extract' },
         { label: 'To Text', value: 'toText' },
-      ], defaultValue: 'extract', required: true, helpText: 'Parse reads title/meta/body, Extract reads matching selector text, To Text returns body text.' },
-      { key: 'html', label: 'HTML Content', type: 'textarea', placeholder: '<html>...</html>', helpText: 'Leave empty to use input from previous node. HTML content to extract from. Can be full HTML document or HTML fragment. Supports template variables like {{input.html}}. Examples: Full HTML document, HTML snippet, {{input.body}}' },
-      { key: 'selector', label: 'CSS Selector/Tag', type: 'text', placeholder: 'div, p, h1', helpText: 'CSS selector or HTML tag name to extract. Supports tag names (div, p, h1), class selectors (.class-name), ID selectors (#id-name), attribute selectors ([attr=value]), and combinations (div.class, #id.class). Examples: div, .content, #main, p.text, a[href], div.container > p' },
-      { key: 'sanitize', label: 'Sanitize HTML', type: 'boolean', defaultValue: true, helpText: 'Remove potentially dangerous content like event handlers, javascript: URLs, and other XSS vectors. Enable for untrusted HTML sources. Default: true. Disable only if you trust the HTML source completely' },
-      { key: 'stripScripts', label: 'Strip Scripts & Styles', type: 'boolean', defaultValue: true, helpText: 'Remove <script> and <style> tags from HTML. Important for security to prevent script execution. Default: true. Keep enabled unless you specifically need to preserve scripts/styles' },
-      { key: 'extractText', label: 'Extract Text Only', type: 'boolean', defaultValue: false, helpText: 'Extract only text content, removing all HTML tags. Returns plain text without any markup. Default: false. Enable if you only need the text content without HTML structure. Useful for content analysis or plain text output' },
-      { key: 'maxSize', label: 'Max Size (bytes)', type: 'number', defaultValue: 10485760, helpText: 'Maximum HTML size to process in bytes. Default: 10485760 (10 MB). HTML larger than this will be rejected to prevent memory issues. Increase for large documents, decrease to limit processing. Examples: 1048576 = 1 MB, 10485760 = 10 MB (default), 104857600 = 100 MB' },
+      ], defaultValue: 'parse', required: true, helpText: 'Parse reads title/meta/body, Extract reads matching selector text, To Text returns body text.' },
+      { key: 'html', label: 'HTML Content', type: 'textarea', placeholder: '<html>...</html> or {{$json.html}}', required: true, helpText: 'HTML content to parse. Can be a full HTML document, an HTML fragment, or a template expression such as {{$json.html}}.' },
+      { key: 'selector', label: 'CSS Selector/Tag', type: 'text', placeholder: 'div, p, h1', visibleIf: { field: 'operation', equals: 'extract' }, requiredIf: { field: 'operation', equals: 'extract' }, helpText: 'CSS selector or HTML tag name to extract. Required for Extract. Examples: div, .content, #main, p.text, a[href], div.container > p' },
     ],
   },
   {

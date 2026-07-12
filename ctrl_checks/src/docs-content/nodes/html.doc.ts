@@ -1,134 +1,98 @@
 import type { NodeDoc } from '../types';
 
+const htmlField = {
+  name: 'HTML',
+  internalKey: 'html',
+  type: 'textarea' as const,
+  required: true,
+  description: 'HTML content to process.',
+  helpText: 'Provide an HTML document, fragment, or an expression such as {{$json.pageContent}}.',
+  placeholder: '<html>...</html>',
+  example: '{{$json.pageContent}}',
+};
+
 export const htmlDoc: NodeDoc = {
-  "slug": "html",
-  "displayName": "HTML",
-  "category": "Data",
-  "logoUrl": "/icons/nodes/html.svg",
-  "description": "Parse and manipulate HTML content",
-  "credentialType": "None",
-  "credentialSetupSteps": [
-    "This node does not need a saved account connection.",
-    "Open the node settings and fill the visible input fields.",
-    "Run the workflow when the required fields are complete."
-  ],
-  "credentialDocsUrl": "https://docs.ctrlchecks.com",
-  "resources": [
+  slug: 'html',
+  displayName: 'HTML',
+  category: 'Data',
+  logoUrl: '/icons/nodes/html.svg',
+  description: 'Parse HTML, extract selector text, or convert body content to plain text.',
+  credentialType: 'None',
+  credentialSetupSteps: ['This node does not need a saved account connection.'],
+  credentialDocsUrl: 'https://docs.ctrlchecks.com',
+  resources: [
     {
-      "name": "Operations",
-      "description": "HTML exposes operation choices directly.",
-      "operations": [
+      name: 'Operations',
+      description: 'HTML exposes operation choices directly.',
+      operations: [
         {
-          "name": "Parse",
-          "value": "parse",
-          "description": "Parse an HTML document and extract elements or text.",
-          "fields": [
-            {
-              "name": "Html",
-              "internalKey": "html",
-              "type": "textarea",
-              "required": true,
-              "description": "HTML content",
-              "helpText": "What this field is: HTML content.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: {{$json.html}}.\nTip: Use {{$json.html}} when this value comes from an earlier step.",
-              "placeholder": "{{$json.html}}",
-              "example": "{{$json.html}}"
-            }
-          ],
-          "outputExample": {
-            "title": "Example Domain",
-            "headings": [
-              "Example Domain"
-            ],
-            "links": [
-              "https://www.iana.org/domains/example"
-            ],
-            "text": "This domain is for use in illustrative examples."
+          name: 'Parse',
+          value: 'parse',
+          description: 'Parse an HTML document into page title, meta tags, and body HTML.',
+          fields: [htmlField],
+          outputExample: { title: 'Example Domain', meta: { description: 'Example page' }, body: '<h1>Example Domain</h1>', success: true },
+          outputDescription: 'title: Page title. meta: Meta tags keyed by name/property. body: Inner body HTML. success: true on success.',
+          usageExample: {
+            scenario: 'Read title and metadata from a fetched page',
+            inputValues: { html: '{{$json.pageContent}}' },
+            expectedOutput: 'Use `{{$json.title}}`, `{{$json.meta}}`, or `{{$json.body}}` downstream.',
           },
-          "outputDescription": "title: Page title. headings: Array of heading texts. links: Array of href values. text: Main body text.",
-          "usageExample": {
-            "scenario": "Scrape a product page to extract the title and price",
-            "inputValues": {
-              "html": "{{$json.pageContent}}",
-              "selector": ".price"
-            },
-            "expectedOutput": "Extracted price in `{{$json.text}}`."
-          },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
+          externalDocsUrl: 'https://docs.ctrlchecks.com',
         },
         {
-          "name": "Extract",
-          "value": "extract",
-          "description": "Extract using the HTML node.",
-          "fields": [
+          name: 'Extract',
+          value: 'extract',
+          description: 'Extract text from elements that match a CSS selector.',
+          fields: [
+            htmlField,
             {
-              "name": "Html",
-              "internalKey": "html",
-              "type": "textarea",
-              "required": true,
-              "description": "HTML content",
-              "helpText": "What this field is: HTML content.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: {{$json.html}}.\nTip: Use {{$json.html}} when this value comes from an earlier step.",
-              "placeholder": "{{$json.html}}",
-              "example": "{{$json.html}}"
-            }
-          ],
-          "outputExample": {
-            "text": "Alice Smith",
-            "length": 11
-          },
-          "outputDescription": "text: Value returned by this operation.\nlength: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming HTML data with extract after a related upstream event is received",
-            "inputValues": {
-              "Html": "{{$json.html}}"
+              name: 'Selector',
+              internalKey: 'selector',
+              type: 'string',
+              required: true,
+              description: 'CSS selector used to find elements.',
+              helpText: 'Examples: .price, h1, a[href].',
+              placeholder: '.price',
+              example: '.price',
             },
-            "expectedOutput": "HTML returns structured extract data that downstream nodes can reference with {{$json.fieldName}}."
+          ],
+          outputExample: { results: ['$42.00'], count: 1, success: true },
+          outputDescription: 'results: Text from each matched element. count: Number of matched elements. success: true on success.',
+          usageExample: {
+            scenario: 'Scrape a product page price',
+            inputValues: { html: '{{$json.pageContent}}', selector: '.price' },
+            expectedOutput: 'Extracted values are in `{{$json.results}}`.',
           },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
+          externalDocsUrl: 'https://docs.ctrlchecks.com',
         },
         {
-          "name": "Clean",
-          "value": "clean",
-          "description": "Clean using the HTML node.",
-          "fields": [
-            {
-              "name": "Html",
-              "internalKey": "html",
-              "type": "textarea",
-              "required": true,
-              "description": "HTML content",
-              "helpText": "What this field is: HTML content.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: {{$json.html}}.\nTip: Use {{$json.html}} when this value comes from an earlier step.",
-              "placeholder": "{{$json.html}}",
-              "example": "{{$json.html}}"
-            }
-          ],
-          "outputExample": {
-            "text": "Clean page text without scripts, styles, or markup.",
-            "length": 51
+          name: 'To Text',
+          value: 'toText',
+          description: 'Convert HTML body content to plain text.',
+          fields: [htmlField],
+          outputExample: { text: 'Example Domain This domain is for use in illustrative examples.', success: true },
+          outputDescription: 'text: Plain text from the body element. success: true on success.',
+          usageExample: {
+            scenario: 'Convert downloaded HTML into plain text for an AI step',
+            inputValues: { html: '{{$json.pageContent}}' },
+            expectedOutput: 'Plain text is available in `{{$json.text}}`.',
           },
-          "outputDescription": "text: Value returned by this operation.\nlength: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming HTML data with clean after a related upstream event is received",
-            "inputValues": {
-              "Html": "{{$json.html}}"
-            },
-            "expectedOutput": "HTML returns structured clean data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
-        }
-      ]
-    }
+          externalDocsUrl: 'https://docs.ctrlchecks.com',
+        },
+      ],
+    },
   ],
-  "commonErrors": [
+  commonErrors: [
     {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
+      error: 'HTML is required',
+      cause: 'The html field and content alias were empty.',
+      fix: 'Map HTML content into the html field.',
     },
     {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
+      error: 'Selector is required',
+      cause: 'Extract was selected without a CSS selector.',
+      fix: 'Set Selector to a CSS selector such as .price or h1.',
+    },
   ],
-  "relatedNodes": []
+  relatedNodes: [],
 };

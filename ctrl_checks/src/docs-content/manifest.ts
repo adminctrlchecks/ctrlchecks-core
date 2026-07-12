@@ -179,7 +179,7 @@ export const nodeDocManifest = [
     "slug": "date_time",
     "displayName": "Date/Time",
     "category": "Data",
-    "description": "Parse, format, and manipulate dates and times Use this node when a workflow needs date/time behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Create, format, offset, compare, and inspect date/time values.",
     "logoUrl": "/icons/nodes/date_time.svg"
   },
   {
@@ -452,7 +452,7 @@ export const nodeDocManifest = [
     "slug": "edit_fields",
     "displayName": "Edit Fields",
     "category": "Data",
-    "description": "Edit, rename, or transform field values in data objects Use this node when a workflow needs edit fields behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Add or overwrite fields on the current data object.",
     "logoUrl": "/icons/nodes/edit_fields.svg"
   },
   {
@@ -522,7 +522,7 @@ export const nodeDocManifest = [
     "slug": "html",
     "displayName": "HTML",
     "category": "Data",
-    "description": "Parse and manipulate HTML content Use this node when a workflow needs html behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Parse HTML, extract selector text, or convert body content to plain text.",
     "logoUrl": "/icons/nodes/html.svg"
   },
   {
@@ -536,7 +536,7 @@ export const nodeDocManifest = [
     "slug": "csv",
     "displayName": "CSV",
     "category": "Data",
-    "description": "Parse and generate CSV data Use this node when a workflow needs csv behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Parse CSV text into rows/items or generate CSV text from object arrays.",
     "logoUrl": "/icons/nodes/csv.svg"
   },
   {
@@ -550,7 +550,7 @@ export const nodeDocManifest = [
     "slug": "aggregate",
     "displayName": "Aggregate",
     "category": "Data",
-    "description": "Aggregate data Use this node when a workflow needs aggregate behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Aggregate input.items with sum, average, count, min, max, or join.",
     "logoUrl": "/icons/nodes/aggregate.svg"
   },
   {

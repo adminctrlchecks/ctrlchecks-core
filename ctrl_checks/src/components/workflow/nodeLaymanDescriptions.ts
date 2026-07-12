@@ -47,6 +47,7 @@ export const NODE_LAYMAN_DESCRIPTIONS: Record<string, string> = {
   set_variable:   "Saves a value under a name so you can reuse it in later steps",
   sort:           "Sorts a list alphabetically, numerically, or by date",
   text_formatter: "Builds a piece of text by filling in a template with your data — like mail merge",
+  html:           "Reads an HTML document to extract page details, matching text, or plain body text",
 
   // ── Google ────────────────────────────────────────────────────────────────
   google_bigquery:  "Runs queries against Google's massive cloud database — great for analyzing huge datasets",
@@ -168,7 +169,7 @@ export const NODE_LAYMAN_DESCRIPTIONS: Record<string, string> = {
   date_time:          "Works with dates and times — format them, convert timezones, or calculate differences",
   math:               "Performs calculations on your data — add, subtract, multiply, or apply formulas",
   crypto:             "Encrypts, decrypts, or hashes data for security purposes",
-  html_extract:       "Pulls specific content out of an HTML web page — like scraping a field from a site",
+  html_extract:       "Legacy HTML alias that parses a page, extracts selector text, or turns body content into plain text",
   xml:                "Parses XML data into a structured format your workflow can read",
   rss_feed_read:      "Reads the latest posts or articles from an RSS news feed",
   pdf:                "Reads text from a PDF file or creates a new PDF document",
