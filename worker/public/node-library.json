@@ -1693,6 +1693,7 @@
       "batchSize"
     ],
     "optionalConfig": [
+      "array",
       "batchSize"
     ],
     "credentialType": null,
@@ -1714,7 +1715,8 @@
       "errorMessage"
     ],
     "optionalConfig": [
-      "errorMessage"
+      "errorMessage",
+      "errorCode"
     ],
     "credentialType": null,
     "capabilities": []

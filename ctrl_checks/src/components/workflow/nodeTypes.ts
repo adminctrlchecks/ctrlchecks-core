@@ -12970,7 +12970,7 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     description: 'Return a value from a sub-workflow and stop execution.',
     defaultConfig: {},
     configFields: [
-      { key: 'returnValue', label: 'Return Value (JSON)', type: 'json', placeholder: '{"result": "value"}', required: false, helpText: 'Optional value to return to the caller workflow.' },
+      { key: 'value', label: 'Return Value (JSON)', type: 'json', placeholder: '{"result": "value"}', required: false, helpText: 'Optional value to return to the caller workflow.' },
     ],
   },
   {

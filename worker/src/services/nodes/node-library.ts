@@ -7027,6 +7027,11 @@ export class NodeLibrary {
       configSchema: {
         required: ['batchSize'],
         optional: {
+          array: {
+            type: 'expression',
+            description: 'Expression that returns the array to split into batches (e.g. {{$json.items}})',
+            examples: ['{{$json.items}}', '{{$json.users}}'],
+          },
           batchSize: {
             type: 'number',
             description: 'Batch size',
@@ -7065,6 +7070,12 @@ export class NodeLibrary {
             type: 'string',
             description: 'Error message',
             examples: ['Validation failed'],
+          },
+          errorCode: {
+            type: 'string',
+            description: 'Error code to categorize the error (uppercase letters and underscores)',
+            examples: ['STOPPED', 'VALIDATION_ERROR', 'PERMISSION_DENIED'],
+            default: 'STOPPED',
           },
         },
       },
