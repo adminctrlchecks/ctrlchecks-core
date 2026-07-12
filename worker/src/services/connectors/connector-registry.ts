@@ -1781,6 +1781,27 @@ export class ConnectorRegistry {
       nodeTypes: ['oracle_database'],
       description: 'Connect to and query Oracle databases',
     });
+
+    // ============================================
+    // INTUIT SME CONNECTOR (mock/demo — executor returns simulated data, see intuitSmesNode.ts)
+    // ============================================
+    this.register({
+      id: 'intuit',
+      provider: 'intuit',
+      service: 'crm',
+      capabilities: ['crm.read', 'crm.write', 'intuit.customer', 'intuit.invoice'],
+      keywords: ['intuit', 'quickbooks', 'sme', 'customer', 'invoice'],
+      credentialContract: {
+        provider: 'intuit',
+        type: 'api_key',
+        vaultKey: 'intuit',
+        displayName: 'Intuit / QuickBooks',
+        required: true,
+        credentialFieldName: 'apiKey',
+      },
+      nodeTypes: ['intuit_smes'],
+      description: 'Manage SME customer and invoice data via Intuit (mock/demo — does not call the real Intuit API)',
+    });
   }
 
   /**

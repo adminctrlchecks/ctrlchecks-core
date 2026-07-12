@@ -6523,7 +6523,7 @@ export class NodeLibrary {
       type: 'intuit_smes',
       label: "Intuit - SME'S",
       category: 'crm',
-      description: "Intuit SME integration for managing customer data and financial operations via Intuit APIs",
+      description: "Intuit SME integration for managing customer data and financial operations via Intuit APIs. Mock/demo node — currently returns simulated data and does not call the real Intuit/QuickBooks API.",
       configSchema: {
         required: ['operation'],
         optional: {

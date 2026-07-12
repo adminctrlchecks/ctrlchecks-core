@@ -68,6 +68,7 @@ const providerDocsUrls: Record<string, string> = {
   hubspot: 'https://developers.hubspot.com/docs/api/oauth-quickstart-guide',
   instagram: 'https://developers.facebook.com/docs/instagram-platform/',
   intercom: 'https://developers.intercom.com/docs/build-an-integration/learn-more/authentication',
+  intuit: 'https://developer.intuit.com/app/developer/qbo/docs/develop/authentication-and-authorization',
   jira: 'https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/',
   linear: 'https://developers.linear.app/docs/graphql/working-with-the-graphql-api',
   mailchimp: 'https://mailchimp.com/developer/marketing/guides/quick-start/',
@@ -2665,6 +2666,23 @@ export const credentialTypeDefinitions: CredentialTypeDefinition[] = addCredenti
     injection: [],
     refresh: { enabled: false, refreshBeforeSeconds: 0 },
     maskFields: ['password'],
+  },
+
+  // ─── Intuit SME (mock/demo — see worker/src/services/database/intuitSmesNode.ts) ──
+  {
+    id: 'intuit_smes_connection',
+    provider: 'intuit',
+    displayName: 'Intuit / QuickBooks',
+    authType: 'api_key',
+    inputFields: [
+      { name: 'apiKey', label: 'API Key', type: 'password', required: false, secret: true, helpText: 'Intuit API key. Provide this or an Access Token. Note: this node is a mock/demo integration and does not call the real Intuit API yet.' },
+      { name: 'accessToken', label: 'Access Token', type: 'password', required: false, secret: true, helpText: 'Intuit OAuth2 access token, used if no API Key is provided.' },
+    ],
+    form: { layout: 'stacked', submitLabel: 'Save Connection', testLabel: 'Test Connection' },
+    validation: { requiredFields: [] },
+    injection: [],
+    refresh: { enabled: false, refreshBeforeSeconds: 0 },
+    maskFields: ['apiKey', 'accessToken'],
   },
 
   // ─── TimescaleDB ──────────────────────────────────────────────────────────────

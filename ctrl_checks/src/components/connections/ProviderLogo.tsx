@@ -82,6 +82,7 @@ const PROVIDER_COLORS: Record<string, string> = {
   timescaledb:    'bg-yellow-100 text-yellow-700',
   schedulewise:   'bg-teal-100 text-teal-600',
   smtp:           'bg-slate-100 text-slate-600',
+  intuit:         'bg-green-100 text-green-600',
 };
 
 const PROVIDER_INITIALS: Record<string, string> = {
@@ -111,6 +112,7 @@ const PROVIDER_INITIALS: Record<string, string> = {
   timescaledb: 'Ts',
   schedulewise: 'Sw',
   smtp: '@',
+  intuit: 'QB',
 };
 
 const PROVIDER_LOGO_ALIASES: Record<string, string> = {
@@ -155,6 +157,7 @@ const SIMPLE_ICON_SLUGS: Record<string, string> = {
   google_cloud_storage: 'googlecloud',
   sql_server: 'microsoftsqlserver',
   timescaledb: 'timescale',
+  intuit: 'quickbooks',
 };
 
 interface Props {

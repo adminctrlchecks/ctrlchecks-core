@@ -1175,6 +1175,8 @@ export class UnifiedNodeRegistry implements INodeRegistry {
     sap:           { credentialTypeId: 'sap_connection',       label: 'SAP Connection',           authType: 'bearer_token' },
     chargebee:     { credentialTypeId: 'chargebee_connection', label: 'Chargebee Connection',      authType: 'api_key' },
     netlify:       { credentialTypeId: 'netlify_api_key',      label: 'Netlify Connection',       authType: 'bearer_token' },
+    // CRM (mock/demo executor — see intuitSmesNode.ts)
+    intuit:        { credentialTypeId: 'intuit_smes_connection', label: 'Intuit / QuickBooks',    authType: 'api_key' },
   };
 
   private enrichRequirementsWithCredentialType(
