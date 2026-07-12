@@ -22,8 +22,8 @@ const timezoneField: FieldDoc = {
   example: 'Asia/Kolkata',
 };
 
-function operation(operation: OperationDoc): OperationDoc {
-  return { ...operation, externalDocsUrl: 'https://docs.ctrlchecks.com' };
+function operation(op: OperationDoc): OperationDoc {
+  return { ...op, externalDocsUrl: 'https://docs.ctrlchecks.com' };
 }
 
 export const dateTimeDoc: NodeDoc = {
