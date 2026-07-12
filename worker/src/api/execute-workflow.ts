@@ -3596,11 +3596,14 @@ export async function executeNodeLegacy(
         }
         
         // Signal to workflow engine to stop
-        // Return a special marker that the engine can detect
+        // Return a special marker that the engine can detect.
+        // Output key is `returnedValue`, not `value` — the legacy adapter and dynamic
+        // executor both strip any output key that matches a config key (cleanOutputFromConfig),
+        // and `value` is this node's own config field name, so it would be silently deleted.
         return {
           success: true,
           __return: true, // marker for workflow engine to stop execution
-          value: returnValue,
+          returnedValue: returnValue,
         };
       } catch (error: any) {
         return {
@@ -3722,7 +3725,7 @@ export async function executeNodeLegacy(
 
           // Check for return marker
           if (subNodeOutput && typeof subNodeOutput === 'object' && (subNodeOutput as any).__return) {
-            subFinalOutput = (subNodeOutput as any).value;
+            subFinalOutput = (subNodeOutput as any).returnedValue;
             break; // Stop execution
           }
 
