@@ -10,7 +10,7 @@ export const NODE_LAYMAN_DESCRIPTIONS: Record<string, string> = {
   form:             "Starts your workflow when someone fills out and submits a web form you built",
 
   // ── Core Logic ────────────────────────────────────────────────────────────
-  error_handler:          "Catches errors so your workflow can retry or recover instead of stopping completely",
+  error_handler:          "Marks an error from the previous step as handled and can pass along a fallback value",
   filter:                 "Keeps only the items that match your rule and discards the rest — like filtering rows in a spreadsheet",
   if_else:                "Makes a yes/no decision: if something is true, go one way; otherwise go another",
   loop:                   "Repeats a set of actions for each item in a list — like doing the same thing for every row",

@@ -7,7 +7,7 @@ export const filterSearchIndex = [
     "slug": "filter",
     "category": "Logic",
     "href": "/docs/nodes/filter",
-    "text": "Filter Filter array items by condition Use this node when a workflow needs filter behavior with schema-driven inputs from the CtrlChecks node registry. Logic"
+    "text": "Filter Filters input.items or a configured array with a JavaScript condition that uses item. Logic"
   },
   {
     "type": "operation",
@@ -15,7 +15,15 @@ export const filterSearchIndex = [
     "slug": "filter",
     "category": "Logic",
     "href": "/docs/nodes/filter#operation-configure",
-    "text": "Filter Configuration Configure Configure with the Filter node using the configured input fields. configure"
+    "text": "Filter Configuration Configure Keep only items whose condition evaluates to true."
+  },
+  {
+    "type": "field",
+    "title": "Filter: Array",
+    "slug": "filter",
+    "category": "Logic",
+    "href": "/docs/nodes/filter#operation-configure",
+    "text": "Filter Configuration Configure Array array Optional expression that resolves to the array to filter; defaults to input.items"
   },
   {
     "type": "field",
@@ -23,6 +31,6 @@ export const filterSearchIndex = [
     "slug": "filter",
     "category": "Logic",
     "href": "/docs/nodes/filter#operation-configure",
-    "text": "Filter Configuration Configure Condition condition Filter condition"
+    "text": "Filter Configuration Configure Condition condition JavaScript expression evaluated for each item, such as item.age >= 18"
   }
 ] satisfies DocsSearchIndexItem[];

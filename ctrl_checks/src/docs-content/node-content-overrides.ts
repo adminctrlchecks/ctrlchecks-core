@@ -1023,10 +1023,10 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
 
   error_handler: {
     default: {
-      description: 'Handle errors in a workflow branch with retry logic and fallback values.',
-      outputExample: { handled: true, error: { message: 'Connection timeout', code: 'ECONNRESET' }, fallback: { status: 'error_handled' } },
-      outputDescription: 'handled: true if the error was caught. error: The original error object. fallback: The fallback value configured.',
-      usageExample: { scenario: 'Catch HTTP request failures and return a fallback value instead of stopping the workflow', inputValues: { fallbackValue: '{"status": "unavailable"}', maxRetries: '3' }, expectedOutput: 'On error, `{{$json.fallback}}` is passed to the next node instead of terminating.' },
+      description: 'Mark an incoming `_error` payload as handled and optionally emit a fallback value.',
+      outputExample: { _error: 'Connection timeout', handled: true, value: { status: 'error_handled' } },
+      outputDescription: 'handled: true when `_error` exists and fallbackValue is configured; otherwise false. value: The configured fallbackValue when present.',
+      usageExample: { scenario: 'Convert an upstream error payload into a handled fallback object', inputValues: { fallbackValue: '{"status": "unavailable"}' }, expectedOutput: 'On error, `{{$json.value}}` contains the configured fallback value.' },
     },
   },
 
@@ -1059,10 +1059,10 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
 
   execute_workflow: {
     default: {
-      description: 'Call another workflow and wait for its result.',
-      outputExample: { result: { success: true, processedCount: 42 }, calledWorkflowId: 'wf_sub123', duration: 1250 },
-      outputDescription: 'result: The data returned by the called workflow\'s Return node. calledWorkflowId: The ID of the sub-workflow. duration: How long the sub-workflow took in milliseconds.',
-      usageExample: { scenario: 'Call a reusable "send-notification" sub-workflow from multiple workflows', inputValues: { workflowId: '{{$env.NOTIFY_WORKFLOW_ID}}', inputData: '{"userId": "{{$json.userId}}", "message": "{{$json.message}}"}' }, expectedOutput: 'The sub-workflow runs and returns its result in `{{$json.result}}`.' },
+      description: 'Call another active workflow and return its final inline result.',
+      outputExample: { success: true, result: { processedCount: 42 }, workflowId: 'wf_sub123' },
+      outputDescription: 'success: true when the sub-workflow completes. result: The final output from the called workflow. workflowId: The called workflow ID.',
+      usageExample: { scenario: 'Call a reusable "send-notification" sub-workflow from multiple workflows', inputValues: { workflowId: '{{$env.NOTIFY_WORKFLOW_ID}}', input: '{"userId": "{{$json.userId}}", "message": "{{$json.message}}"}' }, expectedOutput: 'The sub-workflow runs and returns its final result in `{{$json.result}}`.' },
     },
   },
 
@@ -1087,9 +1087,9 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
   filter: {
     default: {
       description: 'Filter an array of items, keeping only those that match a condition.',
-      outputExample: { filtered: [{ id: 2, status: 'active', name: 'Bob' }], totalIn: 5, totalOut: 1 },
-      outputDescription: 'filtered: Array of items that passed the filter condition. totalIn: Input item count. totalOut: Filtered item count.',
-      usageExample: { scenario: 'Keep only active users from a database query result', inputValues: { condition: '{{$item.status === "active"}}' }, expectedOutput: 'Only items where status is "active" are passed to the next node.' },
+      outputExample: { items: [{ id: 2, status: 'active', name: 'Bob' }] },
+      outputDescription: 'items: The incoming `items` array replaced with only the entries where condition returned true. Other input fields are preserved.',
+      usageExample: { scenario: 'Keep only active users from a database query result', inputValues: { condition: 'item.status === "active"' }, expectedOutput: 'Only items where status is "active" remain in `{{$json.items}}`.' },
     },
   },
 

@@ -21,7 +21,7 @@ export const executeWorkflowDoc: NodeDoc = {
         {
           "name": "Execute",
           "value": "default",
-          "description": "Call another workflow and wait for its result.",
+          "description": "Call another confirmed or active workflow and return its final result.",
           "fields": [
             {
               "name": "Workflow Id",
@@ -42,33 +42,21 @@ export const executeWorkflowDoc: NodeDoc = {
               "helpText": "What this field is: Structured data for Input data to pass to the sub-workflow.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Execute Workflow.\nExample: {{$json}}.\nTip: Use {{$json.input}} when an earlier step already prepared this data.",
               "placeholder": "{{$json}}",
               "example": "{{$json}}"
-            },
-            {
-              "name": "Wait For Completion",
-              "internalKey": "waitForCompletion",
-              "type": "boolean",
-              "required": false,
-              "description": "Wait for the sub-workflow to finish",
-              "helpText": "What this field is: An on/off switch for Wait for the sub-workflow to finish.\nHow to fill it: Turn ON to enable this option. Turn OFF to leave it disabled.\nExample: Turn ON when this workflow should use wait for completion; turn OFF for the default behavior.",
-              "placeholder": "true",
-              "example": "true",
-              "defaultValue": "true"
             }
           ],
           "outputExample": {
+            "success": true,
             "result": {
-              "success": true,
               "processedCount": 42
             },
-            "calledWorkflowId": "wf_sub123",
-            "duration": 1250
+            "workflowId": "wf_sub123"
           },
-          "outputDescription": "result: The data returned by the called workflow's Return node. calledWorkflowId: The ID of the sub-workflow. duration: How long the sub-workflow took in milliseconds.",
+          "outputDescription": "success: true when the sub-workflow was found and executed. result: The final output or Return-node value from the called workflow. workflowId: The called workflow ID.",
           "usageExample": {
             "scenario": "Call a reusable \"send-notification\" sub-workflow from multiple workflows",
             "inputValues": {
               "workflowId": "{{$env.NOTIFY_WORKFLOW_ID}}",
-              "inputData": "{\"userId\": \"{{$json.userId}}\", \"message\": \"{{$json.message}}\"}"
+              "input": "{\"userId\": \"{{$json.userId}}\", \"message\": \"{{$json.message}}\"}"
             },
             "expectedOutput": "The sub-workflow runs and returns its result in `{{$json.result}}`."
           },

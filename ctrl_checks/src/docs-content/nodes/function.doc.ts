@@ -5,7 +5,7 @@ export const functionDoc: NodeDoc = {
   "displayName": "Function",
   "category": "Logic",
   "logoUrl": "/icons/nodes/function.svg",
-  "description": "Execute a custom function with input parameters",
+  "description": "Execute custom JavaScript against the incoming item or object",
   "credentialType": "None",
   "credentialSetupSteps": [
     "This node does not need a saved account connection.",
@@ -21,25 +21,15 @@ export const functionDoc: NodeDoc = {
         {
           "name": "Execute",
           "value": "default",
-          "description": "Execute using the Function node.",
+          "description": "Run a JavaScript body once with `input`, `data`, `$json`, and `json` bound to the incoming object.",
           "fields": [
-            {
-              "name": "Description",
-              "internalKey": "description",
-              "type": "textarea",
-              "required": true,
-              "description": "Description of what this function should do",
-              "helpText": "What this field is: Description of what this function should do.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: Transform contact data.\nTip: Use {{$json.description}} when this value comes from an earlier step.",
-              "placeholder": "Transform contact data",
-              "example": "Transform contact data"
-            },
             {
               "name": "Code",
               "internalKey": "code",
               "type": "string",
-              "required": false,
-              "description": "Optional JavaScript code for the function",
-              "helpText": "What this field is: JavaScript code for the function.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: return { ...$json, processed: true };.\nTip: Use {{$json.code}} when this value comes from an earlier step.",
+              "required": true,
+              "description": "JavaScript body to run once. Return a value or assign `result`.",
+              "helpText": "What this field is: JavaScript code that transforms the incoming object.\nHow to fill it: Use `return ...` or assign `result`. You can read incoming data from `$json`, `json`, `input`, or `data`.\nExample: return { ...$json, processed: true };",
               "placeholder": "return { ...$json, processed: true };",
               "example": "return { ...$json, processed: true };"
             },
@@ -49,29 +39,24 @@ export const functionDoc: NodeDoc = {
               "type": "number",
               "required": false,
               "description": "Execution timeout in milliseconds (max 30000)",
-              "helpText": "What this field is: The date or time value for Execution timeout in milliseconds.\nHow to fill it: Use a clear date such as 2026-06-01, or a full date and time with timezone when the service needs exact timing.\nExample: 5000.\nTip: Use {{$json.timeout}} when an earlier calendar, form, or database step provides the date.",
+              "helpText": "What this field is: Maximum JavaScript execution time in milliseconds.\nHow to fill it: Type a number from 100 up to 30000. The runtime caps larger values at 30000.\nExample: 10000.",
               "placeholder": "5000",
               "example": "5000",
               "defaultValue": "10000"
             }
           ],
           "outputExample": {
-            "success": true,
-            "operation": "default",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
+            "processed": true,
+            "id": "item_123"
           },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
+          "outputDescription": "Returns exactly the JavaScript return value. If no value is returned and `result` is not assigned, the original input object is returned.",
           "usageExample": {
-            "scenario": "Process incoming Function data with execute after a related upstream event is received",
+            "scenario": "Add a processed flag to the incoming object",
             "inputValues": {
-              "Description": "Transform contact data",
               "Code": "return { ...$json, processed: true };",
               "Timeout": "5000"
             },
-            "expectedOutput": "Function returns structured execute data that downstream nodes can reference with {{$json.fieldName}}."
+            "expectedOutput": "Downstream nodes can reference `{{$json.processed}}`."
           },
           "externalDocsUrl": "https://docs.ctrlchecks.com"
         }

@@ -1,6 +1,6 @@
 import { WorkflowNode } from '../../core/types/ai-types';
 
-export type QuestionType = 'string' | 'number' | 'boolean' | 'select' | 'json';
+export type QuestionType = 'string' | 'number' | 'boolean' | 'select' | 'json' | 'code';
 
 export interface NodeQuestion {
   id: string;
@@ -93,10 +93,10 @@ export const NODE_QUESTIONS: Record<string, NodeQuestion[]> = {
   ],
   function: [
     {
-      id: 'function_description',
-      prompt: 'Briefly describe what this function should do with the incoming data.',
-      target: 'description',
-      type: 'string',
+      id: 'function_code',
+      prompt: 'What JavaScript should run against the incoming data?',
+      target: 'code',
+      type: 'code',
       required: true,
     },
   ],
@@ -156,10 +156,10 @@ export const NODE_QUESTIONS: Record<string, NodeQuestion[]> = {
   ],
   function_item: [
     {
-      id: 'function_item_description',
-      prompt: 'What should this per-item function do for each element in the list?',
-      target: 'description',
-      type: 'string',
+      id: 'function_item_code',
+      prompt: 'What JavaScript should run for each item in input.items?',
+      target: 'code',
+      type: 'code',
       required: true,
     },
   ],

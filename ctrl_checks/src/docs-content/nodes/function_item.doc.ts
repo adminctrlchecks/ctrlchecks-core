@@ -5,7 +5,7 @@ export const functionItemDoc: NodeDoc = {
   "displayName": "Function Item",
   "category": "Logic",
   "logoUrl": "/icons/nodes/function_item.svg",
-  "description": "Execute a function for each item in an array",
+  "description": "Execute custom JavaScript once for each item in input.items",
   "credentialType": "None",
   "credentialSetupSteps": [
     "This node does not need a saved account connection.",
@@ -21,44 +21,47 @@ export const functionItemDoc: NodeDoc = {
         {
           "name": "Execute",
           "value": "default",
-          "description": "Execute using the Function Item node.",
+          "description": "Run a JavaScript body for each element in `input.items` and replace `items` with the mapped results.",
           "fields": [
             {
-              "name": "Description",
-              "internalKey": "description",
-              "type": "textarea",
+              "name": "Code",
+              "internalKey": "code",
+              "type": "string",
               "required": true,
-              "description": "Description of what should be done for each item",
-              "helpText": "What this field is: Description of what should be done for each item.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: Process each contact.\nTip: Use {{$json.description}} when this value comes from an earlier step.",
-              "placeholder": "Process each contact",
-              "example": "Process each contact"
+              "description": "JavaScript body to run for each item. Return a value or assign `result`.",
+              "helpText": "What this field is: JavaScript code that transforms one item at a time.\nHow to fill it: Use `item`, `input`, `data`, `$json`, or `json` for the current item. Return the mapped item.\nExample: return { ...item, processed: true };",
+              "placeholder": "return { ...item, processed: true };",
+              "example": "return { ...item, processed: true };"
             },
             {
-              "name": "Items",
-              "internalKey": "items",
-              "type": "json",
+              "name": "Timeout",
+              "internalKey": "timeout",
+              "type": "number",
               "required": false,
-              "description": "Array of items to process",
-              "helpText": "What this field is: Structured data for Array of items to process.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Function Item.\nExample: {{$json.items}}.\nTip: Use {{$json.items}} when an earlier step already prepared this data.",
-              "placeholder": "{{$json.items}}",
-              "example": "{{$json.items}}"
+              "description": "Execution timeout in milliseconds (max 30000)",
+              "helpText": "What this field is: Maximum JavaScript execution time in milliseconds.\nHow to fill it: Type a number from 100 up to 30000. The runtime caps larger values at 30000.\nExample: 10000.",
+              "placeholder": "10000",
+              "example": "10000",
+              "defaultValue": "10000"
             }
           ],
-          "outputExample": [
-            {
-              "id": "1",
-              "name": "Example item",
-              "createdAt": "2025-01-15T09:00:00Z"
-            }
-          ],
-          "outputDescription": "Returns an array of result objects. Access individual fields via {{$json.fieldName}} in downstream nodes.",
+          "outputExample": {
+            "items": [
+              {
+                "id": "1",
+                "name": "Example item",
+                "processed": true
+              }
+            ]
+          },
+          "outputDescription": "Passes through the incoming object and replaces items with the mapped array. If input.items is missing, the input passes through unchanged.",
           "usageExample": {
-            "scenario": "Process incoming Function Item data with execute after a related upstream event is received",
+            "scenario": "Mark every item in an array as processed",
             "inputValues": {
-              "Description": "Process each contact",
-              "Items": "{{$json.items}}"
+              "Code": "return { ...item, processed: true };",
+              "Timeout": "10000"
             },
-            "expectedOutput": "Function Item returns structured execute data that downstream nodes can reference with {{$json.fieldName}}."
+            "expectedOutput": "The next node receives `{{$json.items}}` with every item transformed."
           },
           "externalDocsUrl": "https://docs.ctrlchecks.com"
         }

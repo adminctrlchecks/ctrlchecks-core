@@ -5,7 +5,7 @@ export const errorHandlerDoc: NodeDoc = {
   "displayName": "Error Handler",
   "category": "Logic",
   "logoUrl": "/icons/nodes/error_handler.svg",
-  "description": "Handle errors with retry logic and fallback values",
+  "description": "Mark an upstream error as handled and optionally emit a fallback value",
   "credentialType": "None",
   "credentialSetupSteps": [
     "This node does not need a saved account connection.",
@@ -21,71 +21,33 @@ export const errorHandlerDoc: NodeDoc = {
         {
           "name": "Execute",
           "value": "default",
-          "description": "Handle errors in a workflow branch with retry logic and fallback values.",
+          "description": "Inspect the incoming payload for `_error`, mark it as handled, and optionally return a fallback value.",
           "fields": [
             {
-              "name": "Continue On Fail",
-              "internalKey": "continueOnFail",
-              "type": "boolean",
+              "name": "Fallback Value",
+              "internalKey": "fallbackValue",
+              "type": "json",
               "required": false,
-              "description": "Continue workflow after error",
-              "helpText": "What this field is: An on/off switch for Continue workflow after error.\nHow to fill it: Turn ON to enable this option. Turn OFF to leave it disabled.\nExample: Turn ON when this workflow should use continue on fail; turn OFF for the default behavior.",
-              "placeholder": "false",
-              "example": "false",
-              "defaultValue": "false"
-            },
-            {
-              "name": "Retry On Fail",
-              "internalKey": "retryOnFail",
-              "type": "boolean",
-              "required": false,
-              "description": "Retry failed node",
-              "helpText": "What this field is: An on/off switch for Retry failed node.\nHow to fill it: Turn ON to enable this option. Turn OFF to leave it disabled.\nExample: Turn ON when this workflow should use retry on fail; turn OFF for the default behavior.",
-              "placeholder": "true",
-              "example": "true",
-              "defaultValue": "true"
-            },
-            {
-              "name": "Max Retries",
-              "internalKey": "maxRetries",
-              "type": "number",
-              "required": false,
-              "description": "Maximum retry attempts",
-              "helpText": "What this field is: The number used for Maximum retry attempts.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 3.\nTip: Use {{$json.maxRetries}} when the number comes from an earlier step.",
-              "placeholder": "3",
-              "example": "3",
-              "defaultValue": "3"
-            },
-            {
-              "name": "Retry Delay",
-              "internalKey": "retryDelay",
-              "type": "number",
-              "required": false,
-              "description": "Delay between retries (ms)",
-              "helpText": "What this field is: The number used for Delay between retries.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 5000.\nTip: Use {{$json.retryDelay}} when the number comes from an earlier step.",
-              "placeholder": "5000",
-              "example": "5000",
-              "defaultValue": "5000"
+              "description": "Optional value emitted as `value` when the incoming payload contains `_error`.",
+              "helpText": "What this field is: A fallback object returned when the previous step already produced an error.\nHow to fill it: Enter a JSON object such as {\"status\":\"unavailable\"}. Leave it empty to only mark whether an error was handled.\nRuntime note: Retry and backoff are handled by the execution engine, not by this node.",
+              "placeholder": "{\"status\":\"unavailable\"}",
+              "example": "{\"status\":\"unavailable\"}"
             }
           ],
           "outputExample": {
             "handled": true,
-            "error": {
-              "message": "Connection timeout",
-              "code": "ECONNRESET"
-            },
-            "fallback": {
+            "_error": "Connection timeout",
+            "value": {
               "status": "error_handled"
             }
           },
-          "outputDescription": "handled: true if the error was caught. error: The original error object. fallback: The fallback value configured.",
+          "outputDescription": "Passes through the incoming payload. Adds handled: true and value when `_error` exists and fallbackValue is configured; otherwise adds handled: false.",
           "usageExample": {
-            "scenario": "Catch HTTP request failures and return a fallback value instead of stopping the workflow",
+            "scenario": "Convert an upstream `_error` payload into a handled fallback object",
             "inputValues": {
-              "fallbackValue": "{\"status\": \"unavailable\"}",
-              "maxRetries": "3"
+              "fallbackValue": "{\"status\": \"unavailable\"}"
             },
-            "expectedOutput": "On error, `{{$json.fallback}}` is passed to the next node instead of terminating."
+            "expectedOutput": "When the input has `_error`, the next node can read `{{$json.handled}}` and `{{$json.value.status}}`."
           },
           "externalDocsUrl": "https://docs.ctrlchecks.com"
         }

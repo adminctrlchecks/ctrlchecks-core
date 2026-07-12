@@ -554,10 +554,9 @@
       "result"
     ],
     "requiredConfig": [
-      "description"
+      "code"
     ],
     "optionalConfig": [
-      "description",
       "code",
       "timeout"
     ],
@@ -577,11 +576,11 @@
       "result"
     ],
     "requiredConfig": [
-      "description"
+      "code"
     ],
     "optionalConfig": [
-      "description",
-      "items"
+      "code",
+      "timeout"
     ],
     "credentialType": null,
     "capabilities": []
@@ -714,10 +713,7 @@
     ],
     "requiredConfig": [],
     "optionalConfig": [
-      "continueOnFail",
-      "retryOnFail",
-      "maxRetries",
-      "retryDelay"
+      "fallbackValue"
     ],
     "credentialType": null,
     "capabilities": []
@@ -824,8 +820,7 @@
     ],
     "optionalConfig": [
       "workflowId",
-      "input",
-      "waitForCompletion"
+      "input"
     ],
     "credentialType": null,
     "capabilities": []
@@ -1621,6 +1616,7 @@
       "condition"
     ],
     "optionalConfig": [
+      "array",
       "condition"
     ],
     "credentialType": null,

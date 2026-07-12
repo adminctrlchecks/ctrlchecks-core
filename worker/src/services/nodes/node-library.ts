@@ -2674,23 +2674,17 @@ export class NodeLibrary {
       type: 'function',
       label: 'Function',
       category: 'logic',
-      description: 'Execute a custom function with input parameters',
+      description: 'Execute custom JavaScript against the incoming item or object',
       configSchema: {
-        required: ['description'],
+        required: ['code'],
         optional: {
-          description: {
-            type: 'string',
-            description: 'Description of what this function should do',
-            examples: ['Transform contact data', 'Calculate total price'],
-          },
           code: {
             type: 'string',
-            description: 'Optional JavaScript code for the function',
-            examples: ['return { ...$json, processed: true };'],
-            fillMode: { default: 'runtime_ai', supportsRuntimeAI: true, supportsBuildtimeAI: true },
+            description: 'JavaScript body to run once. Use input, data, $json, or json for the incoming object. Return a value or assign result.',
+            examples: ['return { ...$json, processed: true };', 'result = { doubled: $json.x * 2 };'],
+            fillMode: { default: 'manual_static', supportsRuntimeAI: false, supportsBuildtimeAI: true },
             runtimeContract: {
               aiGeneratable: true,
-              requiredWhen: [{ field: 'description', notEquals: '' }],
               validation: { format: 'code' },
             },
           },
@@ -2731,19 +2725,25 @@ export class NodeLibrary {
       type: 'function_item',
       label: 'Function Item',
       category: 'logic',
-      description: 'Execute a function for each item in an array',
+      description: 'Execute custom JavaScript once for each item in input.items',
       configSchema: {
-        required: ['description'],
+        required: ['code'],
         optional: {
-          description: {
+          code: {
             type: 'string',
-            description: 'Description of what should be done for each item',
-            examples: ['Process each contact', 'Transform each record'],
+            description: 'JavaScript body to run for each item. Use item, input, data, $json, or json for the current item. Return a value or assign result.',
+            examples: ['return { ...item, processed: true };', 'result = { ...item, y: item.x + 1 };'],
+            fillMode: { default: 'manual_static', supportsRuntimeAI: false, supportsBuildtimeAI: true },
+            runtimeContract: {
+              aiGeneratable: true,
+              validation: { format: 'code' },
+            },
           },
-          items: {
-            type: 'array',
-            description: 'Array of items to process',
-            examples: ['{{$json.items}}', '{{$json.contacts}}'],
+          timeout: {
+            type: 'number',
+            description: 'Execution timeout in milliseconds (max 30000)',
+            default: 10000,
+            examples: [5000, 10000, 30000],
           },
         },
       },
@@ -3084,29 +3084,15 @@ export class NodeLibrary {
       type: 'error_handler',
       label: 'Error Handler',
       category: 'logic',
-      description: 'Handle errors with retry logic and fallback values',
+      description: 'Mark an upstream error as handled and optionally emit a fallback value',
       configSchema: {
         required: [],
         optional: {
-          continueOnFail: {
-            type: 'boolean',
-            description: 'Continue workflow after error',
-            default: false,
-          },
-          retryOnFail: {
-            type: 'boolean',
-            description: 'Retry failed node',
-            default: true,
-          },
-          maxRetries: {
-            type: 'number',
-            description: 'Maximum retry attempts',
-            default: 3,
-          },
-          retryDelay: {
-            type: 'number',
-            description: 'Delay between retries (ms)',
-            default: 5000,
+          fallbackValue: {
+            type: 'object',
+            description: 'Optional value to place in output.value when the incoming payload contains _error',
+            examples: [{ status: 'unavailable' }, { ok: false }],
+            fillMode: { default: 'manual_static', supportsRuntimeAI: true, supportsBuildtimeAI: true },
           },
         },
       },
@@ -3124,16 +3110,16 @@ export class NodeLibrary {
           'error retry', 'retry error', 'error recovery', 'error fallback',
           'error catch', 'catch error', 'error management', 'error control'
         ],
-        useCases: ['API error handling', 'Retry logic', 'Graceful degradation'],
+        useCases: ['API error handling', 'Fallback value', 'Graceful degradation'],
         // ✅ ROOT-LEVEL: Semantic intent description for AI understanding
-        intentDescription: 'Error handler node that manages errors with retry logic and fallback values. Handles workflow errors by retrying failed operations, continuing workflow execution after errors, and providing graceful degradation. Used for API error handling, retry logic, and making workflows more reliable.',
-        intentCategories: ['error_handling', 'retry_logic', 'reliability', 'fault_tolerance'],
+        intentDescription: 'Error handler node that inspects the incoming payload for _error, marks the payload as handled when applicable, and can output a configured fallback value. Retry and backoff are handled by the execution engine, not this node.',
+        intentCategories: ['error_handling', 'fallback_value', 'reliability', 'fault_tolerance'],
       },
       commonPatterns: [
         {
-          name: 'api_retry',
-          description: 'Retry API calls with exponential backoff',
-          config: { retryOnFail: true, maxRetries: 3, retryDelay: 2000 },
+          name: 'fallback_value',
+          description: 'Return a fallback value when an upstream step provides _error',
+          config: { fallbackValue: { status: 'unavailable' } },
         },
       ],
       validationRules: [],
@@ -3417,11 +3403,6 @@ export class NodeLibrary {
             type: 'object',
             description: 'Input data to pass to the sub-workflow',
             examples: ['{{$json}}', '{ "key": "value" }'],
-          },
-          waitForCompletion: {
-            type: 'boolean',
-            description: 'Wait for the sub-workflow to finish',
-            default: true,
           },
         },
       },
@@ -6931,10 +6912,21 @@ export class NodeLibrary {
       configSchema: {
         required: ['condition'],
         optional: {
+          array: {
+            type: 'string',
+            description: 'Optional expression that resolves to the array to filter. Defaults to input.items.',
+            examples: ['{{$json.items}}', '{{$json.contacts}}'],
+            fillMode: { default: 'manual_static', supportsRuntimeAI: true, supportsBuildtimeAI: true },
+          },
           condition: {
-            type: 'expression',
-            description: 'Filter condition',
-            examples: ['{{$json.age}} >= 18'],
+            type: 'string',
+            description: 'JavaScript expression evaluated for each item. Use item for the current item and input for the full incoming object.',
+            examples: ['item.age >= 18', 'item.status === "active"'],
+            fillMode: { default: 'buildtime_ai_once', supportsRuntimeAI: false, supportsBuildtimeAI: true },
+            runtimeContract: {
+              aiGeneratable: true,
+              validation: { format: 'code' },
+            },
           },
         },
       },

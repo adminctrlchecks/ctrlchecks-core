@@ -3620,8 +3620,11 @@ export async function executeNodeLegacy(
           };
         }
 
-        const subWorkflowInput = config.input !== undefined ? config.input : inputObj;
-        const waitForCompletion = config.waitForCompletion !== false; // Default to true
+        const subWorkflowInput = config.input !== undefined
+          ? config.input
+          : config.inputData !== undefined
+            ? config.inputData
+            : inputObj;
 
         // Fetch the sub-workflow from database
         const { data: subWorkflow, error: workflowError } = await db
@@ -7330,7 +7333,7 @@ export async function executeNodeLegacy(
 
     case 'function': {
       // Function node - similar to javascript but with different default timeout
-      const code = getStringProperty(config, 'code', '');
+      const code = getStringProperty(config, 'code', '') || getStringProperty(config, 'function', '');
       
       if (!code) {
         return {
@@ -7393,7 +7396,7 @@ export async function executeNodeLegacy(
       //   { items: [{...}, {...}], ... }
       // Config:
       //   code: JavaScript body; can set `result` per item (or return value)
-      const code = getStringProperty(config, 'code', '');
+      const code = getStringProperty(config, 'code', '') || getStringProperty(config, 'function', '');
       if (!code) {
         return {
           ...inputObj,
@@ -7408,7 +7411,8 @@ export async function executeNodeLegacy(
         };
       }
 
-      const items = Array.isArray((inputObj as any).items) ? (inputObj as any).items : null;
+      const configItems = Array.isArray((config as any).items) ? (config as any).items : null;
+      const items = Array.isArray((inputObj as any).items) ? (inputObj as any).items : configItems;
       if (!items) {
         // Nothing to map; fall back to function semantics on whole object
         return inputObj;
@@ -13329,8 +13333,11 @@ export async function executeNodeLegacy(
       // - condition: 'item.active === true'
       const arrayExpr = getStringProperty(config, 'array', '').trim();
       const conditionExpr = getStringProperty(config, 'condition', '').trim();
+      const legacyConditions = !conditionExpr && Array.isArray((config as any).conditions)
+        ? normalizeIfElseConditionsCanonical((config as any).conditions)
+        : [];
 
-      if (!conditionExpr) {
+      if (!conditionExpr && legacyConditions.length === 0) {
         return {
           ...inputObj,
           _error: 'Filter: condition is required',
@@ -13357,6 +13364,30 @@ export async function executeNodeLegacy(
       }
 
       try {
+        if (legacyConditions.length > 0) {
+          const combineOperation = String((config as any).combineOperation || 'AND').toUpperCase() === 'OR'
+            ? 'OR'
+            : 'AND';
+          const filtered = items.filter((item: any) => {
+            const itemContext = createExecutionContext(item);
+            Object.entries(nodeOutputs.getAll()).forEach(([nodeId, output]) => {
+              setNodeOutput(itemContext, nodeId, output);
+            });
+            const matches = legacyConditions.map((condition) =>
+              evaluateCondition(
+                {
+                  leftValue: condition.field,
+                  operation: condition.operator as Condition['operation'],
+                  rightValue: condition.value,
+                },
+                itemContext
+              )
+            );
+            return combineOperation === 'OR' ? matches.some(Boolean) : matches.every(Boolean);
+          });
+          return { ...inputObj, items: filtered };
+        }
+
         // Run all items through the filter expression in a single sandbox call.
         const filterCode = `items.filter(function(item) {
   try { return Boolean(${conditionExpr}); } catch { return false; }

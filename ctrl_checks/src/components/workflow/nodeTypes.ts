@@ -260,12 +260,10 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     label: 'Error Handler',
     category: 'logic',
     icon: 'ShieldAlert',
-    description: 'Error handler',
-    defaultConfig: { retries: 3, retryDelay: 1000 },
+    description: 'Marks upstream errors as handled and can emit a fallback value',
+    defaultConfig: {},
     configFields: [
-      { key: 'retries', label: 'Max Retries', type: 'number', defaultValue: 3, helpText: 'Maximum number of retry attempts if the node fails. Set to 0 to disable retries. Recommended: 3-5 retries for transient errors' },
-      { key: 'retryDelay', label: 'Retry Delay (ms)', type: 'number', defaultValue: 1000, helpText: 'Time to wait in milliseconds before retrying a failed operation. Increase for rate-limited APIs or to avoid overwhelming services (e.g., 2000ms = 2 seconds)' },
-      { key: 'fallbackValue', label: 'Fallback Value', type: 'json', placeholder: 'null', helpText: 'Value to return if all retries fail. Use JSON format: null, {}, [], "default value", or {"key": "value"}. This prevents workflow termination on errors' },
+      { key: 'fallbackValue', label: 'Fallback Value', type: 'json', placeholder: '{"status":"unavailable"}', helpText: 'Optional value returned as output.value when the incoming payload contains _error. Retry timing is handled by the execution engine, not this node.' },
     ],
   },
   {
@@ -276,7 +274,7 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     description: 'Filter items',
     defaultConfig: { condition: '' },
     configFields: [
-      { key: 'array', label: 'Array Expression', type: 'text', placeholder: '{{input.items}}', required: true, helpText: 'Expression that returns an array to filter. Use {{input.field}} to reference input data. Examples: {{input.items}}, {{input.users}}, {{input.data}}' },
+      { key: 'array', label: 'Array Expression', type: 'text', placeholder: '{{$json.items}}', required: false, helpText: 'Optional expression that returns an array to filter. Leave empty to use input.items from the previous node.' },
       { key: 'condition', label: 'Filter Condition', type: 'text', placeholder: 'item.active === true', required: true, helpText: 'JavaScript expression that evaluates to true/false for each item. Use "item" to reference the current array element. Examples: item.active === true, item.age > 18, item.status === "active"' },
     ],
   },
@@ -572,7 +570,7 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
   {
     type: 'aggregate',
     label: 'Aggregate',
-    category: 'data',
+    category: 'logic',
     icon: 'Code2',
     description: 'Aggregate data',
     defaultConfig: { operation: 'sum' },
@@ -635,25 +633,25 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
   {
     type: 'function',
     label: 'Function',
-    category: 'data',
+    category: 'logic',
     icon: 'Code2',
     description: 'Function node',
     defaultConfig: { code: 'return input;', timeout: 10000 },
     configFields: [
-      { key: 'code', label: 'Function Code', type: 'textarea', placeholder: 'return input;', required: true, helpText: 'Code receives: input, data' },
+      { key: 'code', label: 'Function Code', type: 'textarea', placeholder: 'return input;', required: true, helpText: 'Code receives: input, data, $json, and json. Return a value or assign result.' },
       { key: 'timeout', label: 'Timeout (ms)', type: 'number', defaultValue: 10000, helpText: 'Maximum execution time in milliseconds. If code execution exceeds this timeout, it will be terminated. Default: 10 seconds. Increase for complex operations but be mindful of workflow execution limits' },
     ],
   },
   {
     type: 'function_item',
     label: 'Function Item',
-    category: 'data',
+    category: 'logic',
     icon: 'Repeat',
     description: 'Function item',
-    defaultConfig: { code: 'return item;', timeout: 5000 },
+    defaultConfig: { code: 'return item;', timeout: 10000 },
     configFields: [
       { key: 'code', label: 'Function Code', type: 'textarea', placeholder: 'return item;', required: true, helpText: 'Code receives: item, index, input' },
-      { key: 'timeout', label: 'Timeout (ms)', type: 'number', defaultValue: 5000, helpText: 'Maximum execution time in milliseconds per item. If code execution exceeds this timeout for an item, it will be terminated. Default: 5 seconds per item. Increase for complex item operations' },
+      { key: 'timeout', label: 'Timeout (ms)', type: 'number', defaultValue: 10000, helpText: 'Maximum execution time in milliseconds. If code execution exceeds this timeout, it will be terminated. Default: 10 seconds.' },
     ],
   },
   {
@@ -12897,12 +12895,11 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     label: 'Execute Workflow',
     category: 'logic',
     icon: 'Play',
-    description: 'Trigger and optionally wait for another workflow to complete.',
-    defaultConfig: { workflowId: '', waitForCompletion: true },
+    description: 'Execute another workflow and return its final result.',
+    defaultConfig: { workflowId: '' },
     configFields: [
       { key: 'workflowId', label: 'Workflow ID', type: 'text', placeholder: 'workflow-uuid', required: true, helpText: 'ID of the workflow to execute. Find it in the workflow list URL.' },
-      { key: 'waitForCompletion', label: 'Wait for Completion', type: 'boolean', defaultValue: true, helpText: 'When enabled, this node waits until the called workflow finishes before continuing.' },
-      { key: 'inputData', label: 'Input Data (JSON)', type: 'json', placeholder: '{"key": "value"}', required: false, helpText: 'Optional JSON object passed as input to the called workflow.' },
+      { key: 'input', label: 'Input Data (JSON)', type: 'json', placeholder: '{"key": "value"}', required: false, helpText: 'Optional JSON object passed as input to the called workflow. Leave empty to pass the current node input.' },
     ],
   },
   {

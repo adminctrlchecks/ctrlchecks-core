@@ -7,7 +7,7 @@ export const functionSearchIndex = [
     "slug": "function",
     "category": "Logic",
     "href": "/docs/nodes/function",
-    "text": "Function Execute a custom function with input parameters Use this node when a workflow needs function behavior with schema-driven inputs from the CtrlChecks node registry. Logic"
+    "text": "Function Execute custom JavaScript once against the incoming object. Logic"
   },
   {
     "type": "operation",
@@ -15,15 +15,7 @@ export const functionSearchIndex = [
     "slug": "function",
     "category": "Logic",
     "href": "/docs/nodes/function#operation-configure",
-    "text": "Function Configuration Configure Configure with the Function node using the configured input fields. configure"
-  },
-  {
-    "type": "field",
-    "title": "Function: Description",
-    "slug": "function",
-    "category": "Logic",
-    "href": "/docs/nodes/function#operation-configure",
-    "text": "Function Configuration Configure Description description Description of what this function should do"
+    "text": "Function Configuration Configure Run code with input, data, $json, and json bound to the incoming object."
   },
   {
     "type": "field",
@@ -31,7 +23,7 @@ export const functionSearchIndex = [
     "slug": "function",
     "category": "Logic",
     "href": "/docs/nodes/function#operation-configure",
-    "text": "Function Configuration Configure Code code Optional JavaScript code for the function"
+    "text": "Function Configuration Configure Code code Required JavaScript body to run once"
   },
   {
     "type": "field",
@@ -39,6 +31,6 @@ export const functionSearchIndex = [
     "slug": "function",
     "category": "Logic",
     "href": "/docs/nodes/function#operation-configure",
-    "text": "Function Configuration Configure Timeout timeout Execution timeout in milliseconds (max 30000)"
+    "text": "Function Configuration Configure Timeout timeout Execution timeout in milliseconds max 30000"
   }
 ] satisfies DocsSearchIndexItem[];

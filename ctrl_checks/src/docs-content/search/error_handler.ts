@@ -7,7 +7,7 @@ export const errorHandlerSearchIndex = [
     "slug": "error_handler",
     "category": "Logic",
     "href": "/docs/nodes/error_handler",
-    "text": "Error Handler Handle errors with retry logic and fallback values Use this node when a workflow needs error handler behavior with schema-driven inputs from the CtrlChecks node registry. Logic"
+    "text": "Error Handler Mark an upstream error as handled and optionally emit a fallback value. Logic"
   },
   {
     "type": "operation",
@@ -15,38 +15,14 @@ export const errorHandlerSearchIndex = [
     "slug": "error_handler",
     "category": "Logic",
     "href": "/docs/nodes/error_handler#operation-configure",
-    "text": "Error Handler Configuration Configure Configure with the Error Handler node using the configured input fields. configure"
+    "text": "Error Handler Configuration Configure Inspect _error, set handled, and optionally return fallbackValue."
   },
   {
     "type": "field",
-    "title": "Error Handler: Continue On Fail",
+    "title": "Error Handler: Fallback Value",
     "slug": "error_handler",
     "category": "Logic",
     "href": "/docs/nodes/error_handler#operation-configure",
-    "text": "Error Handler Configuration Configure Continue On Fail continueOnFail Continue workflow after error"
-  },
-  {
-    "type": "field",
-    "title": "Error Handler: Retry On Fail",
-    "slug": "error_handler",
-    "category": "Logic",
-    "href": "/docs/nodes/error_handler#operation-configure",
-    "text": "Error Handler Configuration Configure Retry On Fail retryOnFail Retry failed node"
-  },
-  {
-    "type": "field",
-    "title": "Error Handler: Max Retries",
-    "slug": "error_handler",
-    "category": "Logic",
-    "href": "/docs/nodes/error_handler#operation-configure",
-    "text": "Error Handler Configuration Configure Max Retries maxRetries Maximum retry attempts"
-  },
-  {
-    "type": "field",
-    "title": "Error Handler: Retry Delay",
-    "slug": "error_handler",
-    "category": "Logic",
-    "href": "/docs/nodes/error_handler#operation-configure",
-    "text": "Error Handler Configuration Configure Retry Delay retryDelay Delay between retries (ms)"
+    "text": "Error Handler Configuration Configure Fallback Value fallbackValue Optional value emitted as value when the incoming payload contains _error"
   }
 ] satisfies DocsSearchIndexItem[];

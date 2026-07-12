@@ -165,14 +165,14 @@ export const nodeDocManifest = [
     "slug": "function",
     "displayName": "Function",
     "category": "Logic",
-    "description": "Execute a custom function with input parameters Use this node when a workflow needs function behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Execute custom JavaScript against the incoming item or object. Use this node when a workflow needs function behavior with schema-driven inputs from the CtrlChecks node registry.",
     "logoUrl": "/icons/nodes/function.svg"
   },
   {
     "slug": "function_item",
     "displayName": "Function Item",
     "category": "Logic",
-    "description": "Execute a function for each item in an array Use this node when a workflow needs function item behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Execute custom JavaScript once for each item in input.items. Use this node when a workflow needs function item behavior with schema-driven inputs from the CtrlChecks node registry.",
     "logoUrl": "/icons/nodes/function_item.svg"
   },
   {
@@ -214,7 +214,7 @@ export const nodeDocManifest = [
     "slug": "error_handler",
     "displayName": "Error Handler",
     "category": "Logic",
-    "description": "Handle errors with retry logic and fallback values Use this node when a workflow needs error handler behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Mark an upstream error as handled and optionally emit a fallback value. Use this node when a workflow needs error handler behavior with schema-driven inputs from the CtrlChecks node registry.",
     "logoUrl": "/icons/nodes/error_handler.svg"
   },
   {

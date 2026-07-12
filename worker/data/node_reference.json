@@ -72,10 +72,10 @@
     "config": {"category": "logic", "key_properties": ["Duration (ms)"]}
   },
   "error_handler": {
-    "description": "Handle errors with retries",
+    "description": "Mark upstream errors as handled with an optional fallback value",
     "inputs": [],
     "outputs": [],
-    "config": {"category": "logic", "key_properties": ["Max Retries", "Retry Delay"]}
+    "config": {"category": "logic", "key_properties": ["Fallback Value"]}
   },
   "filter": {
     "description": "Filter array items by condition",

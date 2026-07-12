@@ -126,9 +126,10 @@ export const nodeTestFixtures: Record<string, NodeTestFixture> = {
 
   filter: {
     input: [{ age: 25 }, { age: 15 }, { age: 30 }],
-    config: { conditions: [{ field: '$json.age', operator: 'greater_than_or_equal', value: 18 }] },
+    config: { condition: 'item.age >= 18' },
     expectSuccess: true,
-    description: 'filter runs without crashing; actual filtered output depends on runtime',
+    expectOutputKeys: ['items'],
+    description: 'filter keeps only array items matching the JavaScript condition',
   },
 
   loop: {
@@ -259,6 +260,7 @@ export const nodeTestFixtures: Record<string, NodeTestFixture> = {
     input: [{ x: 1 }, { x: 2 }],
     config: { code: 'return { ...item, y: item.x + 1 };' },
     expectSuccess: true,
+    expectOutputKeys: ['items'],
   },
 
   javascript: {

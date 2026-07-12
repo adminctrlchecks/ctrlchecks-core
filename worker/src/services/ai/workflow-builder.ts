@@ -9820,7 +9820,7 @@ return {
         // Logic
         'if_else': ['conditions', 'combineOperation'],
         'switch': ['routingType', 'rules', 'value'],
-        'filter': ['condition', 'items'],
+        'filter': ['condition', 'array'],
         'loop': ['items', 'maxIterations'],
         'merge': ['mode', 'joinBy', 'data1', 'data2'], // ✅ CRITICAL: merge receives data via 'data1' and 'data2'
         'javascript': ['code', 'input', 'data'], // ✅ CRITICAL: javascript receives data via 'data' field
@@ -9831,10 +9831,10 @@ return {
         'edit_fields': ['fields', 'data'],
         'rename_keys': ['keys', 'data'],
         'merge_data': ['data1', 'data2', 'mode'],
-        'function': ['description', 'code', 'timeout'],
-        'function_item': ['description', 'items'],
+        'function': ['code', 'timeout'],
+        'function_item': ['code', 'timeout'],
         'wait': ['duration', 'unit'],
-        'error_handler': ['continueOnFail', 'retryOnFail', 'maxRetries', 'retryDelay'],
+        'error_handler': ['fallbackValue'],
         'stop_and_error': ['errorMessage'],
         'noop': [],
         'split_in_batches': ['batchSize'],

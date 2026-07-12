@@ -24,34 +24,42 @@ export const filterDoc: NodeDoc = {
           "description": "Filter an array of items, keeping only those that match a condition.",
           "fields": [
             {
+              "name": "Array",
+              "internalKey": "array",
+              "type": "string",
+              "required": false,
+              "description": "Optional expression that resolves to the array to filter. Defaults to input.items.",
+              "helpText": "What this field is: The array this node should filter.\nHow to fill it: Leave empty when the previous node already outputs `items`, or use an expression such as {{$json.contacts}}.\nExample: {{$json.items}}.",
+              "placeholder": "{{$json.items}}",
+              "example": "{{$json.items}}"
+            },
+            {
               "name": "Condition",
               "internalKey": "condition",
               "type": "string",
               "required": true,
-              "description": "Filter condition",
-              "helpText": "What this field is: Filter condition.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: {{$json.age}} >= 18.\nTip: Use {{$json.condition}} when this value comes from an earlier step.",
-              "placeholder": "{{$json.age}} >= 18",
-              "example": "{{$json.age}} >= 18"
+              "description": "JavaScript expression evaluated for each item. Use item for the current item and input for the full incoming object.",
+              "helpText": "What this field is: A JavaScript expression that must return true for items you want to keep.\nHow to fill it: Use `item` for each current array element, such as item.age >= 18.\nExample: item.status === \"active\".",
+              "placeholder": "item.age >= 18",
+              "example": "item.age >= 18"
             }
           ],
           "outputExample": {
-            "filtered": [
+            "items": [
               {
                 "id": 2,
                 "status": "active",
                 "name": "Bob"
               }
-            ],
-            "totalIn": 5,
-            "totalOut": 1
+            ]
           },
-          "outputDescription": "filtered: Array of items that passed the filter condition. totalIn: Input item count. totalOut: Filtered item count.",
+          "outputDescription": "Passes through the incoming object and replaces items with the filtered array. If no array is available, the input passes through unchanged.",
           "usageExample": {
             "scenario": "Keep only active users from a database query result",
             "inputValues": {
-              "condition": "{{$item.status === \"active\"}}"
+              "condition": "item.status === \"active\""
             },
-            "expectedOutput": "Only items where status is \"active\" are passed to the next node."
+            "expectedOutput": "The next node receives `{{$json.items}}` containing only active users."
           },
           "externalDocsUrl": "https://docs.ctrlchecks.com"
         }

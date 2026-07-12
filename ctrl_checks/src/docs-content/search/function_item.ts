@@ -7,7 +7,7 @@ export const functionItemSearchIndex = [
     "slug": "function_item",
     "category": "Logic",
     "href": "/docs/nodes/function_item",
-    "text": "Function Item Execute a function for each item in an array Use this node when a workflow needs function item behavior with schema-driven inputs from the CtrlChecks node registry. Logic"
+    "text": "Function Item Execute custom JavaScript once for each item in input.items. Logic"
   },
   {
     "type": "operation",
@@ -15,22 +15,22 @@ export const functionItemSearchIndex = [
     "slug": "function_item",
     "category": "Logic",
     "href": "/docs/nodes/function_item#operation-configure",
-    "text": "Function Item Configuration Configure Configure with the Function Item node using the configured input fields. configure"
+    "text": "Function Item Configuration Configure Map input.items with custom JavaScript."
   },
   {
     "type": "field",
-    "title": "Function Item: Description",
+    "title": "Function Item: Code",
     "slug": "function_item",
     "category": "Logic",
     "href": "/docs/nodes/function_item#operation-configure",
-    "text": "Function Item Configuration Configure Description description Description of what should be done for each item"
+    "text": "Function Item Configuration Configure Code code Required JavaScript body to run for each item"
   },
   {
     "type": "field",
-    "title": "Function Item: Items",
+    "title": "Function Item: Timeout",
     "slug": "function_item",
     "category": "Logic",
     "href": "/docs/nodes/function_item#operation-configure",
-    "text": "Function Item Configuration Configure Items items Array of items to process"
+    "text": "Function Item Configuration Configure Timeout timeout Execution timeout in milliseconds max 30000"
   }
 ] satisfies DocsSearchIndexItem[];
