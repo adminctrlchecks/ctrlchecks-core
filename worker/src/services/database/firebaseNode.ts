@@ -37,6 +37,25 @@ const VALID_OPERATIONS: FirebaseOperation[] = [
   'realtime_set',
 ];
 
+// The Operation dropdown's UI label (e.g. "Query Collection") is sometimes saved instead of
+// the canonical enum value (e.g. "query") — normalize either form to the canonical value.
+const OPERATION_LABEL_ALIASES: Record<string, FirebaseOperation> = {
+  'get document': 'get',
+  'add document': 'add',
+  'update document': 'update',
+  'delete document': 'delete',
+  'query collection': 'query',
+  'realtime get': 'realtime_get',
+  'realtime set': 'realtime_set',
+};
+
+function normalizeOperation(rawOperation: unknown): string {
+  const trimmed = String(rawOperation ?? '').trim();
+  if (VALID_OPERATIONS.includes(trimmed as FirebaseOperation)) return trimmed;
+  const lower = trimmed.toLowerCase();
+  return OPERATION_LABEL_ALIASES[lower] || trimmed;
+}
+
 /**
  * Parse a value that may arrive as a JSON string or already be an object.
  */
@@ -255,9 +274,9 @@ export async function runFirebaseNode(context: NodeExecutionContext): Promise<an
   }
 
   // --- Operation validation ---
-  const operation: string = inputs.operation;
+  const operation: string = normalizeOperation(inputs.operation);
   if (!operation || !VALID_OPERATIONS.includes(operation as FirebaseOperation)) {
-    return { success: false, error: `Invalid operation: ${operation}` };
+    return { success: false, error: `Invalid operation: ${inputs.operation}` };
   }
 
   // --- Unique app name per execution ---

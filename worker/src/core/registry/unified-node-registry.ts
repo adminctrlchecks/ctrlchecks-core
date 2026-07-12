@@ -279,6 +279,7 @@ export class UnifiedNodeRegistry implements INodeRegistry {
     'mongo': 'mongodb',
     'mongo_db': 'mongodb',
     'db': 'db',
+    'supabase': 'db',
     'redis': 'redis',
     'firebase': 'firebase',
     'firestore': 'firebase',
@@ -1159,6 +1160,9 @@ export class UnifiedNodeRegistry implements INodeRegistry {
     mongodb:       { credentialTypeId: 'mongodb_connection',   label: 'MongoDB Connection',       authType: 'basic_auth' },
     redis:         { credentialTypeId: 'redis_connection',     label: 'Redis Connection',         authType: 'api_key' },
     firebase:      { credentialTypeId: 'firebase_credentials', label: 'Firebase Credentials',     authType: 'api_key' },
+    // Supabase node's canonical type is 'db'; its credential type is supabase_api_key (provider 'db').
+    db:            { credentialTypeId: 'supabase_api_key',     label: 'Supabase Connection',      authType: 'bearer_token' },
+    oracle_database: { credentialTypeId: 'oracle_connection', label: 'Oracle Connection',        authType: 'basic_auth' },
     sftp:          { credentialTypeId: 'sftp_credentials',     label: 'SFTP Credentials',         authType: 'basic_auth' },
     ftp:           { credentialTypeId: 'ftp_credentials',      label: 'FTP Credentials',          authType: 'basic_auth' },
     odoo:          { credentialTypeId: 'odoo_credentials',     label: 'Odoo Credentials',         authType: 'basic_auth' },

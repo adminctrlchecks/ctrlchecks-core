@@ -195,12 +195,41 @@ function mergeConnectionCredentialsIntoConfig(
     ['secretKey', 'apiKey'],
     ['apiKey', 'secretKey'],
     ['authToken', 'token'],
+    // Supabase: the supabase_api_key credential stores projectUrl + token (service role key),
+    // but the Supabase node executor reads url + serviceRoleKey. Map them so a saved connection
+    // satisfies the node without the user re-typing anything.
+    ['projectUrl', 'url'],
+    ['token', 'serviceRoleKey'],
   ];
   for (const [from, to] of aliases) {
     if ((next[to] === undefined || next[to] === '') && credentials[from] !== undefined && credentials[from] !== null && credentials[from] !== '') {
       next[to] = credentials[from];
     }
   }
+
+  // Service-account JSON credentials (Firebase, GCS, etc.) bundle project_id/client_email/
+  // private_key inside a single pasted JSON blob rather than as separate credential fields —
+  // unpack it here so nodes that declare clientEmail/privateKey as their own inputs get them.
+  const rawServiceAccount = credentials.serviceAccountJson;
+  if (typeof rawServiceAccount === 'string' && rawServiceAccount.trim()) {
+    try {
+      const parsedServiceAccount = JSON.parse(rawServiceAccount);
+      if (parsedServiceAccount && typeof parsedServiceAccount === 'object') {
+        if ((next.clientEmail === undefined || next.clientEmail === '') && parsedServiceAccount.client_email) {
+          next.clientEmail = parsedServiceAccount.client_email;
+        }
+        if ((next.privateKey === undefined || next.privateKey === '') && parsedServiceAccount.private_key) {
+          next.privateKey = parsedServiceAccount.private_key;
+        }
+        if ((next.projectId === undefined || next.projectId === '') && parsedServiceAccount.project_id) {
+          next.projectId = parsedServiceAccount.project_id;
+        }
+      }
+    } catch {
+      // Not valid JSON — leave fields unset, existing validation will surface a clear error.
+    }
+  }
+
   return next;
 }
 

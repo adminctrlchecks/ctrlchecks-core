@@ -21,6 +21,10 @@ import ScheduleWiseSettings from './ScheduleWiseSettings';
 import FacebookConnectionStatus from '@/components/FacebookConnectionStatus';
 import MysqlQueryEditor from './MysqlQueryEditor';
 import MongoCollectionSelect from './MongoCollectionSelect';
+import FirebaseCollectionSelect from './FirebaseCollectionSelect';
+import FirebaseDocumentSelect from './FirebaseDocumentSelect';
+import SupabaseTableSelect from './SupabaseTableSelect';
+import PostgresQueryEditor from './PostgresQueryEditor';
 import { awsClient } from '@/integrations/aws/client';
 import { ENDPOINTS } from '@/config/endpoints';
 import {
@@ -2195,6 +2199,17 @@ export default function PropertiesPanel({
         );
       }
 
+      case 'postgresQueryEditor': {
+        const connectionRefs = (selectedNode.data as any)?.connectionRefs as Record<string, string> | undefined;
+        return (
+          <PostgresQueryEditor
+            value={value as string}
+            onChange={(val) => handleConfigChange(field.key, val)}
+            connectionId={connectionRefs?.postgresql_connection ?? connectionRefs?.postgresql}
+          />
+        );
+      }
+
       case 'mongoCollectionSelect': {
         const connectionRefs = (selectedNode.data as any)?.connectionRefs as Record<string, string> | undefined;
         return (
@@ -2202,6 +2217,43 @@ export default function PropertiesPanel({
             value={value as string}
             onChange={(val) => handleConfigChange(field.key, val)}
             connectionId={connectionRefs?.mongodb_connection}
+          />
+        );
+      }
+
+      case 'firebaseCollectionSelect': {
+        const connectionRefs = (selectedNode.data as any)?.connectionRefs as Record<string, string> | undefined;
+        return (
+          <FirebaseCollectionSelect
+            value={value as string}
+            onChange={(val) => handleConfigChange(field.key, val)}
+            connectionId={connectionRefs?.firebase_credentials}
+          />
+        );
+      }
+
+      case 'firebaseDocumentSelect': {
+        const connectionRefs = (selectedNode.data as any)?.connectionRefs as Record<string, string> | undefined;
+        const collectionValue = (selectedNode.data.config || {})['collection'];
+        return (
+          <FirebaseDocumentSelect
+            value={typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
+            onChange={(val) => handleConfigChange(field.key, val)}
+            connectionId={connectionRefs?.firebase_credentials}
+            collection={typeof collectionValue === 'string' ? collectionValue : undefined}
+            pickField={field.key === 'documentId' ? 'id' : 'data'}
+            placeholder={field.placeholder}
+          />
+        );
+      }
+
+      case 'supabaseTableSelect': {
+        const connectionRefs = (selectedNode.data as any)?.connectionRefs as Record<string, string> | undefined;
+        return (
+          <SupabaseTableSelect
+            value={value as string}
+            onChange={(val) => handleConfigChange(field.key, val)}
+            connectionId={connectionRefs?.supabase_api_key ?? connectionRefs?.db}
           />
         );
       }

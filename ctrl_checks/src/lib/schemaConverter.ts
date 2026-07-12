@@ -416,6 +416,22 @@ export function convertSchemaToConfigField(
     frontendType = 'mongoCollectionSelect';
   }
 
+  if (nodeType === 'firebase' && fieldKey === 'collection') {
+    frontendType = 'firebaseCollectionSelect';
+  }
+
+  if (nodeType === 'firebase' && ['documentId', 'data', 'filter'].includes(fieldKey)) {
+    frontendType = 'firebaseDocumentSelect';
+  }
+
+  if (nodeType === 'db' && fieldKey === 'table') {
+    frontendType = 'supabaseTableSelect';
+  }
+
+  if (nodeType === 'postgresql' && fieldKey === 'query') {
+    frontendType = 'postgresQueryEditor';
+  }
+
   let friendlyLabel =
     fieldKey.charAt(0).toUpperCase() + fieldKey.slice(1).replace(/([A-Z])/g, ' $1').trim();
   if (nodeType === 'google_tasks' && fieldKey === 'due') {

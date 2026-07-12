@@ -467,6 +467,21 @@ export class ConnectionService {
       }
     }
 
+    // Reject values that still contain masking characters — this catches a masked secret
+    // (e.g. "eyJ••••••••" copied from a provider dashboard's hidden-key display) being
+    // saved as if it were the real value, which silently breaks the connection.
+    // U+2022 (•), U+00B7 (·), U+2219 (∙), and the "[REDACTED]" placeholder are never valid
+    // characters inside a real API key / token.
+    const MASK_PATTERN = /[•·∙●✱]|\[REDACTED\]/;
+    for (const [field, rawValue] of Object.entries(credentials)) {
+      if (typeof rawValue === 'string' && MASK_PATTERN.test(rawValue)) {
+        throw new Error(
+          `${field} looks masked (contains hidden/• characters). Copy the full value using the ` +
+          `provider's reveal or copy button, then paste it again.`,
+        );
+      }
+    }
+
     for (const group of definition.validation.mutuallyExclusiveFields || []) {
       const present = group.filter((field) => credentials[field]);
       if (present.length > 1) throw new Error(`${present.join(', ')} are mutually exclusive`);

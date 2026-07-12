@@ -182,9 +182,6 @@ export function cleanOutputFromConfig(output: any, config: Record<string, any>):
   const outputObj = output as Record<string, any>;
   const cleaned: Record<string, any> = {};
 
-  // List of config keys that should never appear in output
-  const configKeys = new Set(Object.keys(config));
-
   for (const [key, value] of Object.entries(outputObj)) {
     // Always keep error fields
     if (key === '_error' || key === '_errorCode' || key === '_errorDetails' || key === '_nodeType') {
@@ -192,11 +189,21 @@ export function cleanOutputFromConfig(output: any, config: Record<string, any>):
       continue;
     }
 
-    // Filter out config values from output
-    // Config values like spreadsheetId, operation, outputFormat should not be in output
-    if (configKeys.has(key)) {
-      // This is a config value, don't include it in output
-      continue;
+    // Filter out values that are just the config echoed back unchanged (e.g.
+    // spreadsheetId, operation, outputFormat). Compare by value, not just key name —
+    // some fields (like documentId) legitimately mean different things on input vs
+    // output (the id to look up vs. the id of a newly created record), so a name
+    // match alone must not discard genuinely new output data.
+    if (Object.prototype.hasOwnProperty.call(config, key)) {
+      const configValue = config[key];
+      const isSameValue =
+        configValue === value ||
+        (configValue !== null &&
+          value !== null &&
+          typeof configValue === 'object' &&
+          typeof value === 'object' &&
+          JSON.stringify(configValue) === JSON.stringify(value));
+      if (isSameValue) continue;
     }
 
     // Keep all other output values

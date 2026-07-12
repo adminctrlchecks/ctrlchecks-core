@@ -37,6 +37,22 @@ export function isOAuthRefSatisfiedInConfig(config: Record<string, unknown>): bo
 }
 
 /**
+ * True if the node links a saved Connection (Properties Panel "Connect" flow) for this
+ * provider instead of typing credentials inline — node.data.connectionRefs[<provider>|…].
+ */
+export function isConnectionLinkedInConfig(node: WorkflowNode, provider: string): boolean {
+  const connectionRefs = (node.data?.connectionRefs || {}) as Record<string, unknown>;
+  const candidateKeys = [
+    provider,
+    `${provider}_connection`,
+    `${provider}_api_key`,
+    `${provider}_oauth2`,
+    `${provider}_token`,
+  ];
+  return candidateKeys.some((key) => isNonPlaceholderString(connectionRefs[key]));
+}
+
+/**
  * Returns true if the node's config satisfies the credential contract without vault access.
  */
 export function isCredentialSatisfiedByNodeConfig(
@@ -46,7 +62,7 @@ export function isCredentialSatisfiedByNodeConfig(
   const config = (node.data?.config || {}) as Record<string, unknown>;
 
   if (contract.type === 'oauth') {
-    return isOAuthRefSatisfiedInConfig(config);
+    return isOAuthRefSatisfiedInConfig(config) || isConnectionLinkedInConfig(node, contract.provider);
   }
 
   if (contract.type === 'webhook') {
@@ -59,11 +75,11 @@ export function isCredentialSatisfiedByNodeConfig(
 
   if (contract.type === 'api_key' || contract.type === 'token') {
     const field = contract.credentialFieldName;
-    if (field) {
-      const v = config[field];
-      return isNonPlaceholderString(v);
-    }
-    return false;
+    if (field && isNonPlaceholderString(config[field])) return true;
+    // A linked saved Connection (e.g. Supabase, Firebase) satisfies the requirement even
+    // though no inline api-key field is typed into the node — the secret lives in the
+    // Connection and is injected at execution time.
+    return isConnectionLinkedInConfig(node, contract.provider);
   }
 
   if (contract.type === 'runtime') {
@@ -79,16 +95,7 @@ export function isCredentialSatisfiedByNodeConfig(
     ) {
       return true;
     }
-    // Or the node links to a saved Connection (Properties Panel "Connect" flow)
-    // instead of typing credentials inline — node.data.connectionRefs[credentialTypeId].
-    const connectionRefs = (node.data?.connectionRefs || {}) as Record<string, unknown>;
-    const candidateKeys = [
-      contract.provider,
-      `${contract.provider}_connection`,
-      `${contract.provider}_api_key`,
-      `${contract.provider}_oauth2`,
-    ];
-    return candidateKeys.some((key) => isNonPlaceholderString(connectionRefs[key]));
+    return isConnectionLinkedInConfig(node, contract.provider);
   }
 
   return false;

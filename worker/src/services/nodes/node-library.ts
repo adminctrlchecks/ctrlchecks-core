@@ -2029,6 +2029,7 @@ export class NodeLibrary {
       label: 'Supabase',
       category: 'database',
       description: 'Interact with Supabase (PostgreSQL + realtime + storage)',
+      providers: ['db'],
       configSchema: {
         required: ['table', 'operation'],
         optional: {

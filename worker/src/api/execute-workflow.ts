@@ -15064,8 +15064,20 @@ export async function executeNodeLegacy(
           };
         }
 
-        // Return the data from successful operation
-        result = dbResult.data || dbResult;
+        // Return the data from successful operation, but keep sibling metadata
+        // (e.g. documentId from an Add/insert) instead of discarding it — the
+        // caller needs the new record's id, not just the payload it sent.
+        if (
+          dbResult.data !== undefined &&
+          typeof dbResult.data === 'object' &&
+          dbResult.data !== null &&
+          !Array.isArray(dbResult.data)
+        ) {
+          const { data, success: _success, ...metadata } = dbResult;
+          result = { ...metadata, ...data };
+        } else {
+          result = dbResult.data ?? dbResult;
+        }
       } catch (error: any) {
         const errorMessage = error.message || 'Database operation failed';
         logger.error(`[Database Node ${type}] Error:`, error);

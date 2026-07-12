@@ -79,6 +79,12 @@ export async function executeDatabaseNode(
       return await runFirebaseNode(context);
     }
 
+    case 'oracle':
+    case 'oracle_database': {
+      const { runOracleNode } = await import('./oracleNode');
+      return await runOracleNode(context);
+    }
+
     case 'google_cloud_storage': {
       const { runGCSNode } = await import('./gcsNode');
       return await runGCSNode(context);

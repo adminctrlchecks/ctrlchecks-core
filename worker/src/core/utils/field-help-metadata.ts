@@ -310,6 +310,9 @@ export function inferFieldHelpMetadata(
   if (f === 'consumerkey' || f === 'consumer_key') return pick('consumer_key');
   if (f === 'consumersecret' || f === 'consumer_secret') return pick('consumer_secret');
   if (f === 'connectionstring' || f === 'connection_string' || f === 'databaseurl' || f === 'database_url') return pick('connection_string');
+  // Oracle node names its username field `user` — treat it as a connection username so it
+  // becomes credential-owned (handled by the saved connection, not an inline node field).
+  if (f === 'user' && nt === 'oracle_database') return pick('username');
   if (f === 'username' && /(postgres|mysql|mongo|redis|database|ftp|sftp|jenkins|bitbucket|smtp|mail)/.test(nt)) return pick('username');
   if ((f === 'password' || f === 'apppassword' || f === 'app_password') && /(postgres|mysql|mongo|redis|database|ftp|sftp|jenkins|bitbucket|smtp|mail)/.test(nt)) return pick('password');
 

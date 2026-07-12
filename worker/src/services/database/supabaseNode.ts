@@ -142,10 +142,14 @@ export async function runSupabaseNode(context: NodeExecutionContext): Promise<an
   };
 
   const operation: SupabaseOperation = {
-    name: inputs.operation,
+    // Normalize to the canonical lowercase enum so a display label ("Select") or
+    // stray casing still routes to the right handler.
+    name: String(inputs.operation ?? '').trim().toLowerCase() as SupabaseOperation['name'],
     table: inputs.table,
     columns: inputs.columns,
-    filter: inputs.filter,
+    // The node config schema exposes this field as `filters` (plural); the executor
+    // uses `filter`. Accept either so a filter set in the UI actually reaches the query.
+    filter: inputs.filter ?? inputs.filters,
     limit: inputs.limit,
     order: inputs.order,
     data: inputs.data,

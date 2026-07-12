@@ -206,7 +206,7 @@ import {
   testConnectionHandler,
   updateConnectionHandler,
 } from './api/credential-connections';
-import { listMysqlTablesHandler, previewMysqlTableHandler, listMongoCollectionsHandler, previewMongoCollectionHandler } from './api/database-explorer';
+import { listMysqlTablesHandler, previewMysqlTableHandler, listMongoCollectionsHandler, previewMongoCollectionHandler, listFirestoreCollectionsHandler, previewFirestoreCollectionHandler, listSupabaseTablesHandler, previewSupabaseTableHandler, listPostgresTablesHandler, previewPostgresTableHandler } from './api/database-explorer';
 import { credentialExecutionAuthMiddleware } from './credentials-system/execution-auth-middleware';
 import workflowFieldOwnershipCatalogHandler from './api/workflow-field-ownership-catalog';
 import { linkedinStatusHandler, linkedinTestHandler, linkedinRefreshNowHandler, linkedinDisconnectHandler } from './api/connections-linkedin';
@@ -774,6 +774,12 @@ app.post('/api/database-explorer/mysql/tables', asyncHandler(authenticateUser), 
 app.post('/api/database-explorer/mysql/preview', asyncHandler(authenticateUser), asyncHandler(previewMysqlTableHandler));
 app.post('/api/database-explorer/mongo/collections', asyncHandler(authenticateUser), asyncHandler(listMongoCollectionsHandler));
 app.post('/api/database-explorer/mongo/preview', asyncHandler(authenticateUser), asyncHandler(previewMongoCollectionHandler));
+app.post('/api/database-explorer/firebase/collections', asyncHandler(authenticateUser), asyncHandler(listFirestoreCollectionsHandler));
+app.post('/api/database-explorer/firebase/preview', asyncHandler(authenticateUser), asyncHandler(previewFirestoreCollectionHandler));
+app.post('/api/database-explorer/supabase/tables', asyncHandler(authenticateUser), asyncHandler(listSupabaseTablesHandler));
+app.post('/api/database-explorer/supabase/preview', asyncHandler(authenticateUser), asyncHandler(previewSupabaseTableHandler));
+app.post('/api/database-explorer/postgres/tables', asyncHandler(authenticateUser), asyncHandler(listPostgresTablesHandler));
+app.post('/api/database-explorer/postgres/preview', asyncHandler(authenticateUser), asyncHandler(previewPostgresTableHandler));
 app.post('/api/credential-connections/connections/:id/reconnect', asyncHandler(authenticateUser), asyncHandler(oauthReconnectHandler));
 // Generic OAuth (Slack, HubSpot, etc.) — proxy start when credentialTypeId is a migrated provider.
 // Proxy checks CREDENTIAL_SERVICE_OAUTH_ENABLED + credentialTypeId; on disabled/mismatch/timeout → local.

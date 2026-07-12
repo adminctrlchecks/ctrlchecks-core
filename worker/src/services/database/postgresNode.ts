@@ -185,6 +185,19 @@ async function executeOperation(
 /**
  * Run PostgreSQL node
  */
+/**
+ * Normalize the SSL setting into what `pg` expects. The connection form stores an
+ * SSL *mode* string ('disable' | 'require' | 'verify-full'), but any non-empty string
+ * is truthy — so passing it straight through wrongly enabled SSL for 'disable' and broke
+ * connections to servers without SSL ("The server does not support SSL connections").
+ */
+function normalizePostgresSsl(ssl: unknown): false | { rejectUnauthorized: boolean } {
+  if (ssl === true || ssl === 'require' || ssl === 'true') return { rejectUnauthorized: false };
+  if (ssl === 'verify-full' || ssl === 'verify-ca') return { rejectUnauthorized: true };
+  // 'disable', false, '', undefined, null → no SSL
+  return false;
+}
+
 export async function runPostgresNode(context: NodeExecutionContext): Promise<any> {
   const { inputs } = context;
 
@@ -195,12 +208,14 @@ export async function runPostgresNode(context: NodeExecutionContext): Promise<an
     username: inputs.username,
     password: inputs.password,
     database: inputs.database,
-    ssl: inputs.ssl === true ? { rejectUnauthorized: false } : inputs.ssl || false,
+    ssl: normalizePostgresSsl(inputs.ssl),
   };
 
-  // Extract operation
+  // Extract operation. The registered Postgres schema exposes `query` + `parameters`
+  // (raw-SQL design, no separate operation field), so default to executeQuery when the
+  // caller didn't set one — matches the MySQL node's behavior.
   const operation: PostgresOperation = {
-    name: inputs.operation,
+    name: inputs.operation || 'executeQuery',
     query: inputs.query,
     table: inputs.table,
     data: inputs.data,

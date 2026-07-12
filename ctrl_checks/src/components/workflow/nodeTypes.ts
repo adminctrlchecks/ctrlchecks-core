@@ -51,7 +51,15 @@ export interface ConfigField {
     /** MySQL raw SQL query — textarea with a "Browse Tables" helper from the linked connection */
     | 'mysqlQueryEditor'
     /** MongoDB collection name — text input with a "Browse Collections" helper + document preview */
-    | 'mongoCollectionSelect';
+    | 'mongoCollectionSelect'
+    /** Firestore collection name — text input with a "Browse Collections" helper + document preview */
+    | 'firebaseCollectionSelect'
+    /** Firestore document id/data/filter — text input with a "Browse Documents" helper against the selected collection */
+    | 'firebaseDocumentSelect'
+    /** Supabase table name — text input with a "Browse Tables" helper + row preview */
+    | 'supabaseTableSelect'
+    /** PostgreSQL raw SQL query — textarea with a "Browse Tables" helper from the linked connection */
+    | 'postgresQueryEditor';
   placeholder?: string;
   options?: { label: string; value: string }[];
   required?: boolean;
@@ -3482,7 +3490,10 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     ],
   },
   {
-    type: 'supabase',
+    // Backend canonical type is 'db' (the Supabase node). Must match so the node appears
+    // in the library (backend-supported list has 'db', not 'supabase') and so the Properties
+    // panel loads the backend 'db' schema — which is what renders the connection picker.
+    type: 'db',
     label: 'Supabase',
     category: 'database',
     icon: 'Database',
@@ -3568,10 +3579,14 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
       { key: 'projectId', label: 'Project ID', type: 'text', required: true },
       { key: 'clientEmail', label: 'Client Email', type: 'text', required: true },
       { key: 'privateKey', label: 'Private Key', type: 'textarea', required: true },
-      { key: 'collection', label: 'Collection', type: 'text' },
-      { key: 'documentId', label: 'Document ID', type: 'text' },
-      { key: 'data', label: 'Data (JSON)', type: 'json' },
-      { key: 'filter', label: 'Filter (JSON)', type: 'json' },
+      { key: 'collection', label: 'Collection', type: 'firebaseCollectionSelect',
+        helpText: 'Browse your Firestore project\'s real collections and preview sample documents' },
+      { key: 'documentId', label: 'Document ID', type: 'firebaseDocumentSelect',
+        helpText: 'Browse real documents in the selected collection and pick one by ID' },
+      { key: 'data', label: 'Data (JSON)', type: 'firebaseDocumentSelect',
+        helpText: 'Browse a real document from the collection to use its fields as a starting template' },
+      { key: 'filter', label: 'Filter (JSON)', type: 'firebaseDocumentSelect',
+        helpText: 'Browse a real document from the collection to see field names/values for your filter' },
       { key: 'limit', label: 'Limit', type: 'number', defaultValue: 100 },
       { key: 'databaseUrl', label: 'Database URL', type: 'text',
         helpText: 'Required for realtime_get and realtime_set operations' },
