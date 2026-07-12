@@ -269,7 +269,7 @@ export const nodeDocManifest = [
   {
     "slug": "parallel",
     "displayName": "Parallel",
-    "category": "Flow",
+    "category": "Logic",
     "description": "Pass data through while recording the parallel orchestration mode.",
     "logoUrl": "/icons/nodes/parallel.svg"
   },

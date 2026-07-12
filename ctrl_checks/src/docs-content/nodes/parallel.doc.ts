@@ -3,7 +3,7 @@ import type { NodeDoc } from '../types';
 export const parallelDoc: NodeDoc = {
   slug: 'parallel',
   displayName: 'Parallel',
-  category: 'Flow',
+  category: 'Logic',
   logoUrl: '/icons/nodes/parallel.svg',
   description: 'Pass data through while recording the parallel orchestration mode.',
   credentialType: 'None',
