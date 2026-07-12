@@ -18973,6 +18973,10 @@ export default async function executeWorkflowHandler(req: Request, res: Response
     /** Raw expression value after switch runs (numeric / string index routing). */
     const switchExpressionValues: Record<string, unknown> = {};
     const skippedNodeIds = new Set<string>(); // ✅ CORE ARCHITECTURE FIX: Track skipped nodes for recursive skipping
+
+    // Timestamp this workflow run began, read by the timeout node override to compute elapsed time.
+    // Follows the same global-scoped convention as currentWorkflowIntent below.
+    (global as any).currentWorkflowStartTime = Date.now();
     
     // Track memory usage for monitoring
     const startMemory = process.memoryUsage().heapUsed / 1024 / 1024; // MB

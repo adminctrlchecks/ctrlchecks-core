@@ -19,9 +19,8 @@ export function overrideTimeout(def: UnifiedNodeDefinition, schema: NodeSchema):
         };
       }
 
-      // Get workflow start time from context (set by engine) or use current time as fallback
-      // The workflow engine should set workflowStartTime when workflow begins
-      const workflowStart = (context as any).workflowStartTime || Date.now();
+      // Get workflow start time set by the engine at the start of the run (execute-workflow.ts)
+      const workflowStart = (global as any).currentWorkflowStartTime || (context as any).workflowStartTime || Date.now();
       const elapsed = Date.now() - workflowStart;
       const timedOut = elapsed > limit;
 
@@ -29,7 +28,7 @@ export function overrideTimeout(def: UnifiedNodeDefinition, schema: NodeSchema):
         success: true,
         output: {
           elapsedMs: elapsed,
-          limit,
+          limitMs: limit, // named distinctly from the 'limit' config key — cleanOutputFromConfig strips output keys that shadow config keys
           timedOut,
           originalInput: context.rawInput,
         },

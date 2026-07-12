@@ -12943,11 +12943,8 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     category: 'logic',
     icon: 'ShieldAlert',
     description: 'Wrap nodes in error-handling logic — run a fallback branch on failure.',
-    defaultConfig: { continueOnError: false },
-    configFields: [
-      { key: 'continueOnError', label: 'Continue on Error', type: 'boolean', defaultValue: false, helpText: 'When enabled, the workflow continues to the catch branch instead of stopping on error.' },
-      { key: 'errorMessage', label: 'Error Variable Name', type: 'text', placeholder: 'error', defaultValue: 'error', required: false, helpText: 'Variable name that holds the caught error in the catch branch.' },
-    ],
+    defaultConfig: {},
+    configFields: [],
   },
   {
     type: 'retry',
@@ -12990,10 +12987,9 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     category: 'logic',
     icon: 'AlarmClock',
     description: 'Fail or redirect a workflow branch if it exceeds a time limit.',
-    defaultConfig: { timeout: 30000, onTimeout: 'fail' },
+    defaultConfig: { limit: 30000 },
     configFields: [
-      { key: 'timeout', label: 'Timeout (ms)', type: 'number', defaultValue: 30000, required: true, helpText: 'Maximum allowed execution time in milliseconds. 30000 = 30 seconds.' },
-      { key: 'onTimeout', label: 'On Timeout', type: 'select', options: [{ label: 'Fail', value: 'fail' }, { label: 'Continue', value: 'continue' }, { label: 'Fallback Branch', value: 'fallback' }], defaultValue: 'fail', helpText: 'What happens when the timeout is reached.' },
+      { key: 'limit', label: 'Timeout (ms)', type: 'number', defaultValue: 30000, required: true, helpText: 'Maximum allowed execution time in milliseconds. 30000 = 30 seconds.' },
     ],
   },
   {
