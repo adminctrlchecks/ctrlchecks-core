@@ -689,12 +689,9 @@
       "data",
       "result"
     ],
-    "requiredConfig": [
-      "mode"
-    ],
+    "requiredConfig": [],
     "optionalConfig": [
-      "mode",
-      "joinBy"
+      "mode"
     ],
     "credentialType": null,
     "capabilities": []
@@ -1634,11 +1631,9 @@
       "data",
       "result"
     ],
-    "requiredConfig": [
-      "items"
-    ],
+    "requiredConfig": [],
     "optionalConfig": [
-      "items",
+      "array",
       "maxIterations"
     ],
     "credentialType": null,

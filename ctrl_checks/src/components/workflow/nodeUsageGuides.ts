@@ -254,17 +254,19 @@ Connects to different nodes based on status value.`,
   },
 
   loop: {
-    overview: 'Iterates over an array of items, executing connected nodes for each item. Useful for batch processing.',
-    inputs: ['array of items'],
-    outputs: ['current_item', 'index', 'results'],
+    overview: 'Exposes an input array downstream with loop metadata. The current DAG runtime does not execute the downstream branch once per item.',
+    inputs: ['array expression (optional)', 'maxIterations'],
+    outputs: ['items', 'loop.maxIterations', 'loop.iterations', 'loop.truncated'],
     example: `Input: { items: ["email1", "email2", "email3"] }
-Array Expression: {{input.items}}
+Array Expression: {{$json.items}}
+Max Iterations: 100
 
-Loop executes 3 times:
-• Iteration 1: current_item = "email1"
-• Iteration 2: current_item = "email2"
-• Iteration 3: current_item = "email3"`,
-    tips: ['Set max iterations to prevent infinite loops', 'Access current item with {{loop.item}}', 'Results collected after all iterations'],
+Output metadata:
+{
+  items: ["email1", "email2", "email3"],
+  loop: {maxIterations: 100, iterations: 3, truncated: false}
+}`,
+    tips: ['Leave array empty to use input.items', 'Set max iterations to cap large arrays', 'Use function_item when you need a transform once for each item'],
   },
 
   wait: {
@@ -314,25 +316,25 @@ Output: [John, Bob] (filtered out Jane)`,
   },
 
   merge: {
-    overview: 'Combines data from multiple input branches into a single output. Supports different merge modes: merge objects, append arrays, key-based merge, wait for all, or concatenate arrays.',
-    inputs: ['mode', 'mergeKey', 'multiple data inputs from different branches'],
-    outputs: ['merged_data'],
-    example: `Mode: Merge Objects
+    overview: 'Combines data from multiple input branches into one output. Supported modes are overwrite, append, and deep_merge.',
+    inputs: ['mode', 'multiple data inputs from different branches'],
+    outputs: ['combined branch data'],
+    example: `Mode: overwrite
 Input 1: {name: "John", age: 30}
 Input 2: {email: "john@test.com", city: "NYC"}
 
 Output: {name: "John", age: 30, email: "john@test.com", city: "NYC"}
 
-Mode: Append to Array
+Mode: append
 Input 1: [1, 2]
 Input 2: [3, 4]
-Output: [1, 2, 3, 4]
+Output: {items: [1, 2, 3, 4]}
 
-Mode: Key-based Merge (with mergeKey: "id")
-Input 1: [{id: 1, name: "John"}]
-Input 2: [{id: 1, email: "john@test.com"}]
-Output: [{id: 1, name: "John", email: "john@test.com"}]`,
-    tips: ['Use "merge" mode to combine object properties', 'Use "append" to add items to arrays', 'Key-based merge requires a mergeKey field', 'Wait All mode waits for all branches before merging', 'Connect multiple nodes as inputs to merge'],
+Mode: deep_merge
+Input 1: {user: {name: "John"}}
+Input 2: {user: {email: "john@test.com"}}
+Output: {user: {name: "John", email: "john@test.com"}}`,
+    tips: ['Use overwrite to combine flat objects', 'Use append to collect branch outputs into items', 'Use deep_merge for nested objects', 'Connect multiple nodes as inputs to merge'],
   },
 
   noop: {

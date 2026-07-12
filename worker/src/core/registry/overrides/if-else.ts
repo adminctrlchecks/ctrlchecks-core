@@ -104,6 +104,14 @@ export function overrideIfElse(def: UnifiedNodeDefinition, schema: NodeSchema): 
 
       if (result.success && result.output) {
         const outObj = result.output as any;
+        const conditionResult =
+          typeof outObj.conditionResult === 'boolean'
+            ? outObj.conditionResult
+            : typeof outObj.condition_result === 'boolean'
+              ? outObj.condition_result
+              : typeof outObj.condition === 'boolean'
+                ? outObj.condition
+                : undefined;
 
         // Forward clean upstream business data to downstream nodes.
         // Do NOT spread context.inputs (if_else routing config: conditions, combineOperation) —
@@ -119,15 +127,15 @@ export function overrideIfElse(def: UnifiedNodeDefinition, schema: NodeSchema): 
           ...(typeof outObj === 'object' && outObj !== null ? outObj : {}),
         };
 
-        if (outObj.conditionResult !== undefined) {
-          finalOutput.conditionResult = outObj.conditionResult;
+        if (conditionResult !== undefined) {
+          finalOutput.conditionResult = conditionResult;
         }
 
         return {
           success: true,
           output: finalOutput,
           metadata: {
-            branch: outObj.conditionResult ? 'true' : 'false',
+            branch: conditionResult ? 'true' : 'false',
             conditionEvaluated: true,
           },
         };

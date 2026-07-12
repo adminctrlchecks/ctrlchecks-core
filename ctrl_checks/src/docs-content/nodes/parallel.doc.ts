@@ -1,78 +1,55 @@
 import type { NodeDoc } from '../types';
 
 export const parallelDoc: NodeDoc = {
-  "slug": "parallel",
-  "displayName": "Parallel",
-  "category": "Logic",
-  "logoUrl": "/icons/nodes/parallel.svg",
-  "description": "Runs multiple branches concurrently and waits for all to complete",
-  "credentialType": "None",
-  "credentialSetupSteps": [
-    "This node does not need a saved account connection.",
-    "Open the node settings and fill the visible input fields.",
-    "Run the workflow when the required fields are complete."
-  ],
-  "credentialDocsUrl": "https://docs.ctrlchecks.com",
-  "resources": [
+  slug: 'parallel',
+  displayName: 'Parallel',
+  category: 'Flow',
+  logoUrl: '/icons/nodes/parallel.svg',
+  description: 'Pass data through while recording the parallel orchestration mode.',
+  credentialType: 'None',
+  credentialSetupSteps: [],
+  credentialDocsUrl: '',
+  resources: [
     {
-      "name": "Configuration",
-      "description": "Parallel is configured directly with input fields.",
-      "operations": [
+      name: 'Configuration',
+      description: 'Parallel is configured directly with input fields.',
+      operations: [
         {
-          "name": "Execute",
-          "value": "default",
-          "description": "Execute using the Parallel node.",
-          "fields": [
+          name: 'Configure',
+          value: 'configure',
+          description: 'Set the orchestration mode. Actual branch fan-out and fan-in are handled by the workflow engine.',
+          fields: [
             {
-              "name": "Mode",
-              "internalKey": "mode",
-              "type": "select",
-              "required": false,
-              "description": "Execution mode (all, race)",
-              "helpText": "Options: Choose the mode value this Parallel step should use.\nHow to choose it: Pick the option that matches what you want this step to do.\nExample: Wait for all.\nTip: Use {{$json.mode}} only when an earlier step already provides a valid option value.",
-              "placeholder": "all",
-              "example": "all",
-              "defaultValue": "all",
-              "options": [
-                "Wait for all",
-                "Race (first completes)"
-              ]
+              name: 'Mode',
+              internalKey: 'mode',
+              type: 'select',
+              required: false,
+              description: 'Execution mode (all, race).',
+              helpText: 'all records wait-for-all behavior; race records first-completes behavior. The node passes input data through and adds mode/results.',
+              placeholder: 'all',
+              example: 'all',
+              defaultValue: 'all',
+              options: ['Wait for all', 'Race (first completes)']
             }
           ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
+          outputExample: {
+            orderId: 123,
+            mode: 'all',
+            results: []
           },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming Parallel data with execute after a related upstream event is received",
-            "inputValues": {
-              "Mode": "all"
+          outputDescription: 'The node passes object input fields through, adds mode, and returns an empty results array.',
+          usageExample: {
+            scenario: 'Mark a workflow point where independent downstream branches should be treated as parallel',
+            inputValues: {
+              mode: 'all'
             },
-            "expectedOutput": "Parallel returns structured execute data that downstream nodes can reference with {{$json.fieldName}}."
+            expectedOutput: 'Downstream nodes receive the original input plus mode and results.'
           },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
+          externalDocsUrl: 'https://docs.ctrlchecks.com'
         }
       ]
     }
   ],
-  "commonErrors": [
-    {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
-    },
-    {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
-  ],
-  "relatedNodes": []
+  commonErrors: [],
+  relatedNodes: ['merge']
 };

@@ -7973,25 +7973,13 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         'Mode defines how inputs are combined.',
         '',
         'Options:',
-        '• merge – combine object fields',
-        '• append – add items to an array',
-        '• key_based – merge by a shared key',
-        '• wait_all – wait for all inputs',
-        '• concat – join arrays',
+        '• overwrite – combine object fields, with later branches winning',
+        '• append – collect branch outputs into items',
+        '• deep_merge – recursively combine nested object fields',
         '',
         'Choose the simplest mode that fits your data.'
       ],
-      example: 'merge'
-    },
-    mergeKey: {
-      title: 'How to set Merge Key?',
-      steps: [
-        'Merge Key is required for key‑based merge.',
-        '',
-        'Pick a field that exists in all inputs, e.g. "id" or "user_id".',
-        'Records with the same key will be combined.'
-      ],
-      example: 'user_id'
+      example: 'overwrite'
     }
   },
   webhook: {

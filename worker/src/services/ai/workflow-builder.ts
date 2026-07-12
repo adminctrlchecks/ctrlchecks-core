@@ -9821,8 +9821,8 @@ return {
         'if_else': ['conditions', 'combineOperation'],
         'switch': ['routingType', 'rules', 'value'],
         'filter': ['condition', 'array'],
-        'loop': ['items', 'maxIterations'],
-        'merge': ['mode', 'joinBy', 'data1', 'data2'], // ✅ CRITICAL: merge receives data via 'data1' and 'data2'
+        'loop': ['array', 'maxIterations'],
+        'merge': ['mode'],
         'javascript': ['code', 'input', 'data'], // ✅ CRITICAL: javascript receives data via 'data' field
         'set_variable': ['name', 'value'], // ✅ CRITICAL: set_variable receives data via 'value' (removed 'input' - not a valid field)
         'json_parser': ['jsonData', 'options'],

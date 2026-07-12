@@ -12653,7 +12653,26 @@ export async function executeNodeLegacy(
           lastOutput: execContext.lastOutput,
         });
         
-        conditionResult = evaluateCondition(condition, execContext);
+        const combineOperation =
+          String(config.combineOperation || 'AND').toUpperCase() === 'OR' ? 'OR' : 'AND';
+        if (normalizedConditions.length > 1) {
+          const matches = normalizedConditions.map((normalizedCondition) =>
+            evaluateCondition(
+              {
+                leftValue: normalizedCondition.field,
+                operation: normalizedCondition.operator,
+                rightValue: normalizedCondition.value,
+              },
+              execContext
+            )
+          );
+          conditionResult =
+            combineOperation === 'OR'
+              ? matches.some(Boolean)
+              : matches.every(Boolean);
+        } else {
+          conditionResult = evaluateCondition(condition, execContext);
+        }
         
         // ✅ DEBUG: Log result with detailed context
         logger.info('[If/Else] ✅ Condition result:', {
@@ -13331,7 +13350,7 @@ export async function executeNodeLegacy(
       // Frontend config:
       // - array: '{{input.items}}' (optional; defaults to input.items)
       // - condition: 'item.active === true'
-      const arrayExpr = getStringProperty(config, 'array', '').trim();
+      const arrayExpr = String((config as any).array ?? (config as any).items ?? '').trim();
       const conditionExpr = getStringProperty(config, 'condition', '').trim();
       const legacyConditions = !conditionExpr && Array.isArray((config as any).conditions)
         ? normalizeIfElseConditionsCanonical((config as any).conditions)

@@ -1,80 +1,73 @@
 import type { NodeDoc } from '../types';
 
 export const ifElseDoc: NodeDoc = {
-  "slug": "if_else",
-  "displayName": "If/Else",
-  "category": "Logic",
-  "logoUrl": "/icons/nodes/if_else.svg",
-  "description": "Conditional branching based on true/false condition",
-  "credentialType": "None",
-  "credentialSetupSteps": [
-    "This node does not need a saved account connection.",
-    "Open the node settings and fill the visible input fields.",
-    "Run the workflow when the required fields are complete."
-  ],
-  "credentialDocsUrl": "https://docs.ctrlchecks.com",
-  "resources": [
+  slug: 'if_else',
+  displayName: 'If/Else',
+  category: 'Logic',
+  logoUrl: '/icons/nodes/if_else.svg',
+  description: 'Route execution to the true or false branch by evaluating one or more conditions.',
+  credentialType: 'None',
+  credentialSetupSteps: [],
+  credentialDocsUrl: '',
+  resources: [
     {
-      "name": "Configuration",
-      "description": "If/Else is configured directly with input fields.",
-      "operations": [
+      name: 'Configuration',
+      description: 'If/Else is configured directly with input fields.',
+      operations: [
         {
-          "name": "Execute",
-          "value": "default",
-          "description": "Branch the workflow: if the condition is true, the \"true\" path runs; otherwise the \"false\" path runs.",
-          "fields": [
+          name: 'Configure',
+          value: 'configure',
+          description: 'Evaluate conditions against the incoming data and route to true or false.',
+          fields: [
             {
-              "name": "Conditions",
-              "internalKey": "conditions",
-              "type": "json",
-              "required": true,
-              "description": "Conditions to evaluate. Each condition should have: field (string), operator (equals|not_equals|greater_than|less_than|greater_than_or_equal|less_than_or_equal|contains|not_contains), value (string|number|boolean)",
-              "helpText": "What this field is: Structured data for Conditions to evaluate. Each condition should have: field , operator , value.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by If/Else.\nExample: [{\"field\":\"$json.age\",\"operator\":\"greater_than_or_equal\",\"value\":18}].\nTip: Use {{$json.conditions}} when an earlier step already prepared this data.",
-              "placeholder": "[{\"field\":\"$json.age\",\"operator\":\"greater_than_or_equal\",\"value\":18}]",
-              "example": "[{\"field\":\"$json.age\",\"operator\":\"greater_than_or_equal\",\"value\":18}]"
+              name: 'Conditions',
+              internalKey: 'conditions',
+              type: 'json',
+              required: true,
+              description: 'Conditions to evaluate. Each condition must include field, operator, and value.',
+              helpText: 'Use field paths such as $json.age with operators equals, not_equals, greater_than, less_than, greater_than_or_equal, less_than_or_equal, contains, or not_contains.',
+              placeholder: '[{"field":"$json.age","operator":"greater_than_or_equal","value":18}]',
+              example: '[{"field":"$json.age","operator":"greater_than_or_equal","value":18}]'
             },
             {
-              "name": "Combine Operation",
-              "internalKey": "combineOperation",
-              "type": "string",
-              "required": false,
-              "description": "How to combine conditions",
-              "helpText": "What this field is: How to combine conditions.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: AND.\nTip: Use {{$json.combineOperation}} when this value comes from an earlier step.",
-              "placeholder": "AND",
-              "example": "AND",
-              "defaultValue": "AND"
+              name: 'Combine Operation',
+              internalKey: 'combineOperation',
+              type: 'select',
+              required: false,
+              description: 'How to combine multiple conditions.',
+              helpText: 'AND requires every condition to pass. OR routes true when any condition passes.',
+              placeholder: 'AND',
+              example: 'AND',
+              defaultValue: 'AND',
+              options: ['AND', 'OR']
             }
           ],
-          "outputExample": {
-            "condition": true,
-            "branch": "true",
-            "value": "premium",
-            "expression": "{{$json.plan}} === \"premium\""
+          outputExample: {
+            condition: true,
+            condition_result: true,
+            conditionResult: true,
+            result: true
           },
-          "outputDescription": "condition: The evaluated boolean result. branch: \"true\" or \"false\" indicating which path was taken. value: The value that was evaluated.",
-          "usageExample": {
-            "scenario": "Route premium users to a VIP welcome email and free users to a trial email",
-            "inputValues": {
-              "condition": "{{$json.plan === \"premium\"}}"
+          outputDescription: 'The node forwards clean upstream business data and adds condition, condition_result, conditionResult, result, and output booleans for routing/debugging.',
+          usageExample: {
+            scenario: 'Route adults down the true branch and minors down the false branch',
+            inputValues: {
+              conditions: [{ field: '$json.age', operator: 'greater_than_or_equal', value: 18 }],
+              combineOperation: 'AND'
             },
-            "expectedOutput": "If `condition` is true, the \"true\" output path runs (connect a Gmail Send node). Otherwise the \"false\" path runs (connect a different email node)."
+            expectedOutput: 'If the condition evaluates true, the true output path runs; otherwise the false output path runs.'
           },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
+          externalDocsUrl: 'https://docs.ctrlchecks.com'
         }
       ]
     }
   ],
-  "commonErrors": [
+  commonErrors: [
     {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
-    },
-    {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
+      error: 'Condition did not match expected data',
+      cause: 'The field path did not exist in the incoming JSON, or the value type did not match the operator.',
+      fix: 'Inspect the previous node output and use a field path such as $json.status or $json.items.length.'
     }
   ],
-  "relatedNodes": []
+  relatedNodes: ['switch', 'merge']
 };

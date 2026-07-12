@@ -193,7 +193,7 @@ export const nodeDocManifest = [
     "slug": "if_else",
     "displayName": "If/Else",
     "category": "Logic",
-    "description": "Conditional branching based on true/false condition Use this node when a workflow needs if/else behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Route execution to the true or false branch by evaluating one or more conditions.",
     "logoUrl": "/icons/nodes/if_else.svg"
   },
   {
@@ -207,7 +207,7 @@ export const nodeDocManifest = [
     "slug": "merge",
     "displayName": "Merge",
     "category": "Logic",
-    "description": "Merge multiple branches of data Use this node when a workflow needs merge behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Combine multiple incoming branches into one output.",
     "logoUrl": "/icons/nodes/merge.svg"
   },
   {
@@ -269,8 +269,8 @@ export const nodeDocManifest = [
   {
     "slug": "parallel",
     "displayName": "Parallel",
-    "category": "Logic",
-    "description": "Runs multiple branches concurrently and waits for all to complete Use this node when a workflow needs parallel behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "Flow",
+    "description": "Pass data through while recording the parallel orchestration mode.",
     "logoUrl": "/icons/nodes/parallel.svg"
   },
   {
@@ -480,14 +480,14 @@ export const nodeDocManifest = [
     "slug": "loop",
     "displayName": "Loop",
     "category": "Logic",
-    "description": "Iterate over array items with max iterations limit Use this node when a workflow needs loop behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Expose an array downstream with max-iteration metadata.",
     "logoUrl": "/icons/nodes/loop.svg"
   },
   {
     "slug": "noop",
     "displayName": "NoOp",
     "category": "Logic",
-    "description": "Pass through node - no operation Use this node when a workflow needs noop behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Pass data through unchanged.",
     "logoUrl": "/icons/nodes/noop.svg"
   },
   {

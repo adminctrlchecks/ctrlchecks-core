@@ -3038,16 +3038,18 @@ export class NodeLibrary {
       category: 'logic',
       description: 'Merge multiple branches of data',
       configSchema: {
-        required: ['mode'],
+        required: [],
         optional: {
           mode: {
             type: 'string',
-            description: 'Merge mode',
-            examples: ['append', 'join', 'passThrough', 'multiples'],
-          },
-          joinBy: {
-            type: 'string',
-            description: 'Field to join on (for join mode)',
+            description: 'Merge mode. overwrite combines object fields with later branches winning, append collects branch outputs into items, and deep_merge recursively merges nested objects.',
+            default: 'overwrite',
+            examples: ['overwrite', 'append', 'deep_merge'],
+            options: [
+              { label: 'Overwrite objects', value: 'overwrite' },
+              { label: 'Append items', value: 'append' },
+              { label: 'Deep merge objects', value: 'deep_merge' },
+            ],
           },
         },
       },
@@ -6954,12 +6956,17 @@ export class NodeLibrary {
       category: 'logic',
       description: 'Iterate over array items with max iterations limit',
       configSchema: {
-        required: ['items'],
+        required: [],
         optional: {
-          items: {
-            type: 'array',
-            description: 'Array to iterate over',
-            examples: ['{{$json.items}}'],
+          array: {
+            type: 'string',
+            description: 'Optional expression or path that resolves to an array. Leave empty to use input.items from the previous node.',
+            examples: ['{{$json.items}}', '{{$json.rows}}'],
+            fillMode: { default: 'manual_static', supportsRuntimeAI: false, supportsBuildtimeAI: true },
+            runtimeContract: {
+              aiGeneratable: true,
+              validation: { format: 'non_empty', allowEmpty: true },
+            },
           },
           maxIterations: {
             type: 'number',

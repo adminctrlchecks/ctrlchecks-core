@@ -285,7 +285,7 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     icon: 'GitBranch',
     description: 'If/Else',
     // Canonical format: conditions[] + combineOperation (validated and executed by backend)
-    defaultConfig: { conditions: [{ expression: '' }], combineOperation: 'AND' },
+    defaultConfig: { conditions: [{ field: '$json.value', operator: 'equals', value: '' }], combineOperation: 'AND' },
     configFields: [
       {
         key: 'conditions',
@@ -316,8 +316,8 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     description: 'Loop items',
     defaultConfig: { maxIterations: 100 },
     configFields: [
-      { key: 'array', label: 'Array Expression', type: 'text', placeholder: '{{input.items}}', required: true, helpText: 'Expression that returns an array to loop through. Use {{input.field}} to reference input data. Examples: {{input.items}}, {{input.users}}, {{input.data}}' },
-      { key: 'maxIterations', label: 'Max Iterations', type: 'number', defaultValue: 100, helpText: 'Maximum number of loop iterations to prevent infinite loops. The loop stops when this limit is reached or when the array is exhausted. Increase for large arrays, but consider performance impact' },
+      { key: 'array', label: 'Array Expression', type: 'text', placeholder: '{{$json.items}}', required: false, helpText: 'Optional expression that returns an array. Leave empty to use input.items from the previous node. Examples: {{$json.items}}, {{$json.rows}}' },
+      { key: 'maxIterations', label: 'Max Iterations', type: 'number', defaultValue: 100, helpText: 'Maximum number of items to expose downstream. If the input array is longer, Loop truncates items and reports loop.truncated.' },
     ],
   },
   {
@@ -326,16 +326,13 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     category: 'logic',
     icon: 'GitMerge',
     description: 'Merge inputs',
-    defaultConfig: { mode: 'merge' },
+    defaultConfig: { mode: 'overwrite' },
     configFields: [
       { key: 'mode', label: 'Mode', type: 'select', options: [
-        { label: 'Merge Objects', value: 'merge' },
-        { label: 'Append to Array', value: 'append' },
-        { label: 'Key-based Merge', value: 'key_based' },
-        { label: 'Wait All', value: 'wait_all' },
-        { label: 'Concatenate Arrays', value: 'concat' },
-      ], defaultValue: 'merge', helpText: 'How to combine inputs: Merge Objects = combine properties, Append to Array = add to array, Key-based Merge = merge by matching key, Wait All = wait for all inputs, Concatenate Arrays = join arrays together' },
-      { key: 'mergeKey', label: 'Merge Key', type: 'text', placeholder: 'id', helpText: 'For key-based merge mode' },
+        { label: 'Overwrite objects', value: 'overwrite' },
+        { label: 'Append items', value: 'append' },
+        { label: 'Deep merge objects', value: 'deep_merge' },
+      ], defaultValue: 'overwrite', helpText: 'How to combine inputs: overwrite combines object fields with later branches winning, append collects branch outputs into items, deep merge recursively combines nested objects.' },
     ],
   },
   {
@@ -570,7 +567,7 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
   {
     type: 'aggregate',
     label: 'Aggregate',
-    category: 'logic',
+    category: 'flow',
     icon: 'Code2',
     description: 'Aggregate data',
     defaultConfig: { operation: 'sum' },
@@ -12982,9 +12979,9 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     category: 'logic',
     icon: 'GitBranch',
     description: 'Run multiple branches simultaneously and merge results.',
-    defaultConfig: { waitForAll: true },
+    defaultConfig: { mode: 'all' },
     configFields: [
-      { key: 'waitForAll', label: 'Wait for All Branches', type: 'boolean', defaultValue: true, helpText: 'When enabled, the node waits for all parallel branches to complete before continuing.' },
+      { key: 'mode', label: 'Mode', type: 'select', options: [{ label: 'Wait for all', value: 'all' }, { label: 'Race (first completes)', value: 'race' }], defaultValue: 'all', helpText: 'Records the orchestration mode. Branch fan-out/fan-in is handled by the workflow engine.' },
     ],
   },
   {
