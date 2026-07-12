@@ -1452,9 +1452,7 @@ export class ConnectorRegistry {
       provider: 'activecampaign',
       service: 'email_marketing',
       capabilities: [
-        'email.campaign',
-        'activecampaign.campaign',
-        'email.automation',
+        'activecampaign.contact',
       ],
       keywords: ['activecampaign', 'active campaign'],
       credentialContract: {
@@ -1466,7 +1464,7 @@ export class ConnectorRegistry {
         credentialFieldName: 'apiKey',
       },
       nodeTypes: ['activecampaign'],
-      description: 'Manage ActiveCampaign email campaigns via API key',
+      description: 'Add, update, or delete ActiveCampaign contacts via API key',
     });
 
     // ============================================

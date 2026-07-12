@@ -9815,7 +9815,7 @@ return {
         'freshdesk': ['resource', 'operation', 'domain', 'apiKey'],
         'intercom': ['resource', 'operation', 'accessToken'],
         'mailchimp': ['listId', 'operation', 'apiKey'],
-        'activecampaign': ['resource', 'operation', 'apiUrl', 'apiKey'],
+        'activecampaign': ['operation', 'apiUrl', 'apiKey', 'contactId', 'email', 'firstName', 'lastName', 'data'],
         
         // Logic
         'if_else': ['conditions', 'combineOperation'],

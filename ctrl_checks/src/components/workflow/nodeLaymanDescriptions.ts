@@ -187,7 +187,7 @@ export const NODE_LAYMAN_DESCRIPTIONS: Record<string, string> = {
   freshdesk:              "Create, update, or search customer support tickets in Freshdesk",
   intercom:               "Sends messages or looks up user conversations in Intercom",
   mailchimp:              "Manages email lists and campaigns in Mailchimp — add subscribers or trigger campaigns",
-  activecampaign:         "Manages contacts, lists, and automations in ActiveCampaign",
+  activecampaign:         "Adds, updates, or deletes a contact in ActiveCampaign",
   crm_lead_router:        "Automatically assigns a new lead to the right salesperson based on rules you set",
   crm_ticket_prioritizer: "Looks at a support ticket and decides how urgent it is",
   crm_sla_monitor:        "Watches your support tickets to make sure they're resolved within your promised time",

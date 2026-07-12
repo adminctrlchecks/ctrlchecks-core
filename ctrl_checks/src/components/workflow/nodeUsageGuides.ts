@@ -5371,30 +5371,29 @@ Output: {
   },
 
   activecampaign: {
-    overview: 'Interact with ActiveCampaign API to manage contacts, campaigns, automations, and deals. Supports email marketing, CRM, and marketing automation. Perfect for marketing automation or ActiveCampaign integration.',
-    inputs: ['apiKey', 'apiUrl', 'resource', 'operation', 'data'],
-    outputs: ['result', 'contacts', 'campaigns'],
-    example: `Resource: contacts
-Operation: create
-Data: {
-  "email": "user@example.com",
-  "firstName": "John",
-  "lastName": "Doe"
-}
+    overview: 'Add, update, or delete a contact in ActiveCampaign via its REST API. Perfect for syncing new leads or customers into an ActiveCampaign marketing automation.',
+    inputs: ['apiUrl', 'apiKey', 'operation', 'contactId', 'email', 'firstName', 'lastName', 'data'],
+    outputs: ['operation', 'data'],
+    example: `Operation: add
+Email: user@example.com
+First Name: John
+Last Name: Doe
 
 Output: {
-  result: {
-    id: "contact_id",
-    email: "user@example.com",
-    firstName: "John"
+  operation: "add",
+  data: {
+    contact: {
+      id: "contact_id",
+      email: "user@example.com",
+      firstName: "John"
+    }
   }
 }`,
     tips: [
       'Get API key from ActiveCampaign Settings → Developer',
-      'API URL from your ActiveCampaign account',
-      'Resources: contacts, campaigns, automations, deals',
-      'Use for marketing automation',
-      'Supports email marketing and CRM',
+      'API URL is your account URL, e.g. https://youraccount.api-us1.com',
+      'Update and Delete require Contact ID',
+      'Data (JSON) overrides Email/First Name/Last Name if both are set',
     ],
   },
 };

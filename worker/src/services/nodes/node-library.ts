@@ -10056,7 +10056,7 @@ export class NodeLibrary {
       type: 'activecampaign',
       label: 'ActiveCampaign',
       category: 'crm',
-      description: 'ActiveCampaign marketing automation',
+      description: 'Add, update, or delete an ActiveCampaign contact',
       configSchema: {
         required: ['operation'],
         optional: {
@@ -10073,27 +10073,27 @@ export class NodeLibrary {
         },
       },
       aiSelectionCriteria: {
-        whenToUse: ['User mentions ActiveCampaign', 'Marketing automation'],
-        whenNotToUse: ['Other marketing platforms'],
+        whenToUse: ['User mentions ActiveCampaign', 'Add, update, or delete an ActiveCampaign contact'],
+        whenNotToUse: ['Other marketing platforms', 'Managing ActiveCampaign campaigns or automations (not supported by this node)'],
         keywords: [
           'activecampaign', 'active campaign', 'activecampaign email',
-          'activecampaign campaign', 'activecampaign contact', 'activecampaign api',
-          'activecampaign integration', 'activecampaign marketing', 'activecampaign automation',
-          'activecampaign send', 'send activecampaign', 'activecampaign workflow'
+          'activecampaign contact', 'activecampaign api',
+          'activecampaign integration', 'activecampaign add contact', 'activecampaign update contact',
+          'activecampaign delete contact', 'sync contact activecampaign'
         ],
-        useCases: ['Marketing automation'],
-        intentDescription: 'ActiveCampaign integration node that performs marketing automation operations in ActiveCampaign. Adds, updates, and deletes contacts, manages marketing campaigns, and automates marketing workflows. Used for marketing automation, email marketing campaigns, and ActiveCampaign-based marketing workflows.',
-        intentCategories: ['marketing_automation', 'activecampaign', 'email_marketing', 'campaign_management', 'crm'],
+        useCases: ['Add a new contact to ActiveCampaign', 'Update an existing ActiveCampaign contact', 'Delete an ActiveCampaign contact'],
+        intentDescription: 'ActiveCampaign contact node that adds, updates, or deletes a contact via the ActiveCampaign REST API. Does not manage campaigns, automations, deals, or tags. Used for syncing leads or customers into ActiveCampaign as contacts.',
+        intentCategories: ['activecampaign', 'contact_management', 'crm'],
       },
       commonPatterns: [],
       validationRules: [],
-      capabilities: ['marketing.automation', 'activecampaign.contact'],
+      capabilities: ['activecampaign.contact'],
       providers: ['activecampaign'],
       keywords: [
         'activecampaign', 'active campaign', 'activecampaign email',
-        'activecampaign campaign', 'activecampaign contact', 'activecampaign api',
-        'activecampaign integration', 'activecampaign marketing', 'activecampaign automation',
-        'activecampaign send', 'send activecampaign', 'activecampaign workflow'
+        'activecampaign contact', 'activecampaign api',
+        'activecampaign integration', 'activecampaign add contact', 'activecampaign update contact',
+        'activecampaign delete contact', 'sync contact activecampaign'
       ],
     };
   }
