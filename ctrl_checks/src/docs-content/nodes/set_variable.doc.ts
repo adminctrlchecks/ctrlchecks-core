@@ -1,100 +1,98 @@
 import type { NodeDoc } from '../types';
 
 export const setVariableDoc: NodeDoc = {
-  "slug": "set_variable",
-  "displayName": "Set Variable",
-  "category": "Data",
-  "logoUrl": "/icons/nodes/set_variable.svg",
-  "description": "Set a variable with a name and value",
-  "credentialType": "None",
-  "credentialSetupSteps": [
-    "This node does not need a saved account connection.",
-    "Open the node settings and fill the visible input fields.",
-    "Run the workflow when the required fields are complete."
+  slug: 'set_variable',
+  displayName: 'Set Variable',
+  category: 'Data',
+  logoUrl: '/icons/nodes/set_variable.svg',
+  description: 'Create one or more named values for later workflow steps.',
+  credentialType: 'None',
+  credentialSetupSteps: [
+    'This node does not need a saved account connection.',
+    'Provide a variable name and value, or use the legacy values array.',
+    'Optionally keep incoming fields in the output.'
   ],
-  "credentialDocsUrl": "https://docs.ctrlchecks.com",
-  "resources": [
+  credentialDocsUrl: 'https://docs.ctrlchecks.com',
+  resources: [
     {
-      "name": "Configuration",
-      "description": "Set Variable is configured directly with input fields.",
-      "operations": [
+      name: 'Configuration',
+      description: 'Set Variable supports a single name/value pair and a legacy values array.',
+      operations: [
         {
-          "name": "Execute",
-          "value": "default",
-          "description": "Store a value in a named variable that can be referenced later in the workflow.",
-          "fields": [
+          name: 'Set',
+          value: 'default',
+          description: 'Resolve the configured value and place it under the configured name.',
+          fields: [
             {
-              "name": "Name",
-              "internalKey": "name",
-              "type": "string",
-              "required": true,
-              "description": "Variable name (must be a valid identifier)",
-              "helpText": "What this field is: Variable name.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: myVariable.\nTip: Use {{$json.name}} when this value comes from an earlier step.",
-              "placeholder": "myVariable",
-              "example": "myVariable"
+              name: 'Name',
+              internalKey: 'name',
+              type: 'string',
+              required: true,
+              description: 'Variable name for the canonical single assignment path.',
+              helpText: 'Use letters, numbers, and underscores. The name must start with a letter or underscore.',
+              placeholder: 'userEmail',
+              example: 'userEmail'
             },
             {
-              "name": "Value",
-              "internalKey": "value",
-              "type": "string",
-              "required": false,
-              "description": "Variable value (supports template expressions like {{input.field}})",
-              "helpText": "What this field is: Variable value.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Hello World.\nTip: Use {{$json.value}} when this value comes from an earlier step.",
-              "placeholder": "Hello World",
-              "example": "Hello World"
+              name: 'Value',
+              internalKey: 'value',
+              type: 'textarea',
+              required: false,
+              description: 'Value to store under name.',
+              helpText: 'Supports static values and template expressions such as {{$json.email}}.',
+              placeholder: '{{$json.email}}',
+              example: '{{$json.email}}'
             },
             {
-              "name": "Values",
-              "internalKey": "values",
-              "type": "json",
-              "required": true,
-              "description": "Array of field assignments (legacy format)",
-              "helpText": "What this field is: Structured data for Array of field assignments.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Set Variable.\nExample: [{\"name\":\"fullName\",\"value\":\"{{$json.firstName}} {{$json.lastName}}\"}].\nTip: Use {{$json.values}} when an earlier step already prepared this data.",
-              "placeholder": "[{\"name\":\"fullName\",\"value\":\"{{$json.firstName}} {{$json.lastName}}\"}]",
-              "example": "[{\"name\":\"fullName\",\"value\":\"{{$json.firstName}} {{$json.lastName}}\"}]"
+              name: 'Values',
+              internalKey: 'values',
+              type: 'json',
+              required: false,
+              description: 'Legacy multi-assignment array of name/value objects.',
+              helpText: 'Use only for older workflows that set several variables in one node.',
+              placeholder: '[{"name":"fullName","value":"{{$json.firstName}} {{$json.lastName}}"}]',
+              example: '[{"name":"fullName","value":"{{$json.firstName}} {{$json.lastName}}"}]'
             },
             {
-              "name": "Keep Source",
-              "internalKey": "keepSource",
-              "type": "boolean",
-              "required": false,
-              "description": "Keep original fields",
-              "helpText": "What this field is: An on/off switch for Keep original fields.\nHow to fill it: Turn ON to enable this option. Turn OFF to leave it disabled.\nExample: Turn ON when this workflow should use keep source; turn OFF for the default behavior.",
-              "placeholder": "false",
-              "example": "false",
-              "defaultValue": "false"
+              name: 'Keep Source',
+              internalKey: 'keepSource',
+              type: 'boolean',
+              required: false,
+              description: 'Keep incoming fields and add variable values to them.',
+              helpText: 'When off, the output contains only the assigned variables.',
+              placeholder: 'false',
+              defaultValue: 'false',
+              example: 'true'
             }
           ],
-          "outputExample": {
-            "variableName": "userEmail",
-            "variableValue": "alice@example.com",
-            "set": true
+          outputExample: {
+            userEmail: 'alice@example.com'
           },
-          "outputDescription": "variableName: The name of the variable that was set. variableValue: The value stored. set: true on success.",
-          "usageExample": {
-            "scenario": "Store the current user's email early in the workflow to use in multiple later nodes",
-            "inputValues": {
-              "name": "userEmail",
-              "value": "{{$json.email}}"
+          outputDescription: 'The output contains the assigned variable fields. With keepSource enabled, incoming fields are kept too.',
+          usageExample: {
+            scenario: 'Store a user email for later steps',
+            inputValues: {
+              name: 'userEmail',
+              value: '{{$json.email}}'
             },
-            "expectedOutput": "Reference this variable later as `{{$variables.userEmail}}`."
+            expectedOutput: 'The value is available downstream as {{$json.userEmail}}.'
           },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
+          externalDocsUrl: 'https://docs.ctrlchecks.com'
         }
       ]
     }
   ],
-  "commonErrors": [
+  commonErrors: [
     {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
+      error: 'Set Variable requires either name or values',
+      cause: 'No single variable name and no legacy values array were provided.',
+      fix: 'Fill name, or provide a non-empty values array.'
     },
     {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
+      error: 'Variable name must be a valid identifier',
+      cause: 'The name contains spaces or starts with an invalid character.',
+      fix: 'Use a name like userEmail or total_count.'
     }
   ],
-  "relatedNodes": []
+  relatedNodes: ['set', 'javascript']
 };

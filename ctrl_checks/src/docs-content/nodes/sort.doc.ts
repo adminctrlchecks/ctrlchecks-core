@@ -1,105 +1,95 @@
 import type { NodeDoc } from '../types';
 
 export const sortDoc: NodeDoc = {
-  "slug": "sort",
-  "displayName": "Sort",
-  "category": "Data",
-  "logoUrl": "/icons/nodes/sort.svg",
-  "description": "Sort arrays",
-  "credentialType": "None",
-  "credentialSetupSteps": [
-    "This node does not need a saved account connection.",
-    "Open the node settings and fill the visible input fields.",
-    "Run the workflow when the required fields are complete."
+  slug: 'sort',
+  displayName: 'Sort',
+  category: 'Data',
+  logoUrl: '/icons/nodes/sort.svg',
+  description: 'Sort the input items array.',
+  credentialType: 'None',
+  credentialSetupSteps: [
+    'This node does not need a saved account connection.',
+    'Choose the field, direction, and comparison type.',
+    'Run the workflow after an upstream node provides items.'
   ],
-  "credentialDocsUrl": "https://docs.ctrlchecks.com",
-  "resources": [
+  credentialDocsUrl: 'https://docs.ctrlchecks.com',
+  resources: [
     {
-      "name": "Configuration",
-      "description": "Sort is configured directly with input fields.",
-      "operations": [
+      name: 'Configuration',
+      description: 'Sort reads input.items and writes the sorted array back to items.',
+      operations: [
         {
-          "name": "Execute",
-          "value": "default",
-          "description": "Sort an array of items by a field in ascending or descending order.",
-          "fields": [
+          name: 'Sort Items',
+          value: 'default',
+          description: 'Sort items by a configured field.',
+          fields: [
             {
-              "name": "Field",
-              "internalKey": "field",
-              "type": "string",
-              "required": false,
-              "description": "Field to sort by",
-              "helpText": "What this field is: Field to sort by.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: name.\nTip: Use {{$json.field}} when this value comes from an earlier step.",
-              "placeholder": "name",
-              "example": "name"
+              name: 'Field',
+              internalKey: 'field',
+              type: 'string',
+              required: false,
+              description: 'Field to sort by.',
+              helpText: 'Leave blank to sort primitive items. Use a field name such as score for object arrays.',
+              placeholder: 'score',
+              example: 'score'
             },
             {
-              "name": "Direction",
-              "internalKey": "direction",
-              "type": "string",
-              "required": false,
-              "description": "Sort direction: asc, desc",
-              "helpText": "What this field is: Sort direction: asc, desc.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: asc.\nTip: Use {{$json.direction}} when this value comes from an earlier step.",
-              "placeholder": "asc",
-              "example": "asc",
-              "defaultValue": "asc"
+              name: 'Direction',
+              internalKey: 'direction',
+              type: 'select',
+              required: false,
+              description: 'Sort direction.',
+              helpText: 'Use asc for low-to-high or desc for high-to-low.',
+              placeholder: 'asc',
+              defaultValue: 'asc',
+              options: ['asc', 'desc'],
+              example: 'desc'
             },
             {
-              "name": "Type",
-              "internalKey": "type",
-              "type": "string",
-              "required": false,
-              "description": "Value type: auto, number, string, date",
-              "helpText": "What this field is: Value type: auto, number, string, date.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: auto.\nTip: Use {{$json.type}} when this value comes from an earlier step.",
-              "placeholder": "auto",
-              "example": "auto",
-              "defaultValue": "auto"
+              name: 'Type',
+              internalKey: 'type',
+              type: 'select',
+              required: false,
+              description: 'Comparison type.',
+              helpText: 'Use auto, number, string, or date.',
+              placeholder: 'auto',
+              defaultValue: 'auto',
+              options: ['auto', 'number', 'string', 'date'],
+              example: 'number'
             }
           ],
-          "outputExample": {
-            "sorted": [
-              {
-                "name": "Alice",
-                "score": 95
-              },
-              {
-                "name": "Bob",
-                "score": 80
-              },
-              {
-                "name": "Carol",
-                "score": 72
-              }
-            ],
-            "field": "score",
-            "direction": "desc"
+          outputExample: {
+            items: [
+              { name: 'Alice', score: 95 },
+              { name: 'Bob', score: 80 }
+            ]
           },
-          "outputDescription": "sorted: The items array after sorting. field: The field used for sorting. direction: \"asc\" or \"desc\".",
-          "usageExample": {
-            "scenario": "Sort a leaderboard by score descending before displaying it",
-            "inputValues": {
-              "items": "{{$json.players}}",
-              "field": "score",
-              "direction": "desc"
+          outputDescription: 'The output keeps incoming fields and replaces items with the sorted items array. If input.items is missing, the input is returned unchanged.',
+          usageExample: {
+            scenario: 'Sort a leaderboard by score descending',
+            inputValues: {
+              field: 'score',
+              direction: 'desc',
+              type: 'number'
             },
-            "expectedOutput": "Top scores first in `{{$json.sorted}}`."
+            expectedOutput: 'Sorted records are available in {{$json.items}}.'
           },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
+          externalDocsUrl: 'https://docs.ctrlchecks.com'
         }
       ]
     }
   ],
-  "commonErrors": [
+  commonErrors: [
     {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
+      error: 'No items to sort',
+      cause: 'The incoming data does not contain an items array.',
+      fix: 'Provide input.items from an upstream list-producing node.'
     },
     {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
+      error: 'Unexpected order',
+      cause: 'The comparison type does not match the field values.',
+      fix: 'Set type to number, string, or date when auto is not enough.'
     }
   ],
-  "relatedNodes": []
+  relatedNodes: ['limit', 'merge_data']
 };

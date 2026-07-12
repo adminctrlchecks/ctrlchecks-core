@@ -181,11 +181,20 @@ export type AiAgentNodeConfig = z.infer<typeof AiAgentNodeConfigSchema>;
 export const SetVariableNodeConfigSchema = BaseNodeConfigSchema.extend({
   name: z.string()
     .min(1, 'Variable name is required')
-    .regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/, 'Variable name must be a valid identifier'),
-  value: z.string()
+    .regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/, 'Variable name must be a valid identifier')
+    .optional(),
+  value: z.unknown()
     .optional()
     .default(''),
-});
+  values: z.array(z.object({
+    name: z.string().min(1, 'Variable assignment name is required'),
+    value: z.unknown().optional(),
+  }).passthrough()).optional(),
+  keepSource: boolStr(z.boolean()).optional().default(false),
+}).refine(
+  (config) => Boolean(config.name) || Boolean(config.values && config.values.length > 0),
+  'Set Variable requires either name or values',
+);
 
 export type SetVariableNodeConfig = z.infer<typeof SetVariableNodeConfigSchema>;
 
@@ -208,18 +217,17 @@ export type LogNodeConfig = z.infer<typeof LogNodeConfigSchema>;
  * Math Node Schema
  */
 export const MathNodeConfigSchema = BaseNodeConfigSchema.extend({
-  operation: z.enum(['add', 'subtract', 'multiply', 'divide', 'power', 'modulo'], {
-    message: 'Operation must be one of: add, subtract, multiply, divide, power, modulo',
+  operation: z.enum(['add', 'subtract', 'multiply', 'divide', 'power', 'modulo', 'sqrt', 'abs', 'round', 'floor', 'ceil', 'min', 'max', 'avg', 'sum'], {
+    message: 'Operation must be one of: add, subtract, multiply, divide, power, modulo, sqrt, abs, round, floor, ceil, min, max, avg, sum',
   }),
-  values: z.array(numStr(z.number()))
-    .min(2, 'At least 2 values are required for math operations')
-    .optional(),
+  value1: z.union([z.string(), z.number(), z.array(numStr(z.number()))]).optional(),
+  value2: z.union([z.string(), z.number()]).optional(),
   precision: numStr(z.number()
     .int('Precision must be an integer')
     .min(0, 'Precision must be at least 0')
-    .max(10, 'Precision cannot exceed 10'))
+    .max(20, 'Precision cannot exceed 20'))
     .optional()
-    .default(2),
+    .default(10),
 });
 
 export type MathNodeConfig = z.infer<typeof MathNodeConfigSchema>;

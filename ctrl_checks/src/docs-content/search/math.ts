@@ -2,107 +2,51 @@ import type { DocsSearchIndexItem } from '../search-index';
 
 export const mathSearchIndex = [
   {
-    "type": "node",
-    "title": "Math",
-    "slug": "math",
-    "category": "Data",
-    "href": "/docs/nodes/math",
-    "text": "Math Mathematical operations and calculations Use this node when a workflow needs math behavior with schema-driven inputs from the CtrlChecks node registry. Data"
+    type: 'node',
+    title: 'Math',
+    slug: 'math',
+    category: 'Data',
+    href: '/docs/nodes/math',
+    text: 'Math Run numeric operations using operation, value1, value2, and precision.'
   },
   {
-    "type": "operation",
-    "title": "Math: Add",
-    "slug": "math",
-    "category": "Data",
-    "href": "/docs/nodes/math#operation-add",
-    "text": "Math Operations Add Add with the Math node using the configured input fields. add"
+    type: 'operation',
+    title: 'Math: Calculate',
+    slug: 'math',
+    category: 'Data',
+    href: '/docs/nodes/math#operation-default',
+    text: 'Operations: add subtract multiply divide modulo power sqrt abs round floor ceil min max avg sum.'
   },
   {
-    "type": "field",
-    "title": "Math: A",
-    "slug": "math",
-    "category": "Data",
-    "href": "/docs/nodes/math#operation-add",
-    "text": "Math Operations Add A a First number"
+    type: 'field',
+    title: 'Math: Operation',
+    slug: 'math',
+    category: 'Data',
+    href: '/docs/nodes/math#operation-default',
+    text: 'operation Math operation to perform'
   },
   {
-    "type": "field",
-    "title": "Math: B",
-    "slug": "math",
-    "category": "Data",
-    "href": "/docs/nodes/math#operation-add",
-    "text": "Math Operations Add B b Second number"
+    type: 'field',
+    title: 'Math: Value 1',
+    slug: 'math',
+    category: 'Data',
+    href: '/docs/nodes/math#operation-default',
+    text: 'value1 First number expression field path or numeric list'
   },
   {
-    "type": "operation",
-    "title": "Math: Subtract",
-    "slug": "math",
-    "category": "Data",
-    "href": "/docs/nodes/math#operation-subtract",
-    "text": "Math Operations Subtract Subtract with the Math node using the configured input fields. subtract"
+    type: 'field',
+    title: 'Math: Value 2',
+    slug: 'math',
+    category: 'Data',
+    href: '/docs/nodes/math#operation-default',
+    text: 'value2 Second number for binary operations'
   },
   {
-    "type": "field",
-    "title": "Math: A",
-    "slug": "math",
-    "category": "Data",
-    "href": "/docs/nodes/math#operation-subtract",
-    "text": "Math Operations Subtract A a First number"
-  },
-  {
-    "type": "field",
-    "title": "Math: B",
-    "slug": "math",
-    "category": "Data",
-    "href": "/docs/nodes/math#operation-subtract",
-    "text": "Math Operations Subtract B b Second number"
-  },
-  {
-    "type": "operation",
-    "title": "Math: Multiply",
-    "slug": "math",
-    "category": "Data",
-    "href": "/docs/nodes/math#operation-multiply",
-    "text": "Math Operations Multiply Multiply with the Math node using the configured input fields. multiply"
-  },
-  {
-    "type": "field",
-    "title": "Math: A",
-    "slug": "math",
-    "category": "Data",
-    "href": "/docs/nodes/math#operation-multiply",
-    "text": "Math Operations Multiply A a First number"
-  },
-  {
-    "type": "field",
-    "title": "Math: B",
-    "slug": "math",
-    "category": "Data",
-    "href": "/docs/nodes/math#operation-multiply",
-    "text": "Math Operations Multiply B b Second number"
-  },
-  {
-    "type": "operation",
-    "title": "Math: Divide",
-    "slug": "math",
-    "category": "Data",
-    "href": "/docs/nodes/math#operation-divide",
-    "text": "Math Operations Divide Divide with the Math node using the configured input fields. divide"
-  },
-  {
-    "type": "field",
-    "title": "Math: A",
-    "slug": "math",
-    "category": "Data",
-    "href": "/docs/nodes/math#operation-divide",
-    "text": "Math Operations Divide A a First number"
-  },
-  {
-    "type": "field",
-    "title": "Math: B",
-    "slug": "math",
-    "category": "Data",
-    "href": "/docs/nodes/math#operation-divide",
-    "text": "Math Operations Divide B b Second number"
+    type: 'field',
+    title: 'Math: Precision',
+    slug: 'math',
+    category: 'Data',
+    href: '/docs/nodes/math#operation-default',
+    text: 'precision Decimal places applied to result'
   }
 ] satisfies DocsSearchIndexItem[];

@@ -1,4 +1,4 @@
-import { XMLParser } from 'fast-xml-parser';
+import { XMLParser, XMLValidator } from 'fast-xml-parser';
 import type { UnifiedNodeDefinition } from '../../types/unified-node-contract';
 import type { NodeSchema } from '../../../services/nodes/node-library';
 import { mergeAuthoritativeInputs } from '../../execution/runtime-input-handoff';
@@ -24,7 +24,7 @@ function readPath(value: any, path: string): any {
 }
 
 export function overrideXml(def: UnifiedNodeDefinition, _schema: NodeSchema): UnifiedNodeDefinition {
-  const operationOptions = ['parse', 'extract'].map((value) => ({
+  const operationOptions = ['parse', 'extract', 'validate'].map((value) => ({
     label: value.charAt(0).toUpperCase() + value.slice(1),
     value,
   }));
@@ -37,13 +37,6 @@ export function overrideXml(def: UnifiedNodeDefinition, _schema: NodeSchema): Un
         ...def.inputSchema.operation,
         ui: { ...(def.inputSchema.operation?.ui || {}), options: operationOptions },
       },
-      path: {
-        type: 'string',
-        description: 'Dot path used by extract after XML is parsed, e.g. root.item.0.name.',
-        required: false,
-        role: 'config',
-        fillMode: { default: 'buildtime_ai_once', supportsRuntimeAI: false, supportsBuildtimeAI: true },
-      },
     },
     execute: async (context) => {
       const inputs = mergeInputs(context);
@@ -52,23 +45,51 @@ export function overrideXml(def: UnifiedNodeDefinition, _schema: NodeSchema): Un
 
       try {
         if (!xml.trim()) throw new Error('xml is required');
+        const maxSize = Number(inputs.maxSize || 5242880);
+        if (Buffer.byteLength(xml) > maxSize) {
+          throw new Error(`input exceeds maxSize (${maxSize} bytes)`);
+        }
+
+        if (operation === 'validate') {
+          const validation = XMLValidator.validate(xml, { allowBooleanAttributes: true });
+          if (validation === true) {
+            return { success: true, output: { ...inputs, valid: true, errors: [] } };
+          }
+          return {
+            success: true,
+            output: {
+              ...inputs,
+              valid: false,
+              errors: [{
+                message: (validation as any)?.err?.msg ?? 'Invalid XML',
+                line: (validation as any)?.err?.line,
+              }],
+            },
+          };
+        }
+
         const parser = new XMLParser({
           ignoreAttributes: false,
           attributeNamePrefix: '@_',
-          textNodeName: '#text',
+          parseAttributeValue: true,
         });
         const parsed = parser.parse(xml);
 
         if (operation === 'parse') {
-          return { success: true, output: { operation, data: parsed } };
+          return { success: true, output: { ...inputs, data: parsed, success: true } };
         }
 
         if (operation === 'extract') {
-          const path = String(inputs.path || '').trim();
-          return { success: true, output: { operation, path, value: readPath(parsed, path) } };
+          const xpath = String(inputs.xpath || inputs.path || '').trim();
+          if (!xpath) {
+            return { success: true, output: { ...inputs, _error: 'XML extract: xpath field is required', data: parsed } };
+          }
+          const parts = xpath.replace(/^\//, '').split('/').filter(Boolean);
+          const result = readPath(parsed, parts.join('.'));
+          return { success: true, output: { ...inputs, result: result ?? null, xpath, data: parsed, success: result != null } };
         }
 
-        throw new Error(`Unsupported XML operation: ${operation}`);
+        throw new Error(`unsupported operation "${operation}". Supported: parse, extract, validate`);
       } catch (error: any) {
         return { success: false, error: { code: 'XML_OPERATION_FAILED', message: error?.message || 'XML operation failed' } };
       }

@@ -13800,7 +13800,10 @@ export async function executeNodeLegacy(
 
     case 'json_parser': {
       // JSON Parser - parse a JSON string into an object (and optionally extract fields)
-      const jsonStr = getStringProperty(config, 'json', '');
+      const jsonStr =
+        getStringProperty(config, 'json', '') ||
+        getStringProperty(config, 'jsonData', '') ||
+        getStringProperty(config, 'data', '');
       if (!jsonStr) {
         return { ...inputObj, _error: 'JSON Parser: json is required' };
       }

@@ -1,73 +1,68 @@
 import type { NodeDoc } from '../types';
 
 export const setDoc: NodeDoc = {
-  "slug": "set",
-  "displayName": "Set",
-  "category": "Data",
-  "logoUrl": "/icons/nodes/set.svg",
-  "description": "Set/override multiple fields on the current item",
-  "credentialType": "None",
-  "credentialSetupSteps": [
-    "This node does not need a saved account connection.",
-    "Open the node settings and fill the visible input fields.",
-    "Run the workflow when the required fields are complete."
+  slug: 'set',
+  displayName: 'Set',
+  category: 'Data',
+  logoUrl: '/icons/nodes/set.svg',
+  description: 'Set or override fields on the current workflow item.',
+  credentialType: 'None',
+  credentialSetupSteps: [
+    'This node does not need a saved account connection.',
+    'Enter a JSON object of fields to add or replace.',
+    'Run the workflow when the fields object is valid.'
   ],
-  "credentialDocsUrl": "https://docs.ctrlchecks.com",
-  "resources": [
+  credentialDocsUrl: 'https://docs.ctrlchecks.com',
+  resources: [
     {
-      "name": "Configuration",
-      "description": "Set is configured directly with input fields.",
-      "operations": [
+      name: 'Configuration',
+      description: 'Set merges resolved fields into the incoming object.',
+      operations: [
         {
-          "name": "Execute",
-          "value": "default",
-          "description": "Execute using the Set node.",
-          "fields": [
+          name: 'Set Fields',
+          value: 'default',
+          description: 'Resolve the fields object and merge it onto the current item.',
+          fields: [
             {
-              "name": "Fields",
-              "internalKey": "fields",
-              "type": "string",
-              "required": true,
-              "description": "JSON object of fields to set (supports template strings)",
-              "helpText": "What this field is: Structured data for structured data in { } brackets object of fields to set.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Set.\nExample: {\"status\":\"new\",\"email\":\"{{$json.email}}\"}.\nTip: Use {{$json.fields}} when an earlier step already prepared this data.",
-              "placeholder": "{\"status\":\"new\",\"email\":\"{{$json.email}}\"}",
-              "example": "{\"status\":\"new\",\"email\":\"{{$json.email}}\"}"
+              name: 'Fields',
+              internalKey: 'fields',
+              type: 'json',
+              required: true,
+              description: 'JSON object of fields to set.',
+              helpText: 'Use an object such as {"status":"new","email":"{{$json.email}}"}. Template strings are resolved at runtime.',
+              placeholder: '{"status":"new","email":"{{$json.email}}"}',
+              example: '{"status":"new","email":"{{$json.email}}"}'
             }
           ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
+          outputExample: {
+            id: '123',
+            email: 'alice@example.com',
+            status: 'new'
           },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming Set data with execute after a related upstream event is received",
-            "inputValues": {
-              "Fields": "{\"status\":\"new\",\"email\":\"{{$json.email}}\"}"
+          outputDescription: 'The output keeps incoming fields and applies the configured fields on top.',
+          usageExample: {
+            scenario: 'Add a normalized status field',
+            inputValues: {
+              fields: '{"status":"new"}'
             },
-            "expectedOutput": "Set returns structured execute data that downstream nodes can reference with {{$json.fieldName}}."
+            expectedOutput: 'The current item now includes {{$json.status}}.'
           },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
+          externalDocsUrl: 'https://docs.ctrlchecks.com'
         }
       ]
     }
   ],
-  "commonErrors": [
+  commonErrors: [
     {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
+      error: 'Set: fields must be valid JSON object',
+      cause: 'The fields value is empty, invalid JSON, or not an object.',
+      fix: 'Provide a valid JSON object.'
     },
     {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
+      error: 'Missing upstream value',
+      cause: 'A template expression inside fields points to a missing input field.',
+      fix: 'Check the upstream output and update the expression path.'
     }
   ],
-  "relatedNodes": []
+  relatedNodes: ['set_variable', 'rename_keys']
 };

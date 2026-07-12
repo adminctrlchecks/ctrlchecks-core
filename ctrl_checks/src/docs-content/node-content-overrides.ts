@@ -1115,38 +1115,32 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
 
   set_variable: {
     default: {
-      description: 'Store a value in a named variable that can be referenced later in the workflow.',
-      outputExample: { variableName: 'userEmail', variableValue: 'alice@example.com', set: true },
-      outputDescription: 'variableName: The name of the variable that was set. variableValue: The value stored. set: true on success.',
-      usageExample: { scenario: 'Store the current user\'s email early in the workflow to use in multiple later nodes', inputValues: { name: 'userEmail', value: '{{$json.email}}' }, expectedOutput: 'Reference this variable later as `{{$variables.userEmail}}`.' },
+      description: 'Create one or more named output values for later workflow steps.',
+      outputExample: { userEmail: 'alice@example.com' },
+      outputDescription: 'The output contains the assigned variable fields. With keepSource enabled, incoming fields are kept too.',
+      usageExample: { scenario: 'Store the current user\'s email early in the workflow to use in later nodes', inputValues: { name: 'userEmail', value: '{{$json.email}}' }, expectedOutput: 'Reference this value later as `{{$json.userEmail}}`.' },
     },
   },
 
   javascript: {
     default: {
-      description: 'Execute custom JavaScript code to transform data or perform calculations.',
-      outputExample: { result: { totalRevenue: 12450, averageOrderValue: 207.5, orderCount: 60 }, executionMs: 3 },
-      outputDescription: 'result: Whatever your script returns. executionMs: How long the script took to run.',
+      description: 'Execute sandboxed JavaScript code to transform data or perform calculations.',
+      outputExample: { totalRevenue: 12450, averageOrderValue: 207.5, orderCount: 60 },
+      outputDescription: 'The node output is whatever the script returns. Errors are returned in _error.',
       usageExample: {
         scenario: 'Calculate revenue statistics from an array of orders',
         inputValues: { code: 'const orders = $json.orders;\nconst total = orders.reduce((sum, o) => sum + o.amount, 0);\nreturn { totalRevenue: total, averageOrderValue: total / orders.length, orderCount: orders.length };' },
-        expectedOutput: '`{{$json.result.totalRevenue}}` holds the computed total. Use in downstream email or Slack notifications.',
+        expectedOutput: '`{{$json.totalRevenue}}` holds the computed total. Use in downstream email or Slack notifications.',
       },
     },
   },
 
   json_parser: {
-    parse: {
-      description: 'Parse a JSON string into a JavaScript object.',
-      outputExample: { parsed: { userId: 123, email: 'alice@example.com', plan: 'premium' }, success: true },
-      outputDescription: 'parsed: The parsed JavaScript object. success: true if parsing succeeded.',
-      usageExample: { scenario: 'Parse a JSON payload received from a webhook', inputValues: { jsonString: '{{$json.rawBody}}' }, expectedOutput: 'Access parsed fields via `{{$json.parsed.email}}`.' },
-    },
-    stringify: {
-      description: 'Convert a JavaScript object to a JSON string.',
-      outputExample: { result: '{"userId":123,"email":"alice@example.com"}', success: true },
-      outputDescription: 'result: The JSON string. success: true on success.',
-      usageExample: { scenario: 'Serialize an object to a JSON string for an HTTP request body', inputValues: { data: '{"name": "{{$json.name}}", "email": "{{$json.email}}"}' }, expectedOutput: 'Use `{{$json.result}}` as the request body string.' },
+    default: {
+      description: 'Parse a JSON string into workflow data and optionally copy top-level fields.',
+      outputExample: { parsed: { userId: 123, email: 'alice@example.com', plan: 'premium' }, email: 'alice@example.com' },
+      outputDescription: 'parsed: The parsed object. extractFields copies requested top-level keys onto the output.',
+      usageExample: { scenario: 'Parse a JSON payload received from a webhook', inputValues: { json: '{{$json.rawBody}}', extractFields: '["email"]' }, expectedOutput: 'Access the parsed object via `{{$json.parsed}}` and copied fields via `{{$json.email}}`.' },
     },
   },
 
@@ -1197,19 +1191,19 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
 
   text_formatter: {
     default: {
-      description: 'Transform text using operations like uppercase, trim, replace, slug, etc.',
-      outputExample: { result: 'hello-world-welcome-to-ctrlchecks', operation: 'slug', original: 'Hello World! Welcome to CtrlChecks' },
-      outputDescription: 'result: The transformed text. operation: The transformation applied. original: The input text.',
-      usageExample: { scenario: 'Create a URL-safe slug from a blog post title', inputValues: { text: '{{$json.title}}', operation: 'slug' }, expectedOutput: 'URL-friendly slug in `{{$json.result}}`.' },
+      description: 'Render text from a template and current workflow data.',
+      outputExample: { formatted: 'Order #12345 - Total: 49.99' },
+      outputDescription: 'When a template is provided, the node returns the formatted string. If the template is empty, it returns input data plus formatted.',
+      usageExample: { scenario: 'Create a notification message from order data', inputValues: { template: 'Order #{{$json.orderId}} - Total: {{$json.total}}' }, expectedOutput: 'Formatted text is available as the node output.' },
     },
   },
 
   math: {
     default: {
-      description: 'Perform mathematical calculations on numbers.',
-      outputExample: { result: 127.5, expression: '(100 + 50) * 0.85', inputs: { a: 150, b: 0.85 } },
-      outputDescription: 'result: The computed result. expression: The math expression that was evaluated.',
-      usageExample: { scenario: 'Calculate the discounted price of a product', inputValues: { expression: '{{$json.price}} * (1 - {{$json.discountRate}})' }, expectedOutput: 'Discounted price in `{{$json.result}}`.' },
+      description: 'Perform math using operation, value1, value2, and precision.',
+      outputExample: { result: 15, operation: 'sum' },
+      outputDescription: 'result: The computed result. operation: The operation used.',
+      usageExample: { scenario: 'Sum a list of invoice amounts', inputValues: { operation: 'sum', value1: '{{$json.amounts}}' }, expectedOutput: 'The numeric total is available as `{{$json.result}}`.' },
     },
   },
 
@@ -1233,19 +1227,19 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
 
   sort: {
     default: {
-      description: 'Sort an array of items by a field in ascending or descending order.',
-      outputExample: { sorted: [{ name: 'Alice', score: 95 }, { name: 'Bob', score: 80 }, { name: 'Carol', score: 72 }], field: 'score', direction: 'desc' },
-      outputDescription: 'sorted: The items array after sorting. field: The field used for sorting. direction: "asc" or "desc".',
-      usageExample: { scenario: 'Sort a leaderboard by score descending before displaying it', inputValues: { items: '{{$json.players}}', field: 'score', direction: 'desc' }, expectedOutput: 'Top scores first in `{{$json.sorted}}`.' },
+      description: 'Sort input.items by a field in ascending or descending order.',
+      outputExample: { items: [{ name: 'Alice', score: 95 }, { name: 'Bob', score: 80 }, { name: 'Carol', score: 72 }] },
+      outputDescription: 'items: The sorted input.items array. If input.items is missing, input is returned unchanged.',
+      usageExample: { scenario: 'Sort a leaderboard by score descending before displaying it', inputValues: { field: 'score', direction: 'desc', type: 'number' }, expectedOutput: 'Top scores first in `{{$json.items}}`.' },
     },
   },
 
   limit: {
     default: {
       description: 'Take only the first N items from an array.',
-      outputExample: { items: [{ id: 1 }, { id: 2 }, { id: 3 }], total: 10, returned: 3 },
-      outputDescription: 'items: The truncated array. total: Original array length. returned: Number of items after limiting.',
-      usageExample: { scenario: 'Take only the top 5 results from a large dataset', inputValues: { items: '{{$json.results}}', limit: '5' }, expectedOutput: 'First 5 items in `{{$json.items}}`.' },
+      outputExample: { items: [{ id: 1 }, { id: 2 }, { id: 3 }], array: [{ id: 1 }, { id: 2 }, { id: 3 }] },
+      outputDescription: 'items and array contain the truncated array.',
+      usageExample: { scenario: 'Take only the top 5 results from a large dataset', inputValues: { array: '{{$json.results}}', limit: '5' }, expectedOutput: 'First 5 items in `{{$json.items}}`.' },
     },
   },
 
@@ -1286,17 +1280,11 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
   },
 
   xml: {
-    parse: {
-      description: 'Parse an XML string into a JavaScript object.',
-      outputExample: { root: { order: { id: '123', customer: 'Alice', items: [{ sku: 'PROD001', qty: '2' }] } } },
-      outputDescription: 'Parsed JavaScript object. Attributes and text nodes are available as nested properties.',
-      usageExample: { scenario: 'Parse an XML response from a legacy SOAP API', inputValues: { xml: '{{$json.responseBody}}' }, expectedOutput: 'Access parsed fields via `{{$json.root.order.id}}`.' },
-    },
-    generate: {
-      description: 'Convert a JavaScript object to an XML string.',
-      outputExample: { xml: '<?xml version="1.0"?><order><id>123</id><customer>Alice</customer></order>' },
-      outputDescription: 'xml: The generated XML string.',
-      usageExample: { scenario: 'Build an XML payload for a SOAP API request', inputValues: { data: '{"order": {"id": "{{$json.orderId}}", "customer": "{{$json.name}}"}}' }, expectedOutput: 'Use `{{$json.xml}}` as the request body.' },
+    default: {
+      description: 'Parse, extract from, or validate XML content.',
+      outputExample: { data: { root: { order: { id: '123', customer: 'Alice' } } }, success: true },
+      outputDescription: 'Parse returns data/success. Extract returns result/xpath/data/success. Validate returns valid/errors.',
+      usageExample: { scenario: 'Extract an order id from a legacy SOAP response', inputValues: { operation: 'extract', xml: '{{$json.responseBody}}', xpath: '/root/order/id' }, expectedOutput: 'The extracted value is available as `{{$json.result}}`.' },
     },
   },
 

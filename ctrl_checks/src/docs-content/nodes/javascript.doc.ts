@@ -1,71 +1,88 @@
 import type { NodeDoc } from '../types';
 
 export const javascriptDoc: NodeDoc = {
-  "slug": "javascript",
-  "displayName": "JavaScript",
-  "category": "Data",
-  "logoUrl": "/icons/nodes/javascript.svg",
-  "description": "Execute custom JavaScript code",
-  "credentialType": "None",
-  "credentialSetupSteps": [
-    "This node does not need a saved account connection.",
-    "Open the node settings and fill the visible input fields.",
-    "Run the workflow when the required fields are complete."
+  slug: 'javascript',
+  displayName: 'JavaScript',
+  category: 'Data',
+  logoUrl: '/icons/nodes/javascript.svg',
+  description: 'Execute sandboxed JavaScript to transform workflow data.',
+  credentialType: 'None',
+  credentialSetupSteps: [
+    'This node does not need a saved account connection.',
+    'Enter JavaScript that returns the value you want downstream nodes to receive.',
+    'Optionally set a timeout or output schema hint.'
   ],
-  "credentialDocsUrl": "https://docs.ctrlchecks.com",
-  "resources": [
+  credentialDocsUrl: 'https://docs.ctrlchecks.com',
+  resources: [
     {
-      "name": "Configuration",
-      "description": "JavaScript is configured directly with input fields.",
-      "operations": [
+      name: 'Configuration',
+      description: 'JavaScript runs code against the current node input.',
+      operations: [
         {
-          "name": "Execute",
-          "value": "default",
-          "description": "Execute custom JavaScript code to transform data or perform calculations.",
-          "fields": [
+          name: 'Execute',
+          value: 'default',
+          description: 'Run JavaScript and return the script result directly.',
+          fields: [
             {
-              "name": "Code",
-              "internalKey": "code",
-              "type": "string",
-              "required": true,
-              "description": "JavaScript code to execute",
-              "helpText": "What this field is: JavaScript code to execute.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: return { ...$json, fullName: $json.firstName + \" \" + $json.lastName };.\nTip: Use {{$json.code}} when this value comes from an earlier step.",
-              "placeholder": "return { ...$json, fullName: $json.firstName + \" \" + $json.lastName };",
-              "example": "return { ...$json, fullName: $json.firstName + \" \" + $json.lastName };"
+              name: 'Code',
+              internalKey: 'code',
+              type: 'textarea',
+              required: true,
+              description: 'JavaScript code to execute.',
+              helpText: 'Return the object, array, string, or number that downstream nodes should receive. The runtime resolves template expressions before execution.',
+              placeholder: 'return { ...$json, fullName: $json.firstName + " " + $json.lastName };',
+              example: 'return { total: $json.items.reduce((sum, item) => sum + item.amount, 0) };'
+            },
+            {
+              name: 'Timeout',
+              internalKey: 'timeout',
+              type: 'number',
+              required: false,
+              description: 'Execution timeout in milliseconds, capped by the runtime at 30000.',
+              helpText: 'The default is 5000 milliseconds. Values above 30000 are capped.',
+              placeholder: '5000',
+              defaultValue: '5000',
+              example: '10000'
+            },
+            {
+              name: 'Output Schema',
+              internalKey: 'outputSchema',
+              type: 'textarea',
+              required: false,
+              description: 'Optional JSON schema string used as a top-level output shape hint.',
+              helpText: 'The runtime can warn when the returned value does not match the declared top-level type.',
+              placeholder: '{"type":"object"}',
+              example: '{"type":"array"}'
             }
           ],
-          "outputExample": {
-            "result": {
-              "totalRevenue": 12450,
-              "averageOrderValue": 207.5,
-              "orderCount": 60
-            },
-            "executionMs": 3
+          outputExample: {
+            totalRevenue: 12450,
+            orderCount: 60
           },
-          "outputDescription": "result: Whatever your script returns. executionMs: How long the script took to run.",
-          "usageExample": {
-            "scenario": "Calculate revenue statistics from an array of orders",
-            "inputValues": {
-              "code": "const orders = $json.orders;\nconst total = orders.reduce((sum, o) => sum + o.amount, 0);\nreturn { totalRevenue: total, averageOrderValue: total / orders.length, orderCount: orders.length };"
+          outputDescription: 'The node output is whatever the script returns. Errors are returned in _error.',
+          usageExample: {
+            scenario: 'Calculate revenue statistics from an array of orders',
+            inputValues: {
+              code: 'const orders = $json.orders; return { totalRevenue: orders.reduce((sum, o) => sum + o.amount, 0), orderCount: orders.length };'
             },
-            "expectedOutput": "`{{$json.result.totalRevenue}}` holds the computed total. Use in downstream email or Slack notifications."
+            expectedOutput: 'The returned object becomes the downstream {{$json}}.'
           },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
+          externalDocsUrl: 'https://docs.ctrlchecks.com'
         }
       ]
     }
   ],
-  "commonErrors": [
+  commonErrors: [
     {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
+      error: 'JavaScript node disabled',
+      cause: 'The worker was configured with DISABLE_JAVASCRIPT_NODE.',
+      fix: 'Use a built-in transformation node or ask an administrator to enable JavaScript execution.'
     },
     {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
+      error: 'Script error or timeout',
+      cause: 'The code threw an exception or exceeded the configured timeout.',
+      fix: 'Check the code path, input data, and timeout value.'
     }
   ],
-  "relatedNodes": []
+  relatedNodes: ['set', 'math']
 };

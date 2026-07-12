@@ -151,14 +151,14 @@ export const nodeDocManifest = [
     "slug": "set_variable",
     "displayName": "Set Variable",
     "category": "Data",
-    "description": "Set a variable with a name and value Use this node when a workflow needs set variable behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Create one or more named output values for later workflow steps.",
     "logoUrl": "/icons/nodes/set_variable.svg"
   },
   {
     "slug": "javascript",
     "displayName": "JavaScript",
     "category": "Data",
-    "description": "Execute custom JavaScript code Use this node when a workflow needs javascript behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Execute sandboxed JavaScript to transform workflow data.",
     "logoUrl": "/icons/nodes/javascript.svg"
   },
   {
@@ -186,7 +186,7 @@ export const nodeDocManifest = [
     "slug": "text_formatter",
     "displayName": "Text Formatter",
     "category": "Data",
-    "description": "Format text strings with templates and placeholders Use this node when a workflow needs text formatter behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Render text from a template and current workflow data.",
     "logoUrl": "/icons/nodes/text_formatter.svg"
   },
   {
@@ -438,14 +438,14 @@ export const nodeDocManifest = [
     "slug": "json_parser",
     "displayName": "JSON Parser",
     "category": "Data",
-    "description": "Parse JSON strings into objects and extract specific fields Use this node when a workflow needs json parser behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Parse a JSON string into workflow data.",
     "logoUrl": "/icons/nodes/json_parser.svg"
   },
   {
     "slug": "merge_data",
     "displayName": "Merge Data",
     "category": "Data",
-    "description": "Merge data structures from multiple sources Use this node when a workflow needs merge data behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Combine data arriving from multiple workflow branches.",
     "logoUrl": "/icons/nodes/merge_data.svg"
   },
   {
@@ -494,7 +494,7 @@ export const nodeDocManifest = [
     "slug": "set",
     "displayName": "Set",
     "category": "Data",
-    "description": "Set/override multiple fields on the current item Use this node when a workflow needs set behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Set or override fields on the current workflow item.",
     "logoUrl": "/icons/nodes/set.svg"
   },
   {
@@ -515,7 +515,7 @@ export const nodeDocManifest = [
     "slug": "math",
     "displayName": "Math",
     "category": "Data",
-    "description": "Mathematical operations and calculations Use this node when a workflow needs math behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Run numeric operations on values from the current workflow item.",
     "logoUrl": "/icons/nodes/math.svg"
   },
   {
@@ -529,7 +529,7 @@ export const nodeDocManifest = [
     "slug": "xml",
     "displayName": "XML",
     "category": "Data",
-    "description": "Parse and manipulate XML content Use this node when a workflow needs xml behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Parse, extract from, or validate XML content.",
     "logoUrl": "/icons/nodes/xml.svg"
   },
   {
@@ -543,7 +543,7 @@ export const nodeDocManifest = [
     "slug": "rename_keys",
     "displayName": "Rename Keys",
     "category": "Data",
-    "description": "Rename object keys Use this node when a workflow needs rename keys behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Rename fields on the current workflow item.",
     "logoUrl": "/icons/nodes/rename_keys.svg"
   },
   {
@@ -557,14 +557,14 @@ export const nodeDocManifest = [
     "slug": "sort",
     "displayName": "Sort",
     "category": "Data",
-    "description": "Sort arrays Use this node when a workflow needs sort behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Sort the input items array.",
     "logoUrl": "/icons/nodes/sort.svg"
   },
   {
     "slug": "limit",
     "displayName": "Limit",
     "category": "Data",
-    "description": "Limit array size Use this node when a workflow needs limit behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Keep only the first N items from an array.",
     "logoUrl": "/icons/nodes/limit.svg"
   },
   {

@@ -536,7 +536,9 @@
       "code"
     ],
     "optionalConfig": [
-      "code"
+      "code",
+      "timeout",
+      "outputSchema"
     ],
     "credentialType": null,
     "capabilities": []
@@ -630,8 +632,7 @@
       "template"
     ],
     "optionalConfig": [
-      "template",
-      "values"
+      "template"
     ],
     "credentialType": null,
     "capabilities": []
@@ -1542,12 +1543,9 @@
       "data",
       "result"
     ],
-    "requiredConfig": [
-      "mode"
-    ],
+    "requiredConfig": [],
     "optionalConfig": [
-      "mode",
-      "joinBy"
+      "mode"
     ],
     "credentialType": null,
     "capabilities": []
@@ -1745,7 +1743,8 @@
     "optionalConfig": [
       "operation",
       "value1",
-      "value2"
+      "value2",
+      "precision"
     ],
     "credentialType": null,
     "capabilities": []
@@ -1790,7 +1789,9 @@
     ],
     "optionalConfig": [
       "xml",
-      "operation"
+      "operation",
+      "xpath",
+      "maxSize"
     ],
     "credentialType": null,
     "capabilities": []

@@ -1,73 +1,67 @@
 import type { NodeDoc } from '../types';
 
 export const renameKeysDoc: NodeDoc = {
-  "slug": "rename_keys",
-  "displayName": "Rename Keys",
-  "category": "Data",
-  "logoUrl": "/icons/nodes/rename_keys.svg",
-  "description": "Rename object keys",
-  "credentialType": "None",
-  "credentialSetupSteps": [
-    "This node does not need a saved account connection.",
-    "Open the node settings and fill the visible input fields.",
-    "Run the workflow when the required fields are complete."
+  slug: 'rename_keys',
+  displayName: 'Rename Keys',
+  category: 'Data',
+  logoUrl: '/icons/nodes/rename_keys.svg',
+  description: 'Rename fields on the current workflow item.',
+  credentialType: 'None',
+  credentialSetupSteps: [
+    'This node does not need a saved account connection.',
+    'Provide key mappings from old field name to new field name.',
+    'Run the workflow when mappings are complete.'
   ],
-  "credentialDocsUrl": "https://docs.ctrlchecks.com",
-  "resources": [
+  credentialDocsUrl: 'https://docs.ctrlchecks.com',
+  resources: [
     {
-      "name": "Configuration",
-      "description": "Rename Keys is configured directly with input fields.",
-      "operations": [
+      name: 'Configuration',
+      description: 'Rename Keys copies values to new names and removes the old keys.',
+      operations: [
         {
-          "name": "Execute",
-          "value": "default",
-          "description": "Execute using the Rename Keys node.",
-          "fields": [
+          name: 'Rename',
+          value: 'default',
+          description: 'Rename current item keys according to the mappings object.',
+          fields: [
             {
-              "name": "Mappings",
-              "internalKey": "mappings",
-              "type": "json",
-              "required": true,
-              "description": "Key mappings: { oldKey: \"newKey\" }",
-              "helpText": "What this field is: Structured data for Key mappings: { oldKey: \"newKey\" }.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Rename Keys.\nExample: {\"oldName\":\"newName\",\"oldEmail\":\"newEmail\"}.\nTip: Use {{$json.mappings}} when an earlier step already prepared this data.",
-              "placeholder": "{\"oldName\":\"newName\",\"oldEmail\":\"newEmail\"}",
-              "example": "{\"oldName\":\"newName\",\"oldEmail\":\"newEmail\"}"
+              name: 'Mappings',
+              internalKey: 'mappings',
+              type: 'json',
+              required: true,
+              description: 'Key mappings in the form {"oldKey":"newKey"}.',
+              helpText: 'Use an object where each key is the current field name and each value is the new field name.',
+              placeholder: '{"oldName":"name","oldEmail":"email"}',
+              example: '{"oldName":"name","oldEmail":"email"}'
             }
           ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
+          outputExample: {
+            name: 'Alice',
+            email: 'alice@example.com'
           },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming Rename Keys data with execute after a related upstream event is received",
-            "inputValues": {
-              "Mappings": "{\"oldName\":\"newName\",\"oldEmail\":\"newEmail\"}"
+          outputDescription: 'The output keeps unmapped fields, adds renamed fields, and deletes old keys that were renamed.',
+          usageExample: {
+            scenario: 'Normalize API field names before loading data into another system',
+            inputValues: {
+              mappings: '{"oldEmail":"email"}'
             },
-            "expectedOutput": "Rename Keys returns structured execute data that downstream nodes can reference with {{$json.fieldName}}."
+            expectedOutput: 'The value from oldEmail is available as {{$json.email}} and oldEmail is removed.'
           },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
+          externalDocsUrl: 'https://docs.ctrlchecks.com'
         }
       ]
     }
   ],
-  "commonErrors": [
+  commonErrors: [
     {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
+      error: 'Rename Keys: mappings must be object',
+      cause: 'Mappings were empty or not a valid object.',
+      fix: 'Provide an object such as {"oldName":"newName"}.'
     },
     {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
+      error: 'No key changed',
+      cause: 'The mapped source key was not present in the incoming item.',
+      fix: 'Check the upstream output and mapping source keys.'
     }
   ],
-  "relatedNodes": []
+  relatedNodes: ['set', 'json_parser']
 };

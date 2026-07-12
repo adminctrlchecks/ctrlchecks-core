@@ -677,10 +677,10 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     category: 'data',
     icon: 'Braces',
     description: 'JSON parser',
-    defaultConfig: { json: '', expression: '' },
+    defaultConfig: { json: '', extractFields: [] },
     configFields: [
-      { key: 'json', label: 'JSON Content', type: 'textarea', placeholder: '{"data":{"items":[1,2,3]}}', helpText: 'JSON string or template expression to parse. Supports {{$json.someField}}.' },
-      { key: 'expression', label: 'JSONPath Expression', type: 'text', placeholder: '$.data.items[*]', helpText: 'JSONPath expression to extract data from JSON. Examples: $.data.items[*] (all items), $.users[0].name (first user name), $..price (all prices recursively). Use JSONPath syntax to navigate nested JSON structures' },
+      { key: 'json', label: 'JSON Content', type: 'textarea', placeholder: '{"data":{"items":[1,2,3]}}', required: true, helpText: 'JSON string or template expression to parse. Supports {{$json.someField}}.' },
+      { key: 'extractFields', label: 'Extract Fields', type: 'json', placeholder: '["name","email"]', helpText: 'Optional array of top-level field names to copy from the parsed object onto the output.' },
     ],
   },
   {
@@ -689,9 +689,10 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     category: 'data',
     icon: 'ListChecks',
     description: 'Limit items',
-    defaultConfig: { limit: 10 },
+    defaultConfig: { limit: 10, array: '' },
     configFields: [
       { key: 'limit', label: 'Limit', type: 'number', defaultValue: 10, required: true, helpText: 'Maximum number of items to return' },
+      { key: 'array', label: 'Array', type: 'text', placeholder: '{{$json.items}}', helpText: 'Optional array or template expression to limit. If empty, the node uses input.items, then input.array.' },
     ],
   },
   {
@@ -700,13 +701,13 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     category: 'data',
     icon: 'Combine',
     description: 'Merge data',
-    defaultConfig: { mode: 'merge' },
+    defaultConfig: { mode: 'overwrite' },
     configFields: [
       { key: 'mode', label: 'Mode', type: 'select', options: [
-        { label: 'Merge Objects', value: 'merge' },
-        { label: 'Append to Array', value: 'append' },
-        { label: 'Concatenate Arrays', value: 'concat' },
-      ], defaultValue: 'merge', helpText: 'How to combine data: Merge Objects = combine object properties, Append to Array = add input to array, Concatenate Arrays = join arrays together' },
+        { label: 'Overwrite Fields', value: 'overwrite' },
+        { label: 'Append Items', value: 'append' },
+        { label: 'Deep Merge Objects', value: 'deep_merge' },
+      ], defaultValue: 'overwrite', helpText: 'How to combine incoming branch data: Overwrite Fields = later fields replace earlier fields, Append Items = combine inputs into items, Deep Merge Objects = recursively merge nested objects.' },
     ],
   },
   {
@@ -740,7 +741,9 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     defaultConfig: {},
     configFields: [
       { key: 'name', label: 'Variable Name', type: 'text', placeholder: 'myVariable', required: true, helpText: 'Name of the variable to store. Use alphanumeric characters and underscores. Variable names are case-sensitive. Examples: myVariable, user_count, totalPrice' },
-      { key: 'value', label: 'Value', type: 'textarea', placeholder: '{{input.data}}', required: true, helpText: 'Value to store in the variable. Supports template expressions like {{input.data}} or static values. The variable can be accessed in subsequent nodes using {{variableName}}' },
+      { key: 'value', label: 'Value', type: 'textarea', placeholder: '{{input.data}}', helpText: 'Value to store in the variable. Supports template expressions like {{input.data}} or static values. The variable can be accessed in subsequent nodes using {{variableName}}' },
+      { key: 'values', label: 'Values', type: 'variableList', helpText: 'Legacy multi-assignment format. Each row has a name and value. Prefer Name/Value for a single variable.' },
+      { key: 'keepSource', label: 'Keep Source', type: 'boolean', defaultValue: false, helpText: 'When on, the output keeps incoming fields and adds the variable value.' },
     ],
   },
   {
@@ -4090,17 +4093,16 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     category: 'utility',
     icon: 'FileText',
     description: 'XML parser',
-    defaultConfig: { operation: 'parse', safeMode: true },
+    defaultConfig: { operation: 'parse', maxSize: 5242880 },
     configFields: [
       { key: 'operation', label: 'Operation', type: 'select', options: [
         { label: 'Parse', value: 'parse' },
         { label: 'Extract', value: 'extract' },
         { label: 'Validate', value: 'validate' },
       ], defaultValue: 'parse', helpText: 'XML operation: Parse = parse XML to JSON object, Extract = extract data using XPath expression (requires XPath), Validate = validate XML structure and syntax. Choose based on what you need: Parse for conversion, Extract for specific data, Validate for checking XML validity' },
-      { key: 'xml', label: 'XML Content', type: 'textarea', placeholder: '<root><item>value</item></root>', helpText: 'Leave empty to use input from previous node. XML content to process. Can be full XML document or XML fragment. Supports template variables like {{input.xml}}. Examples: Full XML document, XML snippet, {{input.data}}' },
-      { key: 'xpath', label: 'XPath Expression', type: 'text', placeholder: '/root/item', helpText: 'For extract operation. XPath expression to query XML. XPath navigates XML structure. Examples: /root/item (all item elements under root), /root/item[1] (first item), /root/item[@id="1"] (item with id=1), //item (all items anywhere), /root/item/text() (text content of items). Use XPath syntax to extract specific data' },
-      { key: 'safeMode', label: 'Safe Mode', type: 'boolean', defaultValue: true, helpText: 'Enable XXE (XML External Entity) protection and entity expansion limits. Prevents XXE attacks and DoS via entity expansion. Default: true. Keep enabled for security. Only disable if you fully trust the XML source and understand the risks' },
-      { key: 'maxSize', label: 'Max Size (bytes)', type: 'number', defaultValue: 10485760, helpText: 'Maximum XML size to process in bytes. Default: 10485760 (10 MB). XML larger than this will be rejected to prevent memory issues and DoS attacks. Increase for large documents, decrease for stricter limits. Examples: 1048576 = 1 MB, 10485760 = 10 MB (default)' },
+      { key: 'xml', label: 'XML Content', type: 'textarea', placeholder: '<root><item>value</item></root>', required: true, helpText: 'XML content to process. Can be a full XML document, XML fragment, or template expression like {{$json.xml}}.' },
+      { key: 'xpath', label: 'XPath Expression', type: 'text', placeholder: '/root/item', visibleIf: { field: 'operation', equals: 'extract' }, requiredIf: { field: 'operation', equals: 'extract' }, helpText: 'Slash path to extract after parsing. Examples: /root/item, /root/order/id. This is a simplified XPath-style path.' },
+      { key: 'maxSize', label: 'Max Size (bytes)', type: 'number', defaultValue: 5242880, helpText: 'Maximum XML size to process in bytes. Default: 5242880 (5 MB). XML larger than this is rejected.' },
     ],
   },
   {

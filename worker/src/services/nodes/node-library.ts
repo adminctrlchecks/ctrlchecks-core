@@ -1273,7 +1273,6 @@ export class NodeLibrary {
     this.addSchema(this.createStopAndErrorSchema());
     
     // Missing Data Manipulation Nodes
-    // Note: set_variable is already registered via createSetNodeSchema() above, so skip createSetVariableSchema()
     this.addSchema(this.createMathSchema());
     this.addSchema(this.createHtmlSchema());
     this.addSchema(this.createXmlSchema());
@@ -2634,6 +2633,19 @@ export class NodeLibrary {
             examples: [
               'return { ...$json, fullName: $json.firstName + " " + $json.lastName };',
             ],
+            fillMode: { default: 'buildtime_ai_once', supportsRuntimeAI: false, supportsBuildtimeAI: true },
+          },
+          timeout: {
+            type: 'number',
+            description: 'Execution timeout in milliseconds. Runtime caps this at 30000.',
+            examples: [5000, 10000, 30000],
+            default: 5000,
+          },
+          outputSchema: {
+            type: 'string',
+            description: 'Optional JSON schema string used to warn when returned data has an unexpected top-level type.',
+            examples: ['{"type":"object"}', '{"type":"array"}'],
+            fillMode: { default: 'buildtime_ai_once', supportsRuntimeAI: false, supportsBuildtimeAI: true },
           },
         },
       },
@@ -2886,11 +2898,7 @@ export class NodeLibrary {
               'Order #{{$json.orderId}} - Total: ${{$json.total}}',
               '{{$json.firstName}} {{$json.lastName}}',
             ],
-          },
-          values: {
-            type: 'object',
-            description: 'Values to substitute in template (optional if using $json syntax)',
-            examples: [{ name: 'John', orderId: '12345' }],
+            fillMode: { default: 'buildtime_ai_once', supportsRuntimeAI: false, supportsBuildtimeAI: true },
           },
         },
       },
@@ -6818,19 +6826,20 @@ export class NodeLibrary {
       category: 'data',
       description: 'Merge data structures from multiple sources',
       configSchema: {
-        required: ['mode'],
+        required: [],
         optional: {
           mode: {
             type: 'string',
-            description: 'Merge mode: append, join, overwrite',
-            examples: ['append', 'join', 'overwrite'],
-            default: 'append',
-          },
-          joinBy: {
-            type: 'string',
-            description: 'Field to join by (for join mode)',
-            examples: ['id', 'email'],
-          },
+            description: 'Merge mode: overwrite, append, or deep_merge',
+            examples: ['overwrite', 'append', 'deep_merge'],
+            default: 'overwrite',
+            fillMode: { default: 'buildtime_ai_once', supportsRuntimeAI: false, supportsBuildtimeAI: true },
+            options: [
+              { label: 'Overwrite fields', value: 'overwrite' },
+              { label: 'Append items', value: 'append' },
+              { label: 'Deep merge objects', value: 'deep_merge' },
+            ],
+            },
         },
       },
       aiSelectionCriteria: {
@@ -6841,7 +6850,7 @@ export class NodeLibrary {
           'merge data node type'
         ],
         useCases: ['Data merging', 'Combining results'],
-        intentDescription: 'Merge data node that combines data structures from multiple sources. Merges arrays or objects using different modes (append, join, overwrite) and combines data from parallel branches or multiple sources. Used for data merging, combining results from multiple sources, and integrating data from different paths.',
+        intentDescription: 'Merge data node that combines data structures from multiple sources. It can overwrite object fields, append incoming arrays/items, or deep-merge nested objects. Used for data merging, combining results from multiple sources, and integrating data from different paths.',
         intentCategories: ['data_merging', 'data_combination', 'data_integration', 'array_processing'],
       },
       commonPatterns: [],
@@ -7143,46 +7152,6 @@ export class NodeLibrary {
     };
   }
 
-  // Missing Data Manipulation Nodes
-  private createSetVariableSchema(): NodeSchema {
-    return {
-      type: 'set_variable',
-      label: 'Set Variable',
-      category: 'data',
-      description: 'Set workflow variables for use in other nodes',
-      configSchema: {
-        required: ['name'],
-        optional: {
-          name: {
-            type: 'string',
-            description: 'Variable name',
-            examples: ['myVariable', 'userName'],
-          },
-          value: {
-            type: 'expression',
-            description: 'Variable value',
-            examples: ['{{$json.name}}', 'defaultValue'],
-            fillMode: { default: 'manual_static', supportsRuntimeAI: false, supportsBuildtimeAI: true },
-          },
-        },
-      },
-      aiSelectionCriteria: {
-        whenToUse: ['Need to set variables', 'Store computed values'],
-        whenNotToUse: ['Simple data flow'],
-        keywords: [
-          'set variable', 'set var', 'variable set', 'set value',
-          'assign variable', 'assign value', 'set field', 'set data',
-          'variable assign', 'set property', 'set attribute', 'set config'
-        ],
-        useCases: ['Variable setting'],
-        intentDescription: 'Set variable node that sets workflow variables for use in other nodes. Stores computed values, default values, or transformed data into named variables that can be referenced throughout the workflow. Used for variable setting, storing computed values, and sharing data across workflow nodes.',
-        intentCategories: ['variable_assignment', 'data_storage', 'workflow_variables', 'value_storage'],
-      },
-      commonPatterns: [],
-      validationRules: [],
-    };
-  }
-
   private createMathSchema(): NodeSchema {
     return {
       type: 'math',
@@ -7194,18 +7163,45 @@ export class NodeLibrary {
         optional: {
           operation: {
             type: 'string',
-            description: 'Math operation: add, subtract, multiply, divide, etc.',
-            examples: ['add', 'subtract', 'multiply', 'divide'],
+            description: 'Math operation to perform.',
+            examples: ['add', 'subtract', 'multiply', 'divide', 'sqrt', 'sum'],
+            default: 'add',
+            fillMode: { default: 'buildtime_ai_once', supportsRuntimeAI: false, supportsBuildtimeAI: true },
+            options: [
+              { label: 'Add', value: 'add' },
+              { label: 'Subtract', value: 'subtract' },
+              { label: 'Multiply', value: 'multiply' },
+              { label: 'Divide', value: 'divide' },
+              { label: 'Modulo', value: 'modulo' },
+              { label: 'Power', value: 'power' },
+              { label: 'Square Root', value: 'sqrt' },
+              { label: 'Absolute', value: 'abs' },
+              { label: 'Round', value: 'round' },
+              { label: 'Floor', value: 'floor' },
+              { label: 'Ceiling', value: 'ceil' },
+              { label: 'Minimum', value: 'min' },
+              { label: 'Maximum', value: 'max' },
+              { label: 'Average', value: 'avg' },
+              { label: 'Sum', value: 'sum' },
+            ],
           },
           value1: {
-            type: 'number',
-            description: 'First number',
-            examples: [10, '{{$json.value1}}'],
+            type: 'expression',
+            description: 'First number, field path, template expression, or comma-separated number list for min/max/avg/sum.',
+            examples: ['10', '{{$json.value1}}', '1,2,3,4,5'],
           },
           value2: {
+            type: 'expression',
+            description: 'Second number or template expression for binary operations.',
+            examples: ['5', '{{$json.value2}}'],
+            visibleIf: { field: 'operation', equals: ['add', 'subtract', 'multiply', 'divide', 'modulo', 'power'] },
+          },
+          precision: {
             type: 'number',
-            description: 'Second number',
-            examples: [5, '{{$json.value2}}'],
+            description: 'Decimal places applied with toFixed before returning the result.',
+            examples: [2, 10],
+            default: 10,
+            fillMode: { default: 'buildtime_ai_once', supportsRuntimeAI: false, supportsBuildtimeAI: true },
           },
         },
       },
@@ -7225,9 +7221,7 @@ export class NodeLibrary {
       outputType: 'object',
       outputSchema: {
         result: { type: 'number', description: 'The computed mathematical result' },
-        expression: { type: 'string', description: 'The expression or operation that was evaluated' },
         operation: { type: 'string', description: 'The math operation performed (add, subtract, multiply, etc.)' },
-        success: { type: 'boolean', description: 'Whether the calculation succeeded' },
       },
     };
   }
@@ -7295,9 +7289,28 @@ export class NodeLibrary {
           },
           operation: {
             type: 'string',
-            description: 'Operation: parse, extract',
-            examples: ['parse', 'extract'],
+            description: 'Operation: parse, extract, or validate',
+            examples: ['parse', 'extract', 'validate'],
             default: 'parse',
+            fillMode: { default: 'buildtime_ai_once', supportsRuntimeAI: false, supportsBuildtimeAI: true },
+            options: [
+              { label: 'Parse', value: 'parse' },
+              { label: 'Extract', value: 'extract' },
+              { label: 'Validate', value: 'validate' },
+            ],
+          },
+          xpath: {
+            type: 'string',
+            description: 'Slash path used by extract after XML is parsed, e.g. /root/item/name.',
+            examples: ['/root/item', '/root/order/id'],
+            visibleIf: { field: 'operation', equals: 'extract' },
+            requiredIf: { field: 'operation', equals: 'extract' },
+          },
+          maxSize: {
+            type: 'number',
+            description: 'Maximum XML payload size in bytes.',
+            examples: [5242880, 10485760],
+            default: 5242880,
           },
         },
       },

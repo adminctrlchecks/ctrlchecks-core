@@ -1,89 +1,84 @@
 import type { NodeDoc } from '../types';
 
 export const limitDoc: NodeDoc = {
-  "slug": "limit",
-  "displayName": "Limit",
-  "category": "Data",
-  "logoUrl": "/icons/nodes/limit.svg",
-  "description": "Limit array size",
-  "credentialType": "None",
-  "credentialSetupSteps": [
-    "This node does not need a saved account connection.",
-    "Open the node settings and fill the visible input fields.",
-    "Run the workflow when the required fields are complete."
+  slug: 'limit',
+  displayName: 'Limit',
+  category: 'Data',
+  logoUrl: '/icons/nodes/limit.svg',
+  description: 'Keep only the first N items from an array.',
+  credentialType: 'None',
+  credentialSetupSteps: [
+    'This node does not need a saved account connection.',
+    'Set the maximum number of items to keep.',
+    'Optionally point Array at a specific upstream array.'
   ],
-  "credentialDocsUrl": "https://docs.ctrlchecks.com",
-  "resources": [
+  credentialDocsUrl: 'https://docs.ctrlchecks.com',
+  resources: [
     {
-      "name": "Configuration",
-      "description": "Limit is configured directly with input fields.",
-      "operations": [
+      name: 'Configuration',
+      description: 'Limit reads an optional array field, then input.items, then input.array.',
+      operations: [
         {
-          "name": "Execute",
-          "value": "default",
-          "description": "Take only the first N items from an array.",
-          "fields": [
+          name: 'Limit Items',
+          value: 'default',
+          description: 'Truncate an array to the configured limit.',
+          fields: [
             {
-              "name": "Limit",
-              "internalKey": "limit",
-              "type": "number",
-              "required": true,
-              "description": "Maximum items",
-              "helpText": "What this field is: The number used for Maximum items.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 10.\nTip: Use {{$json.limit}} when the number comes from an earlier step.",
-              "placeholder": "10",
-              "example": "10"
+              name: 'Limit',
+              internalKey: 'limit',
+              type: 'number',
+              required: true,
+              description: 'Maximum number of items to return.',
+              helpText: 'Use a positive number such as 10. The node keeps the first items in order.',
+              placeholder: '10',
+              example: '5'
             },
             {
-              "name": "Array",
-              "internalKey": "array",
-              "type": "json",
-              "required": false,
-              "description": "Array to limit",
-              "helpText": "What this field is: Structured data for Array to limit.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Limit.\nExample: {{$json.items}}.\nTip: Use {{$json.array}} when an earlier step already prepared this data.",
-              "placeholder": "{{$json.items}}",
-              "example": "{{$json.items}}"
+              name: 'Array',
+              internalKey: 'array',
+              type: 'string',
+              required: false,
+              description: 'Optional array or template expression to limit.',
+              helpText: 'Leave empty to use input.items first, then input.array.',
+              placeholder: '{{$json.items}}',
+              example: '{{$json.results}}'
             }
           ],
-          "outputExample": {
-            "items": [
-              {
-                "id": 1
-              },
-              {
-                "id": 2
-              },
-              {
-                "id": 3
-              }
+          outputExample: {
+            items: [
+              { id: 1 },
+              { id: 2 }
             ],
-            "total": 10,
-            "returned": 3
+            array: [
+              { id: 1 },
+              { id: 2 }
+            ]
           },
-          "outputDescription": "items: The truncated array. total: Original array length. returned: Number of items after limiting.",
-          "usageExample": {
-            "scenario": "Take only the top 5 results from a large dataset",
-            "inputValues": {
-              "items": "{{$json.results}}",
-              "limit": "5"
+          outputDescription: 'The output keeps incoming fields and writes the limited array to items and array.',
+          usageExample: {
+            scenario: 'Take the top five search results',
+            inputValues: {
+              limit: '5',
+              array: '{{$json.results}}'
             },
-            "expectedOutput": "First 5 items in `{{$json.items}}`."
+            expectedOutput: 'The first five records are available in {{$json.items}}.'
           },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
+          externalDocsUrl: 'https://docs.ctrlchecks.com'
         }
       ]
     }
   ],
-  "commonErrors": [
+  commonErrors: [
     {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
+      error: 'No array input',
+      cause: 'Array, input.items, and input.array were all empty or non-arrays.',
+      fix: 'Point Array at a valid upstream array or provide input.items.'
     },
     {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
+      error: 'Invalid limit',
+      cause: 'The limit value is missing or not numeric.',
+      fix: 'Enter a numeric maximum such as 10.'
     }
   ],
-  "relatedNodes": []
+  relatedNodes: ['sort', 'merge_data']
 };

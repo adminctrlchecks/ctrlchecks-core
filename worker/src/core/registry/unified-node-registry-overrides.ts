@@ -284,6 +284,7 @@ const overridesByType: Record<string, OverrideFn> = {
   html: overrideHtml,
   xml: overrideXml,
   merge: overrideMerge,
+  merge_data: overrideMerge,
   // ✅ BATCH 15: AI Infrastructure
   memory: overrideMemory,
   tool: overrideTool,

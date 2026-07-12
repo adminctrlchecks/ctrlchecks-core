@@ -1101,14 +1101,13 @@ Example: 1000 = wait 1 second between retries. 5000 = wait 5 seconds.`,
   javascript: {
     default: {
       code: `What this field is: JavaScript code that runs on the workflow data.
-The input data is available as the items array. Each item has a .json property with its data.
-You must return an array of objects.
+Return the value that downstream nodes should receive.
 Simple example (add a field):
-  return items.map(item => ({ ...item.json, fullName: item.json.firstName + ' ' + item.json.lastName }));
+  return { ...$json, fullName: $json.firstName + ' ' + $json.lastName };
 Filter example (keep only active users):
-  return items.filter(item => item.json.status === 'active');
+  return { items: $json.items.filter(item => item.status === 'active') };
 Transform example (format a date):
-  return items.map(item => ({ ...item.json, formattedDate: new Date(item.json.createdAt).toLocaleDateString() }));`,
+  return { ...$json, formattedDate: new Date($json.createdAt).toLocaleDateString() };`,
     },
   },
 
@@ -1150,6 +1149,9 @@ Example: 30 (then set unit to "days" to go back 30 days).`,
 
   text_formatter: {
     '*': {
+      template: `What this field is: The text template to resolve.
+Example: Hello {{$json.name}} or Order #{{$json.orderId}}.
+The runtime does not read separate text, operation, or values fields for this node.`,
       text: `What this field is: The text you want to transform.
 Example: {{$json.name}} to transform the name from the previous step, or Hello World as a static value.`,
       operation: `What this field is: The text transformation to apply.
@@ -1164,6 +1166,13 @@ Common options:
   },
 
   json_parser: {
+    default: {
+      json: `What this field is: A JSON string (text) that you want to convert into a usable object so you can access individual fields.
+Example: {{$json.rawApiResponse}} where rawApiResponse is a string like {"name":"Alice","email":"alice@example.com"}
+After parsing, the full parsed object is available as {{$json.parsed}}.`,
+      extractFields: `What this field is: Optional top-level field names to copy from the parsed object.
+Example: ["name","email"] copies parsed.name and parsed.email onto the output.`,
+    },
     parse: {
       text: `What this field is: A JSON string (text) that you want to convert into a usable object so you can access individual fields.
 Example: {{$json.rawApiResponse}} where rawApiResponse is a string like {"name":"Alice","email":"alice@example.com"}
@@ -1200,6 +1209,8 @@ Example: {"fullName":"{{$json.firstName}} {{$json.lastName}}","greeting":"Hello,
 Example: {{$json.price}} to use a price from the previous step, or 100 as a fixed number.`,
       value2: `What this field is: The second number in the calculation.
 Example: {{$json.taxRate}} or 0.08 for 8% tax.`,
+      precision: `What this field is: Decimal places applied to the returned result.
+Default: 10. Valid range: 0 through 20.`,
       operation: `What this field is: The math operation to perform.
 Options: add (+), subtract (-), multiply (*), divide (/), modulo (remainder), power (x^y), round, floor, ceil, abs.
 Example: multiply — to calculate price * quantity.`,

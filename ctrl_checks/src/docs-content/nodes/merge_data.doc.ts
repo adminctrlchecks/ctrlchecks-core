@@ -1,85 +1,71 @@
 import type { NodeDoc } from '../types';
 
 export const mergeDataDoc: NodeDoc = {
-  "slug": "merge_data",
-  "displayName": "Merge Data",
-  "category": "Data",
-  "logoUrl": "/icons/nodes/merge_data.svg",
-  "description": "Merge data structures from multiple sources",
-  "credentialType": "None",
-  "credentialSetupSteps": [
-    "This node does not need a saved account connection.",
-    "Open the node settings and fill the visible input fields.",
-    "Run the workflow when the required fields are complete."
+  slug: 'merge_data',
+  displayName: 'Merge Data',
+  category: 'Data',
+  logoUrl: '/icons/nodes/merge_data.svg',
+  description: 'Combine data arriving from multiple workflow branches.',
+  credentialType: 'None',
+  credentialSetupSteps: [
+    'This node does not need a saved account connection.',
+    'Pick the merge mode that matches how branch data should be combined.',
+    'Run the workflow after the upstream branches provide data.'
   ],
-  "credentialDocsUrl": "https://docs.ctrlchecks.com",
-  "resources": [
+  credentialDocsUrl: 'https://docs.ctrlchecks.com',
+  resources: [
     {
-      "name": "Configuration",
-      "description": "Merge Data is configured directly with input fields.",
-      "operations": [
+      name: 'Configuration',
+      description: 'Merge Data uses the canonical merge executor and supports multiple inputs.',
+      operations: [
         {
-          "name": "Execute",
-          "value": "default",
-          "description": "Execute using the Merge Data node.",
-          "fields": [
+          name: 'Merge',
+          value: 'default',
+          description: 'Merge branch outputs using overwrite, append, or deep_merge mode.',
+          fields: [
             {
-              "name": "Mode",
-              "internalKey": "mode",
-              "type": "string",
-              "required": true,
-              "description": "Merge mode: append, join, overwrite",
-              "helpText": "What this field is: How two data sources are combined.\nOptions: append (combine all items into one array), join (match items by a shared key field), overwrite (replace input A fields with input B values).\nDefault: append.\nExample: Use join with joinBy=id when merging user profile data from two API responses.",
-              "placeholder": "append",
-              "example": "append",
-              "defaultValue": "append"
-            },
-            {
-              "name": "Join By",
-              "internalKey": "joinBy",
-              "type": "string",
-              "required": false,
-              "description": "Field to join by (for join mode)",
-              "helpText": "What this field is: Field to join by.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: id.\nTip: This field is used for join mode. Leave it blank when this operation does not need it.",
-              "placeholder": "id",
-              "example": "id"
+              name: 'Mode',
+              internalKey: 'mode',
+              type: 'select',
+              required: false,
+              description: 'Merge mode: overwrite, append, or deep_merge.',
+              helpText: 'Overwrite combines object fields with later values winning. Append combines inputs into an items array. Deep merge recursively combines nested objects.',
+              placeholder: 'overwrite',
+              defaultValue: 'overwrite',
+              options: ['overwrite', 'append', 'deep_merge'],
+              example: 'append'
             }
           ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
+          outputExample: {
+            items: [
+              { id: 1, name: 'Alice' },
+              { id: 2, name: 'Bob' }
+            ]
           },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming Merge Data data with execute after a related upstream event is received",
-            "inputValues": {
-              "Mode": "append",
-              "Join By": "id"
+          outputDescription: 'Overwrite and deep_merge return a merged object. Append returns combined items. Runtime aliases such as concat and concatenate are accepted for older workflows.',
+          usageExample: {
+            scenario: 'Combine records from two upstream branches',
+            inputValues: {
+              mode: 'append'
             },
-            "expectedOutput": "Merge Data returns structured execute data that downstream nodes can reference with {{$json.fieldName}}."
+            expectedOutput: 'Combined records are available in {{$json.items}}.'
           },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
+          externalDocsUrl: 'https://docs.ctrlchecks.com'
         }
       ]
     }
   ],
-  "commonErrors": [
+  commonErrors: [
     {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
+      error: 'No branch data to merge',
+      cause: 'The node ran before upstream branches produced useful objects or arrays.',
+      fix: 'Check the incoming branch connections and upstream node outputs.'
     },
     {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
+      error: 'Unexpected merge result',
+      cause: 'The selected mode does not match the shape of the incoming data.',
+      fix: 'Use append for lists, overwrite for flat objects, and deep_merge for nested objects.'
     }
   ],
-  "relatedNodes": []
+  relatedNodes: ['set', 'sort', 'limit']
 };

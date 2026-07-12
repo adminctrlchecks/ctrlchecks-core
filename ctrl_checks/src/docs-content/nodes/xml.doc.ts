@@ -1,107 +1,106 @@
 import type { NodeDoc } from '../types';
 
 export const xmlDoc: NodeDoc = {
-  "slug": "xml",
-  "displayName": "XML",
-  "category": "Data",
-  "logoUrl": "/icons/nodes/xml.svg",
-  "description": "Parse and manipulate XML content",
-  "credentialType": "None",
-  "credentialSetupSteps": [
-    "This node does not need a saved account connection.",
-    "Open the node settings and fill the visible input fields.",
-    "Run the workflow when the required fields are complete."
+  slug: 'xml',
+  displayName: 'XML',
+  category: 'Data',
+  logoUrl: '/icons/nodes/xml.svg',
+  description: 'Parse, extract from, or validate XML content.',
+  credentialType: 'None',
+  credentialSetupSteps: [
+    'This node does not need a saved account connection.',
+    'Choose parse, extract, or validate and provide XML content.',
+    'For extract, also provide the XPath-style path.'
   ],
-  "credentialDocsUrl": "https://docs.ctrlchecks.com",
-  "resources": [
+  credentialDocsUrl: 'https://docs.ctrlchecks.com',
+  resources: [
     {
-      "name": "Operations",
-      "description": "XML exposes operation choices directly.",
-      "operations": [
+      name: 'Operations',
+      description: 'XML supports parse, extract, and validate.',
+      operations: [
         {
-          "name": "Parse",
-          "value": "parse",
-          "description": "Parse an XML string into a JavaScript object.",
-          "fields": [
+          name: 'Process XML',
+          value: 'default',
+          description: 'Process XML using the selected operation.',
+          fields: [
             {
-              "name": "Xml",
-              "internalKey": "xml",
-              "type": "textarea",
-              "required": true,
-              "description": "XML content",
-              "helpText": "What this field is: XML content.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: {{$json.xml}}.\nTip: Use {{$json.xml}} when this value comes from an earlier step.",
-              "placeholder": "{{$json.xml}}",
-              "example": "{{$json.xml}}"
+              name: 'Operation',
+              internalKey: 'operation',
+              type: 'select',
+              required: false,
+              description: 'Operation to run: parse, extract, or validate.',
+              helpText: 'Parse converts XML to an object. Extract parses then reads a slash path. Validate checks syntax and returns valid/errors.',
+              placeholder: 'parse',
+              defaultValue: 'parse',
+              options: ['parse', 'extract', 'validate'],
+              example: 'extract'
+            },
+            {
+              name: 'XML',
+              internalKey: 'xml',
+              type: 'textarea',
+              required: true,
+              description: 'XML content or template expression.',
+              helpText: 'Provide the XML string directly or from an upstream field such as {{$json.responseBody}}.',
+              placeholder: '<root><item>value</item></root>',
+              example: '{{$json.responseBody}}'
+            },
+            {
+              name: 'XPath',
+              internalKey: 'xpath',
+              type: 'string',
+              required: false,
+              description: 'Slash path used by extract after XML is parsed.',
+              helpText: 'Required when operation is extract. Examples: /root/item or /root/order/id.',
+              placeholder: '/root/item',
+              example: '/root/order/id'
+            },
+            {
+              name: 'Max Size',
+              internalKey: 'maxSize',
+              type: 'number',
+              required: false,
+              description: 'Maximum XML payload size in bytes.',
+              helpText: 'The runtime default is 5242880 bytes.',
+              placeholder: '5242880',
+              defaultValue: '5242880',
+              example: '5242880'
             }
           ],
-          "outputExample": {
-            "root": {
-              "order": {
-                "id": "123",
-                "customer": "Alice",
-                "items": [
-                  {
-                    "sku": "PROD001",
-                    "qty": "2"
-                  }
-                ]
+          outputExample: {
+            data: {
+              root: {
+                item: 'value'
               }
-            }
-          },
-          "outputDescription": "Parsed JavaScript object. Attributes and text nodes are available as nested properties.",
-          "usageExample": {
-            "scenario": "Parse an XML response from a legacy SOAP API",
-            "inputValues": {
-              "xml": "{{$json.responseBody}}"
             },
-            "expectedOutput": "Access parsed fields via `{{$json.root.order.id}}`."
+            success: true
           },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
-        },
-        {
-          "name": "Extract",
-          "value": "extract",
-          "description": "Extract using the XML node.",
-          "fields": [
-            {
-              "name": "Xml",
-              "internalKey": "xml",
-              "type": "textarea",
-              "required": true,
-              "description": "XML content",
-              "helpText": "What this field is: XML content.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: {{$json.xml}}.\nTip: Use {{$json.xml}} when this value comes from an earlier step.",
-              "placeholder": "{{$json.xml}}",
-              "example": "{{$json.xml}}"
-            }
-          ],
-          "outputExample": {
-            "text": "Extracted value from the selected XML path.",
-            "length": 43
-          },
-          "outputDescription": "text: Value returned by this operation.\nlength: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming XML data with extract after a related upstream event is received",
-            "inputValues": {
-              "Xml": "{{$json.xml}}"
+          outputDescription: 'Parse returns data and success. Extract returns result, xpath, data, and success. Validate returns valid and errors.',
+          usageExample: {
+            scenario: 'Extract an order id from an XML response',
+            inputValues: {
+              operation: 'extract',
+              xml: '{{$json.responseBody}}',
+              xpath: '/root/order/id'
             },
-            "expectedOutput": "XML returns structured extract data that downstream nodes can reference with {{$json.fieldName}}."
+            expectedOutput: 'The extracted value is available as {{$json.result}}.'
           },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
+          externalDocsUrl: 'https://docs.ctrlchecks.com'
         }
       ]
     }
   ],
-  "commonErrors": [
+  commonErrors: [
     {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
+      error: 'xml is required',
+      cause: 'The XML field is empty or the expression resolved to an empty value.',
+      fix: 'Provide XML content or point the field at an upstream XML string.'
     },
     {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
+      error: 'XML extract: xpath field is required',
+      cause: 'Extract was selected without an xpath value.',
+      fix: 'Enter a slash path such as /root/item.'
     }
   ],
-  "relatedNodes": []
+  relatedNodes: ['json_parser', 'text_formatter']
 };

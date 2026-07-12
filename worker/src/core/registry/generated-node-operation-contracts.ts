@@ -36,7 +36,7 @@ export const GENERATED_NODE_OPERATION_VALUES: Record<string, string[]> = {
   linkedin: ['get_profile', 'create_post', 'create_post_media', 'create_article', 'delete_post'],
   mailchimp: ['send', 'subscribe', 'unsubscribe'],
   mailgun: ['send_email'],
-  math: ['add', 'divide', 'multiply', 'subtract'],
+  math: ['abs', 'add', 'avg', 'ceil', 'divide', 'floor', 'max', 'min', 'modulo', 'multiply', 'power', 'round', 'sqrt', 'subtract', 'sum'],
   microsoft_dynamics: ['createRecord', 'deleteRecord', 'fetchXml', 'getRecord', 'getRecords', 'updateRecord'],
   // 'find' listed first — this array's first entry becomes the field default,
   // and defaulting a fresh node to a destructive delete would be a bad surprise.

@@ -386,22 +386,22 @@ Each batch can be processed separately in a loop.`,
 
   // Data Transformation
   javascript: {
-    overview: 'Execute custom JavaScript code. Full access to input data with ability to transform, calculate, or process as needed.',
-    inputs: ['any data as "input"'],
-    outputs: ['return value'],
+    overview: 'Execute sandboxed JavaScript code to transform, calculate, or process workflow data.',
+    inputs: ['current workflow data as $json/input'],
+    outputs: ['script return value'],
     example: `Code:
-const total = input.items.reduce(
+const total = $json.items.reduce(
   (sum, item) => sum + item.price, 0
 );
 return {
   total,
-  count: input.items.length,
-  average: total / input.items.length
+  count: $json.items.length,
+  average: total / $json.items.length
 };
 
 Input: {items: [{price: 10}, {price: 20}]}
 Output: {total: 30, count: 2, average: 15}`,
-    tips: ['Always return a value', 'Input available as "input" variable', 'Use for complex transformations'],
+    tips: ['Always return a value', 'Default timeout is 5000ms and runtime caps at 30000ms', 'Use for transformations that built-in nodes cannot express'],
   },
 
   function: {
@@ -522,24 +522,24 @@ Output: {aggregate: 45, operation: "sum", field: "price"}`,
 
   limit: {
     overview: 'Limits the number of items in an array. Returns only the first N items, useful for pagination or processing subsets.',
-    inputs: ['array of items'],
-    outputs: ['limited array'],
+    inputs: ['limit', 'optional array expression', 'or input.items/input.array'],
+    outputs: ['items and array containing the limited values'],
     example: `Limit: 5
 
 Input: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-Output: [1, 2, 3, 4, 5]
+Output: {items: [1, 2, 3, 4, 5], array: [1, 2, 3, 4, 5]}
 
 Useful for:
 • Pagination (first page)
 • Processing top N items
 • Preventing large array processing`,
-    tips: ['Returns first N items', 'Useful for pagination', 'Prevents processing large arrays', 'Combine with Sort to get top/bottom items'],
+    tips: ['Returns first N items in items and array', 'Useful for pagination', 'Prevents processing large arrays', 'Combine with Sort to get top/bottom items'],
   },
 
   sort: {
-    overview: 'Sorts array items in ascending or descending order. Can sort by a specific field or sort items directly. Supports string, number, and date types.',
-    inputs: ['array of items'],
-    outputs: ['sorted array'],
+    overview: 'Sorts input.items in ascending or descending order. Can sort by a specific field or sort items directly. Supports string, number, and date types.',
+    inputs: ['input.items', 'field', 'direction', 'type'],
+    outputs: ['input object with sorted items array'],
     example: `Field: price
 Direction: Ascending
 Type: Number
@@ -577,38 +577,35 @@ Output: [
   },
 
   merge_data: {
-    overview: 'Combines data from multiple input sources. Supports merging objects, appending to arrays, or concatenating arrays. Similar to Merge node but for data manipulation.',
+    overview: 'Combines data from multiple input sources. Supports overwrite, append, and deep_merge modes.',
     inputs: ['multiple data inputs'],
     outputs: ['merged data'],
-    example: `Mode: Merge Objects
+    example: `Mode: overwrite
 Input 1: {name: "John", age: 30}
 Input 2: {email: "john@test.com"}
 
 Output: {name: "John", age: 30, email: "john@test.com"}
 
-Mode: Concatenate Arrays
+Mode: append
 Input 1: [1, 2, 3]
 Input 2: [4, 5, 6]
-Output: [1, 2, 3, 4, 5, 6]`,
-    tips: ['Merge mode combines object properties', 'Append adds items to arrays', 'Concat joins arrays together', 'Useful for combining workflow data'],
+Output: {items: [1, 2, 3, 4, 5, 6]}`,
+    tips: ['overwrite combines object properties with later values winning', 'append combines inputs into items', 'deep_merge recursively combines nested objects', 'Legacy concat aliases still work at runtime'],
   },
 
   json_parser: {
-    overview: 'Extract specific values from JSON using JSONPath expressions. Navigate nested data structures easily.',
-    inputs: ['JSON data'],
-    outputs: ['extracted_value'],
-    example: `Input: {
-  "data": {
-    "users": [
-      {"name": "John", "email": "john@test.com"},
-      {"name": "Jane", "email": "jane@test.com"}
-    ]
-  }
+    overview: 'Parse JSON text into structured workflow data and optionally copy top-level fields.',
+    inputs: ['json', 'optional extractFields array'],
+    outputs: ['parsed object plus extracted top-level fields'],
+    example: `JSON: {
+  "name": "John",
+  "email": "john@test.com",
+  "plan": "pro"
 }
 
-Expression: $.data.users[*].email
-Output: ["john@test.com", "jane@test.com"]`,
-    tips: ['$ represents root', '[*] selects all items', 'Use .field for nested access'],
+Extract Fields: ["email"]
+Output: {parsed: {name: "John", email: "john@test.com", plan: "pro"}, email: "john@test.com"}`,
+    tips: ['json is required; legacy jsonData and data aliases still work', 'extractFields copies only top-level keys', 'Leave extractFields empty to keep the full parsed object under parsed'],
   },
 
   text_formatter: {
@@ -619,7 +616,7 @@ Output: ["john@test.com", "jane@test.com"]`,
 
 Input: {name: "John", orderId: 123, shipDate: "Jan 20"}
 Output: "Hello John! Your order #123 ships on Jan 20."`,
-    tips: ['Use {{variable}} for substitution', 'Supports nested: {{user.name}}', 'Great for email/message templates'],
+    tips: ['Use {{$json.field}} expressions for substitution', 'The runtime does not read a separate values field', 'Great for email/message templates'],
   },
 
   http_request: {
@@ -679,16 +676,16 @@ When webhook receives request:
   },
 
   set_variable: {
-    overview: 'Store a value for use later in the workflow. Variables persist throughout the workflow execution.',
-    inputs: ['any value'],
-    outputs: ['variable_name', 'value'],
+    overview: 'Create one or more named output values for later workflow steps.',
+    inputs: ['name/value or legacy values array', 'optional keepSource'],
+    outputs: ['assigned variable fields'],
     example: `Variable Name: totalCount
-Value: {{input.items.length}}
+Value: {{$json.items.length}}
 
-Later nodes can access: {{variables.totalCount}}
+Later nodes can access: {{$json.totalCount}}
 
 Useful for storing computed values to use in multiple places.`,
-    tips: ['Access with {{variables.name}}', 'Great for values used multiple times', 'Persists through entire workflow'],
+    tips: ['Access output fields as {{$json.name}} in the next node', 'Use keepSource to preserve incoming fields', 'Legacy values array supports multiple assignments'],
   },
 
   google_sheets: {
@@ -863,7 +860,7 @@ Each step uses output from previous step.`,
 John,john@test.com,30
 Jane,jane@test.com,25"
 
-Output: [
+Output items: [
   {name: "John", email: "john@test.com", age: "30"},
   {name: "Jane", email: "jane@test.com", age: "25"}
 ]`,
@@ -929,10 +926,10 @@ Output: {
   math: {
     overview: 'Perform mathematical operations with precision control. Supports basic arithmetic, advanced functions, and array operations. Deterministic and precise calculations.',
     inputs: ['numeric values or arrays'],
-    outputs: ['calculated_result'],
+    outputs: ['input object with result and operation'],
     example: `Operation: Add
-Value 1: {{input.price}}
-Value 2: {{input.tax}}
+Value 1: {{$json.price}}
+Value 2: {{$json.tax}}
 Precision: 2
 
 Input: {price: 10.50, tax: 1.25}
@@ -946,7 +943,7 @@ Operation: Power
 Value 1: 2
 Value 2: 8
 Output: 256`,
-    tips: ['Supports template expressions like {{input.x}}', 'Use comma-separated values for arrays', 'Set precision for decimal operations (1-20)', 'Supports: add, subtract, multiply, divide, power, sqrt, min, max, avg, sum'],
+    tips: ['Supports template expressions like {{$json.x}}', 'Use comma-separated values or arrays for min, max, avg, and sum', 'Set precision for decimal operations (0-20)', 'Supports: add, subtract, multiply, divide, modulo, power, sqrt, abs, round, floor, ceil, min, max, avg, sum'],
   },
 
   crypto: {
@@ -2949,30 +2946,28 @@ Output: {
   },
 
   xml: {
-    overview: 'Parse, extract, or validate XML documents. Converts XML to JSON, extracts data using XPath expressions, or validates XML structure. Safe mode enabled by default to prevent XXE attacks. Perfect for XML processing, data extraction, or API integrations.',
-    inputs: ['xml', 'operation', 'xpath', 'safeMode', 'maxSize'],
-    outputs: ['json', 'extracted', 'valid'],
+    overview: 'Parse, extract, or validate XML documents. Converts XML to data, extracts data using an XPath-style slash path, or validates XML structure.',
+    inputs: ['xml', 'operation', 'xpath for extract', 'maxSize'],
+    outputs: ['data/result/valid depending on operation'],
     example: `Operation: parse
 XML: "<root><item id='1'>Value</item></root>"
-Safe Mode: true
-
 Output: {
-  json: {
+  data: {
     root: {
       item: {
-        "@id": "1",
+        "@_id": 1,
         "#text": "Value"
       }
     }
   },
-  valid: true
+  success: true
 }`,
     tips: [
       'Parse: converts XML to JSON object',
-      'Extract: uses XPath to extract specific data',
+      'Extract: uses xpath to extract a specific slash path',
       'Validate: checks XML structure and syntax',
-      'Safe mode prevents XXE attacks (enabled by default)',
-      'Use XPath syntax for precise data extraction',
+      'Default maxSize is 5242880 bytes',
+      'Use /root/item style paths for extract',
     ],
   },
 
