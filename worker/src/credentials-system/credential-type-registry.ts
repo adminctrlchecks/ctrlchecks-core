@@ -79,6 +79,7 @@ const providerDocsUrls: Record<string, string> = {
   netlify: 'https://docs.netlify.com/api/get-started/#authentication',
   notion: 'https://developers.notion.com/docs/authorization',
   openai: 'https://platform.openai.com/api-keys',
+  oracle_database: 'https://docs.oracle.com/en/database/oracle/oracle-database/19/dbseg/index.html',
   paypal: 'https://developer.paypal.com/api/rest/authentication/',
   pinecone: 'https://docs.pinecone.io/guides/projects/manage-api-keys',
   pipedrive: 'https://developers.pipedrive.com/docs/api/v1',
