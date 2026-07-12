@@ -3482,85 +3482,78 @@ export async function executeNodeLegacy(
       return { ...inputObj, aggregate: agg, operation, field: field || undefined };
     }
 
-    case 'wait': {
-      // ✅ Wait node - pauses execution for a specified duration
-      // Frontend config (nodeTypes.ts):
-      //   { duration: 1000 }  // in milliseconds
+    case 'wait':
+    case 'delay': {
+      // delay is a canonical alias of wait — both pause execution for a
+      // duration+unit, sharing the same duration-resolution logic. They keep
+      // distinct external contracts (max cap, output shape) for backward
+      // compatibility with workflows already built against either name.
       //
+      // Frontend config (nodeTypes.ts): { duration: 1000 } // in milliseconds
       // Older/AI-generated configs (workflow-builder.ts) may also use:
       //   duration + unit: 'milliseconds' | 'seconds' | 'minutes' | 'hours'
+      const resolveWaitDurationMs = (): number => {
+        const durationRaw = (config as any)?.duration ?? getStringProperty(config, 'duration', '0');
+        let ms = Number(durationRaw);
+        if (Number.isNaN(ms) || ms < 0) ms = 0;
 
-      // Prefer explicit duration from config; fall back to legacy duration/unit
-      const durationRaw = (config as any)?.duration ?? getStringProperty(config, 'duration', '0');
-      let durationMs = Number(durationRaw);
-      if (Number.isNaN(durationMs) || durationMs < 0) {
-        durationMs = 0;
-      }
-
-      // Support optional unit for AI-generated waits
-      const unit = (getStringProperty(config, 'unit', 'milliseconds') || 'milliseconds').toLowerCase();
-      if (unit === 'seconds' || unit === 'second' || unit === 's') {
-        durationMs *= 1000;
-      } else if (unit === 'minutes' || unit === 'minute' || unit === 'm') {
-        durationMs *= 60_000;
-      } else if (unit === 'hours' || unit === 'hour' || unit === 'h') {
-        durationMs *= 3_600_000;
-      }
-
-      // Safety cap: don't allow extremely long waits in the worker
-      const MAX_WAIT_MS = 5 * 60_000; // 5 minutes
-      if (durationMs > MAX_WAIT_MS) {
-        logger.warn(`[Wait Node] Duration ${durationMs}ms exceeds max ${MAX_WAIT_MS}ms, capping.`);
-        durationMs = MAX_WAIT_MS;
-      }
-
-      if (durationMs > 0) {
-        logger.info(`[Wait Node] Pausing execution for ${durationMs}ms`);
-        await new Promise(resolve => setTimeout(resolve, durationMs));
-      }
-
-      // Wait node passes input through unchanged after delay
-      result = inputObj;
-      break;
-    }
-
-    case 'delay': {
-      try {
-        let duration = getNumberProperty(config, 'duration', 0);
-        const unit = getStringProperty(config, 'unit', 'milliseconds');
-        
-        // Convert to milliseconds
-        if (unit === 'seconds') {
-          duration *= 1000;
-        } else if (unit === 'minutes') {
-          duration *= 60 * 1000;
+        const unit = (getStringProperty(config, 'unit', 'milliseconds') || 'milliseconds').toLowerCase();
+        if (unit === 'seconds' || unit === 'second' || unit === 's') {
+          ms *= 1000;
+        } else if (unit === 'minutes' || unit === 'minute' || unit === 'm') {
+          ms *= 60_000;
+        } else if (unit === 'hours' || unit === 'hour' || unit === 'h') {
+          ms *= 3_600_000;
         }
-        
-        // Ensure duration is a number
-        if (isNaN(duration) || duration < 0) {
+        return ms;
+      };
+
+      if (type === 'wait') {
+        let durationMs = resolveWaitDurationMs();
+
+        // Safety cap: don't allow extremely long waits in the worker
+        const MAX_WAIT_MS = 5 * 60_000; // 5 minutes
+        if (durationMs > MAX_WAIT_MS) {
+          logger.warn(`[Wait Node] Duration ${durationMs}ms exceeds max ${MAX_WAIT_MS}ms, capping.`);
+          durationMs = MAX_WAIT_MS;
+        }
+
+        if (durationMs > 0) {
+          logger.info(`[Wait Node] Pausing execution for ${durationMs}ms`);
+          await new Promise(resolve => setTimeout(resolve, durationMs));
+        }
+
+        // Wait node passes input through unchanged after delay
+        result = inputObj;
+        break;
+      }
+
+      // type === 'delay'
+      try {
+        let durationMs = resolveWaitDurationMs();
+        if (isNaN(durationMs) || durationMs < 0) {
           return {
             success: false,
             error: 'Invalid duration',
             originalInput: inputObj,
           };
         }
-        
+
         // Safety cap: don't allow extremely long delays
         const MAX_DELAY_MS = 10 * 60 * 1000; // 10 minutes
-        if (duration > MAX_DELAY_MS) {
-          logger.warn(`[Delay Node] Duration ${duration}ms exceeds max ${MAX_DELAY_MS}ms, capping.`);
-          duration = MAX_DELAY_MS;
+        if (durationMs > MAX_DELAY_MS) {
+          logger.warn(`[Delay Node] Duration ${durationMs}ms exceeds max ${MAX_DELAY_MS}ms, capping.`);
+          durationMs = MAX_DELAY_MS;
         }
-        
-        // Wait
-        if (duration > 0) {
-          logger.info(`[Delay Node] Pausing execution for ${duration}ms`);
-          await new Promise(resolve => setTimeout(resolve, duration));
+
+        if (durationMs > 0) {
+          logger.info(`[Delay Node] Pausing execution for ${durationMs}ms`);
+          await new Promise(resolve => setTimeout(resolve, durationMs));
         }
-        
+
         return {
           success: true,
-          waitedMs: duration,
+          waitedMs: durationMs,
           originalInput: inputObj,
         };
       } catch (error: any) {
@@ -13378,24 +13371,60 @@ export async function executeNodeLegacy(
       }
     }
 
-    case 'merge': {
-      // ✅ Merge node - combines multiple inputs from different sources
-      // The execution engine already merges multiple inputs in the input building phase (lines 4528-4553)
-      // This node just passes through the merged input, but we can add merge-specific logic here if needed
-      // Config options: mode ('append' | 'overwrite' | 'deep_merge')
-      const mergeMode = getStringProperty(config, 'mode', 'overwrite').toLowerCase();
-      
-      // For now, merge node just passes through the merged input (already merged by execution engine)
-      // Future: Could implement different merge modes here (append arrays, deep merge objects, etc.)
-      result = inputObj;
-      break;
-    }
-
+    case 'merge':
     case 'merge_data': {
-      // Merge Data - alias of merge behavior.
-      // The unified execution engine already merges incoming edge outputs.
-      // This node exists to express intent; treat it as passthrough.
-      return inputObj;
+      // merge_data is a canonical alias of merge — same runtime behavior.
+      // The execution engine's generic input-builder already flattens multiple
+      // upstream outputs together (Object.assign — i.e. "overwrite" semantics)
+      // before this node ever sees `inputObj`. That default requires no extra
+      // work. "append" and "deep_merge" need the *raw* per-source outputs, which
+      // are no longer distinguishable once flattened — so for those two modes we
+      // look up this node's incoming edges directly and re-merge from source.
+      const mergeMode = getStringProperty(config, 'mode', 'overwrite').toLowerCase();
+
+      if (mergeMode !== 'append' && mergeMode !== 'deep_merge') {
+        result = inputObj;
+        break;
+      }
+
+      try {
+        const { data: mergeWorkflow } = await db
+          .from('workflows')
+          .select('edges')
+          .eq('id', workflowId)
+          .single();
+        const mergeEdges: Array<{ source: string; target: string }> = (mergeWorkflow?.edges || []) as any[];
+        const sourceOutputs = mergeEdges
+          .filter((e) => e.target === node.id)
+          .map((e) => nodeOutputs.get(e.source))
+          .filter((v) => v !== undefined);
+
+        if (sourceOutputs.length === 0) {
+          result = inputObj;
+          break;
+        }
+
+        if (mergeMode === 'append') {
+          result = { items: sourceOutputs };
+        } else {
+          const deepMergeObjects = (target: unknown, source: unknown): unknown => {
+            if (typeof target !== 'object' || target === null || Array.isArray(target)) return source;
+            if (typeof source !== 'object' || source === null || Array.isArray(source)) return source;
+            const out: Record<string, unknown> = { ...(target as Record<string, unknown>) };
+            for (const key of Object.keys(source as Record<string, unknown>)) {
+              out[key] = key in out
+                ? deepMergeObjects(out[key], (source as Record<string, unknown>)[key])
+                : (source as Record<string, unknown>)[key];
+            }
+            return out;
+          };
+          result = sourceOutputs.reduce((acc: unknown, cur) => deepMergeObjects(acc, cur), {});
+        }
+      } catch (err) {
+        logger.warn(`[Merge Node] Failed to resolve incoming edges for mode "${mergeMode}", falling back to overwrite passthrough:`, err);
+        result = inputObj;
+      }
+      break;
     }
 
     case 'filter': {

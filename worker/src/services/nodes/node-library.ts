@@ -1636,20 +1636,19 @@ export class NodeLibrary {
           interval: {
             type: 'number',
             description: 'Interval value',
-            examples: [1, 5, 30, 60],
+            examples: [5, 15, 30, 1],
           },
           unit: {
             type: 'string',
-            description: 'Interval unit',
-            examples: ['seconds', 'minutes', 'hours'],
+            description: 'Interval unit — minutes (1-59) or hours (1-23). Seconds are not supported: the scheduler runs on minute-granularity cron expressions.',
+            examples: ['minutes', 'hours'],
           },
         },
       },
       aiSelectionCriteria: {
         whenToUse: [
           'User mentions specific intervals (every 5 minutes, every hour)',
-          'More flexible than cron needed',
-          'Simple recurring tasks',
+          'Simple recurring tasks on a minute/hour cadence',
         ],
         whenNotToUse: [
           'Complex scheduling needed',

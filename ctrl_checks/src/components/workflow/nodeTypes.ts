@@ -127,10 +127,22 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     label: 'Interval',
     category: 'triggers',
     icon: 'Timer',
-    description: 'Interval trigger',
-    defaultConfig: { interval: '10m' },
+    description: 'Trigger workflow at a fixed interval',
+    defaultConfig: { interval: 5, unit: 'minutes' },
     configFields: [
-      { key: 'interval', label: 'Interval', type: 'text', placeholder: '10m', required: true, helpText: 'Interval in seconds (s), minutes (m), or hours (h). Examples: 30s, 5m, 1h' },
+      { key: 'interval', label: 'Interval', type: 'number', defaultValue: 5, required: true, helpText: 'How often to run. Combine with the Unit field (e.g. 5 + Minutes = every 5 minutes).' },
+      {
+        key: 'unit',
+        label: 'Unit',
+        type: 'select',
+        options: [
+          { label: 'Minutes', value: 'minutes' },
+          { label: 'Hours', value: 'hours' },
+        ],
+        defaultValue: 'minutes',
+        required: true,
+        helpText: 'Minutes: every N minutes (1-59). Hours: every N hours (1-23).',
+      },
     ],
   },
   {

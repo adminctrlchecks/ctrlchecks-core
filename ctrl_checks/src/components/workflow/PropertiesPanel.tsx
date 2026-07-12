@@ -1244,6 +1244,55 @@ export default function PropertiesPanel({
     [selectedNodeId, selectedNode, updateNodeConfig]
   );
 
+  // Converts an interval trigger's (value, unit) into a cron expression and activates it
+  // via the same workflows.cron_expression + workflowScheduler mechanism the schedule node uses.
+  const activateIntervalTrigger = useCallback(
+    async (value: number, unit: string) => {
+      if (!workflowId || workflowId === 'new') return;
+
+      const cron =
+        unit === 'hours'
+          ? `0 */${Math.min(Math.max(Math.round(value), 1), 23)} * * *`
+          : `*/${Math.min(Math.max(Math.round(value), 1), 59)} * * * *`;
+
+      try {
+        const { error: updateError } = await awsClient
+          .from('workflows')
+          .update({ cron_expression: cron })
+          .eq('id', workflowId);
+
+        if (updateError) {
+          console.error('[IntervalTrigger] Error saving cron to workflows table:', updateError);
+          toast({
+            title: 'Warning',
+            description: 'Interval saved to node config but failed to save to workflow. Scheduler may not start.',
+            variant: 'destructive',
+          });
+          return;
+        }
+
+        workflowScheduler.stop(workflowId);
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        workflowScheduler.start(workflowId, cron);
+
+        toast({
+          title: 'Interval saved',
+          description: `Workflow will run automatically every ${value} ${unit}.`,
+          duration: 5000,
+        });
+        window.dispatchEvent(new Event('schedule-updated'));
+      } catch (error) {
+        console.error('[IntervalTrigger] Error starting scheduler:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to start scheduler. Please try again.',
+          variant: 'destructive',
+        });
+      }
+    },
+    [workflowId, toast]
+  );
+
   // Per-field fill mode — writes to config._fillMode[fieldName] and persists via attach-inputs
   const handleFillModeChange = useCallback(
     async (fieldKey: string, mode: 'manual_static' | 'buildtime_ai_once' | 'runtime_ai', restoredValue?: unknown) => {
@@ -2800,6 +2849,58 @@ export default function PropertiesPanel({
                               }
                             }}
                           />
+                        </div>
+                      ) : selectedNode.data.type === 'interval' ? (
+                        <div className="space-y-4">
+                          <h3 className="text-xs font-medium uppercase text-muted-foreground/70 tracking-wide">
+                            Configuration
+                          </h3>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                              <label className="text-xs text-muted-foreground">Interval</label>
+                              <Input
+                                type="number"
+                                min={1}
+                                value={(selectedNode.data.config?.interval as number) ?? 5}
+                                onChange={(e) => {
+                                  const raw = parseInt(e.target.value, 10);
+                                  const value = Number.isFinite(raw) && raw > 0 ? raw : 1;
+                                  const unit = (selectedNode.data.config?.unit as string) || 'minutes';
+                                  updateNodeConfig(selectedNode.id, { interval: value, unit });
+                                }}
+                                onBlur={async (e) => {
+                                  const raw = parseInt(e.target.value, 10);
+                                  const value = Number.isFinite(raw) && raw > 0 ? raw : 1;
+                                  const unit = (selectedNode.data.config?.unit as string) || 'minutes';
+                                  await activateIntervalTrigger(value, unit);
+                                }}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="text-xs text-muted-foreground">Unit</label>
+                              <Select
+                                value={(selectedNode.data.config?.unit as string) || 'minutes'}
+                                onValueChange={async (unit) => {
+                                  const value = (selectedNode.data.config?.interval as number) ?? 5;
+                                  updateNodeConfig(selectedNode.id, { interval: value, unit });
+                                  await activateIntervalTrigger(value, unit);
+                                }}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="minutes">Minutes (1-59)</SelectItem>
+                                  <SelectItem value="hours">Hours (1-23)</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {!workflowId || workflowId === 'new'
+                              ? 'Save the workflow first — the interval will activate automatically after saving.'
+                              : 'Runs automatically at this interval once the workflow is active.'}
+                          </p>
                         </div>
                       ) : selectedNode.data.type === 'schedulewise' ? (
                         <div className="space-y-4">
