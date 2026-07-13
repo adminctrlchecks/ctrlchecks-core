@@ -15,11 +15,14 @@ export function overrideManualTrigger(
   return {
     ...def,
     execute: async (context) => {
-      const { input } = context;
-      
+      // context.input does not exist on NodeExecutionContext. Manual trigger's
+      // test payload lives in config.inputData; fall back to rawInput/inputs
+      // for consistency with the other trigger overrides.
+      const sourceInput = context.config?.inputData ?? context.rawInput ?? context.inputs ?? {};
+
       // Extract input object
-      const inputObj = typeof input === 'object' && input !== null && !Array.isArray(input)
-        ? input as Record<string, unknown>
+      const inputObj = typeof sourceInput === 'object' && sourceInput !== null && !Array.isArray(sourceInput)
+        ? sourceInput as Record<string, unknown>
         : {};
       
       // ✅ OPTIMIZED: Return clean output - just the input data, no trigger metadata

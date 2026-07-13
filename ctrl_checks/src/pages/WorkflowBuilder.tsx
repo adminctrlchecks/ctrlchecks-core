@@ -25,7 +25,8 @@ import { buildFormPublicUrl } from '@/lib/formPublicUrl';
 import { enforceFrontendRenderContract, normalizeBackendWorkflow, validateNodeTypesRegistered } from '@/lib/node-type-normalizer';
 import { GuidedStatusCard } from '@/components/ui/guided-status-card';
 import { mapWorkflowIssueToGuidance, type GuidedStatusContent } from '@/lib/workflow-guidance';
-import { getAIGuidance } from '@/lib/ai-error-guidance';
+import { getAIGuidance, type AIGuidanceErrorData, type AIGuidanceWorkflowContext } from '@/lib/ai-error-guidance';
+import { buildWorkflowGuidanceContext } from '@/lib/workflow-guidance-context';
 import { useExecutionNotifications } from '../hooks/useExecutionNotifications';
 import { ExecutionResultNotification } from '../components/workflow/ExecutionResultNotification';
 import type { ExecutionResult } from '../lib/executionNotifications';
@@ -50,6 +51,65 @@ type ReliabilityUiState = {
   selfCorrectionTriggered?: boolean;
   lastErrorCode?: string;
 };
+
+/** True when the backend already reported specific, actionable diagnostics for this error. */
+function hasConcreteBackendDiagnostics(details: Record<string, unknown> | undefined): boolean {
+  if (!details) return false;
+  const arrays = [
+    details.missingInputs,
+    details.runtimeValidationIssues,
+    details.missingCredentials,
+    details.executionValidationIssues,
+    details.executionValidationErrors,
+    details.validationErrors,
+    details.schemaValidationFailures,
+  ];
+  return arrays.some((value) => Array.isArray(value) && value.length > 0);
+}
+
+/**
+ * Builds workflow guidance for a save/run error.
+ *
+ * Backend-reported diagnostics are the source of truth: if the failing operation already
+ * told us exactly what's wrong (missing inputs, a provider rejection, etc.), that must be
+ * shown as-is. The local, whole-workflow field scan (`buildWorkflowGuidanceContext`) is only
+ * a fallback for generic errors that carry no structured detail — it must never override or
+ * get blended with a precise backend/provider diagnostic, since it does not have runtime
+ * context and can surface unrelated or optional fields on other nodes.
+ */
+async function getWorkflowGuidanceWithSetupContext(
+  errorData: AIGuidanceErrorData,
+  nodes: Array<{ id: string; type?: string; data?: unknown }>,
+  workflowContext: AIGuidanceWorkflowContext = {}
+): Promise<GuidedStatusContent> {
+  const backendDetails = (errorData.details || {}) as Record<string, unknown>;
+  const backendHasConcreteData = hasConcreteBackendDiagnostics(backendDetails);
+
+  const setupContext = backendHasConcreteData
+    ? {}
+    : await buildWorkflowGuidanceContext(nodes as any[]);
+
+  const details = {
+    ...backendDetails,
+    ...(!backendHasConcreteData && setupContext.missingInputs ? { missingInputs: setupContext.missingInputs } : {}),
+    ...(!backendHasConcreteData && setupContext.runtimeValidationIssues
+      ? { runtimeValidationIssues: setupContext.runtimeValidationIssues }
+      : {}),
+    ...(!backendHasConcreteData && setupContext.validationErrors ? { validationErrors: setupContext.validationErrors } : {}),
+  };
+
+  return getAIGuidance(
+    { ...errorData, details },
+    {
+      ...workflowContext,
+      operation: workflowContext.operation || errorData.operation,
+      missingInputs: workflowContext.missingInputs || (backendHasConcreteData ? undefined : setupContext.missingInputs),
+      runtimeValidationIssues:
+        workflowContext.runtimeValidationIssues || (backendHasConcreteData ? undefined : setupContext.runtimeValidationIssues),
+      validationErrors: workflowContext.validationErrors || (backendHasConcreteData ? undefined : setupContext.validationErrors),
+    }
+  );
+}
 
 
 export default function WorkflowBuilder() {
@@ -363,7 +423,11 @@ export default function WorkflowBuilder() {
       if (!validation.valid) {
         const errorMessages = validation.errors.map(e => e.message).join('; ');
         console.error('[WorkflowBuilder] Workflow validation failed:', validation.errors);
-        getAIGuidance({ code: 'WORKFLOW_VALIDATION_FAILED', message: errorMessages }).then(setExecutionGuidance);
+        getWorkflowGuidanceWithSetupContext(
+          { code: 'WORKFLOW_VALIDATION_FAILED', message: errorMessages, details: { errors: validation.errors } },
+          nodes as any[],
+          { operation: 'save' }
+        ).then(setExecutionGuidance);
         throw new Error(`Workflow validation failed: ${errorMessages}`);
       }
       
@@ -481,7 +545,17 @@ export default function WorkflowBuilder() {
                 } else {
                   // Any other attach-inputs failure is surfaced to the user.
                   console.warn('[handleSave] Failed to auto-attach inputs:', attachError);
-                  getAIGuidance({ code: 'ATTACH_INPUTS_FAILED', message: 'Workflow inputs could not be updated', operation: 'save' } as any).then(setExecutionGuidance);
+                  getWorkflowGuidanceWithSetupContext(
+                    {
+                      code: attachError.code || 'ATTACH_INPUTS_FAILED',
+                      message: attachError.message || attachError.error || 'Workflow inputs could not be updated',
+                      hint: attachError.hint,
+                      details: attachError.details || attachError,
+                      operation: 'save',
+                    },
+                    nodes as any[],
+                    { operation: 'save', phase: attachError.phase || attachError.currentPhase }
+                  ).then(setExecutionGuidance);
                 }
               }
             }
@@ -526,7 +600,11 @@ export default function WorkflowBuilder() {
           : typeof error === 'object' && error !== null && 'message' in error && typeof (error as { message?: unknown }).message === 'string'
             ? (error as { message: string }).message
             : 'Failed to save workflow';
-      getAIGuidance({ code: 'SAVE_FAILED', message: saveMsg, operation: 'save' } as any).then(setExecutionGuidance);
+      getWorkflowGuidanceWithSetupContext(
+        { code: 'SAVE_FAILED', message: saveMsg, operation: 'save' },
+        nodes as any[],
+        { operation: 'save' }
+      ).then(setExecutionGuidance);
     } finally {
       isSavingRef.current = false;
       setIsSaving(false);
@@ -739,7 +817,11 @@ export default function WorkflowBuilder() {
         console.log(`[handleRun] ✅ Auto-saved workflow via /api/save-workflow - ID: ${savedWorkflowId}`);
       } catch (error) {
         console.error('Error auto-saving workflow:', error);
-        getAIGuidance({ code: 'SAVE_FAILED', message: 'Workflow could not be saved', operation: 'save' } as any).then(setExecutionGuidance);
+        getWorkflowGuidanceWithSetupContext(
+          { code: 'SAVE_FAILED', message: error instanceof Error ? error.message : 'Workflow could not be saved', operation: 'save' },
+          nodes as any[],
+          { operation: 'save' }
+        ).then(setExecutionGuidance);
         setIsSaving(false);
         setIsRunning(false);
         return;
@@ -750,7 +832,11 @@ export default function WorkflowBuilder() {
 
     const finalWorkflowId = useWorkflowStore.getState().workflowId;
     if (!finalWorkflowId) {
-      getAIGuidance({ code: 'SAVE_REQUIRED', message: 'Workflow must be saved before running', operation: 'save' } as any).then(setExecutionGuidance);
+      getWorkflowGuidanceWithSetupContext(
+        { code: 'SAVE_REQUIRED', message: 'Workflow must be saved before running', operation: 'save' },
+        nodes as any[],
+        { operation: 'save' }
+      ).then(setExecutionGuidance);
       setIsRunning(false);
       return;
     }
@@ -766,7 +852,11 @@ export default function WorkflowBuilder() {
 
       if (checkError || !workflowCheck) {
         console.error('[execute-workflow] Workflow not found in database:', checkError);
-        getAIGuidance({ code: 'WORKFLOW_NOT_FOUND', message: 'The workflow may not be saved yet', operation: 'save' } as any).then(setExecutionGuidance);
+        getWorkflowGuidanceWithSetupContext(
+          { code: 'WORKFLOW_NOT_FOUND', message: 'The workflow may not be saved yet', operation: 'save' },
+          nodes as any[],
+          { operation: 'save' }
+        ).then(setExecutionGuidance);
         return;
       }
 
@@ -774,7 +864,11 @@ export default function WorkflowBuilder() {
       console.log('[execute-workflow] Workflow verified in database:', { id: workflowCheck.id, name: workflowCheck.name });
     } catch (verifyError) {
       console.error('[execute-workflow] Error verifying workflow:', verifyError);
-      getAIGuidance({ code: 'VERIFICATION_ERROR', message: 'Could not verify workflow', operation: 'save' } as any).then(setExecutionGuidance);
+      getWorkflowGuidanceWithSetupContext(
+        { code: 'VERIFICATION_ERROR', message: verifyError instanceof Error ? verifyError.message : 'Could not verify workflow', operation: 'save' },
+        nodes as any[],
+        { operation: 'save' }
+      ).then(setExecutionGuidance);
       return;
     }
 
@@ -798,20 +892,32 @@ export default function WorkflowBuilder() {
       
       const normalized = normalizeWorkflowGraph(nodes, edges);
       if (normalized.errors.length > 0) {
-        getAIGuidance({ code: 'GRAPH_VALIDATION_FAILED', message: normalized.errors.join(', ') }).then(setExecutionGuidance);
+        getWorkflowGuidanceWithSetupContext(
+          { code: 'GRAPH_VALIDATION_FAILED', message: normalized.errors.join(', '), details: { errors: normalized.errors } },
+          nodes as any[],
+          { operation: 'run' }
+        ).then(setExecutionGuidance);
         return;
       }
 
       const validation = validateWorkflowGraph(normalized.nodes, normalized.edges);
       if (!validation.valid) {
         const errorMessages = validation.errors.map(e => e.message).join('; ');
-        getAIGuidance({ code: 'WORKFLOW_VALIDATION_FAILED', message: errorMessages }).then(setExecutionGuidance);
+        getWorkflowGuidanceWithSetupContext(
+          { code: 'WORKFLOW_VALIDATION_FAILED', message: errorMessages, details: { errors: validation.errors } },
+          nodes as any[],
+          { operation: 'run' }
+        ).then(setExecutionGuidance);
         setIsRunning(false);
         return;
       }
     } catch (validationError: any) {
       console.error('[WorkflowBuilder] Validation error:', validationError);
-      getAIGuidance({ code: 'VALIDATION_ERROR', message: validationError?.message || 'Failed to validate workflow' }).then(setExecutionGuidance);
+      getWorkflowGuidanceWithSetupContext(
+        { code: 'VALIDATION_ERROR', message: validationError?.message || 'Failed to validate workflow' },
+        nodes as any[],
+        { operation: 'run' }
+      ).then(setExecutionGuidance);
       setIsRunning(false);
       return;
     }
@@ -920,9 +1026,10 @@ export default function WorkflowBuilder() {
                 fullError: errorData
               });
               
-              getAIGuidance(
-                { code: errorCode, message: errorMessage, hint: errorHint, details: errorData.details },
-                { phase: errorData.phase }
+              getWorkflowGuidanceWithSetupContext(
+                { code: errorCode, message: errorMessage, hint: errorHint, details: errorData.details || errorData },
+                nodes as any[],
+                { phase: errorData.phase, operation: 'run' }
               ).then(setExecutionGuidance);
               return;
             }
@@ -1045,7 +1152,20 @@ export default function WorkflowBuilder() {
             // Continue to execution - workflow is already ready
           } else {
             console.warn('[execute-workflow] Failed to auto-attach inputs:', attachError);
-            // Continue anyway - execution endpoint will show the actual error
+            const guidance = await getWorkflowGuidanceWithSetupContext(
+              {
+                code: attachError.code || 'ATTACH_INPUTS_FAILED',
+                message: attachError.message || attachError.error || 'Workflow inputs could not be updated',
+                hint: attachError.hint,
+                details: attachError.details || attachError,
+                operation: 'run',
+              },
+              nodes as any[],
+              { operation: 'run', phase: attachError.phase || attachError.currentPhase }
+            );
+            setExecutionGuidance(guidance);
+            setIsRunning(false);
+            return;
           }
         } else {
           console.log('[execute-workflow] ✅ Inputs attached successfully');
@@ -1056,8 +1176,19 @@ export default function WorkflowBuilder() {
         console.log('[execute-workflow] Skipping attach-inputs before run (unchanged payload or workflow already ready)');
       }
     } catch (attachError) {
-      console.warn('[execute-workflow] Error auto-attaching inputs (non-fatal):', attachError);
-      // Continue anyway - execution endpoint will show the actual error
+      console.warn('[execute-workflow] Error auto-attaching inputs:', attachError);
+      const guidance = await getWorkflowGuidanceWithSetupContext(
+        {
+          code: 'ATTACH_INPUTS_FAILED',
+          message: attachError instanceof Error ? attachError.message : 'Workflow inputs could not be updated',
+          operation: 'run',
+        },
+        nodes as any[],
+        { operation: 'run' }
+      );
+      setExecutionGuidance(guidance);
+      setIsRunning(false);
+      return;
     }
 
     // Reset all node statuses to 'idle' before starting new execution
@@ -1122,9 +1253,10 @@ export default function WorkflowBuilder() {
           fullError: errorData
         });
         
-        getAIGuidance(
-          { code: errorCode, message: errorMessage, hint: errorHint, details: errorData.details },
-          { phase: errorData.phase }
+        getWorkflowGuidanceWithSetupContext(
+          { code: errorCode, message: errorMessage, hint: errorHint, details: errorData.details || errorData },
+          nodes as any[],
+          { phase: errorData.phase, operation: 'run' }
         ).then(setExecutionGuidance);
         setIsRunning(false);
         return;
@@ -1171,11 +1303,16 @@ export default function WorkflowBuilder() {
       });
 
       if (data.status && !['queued', 'success', 'waiting', 'started'].includes(data.status)) {
-        getAIGuidance({
-          code: data.code,
-          message: data.error || 'Execution could not be completed.',
-          details: data.details,
-        }).then(setExecutionGuidance);
+        getWorkflowGuidanceWithSetupContext(
+          {
+            code: data.code,
+            message: data.error || 'Execution could not be completed.',
+            details: data.details || data,
+            operation: 'run',
+          },
+          nodes as any[],
+          { operation: 'run' }
+        ).then(setExecutionGuidance);
       } else {
         setExecutionGuidance(null);
       }
@@ -1185,7 +1322,11 @@ export default function WorkflowBuilder() {
     } catch (error) {
       console.error('Execution error:', error);
       const errorMessage = error instanceof Error ? error.message : typeof error === 'string' ? error : 'Failed to execute workflow';
-      getAIGuidance({ code: 'EXECUTION_ERROR', message: errorMessage }).then(setExecutionGuidance);
+      getWorkflowGuidanceWithSetupContext(
+        { code: 'EXECUTION_ERROR', message: errorMessage, operation: 'run' },
+        nodes as any[],
+        { operation: 'run' }
+      ).then(setExecutionGuidance);
     } finally {
       // Async execution stays "running" until ExecutionConsole emits a terminal event.
     }

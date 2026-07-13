@@ -5504,6 +5504,7 @@ export function AutonomousAgentWizard() {
                     ...(sessionData?.session?.access_token
                         ? { Authorization: `Bearer ${sessionData.session.access_token}` }
                         : {}),
+                    'x-stream-progress': 'true',
                 },
                 body: JSON.stringify({
                     correlationId: capNodeCorrelationId,
@@ -5519,7 +5520,58 @@ export function AutonomousAgentWizard() {
                 throw new Error(err.message || err.error || 'Backend generation failed');
             }
 
-            const data = await response.json();
+            const confirmContentType = (response.headers.get('content-type') || '').toLowerCase();
+            const isConfirmNdjsonStream = confirmContentType.includes('application/x-ndjson');
+
+            let data: any = null;
+
+            if (isConfirmNdjsonStream && response.body) {
+                const confirmReader = response.body.getReader();
+                const confirmDecoder = new TextDecoder();
+                let confirmBuffer = '';
+
+                while (true) {
+                    const { done, value } = await confirmReader.read();
+                    if (done) break;
+
+                    confirmBuffer += confirmDecoder.decode(value, { stream: true });
+                    const lines = confirmBuffer.split('\n');
+                    confirmBuffer = lines.pop() || '';
+
+                    for (const line of lines) {
+                        if (!line.trim()) continue;
+
+                        let update: any;
+                        try {
+                            update = JSON.parse(line);
+                        } catch {
+                            console.warn('Failed to parse confirm progress update:', line);
+                            continue;
+                        }
+
+                        if (update.status === 'error') {
+                            throw new Error(update.message || update.error || 'Backend generation failed');
+                        }
+
+                        if (typeof update.progress_percentage === 'number') {
+                            const next = Math.min(99, Math.max(0, update.progress_percentage));
+                            setProgress(prev => deriveMonotonicProgress(prev, next));
+                        }
+                        if (typeof update.log === 'string' && update.log) {
+                            setBuildingLogs(prev => (prev.includes(update.log) ? prev : [...prev, update.log]));
+                        }
+                        if (update.status === 'success') {
+                            data = update;
+                        }
+                    }
+                }
+
+                if (!data) {
+                    throw new Error('Backend generation stream ended without a result.');
+                }
+            } else {
+                data = await response.json();
+            }
 
             // data.workflow contains the AI-populated, credential-discovered, field-ownership-mapped workflow.
             // We must save it to DB, then wire it into the field-ownership wizard
@@ -5531,8 +5583,7 @@ export function AutonomousAgentWizard() {
                 throw new Error('Backend returned an empty workflow — no nodes to save.');
             }
 
-            setProgress(80);
-            setBuildingLogs((prev) => [...prev, 'Saving workflow...']);
+            setBuildingLogs((prev) => (prev.includes('Saving workflow...') ? prev : [...prev, 'Saving workflow...']));
 
             // -- Save to DB ----------------------------------------------
             const { normalizeBackendWorkflow } = await import('@/lib/node-type-normalizer');
@@ -7999,18 +8050,25 @@ export function AutonomousAgentWizard() {
                                             Building Your Workflow
                                         </h2>
                                         
-                                        {/* Cognitive Progress Loading Text */}
-                                        <motion.div
-                                            key={cognitiveTextIndex}
-                                            initial={{ opacity: 0, y: 5 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            exit={{ opacity: 0, y: -5 }}
-                                            transition={{ duration: 0.4 }}
-                                            className="text-base sm:text-lg"
-                                            style={{ color: '#9CA3AF' }}
-                                        >
-                                            {cognitiveTexts[cognitiveTextIndex]}
-                                        </motion.div>
+                                        {/* Progress Loading Text — real backend stage log when available, decorative rotation as pre-stream filler */}
+                                        {(() => {
+                                            const liveStatusText = buildingLogs.length > 0
+                                                ? buildingLogs[buildingLogs.length - 1]
+                                                : cognitiveTexts[cognitiveTextIndex];
+                                            return (
+                                                <motion.div
+                                                    key={liveStatusText}
+                                                    initial={{ opacity: 0, y: 5 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    exit={{ opacity: 0, y: -5 }}
+                                                    transition={{ duration: 0.4 }}
+                                                    className="text-base sm:text-lg"
+                                                    style={{ color: '#9CA3AF' }}
+                                                >
+                                                    {liveStatusText}
+                                                </motion.div>
+                                            );
+                                        })()}
                                     </div>
 
                                     {/* Compact Final Prompt Summary so users see WHAT is being built */}

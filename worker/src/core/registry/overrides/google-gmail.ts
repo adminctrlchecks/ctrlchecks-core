@@ -15,7 +15,7 @@ function ensureRecipientEmailsField(inputSchema: NodeInputSchema): NodeInputSche
       description:
         'Recipient email address(es). Supports comma-separated list or array input. If provided, overrides automatic detection.',
       required: false,
-      examples: ['john@example.com', 'john@example.com, jane@example.com', '{{$json.email}}'],
+      examples: [],
     },
   };
 }

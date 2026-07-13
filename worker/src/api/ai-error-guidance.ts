@@ -14,6 +14,21 @@ interface ErrorGuidanceRequest {
     nodeType?: string;
     missingInputs?: Array<{ fieldName: string; nodeLabel: string; description?: string }>;
     missingCredentials?: Array<{ provider: string; displayName: string }>;
+    validationErrors?: string[];
+    runtimeValidationIssues?: Array<{
+      type?: string;
+      nodeId?: string;
+      nodeType?: string;
+      nodeLabel?: string;
+      fieldName?: string;
+      fieldLabel?: string;
+      description?: string;
+      reason?: string;
+      fillMode?: string;
+      source?: string;
+    }>;
+    runtimeInputAudit?: unknown[];
+    runtimeInputHandoffAudit?: unknown[];
     executionValidationErrors?: string[];
     executionValidationIssues?: Array<{
       type?: string;
@@ -40,9 +55,31 @@ interface ErrorGuidanceResponse {
 
 const CACHE_TTL_SECONDS = 300; // 5 minutes
 
+function runtimeIssuesAsMissingInputs(
+  issues: NonNullable<NonNullable<ErrorGuidanceRequest['context']>['runtimeValidationIssues']>
+): Array<{ fieldName: string; nodeLabel: string; description?: string }> {
+  return issues
+    .map((issue) => ({
+      fieldName: issue.fieldLabel || issue.fieldName || '',
+      nodeLabel: issue.nodeLabel || issue.nodeType || '',
+      description: issue.reason || issue.description,
+    }))
+    .filter((issue) => issue.fieldName);
+}
+
+function hasConcreteSetupContext(req: ErrorGuidanceRequest): boolean {
+  const ctx = req.context || {};
+  return Boolean(ctx.missingInputs?.length || ctx.runtimeValidationIssues?.length);
+}
+
 function deterministicGuidance(req: ErrorGuidanceRequest): ErrorGuidanceResponse {
   const code = (req.errorCode || '').toUpperCase();
   const ctx = req.context || {};
+  const missingInputs = ctx.missingInputs?.length
+    ? ctx.missingInputs
+    : ctx.runtimeValidationIssues?.length
+      ? runtimeIssuesAsMissingInputs(ctx.runtimeValidationIssues)
+      : [];
 
   // Missing credentials
   if (
@@ -71,13 +108,13 @@ function deterministicGuidance(req: ErrorGuidanceRequest): ErrorGuidanceResponse
   if (
     code.includes('MISSING_INPUTS') ||
     code.includes('MISSING_INPUT') ||
-    (ctx.missingInputs && ctx.missingInputs.length > 0)
+    missingInputs.length > 0
   ) {
-    const fields = ctx.missingInputs?.map((f) => {
+    const fields = missingInputs.map((f) => {
       return f.nodeLabel ? `${f.nodeLabel} → ${f.fieldName}` : f.fieldName;
     }).filter(Boolean) || [];
     const fieldList = fields.length > 0 ? fields.join(', ') : 'some required fields';
-    const nodeNames = [...new Set(ctx.missingInputs?.map((f) => f.nodeLabel).filter(Boolean) || [])];
+    const nodeNames = [...new Set(missingInputs.map((f) => f.nodeLabel).filter(Boolean) || [])];
     const nodeHint = nodeNames.length > 0 ? ` Click the ${nodeNames.join(' or ')} node to open its settings.` : '';
     return {
       title: 'Fill in the remaining fields',
@@ -213,6 +250,17 @@ function buildAIPrompt(req: ErrorGuidanceRequest): string {
     lines.push(`  Missing inputs: ${ctx.missingInputs.map((f) => f.nodeLabel ? `${f.nodeLabel} → ${f.fieldName}` : f.fieldName).join(', ')}`);
   }
 
+  if (ctx.runtimeValidationIssues?.length) {
+    lines.push(`  Runtime field issues: ${ctx.runtimeValidationIssues.map((issue) => {
+      const node = issue.nodeLabel || issue.nodeType || 'node';
+      const field = issue.fieldLabel || issue.fieldName || 'field';
+      const reason = issue.reason || issue.description || 'needs a value';
+      return `${node} -> ${field}: ${reason}`;
+    }).join(', ')}`);
+  } else if (ctx.validationErrors?.length) {
+    lines.push(`  Field validation messages: ${ctx.validationErrors.join(', ')}`);
+  }
+
   if (ctx.executionValidationIssues?.length) {
     lines.push(`  Validation issues: ${ctx.executionValidationIssues.map((issue) => {
       const current = issue.nodeLabel || issue.nodeType || 'node';
@@ -235,6 +283,10 @@ export default async function aiErrorGuidanceHandler(req: Request, res: Response
 
   // Build a deterministic fallback immediately so we always have something
   const fallback = deterministicGuidance(body);
+  if (hasConcreteSetupContext(body)) {
+    res.json(fallback);
+    return;
+  }
 
   // Check Redis cache
   const contextHash = crypto

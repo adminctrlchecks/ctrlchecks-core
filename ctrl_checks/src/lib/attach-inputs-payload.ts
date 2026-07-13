@@ -3,6 +3,8 @@
  * Worker accepts flat keys (`config_<nodeId>_<field>`) or nested `{ [nodeId]: { field: value } }`.
  */
 
+import { isEffectivelyEmptyValue } from '@/lib/workflow-value-readiness';
+
 /** Meta keys under `node.data.config` that must persist with attach-inputs (ownership / fill mode). */
 export const ATTACH_INPUTS_PERSISTABLE_META_KEYS = new Set([
   '_fillMode',
@@ -24,6 +26,7 @@ export function extractNodeConfigForAttachInputs(
       }
       continue;
     }
+    if (isEffectivelyEmptyValue(value)) continue;
     out[key] = value;
   }
   return out;

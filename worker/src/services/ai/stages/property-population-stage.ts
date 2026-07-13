@@ -33,6 +33,8 @@ export interface PropertyPopulationStageInput {
   userIntent: string;
   structuralPrompt: string;
   correlationId?: string;
+  /** Called once per node (success or failure) so callers can emit sub-stage progress. */
+  onNodeProgress?: (done: number, total: number) => void;
 }
 
 export interface PropertyPopulationStageResult {
@@ -60,6 +62,107 @@ function buildCompactGraphDigest(workflow: Workflow): string {
       return `${i + 1}. ${n.id}: ${t}`;
     })
     .join('\n');
+}
+
+// ─── Grounded Upstream Field Resolution ─────────────────────────────────────
+
+interface GroundedUpstreamField {
+  name: string;
+  type: string;
+  description?: string;
+}
+
+interface GroundedUpstreamContext {
+  fields: GroundedUpstreamField[];
+  names: Set<string>;
+}
+
+/**
+ * Walks the workflow graph backward from nodeId to find the REAL data shape
+ * flowing into this node — not a per-type guess.
+ *
+ * At each upstream hop, asks the registry for that node's effective output
+ * schema (which is grounded in the node's actual instance config for dynamic
+ * nodes like `form`, e.g. its real configured fields — see
+ * unifiedNodeRegistry.getEffectiveOutputSchema). When a node declares no
+ * properties and isn't marked `dynamic` (e.g. switch/if_else, which don't
+ * transform the payload and declare no output schema of their own), the walk
+ * continues further upstream through it. When a node IS marked `dynamic`
+ * (e.g. a code node whose output shape can't be known statically), the walk
+ * stops there and contributes no fields from that branch — attributing
+ * whatever fed the code node would be a guess, not grounding.
+ *
+ * No node-type checks live here — only the registry's declarative schema.
+ */
+function resolveGroundedUpstreamFields(workflow: Workflow, nodeId: string): GroundedUpstreamContext {
+  const fields: GroundedUpstreamField[] = [];
+  const names = new Set<string>();
+  const visited = new Set<string>();
+  const queue: string[] = [nodeId];
+
+  while (queue.length > 0) {
+    const currentId = queue.shift()!;
+    if (visited.has(currentId)) continue;
+    visited.add(currentId);
+
+    for (const edge of workflow.edges) {
+      if (edge.target !== currentId || visited.has(edge.source)) continue;
+      const upNode = workflow.nodes.find((n) => n.id === edge.source);
+      if (!upNode) continue;
+      const upType = String(upNode.type ?? upNode.data?.type ?? '');
+      const effective = unifiedNodeRegistry.getEffectiveOutputSchema(
+        upType,
+        upNode.data?.config as Record<string, any> | undefined,
+      );
+
+      if (effective?.properties && Object.keys(effective.properties).length > 0) {
+        for (const [name, meta] of Object.entries(effective.properties)) {
+          if (!names.has(name)) {
+            names.add(name);
+            fields.push({ name, type: meta.type, description: meta.description });
+          }
+        }
+        continue; // Real shape found here — don't attribute it to nodes further back.
+      }
+
+      if (effective?.dynamic === true) {
+        continue; // Shape is unknowable statically (e.g. code) — don't guess past it.
+      }
+
+      queue.push(edge.source); // No declared shape at all (passthrough/routing) — keep walking.
+    }
+  }
+
+  return { fields, names };
+}
+
+/** Recursively collects every `$json.<name>` reference (bare or `{{...}}`) inside a JSON value. */
+function extractJsonFieldRefs(value: unknown): string[] {
+  const refs: string[] = [];
+  const visit = (v: unknown): void => {
+    if (typeof v === 'string') {
+      const matches = v.matchAll(/\$json\.([A-Za-z_][A-Za-z0-9_]*)/g);
+      for (const m of matches) refs.push(m[1]);
+    } else if (Array.isArray(v)) {
+      for (const item of v) visit(item);
+    } else if (v && typeof v === 'object') {
+      for (const val of Object.values(v)) visit(val);
+    }
+  };
+  visit(value);
+  return refs;
+}
+
+const RESERVED_EXAMPLE_EMAIL_DOMAIN = /@(example\.(com|net|org|edu)|test\.com)\b/i;
+
+/** True when a literal recipient value is a fabricated placeholder rather than a real address. */
+function isFabricatedRecipientLiteral(value: string, examples: unknown): boolean {
+  const trimmed = value.trim().toLowerCase();
+  if (RESERVED_EXAMPLE_EMAIL_DOMAIN.test(trimmed)) return true;
+  if (Array.isArray(examples)) {
+    return examples.some((ex) => typeof ex === 'string' && ex.trim().toLowerCase() === trimmed);
+  }
+  return false;
 }
 
 /** True when the stored value equals the registry default — no explicit choice was made yet. */
@@ -287,7 +390,7 @@ async function generateRuntimeFieldDirectives(params: {
 export async function runPropertyPopulationStage(
   input: PropertyPopulationStageInput,
 ): Promise<PropertyPopulationStageResult> {
-  const { workflow, userIntent, structuralPrompt, correlationId } = input;
+  const { workflow, userIntent, structuralPrompt, correlationId, onNodeProgress } = input;
   const startedAt = Date.now();
   const graphDigest = buildCompactGraphDigest(workflow);
 
@@ -303,8 +406,10 @@ export async function runPropertyPopulationStage(
   // Work on a shallow copy of nodes so we don't mutate the original array reference,
   // but we DO mutate node.data.config in place (nodes are objects).
   const nodes = workflow.nodes;
+  let nodeIndex = 0;
 
   for (const node of nodes) {
+    nodeIndex++;
     const nodeId = node.id;
     const nodeType = node.type ?? node.data?.type;
 
@@ -316,6 +421,7 @@ export async function runPropertyPopulationStage(
         nodeId,
         reason: 'node has no type — skipping',
       });
+      onNodeProgress?.(nodeIndex, nodes.length);
       continue;
     }
 
@@ -331,6 +437,7 @@ export async function runPropertyPopulationStage(
           nodeType,
           reason: 'node type not found in registry — skipping',
         });
+        onNodeProgress?.(nodeIndex, nodes.length);
         continue;
       }
 
@@ -375,8 +482,11 @@ export async function runPropertyPopulationStage(
         // non-blocking
       }
 
+      // ── Resolve the REAL upstream data shape by walking the graph (not a per-type guess) ──
+      const groundedUpstream = resolveGroundedUpstreamFields(workflow, nodeId);
+
       // ── Get build value context from registry ────────────────────────────
-      const buildCtx = unifiedNodeRegistry.getBuildValueContext(nodeType, upstreamNodeType);
+      const buildCtx = unifiedNodeRegistry.getBuildValueContext(nodeType, upstreamNodeType, groundedUpstream.fields);
 
       if (!node.data) {
         (node as { data: Record<string, unknown> }).data = { config: {} };
@@ -407,20 +517,10 @@ export async function runPropertyPopulationStage(
         })
         .join('\n');
 
-      // ── Collect upstream form field keys (shared by if_else and switch) ────
-      const upstreamFormKeys: string[] = [];
-      for (const n of workflow.nodes) {
-        const nt = n.type ?? n.data?.type ?? '';
-        if (nt === 'form' || nt === 'form_trigger') {
-          const formFields = (n.data?.config as any)?.fields;
-          if (Array.isArray(formFields)) {
-            for (const f of formFields) {
-              const key = f.name ?? f.key ?? f.id;
-              if (key && typeof key === 'string') upstreamFormKeys.push(key);
-            }
-          }
-        }
-      }
+      // ── Upstream field keys grounded in this node's actual graph position
+      // (shared by if_else and switch) — the real fields resolved above, not
+      // a workflow-wide scan for any form node.
+      const upstreamFormKeys: string[] = groundedUpstream.fields.map((f) => f.name);
 
       // ── For if_else nodes: inject upstream form field keys and conditions format ─
       let upstreamFormFieldsHint = '';
@@ -493,57 +593,18 @@ export async function runPropertyPopulationStage(
           `For "long_body" fields: reference upstream data using {{$json.<field>}} template syntax.\n`;
       }
 
-      // ── Upstream data flow context (full upstream chain) ────────────────
-      // Walk ALL upstream nodes via edges so the LLM sees the complete data
-      // shape arriving at this node — not just the immediate predecessor.
+      // ── Upstream data flow context ───────────────────────────────────────
+      // Uses the grounded walk resolved above — the REAL fields flowing into
+      // this node (e.g. an actual form's configured fields), not per-type
+      // guesses or output-port names.
       let upstreamDataFlowHint = '';
-      try {
-        const upstreamChain: Array<{ nodeType: string; nodeLabel: string; outputFields: string[] }> = [];
-        const visited = new Set<string>();
-        const queue = [nodeId];
-        while (queue.length > 0) {
-          const currentId = queue.shift()!;
-          if (visited.has(currentId)) continue;
-          visited.add(currentId);
-          for (const edge of workflow.edges) {
-            if (edge.target !== currentId || visited.has(edge.source)) continue;
-            const upNode = workflow.nodes.find((n) => n.id === edge.source);
-            if (!upNode) continue;
-            const upType = String(upNode.type ?? upNode.data?.type ?? '');
-            const upDef = unifiedNodeRegistry.get(upType);
-            const upLabel = String(upNode.data?.label || upType);
-            const outputFields: string[] = [];
-            if (upDef?.outputSchema) {
-              outputFields.push(...Object.keys(upDef.outputSchema));
-            }
-            // Form nodes surface their configured fields as output
-            if (upType === 'form' || upType === 'form_trigger') {
-              const formFields = (upNode.data?.config as any)?.fields;
-              if (Array.isArray(formFields)) {
-                for (const f of formFields) {
-                  const key = f.name ?? f.key ?? f.label ?? f.id;
-                  if (key && typeof key === 'string' && !outputFields.includes(key)) {
-                    outputFields.push(key);
-                  }
-                }
-              }
-            }
-            upstreamChain.push({ nodeType: upType, nodeLabel: upLabel, outputFields });
-            queue.push(edge.source);
-          }
-        }
-        if (upstreamChain.length > 0) {
-          upstreamDataFlowHint =
-            `\nUPSTREAM_DATA_FLOW (nodes feeding data into this node, use {{$json.<field>}} to reference):\n` +
-            upstreamChain
-              .map((n) =>
-                `  - ${n.nodeLabel} (${n.nodeType})` +
-                (n.outputFields.length > 0 ? `: outputs [${n.outputFields.join(', ')}]` : ''),
-              )
-              .join('\n') + '\n';
-        }
-      } catch {
-        // non-blocking
+      if (groundedUpstream.fields.length > 0) {
+        upstreamDataFlowHint =
+          `\nUPSTREAM_DATA_FLOW (real fields flowing into this node, use {{$json.<field>}} to reference — ` +
+          `do NOT invent field names outside this list):\n` +
+          groundedUpstream.fields
+            .map((f) => `  - ${f.name}: ${f.type}${f.description ? ` — ${f.description}` : ''}`)
+            .join('\n') + '\n';
       }
 
       // ── Operation options hint for AI-suggestible manual_static fields ──
@@ -674,6 +735,41 @@ export async function runPropertyPopulationStage(
         }
       }
 
+      // ── Reject ungrounded {{$json.*}} refs and fabricated recipient literals ──
+      // Only enforced when we actually resolved a real upstream field set above —
+      // fail open (leave the value as-is) when there's nothing to check against
+      // (e.g. this node sits right after a trigger with no configured shape yet).
+      const rejectedFields: string[] = [];
+      if (groundedUpstream.names.size > 0) {
+        for (const [key, value] of Object.entries(filteredLlmValues)) {
+          const refs = extractJsonFieldRefs(value);
+          const hasUngroundedRef = refs.some((r) => !groundedUpstream.names.has(r));
+          if (hasUngroundedRef) {
+            rejectedFields.push(key);
+            continue;
+          }
+
+          const fieldDef = inputSchema[key];
+          if (fieldDef?.role === 'recipient' && typeof value === 'string' && refs.length === 0) {
+            if (isFabricatedRecipientLiteral(value, fieldDef.examples)) {
+              rejectedFields.push(key);
+            }
+          }
+        }
+      }
+      for (const key of rejectedFields) {
+        delete filteredLlmValues[key];
+        logger.warn({
+          event: 'ai_pipeline_stage_warn',
+          stage: 'property_population',
+          correlationId,
+          nodeId,
+          nodeType,
+          field: key,
+          reason: 'AI-built value referenced a nonexistent upstream field or was a fabricated placeholder — deferring to user',
+        });
+      }
+
       // ── 2.5 Merge over defaults + existing config (preserve _fillMode, structural snapshots, etc.)
       const prior = node.data?.config && typeof node.data.config === 'object' ? node.data.config : {};
 
@@ -684,6 +780,12 @@ export async function runPropertyPopulationStage(
         typeof (prior as any)._fillMode === 'object' && (prior as any)._fillMode !== null
           ? { ...(prior as any)._fillMode }
           : {};
+
+      // Rejected fields fall back to defaultConfig/prior value below — flip their
+      // ownership to "You" so the wizard surfaces them instead of hiding the gap.
+      for (const key of rejectedFields) {
+        priorFillMode[key] = 'manual_static';
+      }
 
       for (const key of Object.keys(filteredLlmValues)) {
         const v = filteredLlmValues[key];
@@ -718,42 +820,9 @@ export async function runPropertyPopulationStage(
         .map(([fieldName, field]) => ({ fieldName, field: field as NodeInputField }));
 
       if (runtimeAiFields.length > 0) {
-        // Collect all upstream field names (form fields + registry output fields)
-        // so the directive LLM can generate precise {{$json.<name>}} references.
-        const allUpstreamFieldNames: string[] = [];
-        try {
-          const visitedForDirectives = new Set<string>();
-          const q2 = [nodeId];
-          while (q2.length > 0) {
-            const cid = q2.shift()!;
-            if (visitedForDirectives.has(cid)) continue;
-            visitedForDirectives.add(cid);
-            for (const edge of workflow.edges) {
-              if (edge.target !== cid || visitedForDirectives.has(edge.source)) continue;
-              const upN = workflow.nodes.find((n) => n.id === edge.source);
-              if (!upN) continue;
-              const upT = String(upN.type ?? upN.data?.type ?? '');
-              const upD = unifiedNodeRegistry.get(upT);
-              if (upD?.outputSchema) {
-                allUpstreamFieldNames.push(...Object.keys(upD.outputSchema));
-              }
-              if (upT === 'form' || upT === 'form_trigger') {
-                const ff = (upN.data?.config as any)?.fields;
-                if (Array.isArray(ff)) {
-                  for (const f of ff) {
-                    const k = f.name ?? f.key ?? f.label ?? f.id;
-                    if (k && typeof k === 'string' && !allUpstreamFieldNames.includes(k)) {
-                      allUpstreamFieldNames.push(k);
-                    }
-                  }
-                }
-              }
-              q2.push(edge.source);
-            }
-          }
-        } catch {
-          // non-blocking
-        }
+        // Reuse the same grounded upstream walk computed above so the directive
+        // LLM generates {{$json.<name>}} references against real field names.
+        const allUpstreamFieldNames: string[] = groundedUpstream.fields.map((f) => f.name);
 
         const directives = await generateRuntimeFieldDirectives({
           nodeId,
@@ -774,6 +843,7 @@ export async function runPropertyPopulationStage(
       if (writtenFields.length > 0) {
         summary[nodeId] = writtenFields;
       }
+      onNodeProgress?.(nodeIndex, nodes.length);
     } catch (err) {
       // Per-node soft failure (2.5): log warn, leave node at defaultConfig, continue
       const nodeDef = unifiedNodeRegistry.get(nodeType ?? '');
@@ -789,6 +859,7 @@ export async function runPropertyPopulationStage(
         const prior = node.data?.config && typeof node.data.config === 'object' ? node.data.config : {};
         node.data.config = { ...nodeDef.defaultConfig(), ...prior };
       }
+      onNodeProgress?.(nodeIndex, nodes.length);
       // Continue to next node — stage never throws
     }
   }

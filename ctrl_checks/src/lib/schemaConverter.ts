@@ -536,6 +536,18 @@ export function convertNodeDefinitionToConfigFields(
 }
 
 /**
+ * A field the user has explicitly turned off via the Field Ownership panel
+ * (`config._fieldEnabled[field] === false`) is not part of this workflow's
+ * requirements, regardless of what the schema or a conditional `requiredIf`
+ * would otherwise demand. Disabling a field is a deliberate "this workflow
+ * doesn't need it" signal — it must never be reported as missing.
+ */
+function isFieldDisabledByOwner(inputs: Record<string, any>, fieldKey: string): boolean {
+  const fieldEnabled = (inputs as any)?._fieldEnabled;
+  return Boolean(fieldEnabled && typeof fieldEnabled === 'object' && fieldEnabled[fieldKey] === false);
+}
+
+/**
  * Validate node inputs against schema and return errors
  */
 export function validateNodeInputsAgainstSchema(
@@ -552,6 +564,7 @@ export function validateNodeInputsAgainstSchema(
   };
 
   for (const requiredField of nodeDefinition.requiredInputs) {
+    if (isFieldDisabledByOwner(inputs, requiredField)) continue;
     if (
       !(requiredField in inputs) ||
       inputs[requiredField] === null ||
@@ -564,6 +577,7 @@ export function validateNodeInputsAgainstSchema(
 
   // Conditional required fields (schema-driven)
   for (const [fieldKey, fieldSchema] of Object.entries(nodeDefinition.inputSchema)) {
+    if (isFieldDisabledByOwner(inputs, fieldKey)) continue;
     const requiredIf = (fieldSchema as any)?.ui?.requiredIf as
       | { field: string; equals: any }
       | undefined;
@@ -583,6 +597,7 @@ export function validateNodeInputsAgainstSchema(
   }
 
   for (const [fieldKey, fieldSchema] of Object.entries(nodeDefinition.inputSchema)) {
+    if (isFieldDisabledByOwner(inputs, fieldKey)) continue;
     const value = inputs[fieldKey];
 
     if ((value === null || value === undefined || value === '') && !fieldSchema.required) {

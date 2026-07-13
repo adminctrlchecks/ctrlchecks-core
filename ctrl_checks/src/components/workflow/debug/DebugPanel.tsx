@@ -41,6 +41,34 @@ function getDebugErrorDescription(error: StructuredDebugError | string | undefin
   );
 }
 
+function getNodeOutputFailure(output: unknown): StructuredDebugError | null {
+  if (!output || typeof output !== 'object' || Array.isArray(output)) return null;
+  const record = output as Record<string, unknown>;
+  const status = typeof record.status === 'string' ? record.status.toLowerCase() : '';
+  const errorMessage =
+    (typeof record._error === 'string' && record._error) ||
+    (typeof record.error === 'string' && record.error) ||
+    (typeof record.message === 'string' && record.message) ||
+    '';
+
+  const failed =
+    record.ok === false ||
+    record.success === false ||
+    status === 'failed' ||
+    status === 'error' ||
+    Boolean(errorMessage);
+
+  if (!failed) return null;
+
+  return {
+    success: false,
+    code: typeof record.code === 'string' ? record.code : 'NODE_EXECUTION_FAILED',
+    error: errorMessage || 'Node execution failed',
+    message: errorMessage || 'Node execution failed',
+    details: { output },
+  };
+}
+
 export default function DebugPanel({ onClose }: DebugPanelProps) {
   const { debugNodeId, closeDebug, getNodeState, getPreviousNodeOutput, setNodeInput, setNodeOutput, setNodeStatus, propagateNodeOutput, setPreferredView } = useDebugStore();
   const { nodes, edges, workflowId, selectNode } = useWorkflowStore();
@@ -226,6 +254,18 @@ export default function DebugPanel({ onClose }: DebugPanelProps) {
       const data = await response.json();
 
       if (data.success) {
+        const outputFailure = getNodeOutputFailure(data.output);
+        if (outputFailure) {
+          setNodeOutput(debugNodeId, data.output, data.executionTime);
+          setNodeStatus(debugNodeId, 'error', outputFailure);
+          toast({
+            title: 'Execution Failed',
+            description: getDebugErrorDescription(outputFailure, 'Node returned a failed result'),
+            variant: 'destructive',
+          });
+          return;
+        }
+
         setNodeOutput(debugNodeId, data.output, data.executionTime);
         propagateNodeOutput(debugNodeId, nodes, edges);
         setNodeStatus(debugNodeId, 'success');

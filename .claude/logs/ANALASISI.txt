@@ -1,401 +1,587 @@
-> nodemon --watch src --exec "ts-node src/index.ts"
+Field Ownership Required
+Two areas: workflow structure (forms, logic), then secrets and fill mode. Locked rows use OAuth, vault, or AI-filled values?finish accounts on the Credentials step.
 
-[nodemon] 3.1.14
-[nodemon] to restart at any time, enter `rs`
-[nodemon] watching path(s): src\**\*
-[nodemon] watching extensions: js,mjs,cjs,json
-[nodemon] starting `ts-node src/index.ts`
-[env-loader] Loaded C:\Users\user\Desktop\ctrlchecks-hostinger\services\ai-generator\.env
-Error: listen EADDRINUSE: address already in use :::3002
-    at Server.setupListenHandle [as _listen2] (node:net:1948:16)
-    at listenInCluster (node:net:2005:12)
-    at Server.listen (node:net:2110:7)
-    at app.listen (C:\Users\user\Desktop\ctrlchecks-hostinger\services\ai-generator\node_modules\express\lib\application.js:635:24)
-    at Object.<anonymous> (C:\Users\user\Desktop\ctrlchecks-hostinger\services\ai-generator\src\index.ts:71:5)
-    at Module._compile (node:internal/modules/cjs/loader:1812:14)
-    at Module.m._compile (C:\Users\user\Desktop\ctrlchecks-hostinger\services\ai-generator\node_modules\ts-node\src\index.ts:1618:23)
-    at node:internal/modules/cjs/loader:1943:10
-    at Object.require.extensions.<computed> [as .ts] (C:\Users\user\Desktop\ctrlchecks-hostinger\services\ai-generator\node_modules\ts-node\src\index.ts:1621:12)
-    at Module.load (node:internal/modules/cjs/loader:1533:32) {
-  code: 'EADDRINUSE',
-  errno: -4091,
-  syscall: 'listen',
-  address: '::',
-  port: 3002
-}
-[nodemon] app crashed - waiting for file changes before starting...
+Walk me through all fields
+Workflow structure
+Forms, conditions, and branching. Choose You for static values, AI (build) for one-time generation at build, or AI (runtime) when the field supports it.
 
+Form Trigger
 
-> ctrlchecks-notification-service@0.1.0 dev
-> nodemon --watch src --exec "ts-node src/index.ts"
+form
 
-[nodemon] 3.1.14
-[nodemon] to restart at any time, enter `rs`
-[nodemon] watching path(s): src\**\*
-[nodemon] watching extensions: js,mjs,cjs,json
-[nodemon] starting `ts-node src/index.ts`
-[env-loader] Loaded C:\Users\user\Desktop\ctrlchecks-hostinger\services\notification-service\.env
-Error: listen EADDRINUSE: address already in use 127.0.0.1:3005
-    at Server.setupListenHandle [as _listen2] (node:net:1948:16)
-    at listenInCluster (node:net:2005:12)
-    at node:net:2214:7
-    at processTicksAndRejections (node:internal/process/task_queues:90:21) {
-  code: 'EADDRINUSE',
-  errno: -4091,
-  syscall: 'listen',
-  address: '127.0.0.1',
-  port: 3005
-}
-[nodemon] app crashed - waiting for file changes before starting...
+What does this node do?
+What is the title of this form?
 
-> ctrlchecks-credential-service@0.1.0 dev
-> nodemon --watch src --exec "ts-node src/index.ts"
+AI prefilled
+Form Trigger?formTitle
 
-[nodemon] 3.1.14
-[nodemon] to restart at any time, enter `rs`
-[nodemon] watching path(s): src\**\*
-[nodemon] watching extensions: js,mjs,cjs,json
-[nodemon] starting `ts-node src/index.ts`
-[env-loader] Loaded C:\Users\user\Desktop\ctrlchecks-hostinger\services\credential-service\.env
-Error: listen EADDRINUSE: address already in use 127.0.0.1:3004
-    at Server.setupListenHandle [as _listen2] (node:net:1948:16)
-    at listenInCluster (node:net:2005:12)
-    at node:net:2214:7
-    at processTicksAndRejections (node:internal/process/task_queues:90:21) {
-  code: 'EADDRINUSE',
-  errno: -4091,
-  syscall: 'listen',
-  address: '127.0.0.1',
-  port: 3004
-}
-[nodemon] app crashed - waiting for file changes before starting...
+What does this input field do?
 
+Owner: AI Build
 
+Change ownership
+Current value in workflow (edit on Configuration step)
 
-> ctrlchecks-execution-engine@0.1.0 dev
-> nodemon --watch src --exec "ts-node src/index.ts"
+Payment Notification Form
+Define the form fields
 
-[nodemon] 3.1.14
-[nodemon] to restart at any time, enter `rs`
-[nodemon] watching path(s): src\**\*
-[nodemon] watching extensions: js,mjs,cjs,json
-[nodemon] starting `ts-node src/index.ts`
-[env-loader] Loaded C:\Users\user\Desktop\ctrlchecks-hostinger\services\execution-engine\.env
-Error: listen EADDRINUSE: address already in use 127.0.0.1:3003
-    at Server.setupListenHandle [as _listen2] (node:net:1948:16)
-    at listenInCluster (node:net:2005:12)
-    at node:net:2214:7
-    at processTicksAndRejections (node:internal/process/task_queues:90:21) {
-  code: 'EADDRINUSE',
-  errno: -4091,
-  syscall: 'listen',
-  address: '127.0.0.1',
-  port: 3003
-}
-[nodemon] app crashed - waiting for file changes before starting...
+AI prefilled
+Form Trigger?fields
 
+What does this input field do?
 
-> ctrlchecks-workflow-crud-service@0.1.0 dev
-> nodemon --watch src --exec "ts-node src/index.ts"
+Owner: AI Build
 
-[nodemon] 3.1.14
-[nodemon] to restart at any time, enter `rs`
-[nodemon] watching path(s): src\**\*
-[nodemon] watching extensions: js,mjs,cjs,json
-[nodemon] starting `ts-node src/index.ts`
-[env-loader] Loaded C:\Users\user\Desktop\ctrlchecks-hostinger\services\workflow-crud-service\.env
-Error: listen EADDRINUSE: address already in use 127.0.0.1:3007
-    at Server.setupListenHandle [as _listen2] (node:net:1948:16)
-    at listenInCluster (node:net:2005:12)
-    at node:net:2214:7
-    at processTicksAndRejections (node:internal/process/task_queues:90:21) {
-  code: 'EADDRINUSE',
-  errno: -4091,
-  syscall: 'listen',
-  address: '127.0.0.1',
-  port: 3007
-}
-[nodemon] app crashed - waiting for file changes before starting
+Change ownership
+Current value in workflow (edit on Configuration step)
 
-> ctrlchecks-trigger-service@0.1.0 dev
-> nodemon --watch src --exec "ts-node src/index.ts"
-
-[nodemon] 3.1.14
-[nodemon] to restart at any time, enter `rs`
-[nodemon] watching path(s): src\**\*Overview
-
-Copy page
-
-Contentful’s Content Management API (CMA) helps you manage content in your spaces. To learn more about how to model your content, read our modeling guide.
-
-NOTE: You can use the CMA to deliver and manage content, but you shouldn’t use it to deliver large amounts of content and instead use the Content Delivery API. The structure of responses from the CMA differs from the CDA as GET responses retrieve the entirety of items (i.e. all localized and unpublished content).
-
-Note: For EU data residency customers, the Base URL is https://api.eu.contentful.com.
-Basic API information
-API Base URL https://api.contentful.com This is a read/write API
-
-Authentication
-You access the API securely via HTTPS, and it will be available to clients authenticating with an access token.
-
-Learn about authenticating to the CMA and get your access token from the developer center.
-
-Resource IDs
-When creating resources, you can specify an ID or let the API generate a random ID for you. If you choose an ID yourself it must adhere to the following rules:
-
-It has a length between 1 and 64 characters.
-
-It only includes alphanumeric characters, dots ., hyphens - or underscores _.
-
-Represented as a regular expression, this is /^[a-zA-Z0-9-_.]{1,64}$/.
-
-Updating content
-Contentful doesn’t merge changes made to content, so when updating content, you need to send the entire body of an entry. If you update content with a subset of properties, you will lose all existing properties not included in that update.
-
-You should always update resources in the following order:
-
-Fetch current resource.
-
-Make changes to the current resource.
-
-Update the resource by passing the changed resource along with current version number.
-
-This way no unseen changes are overridden and unexpected conflicts are unlikely to occur.
-
-Note: You can’t update any of the sys property fields, including sys.id.
-
-Updating and version locking
-Contentful uses optimistic locking. When updating an existing resource, you need to specify its current version with the X-Contentful-Version HTTP header (this header is automatically set when using our official client libraries). Contentful compares this version with the current version stored to ensure that a client doesn’t overwrite a resource that has since been updated. If the version changed in-between, Contentful would reject the update.
-
-API rate limits
-API Rate limits specify the number of requests a client can make to Contentful APIs in a specific time frame. Every request counts against a per second rate limit.
-
-By default the Contentful Management API enforces rate limits of 7 requests per second. Higher rate limits may apply depending on your current plan.
-
-The following table lists all headers returned in every response by the Content Management API which give a client information on rate limiting:
-
-Header	Description
-X-Contentful-RateLimit-Second-Limit	The maximum amount of requests which can be made in a second.
-X-Contentful-RateLimit-Second-Remaining	The remaining amount of requests which can be made until the next secondly reset.
-X-Contentful-RateLimit-Reset	The number of seconds until the next request can be made.
-Here is a part of a Contentful Management API response example showing the headers for rate limiting:
-
-X-Contentful-RateLimit-Reset: 0
-X-Contentful-RateLimit-Second-Limit: 7
-X-Contentful-RateLimit-Second-Remaining: 9
-
-
-When a client gets rate limited, the API responds with the 429 Too Many Requests HTTP status code and sets the value X-Contentful-RateLimit-Reset header to an integer specifying the time before the limit resets and another request will be accepted. As the client is rate limited per second, the header will return 1, which means the next second.
-
-Examples:
-
-The current rate limits for a client are the default 7 per second.
-
-Example 1
-
-Client: 5 requests in 1 second
-
-HTTP/1.1 2xx
-X-Contentful-RateLimit-Reset: 0
-
-
-Meaning: not rate limited. More requests are allowed.
-
-Example 2
-
-Client: 11 requests in 1 second
-
-HTTP/1.1 429
-X-Contentful-RateLimit-Reset: 1
-
-
-Meaning: wait 1 second before making more requests.
-
-Example 3
-
-Client: 9000 requests in 15 minutes, 9000 requests in following 15 minutes, 9000 requests in following 15 minutes, 9000 requests in following 15 minutes
-
-HTTP/1.1 429
-X-Contentful-RateLimit-Reset: 900
-
-
-Meaning: wait 15 minutes before making more requests (which frees up 9000 requests - 15 minutes later 9000 requests get freed up and so on).
-
-Common Resource Attributes
-Every resource returned by the API includes a sys property. The sys object contains system managed and resource dependent information. At minimum sys defines the sys.type property.
-
-During entity creation, the value of sys.id is either automatically generated or can be specified in the URL (e.g. /environments/master/entries/my-custom-id) of the initial PUT request. The only entity which always uses generated sys.id values is spaces.
-
-Note: sys metadata fields can not be changed programmatically.
-
-The sys.id property is defined for every resource that is not a collection. For example, a Space resource will have a sys.type and sys.id:
-
-{
-  "sys": {
-    "type": "Space",
-    "id": "yadj1kx9rmg0"
+[
+  {
+    "label": "Payment Status",
+    "name": "status",
+    "type": "select",
+    "required": true,
+    "options": [
+      {
+        "label": "Success",
+        "value": "success"
+      },
+      {
+        "label": "Pending",
+        "value": "pending"
+      },
+      {
+        "label": "Failed",
+        "value": "failed"
+      }
+    ]
+  },
+  {
+    "label": "Amount",
+    "name": "amount",
+    "type": "number",
+    "required": true
   }
-}
+]
+allowMultipleSubmissions
 
+Form Trigger?allowMultipleSubmissions
 
-Field	Type	Description	Applies to
-sys.type	String	Type of a resource.	All
-sys.linkType	String	Type of an entity the link is referring to.	Links
-sys.id	String	Unique ID of a resource.	All except arrays
-sys.space	Link	Link to a resource’s space.	Entries, assets, content types
-sys.environment	Link	Link to a resource’s environment.	Entries, assets, content types
-sys.contentType	Link	Link to an entry’s content type.	Entries
-sys.publishedCounter	Integer	Number of times a resource was published.	Entries, assets, content types
-sys.publishedVersion	Integer	Published version of a resource.	Entries, assets, content types
-sys.version	Integer	Current version of a resource.	Entries, assets, content types
-sys.firstPublishedAt	Date	Date and time a resource was published for the first time.	Entries, assets, content types
-sys.createdAt	Date	Date and time a resource was generated in the system.	Entries, assets, content types
-sys.createdBy	Link	Link to creating a user.	Entries, assets, content types
-sys.publishedAt	Date	Date and time a resource was published after an update.	Entries, assets, content types
-sys.publishedBy	Link	Link to publishing a user.	Entries, assets, content types
-sys.updatedAt	Date	Date and time a resource was updated in the system.	Entries, assets, content types
-sys.updatedBy	Link	Link to updating a user.	Entries, assets, content types
-Sys properties - difference in meaning in Contentful APIs
+What does this input field do?
 
-Some of sys properties, while having the same label, render different kinds of data depending on the API. Please see the descriptions of these properties per API in the table below:
+If off, this allow multiple submissions input is not included in setup. If empty, this optional allow multiple submissions setting is skipped unless this workflow specifically needs it.
 
-Property name per API			
-CMA	CDA	CPA	Description
-firstPublishedAt	createdAt	-	Date and time a resource was published for the first time.
-publishedAt	updatedAt	-	Date and time a resource was published after an update.
-createdAt	-	createdAt	Date and time a resource was generated in the system.
-updatedAt	-	updatedAt	Date and time a resource was updated in the system.
-Date and time format
-Date and time must be formatted according to ISO 8601.
+Current value: true
 
-Important: When setting time, ensure to indicate timezone. With no timezone specified, UTC+0 is applied as a default one.
+requireAuthentication
 
-The table below displays the supported date and time formatting:
+Form Trigger?requireAuthentication
 
-Data type	Format	Examples
-Date only	”YYYY-MM-DD"	"2015-11-06”
-Date + time	”YYYY-MM-DDThh:mm:ss"	
-"YYYY-MM-DDThh:mm:ss.sss"	"2015-11-06T09:45”	
-Date + time + timezone	”YYYY-MM-DDThh:mm:ssZ"	
-"YYYY-MM-DDThh:mm:ss±[hh:mm]"	"2015-11-06T09:45:27Z"	
-"2015-11-06T09:45:27+00:00"		
-"2015-11-06T09:45:27-08:00”		
-Collection resources and pagination
-Contentful returns collections of resources in a wrapper object that contains extra information useful for paginating over large result sets:
+What does this input field do?
 
-{
-  "sys": { "type": "Array" },
-  "skip": 0,
-  "limit": 100,
-  "total": 1256,
-  "items": [ /* 100 individual resources */ ]
-}
+If off, this require authentication input is not included in setup. If empty, this optional require authentication setting is skipped unless this workflow specifically needs it.
 
+Current value: false
 
-In the above example, a client retrieves the next 100 resources by repeating the same request, changing the skip query parameter to 100. You can use the order parameter when paging through larger result sets to keep ordering predictable. For example, order=sys.createdAt will order results by the time the resource was first published.
+captcha
 
-Cursor pagination
-Overview
-Cursor pagination is an approach to paginating datasets in Contentful APIs. Unlike traditional offset-based pagination, which uses skip and limit parameters, cursor-based pagination uses opaque cursor tokens and dedicated next/prev links to mark the position in the dataset. This can dramatically improve performance, especially for datasets with large numbers of items.
+Form Trigger?captcha
 
-How cursor pagination works
-Initial Request:
-Add the query parameter cursor=true to your API request, e.g.
+What does this input field do?
 
-GET /spaces/:space_id/entries?cursor=true
+If off, this captcha input is not included in setup. If empty, this optional captcha setting is skipped unless this workflow specifically needs it.
 
+Current value: false
 
-The response contains:
+Switch
 
-items: The current page of resources.
-pages: Contains next (and optionally prev) URLs for paginating forward and backward.
-Paginate forward:
-Use the pages.next URL from the previous response for the next page request:
+switch
 
-GET /spaces/:space_id/entries?pageNext={cursor_token}
+What does this node do?
+Cases (JSON array): each { value, label? } — value becomes the output port name
 
+AI prefilled
+Switch?cases
 
-Continue this process until the next link is omitted, which means you’ve reached the end of the dataset.
+What does this input field do?
 
-Paginate backward: If the response contains a pages.prev link, you can fetch previous pages:
+Owner: AI Build
 
-GET /spaces/:space_id/entries?pagePrev={cursor_token}
+Change ownership
+Current value in workflow (edit on Configuration step)
 
-
-Consistency: All query parameters used in the initial request apart from limit are locked and encoded in the cursor token. They cannot be changed between pages.
-
-The limit parameter can be updated, and the new value will be persisted for subsequent pages until it’s updated again.
-
-GET /spaces/:space_id/entries?pageNext={cursor_token}&limit={limit}
-
-
-This can be useful when you need to adjust the page size, for example, if a page size (in bytes) exceeds the response limit.
-
-Total count: The response does not include a total count or a skip property. This is a key feature for performance, as the API avoids costly full counts on large datasets.
-
-Example response
-{
-  "sys": { "type": "Array" },
-  "limit": 100,
-  "items": [ ... ],
-  "pages": {
-    "next": "/spaces/:space_id/entries?pageNext=cursor_token",
-    "prev": "/spaces/:space_id/entries?pagePrev=cursor_token"
+[
+  {
+    "value": "success",
+    "label": "Success"
+  },
+  {
+    "value": "pending",
+    "label": "Pending"
+  },
+  {
+    "value": "failed",
+    "label": "Failed"
   }
-}
+]
+rules
 
+Switch?rules
 
-Advantages
-Considerable performance improvements, particularly for large datasets.
-If your environment contains 10s of thousands of entries or assets, consider switching to cursor pagination, it can make requests to fetch lists of entries or assets of such an environment much faster.
+What does this input field do?
 
-If you don’t paginate at all, particularly when working with CDA and you don’t need the total property from the response, we highly recommend using requests with cursor=true.
+If off, this rules input is not included in setup. If empty, this optional rules setting is skipped unless this workflow specifically needs it.
 
-Limitations
-The “total” property is not included in the API responses. Make sure you don’t rely on it in your workflow prior to making the switch.
-Enablement and access
-The feature is currently available in the CMA, CPA and CDA.
-API versioning
-All API requests should specify a Content-Type header of application/vnd.contentful.management.v1+json.
+If/Else
 
-If not specified, Contentful will route your request to the latest version of the API. This could break clients which expect the outdated API version. To be certain, always specify the Content-Type header.
-[nodemon] watching extensions: js,mjs,cjs,json
-[nodemon] starting `ts-node src/index.ts`
-[env-loader] Loaded C:\Users\user\Desktop\ctrlchecks-hostinger\services\trigger-service\.env
-Error: listen EADDRINUSE: address already in use 127.0.0.1:3006
-    at Server.setupListenHandle [as _listen2] (node:net:1948:16)
-    at listenInCluster (node:net:2005:12)
-    at node:net:2214:7
-    at processTicksAndRejections (node:internal/process/task_queues:90:21) {
-  code: 'EADDRINUSE',
-  errno: -4091,
-  syscall: 'listen',
-  address: '127.0.0.1',
-  port: 3006
-}
-[nodemon] app crashed - waiting for file changes before starting...
+if_else
 
+What does this node do?
+Define the conditions (JSON)
 
-it showing like this 
+AI prefilled
+If/Else?conditions
 
-🔍 Environment Debug: Object
-endpoints.ts:94 App Configuration: Object
-client.ts:69 🌐 API Client initialized with base URL: http://localhost:3001
-workflowScheduler.ts:336 [Scheduler] Stopping all schedulers (0 active)
-workflowScheduler.ts:351 [Scheduler] ✅ All schedulers stopped
-client.ts:119 ✅ Backend connection established
-:3001/api/db/workflows?order_col=updated_at&order_dir=DESC&limit=6&filter_setup_completed=true:1  Failed to load resource: the server responded with a status of 503 (Service Unavailable)
-installHook.js:1 Error loading workflows: Object
-overrideMethod @ installHook.js:1
-:3001/api/db/workflows?select=id&limit=0&count=exact&filter_setup_completed=true:1  Failed to load resource: the server responded with a status of 503 (Service Unavailable)
-installHook.js:1 Error loading stats: Object
-overrideMethod @ installHook.js:1
-:3001/api/db/user_roles?select=role&filter_user_id=d1f3dd1a-2081-7056-9577-8ef4e3a8082a:1  Failed to load resource: the server responded with a status of 503 (Service Unavailable)
-installHook.js:1 Error getting user role: Object
-overrideMethod @ installHook.js:1
-general.js:205 [LaunchDarkly] LaunchDarkly client initialized
-workflowScheduler.ts:336 [Scheduler] Stopping all schedulers (0 active)
-workflowScheduler.ts:351 [Scheduler] ✅ All schedulers stopped
-:3001/api/db/workflows?select=id%2C+cron_expression&filter_setup_completed=true&notnull_cron_expression=true:1  Failed to load resource: the server responded with a status of 503 (Service Unavailable)
-installHook.js:1 Error loading scheduled workflows: Object
-overrideMethod @ installHook.js:1
-selection.3fa02834.js:382 Download the Apollo DevTools for a better development experience: https://chrome.google.com/webstore/detail/apollo-client-developer-t/jdkknkkbebbapilgoeccciglkfbmbnfm
+What does this input field do?
+
+Owner: AI Build
+
+Change ownership
+Current value in workflow (edit on Configuration step)
+
+[
+  {
+    "field": "$json.amount",
+    "operator": "greater_than",
+    "value": 5000
+  }
+]
+Gmail
+
+google_gmail
+
+What does this node do?
+What Gmail operation should "Gmail" perform?
+
+Gmail?operation
+
+What does this input field do?
+
+If off, this step will still need operation before the workflow can run.
+
+Current value: send
+
+recipientSource
+
+AI prefilled
+Gmail?recipientSource
+
+What does this input field do?
+
+Owner: AI Build
+
+Change ownership
+Current value in workflow (edit on Configuration step)
+
+manual_entry
+Gmail
+
+google_gmail
+
+What does this node do?
+What Gmail operation should "Gmail" perform?
+
+Gmail?operation
+
+What does this input field do?
+
+If off, this step will still need operation before the workflow can run.
+
+Current value: send
+
+recipientSource
+
+AI prefilled
+Gmail?recipientSource
+
+What does this input field do?
+
+Owner: AI Build
+
+Change ownership
+Current value in workflow (edit on Configuration step)
+
+manual_entry
+Slack
+
+slack_message
+
+What does this node do?
+Slack blocks JSON (optional)
+
+Slack?blocks
+
+What does this input field do?
+
+If off, this blocks input is not included in setup. If empty, this optional blocks setting is skipped unless this workflow specifically needs it.
+
+Which Slack channel should we post to?
+
+AI prefilled
+Slack?channel
+
+What does this input field do?
+
+Owner: AI Build
+
+Change ownership
+Current value in workflow (edit on Configuration step)
+
+#finance-alerts
+Slack
+
+slack_message
+
+What does this node do?
+Slack blocks JSON (optional)
+
+Slack?blocks
+
+What does this input field do?
+
+If off, this blocks input is not included in setup. If empty, this optional blocks setting is skipped unless this workflow specifically needs it.
+
+Which Slack channel should we post to?
+
+AI prefilled
+Slack?channel
+
+What does this input field do?
+
+Owner: AI Build
+
+Change ownership
+Current value in workflow (edit on Configuration step)
+
+#alerts
+Secrets & fill mode
+API keys, webhooks, and other values: You, AI (build), or AI (runtime) where supported. Vault and OAuth are completed on Credentials.
+
+Form Trigger
+
+form
+
+What does this node do?
+Add a description for users (optional)
+
+AI prefilled
+Form Trigger?formDescription
+
+What does this input field do?
+
+Owner: AI Build
+
+Change ownership
+Current value in workflow (edit on Configuration step)
+
+Please enter the payment status and transaction amount to initiate the routing workflow.
+submitButtonText
+
+AI prefilled
+Form Trigger?submitButtonText
+
+What does this input field do?
+
+Owner: AI Build
+
+Change ownership
+Current value in workflow (edit on Configuration step)
+
+Submit Payment
+successMessage
+
+AI prefilled
+Form Trigger?successMessage
+
+What does this input field do?
+
+Owner: AI Build
+
+Change ownership
+Current value in workflow (edit on Configuration step)
+
+Payment details submitted successfully. The automated routing workflow has been triggered.
+Switch
+
+switch
+
+What does this node do?
+Expression to evaluate (e.g. {{$json.status}}) — must match a case value
+
+AI prefilled
+Switch?expression
+
+What does this input field do?
+
+Owner: AI Build
+
+Change ownership
+Current value in workflow (edit on Configuration step)
+
+{{$json.status}}
+Optional: how the expression is interpreted
+
+Switch?routingType
+
+What does this input field do?
+
+If off, this routing type input is not included in setup. If empty, this optional routing type setting is skipped unless this workflow specifically needs it.
+
+If/Else
+
+if_else
+
+What does this node do?
+combineOperation
+
+If/Else?combineOperation
+
+What does this input field do?
+
+If off, this combine operation input is not included in setup. If empty, this optional combine operation setting is skipped unless this workflow specifically needs it.
+
+Current value: AND
+
+Gmail
+
+google_gmail
+
+What does this node do?
+Who should we send to?
+
+AI prefilled
+Gmail?recipientEmails
+
+What does this input field do?
+
+Owner: AI Build
+
+Change ownership
+Current value in workflow (edit on Configuration step)
+
+customer@example.com
+What is the subject?
+
+AI prefilled
+Gmail?subject
+
+What does this input field do?
+
+Owner: AI Build
+
+Change ownership
+Current value in workflow (edit on Configuration step)
+
+Premium Payment Confirmation
+What is the email body?
+
+AI prefilled
+Gmail?body
+
+What does this input field do?
+
+Owner: AI Build
+
+Change ownership
+Current value in workflow (edit on Configuration step)
+
+Thank you for your premium payment of {{$json.amount}}. Your transaction has been successfully processed.
+cc
+
+Gmail?cc
+
+What does this input field do?
+
+If off, this cc input is not included in setup. If empty, this optional cc setting is skipped unless this workflow specifically needs it.
+
+bcc
+
+Gmail?bcc
+
+What does this input field do?
+
+If off, this bcc input is not included in setup. If empty, this optional bcc setting is skipped unless this workflow specifically needs it.
+
+from
+
+Gmail?from
+
+What does this input field do?
+
+If off, this from input is not included in setup. If empty, this optional from setting is skipped unless this workflow specifically needs it.
+
+Gmail
+
+google_gmail
+
+What does this node do?
+Who should we send to?
+
+AI prefilled
+Gmail?recipientEmails
+
+What does this input field do?
+
+Owner: AI Build
+
+Change ownership
+Current value in workflow (edit on Configuration step)
+
+{{$json.email}}
+What is the subject?
+
+AI prefilled
+Gmail?subject
+
+What does this input field do?
+
+Owner: AI Build
+
+Change ownership
+Current value in workflow (edit on Configuration step)
+
+Payment Confirmation
+What is the email body?
+
+AI prefilled
+Gmail?body
+
+What does this input field do?
+
+Owner: AI Build
+
+Change ownership
+Current value in workflow (edit on Configuration step)
+
+Your payment of {{$json.amount}} has been successfully processed. Thank you for your purchase!
+cc
+
+Gmail?cc
+
+What does this input field do?
+
+If off, this cc input is not included in setup. If empty, this optional cc setting is skipped unless this workflow specifically needs it.
+
+bcc
+
+Gmail?bcc
+
+What does this input field do?
+
+If off, this bcc input is not included in setup. If empty, this optional bcc setting is skipped unless this workflow specifically needs it.
+
+from
+
+Gmail?from
+
+What does this input field do?
+
+If off, this from input is not included in setup. If empty, this optional from setting is skipped unless this workflow specifically needs it.
+
+Slack
+
+slack_message
+
+What does this node do?
+What message should we send?
+
+AI prefilled
+Slack?message
+
+What does this input field do?
+
+Owner: AI Build
+
+Change ownership
+Current value in workflow (edit on Configuration step)
+
+⚠️ *Payment Reminder*
+A payment of ${{$json.amount}} is currently *pending*. Please follow up.
+Bot username (optional)
+
+AI prefilled
+Slack?username
+
+What does this input field do?
+
+Owner: AI Build
+
+Change ownership
+Current value in workflow (edit on Configuration step)
+
+Payment Bot
+Icon emoji (optional)
+
+AI prefilled
+Slack?iconEmoji
+
+What does this input field do?
+
+Owner: AI Build
+
+Change ownership
+Current value in workflow (edit on Configuration step)
+
+:warning:
+Slack
+
+slack_message
+
+What does this node do?
+What message should we send?
+
+AI prefilled
+Slack?message
+
+What does this input field do?
+
+Owner: AI Build
+
+Change ownership
+Current value in workflow (edit on Configuration step)
+
+🚨 *Payment Failure Alert* 🚨
+A payment of ${{$json.amount}} has failed. Please check the logs for details.
+Bot username (optional)
+
+AI prefilled
+Slack?username
+
+What does this input field do?
+
+Owner: AI Build
+
+Change ownership
+Current value in workflow (edit on Configuration step)
+
+Payment Alert Bot
+Icon emoji (optional)
+
+Slack?iconEmoji
+
+What does this input field do?
+
+If off, this icon emoji input is not included in setup. If empty, this optional icon emoji setting is skipped unless this workflow specifically needs it.
+
+Log Output
+
+log_output
+
+What does this node do?
+What message should "Log Output" send?
+
+Log Output?message
+
+What does this input field do?
+
+Owner: You

@@ -208,6 +208,17 @@ function resolveMissingFieldKey(
   return bestMatch?.key ?? null;
 }
 
+function parseDebugValidationField(message: string): string | null {
+  const runtimeMatch = message.match(/^Required runtime_ai field ['"]?([^'"]+)['"]?/i);
+  if (runtimeMatch?.[1]) return runtimeMatch[1].trim();
+
+  const requiredMatch = message.match(/^([A-Za-z0-9_.-]+)\s+is\s+required\b/i);
+  if (requiredMatch?.[1]) return requiredMatch[1].trim();
+
+  const prefixMatch = message.match(/^([A-Za-z0-9_.-]+)\s*:/);
+  return prefixMatch?.[1]?.trim() || null;
+}
+
 function buildDebugValidationErrors(
   debugError: DebugNodeError | undefined,
   selectedNodeId: string | undefined,
@@ -223,6 +234,20 @@ function buildDebugValidationErrors(
     : [];
 
   const errors: Record<string, string> = {};
+  const addFieldError = (fieldRecord: Record<string, unknown>, fallbackMessage?: string) => {
+    const fieldKey = resolveMissingFieldKey(fieldRecord, inputSchema);
+    if (!fieldKey) return;
+
+    const friendlyLabel = getDebugString(fieldRecord.friendlyLabel) ||
+      getDebugString(fieldRecord.fieldLabel) ||
+      getDebugString(fieldRecord.fieldName) ||
+      fieldKey;
+    const description = getDebugString(fieldRecord.reason) ||
+      getDebugString(fieldRecord.description) ||
+      fallbackMessage;
+    errors[fieldKey] = description || `${friendlyLabel} is required`;
+  };
+
   for (const issue of issues) {
     if (!issue || typeof issue !== 'object' || Array.isArray(issue)) continue;
     const issueRecord = issue as Record<string, unknown>;
@@ -232,14 +257,76 @@ function buildDebugValidationErrors(
     const missingFields = Array.isArray(issueRecord.missingFields) ? issueRecord.missingFields : [];
     for (const missingField of missingFields) {
       if (!missingField || typeof missingField !== 'object' || Array.isArray(missingField)) continue;
-      const fieldRecord = missingField as Record<string, unknown>;
-      const fieldKey = resolveMissingFieldKey(fieldRecord, inputSchema);
-      if (!fieldKey) continue;
-
-      const friendlyLabel = getDebugString(fieldRecord.friendlyLabel) || fieldKey;
-      const description = getDebugString(fieldRecord.description);
-      errors[fieldKey] = description || `${friendlyLabel} is required`;
+      addFieldError(missingField as Record<string, unknown>);
     }
+  }
+
+  const detailsRecord = details as Record<string, unknown>;
+  const outputRecord = detailsRecord.output && typeof detailsRecord.output === 'object' && !Array.isArray(detailsRecord.output)
+    ? detailsRecord.output as Record<string, unknown>
+    : {};
+
+  const missingInputs = Array.isArray(detailsRecord.missingInputs) ? detailsRecord.missingInputs : [];
+  for (const missingInput of missingInputs) {
+    if (!missingInput || typeof missingInput !== 'object' || Array.isArray(missingInput)) continue;
+    addFieldError(missingInput as Record<string, unknown>);
+  }
+
+  const runtimeValidationIssues = Array.isArray(detailsRecord.runtimeValidationIssues)
+    ? detailsRecord.runtimeValidationIssues
+    : [];
+  for (const runtimeIssue of runtimeValidationIssues) {
+    if (!runtimeIssue || typeof runtimeIssue !== 'object' || Array.isArray(runtimeIssue)) continue;
+    const issueRecord = runtimeIssue as Record<string, unknown>;
+    const issueNodeId = getDebugString(issueRecord.nodeId);
+    if (selectedNodeId && issueNodeId && issueNodeId !== selectedNodeId) continue;
+    addFieldError(issueRecord);
+  }
+
+  const runtimeAudit = Array.isArray(detailsRecord.runtimeInputAudit)
+    ? detailsRecord.runtimeInputAudit
+    : Array.isArray(outputRecord._runtimeInputAudit)
+      ? outputRecord._runtimeInputAudit as unknown[]
+      : [];
+  for (const auditEntry of runtimeAudit) {
+    if (!auditEntry || typeof auditEntry !== 'object' || Array.isArray(auditEntry)) continue;
+    const auditRecord = auditEntry as Record<string, unknown>;
+    const auditErrors = Array.isArray(auditRecord.errors)
+      ? auditRecord.errors.filter((entry): entry is string => typeof entry === 'string')
+      : [];
+    if (auditRecord.valid !== false && auditErrors.length === 0) continue;
+    addFieldError({
+      fieldName: auditRecord.field,
+      description: auditErrors.join('; '),
+    });
+  }
+
+  const handoffAudit = Array.isArray(detailsRecord.runtimeInputHandoffAudit)
+    ? detailsRecord.runtimeInputHandoffAudit
+    : Array.isArray(outputRecord._runtimeInputHandoffAudit)
+      ? outputRecord._runtimeInputHandoffAudit as unknown[]
+      : [];
+  for (const auditEntry of handoffAudit) {
+    if (!auditEntry || typeof auditEntry !== 'object' || Array.isArray(auditEntry)) continue;
+    const auditRecord = auditEntry as Record<string, unknown>;
+    const blockedReason = getDebugString(auditRecord.blockedReason);
+    if (getDebugString(auditRecord.validationStatus) !== 'invalid' && !blockedReason) continue;
+    addFieldError({
+      fieldName: auditRecord.fieldName,
+      description: blockedReason,
+    });
+  }
+
+  const validationErrors = Array.isArray(detailsRecord.validationErrors)
+    ? detailsRecord.validationErrors
+    : Array.isArray(outputRecord._validationErrors)
+      ? outputRecord._validationErrors as unknown[]
+      : [];
+  for (const validationError of validationErrors) {
+    const message = getDebugString(validationError);
+    const fieldName = parseDebugValidationField(message);
+    if (!fieldName) continue;
+    addFieldError({ fieldName, description: message }, message);
   }
 
   return errors;

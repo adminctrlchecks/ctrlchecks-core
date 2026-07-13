@@ -6,6 +6,7 @@ export interface AIGuidanceErrorData {
   message?: string;
   hint?: string;
   details?: Record<string, unknown>;
+  operation?: string;
 }
 
 export interface AIGuidanceWorkflowContext {
@@ -17,6 +18,21 @@ export interface AIGuidanceWorkflowContext {
   operation?: string;
   missingInputs?: Array<{ fieldName: string; nodeLabel: string; description?: string }>;
   missingCredentials?: Array<{ provider: string; displayName: string }>;
+  validationErrors?: string[];
+  runtimeValidationIssues?: Array<{
+    type?: string;
+    nodeId?: string;
+    nodeType?: string;
+    nodeLabel?: string;
+    fieldName?: string;
+    fieldLabel?: string;
+    description?: string;
+    reason?: string;
+    fillMode?: string;
+    source?: string;
+  }>;
+  runtimeInputAudit?: unknown[];
+  runtimeInputHandoffAudit?: unknown[];
   executionValidationErrors?: string[];
   executionValidationIssues?: Array<{
     type?: string;
@@ -54,7 +70,7 @@ export async function getAIGuidance(
           nodeType: workflowContext?.nodeType,
           phase: workflowContext?.phase || (errorData.details as any)?.phase,
           provider: workflowContext?.provider,
-          operation: workflowContext?.operation,
+          operation: workflowContext?.operation || errorData.operation,
           missingInputs:
             workflowContext?.missingInputs ||
             (Array.isArray((errorData.details as any)?.missingInputs)
@@ -65,6 +81,32 @@ export async function getAIGuidance(
             (Array.isArray((errorData.details as any)?.missingCredentials)
               ? (errorData.details as any).missingCredentials
               : undefined),
+          validationErrors:
+            workflowContext?.validationErrors ||
+            (Array.isArray((errorData.details as any)?.validationErrors)
+              ? (errorData.details as any).validationErrors
+              : Array.isArray((errorData.details as any)?.output?._validationErrors)
+                ? (errorData.details as any).output._validationErrors
+                : undefined),
+          runtimeValidationIssues:
+            workflowContext?.runtimeValidationIssues ||
+            (Array.isArray((errorData.details as any)?.runtimeValidationIssues)
+              ? (errorData.details as any).runtimeValidationIssues
+              : undefined),
+          runtimeInputAudit:
+            workflowContext?.runtimeInputAudit ||
+            (Array.isArray((errorData.details as any)?.runtimeInputAudit)
+              ? (errorData.details as any).runtimeInputAudit
+              : Array.isArray((errorData.details as any)?.output?._runtimeInputAudit)
+                ? (errorData.details as any).output._runtimeInputAudit
+                : undefined),
+          runtimeInputHandoffAudit:
+            workflowContext?.runtimeInputHandoffAudit ||
+            (Array.isArray((errorData.details as any)?.runtimeInputHandoffAudit)
+              ? (errorData.details as any).runtimeInputHandoffAudit
+              : Array.isArray((errorData.details as any)?.output?._runtimeInputHandoffAudit)
+                ? (errorData.details as any).output._runtimeInputHandoffAudit
+                : undefined),
           executionValidationErrors:
             workflowContext?.executionValidationErrors ||
             (Array.isArray((errorData.details as any)?.executionValidationErrors)

@@ -30,6 +30,19 @@ import { validateSummaryV2 } from '../../core/validation/summary-v2-validator';
 import { logger } from '../../core/logger';
 
 /**
+ * Progress bands for the confirm endpoint's 3 downstream stages.
+ * property_population is the slowest (one LLM call per node), so it gets
+ * the widest band and per-node interpolation via onNodeProgress.
+ */
+const CONFIRM_PROGRESS = {
+  start: 5,
+  property_population: 45,
+  credential_discovery: 65,
+  field_ownership: 80,
+  finalizing: 99,
+} as const;
+
+/**
  * Stamp _fillMode.fields = 'buildtime_ai_once' on every form/form_trigger node
  * that has a non-empty fields array. This signals attach-inputs to preserve
  * the fields that were shown in the Field Ownership UI rather than re-deriving
@@ -166,6 +179,18 @@ function buildSwitchContextFromPopulatedNodes(nodes: WorkflowNode[]): SwitchCont
 }
 
 export default async function confirmCapabilityWorkflow(req: AuthenticatedRequest, res: Response): Promise<void> {
+  let isStreaming = false;
+  let writeEvent: (event: object) => void = () => {};
+
+  const sendError = (status: number, payload: Record<string, unknown>) => {
+    if (isStreaming) {
+      writeEvent({ status: 'error', ok: false, ...payload });
+      res.end();
+    } else {
+      res.status(status).json({ ok: false, ...payload });
+    }
+  };
+
   try {
     const body = req.body as Record<string, unknown>;
     const correlationId =
@@ -204,15 +229,67 @@ export default async function confirmCapabilityWorkflow(req: AuthenticatedReques
       return;
     }
 
+    // ── Streaming mode: emit NDJSON progress events (Req: progress bar granularity) ──
+    const rawStreamHeader = req.headers['x-stream-progress'];
+    const streamHeaderValue = Array.isArray(rawStreamHeader) ? rawStreamHeader[0] : rawStreamHeader;
+    isStreaming = ['true', '1', 'yes'].includes(String(streamHeaderValue || '').toLowerCase());
+
+    if (isStreaming) {
+      res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+      res.setHeader('Transfer-Encoding', 'chunked');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      res.setHeader('X-Stream-Mode', 'ndjson');
+      res.flushHeaders();
+
+      writeEvent = (event: object) => {
+        res.write(JSON.stringify(event) + '\n');
+        const flush = (res as Response & { flush?: () => void }).flush;
+        if (typeof flush === 'function') flush.call(res);
+      };
+
+      writeEvent({
+        current_phase: 'property_population',
+        progress_percentage: CONFIRM_PROGRESS.start,
+        log: 'Populating node properties...',
+      });
+    }
+
     // Stage: Property Population (Req 6.2)
+    const ppRangeStart = CONFIRM_PROGRESS.start;
+    const ppRangeEnd = CONFIRM_PROGRESS.property_population;
     const ppResult = await runPropertyPopulationStage({
       workflow,
       userIntent: userPrompt,
       structuralPrompt,
       correlationId,
+      onNodeProgress: isStreaming
+        ? (done, total) => {
+            if (total <= 0) return;
+            const pct = Math.min(
+              ppRangeEnd,
+              ppRangeStart + Math.round((ppRangeEnd - ppRangeStart) * (done / total)),
+            );
+            try {
+              writeEvent({
+                current_phase: 'property_population',
+                progress_percentage: pct,
+                log: `Populating node properties... (${done}/${total} nodes)`,
+              });
+            } catch (_) {}
+          }
+        : undefined,
     });
     // Property population is always ok: true (soft-failing stage)
     let populatedWorkflow = ppResult.workflow;
+    try {
+      writeEvent({
+        current_phase: 'property_population',
+        progress_percentage: CONFIRM_PROGRESS.property_population,
+        log: 'Populating node properties...',
+      });
+    } catch (_) {}
 
     // ── Rebuild edges after property population ───────────────────────────
     // Property population fills switch.cases and if_else.conditions.
@@ -304,9 +381,23 @@ export default async function confirmCapabilityWorkflow(req: AuthenticatedReques
     const cdResult = await runCredentialDiscoveryStage(populatedWorkflow, userId, correlationId);
     const requiredCredentials = cdResult.ok ? cdResult.requiredCredentials : [];
     const missingCredentials = cdResult.ok ? cdResult.missingCredentials : [];
+    try {
+      writeEvent({
+        current_phase: 'credential_discovery',
+        progress_percentage: CONFIRM_PROGRESS.credential_discovery,
+        log: 'Discovering credentials...',
+      });
+    } catch (_) {}
 
     // Stage: Field Ownership (Req 6.4)
     const foResult = await runFieldOwnershipStage(populatedWorkflow, correlationId);
+    try {
+      writeEvent({
+        current_phase: 'field_ownership',
+        progress_percentage: CONFIRM_PROGRESS.field_ownership,
+        log: 'Assigning field ownership...',
+      });
+    } catch (_) {}
 
     // Generate comprehensive questions for the field-ownership wizard
     let comprehensiveQuestions: any[] = [];
@@ -326,8 +417,7 @@ export default async function confirmCapabilityWorkflow(req: AuthenticatedReques
 
     const confirmValidation = unifiedGraphOrchestrator.validateWorkflow(finalWorkflow);
     if (!confirmValidation.valid) {
-      res.status(422).json({
-        ok: false,
+      sendError(422, {
         code: 'ORCHESTRATOR_VALIDATION_FAILED',
         message: 'Workflow validation failed before summary compilation',
         violations: confirmValidation.errors,
@@ -337,8 +427,7 @@ export default async function confirmCapabilityWorkflow(req: AuthenticatedReques
     const summaryV2 = compileSummaryV2FromWorkflow(finalWorkflow, userPrompt);
     const summaryValidation = validateSummaryV2(summaryV2);
     if (!summaryValidation.valid) {
-      res.status(422).json({
-        ok: false,
+      sendError(422, {
         code: 'SUMMARY_V2_CONTRACT_FAILED',
         message: 'summaryV2 contract validation failed',
         violations: summaryValidation.errors,
@@ -346,8 +435,18 @@ export default async function confirmCapabilityWorkflow(req: AuthenticatedReques
       return;
     }
 
-    res.status(200).json({
+    try {
+      writeEvent({
+        current_phase: 'finalizing',
+        progress_percentage: CONFIRM_PROGRESS.finalizing,
+        log: 'Finalizing workflow...',
+      });
+    } catch (_) {}
+
+    const terminalPayload = {
       ok: true,
+      status: 'success',
+      success: true,
       workflow: finalWorkflow,
       summaryV2,
       requiredCredentials: requiredCredentials.map((c) => c.vaultKey || c.displayName || c.provider),
@@ -358,10 +457,24 @@ export default async function confirmCapabilityWorkflow(req: AuthenticatedReques
       propertyPopulationSummary: ppResult.propertyPopulationSummary,
       comprehensiveQuestions,
       correlationId,
-    });
+    };
+
+    if (isStreaming) {
+      writeEvent(terminalPayload);
+      res.end();
+    } else {
+      res.status(200).json(terminalPayload);
+    }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     logger.error('[CapabilitySelection/confirm] Unhandled error:', message);
-    res.status(500).json({ ok: false, code: 'INTERNAL_ERROR', message });
+    if (isStreaming) {
+      try {
+        writeEvent({ status: 'error', ok: false, code: 'INTERNAL_ERROR', message });
+      } catch (_) {}
+      res.end();
+    } else {
+      res.status(500).json({ ok: false, code: 'INTERNAL_ERROR', message });
+    }
   }
 }

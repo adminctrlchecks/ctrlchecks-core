@@ -161,6 +161,10 @@ export function resolveUniversalTemplate(
     if (resolved !== undefined) {
       return convertIfNeeded(resolved);
     }
+    console.warn(
+      `[TemplateResolver] Unresolved template "${template}" for field "${fieldName || 'unknown'}": ` +
+      `no matching value found upstream. Passing through the literal string unchanged.`
+    );
     return template;
   }
 
@@ -171,6 +175,10 @@ export function resolveUniversalTemplate(
     if (resolved !== undefined) {
       return convertIfNeeded(resolved);
     }
+    console.warn(
+      `[TemplateResolver] Unresolved template "${template}" for field "${fieldName || 'unknown'}": ` +
+      `no matching value found upstream. Passing through the literal string unchanged.`
+    );
     return template;
   }
 
@@ -178,7 +186,13 @@ export function resolveUniversalTemplate(
   if (template.includes('{{')) {
     return template.replace(/\{\{\s*([^}]+)\s*\}\}/g, (m, expr) => {
       const resolved = resolveExpression(String(expr));
-      if (resolved === undefined || resolved === null) return m; // keep original if unresolved
+      if (resolved === undefined || resolved === null) {
+        console.warn(
+          `[TemplateResolver] Unresolved template "${m}" for field "${fieldName || 'unknown'}": ` +
+          `no matching value found upstream. Passing through the literal string unchanged.`
+        );
+        return m; // keep original if unresolved
+      }
       // For interpolated strings, always convert to string
       const stringValue = convertIfNeeded(resolved);
       return stringifyForInterpolation(stringValue);

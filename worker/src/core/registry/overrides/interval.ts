@@ -15,11 +15,12 @@ export function overrideInterval(
   return {
     ...def,
     execute: async (context) => {
-      const { input } = context;
-      
+      // context.input does not exist on NodeExecutionContext; the correct field is rawInput.
+      const sourceInput = context.rawInput ?? context.inputs ?? {};
+
       // Extract input object
-      const inputObj = typeof input === 'object' && input !== null && !Array.isArray(input)
-        ? input as Record<string, unknown>
+      const inputObj = typeof sourceInput === 'object' && sourceInput !== null && !Array.isArray(sourceInput)
+        ? sourceInput as Record<string, unknown>
         : {};
       
       // ✅ OPTIMIZED: Interval trigger - return clean output with just timestamp

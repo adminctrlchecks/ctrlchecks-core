@@ -54,6 +54,27 @@ import { geminiWalletService } from '../services/ai/gemini-wallet-service';
 import { logger } from '../core/logger';
 
 const EXECUTION_RUNTIME_MARKER = 'runtime-marker-2026-03-20-v1';
+const configuredResumePreflightTimeoutMs = Number(process.env.EXECUTION_RESUME_PREFLIGHT_TIMEOUT_MS || 15000);
+const RESUME_PREFLIGHT_TIMEOUT_MS = Number.isFinite(configuredResumePreflightTimeoutMs) && configuredResumePreflightTimeoutMs > 0
+  ? configuredResumePreflightTimeoutMs
+  : 15000;
+
+function withExecutionTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  label: string
+): Promise<T> {
+  let timeoutHandle: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutHandle = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${Math.round(timeoutMs / 1000)}s`));
+    }, timeoutMs);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+  });
+}
 
 // Registry-driven check: which node types bypass the intent-authority execution guard.
 // A node bypasses the guard when it is:
@@ -18183,9 +18204,21 @@ export default async function executeWorkflowHandler(req: Request, res: Response
   // ✅ CRITICAL: Import workflow cloner for immutable execution
   const { cloneWorkflowDefinition } = await import('../core/utils/workflow-cloner');
 
-  let executionId: string | undefined;
+  let executionId: string | undefined = typeof providedExecutionId === 'string' && providedExecutionId.trim()
+    ? providedExecutionId
+    : undefined;
   let logs: ExecutionLog[] = [];
   let currentUserId: string | undefined;
+
+  const markResumedExecutionFailed = async (errorMessage: string) => {
+    if (!executionId) return;
+    await db.from('executions').update({
+      status: 'failed',
+      finished_at: new Date().toISOString(),
+      error: errorMessage,
+      ...(logs?.length ? { logs } : {}),
+    }).eq('id', executionId).catch(() => {});
+  };
 
   // Extract current user from Authorization header (if available)
   // This is optional - workflow can execute without it
@@ -18276,6 +18309,7 @@ export default async function executeWorkflowHandler(req: Request, res: Response
       if (errorMessage.includes('ENOTFOUND') || 
           errorMessage.includes('fetch failed') || 
           errorMessage.includes('your-project-id')) {
+        await markResumedExecutionFailed('Database configuration error: workflow cannot be fetched');
         return res.status(500).json({ 
           error: 'Database configuration error',
           message: 'DATABASE_URL is not configured correctly. Please update DATABASE_URL in your .env file with your actual AWS RDS connection string.',
@@ -18284,6 +18318,7 @@ export default async function executeWorkflowHandler(req: Request, res: Response
         });
       }
       
+      await markResumedExecutionFailed(workflowError?.message || 'Workflow not found');
       return res.status(404).json({ 
         error: 'Workflow not found',
         message: workflowError?.message || 'The specified workflow could not be found.',
@@ -18308,6 +18343,7 @@ export default async function executeWorkflowHandler(req: Request, res: Response
           userAgent: req.get('User-Agent'),
           metadata: { reason: 'not_workflow_owner' },
         });
+        await markResumedExecutionFailed('Forbidden: workflow execution requested by a non-owner');
         return res.status(403).json({
           error: 'Forbidden',
           message: 'You do not have permission to execute this workflow.',
@@ -18321,12 +18357,14 @@ export default async function executeWorkflowHandler(req: Request, res: Response
     const { isSetupPending, setupPendingResponse } = await import('./workflow-setup-lifecycle');
     if (isSetupPending(workflow)) {
       logger.warn(`[ExecuteWorkflow] Execution blocked - workflow ${workflowId} is still in hidden setup`);
+      await markResumedExecutionFailed('Workflow is still in hidden setup');
       return res.status(409).json(setupPendingResponse(workflowId));
     }
 
     const isConfirmed = workflow.confirmed === true || workflow.status === 'active';
     if (!isConfirmed) {
       logger.error(`[ExecuteWorkflow] ❌ Execution blocked - Workflow ${workflowId} is not confirmed`);
+      await markResumedExecutionFailed('Workflow must be confirmed before execution');
       return res.status(403).json({
         error: 'Workflow execution not allowed',
         message: 'Workflow must be confirmed before execution',
@@ -18371,6 +18409,7 @@ export default async function executeWorkflowHandler(req: Request, res: Response
         const message = `Execution blocked by intent-authority guard: unexpected semantic node(s): ${[...new Set(unexpected)].join(', ')}`;
         logger.warn(`[ExecuteWorkflow] ${message}`);
         if (getIntentAuthorityExecutionMode() !== 'shadow') {
+          await markResumedExecutionFailed(message);
           return res.status(409).json({
             error: 'intent_authority_violation',
             message,
@@ -18445,30 +18484,27 @@ export default async function executeWorkflowHandler(req: Request, res: Response
     // Execution API must reject if credentials are not injected (not just in vault)
     const { workflowLifecycleManager } = await import('../services/workflow-lifecycle-manager');
     const { executionPreflight } = await import('../services/execution-preflight');
-    const credentialPreflight = await executionPreflight({
-      workflowId,
-      ownerId: workflowOwnerId,
-      nodes,
-    });
-    if (!credentialPreflight.ok) {
-      // Mark the execution as failed so the UI doesn't stay stuck at "waiting" forever.
-      // form-trigger.ts already set this execution to "running" before firing this request;
-      // without this update the record stays "running" (shown as "waiting") indefinitely.
-      if (providedExecutionId) {
-        const failureNames = credentialPreflight.failures
-          ?.map((f: any) => f.displayName || f.vaultKey || 'unknown')
-          .join(', ') || 'missing credentials';
-        await db.from('executions').update({
-          status: 'error',
-          finished_at: new Date().toISOString(),
-          error: `Credential preflight failed: ${failureNames}`,
-        }).eq('id', providedExecutionId).catch(() => {});
-      }
-      return res.status(409).json({
-        error: 'CredentialPreflightFailed',
-        message: 'This workflow cannot run until the workflow owner reconnects the required accounts.',
+    const credentialPreflight = await withExecutionTimeout(
+      executionPreflight({
         workflowId,
-        failures: credentialPreflight.failures,
+        ownerId: workflowOwnerId,
+        nodes,
+      }),
+      RESUME_PREFLIGHT_TIMEOUT_MS,
+      'Credential preflight'
+    );
+    if (!credentialPreflight.ok) {
+      logger.warn('[ExecuteWorkflow] Credential preflight found missing credentials; continuing to routed execution', {
+        workflowId,
+        providedExecutionId,
+        failures: credentialPreflight.failures.map((failure: any) => ({
+          nodeId: failure.nodeId,
+          nodeName: failure.nodeName,
+          nodeType: failure.nodeType,
+          provider: failure.provider,
+          requiredScopes: failure.requiredScopes,
+          error: failure.error?.error || failure.error?.message || String(failure.error || ''),
+        })),
       });
     }
     
@@ -18490,9 +18526,13 @@ export default async function executeWorkflowHandler(req: Request, res: Response
       nodeIds: nodes.map(n => n.id),
     });
     
-    const executionValidation = await workflowLifecycleManager.validateExecutionReady(
-      workflowForValidation,
-      workflowOwnerId
+    const executionValidation = await withExecutionTimeout(
+      workflowLifecycleManager.validateExecutionReady(
+        workflowForValidation,
+        workflowOwnerId
+      ),
+      RESUME_PREFLIGHT_TIMEOUT_MS,
+      'Execution readiness validation'
     );
     (global as any).__expectedExecutionRuntimeMarker = EXECUTION_RUNTIME_MARKER;
     
@@ -18503,9 +18543,13 @@ export default async function executeWorkflowHandler(req: Request, res: Response
     let workflowPhase = workflow.phase || workflow.status || 'ready_for_execution';
     
     // ✅ CRITICAL: Re-run credential discovery to get accurate counts
-    const credentialDiscovery = await credentialDiscoveryPhase.discoverCredentials(
-      { nodes, edges },
-      workflowOwnerId
+    const credentialDiscovery = await withExecutionTimeout(
+      credentialDiscoveryPhase.discoverCredentials(
+        { nodes, edges },
+        workflowOwnerId
+      ),
+      RESUME_PREFLIGHT_TIMEOUT_MS,
+      'Credential discovery'
     );
     const requiredCredentialsCount = credentialDiscovery.requiredCredentials?.length || 0;
     const missingCredentialsCount = credentialDiscovery.missingCredentials?.length || 0;
@@ -18726,6 +18770,7 @@ export default async function executeWorkflowHandler(req: Request, res: Response
           missingItems.push(`${missingCredentialsCount} credential(s)`);
         }
         
+        await markResumedExecutionFailed(`Workflow not ready for execution: ${missingItems.join(', ')}`);
         return res.status(400).json({
           code: 'WORKFLOW_NOT_READY',
           error: 'Workflow not ready for execution',
@@ -18766,6 +18811,7 @@ export default async function executeWorkflowHandler(req: Request, res: Response
     });
     
     if (nodes.length === 0) {
+      await markResumedExecutionFailed('Workflow has no nodes');
       return res.status(400).json({
         code: ErrorCode.EXECUTION_NOT_READY,
         error: 'Workflow has no nodes',
@@ -18775,6 +18821,7 @@ export default async function executeWorkflowHandler(req: Request, res: Response
     }
     
     if (triggerNodes.length === 0) {
+      await markResumedExecutionFailed('Workflow has no trigger');
       return res.status(400).json({
         code: ErrorCode.EXECUTION_NOT_READY,
         error: 'Workflow has no trigger',
@@ -18783,14 +18830,17 @@ export default async function executeWorkflowHandler(req: Request, res: Response
       });
     }
     
-    // Check if already executing (prevent double runs)
-    if (workflowPhase === 'executing') {
-      return res.status(409).json({
-        code: ErrorCode.WORKFLOW_ALREADY_EXECUTING,
-        error: 'Workflow is already executing',
-        message: 'This workflow is currently running. Please wait for it to complete.',
-        phase: workflowPhase,
-        details: readinessCheck,
+    // Do not treat workflow.phase as the concurrency source of truth. It can be
+    // stale after a crash or an early resume failure. The execution lock below
+    // is authoritative and can distinguish same-execution resumes, stale locks,
+    // and real concurrent runs.
+    if (['executing', 'running'].includes(String(workflowPhase).toLowerCase())) {
+      logger.warn('[ExecuteWorkflow] Workflow phase indicates an active run; deferring to execution lock', {
+        workflowId,
+        executionId,
+        providedExecutionId,
+        workflowPhase,
+        activeExecutionId: (workflow as any).active_execution_id,
       });
     }
     
@@ -18838,6 +18888,7 @@ export default async function executeWorkflowHandler(req: Request, res: Response
         .single();
 
       if (fetchError || !existingExecution) {
+        await markResumedExecutionFailed('Execution not found');
         return res.status(404).json({ error: 'Execution not found' });
       }
 
@@ -18845,6 +18896,7 @@ export default async function executeWorkflowHandler(req: Request, res: Response
 
       // ✅ CRITICAL: Type guard - ensure executionId and workflowId are defined
       if (!executionId || !workflowId) {
+        await markResumedExecutionFailed('Invalid execution or workflow ID');
         return res.status(500).json({
           error: 'Invalid execution or workflow ID',
           executionId,
@@ -18857,7 +18909,7 @@ export default async function executeWorkflowHandler(req: Request, res: Response
       if (!lockResult.acquired) {
         // Mark as error so the execution doesn't stay stuck at "waiting/running" in the UI.
         await db.from('executions').update({
-          status: 'error',
+          status: 'failed',
           finished_at: new Date().toISOString(),
           error: `Workflow locked by execution ${lockResult.existingExecutionId} — previous run may still be in progress`,
         }).eq('id', executionId).catch(() => {});
@@ -20336,7 +20388,7 @@ export default async function executeWorkflowHandler(req: Request, res: Response
               hasError = true;
               errorMessage = errMsg;
               await db.from('executions').update({
-                status: 'error',
+                status: 'failed',
                 finished_at: new Date().toISOString(),
                 error: errMsg,
                 logs,

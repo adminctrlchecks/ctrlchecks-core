@@ -104,12 +104,20 @@ function conditionMatches(
   return true;
 }
 
+function isFieldDisabledByOwner(fieldName: string, config: Record<string, unknown>): boolean {
+  const fieldEnabled = (config as any)?._fieldEnabled;
+  return Boolean(fieldEnabled && typeof fieldEnabled === 'object' && fieldEnabled[fieldName] === false);
+}
+
 function fieldRequiredByContract(
   fieldName: string,
   fieldDef: NodeInputField,
   resolved: Record<string, unknown>,
   config: Record<string, unknown>
 ): boolean {
+  // A field the user explicitly turned off via Field Ownership is never required —
+  // this must hold even when the schema or a conditional requiredWhen says otherwise.
+  if (isFieldDisabledByOwner(fieldName, config)) return false;
   if (fieldDef.required) return true;
   const uiRequired = fieldDef.ui?.requiredIf;
   if (uiRequired && conditionMatches(uiRequired, resolved, config)) return true;

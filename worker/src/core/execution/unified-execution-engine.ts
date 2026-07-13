@@ -243,6 +243,12 @@ export function shouldSkipNode(
     return true;
   }
 
+  if (incomingEdges.length === 0) {
+    return false;
+  }
+
+  let hasActiveIncomingPath = false;
+
   for (const edge of incomingEdges) {
     const sourceNode = nodes.find(n => n.id === edge.source);
     if (!sourceNode) continue;
@@ -257,8 +263,7 @@ export function shouldSkipNode(
         sourceNodeLabel: sourceNode.data?.label,
       });
       // ✅ FIX: Mark this node as skipped so further downstream nodes are also skipped
-      skippedNodeIds.add(node.id);
-      return true;
+      continue;
     }
 
     // Check If/Else branches
@@ -300,11 +305,13 @@ export function shouldSkipNode(
           // Condition is false, so this edge is likely on the false path
           // Don't skip - allow execution
           console.log('[shouldSkipNode] ✅ Inferred false path (condition=false, no sourceHandle) - allowing execution');
+          hasActiveIncomingPath = true;
           continue; // Don't skip - this is likely the false path
         } else {
           // Condition is true, so this edge is likely on the true path
           // Don't skip - allow execution
           console.log('[shouldSkipNode] ✅ Inferred true path (condition=true, no sourceHandle) - allowing execution');
+          hasActiveIncomingPath = true;
           continue; // Don't skip - this is likely the true path
         }
       }
@@ -322,10 +329,7 @@ export function shouldSkipNode(
           conditionResult,
         });
         // ✅ FIX: Mark this node as skipped so downstream nodes are also skipped
-        if (skippedNodeIds) {
-          skippedNodeIds.add(node.id);
-        }
-        return true; // Skip - on true path but condition is false
+        continue; // This incoming path is inactive.
       }
       if (isFalsePath && conditionResult) {
         // Edge says false path but condition is true → SKIP
@@ -337,14 +341,13 @@ export function shouldSkipNode(
           conditionResult,
         });
         // ✅ FIX: Mark this node as skipped so downstream nodes are also skipped
-        if (skippedNodeIds) {
-          skippedNodeIds.add(node.id);
-        }
-        return true; // Skip - on false path but condition is true
+        continue; // This incoming path is inactive.
       }
       
       // ✅ If we reach here, the node is on the correct path and should execute
       console.log('[shouldSkipNode] ✅ Node should execute - on correct path');
+      hasActiveIncomingPath = true;
+      continue;
     }
 
     // Check Switch branches (sourceHandle may be case_N while matchedCase is semantic, e.g. "success")
@@ -360,11 +363,10 @@ export function shouldSkipNode(
           exprVal
         )
       ) {
-        if (skippedNodeIds) {
-          skippedNodeIds.add(node.id);
-        }
-        return true;
+        continue; // This incoming path is inactive.
       }
+      hasActiveIncomingPath = true;
+      continue;
     }
 
     // Check try_catch branches: skip the port ('try' or 'catch') that wasn't taken.
@@ -373,11 +375,10 @@ export function shouldSkipNode(
       const takenBranch = tryCatchResults[edge.source];
       const handle = edge.sourceHandle;
       if ((handle === 'try' || handle === 'catch') && handle !== takenBranch) {
-        if (skippedNodeIds) {
-          skippedNodeIds.add(node.id);
-        }
-        return true;
+        continue; // This incoming path is inactive.
       }
+      hasActiveIncomingPath = true;
+      continue;
     }
 
     // Check timeout branches: skip the port ('success' or 'timeout') that wasn't taken.
@@ -385,12 +386,20 @@ export function shouldSkipNode(
       const takenBranch = timeoutResults[edge.source];
       const handle = edge.sourceHandle;
       if ((handle === 'success' || handle === 'timeout') && handle !== takenBranch) {
-        if (skippedNodeIds) {
-          skippedNodeIds.add(node.id);
-        }
-        return true;
+        continue; // This incoming path is inactive.
       }
+      hasActiveIncomingPath = true;
+      continue;
     }
+
+    hasActiveIncomingPath = true;
+  }
+
+  if (!hasActiveIncomingPath) {
+    if (skippedNodeIds) {
+      skippedNodeIds.add(node.id);
+    }
+    return true;
   }
 
   return false;

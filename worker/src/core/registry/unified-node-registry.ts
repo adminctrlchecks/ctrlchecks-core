@@ -832,12 +832,18 @@ export class UnifiedNodeRegistry implements INodeRegistry {
       const warnings: string[] = [];
       
       // Validate required fields
+      const fieldEnabledMap = config?._fieldEnabled as Record<string, boolean> | undefined;
       for (const fieldName of requiredInputs) {
+        // A field the user explicitly turned off via Field Ownership is not part of this
+        // workflow's requirements, regardless of the schema — never block execution on it.
+        if (fieldEnabledMap && typeof fieldEnabledMap === 'object' && fieldEnabledMap[fieldName] === false) {
+          continue;
+        }
         const effectiveMode = resolveEffectiveFieldFillMode(fieldName, inputSchema, config);
         if (effectiveMode === 'runtime_ai') {
           continue;
         }
-        if (config[fieldName] === undefined || config[fieldName] === null || 
+        if (config[fieldName] === undefined || config[fieldName] === null ||
             (typeof config[fieldName] === 'string' && config[fieldName].trim() === '')) {
           errors.push(`Required field '${fieldName}' is missing or empty`);
         }
@@ -2187,23 +2193,35 @@ export class UnifiedNodeRegistry implements INodeRegistry {
    * Returns context needed for build-time AI value generation for a target node,
    * given an optional upstream node type.
    *
-   * - upstreamFields: flat property map from the upstream node's default output port schema.
+   * - upstreamFields: the REAL, instance-grounded field set flowing into this node when the
+   *   caller supplies `groundedUpstreamFields` (derived by walking the actual workflow graph
+   *   via `getEffectiveOutputSchema`, e.g. a form node's actually-configured fields). Falls
+   *   back to the upstream node TYPE's static default output port schema only when no grounded
+   *   data is available (e.g. the immediate predecessor is the trigger itself, or the caller
+   *   has no workflow graph to walk).
    * - targetFields: input fields of the target node eligible for build-time AI population
    *   (fillMode.default === 'buildtime_ai_once' OR fillMode.supportsBuildtimeAI === true),
    *   excluding credential-owned fields.
    *
    * Returns { upstreamFields: [], targetFields: [] } for unknown target types.
    */
-  getBuildValueContext(targetNodeType: string, upstreamNodeType: string | undefined): BuildValueContext {
+  getBuildValueContext(
+    targetNodeType: string,
+    upstreamNodeType: string | undefined,
+    groundedUpstreamFields?: BuildValueContext['upstreamFields'],
+  ): BuildValueContext {
     const targetCanonical = this.ALIAS_MAP[targetNodeType.toLowerCase()] ?? targetNodeType;
     const targetDef = this.definitions.get(targetCanonical);
     if (!targetDef) {
       return { upstreamFields: [], targetFields: [] };
     }
 
-    // Build upstreamFields from upstream node's default output port schema properties
+    // Prefer real, instance-grounded upstream fields when the caller has them.
     let upstreamFields: BuildValueContext['upstreamFields'] = [];
-    if (upstreamNodeType) {
+    if (groundedUpstreamFields && groundedUpstreamFields.length > 0) {
+      upstreamFields = groundedUpstreamFields;
+    } else if (upstreamNodeType) {
+      // Fallback: upstream node TYPE's static default output port schema.
       const upstreamCanonical = this.ALIAS_MAP[upstreamNodeType.toLowerCase()] ?? upstreamNodeType;
       const upstreamDef = this.definitions.get(upstreamCanonical);
       const props = upstreamDef?.outputSchema?.default?.schema?.properties;

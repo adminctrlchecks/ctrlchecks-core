@@ -115,6 +115,7 @@ export async function releaseExecutionLock(
       .from('workflows')
       .update({
         active_execution_id: null,
+        phase: 'ready_for_execution',
         updated_at: new Date().toISOString(),
       })
       .eq('id', workflowId)

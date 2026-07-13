@@ -91,21 +91,128 @@ function formatValidationIssue(value: unknown): string | null {
   const item = value as Record<string, unknown>;
   const issue = getString(item.issue) || getString(item.message) || getString(item.description) || 'Check this node';
   const nodeLabel = getString(item.nodeLabel) || getString(item.nodeName) || getString(item.nodeType) || getString(item.nodeId);
+  const fieldName = getString(item.fieldLabel) || getString(item.fieldName) || getString(item.field) || getString(item.name);
   const previousNodeLabel =
     getString(item.previousNodeLabel) ||
     getString(item.previousNodeName) ||
     getString(item.previousNodeType) ||
     getString(item.previousNodeId);
 
+  if (nodeLabel && fieldName) return `${nodeLabel}: ${humanizeKey(fieldName)} - ${issue}`;
+  if (fieldName) return `${humanizeKey(fieldName)} - ${issue}`;
   if (previousNodeLabel && nodeLabel) return `${previousNodeLabel} -> ${nodeLabel}: ${issue}`;
   if (nodeLabel) return `${nodeLabel}: ${issue}`;
   return issue;
+}
+
+function formatRuntimeValidationIssue(value: unknown): string | null {
+  if (!value) return null;
+  if (typeof value === 'string') return value;
+  if (typeof value !== 'object') return null;
+
+  const item = value as Record<string, unknown>;
+  const fieldName = getString(item.fieldLabel) || getString(item.fieldName) || getString(item.field);
+  if (!fieldName) return null;
+
+  const nodeLabel = getString(item.nodeLabel) || getString(item.nodeName) || getString(item.nodeType) || getString(item.nodeId);
+  const reason = getString(item.reason) || getString(item.description) || getString(item.blockedReason);
+  const fieldLabel = humanizeKey(fieldName);
+  const prefix = nodeLabel ? `${fieldLabel} for ${nodeLabel}` : fieldLabel;
+  return reason && !reason.toLowerCase().includes(fieldName.toLowerCase())
+    ? `${prefix} - ${reason}`
+    : prefix;
+}
+
+function formatRuntimeAuditIssue(value: unknown): string | null {
+  if (!value || typeof value !== 'object') return null;
+
+  const item = value as Record<string, unknown>;
+  const valid = item.valid;
+  const validationStatus = getString(item.validationStatus);
+  const fieldName = getString(item.field) || getString(item.fieldName);
+  if (!fieldName) return null;
+  if (valid !== false && validationStatus !== 'invalid' && !getString(item.blockedReason)) return null;
+
+  const nodeLabel = getString(item.nodeLabel) || getString(item.nodeType) || getString(item.nodeId);
+  const errors = Array.isArray(item.errors)
+    ? (item.errors as unknown[]).filter((entry): entry is string => typeof entry === 'string')
+    : [];
+  const reason = errors.join('; ') || getString(item.blockedReason);
+  return formatRuntimeValidationIssue({
+    fieldName,
+    nodeLabel,
+    reason,
+  });
+}
+
+function parseValidationErrorAsInput(value: unknown): string | null {
+  if (value && typeof value === 'object') return formatValidationIssue(value);
+
+  const message = getString(value);
+  if (!message) return null;
+
+  const runtimeMatch = message.match(/^Required runtime_ai field ['"]?([^'"]+)['"]?/i);
+  const requiredMatch = message.match(/^([A-Za-z0-9_.-]+)\s+is\s+required\b/i);
+  const prefixMatch = message.match(/^([A-Za-z0-9_.-]+)\s*:/);
+  const fieldName = runtimeMatch?.[1] || requiredMatch?.[1] || prefixMatch?.[1];
+  return fieldName ? `${humanizeKey(fieldName)} - ${message}` : null;
+}
+
+function nestedArray(record: Record<string, unknown>, path: string[]): unknown[] {
+  let current: unknown = record;
+  for (const part of path) {
+    current = toRecord(current)[part];
+  }
+  return Array.isArray(current) ? current : [];
+}
+
+function collectValidationDetails(details: Record<string, unknown>): unknown[] {
+  const output = toRecord(details.output);
+  return [
+    ...(Array.isArray(details.validationErrors) ? details.validationErrors : []),
+    ...(Array.isArray(details.errors) ? details.errors : []),
+    ...(Array.isArray(details.schemaValidationFailures) ? details.schemaValidationFailures : []),
+    ...(Array.isArray(output._validationErrors) ? output._validationErrors : []),
+    ...nestedArray(details, ['contractDiagnostics', 'validationErrors']),
+    ...nestedArray(details, ['contractDiagnostics', 'errors']),
+    ...nestedArray(details, ['diagnostics', 'contract', 'validationErrors']),
+    ...nestedArray(details, ['diagnostics', 'contract', 'errors']),
+    ...nestedArray(details, ['validationResult', 'errors']),
+    ...nestedArray(details, ['validation', 'errors']),
+  ];
 }
 
 function extractMissingInputs(details: Record<string, unknown>): string[] {
   const raw = Array.isArray(details.missingInputs) ? details.missingInputs : [];
   const items = raw.map(formatMissingInput).filter((item): item is string => Boolean(item));
   if (items.length > 0) return unique(items);
+
+  const runtimeIssues = Array.isArray(details.runtimeValidationIssues) ? details.runtimeValidationIssues : [];
+  const runtimeIssueItems = runtimeIssues
+    .map(formatRuntimeValidationIssue)
+    .filter((item): item is string => Boolean(item));
+  if (runtimeIssueItems.length > 0) return unique(runtimeIssueItems);
+
+  const output = toRecord(details.output);
+  const runtimeAudit = Array.isArray(details.runtimeInputAudit)
+    ? details.runtimeInputAudit
+    : Array.isArray(output._runtimeInputAudit)
+      ? output._runtimeInputAudit
+      : [];
+  const handoffAudit = Array.isArray(details.runtimeInputHandoffAudit)
+    ? details.runtimeInputHandoffAudit
+    : Array.isArray(output._runtimeInputHandoffAudit)
+      ? output._runtimeInputHandoffAudit
+      : [];
+  const auditItems = [...runtimeAudit, ...handoffAudit]
+    .map(formatRuntimeAuditIssue)
+    .filter((item): item is string => Boolean(item));
+  if (auditItems.length > 0) return unique(auditItems);
+
+  const validationItems = collectValidationDetails(details)
+    .map(parseValidationErrorAsInput)
+    .filter((item): item is string => Boolean(item));
+  if (validationItems.length > 0) return unique(validationItems);
 
   const count = Number(details.missingInputsCount || 0);
   return count > 0 ? [`${count} required input${count === 1 ? '' : 's'} still need values.`] : [];
@@ -131,7 +238,7 @@ function extractExecutionValidationIssues(details: Record<string, unknown>): str
   if (structuredItems.length > 0) return unique(structuredItems);
 
   const errors = Array.isArray(details.executionValidationErrors) ? details.executionValidationErrors : [];
-  return unique(errors.map(formatValidationIssue).filter((item): item is string => Boolean(item)));
+  return unique([...errors, ...collectValidationDetails(details)].map(formatValidationIssue).filter((item): item is string => Boolean(item)));
 }
 
 function buildReadinessGuidance(payload: Record<string, unknown>, message: string): GuidedStatusContent {
@@ -194,6 +301,44 @@ export function mapWorkflowIssueToGuidance(input: WorkflowIssueInput): GuidedSta
   const currentPhase = getString(payload.currentPhase) || getString(payload.phase);
   const normalizedMessage = message.toLowerCase();
 
+  // Provider-specific rejections are checked first: a precise "the service said X" diagnostic
+  // must always win over the generic missing-data safety net below. Otherwise an unrelated
+  // (or stale) locally-scanned missing field can mask the real, actionable provider error —
+  // e.g. Slack rejecting a send with not_in_channel while message/channel are both filled in.
+  if (normalizedMessage.includes('not_in_channel')) {
+    return {
+      title: 'Slack app needs channel access',
+      description:
+        'The message and channel are filled, but Slack rejected the send because the connected CtrlChecks app is not a member of that channel.',
+      resolution:
+        'Invite the CtrlChecks Slack app to the selected channel, or choose a channel where the app is already a member.',
+      details: message,
+      nextSteps: [
+        'Open the Slack channel selected in this node.',
+        'Invite the CtrlChecks app to that channel, for example with /invite @CtrlChecks.',
+        'Run this node again after the app appears in the channel.',
+      ],
+      tone: 'connection',
+    };
+  }
+
+  if (normalizedMessage.includes('channel_not_found')) {
+    return {
+      title: 'Slack channel was not found',
+      description:
+        'Slack could not match the configured channel to a channel this app can see.',
+      resolution:
+        'Use the exact channel name or Slack channel ID, then save and run the node again.',
+      details: message,
+      nextSteps: [
+        'Check the channel spelling and casing.',
+        'Prefer the Slack channel ID if the name still fails.',
+        'Make sure the connected Slack app has access to that channel.',
+      ],
+      tone: 'connection',
+    };
+  }
+
   if (
     code === 'EXECUTION_NOT_READY' ||
     code === 'EXECUTION_MISSING_INPUTS' ||
@@ -211,8 +356,15 @@ export function mapWorkflowIssueToGuidance(input: WorkflowIssueInput): GuidedSta
   const hasMissingData =
     (Array.isArray(safetyDetails.missingCredentials) && (safetyDetails.missingCredentials as unknown[]).length > 0) ||
     (Array.isArray(safetyDetails.missingInputs) && (safetyDetails.missingInputs as unknown[]).length > 0) ||
+    (Array.isArray(safetyDetails.runtimeValidationIssues) && (safetyDetails.runtimeValidationIssues as unknown[]).length > 0) ||
+    (Array.isArray(safetyDetails.runtimeInputAudit) && (safetyDetails.runtimeInputAudit as unknown[]).length > 0) ||
+    (Array.isArray(safetyDetails.runtimeInputHandoffAudit) && (safetyDetails.runtimeInputHandoffAudit as unknown[]).length > 0) ||
+    (Array.isArray(safetyDetails.validationErrors) && (safetyDetails.validationErrors as unknown[]).length > 0) ||
+    (Array.isArray(safetyDetails.errors) && (safetyDetails.errors as unknown[]).length > 0) ||
+    (Array.isArray(safetyDetails.schemaValidationFailures) && (safetyDetails.schemaValidationFailures as unknown[]).length > 0) ||
     (Array.isArray(safetyDetails.executionValidationIssues) && (safetyDetails.executionValidationIssues as unknown[]).length > 0) ||
     (Array.isArray(safetyDetails.executionValidationErrors) && (safetyDetails.executionValidationErrors as unknown[]).length > 0) ||
+    collectValidationDetails(safetyDetails).length > 0 ||
     Number(safetyDetails.missingCredentialsCount || 0) > 0 ||
     Number(safetyDetails.missingInputsCount || 0) > 0;
   if (hasMissingData) {

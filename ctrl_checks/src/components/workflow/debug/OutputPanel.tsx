@@ -188,15 +188,26 @@ export default function OutputPanel({
   const structuredError = isStructuredDebugError(error) ? error : null;
   const needsAIGuidance = Boolean(structuredError && shouldFetchAIGuidance(structuredError));
   const staticGuidance = useMemo(
-    () => (structuredError && !needsAIGuidance ? mapWorkflowIssueToGuidance(structuredError) : null),
-    [structuredError, needsAIGuidance]
+    () => (structuredError ? mapWorkflowIssueToGuidance(structuredError) : null),
+    [structuredError]
   );
-  const guidedError = needsAIGuidance ? aiGuidance : staticGuidance;
-  const isGuidanceLoading = needsAIGuidance && (guidanceLoading || !guidedError);
+  // 'attention' is the tone `mapWorkflowIssueToGuidance` reserves exclusively for its generic,
+  // unclassified catch-all. Any other tone means the error text was actually recognized (a
+  // provider rejection like Slack not_in_channel, a readiness/missing-field issue, an auth
+  // issue, etc.) — that precise classification must win over a generic AI-fetched guidance.
+  const staticGuidanceHasDetails = Boolean(staticGuidance) && staticGuidance!.tone !== 'attention';
+  const guidedError = staticGuidanceHasDetails
+    ? staticGuidance
+    : needsAIGuidance
+      ? aiGuidance
+      : staticGuidance;
+  const isGuidanceLoading = needsAIGuidance && !staticGuidanceHasDetails && (guidanceLoading || !guidedError);
   const technicalDetails = structuredError ? formatTechnicalDetails(structuredError) : '';
 
   useEffect(() => {
-    if (!structuredError || !needsAIGuidance) {
+    // Skip the network round-trip entirely once the static classifier already produced a
+    // specific answer — it will be shown in preference to aiGuidance regardless.
+    if (!structuredError || !needsAIGuidance || staticGuidanceHasDetails) {
       setAiGuidance(null);
       setGuidanceLoading(false);
       return;

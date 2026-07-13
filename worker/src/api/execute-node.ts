@@ -7,6 +7,7 @@ import { getDbClient } from '../core/database/aws-db-client';
 import { executeNode } from './execute-workflow';
 import { LRUNodeOutputsCache } from '../core/cache/lru-node-outputs-cache';
 import { logger } from '../core/logger';
+import { buildRuntimeValidationGuidance } from '../core/utils/runtime-validation-guidance';
 
 // WorkflowNode interface must match execute-workflow.ts
 interface WorkflowNode {
@@ -228,6 +229,12 @@ export default async function executeNodeHandler(req: Request, res: Response) {
         (cleanedOutput as Record<string, unknown>)._connectionError
       )
     ) {
+      const runtimeGuidance = buildRuntimeValidationGuidance({
+        nodeId,
+        nodeType,
+        nodeLabel: node.data.label,
+        output: cleanedOutput,
+      });
       nodeOutputs.clear();
       return res.status(400).json({
         success: false,
@@ -238,7 +245,7 @@ export default async function executeNodeHandler(req: Request, res: Response) {
         message: 'This node needs setup before it can run.',
         hint: 'Open the Properties panel and complete the highlighted connection or required fields.',
         details: {
-          validationErrors: (cleanedOutput as Record<string, unknown>)._validationErrors || [],
+          ...runtimeGuidance,
           output: cleanedOutput,
         },
         executionTime,

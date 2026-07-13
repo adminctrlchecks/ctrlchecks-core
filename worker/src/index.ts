@@ -130,7 +130,7 @@ try {
   console.error('[ServerStartup] ❌ Failed to initialize node registry:', error.message);
 }
 
-import express, { Express, Request, Response } from 'express';
+import express, { Express, NextFunction, Request, Response } from 'express';
 import { networkInterfaces } from 'os';
 import helmet from 'helmet';
 import { config } from './core/config';
@@ -561,6 +561,22 @@ app.get('/api/chat/health', asyncHandler(async (req: Request, res: Response) => 
 }));
 
 // API Routes
+const INTERNAL_EXECUTION_HEADERS = [
+  'x-internal-form-execution',
+  'x-internal-chat-execution',
+  'x-internal-webhook-execution',
+  'x-internal-engine-execution',
+  'x-internal-trigger-execution',
+  'x-internal-approval-execution',
+];
+const authenticateExternalExecution = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const isInternalExecution = INTERNAL_EXECUTION_HEADERS.some((header) => req.headers[header] === 'true');
+  if (isInternalExecution) {
+    next();
+    return;
+  }
+  await authenticateUser(req as any, res, next);
+};
 console.log('[ServerStartup] 🔵 Registering /api/execute-workflow endpoint...');
 app.post(
   '/api/execute-workflow',
@@ -571,7 +587,7 @@ app.post(
     windowMs: 60_000,
   }),
   tierRateLimit('execute'),
-  asyncHandler(authenticateUser),
+  asyncHandler(authenticateExternalExecution),
   asyncHandler(executeWorkflowRoute)
 );
 

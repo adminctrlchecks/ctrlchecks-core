@@ -200,11 +200,27 @@ export class BackendFinalizer {
 
     // ── Step 5: Property Population via Gemini ────────────────────────────
     const ppStart = Date.now();
+    const ppRangeStart = getStageProgress('validation');
+    const ppRangeEnd = getStageProgress('property_population');
     const ppResult = await runPropertyPopulationStage({
       workflow,
       userIntent,
       structuralPrompt,
       correlationId,
+      onNodeProgress: (done, total) => {
+        if (total <= 0) return;
+        const pct = Math.min(
+          ppRangeEnd,
+          ppRangeStart + Math.round((ppRangeEnd - ppRangeStart) * (done / total)),
+        );
+        try {
+          onStageComplete?.(
+            'property_population',
+            pct,
+            `${STAGE_LOG_LABELS['property_population'] ?? 'property_population'} (${done}/${total} nodes)`,
+          );
+        } catch (_) {}
+      },
     });
     stageTrace.push({
       stage: 'property_population',
