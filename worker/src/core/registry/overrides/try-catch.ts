@@ -60,7 +60,12 @@ export function overrideTryCatch(def: UnifiedNodeDefinition, schema: NodeSchema)
 
           return {
             success: true,
-            output: finalOutput,
+            output: {
+              ...finalOutput,
+              // __routing survives into downstream branch-skip logic (execute-workflow.ts reads this
+              // from the raw output since NodeExecutionResult.metadata does not propagate past the executor).
+              __routing: { branch: 'try' },
+            },
             metadata: {
               branch: 'try', // ✅ Always start with try branch
               tryCatchNodeId: context.nodeId, // ✅ Mark this as a try_catch node for error routing

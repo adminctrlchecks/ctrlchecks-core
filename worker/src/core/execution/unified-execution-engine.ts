@@ -234,7 +234,9 @@ export function shouldSkipNode(
   ifElseResults: Record<string, boolean>,
   switchResults: Record<string, string | null>,
   skippedNodeIds: Set<string> = new Set(), // Track skipped nodes to prevent infinite loops
-  switchExpressionValues?: Record<string, unknown>
+  switchExpressionValues?: Record<string, unknown>,
+  tryCatchResults: Record<string, string | null> = {},
+  timeoutResults: Record<string, string | null> = {}
 ): boolean {
   // ✅ FIX: If this node was already determined to be skipped, return true
   if (skippedNodeIds && skippedNodeIds.has(node.id)) {
@@ -358,6 +360,31 @@ export function shouldSkipNode(
           exprVal
         )
       ) {
+        if (skippedNodeIds) {
+          skippedNodeIds.add(node.id);
+        }
+        return true;
+      }
+    }
+
+    // Check try_catch branches: skip the port ('try' or 'catch') that wasn't taken.
+    // Edges with no sourceHandle (e.g. the 'default' port) are left ambiguous and always allowed through.
+    if (sourceNode.data?.type === 'try_catch' && tryCatchResults[edge.source] !== undefined) {
+      const takenBranch = tryCatchResults[edge.source];
+      const handle = edge.sourceHandle;
+      if ((handle === 'try' || handle === 'catch') && handle !== takenBranch) {
+        if (skippedNodeIds) {
+          skippedNodeIds.add(node.id);
+        }
+        return true;
+      }
+    }
+
+    // Check timeout branches: skip the port ('success' or 'timeout') that wasn't taken.
+    if (sourceNode.data?.type === 'timeout' && timeoutResults[edge.source] !== undefined) {
+      const takenBranch = timeoutResults[edge.source];
+      const handle = edge.sourceHandle;
+      if ((handle === 'success' || handle === 'timeout') && handle !== takenBranch) {
         if (skippedNodeIds) {
           skippedNodeIds.add(node.id);
         }

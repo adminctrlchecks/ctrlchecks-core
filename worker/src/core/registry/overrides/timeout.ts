@@ -31,6 +31,9 @@ export function overrideTimeout(def: UnifiedNodeDefinition, schema: NodeSchema):
           limitMs: limit, // named distinctly from the 'limit' config key — cleanOutputFromConfig strips output keys that shadow config keys
           timedOut,
           originalInput: context.rawInput,
+          // __routing survives into downstream branch-skip logic (execute-workflow.ts reads this
+          // from the raw output since NodeExecutionResult.metadata does not propagate past the executor).
+          __routing: { branch: timedOut ? 'timeout' : 'success' },
         },
         metadata: {
           branch: timedOut ? 'timeout' : 'success',

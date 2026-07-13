@@ -19146,6 +19146,10 @@ export default async function executeWorkflowHandler(req: Request, res: Response
     const switchResults: Record<string, string | null> = {};
     /** Raw expression value after switch runs (numeric / string index routing). */
     const switchExpressionValues: Record<string, unknown> = {};
+    /** Which outgoing port ('try' | 'catch') a try_catch node actually took, keyed by node id. */
+    const tryCatchResults: Record<string, string | null> = {};
+    /** Which outgoing port ('success' | 'timeout') a timeout node actually took, keyed by node id. */
+    const timeoutResults: Record<string, string | null> = {};
     const skippedNodeIds = new Set<string>(); // ✅ CORE ARCHITECTURE FIX: Track skipped nodes for recursive skipping
 
     // Timestamp this workflow run began, read by the timeout node override to compute elapsed time.
@@ -19459,7 +19463,9 @@ export default async function executeWorkflowHandler(req: Request, res: Response
           ifElseResults,
           switchResults,
           skippedNodeIds,
-          switchExpressionValues
+          switchExpressionValues,
+          tryCatchResults,
+          timeoutResults
         );
         
         // ✅ CORE ARCHITECTURE FIX: Build node input from incoming edges FIRST
@@ -20429,6 +20435,20 @@ export default async function executeWorkflowHandler(req: Request, res: Response
             if (expressionValResult !== undefined) {
               switchExpressionValues[node.id] = expressionValResult;
             }
+          }
+
+          if (nodeType === 'try_catch' && typeof output === 'object' && output !== null) {
+            const outputObj = output as Record<string, unknown>;
+            const routing = outputObj.__routing as Record<string, unknown> | undefined;
+            const branch = (routing?.branch as string | undefined) ?? 'try';
+            tryCatchResults[node.id] = branch;
+          }
+
+          if (nodeType === 'timeout' && typeof output === 'object' && output !== null) {
+            const outputObj = output as Record<string, unknown>;
+            const routing = outputObj.__routing as Record<string, unknown> | undefined;
+            const branch = (routing?.branch as string | undefined) ?? (outputObj.timedOut ? 'timeout' : 'success');
+            timeoutResults[node.id] = branch;
           }
 
           // ============================================
