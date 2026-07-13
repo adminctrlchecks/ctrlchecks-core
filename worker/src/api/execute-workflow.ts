@@ -19153,8 +19153,16 @@ export default async function executeWorkflowHandler(req: Request, res: Response
     const skippedNodeIds = new Set<string>(); // ✅ CORE ARCHITECTURE FIX: Track skipped nodes for recursive skipping
 
     // Timestamp this workflow run began, read by the timeout node override to compute elapsed time.
-    // Follows the same global-scoped convention as currentWorkflowIntent below.
-    (global as any).currentWorkflowStartTime = Date.now();
+    // Stored on the per-execution nodeOutputs cache (not just the process-wide global below) because
+    // concurrent executions share the same Node process: a bare global gets clobbered by whichever
+    // execution starts last, silently under-reporting elapsed time for any run that started earlier.
+    const workflowStartTime = Date.now();
+    // Note: keys prefixed with '__' are treated as internal/observability-only and are
+    // filtered out of getAll() (and therefore never reach a node's context.upstreamOutputs) —
+    // use the '$'-prefixed convention ($json/json use it too) so this value actually propagates.
+    nodeOutputs.set('$workflowStartTime', workflowStartTime, true);
+    // Kept for back-compat with any other reader still on the global convention (e.g. currentWorkflowIntent below).
+    (global as any).currentWorkflowStartTime = workflowStartTime;
     
     // Track memory usage for monitoring
     const startMemory = process.memoryUsage().heapUsed / 1024 / 1024; // MB

@@ -19,8 +19,14 @@ export function overrideTimeout(def: UnifiedNodeDefinition, schema: NodeSchema):
         };
       }
 
-      // Get workflow start time set by the engine at the start of the run (execute-workflow.ts)
-      const workflowStart = (global as any).currentWorkflowStartTime || (context as any).workflowStartTime || Date.now();
+      // Get workflow start time set by the engine at the start of the run (execute-workflow.ts).
+      // Prefer the per-execution value (survives concurrent executions in the same process) over
+      // the process-wide global, which gets clobbered when another execution starts concurrently.
+      const workflowStart =
+        context.upstreamOutputs.get('$workflowStartTime') ??
+        (context as any).workflowStartTime ??
+        (global as any).currentWorkflowStartTime ??
+        Date.now();
       const elapsed = Date.now() - workflowStart;
       const timedOut = elapsed > limit;
 
