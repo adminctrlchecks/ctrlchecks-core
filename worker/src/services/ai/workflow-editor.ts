@@ -12,6 +12,11 @@ import type {
   AiEditorMutationOperation,
   AiEditorNodeSchemaSummary,
   AiEditorRegistryContext,
+  AiEditorGraphNodeRef,
+  AiEditorBranchPathStep,
+  AiEditorBranchSummary,
+  AiEditorBranchNodeSummary,
+  AiEditorGraphRewriteContext,
   WorkflowDiff,
   WorkflowNodeDiff,
   WorkflowEdgeDiff,
@@ -444,83 +449,402 @@ export class AIWorkflowEditor {
     }));
   }
 
-  private getSuggestStructuredOutputSchema(): Record<string, unknown> {
+  /**
+   * Build deterministic branch/path facts about the current graph so the LLM can map
+   * natural-language branch references ("when status is pending", "condition is false")
+   * to concrete existing node ids. Purely structural — works for any node types.
+   */
+  buildGraphRewriteContext(workflow: Workflow): AiEditorGraphRewriteContext {
+    const nodes = workflow.nodes || [];
+    const edges = workflow.edges || [];
+
+    const nodesById = new Map<string, WorkflowNode>();
+    for (const node of nodes) nodesById.set(node.id, node);
+
+    const toRef = (node: WorkflowNode): AiEditorGraphNodeRef => {
+      const data = (node.data || {}) as any;
+      return {
+        id: node.id,
+        type: String(data.type || node.type || 'unknown'),
+        label: typeof data.label === 'string' ? data.label : undefined,
+      };
+    };
+
+    const outgoingBySource = new Map<string, WorkflowEdge[]>();
+    const incomingByTarget = new Map<string, WorkflowEdge[]>();
+    for (const edge of edges) {
+      const out = outgoingBySource.get(edge.source) || [];
+      out.push(edge);
+      outgoingBySource.set(edge.source, out);
+      const inc = incomingByTarget.get(edge.target) || [];
+      inc.push(edge);
+      incomingByTarget.set(edge.target, inc);
+    }
+
+    const edgeHandle = (edge: WorkflowEdge): string => {
+      const handle = (edge as any).sourceHandle;
+      return typeof handle === 'string' && handle.trim() ? handle.trim() : 'default';
+    };
+
+    const isBranchNode = (node: WorkflowNode): boolean => {
+      const outEdges = outgoingBySource.get(node.id) || [];
+      const handles = new Set(outEdges.map(edgeHandle));
+      if (handles.size >= 2) return true;
+      // A single wired branch still counts when its handle is an explicit branch name.
+      if (outEdges.length > 0 && !handles.has('default')) return true;
+      const outputSchema = unifiedNodeRegistry.getOutputSchema(toRef(node).type);
+      return !!outputSchema && Object.keys(outputSchema).length >= 2;
+    };
+
+    const branchNodeIds = new Set(nodes.filter(isBranchNode).map((node) => node.id));
+
+    // Branch paths: for every node, the sequence(s) of branch decisions that lead to it.
+    const branchPathsByNode = new Map<string, AiEditorBranchPathStep[][]>();
+    const roots = nodes.filter((node) => !(incomingByTarget.get(node.id) || []).length);
+    const traversalQueue: Array<{ nodeId: string; path: AiEditorBranchPathStep[] }> = roots.map(
+      (node) => ({ nodeId: node.id, path: [] })
+    );
+    const visited = new Set<string>();
+    let traversalSteps = 0;
+    while (traversalQueue.length && traversalSteps < 5000) {
+      traversalSteps += 1;
+      const { nodeId, path } = traversalQueue.shift()!;
+      const visitKey = `${nodeId}|${path.map((s) => `${s.branchNodeId}:${s.sourceHandle}`).join('>')}`;
+      if (visited.has(visitKey)) continue;
+      visited.add(visitKey);
+
+      if (path.length) {
+        const existing = branchPathsByNode.get(nodeId) || [];
+        if (existing.length < 3) {
+          existing.push(path);
+          branchPathsByNode.set(nodeId, existing);
+        }
+      }
+
+      const node = nodesById.get(nodeId);
+      if (!node) continue;
+      const nodeIsBranch = branchNodeIds.has(nodeId);
+      for (const edge of outgoingBySource.get(nodeId) || []) {
+        const nextPath =
+          nodeIsBranch && path.length < 6
+            ? [
+                ...path,
+                {
+                  branchNodeId: nodeId,
+                  branchNodeType: toRef(node).type,
+                  branchNodeLabel: toRef(node).label,
+                  sourceHandle: edgeHandle(edge),
+                },
+              ]
+            : path;
+        traversalQueue.push({ nodeId: edge.target, path: nextPath });
+      }
+    }
+
+    const collectDownstream = (startIds: string[]): AiEditorGraphNodeRef[] => {
+      const seen = new Set<string>(startIds);
+      const queue = [...startIds];
+      const refs: AiEditorGraphNodeRef[] = [];
+      while (queue.length && refs.length < 20) {
+        const id = queue.shift()!;
+        const node = nodesById.get(id);
+        if (node) refs.push(toRef(node));
+        for (const edge of outgoingBySource.get(id) || []) {
+          if (!seen.has(edge.target)) {
+            seen.add(edge.target);
+            queue.push(edge.target);
+          }
+        }
+      }
+      return refs;
+    };
+
+    const branchNodes: AiEditorBranchNodeSummary[] = [];
+    for (const node of nodes) {
+      if (!branchNodeIds.has(node.id)) continue;
+      const edgesByHandle = new Map<string, WorkflowEdge[]>();
+      for (const edge of outgoingBySource.get(node.id) || []) {
+        const handle = edgeHandle(edge);
+        const group = edgesByHandle.get(handle) || [];
+        group.push(edge);
+        edgesByHandle.set(handle, group);
+      }
+      const outgoingBranches: AiEditorBranchSummary[] = [];
+      for (const [sourceHandle, handleEdges] of edgesByHandle.entries()) {
+        const directTargetIds = handleEdges.map((edge) => edge.target);
+        outgoingBranches.push({
+          sourceHandle,
+          directTargets: directTargetIds
+            .map((id) => nodesById.get(id))
+            .filter((n): n is WorkflowNode => !!n)
+            .map(toRef),
+          downstreamNodes: collectDownstream(directTargetIds),
+        });
+      }
+      const data = (node.data || {}) as any;
+      branchNodes.push({
+        ...toRef(node),
+        configSummary:
+          data.config && typeof data.config === 'object'
+            ? this.summarizeValueForAiEditor(data.config)
+            : undefined,
+        outgoingBranches,
+      });
+    }
+
+    return {
+      nodes: nodes.map((node) => {
+        const paths = branchPathsByNode.get(node.id);
+        return { ...toRef(node), ...(paths?.length ? { branchPaths: paths } : {}) };
+      }),
+      branchNodes,
+    };
+  }
+
+  private formatBranchPathForUser(path: AiEditorBranchPathStep[]): string {
+    return path
+      .map((step) => `${step.branchNodeLabel || step.branchNodeType} → "${step.sourceHandle}" branch`)
+      .join(' → ');
+  }
+
+  /**
+   * When edit generation fails validation, produce a precise graph-aware clarification
+   * instead of a generic refusal: enumerate the existing nodes that the request seems
+   * to reference, each with the branch path that leads to it.
+   */
+  private buildGraphAwareClarification(
+    rawRequest: string,
+    context: AiEditorGraphRewriteContext
+  ): string {
+    const normalizedRequest = ` ${rawRequest
+      .toLowerCase()
+      .replace(/[_-]+/g, ' ')
+      .replace(/[^a-z0-9\s]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()} `;
+    const genericTokens = new Set(['node', 'nodes', 'trigger', 'workflow', 'the', 'and', 'with', 'new']);
+
+    const matches: Array<{ ref: AiEditorGraphRewriteContext['nodes'][number] }> = [];
+    for (const nodeRef of context.nodes) {
+      const tokens = new Set<string>();
+      for (const source of [nodeRef.type, nodeRef.label]) {
+        for (const token of String(source || '').toLowerCase().split(/[^a-z0-9]+/)) {
+          if (token.length >= 3 && !genericTokens.has(token)) tokens.add(token);
+        }
+      }
+      const matched = Array.from(tokens).some(
+        (token) => normalizedRequest.includes(` ${token} `) || normalizedRequest.includes(` ${token}s `)
+      );
+      if (matched) matches.push({ ref: nodeRef });
+    }
+
+    if (matches.length) {
+      const lines = matches.slice(0, 6).map(({ ref }, index) => {
+        const location = ref.branchPaths?.length
+          ? ` — reached via ${this.formatBranchPathForUser(ref.branchPaths[0])}`
+          : ' — on the main path';
+        return `${index + 1}. ${ref.label || ref.type} (${ref.type}, id: ${ref.id})${location}`;
+      });
+      return [
+        'I could not safely turn that request into a validated edit yet. Here are the existing nodes that seem to match it:',
+        '',
+        ...lines,
+        '',
+        'Tell me exactly which of these to change — for example "replace #1 with <service>" or "remove #2" — or send one change at a time.',
+      ].join('\n');
+    }
+
+    if (context.branchNodes.length) {
+      const lines = context.branchNodes.slice(0, 4).map((branchNode) => {
+        const handles = branchNode.outgoingBranches.map((b) => `"${b.sourceHandle}"`).join(', ');
+        return `- ${branchNode.label || branchNode.type} (${branchNode.type}) with branches: ${handles || 'none wired'}`;
+      });
+      return [
+        'I could not safely map that request to exact workflow changes. This workflow branches at:',
+        '',
+        ...lines,
+        '',
+        'Please name the branch and the node you want changed (for example "the node on the false branch"), or send one change at a time.',
+      ].join('\n');
+    }
+
+    return [
+      'I could not safely convert that request into a validated workflow edit.',
+      'Please name the exact node you want changed, or split the request into one replacement/removal at a time.',
+    ].join(' ');
+  }
+
+  /**
+   * Structured output schema for edit suggestions.
+   *
+   * Deliberately FLAT with all core fields required and enum-constrained:
+   * Gemini's constrained JSON mode only guarantees fields listed in `required`,
+   * so a kind-specific schema with optional fields let the model legally emit
+   * truncated operations like { "kind": "replace_node", "targetNodeId": "..." }
+   * with no newNodeType — the exact failure seen in production. With required
+   * enums the model cannot omit fields or invent node ids/types. The flat
+   * interpretation is converted to whitelisted operations in
+   * convertInterpretedOperations().
+   */
+  private getSuggestStructuredOutputSchema(workflow: Workflow): Record<string, unknown> {
+    const nodeIds = (workflow.nodes || []).map((node) => node.id);
     return {
       type: 'object',
       properties: {
         message: {
           type: 'string',
-          description: 'Short plain-English explanation of the proposed workflow edit. Do not include raw JSON here.',
+          description:
+            'Plain-English explanation of the proposed workflow edit. For multi-part requests, enumerate each planned change as a numbered list. Do not include raw JSON here.',
         },
         operations: {
           type: 'array',
           items: {
             type: 'object',
             properties: {
-              kind: {
+              action: {
                 type: 'string',
                 enum: AI_EDITOR_MUTATION_OPERATION_KINDS,
-              },
-              nodeType: {
-                type: 'string',
-                description: 'Required for add_node and insert_safety_node.',
-              },
-              label: {
-                type: 'string',
-                description: 'Optional label for add_node.',
-              },
-              nodeId: {
-                type: 'string',
-                description: 'Required for remove_node and update_node_config.',
+                description: 'The edit action to perform.',
               },
               targetNodeId: {
                 type: 'string',
-                description: 'Required for replace_node. Must be an existing workflow node id.',
+                enum: [...nodeIds, 'none'],
+                description:
+                  'The existing workflow node this action applies to: the node to replace/remove/reconfigure, or the reference node for add_node/insert_safety_node placement. Use "none" only for refactor_linearize.',
               },
               newNodeType: {
                 type: 'string',
-                description: 'Required for replace_node. Must be a canonical node type from the registry context.',
+                description:
+                  'For replace_node: the canonical replacement node type (e.g. "slack_message", "google_gmail"). For add_node/insert_safety_node: the node type to create. Must be a canonical node type — prefer types listed in the REGISTRY SUMMARY or MATCHED NODE CANDIDATES sections of the prompt. Use "none" for remove_node, update_node_config, and refactor_linearize.',
               },
-              configStrategy: {
+              relation: {
                 type: 'string',
-                enum: ['preserve_compatible', 'use_defaults', 'merge'],
+                enum: ['before', 'after', 'none'],
+                description:
+                  'For add_node/insert_safety_node: where to place the new node relative to targetNodeId. Use "none" for all other actions.',
               },
-              path: {
+              configPath: {
                 type: 'string',
-                description: 'Required for update_node_config. Must be a JSON pointer starting with /.',
+                description:
+                  'For update_node_config only: JSON pointer to the config field, e.g. "/subject". Empty string for all other actions.',
               },
-              newValue: {
-                description: 'Required for update_node_config. The new config value.',
+              configValueJson: {
+                type: 'string',
+                description:
+                  'For update_node_config only: the new value encoded as JSON (e.g. "\\"hello\\"" or "42"). Empty string for all other actions.',
               },
-              configOverrides: {
-                type: 'object',
-                description: 'Optional node config overrides using only supported config keys.',
+              configOverridesJson: {
+                type: 'string',
+                description:
+                  'Optional JSON object (encoded as a string) with config overrides for the new/replacement node, using only fields from that node type\'s schema. Empty string if none.',
               },
-              positionHint: {
-                type: 'object',
-                properties: {
-                  relation: { type: 'string', enum: ['before', 'after', 'replace'] },
-                  referenceNodeId: { type: 'string' },
-                },
-              },
-              position: {
-                type: 'object',
-                properties: {
-                  relation: { type: 'string', enum: ['before', 'after'] },
-                  referenceNodeId: { type: 'string' },
-                },
-              },
-              focusNodeIds: {
-                type: 'array',
-                items: { type: 'string' },
+              label: {
+                type: 'string',
+                description: 'Optional label for add_node. Empty string if none.',
               },
             },
-            required: ['kind'],
+            required: ['action', 'targetNodeId', 'newNodeType'],
           },
         },
       },
       required: ['message', 'operations'],
     };
+  }
+
+  private parseJsonStringSafely(value: unknown): unknown {
+    if (typeof value !== 'string' || !value.trim()) return undefined;
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
+  }
+
+  /**
+   * Convert flat interpreted operations (from the structured output schema) into
+   * whitelisted AiEditorMutationOperation shapes. Deterministic — no LLM involved.
+   * Items already in operation shape (with "kind") pass through untouched, so the
+   * downstream validator remains the single safety net for both formats.
+   */
+  private convertInterpretedOperations(raw: unknown[], workflow: Workflow): unknown[] {
+    const nodeIds = new Set((workflow.nodes || []).map((node) => node.id));
+    const out: unknown[] = [];
+
+    for (const item of raw) {
+      if (!item || typeof item !== 'object') {
+        out.push(item);
+        continue;
+      }
+      const op = item as Record<string, any>;
+      if (typeof op.kind === 'string' && typeof op.action !== 'string') {
+        out.push(item);
+        continue;
+      }
+      const action = String(op.action || '');
+      const targetNodeId =
+        typeof op.targetNodeId === 'string' && op.targetNodeId !== 'none' && op.targetNodeId.trim()
+          ? op.targetNodeId.trim()
+          : undefined;
+      const rawNewNodeType =
+        typeof op.newNodeType === 'string' && op.newNodeType !== 'none' && op.newNodeType.trim()
+          ? op.newNodeType.trim()
+          : undefined;
+      const newNodeType = rawNewNodeType
+        ? unifiedNormalizeNodeTypeString(rawNewNodeType) || rawNewNodeType
+        : undefined;
+      const relation = op.relation === 'before' ? 'before' : 'after';
+      const configOverrides = this.parseJsonStringSafely(op.configOverridesJson);
+      const overridesObject =
+        configOverrides && typeof configOverrides === 'object' && !Array.isArray(configOverrides)
+          ? (configOverrides as Record<string, unknown>)
+          : undefined;
+
+      if (action === 'replace_node') {
+        out.push({
+          kind: 'replace_node',
+          targetNodeId,
+          newNodeType,
+          configStrategy: 'merge',
+          ...(overridesObject ? { configOverrides: overridesObject } : {}),
+        });
+      } else if (action === 'remove_node') {
+        out.push({ kind: 'remove_node', nodeId: targetNodeId });
+      } else if (action === 'update_node_config') {
+        const rawPath = typeof op.configPath === 'string' ? op.configPath.trim() : '';
+        const path = rawPath && !rawPath.startsWith('/') ? `/${rawPath}` : rawPath;
+        const newValue = this.parseJsonStringSafely(op.configValueJson);
+        out.push({
+          kind: 'update_node_config',
+          nodeId: targetNodeId,
+          path,
+          // Omit newValue when the model gave no value so the validator rejects and retries.
+          ...(newValue !== undefined ? { newValue } : {}),
+        });
+      } else if (action === 'add_node') {
+        out.push({
+          kind: 'add_node',
+          nodeType: newNodeType,
+          ...(typeof op.label === 'string' && op.label.trim() ? { label: op.label.trim() } : {}),
+          ...(overridesObject ? { configOverrides: overridesObject } : {}),
+          ...(targetNodeId && nodeIds.has(targetNodeId)
+            ? { positionHint: { relation, referenceNodeId: targetNodeId } }
+            : {}),
+        });
+      } else if (action === 'insert_safety_node') {
+        out.push({
+          kind: 'insert_safety_node',
+          nodeType: newNodeType,
+          position: { relation, referenceNodeId: targetNodeId },
+          ...(overridesObject ? { configOverrides: overridesObject } : {}),
+        });
+      } else if (action === 'refactor_linearize') {
+        out.push({ kind: 'refactor_linearize' });
+      } else {
+        out.push(item);
+      }
+    }
+
+    return out;
   }
 
   /**
@@ -541,11 +865,19 @@ export class AIWorkflowEditor {
        * at runtime, not just the static graph shape.
        */
       runtimePatternContext?: string;
+      /**
+       * The user's own latest message, unwrapped. `prompt` may be a composed suggestion
+       * prompt containing candidate JSON and analyzer text; graph-aware clarification
+       * matching must only look at what the user actually typed.
+       */
+      rawUserRequest?: string;
     }
   ): Promise<{
     message: string;
     operations: AiEditorMutationOperation[];
     dryRun: Awaited<ReturnType<AIWorkflowEditor['applyOperations']>>;
+    /** True when no operations were produced and the message is a clarification question. */
+    needsClarification: boolean;
   }> {
     const registryContext = this.buildRegistryContextForWorkflow(workflow);
     const validation = unifiedGraphOrchestrator.validateWorkflow(workflow);
@@ -555,16 +887,20 @@ export class AIWorkflowEditor {
       : undefined;
     const nodePromptSummary = this.buildWorkflowNodePromptSummary(workflow);
     const edgePromptSummary = this.buildWorkflowEdgePromptSummary(workflow);
+    const graphRewriteContext = this.buildGraphRewriteContext(workflow);
 
     const opHelp = [
-      'Allowed operation "kind" values ONLY:',
-      '- add_node: { "kind":"add_node", "nodeType": string, "label"?: string, "configOverrides"?: object, "positionHint"?: { "relation":"before"|"after"|"replace", "referenceNodeId": string } }',
-      '- remove_node: { "kind":"remove_node", "nodeId": string }',
-      '- replace_node: { "kind":"replace_node", "targetNodeId": string, "newNodeType": string, "configStrategy"?: "preserve_compatible"|"use_defaults"|"merge", "configOverrides"?: object }',
-      '- update_node_config: { "kind":"update_node_config", "nodeId": string, "path": string (JSON pointer starting with /, e.g. /subject), "newValue": any }',
-      '- insert_safety_node: { "kind":"insert_safety_node", "nodeType": string, "position": { "relation":"before"|"after", "referenceNodeId": string }, "configOverrides"?: object }',
-      '- refactor_linearize: { "kind":"refactor_linearize", "focusNodeIds"?: string[] } (prefer avoiding; may be no-op)',
-      'Use existing node ids from the workflow for references. Do not output edges.',
+      'Every operation object MUST contain these three fields: "action", "targetNodeId", "newNodeType".',
+      'Optional fields: "relation", "configPath", "configValueJson", "configOverridesJson", "label".',
+      'How to express each edit:',
+      '- Replace an existing node: { "action":"replace_node", "targetNodeId":"<existing node id>", "newNodeType":"<replacement type>" }',
+      '- Remove an existing node: { "action":"remove_node", "targetNodeId":"<existing node id>", "newNodeType":"none" }',
+      '- Change one config value: { "action":"update_node_config", "targetNodeId":"<existing node id>", "newNodeType":"none", "configPath":"/field", "configValueJson":"<JSON-encoded value>" }',
+      '- Add a new node: { "action":"add_node", "targetNodeId":"<reference node id>", "newNodeType":"<type to create>", "relation":"before"|"after" }',
+      '- Insert a guard/safety node: { "action":"insert_safety_node", "targetNodeId":"<reference node id>", "newNodeType":"<type>", "relation":"before"|"after" }',
+      'targetNodeId must be an existing workflow node id. newNodeType must be a known node type, or "none" where no new node is created.',
+      'configOverridesJson, when used, must be a JSON object string using only config fields from the selected node type schema.',
+      'Do not output edges.',
     ].join('\n');
 
     const llmInput = [
@@ -572,8 +908,8 @@ export class AIWorkflowEditor {
       '- message: short human explanation',
       '- operations: array of mutation operations following the schema below',
       'You are CtrlChecks AI Editor. Do not mention n8n, Zapier, Make, or competitor-specific settings unless the user explicitly asks for a comparison.',
-      'Never invent node config keys. For any configOverrides, use only fields present in the selected node schema/default config supplied in this prompt.',
-      'Every operation MUST include all required fields listed in the operation schema. Never output only {"kind":"replace_node"} or any other incomplete operation.',
+      'Never invent node config keys. For any config overrides, use only fields present in the selected node schema/default config supplied in this prompt.',
+      'Every operation MUST include action, targetNodeId, and newNodeType. Never output an incomplete operation.',
       'If the user request is a graph rewrite (replace, swap, remove, delete, branch-specific change, or multiple existing nodes named), reason over the existing workflow graph and return the required operation array. Do not ask the user to choose a generic node type when the request already names the existing/source/target node type.',
       'Only ask a clarification question with an empty operations array when the target node, target branch, or required destination service cannot be inferred from the workflow and conversation.',
       opHelp,
@@ -583,16 +919,27 @@ export class AIWorkflowEditor {
         '- Every replace_node must include targetNodeId and newNodeType. targetNodeId must be copied exactly from WORKFLOW NODES.',
         '- For deletion requests, use remove_node on the exact existing node id; do not fake deletion with empty config values.',
         '- Every remove_node must include nodeId copied exactly from WORKFLOW NODES.',
-        '- For branch or condition requests, inspect sourceHandle/targetHandle and condition-node config before choosing which node ids to replace or remove.',
+        '- For branch or condition requests, resolve the target using GRAPH REWRITE CONTEXT: match the condition/case/status words in the request against each branch node\'s configSummary and its outgoingBranches sourceHandle values, then pick target node ids from that branch\'s directTargets/downstreamNodes.',
+        '- Every node\'s branchPaths in GRAPH REWRITE CONTEXT lists the branch decisions that lead to it (e.g. which if_else handle or switch case). Use it to tell apart same-type nodes on different branches.',
+        '- If two or more existing nodes could match the request (for example the same service on different branches) and the request does not clearly pick one, return operations: [] and a clarification message that names each candidate with its label, node id, and branch path. Never guess between candidates.',
         '- For multi-part requests, return all necessary operations in one ordered operations array.',
         '- For adding a terminal/log/result node, use add_node with positionHint after the final relevant node and include only supported config fields.',
         '- If a selected target node type requires configuration and the user did not provide concrete field values, use safe schema/default values only when they are obvious from the request or existing comparable nodes; otherwise return a clear question and no operations.',
         '- The message should explain what will change in plain English. It must not include raw JSON.',
+        '- When the request contains multiple changes, the message must list each planned change as a numbered step, in the same order as the operations array (e.g. "1. Replace the Gmail on the If/Else false branch with Slack. 2. Replace the Slack on the pending branch with Gmail.").',
       ].join('\n'),
       '=== WORKFLOW NODES ===',
       JSON.stringify(nodePromptSummary, null, 2),
       '=== WORKFLOW EDGES ===',
       JSON.stringify(edgePromptSummary, null, 2),
+      '=== GRAPH REWRITE CONTEXT (deterministic branch map) ===',
+      [
+        'Precomputed facts about the current graph. Use this to resolve branch language',
+        '("when X is false", "status pending", case names) to concrete node ids.',
+        'Every targetNodeId, nodeId, and referenceNodeId you output MUST be copied exactly from',
+        'an "id" field in this context or in WORKFLOW NODES. Never invent or abbreviate ids.',
+      ].join('\n'),
+      JSON.stringify(graphRewriteContext, null, 2),
       focusedNode
         ? `=== FOCUSED NODE ===\n${JSON.stringify({ id: focusedNode.id, type: (focusedNode.data as any)?.type || focusedNode.type }, null, 2)}`
         : '',
@@ -648,6 +995,7 @@ export class AIWorkflowEditor {
 
     let message = 'Review suggested operations below.';
     let operations: AiEditorMutationOperation[] = [];
+    const structuredSchema = this.getSuggestStructuredOutputSchema(workflow);
 
     try {
       const rawResult = await geminiOrchestrator.processRequest('chat-generation', llmInput, {
@@ -656,17 +1004,19 @@ export class AIWorkflowEditor {
         cache: false,
         structuredOutput: {
           mimeType: 'application/json',
-          schema: this.getSuggestStructuredOutputSchema(),
+          schema: structuredSchema,
         },
       });
       const text =
         typeof rawResult === 'string'
           ? rawResult
           : (rawResult as any)?.content || JSON.stringify(rawResult);
-      let parsed = await this.parseSuggestJsonWithRepair(text);
+      let parsed = await this.parseSuggestJsonWithRepair(text, structuredSchema);
+      parsed.operations = this.convertInterpretedOperations(parsed.operations, workflow);
       const validationIssues = this.describeMutationOperationIssues(parsed.operations, workflow);
       if (validationIssues.length) {
-        parsed = await this.retrySuggestJsonWithValidation(llmInput, parsed, validationIssues);
+        parsed = await this.retrySuggestJsonWithValidation(llmInput, parsed, validationIssues, structuredSchema);
+        parsed.operations = this.convertInterpretedOperations(parsed.operations, workflow);
         const retryIssues = this.describeMutationOperationIssues(parsed.operations, workflow);
         if (retryIssues.length) {
           throw new Error(`Invalid AI editor operations: ${retryIssues.join('; ')}`);
@@ -674,18 +1024,22 @@ export class AIWorkflowEditor {
       }
       message = parsed.message || message;
       operations = this.sanitizeMutationOperations(parsed.operations);
-    } catch {
-      message = [
-        'I could not safely convert that request into a validated workflow edit.',
-        'Please name the exact node or branch you want changed, or split the request into one replacement/removal at a time.',
-      ].join(' ');
+    } catch (err: any) {
+      console.error(
+        '[AIWorkflowEditor] suggestWorkflowEdits could not produce validated operations:',
+        err?.message || String(err)
+      );
+      message = this.buildGraphAwareClarification(
+        options?.rawUserRequest?.trim() || prompt,
+        graphRewriteContext
+      );
       operations = [];
     }
 
     const clone: Workflow = JSON.parse(JSON.stringify(workflow));
     const dryRun = await this.applyOperations(clone, operations);
 
-    return { message, operations, dryRun };
+    return { message, operations, dryRun, needsClarification: operations.length === 0 };
   }
 
   private parseSuggestJson(text: string): { message: string; operations: unknown[] } {
@@ -707,15 +1061,17 @@ export class AIWorkflowEditor {
     };
   }
 
-  private async parseSuggestJsonWithRepair(text: string): Promise<{ message: string; operations: unknown[] }> {
+  private async parseSuggestJsonWithRepair(
+    text: string,
+    structuredSchema: Record<string, unknown>
+  ): Promise<{ message: string; operations: unknown[] }> {
     try {
       return this.parseSuggestJson(text);
     } catch (parseError: any) {
       const repairPrompt = [
         'Repair the following AI workflow editor response into valid JSON.',
         'Return ONLY one JSON object with keys "message" and "operations".',
-        'The operations array must contain only these operation kinds:',
-        AI_EDITOR_MUTATION_OPERATION_KINDS.join(', '),
+        'Each operation must contain "action" (one of: ' + AI_EDITOR_MUTATION_OPERATION_KINDS.join(', ') + '), "targetNodeId", and "newNodeType".',
         'Do not add explanations, markdown, or fields that are not present or inferable from the broken response.',
         '',
         'Broken response:',
@@ -730,7 +1086,7 @@ export class AIWorkflowEditor {
         cache: false,
         structuredOutput: {
           mimeType: 'application/json',
-          schema: this.getSuggestStructuredOutputSchema(),
+          schema: structuredSchema,
         },
       });
       const repairedText =
@@ -744,7 +1100,8 @@ export class AIWorkflowEditor {
   private async retrySuggestJsonWithValidation(
     originalPrompt: string,
     previous: { message: string; operations: unknown[] },
-    validationIssues: string[]
+    validationIssues: string[],
+    structuredSchema: Record<string, unknown>
   ): Promise<{ message: string; operations: unknown[] }> {
     const retryPrompt = [
       originalPrompt,
@@ -759,9 +1116,9 @@ export class AIWorkflowEditor {
       JSON.stringify(previous, null, 2).slice(0, 8000),
       '',
       'Correction requirements:',
-      '- If an edit can be performed, return complete operations with all required ids and node types.',
-      '- If the target node or branch cannot be identified from the workflow graph, return a clarification message and operations: [].',
-      '- Do not output operation objects that contain only kind.',
+      '- If an edit can be performed, return complete operations: every operation must include action, targetNodeId, and newNodeType.',
+      '- Copy every targetNodeId exactly from the GRAPH REWRITE CONTEXT or WORKFLOW NODES sections above; use branchPaths and outgoingBranches to pick the node on the requested branch.',
+      '- If the target node or branch cannot be identified from the workflow graph, return a clarification message that names the candidate node ids and their branch paths, and operations: [].',
     ].join('\n');
 
     const retried = await geminiOrchestrator.processRequest('chat-generation', retryPrompt, {
@@ -770,14 +1127,14 @@ export class AIWorkflowEditor {
       cache: false,
       structuredOutput: {
         mimeType: 'application/json',
-        schema: this.getSuggestStructuredOutputSchema(),
+        schema: structuredSchema,
       },
     });
     const retriedText =
       typeof retried === 'string'
         ? retried
         : (retried as any)?.content || JSON.stringify(retried);
-    return this.parseSuggestJsonWithRepair(retriedText);
+    return this.parseSuggestJsonWithRepair(retriedText, structuredSchema);
   }
 
   private describeMutationOperationIssues(raw: unknown[], workflow: Workflow): string[] {

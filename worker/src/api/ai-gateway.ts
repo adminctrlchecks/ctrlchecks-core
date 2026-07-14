@@ -1356,6 +1356,7 @@ router.post('/editor/chat', async (req: Request, res: Response) => {
     let previewErrors: string[] = [];
     let previewWarnings: string[] = [];
     let previewValid = true;
+    let editNeedsClarification = false;
 
     if (wantsChange && body.workflow) {
       let runtimePatternContext = '';
@@ -1382,17 +1383,19 @@ router.post('/editor/chat', async (req: Request, res: Response) => {
         }> | undefined,
       });
 
-      const { message, operations: suggestedOperations, dryRun } = await aiWorkflowEditor.suggestWorkflowEdits(
+      const { message, operations: suggestedOperations, dryRun, needsClarification } = await aiWorkflowEditor.suggestWorkflowEdits(
         body.workflow,
         suggestionPrompt,
         {
           focusedNodeId: body.nodeId,
           conversationHistory: Array.isArray(body.conversationHistory) ? body.conversationHistory : [],
           runtimePatternContext,
+          rawUserRequest: prompt,
         }
       );
 
       editorMessage = message;
+      editNeedsClarification = needsClarification;
       operations = suggestedOperations as any[];
       diff = dryRun.diff;
       previewErrors = dryRun.errors;
@@ -1455,6 +1458,7 @@ router.post('/editor/chat', async (req: Request, res: Response) => {
       diff,
       updatedWorkflow,
       requiresApply: operations.length > 0,
+      needsClarification: editNeedsClarification || undefined,
     };
 
     if (workflowId) {
@@ -1617,6 +1621,7 @@ router.post('/editor/suggest', async (req: Request, res: Response) => {
       focusedNodeId: body.nodeId,
       conversationHistory,
       runtimePatternContext,
+      rawUserRequest: body.prompt,
     });
 
     const previewValid = dryRun.errors.length === 0;

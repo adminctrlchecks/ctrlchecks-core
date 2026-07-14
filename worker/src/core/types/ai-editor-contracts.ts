@@ -95,6 +95,63 @@ export interface AiEditorRegistryContext {
 }
 
 /**
+ * GRAPH REWRITE CONTEXT
+ *
+ * Deterministic, precomputed facts about the current graph so the LLM can map
+ * natural-language branch references ("when status is pending", "on the false
+ * branch") to concrete existing node ids instead of inventing them.
+ * Built by AIWorkflowEditor.buildGraphRewriteContext — never by the LLM.
+ */
+
+/** Minimal reference to an existing workflow node. */
+export interface AiEditorGraphNodeRef {
+  id: string;
+  type: string;
+  label?: string;
+}
+
+/**
+ * One branch decision crossed on the way to a node:
+ * "went through <branchNode> via <sourceHandle>".
+ */
+export interface AiEditorBranchPathStep {
+  branchNodeId: string;
+  branchNodeType: string;
+  branchNodeLabel?: string;
+  /** Edge sourceHandle taken out of the branch node (e.g. "true", "false", a switch case). */
+  sourceHandle: string;
+}
+
+/** One outgoing branch of a branching node (grouped by sourceHandle). */
+export interface AiEditorBranchSummary {
+  sourceHandle: string;
+  /** Nodes wired directly to this handle. */
+  directTargets: AiEditorGraphNodeRef[];
+  /** All nodes reachable through this handle (bounded traversal). */
+  downstreamNodes: AiEditorGraphNodeRef[];
+}
+
+/** A node whose outgoing edges fan out into distinct branches (if_else, switch, ...). */
+export interface AiEditorBranchNodeSummary extends AiEditorGraphNodeRef {
+  /** Compact redacted config summary (conditions, cases, fields) for branch matching. */
+  configSummary?: unknown;
+  outgoingBranches: AiEditorBranchSummary[];
+}
+
+export interface AiEditorGraphRewriteContext {
+  /**
+   * Every workflow node with the branch decisions that lead to it.
+   * An empty/absent branchPaths means the node is on the main (unbranched) path.
+   */
+  nodes: Array<
+    AiEditorGraphNodeRef & {
+      branchPaths?: AiEditorBranchPathStep[][];
+    }
+  >;
+  branchNodes: AiEditorBranchNodeSummary[];
+}
+
+/**
  * READ-ONLY operations (no graph mutation).
  */
 export interface ExplainWorkflowOperation {
