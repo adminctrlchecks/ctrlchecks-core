@@ -265,6 +265,7 @@ export default function TemplatesManager() {
                       <SelectItem value="If-Else Logic">If-Else Logic</SelectItem>
                       <SelectItem value="Monitoring & Alerts">Monitoring & Alerts</SelectItem>
                       <SelectItem value="AI Agents">AI Agents</SelectItem>
+                      <SelectItem value="Business Verification & Compliance">Business Verification & Compliance</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -437,6 +438,7 @@ export default function TemplatesManager() {
                         <SelectItem value="If-Else Logic">If-Else Logic</SelectItem>
                         <SelectItem value="Monitoring & Alerts">Monitoring & Alerts</SelectItem>
                         <SelectItem value="AI Agents">AI Agents</SelectItem>
+                        <SelectItem value="Business Verification & Compliance">Business Verification & Compliance</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
