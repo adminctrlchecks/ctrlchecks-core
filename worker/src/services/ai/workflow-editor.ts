@@ -440,6 +440,9 @@ export class AIWorkflowEditor {
       'You are a workflow editor. Respond with ONLY a single JSON object (no markdown fences) with keys:',
       '- message: short human explanation',
       '- operations: array of mutation operations following the schema below',
+      'You are CtrlChecks AI Editor. Do not mention n8n, Zapier, Make, or competitor-specific settings unless the user explicitly asks for a comparison.',
+      'Never invent node config keys. For any configOverrides, use only fields present in the selected node schema/default config supplied in this prompt.',
+      'If the user request can be implemented by multiple valid node types and the latest turn does not name one clearly, return a message asking the user to choose and an empty operations array.',
       opHelp,
       '=== WORKFLOW NODES ===',
       JSON.stringify(
@@ -567,9 +570,51 @@ export class AIWorkflowEditor {
       if (!item || typeof item !== 'object') continue;
       const k = (item as any).kind;
       if (typeof k !== 'string' || !allowed.has(k)) continue;
-      out.push(item as AiEditorMutationOperation);
+      out.push(this.sanitizeOperationConfig(item as AiEditorMutationOperation));
     }
     return out;
+  }
+
+  private getAllowedConfigKeys(nodeType: string): Set<string> {
+    const def = unifiedNodeRegistry.get(nodeType);
+    const keys = new Set<string>();
+    if (!def) return keys;
+    for (const key of Object.keys(def.inputSchema || {})) keys.add(key);
+    try {
+      for (const key of Object.keys(def.defaultConfig?.() || {})) keys.add(key);
+    } catch {
+      // Registry default config should be safe, but a bad node definition must not break sanitization.
+    }
+    return keys;
+  }
+
+  private sanitizeConfigOverrides(nodeType: string, overrides: unknown): Record<string, unknown> | undefined {
+    if (!overrides || typeof overrides !== 'object' || Array.isArray(overrides)) return undefined;
+    const allowedKeys = this.getAllowedConfigKeys(nodeType);
+    if (allowedKeys.size === 0) return undefined;
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(overrides as Record<string, unknown>)) {
+      if (allowedKeys.has(key)) {
+        out[key] = value;
+      }
+    }
+    return Object.keys(out).length ? out : undefined;
+  }
+
+  private sanitizeOperationConfig(op: AiEditorMutationOperation): AiEditorMutationOperation {
+    if (op.kind === 'add_node') {
+      const configOverrides = this.sanitizeConfigOverrides(op.nodeType, op.configOverrides);
+      return { ...op, ...(configOverrides ? { configOverrides } : { configOverrides: undefined }) };
+    }
+    if (op.kind === 'insert_safety_node') {
+      const configOverrides = this.sanitizeConfigOverrides(op.nodeType, op.configOverrides);
+      return { ...op, ...(configOverrides ? { configOverrides } : { configOverrides: undefined }) };
+    }
+    if (op.kind === 'replace_node') {
+      const configOverrides = this.sanitizeConfigOverrides(op.newNodeType, op.configOverrides);
+      return { ...op, ...(configOverrides ? { configOverrides } : { configOverrides: undefined }) };
+    }
+    return op;
   }
 
   async suggestNodeImprovements(

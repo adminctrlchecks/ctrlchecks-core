@@ -47,6 +47,18 @@ const FIELD_GUIDANCE_PRESENTATION_VERSION = 2;
 
 type UnifiedAiEditorIntent = 'explain_run' | 'explain_workflow' | 'propose_change' | 'mixed';
 
+interface UnifiedAiEditorNodeCandidate {
+  id: string;
+  nodeType: string;
+  label: string;
+  category?: string;
+  description?: string;
+  reason: string;
+  confidence: number;
+  requiredFields: string[];
+  configurableFields: string[];
+}
+
 function classifyUnifiedAiEditorIntent(prompt: string, hasExecutionContext: boolean): UnifiedAiEditorIntent {
   const text = prompt.toLowerCase();
   const editIntent =
@@ -59,6 +71,132 @@ function classifyUnifiedAiEditorIntent(prompt: string, hasExecutionContext: bool
   if (editIntent && analysisIntent) return 'mixed';
   if (editIntent) return 'propose_change';
   return hasExecutionContext ? 'explain_run' : 'explain_workflow';
+}
+
+function normalizeSearchText(value: unknown): string {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ')
+    .replace(/[^a-z0-9\s]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function tokenizeSearchText(value: unknown): string[] {
+  const stopWords = new Set([
+    'a', 'an', 'and', 'add', 'after', 'at', 'before', 'can', 'change', 'do', 'for', 'from', 'i', 'in', 'into',
+    'it', 'me', 'my', 'node', 'nodes', 'of', 'on', 'please', 'the', 'this', 'to', 'use', 'using', 'with',
+    'workflow', 'workflows', 'make', 'create', 'update',
+  ]);
+  return normalizeSearchText(value)
+    .split(' ')
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 2 && !stopWords.has(token));
+}
+
+function getRegistryFieldNames(def: any): { requiredFields: string[]; configurableFields: string[] } {
+  const inputSchema = def?.inputSchema || {};
+  const requiredFields: string[] = [];
+  const configurableFields: string[] = [];
+  for (const [fieldName, fieldDef] of Object.entries(inputSchema)) {
+    configurableFields.push(fieldName);
+    if ((fieldDef as any)?.required === true) {
+      requiredFields.push(fieldName);
+    }
+  }
+  return { requiredFields, configurableFields };
+}
+
+function discoverAiEditorNodeCandidates(prompt: string, limit = 4): UnifiedAiEditorNodeCandidate[] {
+  const promptText = normalizeSearchText(prompt);
+  const promptTokens = new Set(tokenizeSearchText(prompt));
+  if (!promptText || promptTokens.size === 0) return [];
+
+  const candidates: UnifiedAiEditorNodeCandidate[] = [];
+  for (const nodeType of unifiedNodeRegistry.getAllTypes()) {
+    const def = unifiedNodeRegistry.get(nodeType);
+    if (!def) continue;
+
+    const { requiredFields, configurableFields } = getRegistryFieldNames(def);
+    const searchableParts = [
+      nodeType,
+      def.label,
+      def.category,
+      def.description,
+      ...(Array.isArray((def as any).tags) ? (def as any).tags : []),
+      ...Object.keys(def.inputSchema || {}),
+      ...Object.values(def.inputSchema || {}).map((field: any) => field?.description || field?.label || ''),
+    ];
+    const searchable = normalizeSearchText(searchableParts.join(' '));
+    const nodeTokens = new Set(tokenizeSearchText(searchable));
+
+    let score = 0;
+    const reasons: string[] = [];
+    if (promptText.includes(normalizeSearchText(nodeType))) {
+      score += 8;
+      reasons.push(`matches node type "${nodeType}"`);
+    }
+    if (def.label && promptText.includes(normalizeSearchText(def.label))) {
+      score += 8;
+      reasons.push(`matches "${def.label}"`);
+    }
+    if (def.category && promptTokens.has(normalizeSearchText(def.category))) {
+      score += 2;
+      reasons.push(`category ${def.category}`);
+    }
+
+    let overlap = 0;
+    for (const token of promptTokens) {
+      if (nodeTokens.has(token)) overlap += 1;
+      else if (token === 'out' && nodeTokens.has('output')) overlap += 1;
+      else if (token === 'print' && (nodeTokens.has('log') || nodeTokens.has('output') || nodeTokens.has('return'))) overlap += 1;
+    }
+    if (overlap > 0) {
+      score += overlap;
+      reasons.push(`${overlap} intent keyword${overlap > 1 ? 's' : ''} matched`);
+    }
+
+    if (score < 2) continue;
+    const confidence = Math.min(0.95, Math.max(0.25, score / 12));
+    candidates.push({
+      id: nodeType,
+      nodeType,
+      label: def.label || nodeType,
+      category: def.category,
+      description: def.description,
+      reason: reasons.slice(0, 3).join('; ') || 'matches the request',
+      confidence,
+      requiredFields,
+      configurableFields: configurableFields.slice(0, 12),
+    });
+  }
+
+  return candidates
+    .sort((a, b) => b.confidence - a.confidence || a.label.localeCompare(b.label))
+    .slice(0, limit);
+}
+
+function shouldClarifyNodeChoice(
+  intent: UnifiedAiEditorIntent,
+  prompt: string,
+  candidates: UnifiedAiEditorNodeCandidate[],
+  selectedNodeType?: string
+): boolean {
+  if (selectedNodeType) return false;
+  if (intent !== 'propose_change' && intent !== 'mixed') return false;
+  if (candidates.length < 2) return false;
+
+  const promptText = normalizeSearchText(prompt);
+  const top = candidates[0];
+  const second = candidates[1];
+  const topExplicit =
+    promptText.includes(normalizeSearchText(top.nodeType)) ||
+    promptText.includes(normalizeSearchText(top.label));
+
+  if (topExplicit && top.confidence >= 0.85 && top.confidence - second.confidence >= 0.2) {
+    return false;
+  }
+  return second.confidence >= 0.35 || top.confidence - second.confidence < 0.25;
 }
 
 function formatRunExplanationForChat(explanation: {
@@ -86,11 +224,28 @@ function buildUnifiedSuggestionPrompt(args: {
   intent: UnifiedAiEditorIntent;
   runExplanation?: string;
   remediationCandidates?: Array<{ userFacingSummary: string; risk: string; confidence: number; proposedOperations: unknown[] }>;
+  selectedCandidate?: UnifiedAiEditorNodeCandidate;
+  candidateOptions?: UnifiedAiEditorNodeCandidate[];
 }): string {
   const parts = [
     'The user is working in a unified AI Editor chat. Produce a safe workflow edit preview when the request asks for a change.',
     'Do not apply changes directly. Return only valid AI Editor operations for dry-run preview.',
+    'You are CtrlChecks AI Editor. Do not mention n8n, Zapier, Make, or competitor-specific settings unless the user explicitly asks for a comparison.',
+    'Never invent config fields. Config overrides must use fields from the selected node schema/default config only.',
     `Intent: ${args.intent}`,
+    args.selectedCandidate
+      ? [
+          '=== USER SELECTED NODE OPTION ===',
+          JSON.stringify(args.selectedCandidate, null, 2),
+          'Use this nodeType for the requested new node unless the current workflow makes it impossible.',
+        ].join('\n')
+      : args.candidateOptions?.length
+        ? [
+            '=== MATCHED NODE CANDIDATES ===',
+            JSON.stringify(args.candidateOptions, null, 2),
+            'If you create a node, prefer the strongest candidate that directly fits the user request.',
+          ].join('\n')
+        : '',
     args.runExplanation
       ? [
           '=== SELECTED EXECUTION ANALYSIS ===',
@@ -980,6 +1135,7 @@ router.post('/editor/chat', async (req: Request, res: Response) => {
       nodeId?: string;
       prompt: string;
       conversationHistory?: Array<{ role: string; content: string }>;
+      selectedCandidateNodeType?: string;
     };
 
     if (!body || typeof body.prompt !== 'string' || !body.prompt.trim()) {
@@ -992,6 +1148,27 @@ router.post('/editor/chat', async (req: Request, res: Response) => {
     const intent = classifyUnifiedAiEditorIntent(prompt, !!selectedExecutionId);
     const wantsChange = intent === 'propose_change' || intent === 'mixed';
     const wantsExplanation = intent === 'explain_run' || intent === 'explain_workflow' || intent === 'mixed';
+    const candidateOptions = wantsChange ? discoverAiEditorNodeCandidates(prompt, 4) : [];
+    const selectedCandidate =
+      body.selectedCandidateNodeType && candidateOptions.find((candidate) => candidate.nodeType === body.selectedCandidateNodeType)
+        ? candidateOptions.find((candidate) => candidate.nodeType === body.selectedCandidateNodeType)
+        : body.selectedCandidateNodeType && unifiedNodeRegistry.get(body.selectedCandidateNodeType)
+          ? (() => {
+              const def = unifiedNodeRegistry.get(body.selectedCandidateNodeType)!;
+              const { requiredFields, configurableFields } = getRegistryFieldNames(def);
+              return {
+                id: body.selectedCandidateNodeType!,
+                nodeType: body.selectedCandidateNodeType!,
+                label: def.label || body.selectedCandidateNodeType!,
+                category: def.category,
+                description: def.description,
+                reason: 'selected by the user',
+                confidence: 1,
+                requiredFields,
+                configurableFields: configurableFields.slice(0, 12),
+              } satisfies UnifiedAiEditorNodeCandidate;
+            })()
+          : undefined;
 
     if (workflowId) {
       const access = await assertWorkflowAccess(String(workflowId), principalResult.principal);
@@ -1026,6 +1203,57 @@ router.post('/editor/chat', async (req: Request, res: Response) => {
         content: prompt,
         referencedExecutionId: selectedExecutionId,
         referencedNodeId: body.nodeId,
+      });
+    }
+
+    if (wantsChange && shouldClarifyNodeChoice(intent, prompt, candidateOptions, selectedCandidate?.nodeType)) {
+      const message = [
+        'I found a few valid ways to implement that. Choose the one you want, and I will prepare a safe preview.',
+        '',
+        ...candidateOptions.slice(0, 4).map((candidate, index) => {
+          const fieldHint = candidate.requiredFields.length
+            ? ` Required config: ${candidate.requiredFields.join(', ')}.`
+            : '';
+          return `${index + 1}. ${candidate.label} (${candidate.nodeType}) - ${candidate.description || candidate.reason}.${fieldHint}`;
+        }),
+      ].join('\n');
+
+      if (workflowId) {
+        await executionRuntimeAnalyzer.recordSessionMessage(String(workflowId), principalResult.principal.userId, {
+          role: 'assistant',
+          content: message,
+          referencedExecutionId: selectedExecutionId,
+          referencedNodeId: body.nodeId,
+          runtimeContext: { intent, candidateOptions, needsClarification: true },
+        });
+      }
+
+      logAiEditorEvent({
+        action: 'analyze_chat',
+        userId: principalResult.principal.userId,
+        workflowId: String(workflowId || 'unsaved'),
+        operationsSummary: `clarify_candidates=${candidateOptions.length}`,
+        promptPreview: prompt.slice(0, 500),
+        telemetryMs: Date.now() - t0,
+      });
+
+      return res.json({
+        success: true,
+        previewValid: true,
+        previewErrors: [],
+        previewWarnings: [],
+        result: {
+          message,
+          intent,
+          references: [],
+          patterns: undefined,
+          remediationCandidates: undefined,
+          operations: [],
+          diff: null,
+          requiresApply: false,
+          needsClarification: true,
+          candidateOptions,
+        },
       });
     }
 
@@ -1103,6 +1331,8 @@ router.post('/editor/chat', async (req: Request, res: Response) => {
         userPrompt: prompt,
         intent,
         runExplanation: analysisMessage,
+        selectedCandidate,
+        candidateOptions,
         remediationCandidates: remediationCandidates as Array<{
           userFacingSummary: string;
           risk: string;

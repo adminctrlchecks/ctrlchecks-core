@@ -138,10 +138,24 @@ export interface AnalyzerChatResult {
 
 export type UnifiedAiEditorIntent = 'explain_run' | 'explain_workflow' | 'propose_change' | 'mixed';
 
+export interface AiEditorNodeCandidateOption {
+  id: string;
+  nodeType: string;
+  label: string;
+  category?: string;
+  description?: string;
+  reason: string;
+  confidence: number;
+  requiredFields: string[];
+  configurableFields: string[];
+}
+
 export interface UnifiedAiEditorChatResult extends AnalyzerChatResult {
   intent: UnifiedAiEditorIntent;
   operations?: AiEditorMutationOperation[];
   diff?: WorkflowDiffSummary | null;
   updatedWorkflow?: unknown;
   requiresApply?: boolean;
+  needsClarification?: boolean;
+  candidateOptions?: AiEditorNodeCandidateOption[];
 }

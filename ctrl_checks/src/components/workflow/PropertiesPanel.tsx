@@ -59,6 +59,7 @@ import type {
   AnalyzerExecutionSummary,
   AnalyzerChatMessage,
   AnalyzerRemediationCandidate,
+  AiEditorNodeCandidateOption,
   UnifiedAiEditorChatResult,
 } from '@/types/aiEditor';
 import {
@@ -546,6 +547,8 @@ export default function PropertiesPanel({
   // "Preview fix" turns a candidate into a real Suggest-edits preview (never applied directly).
   const [remediationCandidates, setRemediationCandidates] = useState<AnalyzerRemediationCandidate[]>([]);
   const [isPreviewingFixIndex, setIsPreviewingFixIndex] = useState<number | null>(null);
+  const [nodeCandidateOptions, setNodeCandidateOptions] = useState<AiEditorNodeCandidateOption[]>([]);
+  const [lastAiUserPrompt, setLastAiUserPrompt] = useState('');
 
   const loadWorkflowStatus = useCallback(async () => {
     if (!workflowId) return;
@@ -799,6 +802,7 @@ export default function PropertiesPanel({
     setPendingAiPrompt('');
     setPendingPreviewValid(true);
     setShowAiDiffDetails(false);
+    setNodeCandidateOptions([]);
   };
 
   const handleApplyAiEdits = async () => {
@@ -903,14 +907,15 @@ export default function PropertiesPanel({
     }
   };
 
-  // AI Editor send handler: analyze (read-only) or suggest (structured ops + preview)
-  const handleAiSend = async () => {
-    if (!aiInput.trim() || isAiLoading) return;
+  // AI Editor send handler: one unified assistant turn (analysis, clarification, or edit preview).
+  const handleAiSend = async (options?: { promptOverride?: string; selectedCandidateNodeType?: string; visibleUserMessage?: string }) => {
+    const rawPrompt = (options?.promptOverride ?? aiInput).trim();
+    if (!rawPrompt || isAiLoading) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: aiInput,
+      content: options?.visibleUserMessage || rawPrompt,
       timestamp: new Date(),
     };
 
@@ -926,8 +931,14 @@ export default function PropertiesPanel({
       }));
 
     setAiMessages((prev) => [...prev, userMessage]);
-    const outgoingPrompt = userMessage.content.trim();
-    setAiInput('');
+    const outgoingPrompt = rawPrompt;
+    if (!options?.promptOverride) {
+      setLastAiUserPrompt(outgoingPrompt);
+      setAiInput('');
+    }
+    if (!options?.selectedCandidateNodeType) {
+      setNodeCandidateOptions([]);
+    }
     setIsAiLoading(true);
 
     try {
@@ -961,6 +972,7 @@ export default function PropertiesPanel({
             nodeId: selectedNode?.id,
             prompt: outgoingPrompt,
             conversationHistory,
+            selectedCandidateNodeType: options?.selectedCandidateNodeType,
           }),
           signal: controller.signal,
         });
@@ -993,12 +1005,13 @@ export default function PropertiesPanel({
       const pe = Array.isArray(data.previewErrors) ? data.previewErrors : [];
       setPendingPreviewValid(data.previewValid !== false && pe.length === 0);
       setRemediationCandidates(Array.isArray(result.remediationCandidates) ? result.remediationCandidates : []);
+      setNodeCandidateOptions(Array.isArray(result.candidateOptions) ? result.candidateOptions : []);
 
       let extra = '';
       if (pe.length) {
         extra += `\n\nDry-run issues:\n- ${pe.slice(0, 5).join('\n- ')}`;
       }
-      if ((result.requiresApply || result.intent === 'propose_change' || result.intent === 'mixed') && ops.length === 0) {
+      if (!result.needsClarification && (result.requiresApply || result.intent === 'propose_change' || result.intent === 'mixed') && ops.length === 0) {
         extra += '\n\n(No structured operations returned. Try naming the exact node or field you want changed.)';
       }
 
@@ -1033,6 +1046,16 @@ export default function PropertiesPanel({
     } finally {
       setIsAiLoading(false);
     }
+  };
+
+  const handleSelectNodeCandidate = (candidate: AiEditorNodeCandidateOption) => {
+    const basePrompt = lastAiUserPrompt || aiInput.trim();
+    if (!basePrompt) return;
+    void handleAiSend({
+      promptOverride: `${basePrompt}\n\nSelected implementation: ${candidate.label} (${candidate.nodeType}).`,
+      selectedCandidateNodeType: candidate.nodeType,
+      visibleUserMessage: `Use ${candidate.label}`,
+    });
   };
 
   const handleDismissRemediation = (index: number) => {
@@ -1445,6 +1468,51 @@ export default function PropertiesPanel({
                 </span>
               </div>
             ))}
+            {nodeCandidateOptions.length > 0 && (
+              <div className="mr-auto min-w-0 max-w-full overflow-hidden rounded-sm border border-sky-500/35 bg-sky-500/5 px-3 py-2 space-y-2">
+                <p className="text-xs font-medium text-foreground">Choose an implementation</p>
+                <div className="min-w-0 max-w-full space-y-2">
+                  {nodeCandidateOptions.slice(0, 4).map((candidate) => (
+                    <div
+                      key={candidate.nodeType}
+                      className="min-w-0 max-w-full overflow-hidden rounded-sm border border-border/50 bg-background/70 px-2.5 py-2"
+                    >
+                      <div className="flex min-w-0 items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-[11px] font-medium text-foreground">
+                            {candidate.label}
+                          </p>
+                          <p className="break-words text-[10px] text-muted-foreground">
+                            {candidate.nodeType}
+                            {candidate.category ? ` - ${candidate.category}` : ''}
+                          </p>
+                        </div>
+                        <span className="shrink-0 text-[10px] text-muted-foreground">
+                          {Math.round(candidate.confidence * 100)}%
+                        </span>
+                      </div>
+                      <p className="mt-1 break-words text-[11px] leading-snug text-foreground/80">
+                        {candidate.description || candidate.reason}
+                      </p>
+                      {candidate.requiredFields.length > 0 && (
+                        <p className="mt-1 break-words text-[10px] text-muted-foreground">
+                          Required: {candidate.requiredFields.slice(0, 5).join(', ')}
+                        </p>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-2 h-6 px-2 text-[11px]"
+                        disabled={isAiLoading}
+                        onClick={() => handleSelectNodeCandidate(candidate)}
+                      >
+                        Use this
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {remediationCandidates.map((candidate, index) => (
                 <div
                   key={`remediation-${index}`}
@@ -1561,13 +1629,17 @@ export default function PropertiesPanel({
               placeholder="Ask about a run, output, failure, or workflow change..."
               value={aiInput}
               onChange={(e) => setAiInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleAiSend()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  void handleAiSend();
+                }
+              }}
               disabled={isAiLoading}
               className="min-w-0 flex-1 h-8 text-xs border-border/60 focus-visible:ring-1 focus-visible:ring-ring/50"
             />
             <Button
               size="icon"
-              onClick={handleAiSend}
+              onClick={() => void handleAiSend()}
               disabled={isAiLoading || !aiInput.trim()}
               className="h-8 w-8"
             >
