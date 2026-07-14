@@ -149,9 +149,54 @@ interface Message {
   timestamp: Date;
 }
 
+type AnalyzerStructuredContent = {
+  summary?: string;
+  dataNarration?: string;
+  evidence?: string[];
+  remediationCandidates?: AnalyzerRemediationCandidate[];
+};
+
 type ViewMode = 'properties' | 'ai-editor';
 
 const PROPERTIES_PANEL_WIDTH = 360;
+
+function parseAnalyzerStructuredContent(content: string): AnalyzerStructuredContent | null {
+  const trimmed = content.trim();
+  if (!trimmed || (!trimmed.startsWith('{') && !trimmed.startsWith('```'))) {
+    return null;
+  }
+
+  const jsonText = trimmed
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/, '')
+    .trim();
+
+  try {
+    const parsed = JSON.parse(jsonText) as Record<string, unknown>;
+    const hasAnalyzerShape =
+      typeof parsed.summary === 'string' ||
+      typeof parsed.dataNarration === 'string' ||
+      Array.isArray(parsed.evidence) ||
+      Array.isArray(parsed.remediationCandidates);
+
+    if (!hasAnalyzerShape) return null;
+
+    return {
+      summary: typeof parsed.summary === 'string' ? parsed.summary : undefined,
+      dataNarration: typeof parsed.dataNarration === 'string' ? parsed.dataNarration : undefined,
+      evidence: Array.isArray(parsed.evidence)
+        ? parsed.evidence.filter((item): item is string => typeof item === 'string')
+        : undefined,
+      remediationCandidates: Array.isArray(parsed.remediationCandidates)
+        ? parsed.remediationCandidates.filter((item): item is AnalyzerRemediationCandidate => {
+            return item && typeof item === 'object' && typeof (item as AnalyzerRemediationCandidate).userFacingSummary === 'string';
+          })
+        : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
 
 function toDebugRecord(error: DebugNodeError | undefined): Record<string, unknown> | null {
   return error && typeof error === 'object' && !Array.isArray(error)
@@ -1291,6 +1336,76 @@ export default function PropertiesPanel({
       ) : null;
     };
 
+    const renderAiMessageContent = (msg: Message): ReactNode => {
+      if (msg.role === 'user') {
+        return <span className="whitespace-pre-wrap">{msg.content}</span>;
+      }
+
+      const structured = parseAnalyzerStructuredContent(msg.content);
+      if (!structured) {
+        return <span className="whitespace-pre-wrap">{msg.content}</span>;
+      }
+
+      const fixes = structured.remediationCandidates || [];
+
+      return (
+        <div className="space-y-2">
+          {structured.summary && (
+            <p className="text-xs leading-relaxed text-foreground">
+              {structured.summary}
+            </p>
+          )}
+
+          {structured.dataNarration && (
+            <div className="rounded-sm border border-border/50 bg-background/50 px-2.5 py-2">
+              <p className="text-[10px] font-medium uppercase text-muted-foreground mb-1">
+                What happened
+              </p>
+              <p className="text-[11px] leading-relaxed text-foreground/85">
+                {structured.dataNarration}
+              </p>
+            </div>
+          )}
+
+          {structured.evidence && structured.evidence.length > 0 && (
+            <div className="rounded-sm border border-border/50 bg-background/50 px-2.5 py-2">
+              <p className="text-[10px] font-medium uppercase text-muted-foreground mb-1">
+                Evidence
+              </p>
+              <ul className="space-y-1">
+                {structured.evidence.slice(0, 4).map((item, index) => (
+                  <li key={`${msg.id}-evidence-${index}`} className="text-[11px] leading-relaxed text-foreground/80">
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {fixes.length > 0 && (
+            <div className="rounded-sm border border-amber-500/35 bg-amber-500/5 px-2.5 py-2">
+              <p className="text-[10px] font-medium uppercase text-amber-700 dark:text-amber-300 mb-1">
+                Possible fix
+              </p>
+              <div className="space-y-1.5">
+                {fixes.slice(0, 2).map((candidate, index) => (
+                  <div key={`${msg.id}-fix-${index}`} className="space-y-0.5">
+                    <p className="text-[11px] leading-relaxed text-foreground/85">
+                      {candidate.userFacingSummary}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      Risk: {candidate.risk}
+                      {typeof candidate.confidence === 'number' ? ` - confidence ${Math.round(candidate.confidence * 100)}%` : ''}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
     return (
       <div className="flex-1 flex flex-col overflow-hidden min-h-0">
         <div className="px-4 pt-3 pb-2 border-b border-border/40 space-y-2 shrink-0">
@@ -1382,7 +1497,7 @@ export default function PropertiesPanel({
                       : 'bg-muted/60 text-foreground/90 border border-border/40'
                   )}
                 >
-                  {msg.content}
+                  {renderAiMessageContent(msg)}
                 </div>
                 <span className="text-[10px] text-muted-foreground/60">
                   {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
