@@ -200,6 +200,20 @@ export type AiEditorMutationOperation =
   | InsertSafetyNodeOperation
   | RefactorLinearizeOperation;
 
+/**
+ * Single source of truth for the whitelisted operation "kind" values the AI editor
+ * (and the execution-analyzer's remediation suggestions) is allowed to emit.
+ * Never let an LLM emit raw edges — only these node-centric operations.
+ */
+export const AI_EDITOR_MUTATION_OPERATION_KINDS = [
+  'add_node',
+  'remove_node',
+  'replace_node',
+  'update_node_config',
+  'insert_safety_node',
+  'refactor_linearize',
+] as const;
+
 export type AiEditorOperation =
   | ExplainWorkflowOperation
   | ValidateWorkflowOperation

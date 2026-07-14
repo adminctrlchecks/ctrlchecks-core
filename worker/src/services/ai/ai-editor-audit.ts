@@ -3,7 +3,15 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 import type { AiEditorCapability } from '../../core/types/ai-editor-auth';
 
-export type AiEditorAuditAction = 'analyze' | 'suggest' | 'apply' | 'capabilities';
+export type AiEditorAuditAction =
+  | 'analyze'
+  | 'suggest'
+  | 'apply'
+  | 'capabilities'
+  | 'executions_list'
+  | 'executions_detail'
+  | 'analyze_session'
+  | 'analyze_chat';
 
 export interface AiEditorAuditEntry {
   id: string;

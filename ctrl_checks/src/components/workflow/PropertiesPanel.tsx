@@ -57,6 +57,10 @@ import type {
   AiEditorChatMode,
   AiEditorMutationOperation,
   WorkflowDiffSummary,
+  AnalyzerExecutionSummary,
+  AnalyzerChatMessage,
+  AnalyzerChatResult,
+  AnalyzerRemediationCandidate,
 } from '@/types/aiEditor';
 import {
   enforceFrontendRenderContract,
@@ -489,6 +493,17 @@ export default function PropertiesPanel({
   const aiScrollAreaRef = useRef<HTMLDivElement>(null);
   const aiHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Execution-aware analyzer: run history + persisted per-workflow chat memory
+  const [analyzerExecutions, setAnalyzerExecutions] = useState<AnalyzerExecutionSummary[]>([]);
+  const [selectedExecutionId, setSelectedExecutionId] = useState<string>('');
+  const [isLoadingExecutions, setIsLoadingExecutions] = useState(false);
+  const analyzerHydratedForWorkflowRef = useRef<string | null>(null);
+
+  // Analyze -> "AI found a possible fix" cards. Populated from the analyzer chat response;
+  // "Preview fix" turns a candidate into a real Suggest-edits preview (never applied directly).
+  const [remediationCandidates, setRemediationCandidates] = useState<AnalyzerRemediationCandidate[]>([]);
+  const [isPreviewingFixIndex, setIsPreviewingFixIndex] = useState<number | null>(null);
+
   const loadWorkflowStatus = useCallback(async () => {
     if (!workflowId) return;
 
@@ -599,6 +614,63 @@ export default function PropertiesPanel({
         if (!cancelled) setAiCapabilities(json.success ? json : null);
       } catch {
         if (!cancelled) setAiCapabilities(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [viewMode, workflowId]);
+
+  // AI editor analyzer: hydrate persisted per-workflow chat memory + recent execution list.
+  // Runs once per workflow when the AI Editor panel is first opened.
+  useEffect(() => {
+    if (viewMode !== 'ai-editor' || !workflowId) return;
+    if (analyzerHydratedForWorkflowRef.current === workflowId) return;
+    analyzerHydratedForWorkflowRef.current = workflowId;
+    let cancelled = false;
+    setIsLoadingExecutions(true);
+    (async () => {
+      try {
+        const { data: sessionData } = await awsClient.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        if (!token) return;
+
+        const [sessionRes, executionsRes] = await Promise.all([
+          fetch(`${ENDPOINTS.itemBackend}/api/ai/editor/analyze/session/${encodeURIComponent(workflowId)}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch(`${ENDPOINTS.itemBackend}/api/ai/editor/executions/${encodeURIComponent(workflowId)}?limit=20`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
+
+        if (sessionRes.ok) {
+          const sessionJson = await sessionRes.json().catch(() => null);
+          const persisted = (sessionJson?.messages || []) as AnalyzerChatMessage[];
+          if (!cancelled && persisted.length > 0) {
+            setAiMessages(
+              persisted
+                .filter((m) => m.role === 'user' || m.role === 'assistant')
+                .map((m) => ({
+                  id: m.id,
+                  role: m.role as 'user' | 'assistant',
+                  content: m.content,
+                  timestamp: new Date(m.createdAt),
+                }))
+            );
+          }
+        }
+
+        if (executionsRes.ok) {
+          const executionsJson = await executionsRes.json().catch(() => null);
+          if (!cancelled && Array.isArray(executionsJson?.executions)) {
+            setAnalyzerExecutions(executionsJson.executions);
+          }
+        }
+      } catch {
+        // Non-fatal: analyzer memory/execution history is a progressive enhancement.
+      } finally {
+        if (!cancelled) setIsLoadingExecutions(false);
       }
     })();
     return () => {
@@ -831,10 +903,31 @@ export default function PropertiesPanel({
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 120000);
 
-      const endpoint =
-        aiChatMode === 'suggest'
+      // Analyze mode with a saved workflow uses the persisted, execution-aware analyzer
+      // chat endpoint (server keeps conversation memory + can explain a selected run).
+      // Unsaved/new workflows and Suggest mode keep using the existing stateless endpoints.
+      const useAnalyzerChat = aiChatMode === 'analyze' && !!workflowId;
+      const endpoint = useAnalyzerChat
+        ? `${ENDPOINTS.itemBackend}/api/ai/editor/analyze/chat`
+        : aiChatMode === 'suggest'
           ? `${ENDPOINTS.itemBackend}/api/ai/editor/suggest`
           : `${ENDPOINTS.itemBackend}/api/ai/editor/analyze`;
+
+      const requestBody = useAnalyzerChat
+        ? {
+            workflowId,
+            workflow: currentWorkflow,
+            executionId: selectedExecutionId || undefined,
+            nodeId: selectedNode?.id,
+            prompt: outgoingPrompt,
+          }
+        : {
+            workflowId: workflowId || undefined,
+            workflow: currentWorkflow,
+            nodeId: selectedNode?.id,
+            prompt: outgoingPrompt,
+            conversationHistory,
+          };
 
       let response: Response;
       try {
@@ -844,13 +937,7 @@ export default function PropertiesPanel({
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({
-            workflowId: workflowId || undefined,
-            workflow: currentWorkflow,
-            nodeId: selectedNode?.id,
-            prompt: outgoingPrompt,
-            conversationHistory,
-          }),
+          body: JSON.stringify(requestBody),
           signal: controller.signal,
         });
         clearTimeout(timeoutId);
@@ -872,7 +959,7 @@ export default function PropertiesPanel({
       const data = await response.json();
 
       if (aiChatMode === 'analyze') {
-        const result = data.result || data;
+        const result = (useAnalyzerChat ? data.result : data.result || data) as AnalyzerChatResult & { explanation?: string };
         const assistantText: string =
           result.message ||
           result.explanation ||
@@ -887,6 +974,9 @@ export default function PropertiesPanel({
             timestamp: new Date(),
           },
         ]);
+        // Analyze never mutates the workflow directly — if the analyzer found a fix candidate
+        // from real execution history, surface it as a card the user must explicitly preview.
+        setRemediationCandidates(useAnalyzerChat && Array.isArray(result.remediationCandidates) ? result.remediationCandidates : []);
       } else {
         const result = data.result || {};
         const assistantText: string =
@@ -939,6 +1029,137 @@ export default function PropertiesPanel({
       });
     } finally {
       setIsAiLoading(false);
+    }
+  };
+
+  const handleDismissRemediation = (index: number) => {
+    setRemediationCandidates((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // "Preview fix": turns an Analyze-detected remediation candidate into a real Suggest-edits
+  // preview. This never mutates the workflow directly — it calls the same /editor/suggest
+  // pipeline used by the Suggest tab, so the result goes through full sanitization + dry-run
+  // validation and lands in the existing pendingAiOperations/pendingAiDiff Apply flow.
+  const handlePreviewFix = async (candidate: AnalyzerRemediationCandidate, index: number) => {
+    if (isPreviewingFixIndex !== null || isAiLoading) return;
+
+    const perm = mergeCapabilityHints(aiCapabilities, appRole);
+    if (!perm.canSuggest) {
+      toast({
+        title: 'Cannot preview fix',
+        description: 'Suggesting edits requires moderator or admin.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsPreviewingFixIndex(index);
+    const derivedPrompt = [
+      'Prepare a preview for this fix found during analysis of a past run.',
+      '',
+      `Issue summary: ${candidate.userFacingSummary}`,
+      `Risk: ${candidate.risk}`,
+      typeof candidate.confidence === 'number' ? `Confidence: ${Math.round(candidate.confidence * 100)}%` : '',
+      '',
+      'The analyzer proposed these operations from execution evidence. Prefer these exact operations when they are valid for the current workflow; if one is invalid, translate it into the closest valid AI Editor operation. Do not invent unrelated edits.',
+      JSON.stringify(candidate.proposedOperations || [], null, 2),
+    ].filter(Boolean).join('\n');
+
+    try {
+      const currentWorkflow = buildAiEditorWorkflowPayload();
+      if (!Array.isArray(currentWorkflow.nodes) || currentWorkflow.nodes.length === 0) {
+        throw new Error('Current workflow has no nodes. Please add at least one node before using the AI editor.');
+      }
+
+      const { data: sessionData } = await awsClient.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) {
+        throw new Error('Sign in is required for the AI editor.');
+      }
+
+      const conversationHistory = aiMessages
+        .filter((m) => m.id !== 'welcome')
+        .filter((m) => m.role === 'user' || m.role === 'assistant')
+        .slice(-24)
+        .map((m) => ({
+          role: m.role,
+          content: m.content.length > 14000 ? `${m.content.slice(0, 14000)}…` : m.content,
+        }));
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000);
+      let response: Response;
+      try {
+        response = await fetch(`${ENDPOINTS.itemBackend}/api/ai/editor/suggest`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            workflowId: workflowId || undefined,
+            workflow: currentWorkflow,
+            nodeId: selectedNode?.id,
+            prompt: derivedPrompt,
+            conversationHistory,
+          }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        if (fetchError.name === 'AbortError') {
+          throw new Error('Request timed out. Try again.');
+        }
+        throw fetchError;
+      }
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'AI request failed' }));
+        throw new Error(error.error || error.message || 'AI request failed');
+      }
+
+      const data = await response.json();
+      const result = data.result || {};
+      const assistantText: string =
+        result.message || 'Here is a preview of the fix. Review and click Apply to commit.';
+      const ops = (result.operations || []) as AiEditorMutationOperation[];
+      const diff = (result.diff || null) as WorkflowDiffSummary | null;
+
+      setPendingAiOperations(ops);
+      setPendingAiDiff(diff);
+      setPendingAiPrompt(derivedPrompt);
+      const pe = Array.isArray(data.previewErrors) ? data.previewErrors : [];
+      setPendingPreviewValid(data.previewValid !== false && pe.length === 0);
+      setAiChatMode('suggest');
+
+      let extra = '';
+      if (data.previewErrors?.length) {
+        extra += `\n\nDry-run issues:\n- ${data.previewErrors.slice(0, 5).join('\n- ')}`;
+      }
+      if (ops.length === 0) {
+        extra += '\n\n(No structured operations returned — try rephrasing or dismiss this suggestion.)';
+      }
+
+      setAiMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: `${assistantText}${extra}`,
+          timestamp: new Date(),
+        },
+      ]);
+      handleDismissRemediation(index);
+    } catch (error: any) {
+      const errorMessage = error?.message || 'Could not prepare a preview for this fix.';
+      toast({
+        title: 'Preview fix failed',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsPreviewingFixIndex(null);
     }
   };
 
@@ -1109,6 +1330,38 @@ export default function PropertiesPanel({
               {perm.applyBlockedReason}
             </p>
           )}
+          {aiChatMode === 'analyze' && workflowId && isLoadingExecutions && analyzerExecutions.length === 0 && (
+            <p className="text-[10px] text-muted-foreground leading-snug">Loading run history…</p>
+          )}
+          {aiChatMode === 'analyze' && workflowId && analyzerExecutions.length > 0 && (
+            <div className="flex items-center gap-2">
+              <Select
+                value={selectedExecutionId || '__none__'}
+                onValueChange={(v) => setSelectedExecutionId(v === '__none__' ? '' : v)}
+              >
+                <SelectTrigger className="h-7 text-[11px] flex-1">
+                  <SelectValue placeholder="Discuss the workflow (no run selected)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__" className="text-[11px]">
+                    No run selected — discuss workflow/history
+                  </SelectItem>
+                  {analyzerExecutions.map((ex) => (
+                    <SelectItem key={ex.id} value={ex.id} className="text-[11px]">
+                      {ex.status === 'failed' ? '⚠ ' : ex.status === 'completed' || ex.status === 'success' ? '✓ ' : '… '}
+                      {ex.startedAt ? new Date(ex.startedAt).toLocaleString() : ex.id.slice(0, 8)}
+                      {ex.failedSteps > 0 ? ` (${ex.failedSteps} node failure${ex.failedSteps > 1 ? 's' : ''})` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {aiChatMode === 'analyze' && selectedExecutionId && (
+            <p className="text-[10px] text-violet-600 dark:text-violet-400 leading-snug">
+              Discussing a specific past run — questions and answers below reference its actual node inputs/outputs.
+            </p>
+          )}
         </div>
 
         <ScrollArea className="flex-1 px-4 py-3 min-h-0" ref={aiScrollAreaRef}>
@@ -1136,6 +1389,55 @@ export default function PropertiesPanel({
                 </span>
               </div>
             ))}
+            {aiChatMode === 'analyze' &&
+              remediationCandidates.map((candidate, index) => (
+                <div
+                  key={`remediation-${index}`}
+                  className="mr-auto max-w-[95%] rounded-sm border border-amber-500/40 bg-amber-500/5 px-3 py-2 space-y-1.5"
+                >
+                  <p className="text-xs font-medium text-foreground">AI found a possible fix</p>
+                  <p className="text-[11px] text-foreground/80 leading-snug">{candidate.userFacingSummary}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    Risk:{' '}
+                    <span
+                      className={cn(
+                        'font-medium',
+                        candidate.risk === 'high'
+                          ? 'text-destructive'
+                          : candidate.risk === 'medium'
+                            ? 'text-amber-600 dark:text-amber-400'
+                            : 'text-emerald-600 dark:text-emerald-400'
+                      )}
+                    >
+                      {candidate.risk}
+                    </span>
+                    {typeof candidate.confidence === 'number' ? ` · confidence ${Math.round(candidate.confidence * 100)}%` : ''}
+                  </p>
+                  <div className="flex items-center gap-2 pt-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-6 text-[11px] px-2"
+                      disabled={isPreviewingFixIndex !== null || isAiLoading}
+                      onClick={() => void handlePreviewFix(candidate, index)}
+                    >
+                      {isPreviewingFixIndex === index ? (
+                        <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                      ) : null}
+                      Preview fix
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 text-[11px] px-2"
+                      disabled={isPreviewingFixIndex !== null}
+                      onClick={() => handleDismissRemediation(index)}
+                    >
+                      Dismiss
+                    </Button>
+                  </div>
+                </div>
+              ))}
             {pendingAiOperations.length > 0 && (
               <div className="mr-auto max-w-[95%] rounded-sm border border-violet-500/35 bg-violet-500/5 px-3 py-2">
                 <p className="text-xs font-medium text-foreground">Pending AI changes</p>

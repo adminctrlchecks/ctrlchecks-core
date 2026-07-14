@@ -16,6 +16,7 @@ import type {
   WorkflowNodeDiff,
   WorkflowEdgeDiff,
 } from '../../core/types/ai-editor-contracts';
+import { AI_EDITOR_MUTATION_OPERATION_KINDS } from '../../core/types/ai-editor-contracts';
 
 interface NodeSuggestion {
   type: string;
@@ -403,6 +404,14 @@ export class AIWorkflowEditor {
       focusedNodeId?: string;
       /** Prior AI Editor chat turns so follow-ups ("implement it") stay aligned with discussed intent */
       conversationHistory?: Array<{ role: string; content: string }>;
+      /**
+       * Optional compact, pre-summarized text block describing recurring failure/anomaly
+       * patterns observed in recent real executions of this workflow (from
+       * WorkflowAnalyzer.detectPatterns). Purely additive context — never raw execution
+       * payloads — so the LLM can propose operations informed by what actually happened
+       * at runtime, not just the static graph shape.
+       */
+      runtimePatternContext?: string;
     }
   ): Promise<{
     message: string;
@@ -468,6 +477,17 @@ export class AIWorkflowEditor {
         null,
         2
       ),
+      options?.runtimePatternContext?.trim()
+        ? [
+            '=== RECENT RUNTIME PATTERNS (evidence from real past executions) ===',
+            'These are deterministic observations from actual runs, not guesses. When a pattern',
+            'clearly explains a problem the user is asking about, prefer an operation that addresses',
+            'it directly (e.g. insert_safety_node before a node that received empty upstream data,',
+            'or update_node_config on a field that repeatedly fails). Do not invent patterns beyond',
+            'what is listed here.',
+            options.runtimePatternContext.trim(),
+          ].join('\n')
+        : '',
       options?.conversationHistory?.length
         ? [
             '=== RECENT CONVERSATION (multi-turn — use for vague follow-ups) ===',
@@ -541,14 +561,7 @@ export class AIWorkflowEditor {
   }
 
   private sanitizeMutationOperations(raw: unknown[]): AiEditorMutationOperation[] {
-    const allowed = new Set<string>([
-      'add_node',
-      'remove_node',
-      'replace_node',
-      'update_node_config',
-      'insert_safety_node',
-      'refactor_linearize',
-    ]);
+    const allowed = new Set<string>(AI_EDITOR_MUTATION_OPERATION_KINDS);
     const out: AiEditorMutationOperation[] = [];
     for (const item of raw) {
       if (!item || typeof item !== 'object') continue;

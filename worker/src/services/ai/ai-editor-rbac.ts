@@ -119,3 +119,41 @@ export function canApplyForPhase(
 ): ReturnType<typeof assertCanApply> {
   return assertCanApply(principal.capabilities, phase);
 }
+
+/**
+ * Enforce that the calling principal owns `workflowId` before granting access to
+ * workflow-scoped data (execution history, analyzer chat memory). Capability checks
+ * (`requireCapability`) only gate *what kind* of AI editor action a role may perform —
+ * they say nothing about *which workflow*. Without this, any authenticated user with
+ * the (default, every-role) `ai_editor:analyze` capability could pass an arbitrary
+ * workflowId and read another user's execution data. Admins bypass the ownership check.
+ */
+export async function assertWorkflowAccess(
+  workflowId: string | undefined,
+  principal: AiEditorPrincipal
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  if (!workflowId || workflowId === 'new' || workflowId === 'unsaved') {
+    return { ok: true };
+  }
+  if (principal.role === 'admin') {
+    return { ok: true };
+  }
+  try {
+    const db = getDbClient();
+    const { data, error } = await db
+      .from('workflows')
+      .select('id,user_id')
+      .eq('id', workflowId)
+      .maybeSingle();
+    if (error || !data) {
+      return { ok: false, status: 404, error: 'Workflow not found' };
+    }
+    if (String(data.user_id) !== String(principal.userId)) {
+      return { ok: false, status: 403, error: 'Forbidden workflow access' };
+    }
+    return { ok: true };
+  } catch (e: any) {
+    console.error('[ai-editor-rbac] assertWorkflowAccess error:', e);
+    return { ok: false, status: 503, error: e?.message || 'Workflow access check failed' };
+  }
+}

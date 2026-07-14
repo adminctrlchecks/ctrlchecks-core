@@ -4,6 +4,7 @@ import { Router, Request, Response } from 'express';
 import { geminiOrchestrator } from '../services/ai/gemini-orchestrator';
 import { chichuChatbot } from '../services/ai/chichu-chatbot';
 import { aiWorkflowEditor } from '../services/ai/workflow-editor';
+import { executionRuntimeAnalyzer } from '../services/ai/execution-runtime-analyzer';
 import { aiPerformanceMonitor } from '../services/ai/performance-monitor';
 import { config } from '../core/config';
 import { LLMAdapter } from '../shared/llm-adapter';
@@ -30,6 +31,7 @@ import {
   requireCapability,
   fetchWorkflowLifecyclePhase,
   canApplyForPhase,
+  assertWorkflowAccess,
 } from '../services/ai/ai-editor-rbac';
 import { logAiEditorEvent, hashDiff, readAiEditorAuditForWorkflow } from '../services/ai/ai-editor-audit';
 import { GeminiWalletError, geminiWalletService } from '../services/ai/gemini-wallet-service';
@@ -786,6 +788,172 @@ router.get('/editor/audit/:workflowId', async (req: Request, res: Response) => {
   res.json({ success: true, workflowId, entries });
 });
 
+// ==================== EXECUTION-AWARE ANALYZER ====================
+
+router.get('/editor/executions/:workflowId', async (req: Request, res: Response) => {
+  const t0 = Date.now();
+  const principalResult = await resolveAiEditorPrincipal(req);
+  if (!principalResult.ok) {
+    return res.status(principalResult.status).json({ success: false, error: principalResult.error });
+  }
+  const cap = requireCapability(principalResult.principal, 'ai_editor:analyze');
+  if (!cap.ok) {
+    return res.status(cap.status).json({ success: false, error: cap.error });
+  }
+
+  const { workflowId } = req.params;
+  const access = await assertWorkflowAccess(workflowId, principalResult.principal);
+  if (!access.ok) {
+    return res.status(access.status).json({ success: false, error: access.error });
+  }
+
+  const limitRaw = parseInt(String(req.query.limit || '20'), 10);
+  const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 100) : 20;
+
+  try {
+    const executions = await executionRuntimeAnalyzer.listExecutions(workflowId, limit);
+    logAiEditorEvent({
+      action: 'executions_list',
+      userId: principalResult.principal.userId,
+      workflowId,
+      operationsSummary: `count=${executions.length}`,
+      telemetryMs: Date.now() - t0,
+    });
+    res.json({ success: true, workflowId, executions });
+  } catch (error) {
+    logger.error('AI Editor executions list error:', error);
+    sendAiGatewayError(res, error);
+  }
+});
+
+router.get('/editor/executions/:workflowId/:executionId', async (req: Request, res: Response) => {
+  const t0 = Date.now();
+  const principalResult = await resolveAiEditorPrincipal(req);
+  if (!principalResult.ok) {
+    return res.status(principalResult.status).json({ success: false, error: principalResult.error });
+  }
+  const cap = requireCapability(principalResult.principal, 'ai_editor:analyze');
+  if (!cap.ok) {
+    return res.status(cap.status).json({ success: false, error: cap.error });
+  }
+
+  const { workflowId, executionId } = req.params;
+  const access = await assertWorkflowAccess(workflowId, principalResult.principal);
+  if (!access.ok) {
+    return res.status(access.status).json({ success: false, error: access.error });
+  }
+
+  try {
+    const detail = await executionRuntimeAnalyzer.getExecutionDetail(executionId, workflowId);
+    if (!detail) {
+      return res.status(404).json({ success: false, error: 'Execution not found for this workflow' });
+    }
+    logAiEditorEvent({
+      action: 'executions_detail',
+      userId: principalResult.principal.userId,
+      workflowId,
+      operationsSummary: executionId,
+      telemetryMs: Date.now() - t0,
+    });
+    res.json({ success: true, workflowId, executionId, detail });
+  } catch (error) {
+    logger.error('AI Editor execution detail error:', error);
+    sendAiGatewayError(res, error);
+  }
+});
+
+router.get('/editor/analyze/session/:workflowId', async (req: Request, res: Response) => {
+  const t0 = Date.now();
+  const principalResult = await resolveAiEditorPrincipal(req);
+  if (!principalResult.ok) {
+    return res.status(principalResult.status).json({ success: false, error: principalResult.error });
+  }
+  const cap = requireCapability(principalResult.principal, 'ai_editor:analyze');
+  if (!cap.ok) {
+    return res.status(cap.status).json({ success: false, error: cap.error });
+  }
+
+  const { workflowId } = req.params;
+  const access = await assertWorkflowAccess(workflowId, principalResult.principal);
+  if (!access.ok) {
+    return res.status(access.status).json({ success: false, error: access.error });
+  }
+
+  try {
+    const messages = await executionRuntimeAnalyzer.listSessionMessages(workflowId, principalResult.principal.userId, 50);
+    logAiEditorEvent({
+      action: 'analyze_session',
+      userId: principalResult.principal.userId,
+      workflowId,
+      operationsSummary: `messages=${messages.length}`,
+      telemetryMs: Date.now() - t0,
+    });
+    res.json({ success: true, workflowId, messages });
+  } catch (error) {
+    logger.error('AI Editor analyzer session error:', error);
+    sendAiGatewayError(res, error);
+  }
+});
+
+router.post('/editor/analyze/chat', async (req: Request, res: Response) => {
+  const t0 = Date.now();
+  try {
+    const principalResult = await resolveAiEditorPrincipal(req);
+    if (!principalResult.ok) {
+      return res.status(principalResult.status).json({ success: false, error: principalResult.error });
+    }
+    const cap = requireCapability(principalResult.principal, 'ai_editor:analyze');
+    if (!cap.ok) {
+      return res.status(cap.status).json({ success: false, error: cap.error });
+    }
+
+    const body = req.body as {
+      workflowId?: string;
+      workflow?: { nodes: any[]; edges: any[] };
+      executionId?: string;
+      nodeId?: string;
+      prompt: string;
+    };
+
+    if (!body || typeof body.prompt !== 'string' || !body.prompt.trim()) {
+      return res.status(400).json({ success: false, error: 'prompt is required' });
+    }
+    if (!body.workflowId) {
+      return res.status(400).json({ success: false, error: 'workflowId is required' });
+    }
+    const access = await assertWorkflowAccess(body.workflowId, principalResult.principal);
+    if (!access.ok) {
+      return res.status(access.status).json({ success: false, error: access.error });
+    }
+    if (!(await hasGeminiAccess(req))) {
+      return res.status(503).json({ success: false, error: 'GEMINI_API_KEY not configured' });
+    }
+
+    const result = await executionRuntimeAnalyzer.chat({
+      workflowId: body.workflowId,
+      userId: principalResult.principal.userId,
+      prompt: body.prompt.trim(),
+      executionId: body.executionId,
+      nodeId: body.nodeId,
+      workflow: body.workflow,
+    });
+
+    logAiEditorEvent({
+      action: 'analyze_chat',
+      userId: principalResult.principal.userId,
+      workflowId: body.workflowId,
+      operationsSummary: body.executionId ? `execution:${body.executionId}` : 'workflow_chat',
+      promptPreview: body.prompt.slice(0, 500),
+      telemetryMs: Date.now() - t0,
+    });
+
+    res.json({ success: true, result });
+  } catch (error) {
+    logger.error('AI Editor analyzer chat error:', error);
+    sendAiGatewayError(res, error);
+  }
+});
+
 router.post('/editor/suggest', async (req: Request, res: Response) => {
   const t0 = Date.now();
   try {
@@ -819,9 +987,27 @@ router.post('/editor/suggest', async (req: Request, res: Response) => {
 
     const workflowId = body.workflowId || body.workflow.metadata?.id || 'unsaved';
     const conversationHistory = Array.isArray(body.conversationHistory) ? body.conversationHistory : [];
+
+    // Feed recent real-execution failure/anomaly patterns into the suggestion prompt as
+    // additive, evidence-based context. Purely optional — falls back silently when the
+    // workflow is unsaved/new or has no execution history yet.
+    let runtimePatternContext = '';
+    if (workflowId && workflowId !== 'unsaved') {
+      try {
+        const access = await assertWorkflowAccess(String(workflowId), principalResult.principal);
+        if (!access.ok) {
+          return res.status(access.status).json({ success: false, error: access.error });
+        }
+        runtimePatternContext = await executionRuntimeAnalyzer.buildRuntimeSuggestionContext(String(workflowId));
+      } catch (e) {
+        logger.warn('AI Editor suggest: runtime pattern context lookup failed (non-fatal):', e);
+      }
+    }
+
     const { message, operations, dryRun } = await aiWorkflowEditor.suggestWorkflowEdits(body.workflow, body.prompt, {
       focusedNodeId: body.nodeId,
       conversationHistory,
+      runtimePatternContext,
     });
 
     const previewValid = dryRun.errors.length === 0;
@@ -1009,6 +1195,8 @@ router.post('/editor/analyze', async (req: Request, res: Response) => {
       nodeId?: string;
       prompt: string;
       conversationHistory?: Array<{ role: string; content: string }>;
+      /** Optional: when present, branch into execution-aware analysis instead of static graph analysis. */
+      executionId?: string;
     };
 
     if (!body || typeof body.prompt !== 'string' || !body.prompt.trim()) {
@@ -1021,6 +1209,46 @@ router.post('/editor/analyze', async (req: Request, res: Response) => {
     const workflow: Workflow = body.workflow;
     const workflowId = body.workflowId || workflow.metadata?.id || 'unsaved';
     const focusedNodeId = body.nodeId;
+
+    // Execution-aware branch: when the caller supplies a real executionId, delegate to the
+    // runtime analyzer instead of the static, execution-blind analysis below. This keeps the
+    // existing no-executionId contract fully backward compatible.
+    if (body.executionId && workflowId && workflowId !== 'unsaved') {
+      const access = await assertWorkflowAccess(String(workflowId), principalResult.principal);
+      if (!access.ok) {
+        return res.status(access.status).json({ success: false, error: access.error });
+      }
+      const explanation = await executionRuntimeAnalyzer.explainExecution({
+        executionId: body.executionId,
+        workflowId: String(workflowId),
+        nodeId: focusedNodeId,
+        prompt: body.prompt,
+      });
+      const messageParts = [explanation.summary];
+      if (explanation.dataNarration) messageParts.push(explanation.dataNarration);
+      if (explanation.rootCause) messageParts.push(`Root cause: ${explanation.rootCause}`);
+
+      const response: AiEditorResponse = {
+        message: messageParts.filter(Boolean).join('\n\n'),
+        operations: [],
+        updatedWorkflow: { workflow },
+      };
+
+      logAiEditorEvent({
+        action: 'analyze',
+        userId: principalResult.principal.userId,
+        workflowId: String(workflowId),
+        operationsSummary: `execution_analysis:${body.executionId}`,
+        promptPreview: body.prompt.slice(0, 500),
+        telemetryMs: Date.now() - t0,
+      });
+
+      return res.json({
+        success: true,
+        result: response,
+        executionAnalysis: explanation,
+      });
+    }
 
     // Build registry context (safe projection of schemas, no secrets)
     const registryContext = aiWorkflowEditor.buildRegistryContextForWorkflow(workflow);

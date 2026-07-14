@@ -89,3 +89,51 @@ export interface AiEditorCapabilitiesResponse {
   applyBlockedReason?: string;
   error?: string;
 }
+
+/** Execution-aware analyzer: run history + persisted chat memory (AI Editor "Analyze" tab). */
+export interface AnalyzerExecutionSummary {
+  id: string;
+  workflowId: string;
+  status: string;
+  startedAt?: string;
+  finishedAt?: string;
+  durationMs?: number;
+  error?: string;
+  totalSteps: number;
+  failedSteps: number;
+  completedSteps: number;
+}
+
+export interface AnalyzerRuntimePattern {
+  nodeId: string;
+  nodeType?: string;
+  pattern: 'recurring_failure' | 'empty_output' | 'high_retry';
+  count: number;
+  window: string;
+  message: string;
+  sampleExecutionIds: string[];
+}
+
+export interface AnalyzerRemediationCandidate {
+  confidence: number;
+  userFacingSummary: string;
+  risk: 'low' | 'medium' | 'high';
+  proposedOperations: AiEditorMutationOperation[];
+}
+
+export interface AnalyzerChatMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system' | 'tool';
+  content: string;
+  messageKind: string;
+  referencedExecutionId?: string;
+  referencedNodeId?: string;
+  createdAt: string;
+}
+
+export interface AnalyzerChatResult {
+  message: string;
+  references: Array<{ executionId?: string; nodeId?: string; kind: string }>;
+  patterns?: AnalyzerRuntimePattern[];
+  remediationCandidates?: AnalyzerRemediationCandidate[];
+}
