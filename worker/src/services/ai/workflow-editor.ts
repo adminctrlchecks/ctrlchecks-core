@@ -448,7 +448,10 @@ export class AIWorkflowEditor {
     return {
       type: 'object',
       properties: {
-        message: { type: 'string' },
+        message: {
+          type: 'string',
+          description: 'Short plain-English explanation of the proposed workflow edit. Do not include raw JSON here.',
+        },
         operations: {
           type: 'array',
           items: {
@@ -457,6 +460,59 @@ export class AIWorkflowEditor {
               kind: {
                 type: 'string',
                 enum: AI_EDITOR_MUTATION_OPERATION_KINDS,
+              },
+              nodeType: {
+                type: 'string',
+                description: 'Required for add_node and insert_safety_node.',
+              },
+              label: {
+                type: 'string',
+                description: 'Optional label for add_node.',
+              },
+              nodeId: {
+                type: 'string',
+                description: 'Required for remove_node and update_node_config.',
+              },
+              targetNodeId: {
+                type: 'string',
+                description: 'Required for replace_node. Must be an existing workflow node id.',
+              },
+              newNodeType: {
+                type: 'string',
+                description: 'Required for replace_node. Must be a canonical node type from the registry context.',
+              },
+              configStrategy: {
+                type: 'string',
+                enum: ['preserve_compatible', 'use_defaults', 'merge'],
+              },
+              path: {
+                type: 'string',
+                description: 'Required for update_node_config. Must be a JSON pointer starting with /.',
+              },
+              newValue: {
+                description: 'Required for update_node_config. The new config value.',
+              },
+              configOverrides: {
+                type: 'object',
+                description: 'Optional node config overrides using only supported config keys.',
+              },
+              positionHint: {
+                type: 'object',
+                properties: {
+                  relation: { type: 'string', enum: ['before', 'after', 'replace'] },
+                  referenceNodeId: { type: 'string' },
+                },
+              },
+              position: {
+                type: 'object',
+                properties: {
+                  relation: { type: 'string', enum: ['before', 'after'] },
+                  referenceNodeId: { type: 'string' },
+                },
+              },
+              focusNodeIds: {
+                type: 'array',
+                items: { type: 'string' },
               },
             },
             required: ['kind'],
@@ -517,13 +573,16 @@ export class AIWorkflowEditor {
       '- operations: array of mutation operations following the schema below',
       'You are CtrlChecks AI Editor. Do not mention n8n, Zapier, Make, or competitor-specific settings unless the user explicitly asks for a comparison.',
       'Never invent node config keys. For any configOverrides, use only fields present in the selected node schema/default config supplied in this prompt.',
+      'Every operation MUST include all required fields listed in the operation schema. Never output only {"kind":"replace_node"} or any other incomplete operation.',
       'If the user request is a graph rewrite (replace, swap, remove, delete, branch-specific change, or multiple existing nodes named), reason over the existing workflow graph and return the required operation array. Do not ask the user to choose a generic node type when the request already names the existing/source/target node type.',
       'Only ask a clarification question with an empty operations array when the target node, target branch, or required destination service cannot be inferred from the workflow and conversation.',
       opHelp,
       '=== GRAPH EDITING RULES ===',
       [
         '- For replacement requests, prefer replace_node on the exact existing node id. Keep upstream/downstream routing intact through the orchestrator.',
+        '- Every replace_node must include targetNodeId and newNodeType. targetNodeId must be copied exactly from WORKFLOW NODES.',
         '- For deletion requests, use remove_node on the exact existing node id; do not fake deletion with empty config values.',
+        '- Every remove_node must include nodeId copied exactly from WORKFLOW NODES.',
         '- For branch or condition requests, inspect sourceHandle/targetHandle and condition-node config before choosing which node ids to replace or remove.',
         '- For multi-part requests, return all necessary operations in one ordered operations array.',
         '- For adding a terminal/log/result node, use add_node with positionHint after the final relevant node and include only supported config fields.',
@@ -594,6 +653,7 @@ export class AIWorkflowEditor {
       const rawResult = await geminiOrchestrator.processRequest('chat-generation', llmInput, {
         model: 'gemini-3.5-flash',
         temperature: 0.25,
+        cache: false,
         structuredOutput: {
           mimeType: 'application/json',
           schema: this.getSuggestStructuredOutputSchema(),
@@ -603,7 +663,15 @@ export class AIWorkflowEditor {
         typeof rawResult === 'string'
           ? rawResult
           : (rawResult as any)?.content || JSON.stringify(rawResult);
-      const parsed = await this.parseSuggestJsonWithRepair(text);
+      let parsed = await this.parseSuggestJsonWithRepair(text);
+      const validationIssues = this.describeMutationOperationIssues(parsed.operations, workflow);
+      if (validationIssues.length) {
+        parsed = await this.retrySuggestJsonWithValidation(llmInput, parsed, validationIssues);
+        const retryIssues = this.describeMutationOperationIssues(parsed.operations, workflow);
+        if (retryIssues.length) {
+          throw new Error(`Invalid AI editor operations: ${retryIssues.join('; ')}`);
+        }
+      }
       message = parsed.message || message;
       operations = this.sanitizeMutationOperations(parsed.operations);
     } catch {
@@ -673,6 +741,131 @@ export class AIWorkflowEditor {
     }
   }
 
+  private async retrySuggestJsonWithValidation(
+    originalPrompt: string,
+    previous: { message: string; operations: unknown[] },
+    validationIssues: string[]
+  ): Promise<{ message: string; operations: unknown[] }> {
+    const retryPrompt = [
+      originalPrompt,
+      '',
+      '=== PREVIOUS STRUCTURED RESPONSE WAS INVALID ===',
+      'Return a corrected single JSON object now.',
+      'Do not repeat incomplete operations.',
+      'Validation issues:',
+      ...validationIssues.map((issue) => `- ${issue}`),
+      '',
+      'Previous response:',
+      JSON.stringify(previous, null, 2).slice(0, 8000),
+      '',
+      'Correction requirements:',
+      '- If an edit can be performed, return complete operations with all required ids and node types.',
+      '- If the target node or branch cannot be identified from the workflow graph, return a clarification message and operations: [].',
+      '- Do not output operation objects that contain only kind.',
+    ].join('\n');
+
+    const retried = await geminiOrchestrator.processRequest('chat-generation', retryPrompt, {
+      model: 'gemini-3.5-flash',
+      temperature: 0.1,
+      cache: false,
+      structuredOutput: {
+        mimeType: 'application/json',
+        schema: this.getSuggestStructuredOutputSchema(),
+      },
+    });
+    const retriedText =
+      typeof retried === 'string'
+        ? retried
+        : (retried as any)?.content || JSON.stringify(retried);
+    return this.parseSuggestJsonWithRepair(retriedText);
+  }
+
+  private describeMutationOperationIssues(raw: unknown[], workflow: Workflow): string[] {
+    const issues: string[] = [];
+    const nodeIds = new Set((workflow.nodes || []).map((node) => node.id));
+
+    raw.forEach((item, index) => {
+      if (!item || typeof item !== 'object') {
+        issues.push(`operations[${index}] must be an object`);
+        return;
+      }
+      const op = item as Record<string, any>;
+      if (typeof op.kind !== 'string' || !AI_EDITOR_MUTATION_OPERATION_KINDS.includes(op.kind as any)) {
+        issues.push(`operations[${index}] has unsupported kind`);
+        return;
+      }
+
+      if (op.kind === 'add_node') {
+        if (typeof op.nodeType !== 'string' || !op.nodeType.trim()) {
+          issues.push(`operations[${index}] add_node requires nodeType`);
+        } else if (!unifiedNodeRegistry.get(op.nodeType)) {
+          issues.push(`operations[${index}] add_node has unknown nodeType ${op.nodeType}`);
+        }
+        const referenceNodeId = op.positionHint?.referenceNodeId;
+        if (referenceNodeId && !nodeIds.has(referenceNodeId)) {
+          issues.push(`operations[${index}] add_node positionHint references unknown node ${referenceNodeId}`);
+        }
+        return;
+      }
+
+      if (op.kind === 'remove_node') {
+        if (typeof op.nodeId !== 'string' || !op.nodeId.trim()) {
+          issues.push(`operations[${index}] remove_node requires nodeId`);
+        } else if (!nodeIds.has(op.nodeId)) {
+          issues.push(`operations[${index}] remove_node references unknown node ${op.nodeId}`);
+        }
+        return;
+      }
+
+      if (op.kind === 'replace_node') {
+        if (typeof op.targetNodeId !== 'string' || !op.targetNodeId.trim()) {
+          issues.push(`operations[${index}] replace_node requires targetNodeId`);
+        } else if (!nodeIds.has(op.targetNodeId)) {
+          issues.push(`operations[${index}] replace_node references unknown node ${op.targetNodeId}`);
+        }
+        if (typeof op.newNodeType !== 'string' || !op.newNodeType.trim()) {
+          issues.push(`operations[${index}] replace_node requires newNodeType`);
+        } else if (!unifiedNodeRegistry.get(op.newNodeType)) {
+          issues.push(`operations[${index}] replace_node has unknown newNodeType ${op.newNodeType}`);
+        }
+        return;
+      }
+
+      if (op.kind === 'update_node_config') {
+        if (typeof op.nodeId !== 'string' || !op.nodeId.trim()) {
+          issues.push(`operations[${index}] update_node_config requires nodeId`);
+        } else if (!nodeIds.has(op.nodeId)) {
+          issues.push(`operations[${index}] update_node_config references unknown node ${op.nodeId}`);
+        }
+        if (typeof op.path !== 'string' || !op.path.startsWith('/')) {
+          issues.push(`operations[${index}] update_node_config requires JSON pointer path`);
+        }
+        if (!Object.prototype.hasOwnProperty.call(op, 'newValue')) {
+          issues.push(`operations[${index}] update_node_config requires newValue`);
+        }
+        return;
+      }
+
+      if (op.kind === 'insert_safety_node') {
+        if (typeof op.nodeType !== 'string' || !op.nodeType.trim()) {
+          issues.push(`operations[${index}] insert_safety_node requires nodeType`);
+        } else if (!unifiedNodeRegistry.get(op.nodeType)) {
+          issues.push(`operations[${index}] insert_safety_node has unknown nodeType ${op.nodeType}`);
+        }
+        const relation = op.position?.relation;
+        const referenceNodeId = op.position?.referenceNodeId;
+        if (relation !== 'before' && relation !== 'after') {
+          issues.push(`operations[${index}] insert_safety_node requires position.relation before/after`);
+        }
+        if (typeof referenceNodeId !== 'string' || !nodeIds.has(referenceNodeId)) {
+          issues.push(`operations[${index}] insert_safety_node requires valid position.referenceNodeId`);
+        }
+      }
+    });
+
+    return issues;
+  }
+
   private sanitizeMutationOperations(raw: unknown[]): AiEditorMutationOperation[] {
     const allowed = new Set<string>(AI_EDITOR_MUTATION_OPERATION_KINDS);
     const out: AiEditorMutationOperation[] = [];
@@ -680,6 +873,26 @@ export class AIWorkflowEditor {
       if (!item || typeof item !== 'object') continue;
       const k = (item as any).kind;
       if (typeof k !== 'string' || !allowed.has(k)) continue;
+      if (k === 'add_node' && typeof (item as any).nodeType !== 'string') continue;
+      if (k === 'remove_node' && typeof (item as any).nodeId !== 'string') continue;
+      if (
+        k === 'replace_node' &&
+        (typeof (item as any).targetNodeId !== 'string' || typeof (item as any).newNodeType !== 'string')
+      ) {
+        continue;
+      }
+      if (
+        k === 'update_node_config' &&
+        (typeof (item as any).nodeId !== 'string' || typeof (item as any).path !== 'string')
+      ) {
+        continue;
+      }
+      if (
+        k === 'insert_safety_node' &&
+        (typeof (item as any).nodeType !== 'string' || !(item as any).position)
+      ) {
+        continue;
+      }
       out.push(this.sanitizeOperationConfig(item as AiEditorMutationOperation));
     }
     return out;
