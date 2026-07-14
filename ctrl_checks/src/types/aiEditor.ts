@@ -3,8 +3,6 @@
  * Structural edits are expressed as node-centric operations; edges are never sent from the client.
  */
 
-export type AiEditorChatMode = 'analyze' | 'suggest';
-
 export interface AiEditorMutationOperationBase {
   kind: string;
 }
@@ -136,4 +134,14 @@ export interface AnalyzerChatResult {
   references: Array<{ executionId?: string; nodeId?: string; kind: string }>;
   patterns?: AnalyzerRuntimePattern[];
   remediationCandidates?: AnalyzerRemediationCandidate[];
+}
+
+export type UnifiedAiEditorIntent = 'explain_run' | 'explain_workflow' | 'propose_change' | 'mixed';
+
+export interface UnifiedAiEditorChatResult extends AnalyzerChatResult {
+  intent: UnifiedAiEditorIntent;
+  operations?: AiEditorMutationOperation[];
+  diff?: WorkflowDiffSummary | null;
+  updatedWorkflow?: unknown;
+  requiresApply?: boolean;
 }

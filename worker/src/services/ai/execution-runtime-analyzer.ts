@@ -793,7 +793,19 @@ export class ExecutionRuntimeAnalyzer {
     await db.from('ai_analyzer_sessions').update({ updated_at: new Date().toISOString() }).eq('id', sessionId);
   }
 
-  private sanitizeRemediationCandidates(raw: unknown): RemediationCandidate[] | undefined {
+  async recordSessionMessage(workflowId: string, userId: string, message: {
+    role: 'user' | 'assistant';
+    content: string;
+    referencedExecutionId?: string;
+    referencedNodeId?: string;
+    runtimeContext?: unknown;
+  }): Promise<void> {
+    const session = await this.getOrCreateSession(workflowId, userId);
+    if (!session) return;
+    await this.appendMessage(session.id, message);
+  }
+
+  sanitizeRemediationCandidates(raw: unknown): RemediationCandidate[] | undefined {
     if (!Array.isArray(raw)) return undefined;
     const allowedKinds = new Set<string>(AI_EDITOR_MUTATION_OPERATION_KINDS);
     const out: RemediationCandidate[] = [];

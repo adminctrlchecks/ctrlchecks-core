@@ -45,6 +45,71 @@ const guideResponseCache = new Map<string, { expiresAt: number; guidance: FieldO
 const GUIDE_CACHE_TTL_MS = 10 * 60 * 1000;
 const FIELD_GUIDANCE_PRESENTATION_VERSION = 2;
 
+type UnifiedAiEditorIntent = 'explain_run' | 'explain_workflow' | 'propose_change' | 'mixed';
+
+function classifyUnifiedAiEditorIntent(prompt: string, hasExecutionContext: boolean): UnifiedAiEditorIntent {
+  const text = prompt.toLowerCase();
+  const editIntent =
+    /\b(add|apply|build|change|connect|create|delete|do it|fix|implement|insert|make|modify|move|preview|remove|replace|set|switch|update)\b/.test(text) ||
+    /\b(can you|please)\b.*\b(fix|change|update|add|remove|replace|set|connect|implement)\b/.test(text);
+  const analysisIntent =
+    hasExecutionContext ||
+    /\b(analy[sz]e|compare|data|debug|explain|fail|failed|failure|happen|happened|history|output|run|runs|why|what)\b/.test(text);
+
+  if (editIntent && analysisIntent) return 'mixed';
+  if (editIntent) return 'propose_change';
+  return hasExecutionContext ? 'explain_run' : 'explain_workflow';
+}
+
+function formatRunExplanationForChat(explanation: {
+  summary?: string;
+  dataNarration?: string;
+  rootCause?: string;
+  evidence?: string[];
+  risks?: string[];
+}): string {
+  const parts: string[] = [];
+  if (explanation.summary) parts.push(explanation.summary);
+  if (explanation.dataNarration) parts.push(explanation.dataNarration);
+  if (explanation.rootCause) parts.push(`Root cause: ${explanation.rootCause}`);
+  if (Array.isArray(explanation.evidence) && explanation.evidence.length) {
+    parts.push(`Evidence:\n- ${explanation.evidence.slice(0, 4).join('\n- ')}`);
+  }
+  if (Array.isArray(explanation.risks) && explanation.risks.length) {
+    parts.push(`Risks:\n- ${explanation.risks.slice(0, 3).join('\n- ')}`);
+  }
+  return parts.filter(Boolean).join('\n\n');
+}
+
+function buildUnifiedSuggestionPrompt(args: {
+  userPrompt: string;
+  intent: UnifiedAiEditorIntent;
+  runExplanation?: string;
+  remediationCandidates?: Array<{ userFacingSummary: string; risk: string; confidence: number; proposedOperations: unknown[] }>;
+}): string {
+  const parts = [
+    'The user is working in a unified AI Editor chat. Produce a safe workflow edit preview when the request asks for a change.',
+    'Do not apply changes directly. Return only valid AI Editor operations for dry-run preview.',
+    `Intent: ${args.intent}`,
+    args.runExplanation
+      ? [
+          '=== SELECTED EXECUTION ANALYSIS ===',
+          args.runExplanation,
+          'Use this as evidence. If the user asks to fix the issue, target the concrete node/config problem described here.',
+        ].join('\n')
+      : '',
+    args.remediationCandidates?.length
+      ? [
+          '=== ANALYZER REMEDIATION CANDIDATES ===',
+          JSON.stringify(args.remediationCandidates.slice(0, 3), null, 2),
+          'Prefer these operations when they are valid for the current workflow. If invalid, translate them to the closest safe operation.',
+        ].join('\n')
+      : '',
+    `User request: ${args.userPrompt}`,
+  ];
+  return parts.filter(Boolean).join('\n\n');
+}
+
 function buildFieldWalkContextKey(field: Record<string, any>): string {
   return JSON.stringify({
     guidancePresentationVersion: FIELD_GUIDANCE_PRESENTATION_VERSION,
@@ -891,6 +956,279 @@ router.get('/editor/analyze/session/:workflowId', async (req: Request, res: Resp
     res.json({ success: true, workflowId, messages });
   } catch (error) {
     logger.error('AI Editor analyzer session error:', error);
+    sendAiGatewayError(res, error);
+  }
+});
+
+router.post('/editor/chat', async (req: Request, res: Response) => {
+  const t0 = Date.now();
+  try {
+    const principalResult = await resolveAiEditorPrincipal(req);
+    if (!principalResult.ok) {
+      return res.status(principalResult.status).json({ success: false, error: principalResult.error });
+    }
+    const analyzeCap = requireCapability(principalResult.principal, 'ai_editor:analyze');
+    if (!analyzeCap.ok) {
+      return res.status(analyzeCap.status).json({ success: false, error: analyzeCap.error });
+    }
+
+    const body = req.body as {
+      workflowId?: string;
+      workflow?: Workflow;
+      selectedExecutionId?: string;
+      executionId?: string;
+      nodeId?: string;
+      prompt: string;
+      conversationHistory?: Array<{ role: string; content: string }>;
+    };
+
+    if (!body || typeof body.prompt !== 'string' || !body.prompt.trim()) {
+      return res.status(400).json({ success: false, error: 'prompt is required' });
+    }
+
+    const prompt = body.prompt.trim();
+    const workflowId = body.workflowId || body.workflow?.metadata?.id;
+    const selectedExecutionId = body.selectedExecutionId || body.executionId;
+    const intent = classifyUnifiedAiEditorIntent(prompt, !!selectedExecutionId);
+    const wantsChange = intent === 'propose_change' || intent === 'mixed';
+    const wantsExplanation = intent === 'explain_run' || intent === 'explain_workflow' || intent === 'mixed';
+
+    if (workflowId) {
+      const access = await assertWorkflowAccess(String(workflowId), principalResult.principal);
+      if (!access.ok) {
+        return res.status(access.status).json({ success: false, error: access.error });
+      }
+    }
+    if (!workflowId && selectedExecutionId) {
+      return res.status(400).json({ success: false, error: 'workflowId is required when referencing an execution' });
+    }
+
+    if (wantsChange) {
+      const suggestCap = requireCapability(principalResult.principal, 'ai_editor:suggest');
+      if (!suggestCap.ok) {
+        return res.status(suggestCap.status).json({
+          success: false,
+          error: 'Suggesting workflow edits requires moderator or admin access.',
+        });
+      }
+      if (!body.workflow || !Array.isArray(body.workflow.nodes) || !Array.isArray(body.workflow.edges)) {
+        return res.status(400).json({ success: false, error: 'workflow with nodes[] and edges[] is required for edit previews' });
+      }
+    }
+
+    if (!(await hasGeminiAccess(req))) {
+      return res.status(503).json({ success: false, error: 'GEMINI_API_KEY not configured' });
+    }
+
+    if (workflowId && (wantsChange || selectedExecutionId)) {
+      await executionRuntimeAnalyzer.recordSessionMessage(String(workflowId), principalResult.principal.userId, {
+        role: 'user',
+        content: prompt,
+        referencedExecutionId: selectedExecutionId,
+        referencedNodeId: body.nodeId,
+      });
+    }
+
+    let analysisMessage = '';
+    let references: Array<{ executionId?: string; nodeId?: string; kind: string }> = [];
+    let patterns: unknown[] | undefined;
+    let remediationCandidates: unknown[] | undefined;
+
+    if (workflowId && selectedExecutionId && wantsExplanation) {
+      const explanation = await executionRuntimeAnalyzer.explainExecution({
+        executionId: selectedExecutionId,
+        workflowId: String(workflowId),
+        nodeId: body.nodeId,
+        prompt,
+      });
+      remediationCandidates = executionRuntimeAnalyzer.sanitizeRemediationCandidates(explanation.remediationCandidates);
+      analysisMessage = formatRunExplanationForChat(explanation);
+      references = [{ executionId: selectedExecutionId, nodeId: body.nodeId, kind: 'execution_profile' }];
+    } else if (workflowId && !wantsChange) {
+      const analyzerResponse = await executionRuntimeAnalyzer.chat({
+        workflowId: String(workflowId),
+        userId: principalResult.principal.userId,
+        prompt,
+        nodeId: body.nodeId,
+        workflow: body.workflow,
+      });
+
+      logAiEditorEvent({
+        action: 'analyze_chat',
+        userId: principalResult.principal.userId,
+        workflowId: String(workflowId),
+        operationsSummary: 'unified_workflow_chat',
+        promptPreview: prompt.slice(0, 500),
+        telemetryMs: Date.now() - t0,
+      });
+
+      return res.json({
+        success: true,
+        previewValid: true,
+        previewErrors: [],
+        previewWarnings: [],
+        result: {
+          message: analyzerResponse.message,
+          intent,
+          references: analyzerResponse.references,
+          patterns: analyzerResponse.patterns,
+          remediationCandidates: analyzerResponse.remediationCandidates,
+          operations: [],
+          diff: null,
+          requiresApply: false,
+        },
+      });
+    }
+
+    let editorMessage = '';
+    let operations: unknown[] = [];
+    let diff: unknown = null;
+    let updatedWorkflow: unknown;
+    let previewErrors: string[] = [];
+    let previewWarnings: string[] = [];
+    let previewValid = true;
+
+    if (wantsChange && body.workflow) {
+      let runtimePatternContext = '';
+      if (workflowId) {
+        try {
+          runtimePatternContext = await executionRuntimeAnalyzer.buildRuntimeSuggestionContext(String(workflowId));
+          patterns = await executionRuntimeAnalyzer.detectPatterns(String(workflowId), 20);
+        } catch (e) {
+          logger.warn('AI Editor unified chat: runtime pattern context lookup failed (non-fatal):', e);
+        }
+      }
+
+      const suggestionPrompt = buildUnifiedSuggestionPrompt({
+        userPrompt: prompt,
+        intent,
+        runExplanation: analysisMessage,
+        remediationCandidates: remediationCandidates as Array<{
+          userFacingSummary: string;
+          risk: string;
+          confidence: number;
+          proposedOperations: unknown[];
+        }> | undefined,
+      });
+
+      const { message, operations: suggestedOperations, dryRun } = await aiWorkflowEditor.suggestWorkflowEdits(
+        body.workflow,
+        suggestionPrompt,
+        {
+          focusedNodeId: body.nodeId,
+          conversationHistory: Array.isArray(body.conversationHistory) ? body.conversationHistory : [],
+          runtimePatternContext,
+        }
+      );
+
+      editorMessage = message;
+      operations = suggestedOperations as any[];
+      diff = dryRun.diff;
+      previewErrors = dryRun.errors;
+      previewWarnings = dryRun.warnings;
+      previewValid = previewErrors.length === 0;
+      updatedWorkflow = previewValid ? { workflow: dryRun.workflow } : undefined;
+    }
+
+    if (!wantsChange && !workflowId && body.workflow) {
+      const llmInput = [
+        'You are a workflow assistant. Explain the current unsaved workflow in plain English.',
+        'Answer conversationally. Do not return JSON. Do not propose hidden mutations.',
+        '=== WORKFLOW NODES ===',
+        JSON.stringify(
+          body.workflow.nodes.map((n: any) => ({
+            id: n.id,
+            type: n.data?.type || n.type,
+            label: n.data?.label,
+          })),
+          null,
+          2
+        ),
+        '=== WORKFLOW EDGES ===',
+        JSON.stringify(
+          body.workflow.edges.map((e: any) => ({
+            source: e.source,
+            target: e.target,
+            type: e.type,
+          })),
+          null,
+          2
+        ),
+        `User request: ${prompt}`,
+      ].join('\n\n');
+      try {
+        const raw = await geminiOrchestrator.processRequest('chat-generation', llmInput, {
+          model: 'gemini-3.5-flash',
+          temperature: 0.35,
+        });
+        analysisMessage = typeof raw === 'string' ? raw : (raw as any)?.content || JSON.stringify(raw);
+      } catch (e: any) {
+        analysisMessage = `Could not analyze this draft workflow: ${e?.message || String(e)}`;
+      }
+    }
+
+    const combinedMessage = [analysisMessage, editorMessage].filter(Boolean).join('\n\n');
+    const finalMessage =
+      combinedMessage ||
+      (wantsChange
+        ? 'I could not find a safe workflow edit for that request. Try being more specific about the node or field to change.'
+        : 'I reviewed the workflow context.');
+
+    const result = {
+      message: finalMessage,
+      intent,
+      references,
+      patterns,
+      remediationCandidates,
+      operations,
+      diff,
+      updatedWorkflow,
+      requiresApply: operations.length > 0,
+    };
+
+    if (workflowId) {
+      await executionRuntimeAnalyzer.recordSessionMessage(String(workflowId), principalResult.principal.userId, {
+        role: 'assistant',
+        content: finalMessage,
+        referencedExecutionId: selectedExecutionId,
+        referencedNodeId: body.nodeId,
+        runtimeContext: {
+          intent,
+          references,
+          patterns,
+          remediationCandidates,
+          operations,
+          diff,
+          previewValid,
+          previewErrors,
+          previewWarnings,
+        },
+      });
+    }
+
+    logAiEditorEvent({
+      action: wantsChange ? 'suggest' : 'analyze_chat',
+      userId: principalResult.principal.userId,
+      workflowId: String(workflowId || 'unsaved'),
+      validationPassed: previewValid,
+      operationsCount: operations.length,
+      operationsSummary: operations.map((o: any) => o?.kind).filter(Boolean).join(',') || intent,
+      errors: previewErrors,
+      warnings: previewWarnings,
+      diffHash: hashDiff(diff),
+      promptPreview: prompt.slice(0, 500),
+      telemetryMs: Date.now() - t0,
+    });
+
+    res.json({
+      success: true,
+      previewValid,
+      previewErrors,
+      previewWarnings,
+      result,
+    });
+  } catch (error) {
+    logger.error('AI Editor unified chat error:', error);
     sendAiGatewayError(res, error);
   }
 });

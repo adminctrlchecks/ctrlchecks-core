@@ -54,13 +54,12 @@ import { useRole } from '@/hooks/useRole';
 import { mergeCapabilityHints } from '@/lib/aiEditorPermissions';
 import type {
   AiEditorCapabilitiesResponse,
-  AiEditorChatMode,
   AiEditorMutationOperation,
   WorkflowDiffSummary,
   AnalyzerExecutionSummary,
   AnalyzerChatMessage,
-  AnalyzerChatResult,
   AnalyzerRemediationCandidate,
+  UnifiedAiEditorChatResult,
 } from '@/types/aiEditor';
 import {
   enforceFrontendRenderContract,
@@ -521,13 +520,12 @@ export default function PropertiesPanel({
     {
       id: 'welcome',
       role: 'assistant',
-      content: 'Hi! I can help you edit this workflow. Try saying "Add a Slack node after success" or "Change the trigger to a schedule".',
+      content: 'Hi! I can explain workflow runs, inspect outputs, and prepare safe workflow changes. Ask what happened, why something failed, or what you want changed.',
       timestamp: new Date(),
     }
   ]);
   const [aiInput, setAiInput] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
-  const [aiChatMode, setAiChatMode] = useState<AiEditorChatMode>('analyze');
   const [aiCapabilities, setAiCapabilities] = useState<AiEditorCapabilitiesResponse | null>(null);
   const [pendingAiOperations, setPendingAiOperations] = useState<AiEditorMutationOperation[]>([]);
   const [pendingAiDiff, setPendingAiDiff] = useState<WorkflowDiffSummary | null>(null);
@@ -948,41 +946,22 @@ export default function PropertiesPanel({
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 120000);
 
-      // Analyze mode with a saved workflow uses the persisted, execution-aware analyzer
-      // chat endpoint (server keeps conversation memory + can explain a selected run).
-      // Unsaved/new workflows and Suggest mode keep using the existing stateless endpoints.
-      const useAnalyzerChat = aiChatMode === 'analyze' && !!workflowId;
-      const endpoint = useAnalyzerChat
-        ? `${ENDPOINTS.itemBackend}/api/ai/editor/analyze/chat`
-        : aiChatMode === 'suggest'
-          ? `${ENDPOINTS.itemBackend}/api/ai/editor/suggest`
-          : `${ENDPOINTS.itemBackend}/api/ai/editor/analyze`;
-
-      const requestBody = useAnalyzerChat
-        ? {
-            workflowId,
-            workflow: currentWorkflow,
-            executionId: selectedExecutionId || undefined,
-            nodeId: selectedNode?.id,
-            prompt: outgoingPrompt,
-          }
-        : {
-            workflowId: workflowId || undefined,
-            workflow: currentWorkflow,
-            nodeId: selectedNode?.id,
-            prompt: outgoingPrompt,
-            conversationHistory,
-          };
-
       let response: Response;
       try {
-        response = await fetch(endpoint, {
+        response = await fetch(`${ENDPOINTS.itemBackend}/api/ai/editor/chat`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify(requestBody),
+          body: JSON.stringify({
+            workflowId: workflowId || undefined,
+            workflow: currentWorkflow,
+            selectedExecutionId: selectedExecutionId || undefined,
+            nodeId: selectedNode?.id,
+            prompt: outgoingPrompt,
+            conversationHistory,
+          }),
           signal: controller.signal,
         });
         clearTimeout(timeoutId);
@@ -1002,57 +981,36 @@ export default function PropertiesPanel({
       }
 
       const data = await response.json();
+      const result = (data.result || {}) as UnifiedAiEditorChatResult;
+      const assistantText: string =
+        result.message || 'I reviewed the workflow context.';
+      const ops = (result.operations || []) as AiEditorMutationOperation[];
+      const diff = (result.diff || null) as WorkflowDiffSummary | null;
 
-      if (aiChatMode === 'analyze') {
-        const result = (useAnalyzerChat ? data.result : data.result || data) as AnalyzerChatResult & { explanation?: string };
-        const assistantText: string =
-          result.message ||
-          result.explanation ||
-          'I have analyzed the workflow based on your request.';
+      setPendingAiOperations(ops);
+      setPendingAiDiff(diff);
+      setPendingAiPrompt(ops.length > 0 ? outgoingPrompt : '');
+      const pe = Array.isArray(data.previewErrors) ? data.previewErrors : [];
+      setPendingPreviewValid(data.previewValid !== false && pe.length === 0);
+      setRemediationCandidates(Array.isArray(result.remediationCandidates) ? result.remediationCandidates : []);
 
-        setAiMessages((prev) => [
-          ...prev,
-          {
-            id: Date.now().toString(),
-            role: 'assistant',
-            content: assistantText,
-            timestamp: new Date(),
-          },
-        ]);
-        // Analyze never mutates the workflow directly — if the analyzer found a fix candidate
-        // from real execution history, surface it as a card the user must explicitly preview.
-        setRemediationCandidates(useAnalyzerChat && Array.isArray(result.remediationCandidates) ? result.remediationCandidates : []);
-      } else {
-        const result = data.result || {};
-        const assistantText: string =
-          result.message || 'Here are suggested edits. Review and click Apply to commit.';
-        const ops = (result.operations || []) as AiEditorMutationOperation[];
-        const diff = (result.diff || null) as WorkflowDiffSummary | null;
-
-        setPendingAiOperations(ops);
-        setPendingAiDiff(diff);
-        setPendingAiPrompt(outgoingPrompt);
-        const pe = Array.isArray(data.previewErrors) ? data.previewErrors : [];
-        setPendingPreviewValid(data.previewValid !== false && pe.length === 0);
-
-        let extra = '';
-        if (data.previewErrors?.length) {
-          extra += `\n\nDry-run issues:\n- ${data.previewErrors.slice(0, 5).join('\n- ')}`;
-        }
-        if (ops.length === 0) {
-          extra += '\n\n(No structured operations returned — try rephrasing your request.)';
-        }
-
-        setAiMessages((prev) => [
-          ...prev,
-          {
-            id: Date.now().toString(),
-            role: 'assistant',
-            content: `${assistantText}${extra}`,
-            timestamp: new Date(),
-          },
-        ]);
+      let extra = '';
+      if (pe.length) {
+        extra += `\n\nDry-run issues:\n- ${pe.slice(0, 5).join('\n- ')}`;
       }
+      if ((result.requiresApply || result.intent === 'propose_change' || result.intent === 'mixed') && ops.length === 0) {
+        extra += '\n\n(No structured operations returned. Try naming the exact node or field you want changed.)';
+      }
+
+      setAiMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: `${assistantText}${extra}`,
+          timestamp: new Date(),
+        },
+      ]);
     } catch (error: any) {
       console.error('AI Editor Error:', error);
       const errorMessage =
@@ -1176,7 +1134,6 @@ export default function PropertiesPanel({
       setPendingAiPrompt(derivedPrompt);
       const pe = Array.isArray(data.previewErrors) ? data.previewErrors : [];
       setPendingPreviewValid(data.previewValid !== false && pe.length === 0);
-      setAiChatMode('suggest');
 
       let extra = '';
       if (data.previewErrors?.length) {
@@ -1288,7 +1245,6 @@ export default function PropertiesPanel({
   // Render AI Editor view
   const renderAIEditor = () => {
     const perm = mergeCapabilityHints(aiCapabilities, appRole);
-    const suggestBlocked = !perm.canSuggest;
     const applyDisabled =
       pendingAiOperations.length === 0 ||
       !perm.canApply ||
@@ -1409,31 +1365,16 @@ export default function PropertiesPanel({
     return (
       <div className="flex-1 min-h-0 min-w-0 max-w-full flex flex-col overflow-hidden">
         <div className="min-w-0 max-w-full overflow-hidden px-4 pt-3 pb-2 border-b border-border/40 space-y-2 shrink-0">
-          <ToggleGroup
-            type="single"
-            value={aiChatMode}
-            onValueChange={(v) => {
-              if (v === 'analyze' || v === 'suggest') {
-                setAiChatMode(v);
-                handleDiscardPendingAi();
-              }
-            }}
-            className="min-w-0 max-w-full justify-start"
-          >
-            <ToggleGroupItem value="analyze" className="text-xs h-7 px-2">
-              Analyze
-            </ToggleGroupItem>
-            <ToggleGroupItem
-              value="suggest"
-              disabled={suggestBlocked}
-              className="text-xs h-7 px-2"
-              title={
-                suggestBlocked ? 'Suggest/apply requires moderator or admin (or active workflow blocks apply).' : ''
-              }
-            >
-              Suggest edits
-            </ToggleGroupItem>
-          </ToggleGroup>
+          <div className="flex min-w-0 max-w-full items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate text-xs font-medium text-foreground">Workflow assistant</p>
+            </div>
+            {pendingAiOperations.length > 0 && (
+              <span className="shrink-0 rounded-sm border border-violet-500/30 bg-violet-500/5 px-2 py-1 text-[10px] text-violet-700 dark:text-violet-300">
+                Preview ready
+              </span>
+            )}
+          </div>
           {!perm.canSuggest && (
             <p className="text-[10px] text-muted-foreground leading-snug">
               Your role can analyze workflows. Suggesting and applying edits needs moderator or admin (see server
@@ -1445,10 +1386,10 @@ export default function PropertiesPanel({
               {perm.applyBlockedReason}
             </p>
           )}
-          {aiChatMode === 'analyze' && workflowId && isLoadingExecutions && analyzerExecutions.length === 0 && (
+          {workflowId && isLoadingExecutions && analyzerExecutions.length === 0 && (
             <p className="text-[10px] text-muted-foreground leading-snug">Loading run history…</p>
           )}
-          {aiChatMode === 'analyze' && workflowId && analyzerExecutions.length > 0 && (
+          {workflowId && analyzerExecutions.length > 0 && (
             <div className="flex min-w-0 max-w-full items-center gap-2 overflow-hidden">
               <Select
                 value={selectedExecutionId || '__none__'}
@@ -1472,7 +1413,7 @@ export default function PropertiesPanel({
               </Select>
             </div>
           )}
-          {aiChatMode === 'analyze' && selectedExecutionId && (
+          {selectedExecutionId && (
             <p className="text-[10px] text-violet-600 dark:text-violet-400 leading-snug">
               Discussing a specific past run — questions and answers below reference its actual node inputs/outputs.
             </p>
@@ -1504,8 +1445,7 @@ export default function PropertiesPanel({
                 </span>
               </div>
             ))}
-            {aiChatMode === 'analyze' &&
-              remediationCandidates.map((candidate, index) => (
+            {remediationCandidates.map((candidate, index) => (
                 <div
                   key={`remediation-${index}`}
                   className="mr-auto min-w-0 max-w-full overflow-hidden rounded-sm border border-amber-500/40 bg-amber-500/5 px-3 py-2 space-y-1.5"
@@ -1618,11 +1558,7 @@ export default function PropertiesPanel({
         <div className="min-w-0 max-w-full px-4 py-3 border-t border-border/40 bg-background shrink-0">
           <div className="flex min-w-0 max-w-full gap-2">
             <Input
-              placeholder={
-                aiChatMode === 'analyze'
-                  ? 'Ask about this workflow...'
-                  : 'Describe edits (e.g. add a node, update config)...'
-              }
+              placeholder="Ask about a run, output, failure, or workflow change..."
               value={aiInput}
               onChange={(e) => setAiInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleAiSend()}
