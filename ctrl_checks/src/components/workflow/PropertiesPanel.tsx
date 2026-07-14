@@ -112,7 +112,7 @@ const DroppableFieldWrapper = ({ fieldKey, children, className, debugMode }: Dro
   return (
     <div
       ref={setNodeRef}
-      className={cn("relative", className, isOver && "ring-2 ring-primary/50 rounded-md")}
+      className={cn("relative min-w-0 max-w-full overflow-hidden", className, isOver && "ring-2 ring-primary/50 rounded-md")}
     >
       {children}
       {isOver && (
@@ -1330,7 +1330,7 @@ export default function PropertiesPanel({
         });
       }
       return bullets.length ? (
-        <ul className="text-[11px] text-muted-foreground space-y-1 list-disc pl-4 mt-2">
+        <ul className="min-w-0 max-w-full text-[11px] text-muted-foreground space-y-1 list-disc pl-4 mt-2">
           {bullets}
         </ul>
       ) : null;
@@ -1349,32 +1349,32 @@ export default function PropertiesPanel({
       const fixes = structured.remediationCandidates || [];
 
       return (
-        <div className="space-y-2">
+        <div className="min-w-0 max-w-full space-y-2 overflow-hidden">
           {structured.summary && (
-            <p className="text-xs leading-relaxed text-foreground">
+            <p className="text-xs leading-relaxed text-foreground break-words">
               {structured.summary}
             </p>
           )}
 
           {structured.dataNarration && (
-            <div className="rounded-sm border border-border/50 bg-background/50 px-2.5 py-2">
+            <div className="min-w-0 max-w-full overflow-hidden rounded-sm border border-border/50 bg-background/50 px-2.5 py-2">
               <p className="text-[10px] font-medium uppercase text-muted-foreground mb-1">
                 What happened
               </p>
-              <p className="text-[11px] leading-relaxed text-foreground/85">
+              <p className="text-[11px] leading-relaxed text-foreground/85 break-words">
                 {structured.dataNarration}
               </p>
             </div>
           )}
 
           {structured.evidence && structured.evidence.length > 0 && (
-            <div className="rounded-sm border border-border/50 bg-background/50 px-2.5 py-2">
+            <div className="min-w-0 max-w-full overflow-hidden rounded-sm border border-border/50 bg-background/50 px-2.5 py-2">
               <p className="text-[10px] font-medium uppercase text-muted-foreground mb-1">
                 Evidence
               </p>
-              <ul className="space-y-1">
+              <ul className="min-w-0 max-w-full space-y-1">
                 {structured.evidence.slice(0, 4).map((item, index) => (
-                  <li key={`${msg.id}-evidence-${index}`} className="text-[11px] leading-relaxed text-foreground/80">
+                  <li key={`${msg.id}-evidence-${index}`} className="text-[11px] leading-relaxed text-foreground/80 break-words">
                     {item}
                   </li>
                 ))}
@@ -1383,17 +1383,17 @@ export default function PropertiesPanel({
           )}
 
           {fixes.length > 0 && (
-            <div className="rounded-sm border border-amber-500/35 bg-amber-500/5 px-2.5 py-2">
+            <div className="min-w-0 max-w-full overflow-hidden rounded-sm border border-amber-500/35 bg-amber-500/5 px-2.5 py-2">
               <p className="text-[10px] font-medium uppercase text-amber-700 dark:text-amber-300 mb-1">
                 Possible fix
               </p>
-              <div className="space-y-1.5">
+              <div className="min-w-0 max-w-full space-y-1.5">
                 {fixes.slice(0, 2).map((candidate, index) => (
-                  <div key={`${msg.id}-fix-${index}`} className="space-y-0.5">
-                    <p className="text-[11px] leading-relaxed text-foreground/85">
+                  <div key={`${msg.id}-fix-${index}`} className="min-w-0 max-w-full space-y-0.5 overflow-hidden">
+                    <p className="text-[11px] leading-relaxed text-foreground/85 break-words">
                       {candidate.userFacingSummary}
                     </p>
-                    <p className="text-[10px] text-muted-foreground">
+                    <p className="text-[10px] text-muted-foreground break-words">
                       Risk: {candidate.risk}
                       {typeof candidate.confidence === 'number' ? ` - confidence ${Math.round(candidate.confidence * 100)}%` : ''}
                     </p>
@@ -1407,8 +1407,8 @@ export default function PropertiesPanel({
     };
 
     return (
-      <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-        <div className="px-4 pt-3 pb-2 border-b border-border/40 space-y-2 shrink-0">
+      <div className="flex-1 min-h-0 min-w-0 max-w-full flex flex-col overflow-hidden">
+        <div className="min-w-0 max-w-full overflow-hidden px-4 pt-3 pb-2 border-b border-border/40 space-y-2 shrink-0">
           <ToggleGroup
             type="single"
             value={aiChatMode}
@@ -1418,7 +1418,7 @@ export default function PropertiesPanel({
                 handleDiscardPendingAi();
               }
             }}
-            className="justify-start"
+            className="min-w-0 max-w-full justify-start"
           >
             <ToggleGroupItem value="analyze" className="text-xs h-7 px-2">
               Analyze
@@ -1449,12 +1449,12 @@ export default function PropertiesPanel({
             <p className="text-[10px] text-muted-foreground leading-snug">Loading run history…</p>
           )}
           {aiChatMode === 'analyze' && workflowId && analyzerExecutions.length > 0 && (
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 max-w-full items-center gap-2 overflow-hidden">
               <Select
                 value={selectedExecutionId || '__none__'}
                 onValueChange={(v) => setSelectedExecutionId(v === '__none__' ? '' : v)}
               >
-                <SelectTrigger className="h-7 text-[11px] flex-1">
+                <SelectTrigger className="h-7 min-w-0 flex-1 text-[11px]">
                   <SelectValue placeholder="Discuss the workflow (no run selected)" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1479,22 +1479,22 @@ export default function PropertiesPanel({
           )}
         </div>
 
-        <ScrollArea className="flex-1 px-4 py-3 min-h-0" ref={aiScrollAreaRef}>
-          <div className="space-y-3">
+        <ScrollArea className="flex-1 min-h-0 min-w-0 max-w-full overflow-hidden px-4 py-3" ref={aiScrollAreaRef}>
+          <div className="min-w-0 max-w-full space-y-3 overflow-hidden">
             {aiMessages.map((msg) => (
               <div
                 key={msg.id}
                 className={cn(
-                  'flex flex-col gap-1 max-w-[85%]',
-                  msg.role === 'user' ? 'ml-auto items-end' : 'mr-auto items-start'
+                  'flex min-w-0 max-w-full flex-col gap-1 overflow-hidden',
+                  msg.role === 'user' ? 'ml-auto w-fit items-end' : 'mr-auto w-full items-start'
                 )}
               >
                 <div
                   className={cn(
-                    'px-3 py-2 rounded-sm text-xs leading-relaxed',
+                    'min-w-0 max-w-full overflow-hidden px-3 py-2 rounded-sm text-xs leading-relaxed',
                     msg.role === 'user'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted/60 text-foreground/90 border border-border/40'
+                      ? 'bg-primary text-primary-foreground break-words'
+                      : 'w-full bg-muted/60 text-foreground/90 border border-border/40'
                   )}
                 >
                   {renderAiMessageContent(msg)}
@@ -1508,11 +1508,11 @@ export default function PropertiesPanel({
               remediationCandidates.map((candidate, index) => (
                 <div
                   key={`remediation-${index}`}
-                  className="mr-auto max-w-[95%] rounded-sm border border-amber-500/40 bg-amber-500/5 px-3 py-2 space-y-1.5"
+                  className="mr-auto min-w-0 max-w-full overflow-hidden rounded-sm border border-amber-500/40 bg-amber-500/5 px-3 py-2 space-y-1.5"
                 >
                   <p className="text-xs font-medium text-foreground">AI found a possible fix</p>
-                  <p className="text-[11px] text-foreground/80 leading-snug">{candidate.userFacingSummary}</p>
-                  <p className="text-[10px] text-muted-foreground">
+                  <p className="text-[11px] text-foreground/80 leading-snug break-words">{candidate.userFacingSummary}</p>
+                  <p className="text-[10px] text-muted-foreground break-words">
                     Risk:{' '}
                     <span
                       className={cn(
@@ -1528,7 +1528,7 @@ export default function PropertiesPanel({
                     </span>
                     {typeof candidate.confidence === 'number' ? ` · confidence ${Math.round(candidate.confidence * 100)}%` : ''}
                   </p>
-                  <div className="flex items-center gap-2 pt-1">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2 pt-1">
                     <Button
                       size="sm"
                       variant="outline"
@@ -1554,10 +1554,10 @@ export default function PropertiesPanel({
                 </div>
               ))}
             {pendingAiOperations.length > 0 && (
-              <div className="mr-auto max-w-[95%] rounded-sm border border-violet-500/35 bg-violet-500/5 px-3 py-2">
+              <div className="mr-auto min-w-0 max-w-full overflow-hidden rounded-sm border border-violet-500/35 bg-violet-500/5 px-3 py-2">
                 <p className="text-xs font-medium text-foreground">Pending AI changes</p>
                 {!pendingPreviewValid && (
-                  <p className="text-[10px] text-destructive mt-1">
+                  <p className="text-[10px] text-destructive mt-1 break-words">
                     Dry-run reported validation errors — applying is disabled until the suggestion validates.
                   </p>
                 )}
@@ -1570,15 +1570,15 @@ export default function PropertiesPanel({
                   {showAiDiffDetails ? 'Hide operation JSON' : 'View operation JSON'}
                 </button>
                 {showAiDiffDetails && (
-                  <pre className="mt-2 max-h-40 overflow-auto text-[10px] bg-muted/40 p-2 rounded border border-border/40">
+                  <pre className="mt-2 max-h-40 max-w-full overflow-auto rounded border border-border/40 bg-muted/40 p-2 text-[10px] whitespace-pre">
                     {JSON.stringify(pendingAiOperations, null, 2)}
                   </pre>
                 )}
               </div>
             )}
             {isAiLoading && (
-              <div className="flex flex-col gap-1 mr-auto items-start max-w-[85%]">
-                <div className="bg-muted/60 text-foreground/70 px-3 py-2 rounded-sm border border-border/40 flex items-center gap-2">
+              <div className="mr-auto flex min-w-0 max-w-full flex-col items-start gap-1">
+                <div className="flex min-w-0 max-w-full items-center gap-2 rounded-sm border border-border/40 bg-muted/60 px-3 py-2 text-foreground/70">
                   <Loader2 className="h-3 w-3 text-muted-foreground/60 animate-spin" />
                   <span className="text-xs">Processing...</span>
                 </div>
@@ -1588,7 +1588,8 @@ export default function PropertiesPanel({
         </ScrollArea>
 
         {pendingAiOperations.length > 0 && (
-          <div className="px-4 py-2 border-t border-border/40 bg-muted/20 flex flex-wrap items-center gap-2 shrink-0">
+          <div className="grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-t border-border/40 bg-muted/20 px-4 py-2 shrink-0">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
             <Button
               size="sm"
               className="h-7 text-xs"
@@ -1607,14 +1608,15 @@ export default function PropertiesPanel({
             >
               Discard
             </Button>
+            </div>
             <span className="text-[10px] text-muted-foreground ml-auto">
               {pendingAiOperations.length} op(s)
             </span>
           </div>
         )}
 
-        <div className="px-4 py-3 border-t border-border/40 bg-background shrink-0">
-          <div className="flex gap-2">
+        <div className="min-w-0 max-w-full px-4 py-3 border-t border-border/40 bg-background shrink-0">
+          <div className="flex min-w-0 max-w-full gap-2">
             <Input
               placeholder={
                 aiChatMode === 'analyze'
@@ -1625,7 +1627,7 @@ export default function PropertiesPanel({
               onChange={(e) => setAiInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleAiSend()}
               disabled={isAiLoading}
-              className="flex-1 h-8 text-xs border-border/60 focus-visible:ring-1 focus-visible:ring-ring/50"
+              className="min-w-0 flex-1 h-8 text-xs border-border/60 focus-visible:ring-1 focus-visible:ring-ring/50"
             />
             <Button
               size="icon"
@@ -2216,18 +2218,18 @@ export default function PropertiesPanel({
   if (!selectedNode) {
     return (
       <div
-        className={cn("relative bg-background h-full overflow-hidden flex flex-col", !debugMode && "border-l border-border/60")}
+        className={cn("relative bg-background h-full min-w-0 max-w-full overflow-hidden flex flex-col", !debugMode && "border-l border-border/60")}
         style={{ width: debugMode ? '100%' : PROPERTIES_PANEL_WIDTH, flexShrink: 0, boxSizing: 'border-box' }}
       >
 
         {/* Header with Professional Segmented Toggle */}
-        <div className="px-4 py-3 border-b border-border/40">
-          <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 max-w-full overflow-hidden px-4 py-3 border-b border-border/40">
+          <div className="flex min-w-0 max-w-full items-center justify-between gap-3">
             <ToggleGroup
               type="single"
               value={viewMode}
               onValueChange={(value) => value && setViewMode(value as ViewMode)}
-              className="justify-center flex-1"
+              className="min-w-0 justify-center flex-1"
             >
               <ToggleGroupItem
                 value="properties"
@@ -2274,8 +2276,8 @@ export default function PropertiesPanel({
         </div>
 
         {viewMode === 'properties' ? (
-          <div className="flex-1 flex items-center justify-center p-6">
-            <div className="text-center text-muted-foreground/70">
+          <div className="flex-1 min-w-0 flex items-center justify-center p-6">
+            <div className="min-w-0 max-w-full text-center text-muted-foreground/70">
               <HelpCircle className="h-7 w-7 mx-auto mb-3 opacity-40" />
               <p className="text-xs font-medium text-foreground/70">No node selected</p>
               <p className="text-xs mt-1.5 text-muted-foreground/60">
@@ -2294,8 +2296,8 @@ export default function PropertiesPanel({
   if (!selectedNode.data || !selectedNode.data.type) {
     console.warn('[PropertiesPanel] Node missing data or type:', selectedNode);
     return (
-      <div className="flex-1 flex items-center justify-center p-6">
-        <div className="text-center text-muted-foreground">
+      <div className="flex-1 min-w-0 flex items-center justify-center p-6">
+        <div className="min-w-0 max-w-full text-center text-muted-foreground">
           <HelpCircle className="h-8 w-8 mx-auto mb-3 opacity-50" />
           <p className="text-sm font-medium">Invalid Node</p>
           <p className="text-xs mt-1">This node has missing data. Please reload the workflow.</p>
@@ -2476,12 +2478,12 @@ export default function PropertiesPanel({
         (typeof value === 'object' && !Array.isArray(value) && Object.keys(value as object).length === 0);
       return (
         <div
-          className="text-xs text-muted-foreground border border-dashed border-border/60 rounded px-3 py-2.5 bg-muted/40 overflow-hidden"
+          className="min-w-0 max-w-full text-xs text-muted-foreground border border-dashed border-border/60 rounded px-3 py-2.5 bg-muted/40 overflow-hidden"
           role="status"
           aria-label="AI-managed field, empty until execution"
           data-testid="ai-managed-field"
         >
-          <p className="font-medium text-foreground/80 leading-snug">
+          <p className="font-medium text-foreground/80 leading-snug break-words">
             Filled automatically by AI at runtime
           </p>
           <p className="mt-1 leading-relaxed break-words">
@@ -2489,19 +2491,19 @@ export default function PropertiesPanel({
             intent. You don&apos;t need to configure it manually.
           </p>
           {isEmptyConfig && (
-            <p className="mt-2 text-[10px] text-muted-foreground/90 italic">
+            <p className="mt-2 text-[10px] text-muted-foreground/90 italic break-words">
               No value is stored in the workflow; it stays empty until execution.
             </p>
           )}
           {runtimeValueMeta && (
-            <div className="mt-2 p-2.5 rounded border border-border/40 bg-background/60 space-y-1.5">
+            <div className="mt-2 min-w-0 max-w-full overflow-hidden p-2.5 rounded border border-border/40 bg-background/60 space-y-1.5">
               <p className="text-[11px] text-foreground/80 font-medium leading-none">
                 Last runtime value (read-only)
               </p>
-              <p className="text-[10px] text-muted-foreground leading-snug">
-                {new Date(runtimeValueMeta.startedAt).toLocaleString()} • {runtimeValueMeta.source === 'runtime_ai' ? 'AI runtime' : 'Static config'}
+              <p className="text-[10px] text-muted-foreground leading-snug break-words">
+                {new Date(runtimeValueMeta.startedAt).toLocaleString()} - {runtimeValueMeta.source === 'runtime_ai' ? 'AI runtime' : 'Static config'}
               </p>
-              <pre className="max-h-28 overflow-auto rounded bg-muted/40 p-2 font-mono text-[10px] whitespace-pre-wrap break-all w-full">
+              <pre className="max-h-28 max-w-full overflow-auto rounded bg-muted/40 p-2 font-mono text-[10px] whitespace-pre-wrap break-all w-full">
                 {typeof runtimeValueMeta.value === 'string'
                   ? runtimeValueMeta.value
                   : JSON.stringify(runtimeValueMeta.value, null, 2)}
@@ -2517,19 +2519,19 @@ export default function PropertiesPanel({
       case 'cron':
         return (
           <DroppableFieldWrapper fieldKey={field.key} debugMode={debugMode}>
-            <div className="relative">
+            <div className="relative min-w-0 max-w-full overflow-hidden">
               <Input
                 id={field.key}
                 value={value as string}
                 onChange={(e) => handleConfigChange(field.key, e.target.value)}
                 placeholder={field.placeholder}
-                className="h-8 text-xs border-border/60 focus-visible:ring-1 focus-visible:ring-ring/50"
+                className="h-8 min-w-0 max-w-full text-xs border-border/60 focus-visible:ring-1 focus-visible:ring-ring/50"
                 onMouseDown={handleInputMouseDown}
                 onFocus={(e) => e.stopPropagation()}
               />
               {debugMode && isExpression && (
-                <div className="absolute top-0 right-0 bottom-0 flex items-center pr-2 text-xs text-muted-foreground/70 bg-muted/20 rounded-r-md pointer-events-none">
-                  <span className="font-mono text-[10px]">{String(resolvedValue)} ({resolvedType})</span>
+                <div className="absolute top-0 right-0 bottom-0 flex max-w-[55%] items-center overflow-hidden pr-2 text-xs text-muted-foreground/70 bg-muted/20 rounded-r-md pointer-events-none">
+                  <span className="font-mono text-[10px] truncate">{String(resolvedValue)} ({resolvedType})</span>
                 </div>
               )}
             </div>
@@ -2545,7 +2547,7 @@ export default function PropertiesPanel({
               value={value as string}
               onChange={(e) => handleConfigChange(field.key, e.target.value)}
               placeholder={field.placeholder || '09:00'}
-              className="h-8 text-xs border-border/60 focus-visible:ring-1 focus-visible:ring-ring/50"
+              className="h-8 min-w-0 max-w-full text-xs border-border/60 focus-visible:ring-1 focus-visible:ring-ring/50"
               onMouseDown={handleInputMouseDown}
               onFocus={(e) => e.stopPropagation()}
             />
@@ -2561,7 +2563,7 @@ export default function PropertiesPanel({
                 value={value}
                 onChange={(e) => handleConfigChange(field.key, e.target.value)}
                 placeholder={field.placeholder || 'YYYY-MM-DD'}
-                className="h-8 text-xs border-border/60 focus-visible:ring-1 focus-visible:ring-ring/50"
+                className="h-8 min-w-0 max-w-full text-xs border-border/60 focus-visible:ring-1 focus-visible:ring-ring/50"
                 onMouseDown={handleInputMouseDown}
                 onFocus={(e) => e.stopPropagation()}
               />
@@ -2580,7 +2582,7 @@ export default function PropertiesPanel({
               value={dateValue}
               onChange={(e) => handleConfigChange(field.key, e.target.value)}
               placeholder={field.placeholder || 'YYYY-MM-DD'}
-              className="h-8 text-xs border-border/60 focus-visible:ring-1 focus-visible:ring-ring/50"
+              className="h-8 min-w-0 max-w-full text-xs border-border/60 focus-visible:ring-1 focus-visible:ring-ring/50"
               onMouseDown={handleInputMouseDown}
               onFocus={(e) => e.stopPropagation()}
             />
@@ -2592,7 +2594,7 @@ export default function PropertiesPanel({
       case 'json':
         return (
           <DroppableFieldWrapper fieldKey={field.key} debugMode={debugMode}>
-            <div className="relative">
+            <div className="relative min-w-0 max-w-full overflow-hidden">
               <Textarea
                 id={field.key}
                 value={typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
@@ -2626,12 +2628,12 @@ export default function PropertiesPanel({
                   }
                 }}
                 placeholder={field.placeholder}
-                className="min-h-[100px] font-mono text-xs border-border/60 focus-visible:ring-1 focus-visible:ring-ring/50"
+                className="min-h-[100px] min-w-0 max-w-full font-mono text-xs border-border/60 focus-visible:ring-1 focus-visible:ring-ring/50"
                 onMouseDown={handleInputMouseDown}
                 onFocus={(e) => e.stopPropagation()}
               />
               {debugMode && isExpression && (
-                <div className="absolute top-2 right-2 text-xs text-muted-foreground/70 bg-muted/20 px-2 py-1 rounded pointer-events-none max-w-[200px]">
+                <div className="absolute top-2 right-2 max-w-[70%] overflow-hidden text-xs text-muted-foreground/70 bg-muted/20 px-2 py-1 rounded pointer-events-none">
                   <div className="font-mono text-[10px] whitespace-pre-wrap break-words">
                     {String(resolvedValue)} ({resolvedType})
                   </div>
@@ -2644,20 +2646,20 @@ export default function PropertiesPanel({
       case 'number':
         return (
           <DroppableFieldWrapper fieldKey={field.key} debugMode={debugMode}>
-            <div className="relative">
+            <div className="relative min-w-0 max-w-full overflow-hidden">
               <Input
                 id={field.key}
                 type="number"
                 value={value as number}
                 onChange={(e) => handleConfigChange(field.key, parseFloat(e.target.value))}
                 placeholder={field.placeholder}
-                className="h-8 text-xs border-border/60 focus-visible:ring-1 focus-visible:ring-ring/50"
+                className="h-8 min-w-0 max-w-full text-xs border-border/60 focus-visible:ring-1 focus-visible:ring-ring/50"
                 onMouseDown={handleInputMouseDown}
                 onFocus={(e) => e.stopPropagation()}
               />
               {debugMode && isExpression && (
-                <div className="absolute top-0 right-0 bottom-0 flex items-center pr-2 text-xs text-muted-foreground/70 bg-muted/20 rounded-r-md pointer-events-none">
-                  <span className="font-mono text-[10px]">{String(resolvedValue)} ({resolvedType})</span>
+                <div className="absolute top-0 right-0 bottom-0 flex max-w-[55%] items-center overflow-hidden pr-2 text-xs text-muted-foreground/70 bg-muted/20 rounded-r-md pointer-events-none">
+                  <span className="font-mono text-[10px] truncate">{String(resolvedValue)} ({resolvedType})</span>
                 </div>
               )}
             </div>
@@ -2687,11 +2689,11 @@ export default function PropertiesPanel({
         // If this is an AI-managed field OR only JSON options exist, show AI message
         if (isAIManagedField || (!hasNonJsonOptions && sourceOptions.length > 0)) {
           return (
-            <div className="text-xs text-muted-foreground border border-dashed border-border/60 rounded px-3 py-2 bg-muted/40">
-              <p className="font-medium text-foreground/80">
+            <div className="min-w-0 max-w-full overflow-hidden text-xs text-muted-foreground border border-dashed border-border/60 rounded px-3 py-2 bg-muted/40">
+              <p className="font-medium text-foreground/80 break-words">
                 Filled automatically by AI at runtime
               </p>
-              <p className="mt-1">
+              <p className="mt-1 break-words">
                 This field will be generated dynamically from previous node output and your workflow
                 intent. No manual selection is required.
               </p>
@@ -2703,14 +2705,14 @@ export default function PropertiesPanel({
         const activeContextHints =
           field.contextHints?.filter((h) => String(value ?? '') === h.whenValue) ?? [];
         return (
-          <div className="space-y-2">
+          <div className="min-w-0 max-w-full space-y-2 overflow-hidden">
             <Select
               value={value as string}
               onValueChange={(val) => handleConfigChange(field.key, val)}
             >
               <SelectTrigger
                 id={field.key}
-                className="h-8 text-xs border-border/60 focus:ring-1 focus:ring-ring/50"
+                className="h-8 min-w-0 max-w-full text-xs border-border/60 focus:ring-1 focus:ring-ring/50"
               >
                 <SelectValue placeholder={`Select ${field.label.toLowerCase()}`} />
               </SelectTrigger>
@@ -2726,11 +2728,11 @@ export default function PropertiesPanel({
               </SelectContent>
             </Select>
             {activeContextHints.length > 0 && (
-              <div className="space-y-1.5" role="note">
+              <div className="min-w-0 max-w-full space-y-1.5 overflow-hidden" role="note">
                 {activeContextHints.map((h) => (
                   <p
                     key={h.whenValue}
-                    className="text-xs text-muted-foreground/90 leading-relaxed border border-border/50 rounded-md px-2.5 py-2 bg-muted/30"
+                    className="text-xs text-muted-foreground/90 leading-relaxed border border-border/50 rounded-md px-2.5 py-2 bg-muted/30 break-words"
                   >
                     {h.message}
                   </p>
@@ -2896,17 +2898,17 @@ export default function PropertiesPanel({
 
   return (
     <div
-      className={cn("relative bg-background h-full overflow-hidden flex flex-col", !debugMode && "border-l border-border/60")}
+      className={cn("relative bg-background h-full min-w-0 max-w-full overflow-hidden flex flex-col", !debugMode && "border-l border-border/60")}
       style={{ width: debugMode ? '100%' : PROPERTIES_PANEL_WIDTH, flexShrink: 0, boxSizing: 'border-box' }}
     >
 
       {/* Header with Professional Segmented Toggle */}
-      <div className="px-4 py-3 border-b border-border/40 flex min-w-0 items-center justify-between gap-3">
+      <div className="px-4 py-3 border-b border-border/40 flex min-w-0 max-w-full items-center justify-between gap-3 overflow-hidden">
         <ToggleGroup
           type="single"
           value={viewMode}
           onValueChange={(value) => value && setViewMode(value as ViewMode)}
-          className="justify-start flex-shrink-0"
+          className="min-w-0 justify-start flex-shrink-0"
         >
           <ToggleGroupItem
             value="properties"
@@ -2935,7 +2937,7 @@ export default function PropertiesPanel({
             AI Editor
           </ToggleGroupItem>
         </ToggleGroup>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex min-w-0 shrink-0 items-center gap-1.5 overflow-hidden">
           {/* Test Node button — visible only for Type 1 nodes that have fixtures */}
           {viewMode === 'properties' && !(backendSchema?.credentialSchema && Object.keys(backendSchema.credentialSchema).length > 0) && (
             <button
@@ -2944,17 +2946,17 @@ export default function PropertiesPanel({
               title="Test this node with a synthetic fixture (no credentials needed)"
               aria-label="Test node"
               className={cn(
-                'h-6 px-2 flex items-center gap-1 rounded-sm text-[10px] font-medium transition-colors duration-150',
+                'h-6 max-w-[84px] px-2 flex min-w-0 items-center gap-1 overflow-hidden rounded-sm text-[10px] font-medium transition-colors duration-150',
                 testNodeState === 'idle' && 'text-muted-foreground/70 hover:text-foreground hover:bg-muted/40',
                 testNodeState === 'running' && 'text-muted-foreground/50 cursor-not-allowed',
                 testNodeState === 'passed' && 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40',
                 testNodeState === 'failed' && 'text-destructive bg-destructive/10',
               )}
             >
-              {testNodeState === 'idle' && <><Play className="h-3 w-3" />Test</>}
-              {testNodeState === 'running' && <><Loader2 className="h-3 w-3 animate-spin" />Running</>}
-              {testNodeState === 'passed' && <>✅ {testNodeTimeMs}ms</>}
-              {testNodeState === 'failed' && <>❌ Failed</>}
+              {testNodeState === 'idle' && <><Play className="h-3 w-3 shrink-0" /><span className="truncate">Test</span></>}
+              {testNodeState === 'running' && <><Loader2 className="h-3 w-3 shrink-0 animate-spin" /><span className="truncate">Running</span></>}
+              {testNodeState === 'passed' && <span className="truncate">OK {testNodeTimeMs}ms</span>}
+              {testNodeState === 'failed' && <span className="truncate">Failed</span>}
             </button>
           )}
           {/* Facebook Connection Button - Show in header when Facebook node is selected */}
@@ -2996,7 +2998,7 @@ export default function PropertiesPanel({
 
       {viewMode === 'properties' ? (
         <>
-          <ScrollArea className="flex-1 min-w-0 overflow-x-hidden">
+          <ScrollArea className="flex-1 min-h-0 min-w-0 max-w-full overflow-x-hidden">
             <div className="min-w-0 max-w-full overflow-x-hidden px-4 py-4 space-y-4">
               {guidedStatus && (
                 <GuidedStatusCard
@@ -3012,14 +3014,14 @@ export default function PropertiesPanel({
               )}
               {/* Test Node error banner */}
               {testNodeState === 'failed' && testNodeError && (
-                <div className="px-3 py-2 rounded-md bg-destructive/10 border border-destructive/30 text-xs text-destructive flex items-start gap-2">
+                <div className="min-w-0 max-w-full overflow-hidden px-3 py-2 rounded-md bg-destructive/10 border border-destructive/30 text-xs text-destructive flex items-start gap-2">
                   <XCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                  <span className="break-words">{testNodeError}</span>
+                  <span className="min-w-0 break-words">{testNodeError}</span>
                 </div>
               )}
               {/* Usage Guide Card - For All Nodes */}
               {NODE_USAGE_GUIDES[selectedNode.data.type] && (
-                <div className="mb-1">
+                <div className="mb-1 min-w-0 max-w-full overflow-hidden">
                   <NodeUsageCard
                     guide={NODE_USAGE_GUIDES[selectedNode.data.type]}
                     nodeLabel={selectedNode.data.label}
@@ -3028,19 +3030,19 @@ export default function PropertiesPanel({
               )}
 
               {/* Node Info */}
-              <div className="space-y-3">
-                <div>
+              <div className="min-w-0 max-w-full space-y-3 overflow-hidden">
+                <div className="min-w-0 max-w-full overflow-hidden">
                   <Label className="text-xs font-medium text-muted-foreground/70">Type</Label>
-                  <p className="text-xs font-medium text-foreground/90 mt-1">{canonicalTypeDisplayName}</p>
-                  <p className="text-[10px] text-muted-foreground/60 mt-0.5 font-mono">{selectedNode.data.type}</p>
+                  <p className="text-xs font-medium text-foreground/90 mt-1 break-words">{canonicalTypeDisplayName}</p>
+                  <p className="text-[10px] text-muted-foreground/60 mt-0.5 font-mono break-all">{selectedNode.data.type}</p>
                 </div>
                 {canvasLabelDiffersFromImplementation && (
-                  <div>
+                  <div className="min-w-0 max-w-full overflow-hidden">
                     <Label className="text-xs font-medium text-muted-foreground/70">Canvas label</Label>
-                    <p className="text-xs text-foreground/80 mt-1">{canvasLabel}</p>
-                    <p className="text-[10px] text-amber-600/90 dark:text-amber-500/90 mt-1 leading-snug">
+                    <p className="text-xs text-foreground/80 mt-1 break-words">{canvasLabel}</p>
+                    <p className="text-[10px] text-amber-600/90 dark:text-amber-500/90 mt-1 leading-snug break-words">
                       Label text can differ from the implementation type. Fields and overview below follow{' '}
-                      <span className="font-mono">{selectedNode.data.type}</span>
+                      <span className="font-mono break-all">{selectedNode.data.type}</span>
                       {legacyNodeDefinition?.category === 'ai' &&
                       /\b(email|gmail|mail)\b/i.test(canvasLabel)
                         ? ' — this is an AI/LLM node, not an email sender; use a Gmail (google_gmail) node to send mail, or regenerate the step.'
@@ -3048,9 +3050,9 @@ export default function PropertiesPanel({
                     </p>
                   </div>
                 )}
-                <div>
+                <div className="min-w-0 max-w-full overflow-hidden">
                   <Label className="text-xs font-medium text-muted-foreground/70">Description</Label>
-                  <p className="text-xs text-muted-foreground/70 mt-1 leading-relaxed">{nodeDefinition?.description || 'No description available'}</p>
+                  <p className="text-xs text-muted-foreground/70 mt-1 leading-relaxed break-words">{nodeDefinition?.description || 'No description available'}</p>
                 </div>
               </div>
 
@@ -3059,18 +3061,18 @@ export default function PropertiesPanel({
                 <>
                   {/* Form Settings for Form Nodes - Show prominently at the top */}
                   {selectedNode.data.type === 'form' && (
-                    <div className="space-y-4">
+                    <div className="min-w-0 max-w-full space-y-4 overflow-hidden">
                       <h3 className="text-xs font-medium uppercase text-muted-foreground/70 tracking-wide">
                         Form Settings
                       </h3>
 
                       {/* Activation Toggle */}
-                      <div className="flex items-center justify-between p-3 border border-border/40 rounded-sm bg-muted/20">
-                        <div className="space-y-0.5 flex-1">
+                      <div className="flex min-w-0 max-w-full items-center justify-between gap-3 overflow-hidden p-3 border border-border/40 rounded-sm bg-muted/20">
+                        <div className="min-w-0 space-y-0.5 flex-1">
                           <Label htmlFor="form-activation" className="text-xs font-medium text-foreground/90">
                             Activate Workflow
                           </Label>
-                          <p className="text-xs text-muted-foreground/70 mt-1 leading-relaxed">
+                          <p className="text-xs text-muted-foreground/70 mt-1 leading-relaxed break-words">
                             {isWorkflowActive
                               ? "Workflow is active and waiting for form submissions"
                               : "Activate to start accepting form submissions"}
@@ -3086,9 +3088,9 @@ export default function PropertiesPanel({
                       </div>
 
                       {/* Form URL Display */}
-                      <div className="space-y-3 p-3 bg-muted/30 rounded-sm border border-border/40">
-                        <div className="space-y-2.5">
-                          <div className="flex items-center gap-2">
+                      <div className="min-w-0 max-w-full overflow-hidden space-y-3 p-3 bg-muted/30 rounded-sm border border-border/40">
+                        <div className="min-w-0 max-w-full space-y-2.5 overflow-hidden">
+                          <div className="flex min-w-0 items-center gap-2 overflow-hidden">
                             <Label className="text-xs font-medium text-foreground/90">Form URL</Label>
                             {!workflowId && (
                               <span className="text-xs text-muted-foreground/70 font-medium">
@@ -3098,7 +3100,7 @@ export default function PropertiesPanel({
                           </div>
                           {workflowId ? (
                             <>
-                              <div className="flex gap-2 items-center">
+                              <div className="flex min-w-0 max-w-full gap-2 items-center overflow-hidden">
                                 <div className="flex-1 min-w-0 p-2 border border-border/40 rounded-sm bg-background">
                                   <code className="text-xs font-mono break-all whitespace-normal text-foreground/80">
                                     {formPublicUrl ?? '(No form trigger in graph — save a workflow with a form node)'}
@@ -3137,17 +3139,17 @@ export default function PropertiesPanel({
                                   <ExternalLink className="h-3.5 w-3.5" />
                                 </Button>
                               </div>
-                              <p className="text-xs text-muted-foreground/70 leading-relaxed">
+                              <p className="text-xs text-muted-foreground/70 leading-relaxed break-words">
                                 Share this URL with users to collect form submissions. Submissions will automatically trigger your workflow.
                               </p>
-                              <div className="p-2.5 bg-muted/40 border border-border/40 rounded-sm">
-                                <p className="text-xs text-muted-foreground/80 leading-relaxed">
+                              <div className="min-w-0 max-w-full overflow-hidden p-2.5 bg-muted/40 border border-border/40 rounded-sm">
+                                <p className="text-xs text-muted-foreground/80 leading-relaxed break-words">
                                   <strong className="font-medium">Note:</strong> The workflow must be saved and active for the form to work. Users can access this URL directly in their browser to fill out and submit the form.
                                 </p>
                               </div>
                             </>
                           ) : (
-                            <div className="p-2.5 bg-muted/40 border border-border/40 rounded-sm text-xs text-muted-foreground/80">
+                            <div className="min-w-0 max-w-full overflow-hidden p-2.5 bg-muted/40 border border-border/40 rounded-sm text-xs text-muted-foreground/80 break-words">
                               <strong className="font-medium">Save Required:</strong> Please save the workflow first to generate the form link.
                             </div>
                           )}
@@ -3158,13 +3160,13 @@ export default function PropertiesPanel({
 
                   {/* Chat URL Display - Show when chat trigger node is selected */}
                   {selectedNode.data.type === 'chat_trigger' && (
-                    <div className="space-y-4">
+                    <div className="min-w-0 max-w-full space-y-4 overflow-hidden">
                       <h3 className="text-xs font-medium uppercase text-muted-foreground/70 tracking-wide">
                         Chat Settings
                       </h3>
-                      <div className="space-y-3 p-3 bg-muted/30 rounded-sm border border-border/40">
-                        <div className="space-y-2.5">
-                          <div className="flex items-center gap-2">
+                      <div className="min-w-0 max-w-full overflow-hidden space-y-3 p-3 bg-muted/30 rounded-sm border border-border/40">
+                        <div className="min-w-0 max-w-full space-y-2.5 overflow-hidden">
+                          <div className="flex min-w-0 items-center gap-2 overflow-hidden">
                             <Label className="text-xs font-medium text-foreground/90">Chat URL</Label>
                             {!workflowId && (
                               <span className="text-xs text-muted-foreground/70 font-medium">
@@ -3174,7 +3176,7 @@ export default function PropertiesPanel({
                           </div>
                           {workflowId ? (
                             <>
-                              <div className="flex gap-2 items-center">
+                              <div className="flex min-w-0 max-w-full gap-2 items-center overflow-hidden">
                                 <div className="flex-1 min-w-0 p-2 border border-border/40 rounded-sm bg-background">
                                   <code className="text-xs font-mono break-all whitespace-normal text-foreground/80">
                                     {`${window.location.origin}/chat/${workflowId}/${selectedNode.id}`}
@@ -3211,17 +3213,17 @@ export default function PropertiesPanel({
                                   <ExternalLink className="h-3.5 w-3.5" />
                                 </Button>
                               </div>
-                              <p className="text-xs text-muted-foreground/70 leading-relaxed">
+                              <p className="text-xs text-muted-foreground/70 leading-relaxed break-words">
                                 Share this URL to open the chat interface. Each message will trigger a new workflow execution (like webhook). Messages will appear in the execution console.
                               </p>
-                              <div className="p-2.5 bg-muted/40 border border-border/40 rounded-sm">
-                                <p className="text-xs text-muted-foreground/80 leading-relaxed">
+                              <div className="min-w-0 max-w-full overflow-hidden p-2.5 bg-muted/40 border border-border/40 rounded-sm">
+                                <p className="text-xs text-muted-foreground/80 leading-relaxed break-words">
                                   <strong className="font-medium">Note:</strong> The workflow must be saved and active for the chat to work. Each message creates a new workflow execution from the start.
                                 </p>
                               </div>
                             </>
                           ) : (
-                            <div className="p-2.5 bg-muted/40 border border-border/40 rounded-sm text-xs text-muted-foreground/80">
+                            <div className="min-w-0 max-w-full overflow-hidden p-2.5 bg-muted/40 border border-border/40 rounded-sm text-xs text-muted-foreground/80 break-words">
                               <strong className="font-medium">Save Required:</strong> Please save the workflow first to generate the chat link.
                             </div>
                           )}
@@ -3232,7 +3234,7 @@ export default function PropertiesPanel({
 
                   {/* Form Node Settings */}
                   {selectedNode.data.type === 'form' ? (
-                    <div className="space-y-4">
+                    <div className="min-w-0 max-w-full space-y-4 overflow-hidden">
                       <h3 className="text-xs font-medium uppercase text-muted-foreground/70 tracking-wide">
                         Form Configuration
                       </h3>
@@ -3262,7 +3264,7 @@ export default function PropertiesPanel({
                     <>
                       {/* Schema-driven nodes use the universal field card renderer. */}
                       {selectedNode.data.type === 'schedule' ? (
-                        <div className="space-y-4">
+                        <div className="min-w-0 max-w-full space-y-4 overflow-hidden">
                           <h3 className="text-xs font-medium uppercase text-muted-foreground/70 tracking-wide">
                             Configuration
                           </h3>
@@ -3355,12 +3357,12 @@ export default function PropertiesPanel({
                           />
                         </div>
                       ) : selectedNode.data.type === 'interval' ? (
-                        <div className="space-y-4">
+                        <div className="min-w-0 max-w-full space-y-4 overflow-hidden">
                           <h3 className="text-xs font-medium uppercase text-muted-foreground/70 tracking-wide">
                             Configuration
                           </h3>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1.5">
+                          <div className="grid min-w-0 max-w-full grid-cols-2 gap-3">
+                            <div className="min-w-0 space-y-1.5">
                               <label className="text-xs text-muted-foreground">Interval</label>
                               <Input
                                 type="number"
@@ -3380,7 +3382,7 @@ export default function PropertiesPanel({
                                 }}
                               />
                             </div>
-                            <div className="space-y-1.5">
+                            <div className="min-w-0 space-y-1.5">
                               <label className="text-xs text-muted-foreground">Unit</label>
                               <Select
                                 value={(selectedNode.data.config?.unit as string) || 'minutes'}
@@ -3390,7 +3392,7 @@ export default function PropertiesPanel({
                                   await activateIntervalTrigger(value, unit);
                                 }}
                               >
-                                <SelectTrigger>
+                                <SelectTrigger className="min-w-0">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -3400,14 +3402,14 @@ export default function PropertiesPanel({
                               </Select>
                             </div>
                           </div>
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-xs text-muted-foreground break-words">
                             {!workflowId || workflowId === 'new'
                               ? 'Save the workflow first — the interval will activate automatically after saving.'
                               : 'Runs automatically at this interval once the workflow is active.'}
                           </p>
                         </div>
                       ) : selectedNode.data.type === 'schedulewise' ? (
-                        <div className="space-y-4">
+                        <div className="min-w-0 max-w-full space-y-4 overflow-hidden">
                           <h3 className="text-xs font-medium uppercase text-muted-foreground/70 tracking-wide">
                             Configuration
                           </h3>
@@ -3421,7 +3423,7 @@ export default function PropertiesPanel({
                           />
                         </div>
                       ) : (nodeDefinition.configFields && nodeDefinition.configFields.length > 0) ? (
-                        <div className="space-y-4">
+                        <div className="min-w-0 max-w-full space-y-4 overflow-hidden">
                           <h3 className="text-xs font-medium uppercase text-muted-foreground/70 tracking-wide">
                             Configuration
                           </h3>
@@ -3441,7 +3443,7 @@ export default function PropertiesPanel({
                               {}
                             ) as Record<string, string>;
                             return (
-                              <div className="space-y-3">
+                              <div className="min-w-0 max-w-full space-y-3 overflow-hidden">
                                 {requirements.map((requirement) => {
                                   const credentialTypeIds = Array.from(new Set([
                                     ...(requirement.credentialTypeIds || []),
@@ -3507,18 +3509,20 @@ export default function PropertiesPanel({
                                 ? 'LinkedIn Account'
                                 : 'Account';
                             return (
-                              <div className={`flex items-center gap-2 rounded-md px-3 py-2 text-xs border ${isConnected ? 'bg-green-500/5 border-green-500/30 text-green-700 dark:text-green-400' : 'bg-amber-500/5 border-amber-500/30 text-amber-700 dark:text-amber-400'}`}>
+                              <div className={`flex min-w-0 max-w-full items-center gap-2 overflow-hidden rounded-md px-3 py-2 text-xs border ${isConnected ? 'bg-green-500/5 border-green-500/30 text-green-700 dark:text-green-400' : 'bg-amber-500/5 border-amber-500/30 text-amber-700 dark:text-amber-400'}`}>
                                 <span className={`h-2 w-2 rounded-full flex-shrink-0 ${isConnected ? 'bg-green-500' : 'bg-amber-500'}`} />
-                                {isConnected
-                                  ? `${providerLabel} connected`
-                                  : `No ${providerLabel} connected — connect via the Connections panel`}
+                                <span className="min-w-0 break-words">
+                                  {isConnected
+                                    ? `${providerLabel} connected`
+                                    : `No ${providerLabel} connected - connect via the Connections panel`}
+                                </span>
                               </div>
                             );
                           })()}
                           {selectedNode.data.type === 'switch' && switchConfigHint && (
                             <div
                               role="status"
-                              className="text-xs text-amber-700 dark:text-amber-300 border border-amber-500/40 rounded-md px-3 py-2 bg-amber-500/5"
+                              className="min-w-0 max-w-full overflow-hidden text-xs text-amber-700 dark:text-amber-300 border border-amber-500/40 rounded-md px-3 py-2 bg-amber-500/5 break-words"
                             >
                               {switchConfigHint}
                             </div>
@@ -3657,14 +3661,14 @@ export default function PropertiesPanel({
                                             steps: buildReadableHelpSteps(effectiveHelpText, field.placeholder),
                                           });
                                         }}
-                                        className="flex min-w-0 shrink-0 items-center gap-1 text-[10px] font-medium text-muted-foreground/70 transition-colors hover:text-primary"
+                                        className="flex min-w-0 max-w-[150px] shrink items-center gap-1 overflow-hidden text-[10px] font-medium text-muted-foreground/70 transition-colors hover:text-primary"
                                       >
                                         <HelpCircle className="h-3 w-3" />
                                         <span className="max-w-[140px] truncate">{fieldHelpTitle}</span>
                                       </button>
                                     )}
                                     {hasAiValue && !fieldEnabled && (
-                                      <span className="text-[10px] text-sky-500/80 font-medium shrink-0">AI prefilled</span>
+                                      <span className="text-[10px] text-sky-500/80 font-medium shrink-0 truncate">AI prefilled</span>
                                     )}
                                   </div>
                                   {/* On/Off toggle */}
@@ -3678,7 +3682,7 @@ export default function PropertiesPanel({
 
                                 {/* ── When OFF: collapsed preview ── */}
                                 {!fieldEnabled && (
-                                  <div className="px-3 pb-2">
+                                  <div className="min-w-0 max-w-full overflow-hidden px-3 pb-2">
                                     {hasAiValue ? (
                                       <p className="text-[11px] text-muted-foreground/60 italic truncate">
                                         {typeof rawFieldValue === 'object'
@@ -3686,7 +3690,7 @@ export default function PropertiesPanel({
                                           : String(rawFieldValue).slice(0, 80)}
                                       </p>
                                     ) : (
-                                      <p className="text-[11px] text-muted-foreground/50 italic">Not configured</p>
+                                      <p className="text-[11px] text-muted-foreground/50 italic truncate">Not configured</p>
                                     )}
                                   </div>
                                 )}
@@ -3741,29 +3745,29 @@ export default function PropertiesPanel({
 
                                     {/* ✅ SCHEMA-DRIVEN UI: Show validation error inline */}
                                     {fieldError && (
-                                      <p className="text-xs text-destructive/80 flex items-center gap-1">
-                                        <XCircle className="h-3 w-3" />
-                                        {fieldError}
+                                      <p className="text-xs text-destructive/80 flex min-w-0 items-start gap-1 break-words">
+                                        <XCircle className="h-3 w-3 shrink-0 mt-0.5" />
+                                        <span className="min-w-0 break-words">{fieldError}</span>
                                       </p>
                                     )}
 
                                     {/* Input area — banner when runtime_ai, editable control otherwise */}
                                     {currentFillMode === 'runtime_ai' ? (
                                       <div
-                                        className="text-xs text-muted-foreground border border-dashed border-border/60 rounded px-3 py-2.5 bg-muted/40"
+                                        className="min-w-0 max-w-full overflow-hidden text-xs text-muted-foreground border border-dashed border-border/60 rounded px-3 py-2.5 bg-muted/40"
                                         data-testid="ai-managed-field"
                                       >
-                                        <p className="font-medium text-foreground/80 leading-snug">Filled automatically by AI at runtime</p>
+                                        <p className="font-medium text-foreground/80 leading-snug break-words">Filled automatically by AI at runtime</p>
                                         <p className="mt-1 leading-relaxed break-words">
                                           Switch to <strong>You</strong> above to enter a custom static value instead.
                                         </p>
                                         {lastResolvedInputs?.[selectedNode.id]?.[field.key] && (
-                                          <div className="mt-2 p-2.5 rounded border border-border/40 bg-background/60 space-y-1.5">
+                                          <div className="mt-2 min-w-0 max-w-full overflow-hidden p-2.5 rounded border border-border/40 bg-background/60 space-y-1.5">
                                             <p className="text-[11px] text-foreground/80 font-medium leading-none">Last runtime value</p>
-                                            <p className="text-[10px] text-muted-foreground leading-snug">
+                                            <p className="text-[10px] text-muted-foreground leading-snug break-words">
                                               {new Date(lastResolvedInputs[selectedNode.id][field.key].startedAt).toLocaleString()}
                                             </p>
-                                            <pre className="max-h-28 overflow-auto rounded bg-muted/40 p-2 font-mono text-[10px] whitespace-pre-wrap break-all w-full">
+                                            <pre className="max-h-28 max-w-full overflow-auto rounded bg-muted/40 p-2 font-mono text-[10px] whitespace-pre-wrap break-all w-full">
                                               {typeof lastResolvedInputs[selectedNode.id][field.key].value === 'string'
                                                 ? lastResolvedInputs[selectedNode.id][field.key].value as string
                                                 : JSON.stringify(lastResolvedInputs[selectedNode.id][field.key].value, null, 2)}
@@ -3774,14 +3778,14 @@ export default function PropertiesPanel({
                                     ) : (
                                       <div className="min-w-0 max-w-full space-y-1 overflow-hidden">
                                         {selectedNode.data.type === 'if_else' && field.key === 'conditions' ? (
-                                          <div className="space-y-2">
+                                          <div className="min-w-0 max-w-full space-y-2 overflow-hidden">
                                             <ToggleGroup
                                               type="single"
                                               value={ifElseConditionsEditorMode}
                                               onValueChange={(v) => {
                                                 if (v === 'builder' || v === 'json') setIfElseConditionsEditorMode(v);
                                               }}
-                                              className="justify-start"
+                                              className="min-w-0 max-w-full justify-start"
                                             >
                                               <ToggleGroupItem value="builder" className="text-xs px-2 py-1">Builder</ToggleGroupItem>
                                               <ToggleGroupItem value="json" className="text-xs px-2 py-1">JSON</ToggleGroupItem>
@@ -3799,7 +3803,7 @@ export default function PropertiesPanel({
                                                 />
                                               </Suspense>
                                             ) : (
-                                              <div className="space-y-2">
+                                              <div className="min-w-0 max-w-full space-y-2 overflow-hidden">
                                                 <Textarea
                                                   id={`${field.key}_json`}
                                                   value={ifElseConditionsJsonText}
@@ -3822,12 +3826,12 @@ export default function PropertiesPanel({
                                                     }
                                                   }}
                                                   placeholder={`[\n  { "field": "$json.age", "operator": "greater_than", "value": 18 }\n]`}
-                                                  className="min-h-[120px] font-mono text-xs border-border/60 focus-visible:ring-1 focus-visible:ring-ring/50"
+                                                  className="min-h-[120px] min-w-0 max-w-full font-mono text-xs border-border/60 focus-visible:ring-1 focus-visible:ring-ring/50"
                                                   onMouseDown={handleInputMouseDown}
                                                   onFocus={(e) => e.stopPropagation()}
                                                 />
                                                 {ifElseConditionsJsonError && (
-                                                  <p className="text-xs text-destructive/80 flex items-center gap-1">
+                                                  <p className="text-xs text-destructive/80 flex min-w-0 items-center gap-1 break-words">
                                                     <XCircle className="h-3 w-3" />
                                                     {ifElseConditionsJsonError}
                                                   </p>
