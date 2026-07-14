@@ -394,6 +394,79 @@ export class AIWorkflowEditor {
     };
   }
 
+  private summarizeValueForAiEditor(value: unknown, depth = 0): unknown {
+    if (value === null || value === undefined) return value;
+    if (typeof value === 'string') {
+      return value.length > 500 ? `${value.slice(0, 500)}...[truncated]` : value;
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') return value;
+    if (Array.isArray(value)) {
+      return value.slice(0, 8).map((item) => this.summarizeValueForAiEditor(item, depth + 1));
+    }
+    if (typeof value === 'object') {
+      if (depth >= 3) return '[object]';
+      const out: Record<string, unknown> = {};
+      for (const [key, nestedValue] of Object.entries(value as Record<string, unknown>).slice(0, 30)) {
+        if (/credential|secret|token|password|api[_-]?key|access[_-]?key|private[_-]?key/i.test(key)) {
+          out[key] = '[redacted]';
+        } else {
+          out[key] = this.summarizeValueForAiEditor(nestedValue, depth + 1);
+        }
+      }
+      return out;
+    }
+    return String(value);
+  }
+
+  private buildWorkflowNodePromptSummary(workflow: Workflow): Array<Record<string, unknown>> {
+    return workflow.nodes.map((node) => {
+      const data = (node.data || {}) as any;
+      const config = data.config && typeof data.config === 'object' ? data.config : {};
+      return {
+        id: node.id,
+        type: data.type || node.type,
+        label: data.label,
+        position: node.position,
+        configKeys: Object.keys(config),
+        config: this.summarizeValueForAiEditor(config),
+      };
+    });
+  }
+
+  private buildWorkflowEdgePromptSummary(workflow: Workflow): Array<Record<string, unknown>> {
+    return workflow.edges.map((edge) => ({
+      id: edge.id,
+      source: edge.source,
+      sourceHandle: (edge as any).sourceHandle,
+      target: edge.target,
+      targetHandle: (edge as any).targetHandle,
+      type: edge.type,
+    }));
+  }
+
+  private getSuggestStructuredOutputSchema(): Record<string, unknown> {
+    return {
+      type: 'object',
+      properties: {
+        message: { type: 'string' },
+        operations: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              kind: {
+                type: 'string',
+                enum: AI_EDITOR_MUTATION_OPERATION_KINDS,
+              },
+            },
+            required: ['kind'],
+          },
+        },
+      },
+      required: ['message', 'operations'],
+    };
+  }
+
   /**
    * LLM-backed structured edit suggestions with orchestrator dry-run for diff preview (no persistence).
    */
@@ -424,6 +497,8 @@ export class AIWorkflowEditor {
     const focusedNode = focusedNodeId
       ? workflow.nodes.find((n) => n.id === focusedNodeId)
       : undefined;
+    const nodePromptSummary = this.buildWorkflowNodePromptSummary(workflow);
+    const edgePromptSummary = this.buildWorkflowEdgePromptSummary(workflow);
 
     const opHelp = [
       'Allowed operation "kind" values ONLY:',
@@ -442,29 +517,23 @@ export class AIWorkflowEditor {
       '- operations: array of mutation operations following the schema below',
       'You are CtrlChecks AI Editor. Do not mention n8n, Zapier, Make, or competitor-specific settings unless the user explicitly asks for a comparison.',
       'Never invent node config keys. For any configOverrides, use only fields present in the selected node schema/default config supplied in this prompt.',
-      'If the user request can be implemented by multiple valid node types and the latest turn does not name one clearly, return a message asking the user to choose and an empty operations array.',
+      'If the user request is a graph rewrite (replace, swap, remove, delete, branch-specific change, or multiple existing nodes named), reason over the existing workflow graph and return the required operation array. Do not ask the user to choose a generic node type when the request already names the existing/source/target node type.',
+      'Only ask a clarification question with an empty operations array when the target node, target branch, or required destination service cannot be inferred from the workflow and conversation.',
       opHelp,
+      '=== GRAPH EDITING RULES ===',
+      [
+        '- For replacement requests, prefer replace_node on the exact existing node id. Keep upstream/downstream routing intact through the orchestrator.',
+        '- For deletion requests, use remove_node on the exact existing node id; do not fake deletion with empty config values.',
+        '- For branch or condition requests, inspect sourceHandle/targetHandle and condition-node config before choosing which node ids to replace or remove.',
+        '- For multi-part requests, return all necessary operations in one ordered operations array.',
+        '- For adding a terminal/log/result node, use add_node with positionHint after the final relevant node and include only supported config fields.',
+        '- If a selected target node type requires configuration and the user did not provide concrete field values, use safe schema/default values only when they are obvious from the request or existing comparable nodes; otherwise return a clear question and no operations.',
+        '- The message should explain what will change in plain English. It must not include raw JSON.',
+      ].join('\n'),
       '=== WORKFLOW NODES ===',
-      JSON.stringify(
-        workflow.nodes.map((n) => ({
-          id: n.id,
-          type: (n.data as any)?.type || n.type,
-          label: (n.data as any)?.label,
-        })),
-        null,
-        2
-      ),
+      JSON.stringify(nodePromptSummary, null, 2),
       '=== WORKFLOW EDGES ===',
-      JSON.stringify(
-        workflow.edges.map((e) => ({
-          id: e.id,
-          source: e.source,
-          target: e.target,
-          type: e.type,
-        })),
-        null,
-        2
-      ),
+      JSON.stringify(edgePromptSummary, null, 2),
       focusedNode
         ? `=== FOCUSED NODE ===\n${JSON.stringify({ id: focusedNode.id, type: (focusedNode.data as any)?.type || focusedNode.type }, null, 2)}`
         : '',
@@ -525,16 +594,23 @@ export class AIWorkflowEditor {
       const rawResult = await geminiOrchestrator.processRequest('chat-generation', llmInput, {
         model: 'gemini-3.5-flash',
         temperature: 0.25,
+        structuredOutput: {
+          mimeType: 'application/json',
+          schema: this.getSuggestStructuredOutputSchema(),
+        },
       });
       const text =
         typeof rawResult === 'string'
           ? rawResult
           : (rawResult as any)?.content || JSON.stringify(rawResult);
-      const parsed = this.parseSuggestJson(text);
+      const parsed = await this.parseSuggestJsonWithRepair(text);
       message = parsed.message || message;
       operations = this.sanitizeMutationOperations(parsed.operations);
-    } catch (e: any) {
-      message = `Could not produce structured suggestions: ${e?.message || String(e)}`;
+    } catch {
+      message = [
+        'I could not safely convert that request into a validated workflow edit.',
+        'Please name the exact node or branch you want changed, or split the request into one replacement/removal at a time.',
+      ].join(' ');
       operations = [];
     }
 
@@ -561,6 +637,40 @@ export class AIWorkflowEditor {
       message: typeof obj.message === 'string' ? obj.message : '',
       operations: Array.isArray(obj.operations) ? obj.operations : [],
     };
+  }
+
+  private async parseSuggestJsonWithRepair(text: string): Promise<{ message: string; operations: unknown[] }> {
+    try {
+      return this.parseSuggestJson(text);
+    } catch (parseError: any) {
+      const repairPrompt = [
+        'Repair the following AI workflow editor response into valid JSON.',
+        'Return ONLY one JSON object with keys "message" and "operations".',
+        'The operations array must contain only these operation kinds:',
+        AI_EDITOR_MUTATION_OPERATION_KINDS.join(', '),
+        'Do not add explanations, markdown, or fields that are not present or inferable from the broken response.',
+        '',
+        'Broken response:',
+        text.length > 8000 ? `${text.slice(0, 8000)}\n...[truncated]` : text,
+        '',
+        `Parser error: ${parseError?.message || String(parseError)}`,
+      ].join('\n');
+
+      const repaired = await geminiOrchestrator.processRequest('chat-generation', repairPrompt, {
+        model: 'gemini-3.1-flash-lite',
+        temperature: 0,
+        cache: false,
+        structuredOutput: {
+          mimeType: 'application/json',
+          schema: this.getSuggestStructuredOutputSchema(),
+        },
+      });
+      const repairedText =
+        typeof repaired === 'string'
+          ? repaired
+          : (repaired as any)?.content || JSON.stringify(repaired);
+      return this.parseSuggestJson(repairedText);
+    }
   }
 
   private sanitizeMutationOperations(raw: unknown[]): AiEditorMutationOperation[] {

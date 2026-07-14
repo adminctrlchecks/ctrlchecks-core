@@ -62,8 +62,8 @@ interface UnifiedAiEditorNodeCandidate {
 function classifyUnifiedAiEditorIntent(prompt: string, hasExecutionContext: boolean): UnifiedAiEditorIntent {
   const text = prompt.toLowerCase();
   const editIntent =
-    /\b(add|apply|build|change|connect|create|delete|do it|fix|implement|insert|make|modify|move|preview|remove|replace|set|switch|update)\b/.test(text) ||
-    /\b(can you|please)\b.*\b(fix|change|update|add|remove|replace|set|connect|implement)\b/.test(text);
+    /\b(add|apply|build|change|connect|create|delete|do it|fix|implement|insert|log|make|modify|move|output|preview|print|remove|replace|return|set|swap|switch|update)\b/.test(text) ||
+    /\b(can you|please)\b.*\b(fix|change|update|add|remove|replace|set|connect|implement|print|output|log|return)\b/.test(text);
   const analysisIntent =
     hasExecutionContext ||
     /\b(analy[sz]e|compare|data|debug|explain|fail|failed|failure|happen|happened|history|output|run|runs|why|what)\b/.test(text);
@@ -71,6 +71,44 @@ function classifyUnifiedAiEditorIntent(prompt: string, hasExecutionContext: bool
   if (editIntent && analysisIntent) return 'mixed';
   if (editIntent) return 'propose_change';
   return hasExecutionContext ? 'explain_run' : 'explain_workflow';
+}
+
+function isGraphRewritePrompt(prompt: string): boolean {
+  const text = normalizeSearchText(prompt);
+  if (!text) return false;
+
+  const structuralAction =
+    /\b(change|delete|remove|replace|swap|switch|update)\b/.test(text) ||
+    /\b(update it with|replace it with|replace .* with|swap .* with)\b/.test(text);
+  const branchLanguage =
+    /\b(when|if|else|condition|case|branch|path|route|routes|status|success|sucess|successful|failed|failure|false|true|pending)\b/.test(text);
+  const existingGraphLanguage =
+    /\b(existing|current|node|nodes|gmail|slack|switch|if else|condition)\b/.test(text);
+
+  return structuralAction || (branchLanguage && existingGraphLanguage);
+}
+
+function isAmbiguousNewNodePrompt(prompt: string): boolean {
+  const text = normalizeSearchText(prompt);
+  if (!text) return false;
+  if (isGraphRewritePrompt(prompt)) return false;
+  return /\b(add|append|create|insert|make|build|send|post|notify|print|output|log|return)\b/.test(text);
+}
+
+function countExplicitCandidateMentions(
+  prompt: string,
+  candidates: UnifiedAiEditorNodeCandidate[]
+): number {
+  const promptText = normalizeSearchText(prompt);
+  let count = 0;
+  for (const candidate of candidates) {
+    const nodeType = normalizeSearchText(candidate.nodeType);
+    const label = normalizeSearchText(candidate.label);
+    if ((nodeType && promptText.includes(nodeType)) || (label && promptText.includes(label))) {
+      count += 1;
+    }
+  }
+  return count;
 }
 
 function normalizeSearchText(value: unknown): string {
@@ -185,10 +223,13 @@ function shouldClarifyNodeChoice(
   if (selectedNodeType) return false;
   if (intent !== 'propose_change' && intent !== 'mixed') return false;
   if (candidates.length < 2) return false;
+  if (!isAmbiguousNewNodePrompt(prompt)) return false;
 
   const promptText = normalizeSearchText(prompt);
   const top = candidates[0];
   const second = candidates[1];
+  const explicitMentions = countExplicitCandidateMentions(prompt, candidates);
+  if (explicitMentions >= 2) return false;
   const topExplicit =
     promptText.includes(normalizeSearchText(top.nodeType)) ||
     promptText.includes(normalizeSearchText(top.label));
