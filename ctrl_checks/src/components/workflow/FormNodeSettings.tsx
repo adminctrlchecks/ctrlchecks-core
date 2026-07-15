@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
 import { InputGuideLink } from './InputGuideLink';
 import { normalizeFormFieldIdentity } from '@/lib/formFieldIdentity';
+import { cn } from '@/lib/utils';
 
 interface FormField {
   id: string;
@@ -50,8 +51,10 @@ function FormGuideLabel({
   className?: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-2">
-      <Label htmlFor={htmlFor} className={className}>{label}</Label>
+    // min-w-0 on both sides: the label wraps, the guide link truncates — the row never
+    // exceeds its container (flex children otherwise refuse to shrink below content width)
+    <div className="flex min-w-0 max-w-full items-center justify-between gap-2">
+      <Label htmlFor={htmlFor} className={cn('min-w-0 break-words', className)}>{label}</Label>
       <InputGuideLink
         fieldKey={fieldKey}
         fieldLabel={label}
@@ -173,7 +176,7 @@ export default function FormNodeSettings({ config, onConfigChange }: FormNodeSet
   };
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 max-w-full space-y-6">
       {/* Form Title */}
       <div className="space-y-2">
         <FormGuideLabel htmlFor="formTitle" label="Form Title" fieldKey="formTitle" helpText={formHelp.formTitle} />
@@ -199,9 +202,9 @@ export default function FormNodeSettings({ config, onConfigChange }: FormNodeSet
 
       {/* Form Fields */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Label>Form Fields</Label>
+        <div className="flex min-w-0 max-w-full items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <Label className="min-w-0 break-words">Form Fields</Label>
             <InputGuideLink
               fieldKey="fields"
               fieldLabel="Form Fields"
@@ -216,7 +219,7 @@ export default function FormNodeSettings({ config, onConfigChange }: FormNodeSet
             variant="outline"
             size="sm"
             onClick={handleAddField}
-            className="h-8"
+            className="h-8 shrink-0"
           >
             <Plus className="h-3 w-3 mr-1" />
             Add Field
@@ -232,11 +235,11 @@ export default function FormNodeSettings({ config, onConfigChange }: FormNodeSet
             config.fields.map((field, index) => {
               const fieldKey = field.id || field.key || field.name || `field-${index}`;
               return (
-              <div key={fieldKey} className="space-y-3 p-3 border rounded-md bg-background">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 space-y-3">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
+              <div key={fieldKey} className="min-w-0 max-w-full space-y-3 p-3 border rounded-md bg-background">
+                <div className="flex min-w-0 max-w-full items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1 space-y-3">
+                    <div className="grid min-w-0 max-w-full grid-cols-2 gap-2">
+                      <div className="min-w-0 space-y-1">
                         <FormGuideLabel htmlFor={`label-${fieldKey}`} label="Label" fieldKey="fieldLabel" helpText={formHelp.fieldLabel} className="text-xs" />
                         <Input
                           id={`label-${fieldKey}`}
@@ -246,7 +249,7 @@ export default function FormNodeSettings({ config, onConfigChange }: FormNodeSet
                           className="h-8 text-sm"
                         />
                       </div>
-                      <div className="space-y-1">
+                      <div className="min-w-0 space-y-1">
                         <FormGuideLabel htmlFor={`type-${fieldKey}`} label="Type" fieldKey="fieldType" fieldType="select" helpText={formHelp.fieldType} className="text-xs" />
                         <Select
                           value={field.type}
@@ -338,7 +341,7 @@ export default function FormNodeSettings({ config, onConfigChange }: FormNodeSet
                     variant="ghost"
                     size="icon"
                     onClick={() => handleRemoveField(fieldKey)}
-                    className="h-8 w-8 text-destructive hover:text-destructive"
+                    className="h-8 w-8 shrink-0 text-destructive hover:text-destructive"
                   >
                     <X className="h-4 w-4" />
                   </Button>
@@ -375,8 +378,8 @@ export default function FormNodeSettings({ config, onConfigChange }: FormNodeSet
 
       {/* Redirect URL */}
       <div className="space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <Label htmlFor="redirectUrl">Redirect URL (Optional)</Label>
+        <div className="flex min-w-0 max-w-full items-center justify-between gap-2">
+          <Label htmlFor="redirectUrl" className="min-w-0 break-words">Redirect URL (Optional)</Label>
           <InputGuideLink
             fieldKey="redirectUrl"
             fieldLabel="Redirect URL"

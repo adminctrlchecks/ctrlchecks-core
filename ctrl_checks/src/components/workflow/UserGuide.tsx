@@ -1,7 +1,6 @@
 import { X, BookOpen } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 
 interface UserGuideProps {
@@ -195,34 +194,36 @@ export function UserGuide({ isOpen, onClose, guideType, customTitle, customSteps
       />
       
       {/* Guide Container - Small size, positioned on right */}
-      <Card className="relative w-[380px] h-[500px] mr-4 shadow-2xl border-border/60 pointer-events-auto animate-in slide-in-from-right duration-300">
+      <Card className="relative w-[min(380px,92vw)] h-[500px] max-h-[85vh] mr-4 overflow-hidden shadow-2xl border-border/60 pointer-events-auto animate-in slide-in-from-right duration-300">
         <CardHeader className="pb-3 border-b border-border/40">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <BookOpen className="h-4 w-4 text-primary" />
-              <CardTitle className="text-sm font-semibold">{guide.title}</CardTitle>
+          <div className="flex min-w-0 items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <BookOpen className="h-4 w-4 shrink-0 text-primary" />
+              <CardTitle className="min-w-0 break-words text-sm font-semibold">{guide.title}</CardTitle>
             </div>
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6"
+              className="h-6 w-6 shrink-0"
               onClick={onClose}
             >
               <X className="h-4 w-4" />
             </Button>
           </div>
         </CardHeader>
-        
+
         <CardContent className="p-4 h-[calc(100%-80px)]">
-          <ScrollArea className="h-full">
-            <div className="space-y-2 pr-4">
+          {/* Plain overflow div, not Radix ScrollArea: its display:table viewport lets long
+              step text size the content wider than the card and clip */}
+          <div className="h-full min-w-0 max-w-full overflow-y-auto overflow-x-hidden">
+            <div className="min-w-0 max-w-full space-y-2 pr-4 break-words">
               {guide.url && (
                 <div className="mb-3 p-2 bg-primary/10 rounded-md border border-primary/20">
                   <a 
                     href={guide.url} 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="text-xs text-primary hover:underline flex items-center gap-1"
+                    className="text-xs text-primary hover:underline break-all"
                   >
                     🔗 {guide.url}
                   </a>
@@ -275,7 +276,7 @@ export function UserGuide({ isOpen, onClose, guideType, customTitle, customSteps
                 </div>
               )}
             </div>
-          </ScrollArea>
+          </div>
         </CardContent>
       </Card>
     </div>

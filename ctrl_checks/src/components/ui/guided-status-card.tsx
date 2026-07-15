@@ -69,14 +69,14 @@ export function GuidedStatusCard({
       <div className={cn('pointer-events-none absolute inset-0 bg-gradient-to-br opacity-70 animate-pulse', style.bg)} />
       <div className="relative flex items-start justify-between gap-2">
         <div className="min-w-0 space-y-2">
-          <div className="flex items-center gap-2">
-            <span className={cn('inline-flex h-6 w-6 items-center justify-center rounded-full bg-background/70', style.iconClass)}>
+          <div className="flex min-w-0 items-center gap-2">
+            <span className={cn('inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-background/70', style.iconClass)}>
               <ToneIcon tone={tone} />
             </span>
-            <p className="text-sm font-semibold text-foreground/95">{title}</p>
+            <p className="min-w-0 break-words text-sm font-semibold text-foreground/95">{title}</p>
           </div>
-          <p className="text-xs text-muted-foreground leading-relaxed">{description}</p>
-          {resolution && <p className="text-xs text-foreground/85">{resolution}</p>}
+          <p className="text-xs text-muted-foreground leading-relaxed break-words">{description}</p>
+          {resolution && <p className="text-xs text-foreground/85 break-words">{resolution}</p>}
           {missingItems.length > 0 && (
             <div className="rounded-md border border-border/50 bg-background/60 p-2">
               <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-foreground/70">

@@ -161,7 +161,6 @@ type AnalyzerStructuredContent = {
 
 type ViewMode = 'properties' | 'ai-editor';
 
-const PROPERTIES_PANEL_WIDTH = 360;
 
 function parseAnalyzerStructuredContent(content: string): AnalyzerStructuredContent | null {
   const trimmed = content.trim();
@@ -2228,8 +2227,9 @@ export default function PropertiesPanel({
   if (!selectedNode) {
     return (
       <div
-        className={cn("relative bg-background h-full min-w-0 max-w-full overflow-hidden flex flex-col", !debugMode && "border-l border-border/60")}
-        style={{ width: debugMode ? '100%' : PROPERTIES_PANEL_WIDTH, flexShrink: 0, boxSizing: 'border-box' }}
+        // Width-agnostic: hosts own the panel width and left border (see main render root)
+        className="relative bg-background h-full w-full min-w-0 max-w-full overflow-hidden flex flex-col"
+        style={{ flexShrink: 0, boxSizing: 'border-box' }}
       >
 
         {/* Header with Professional Segmented Toggle */}
@@ -2960,8 +2960,11 @@ export default function PropertiesPanel({
 
   return (
     <div
-      className={cn("relative bg-background h-full min-w-0 max-w-full overflow-hidden flex flex-col", !debugMode && "border-l border-border/60")}
-      style={{ width: debugMode ? '100%' : PROPERTIES_PANEL_WIDTH, flexShrink: 0, boxSizing: 'border-box' }}
+      // Width-agnostic: hosts own the panel width (WorkflowBuilder w-[360px], TemplateEditor
+      // w-80, DebugPanel flex-1) and draw their own left border — a hard-coded 360 here
+      // clipped 40px inside the 320px TemplateEditor host.
+      className="relative bg-background h-full w-full min-w-0 max-w-full overflow-hidden flex flex-col"
+      style={{ flexShrink: 0, boxSizing: 'border-box' }}
     >
 
       {/* Header with Professional Segmented Toggle */}

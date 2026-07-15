@@ -691,8 +691,8 @@ export const ScheduleTrigger: React.FC<ScheduleTriggerProps> = ({
 
         {/* Timezone Dropdown */}
         <div className="space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <Label htmlFor="timezone-select" className="text-sm font-medium">
+          <div className="flex min-w-0 max-w-full items-center justify-between gap-2">
+            <Label htmlFor="timezone-select" className="min-w-0 break-words text-sm font-medium">
               Timezone
             </Label>
             <InputGuideLink
@@ -724,7 +724,7 @@ export const ScheduleTrigger: React.FC<ScheduleTriggerProps> = ({
                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[400px] p-0" align="start">
+            <PopoverContent className="w-[min(400px,90vw)] p-0" align="start">
               <Command>
                 <CommandInput placeholder="Search timezone..." />
                 <CommandList>
@@ -771,8 +771,8 @@ export const ScheduleTrigger: React.FC<ScheduleTriggerProps> = ({
 
         {/* 24-Hour Digital Clock Picker */}
         <div className="space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <Label className="text-sm font-medium">Pick a time (daily schedule)</Label>
+          <div className="flex min-w-0 max-w-full items-center justify-between gap-2">
+            <Label className="min-w-0 break-words text-sm font-medium">Pick a time (daily schedule)</Label>
             <InputGuideLink
               fieldKey="dailyTime"
               fieldLabel="Pick a time"
@@ -782,7 +782,9 @@ export const ScheduleTrigger: React.FC<ScheduleTriggerProps> = ({
               className="mt-0"
             />
           </div>
-          <div className="flex items-center gap-4 p-4 border rounded-lg bg-muted/30">
+          {/* flex-wrap: the HH:MM steppers + live preview don't fit side by side in narrow
+              hosts (320–360px panel) — the preview wraps below instead of clipping */}
+          <div className="flex min-w-0 max-w-full flex-wrap items-center justify-center gap-2 p-3 border rounded-lg bg-muted/30">
             {/* Hour Selector */}
             <div className="flex flex-col items-center gap-2">
               <div className="flex items-center gap-1">

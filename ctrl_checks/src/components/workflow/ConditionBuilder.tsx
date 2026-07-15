@@ -219,17 +219,18 @@ export default function ConditionBuilder({ value, onChange, availableFields = []
   ].filter((f, i, arr) => arr.indexOf(f) === i); // Deduplicate
 
   return (
-    <div className={cn("space-y-3", className)}>
+    <div className={cn("min-w-0 max-w-full space-y-3", className)}>
       <Label className="text-xs font-medium">Conditions *</Label>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs text-muted-foreground break-words">
         Build conditions using fields, operators, and values. The workflow will branch based on these conditions.
       </p>
-      
+
       {conditions.map((condition, index) => (
-        <div key={index} className="flex items-start gap-2 p-3 border rounded-md bg-muted/30">
-          <div className="flex-1 grid grid-cols-3 gap-2">
+        <div key={index} className="flex min-w-0 max-w-full items-start gap-2 p-3 border rounded-md bg-muted/30">
+          {/* min-w-0 lets the grid shrink to the row; each cell gets min-w-0 so its content can't paint over the neighbor */}
+          <div className="min-w-0 flex-1 grid grid-cols-3 gap-2">
             {/* Field Selector */}
-            <div>
+            <div className="min-w-0">
               <Label className="text-xs text-muted-foreground mb-1 block">Field</Label>
               <Select
                 value={fieldSuggestions.includes(condition.field) ? condition.field : '__custom__'}
@@ -274,7 +275,7 @@ export default function ConditionBuilder({ value, onChange, availableFields = []
             </div>
 
             {/* Operator Selector */}
-            <div>
+            <div className="min-w-0">
               <Label className="text-xs text-muted-foreground mb-1 block">Operator</Label>
               <Select
                 value={condition.operator}
@@ -294,7 +295,7 @@ export default function ConditionBuilder({ value, onChange, availableFields = []
             </div>
 
             {/* Value Input */}
-            <div>
+            <div className="min-w-0">
               <Label className="text-xs text-muted-foreground mb-1 block">Value</Label>
               <Input
                 className="h-8 text-xs"
@@ -322,7 +323,7 @@ export default function ConditionBuilder({ value, onChange, availableFields = []
               type="button"
               variant="ghost"
               size="sm"
-              className="h-8 w-8 p-0 mt-6"
+              className="h-8 w-8 shrink-0 p-0 mt-6"
               onClick={() => removeCondition(index)}
             >
               <Trash2 className="h-4 w-4" />

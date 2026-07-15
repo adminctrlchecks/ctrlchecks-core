@@ -228,8 +228,8 @@ export default function ScheduleWiseSettings({
     <div className="space-y-4">
       {/* Credential Selector — first field */}
       <div className="space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <Label htmlFor="credentialId">
+        <div className="flex min-w-0 max-w-full items-center justify-between gap-2">
+          <Label htmlFor="credentialId" className="min-w-0 break-words">
             ScheduleWise Credentials <span className="text-destructive">*</span>
           </Label>
           <InputGuideLink
@@ -274,8 +274,8 @@ export default function ScheduleWiseSettings({
 
       {/* Operation */}
       <div className="space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <Label htmlFor="operation">
+        <div className="flex min-w-0 max-w-full items-center justify-between gap-2">
+          <Label htmlFor="operation" className="min-w-0 break-words">
             Operation <span className="text-destructive">*</span>
           </Label>
           <InputGuideLink
