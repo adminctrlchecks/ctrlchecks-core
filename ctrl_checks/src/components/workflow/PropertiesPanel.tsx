@@ -11,7 +11,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import NodeUsageCard from './NodeUsageCard';
 import FormNodeSettings from './FormNodeSettings';
@@ -635,13 +634,10 @@ export default function PropertiesPanel({
     }
   }, [selectedNode?.data.config, backendSchema, buildRuntimeAwareValidationErrors]);
 
-  // Auto-scroll AI messages
+  // Auto-scroll AI messages — the ref is the scrollable div itself
   useEffect(() => {
     if (aiScrollAreaRef.current && viewMode === 'ai-editor') {
-      const scrollContainer = aiScrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
-      if (scrollContainer) {
-        scrollContainer.scrollTop = scrollContainer.scrollHeight;
-      }
+      aiScrollAreaRef.current.scrollTop = aiScrollAreaRef.current.scrollHeight;
     }
   }, [aiMessages, viewMode]);
 
@@ -1448,7 +1444,8 @@ export default function PropertiesPanel({
           )}
         </div>
 
-        <ScrollArea className="flex-1 min-h-0 min-w-0 max-w-full overflow-hidden px-4 py-3" ref={aiScrollAreaRef}>
+        {/* Plain overflow div (see properties body): Radix ScrollArea's table viewport breaks width containment */}
+        <div className="flex-1 min-h-0 min-w-0 max-w-full overflow-y-auto overflow-x-hidden px-4 py-3" ref={aiScrollAreaRef}>
           <div className="min-w-0 max-w-full space-y-3 overflow-hidden">
             {aiMessages.map((msg) => (
               <div
@@ -1598,7 +1595,7 @@ export default function PropertiesPanel({
               </div>
             )}
           </div>
-        </ScrollArea>
+        </div>
 
         {pendingAiOperations.length > 0 && (
           <div className="grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-t border-border/40 bg-muted/20 px-4 py-2 shrink-0">
@@ -3064,9 +3061,12 @@ export default function PropertiesPanel({
 
       {viewMode === 'properties' ? (
         <>
-          <ScrollArea className="flex-1 min-h-0 min-w-0 max-w-full overflow-x-hidden">
+          {/* Plain overflow div, NOT Radix ScrollArea: its viewport wraps content in a
+              display:table div that sizes to max-content inside a scroll container,
+              which made the whole body wider than the panel (horizontal clipping). */}
+          <div className="flex-1 min-h-0 min-w-0 max-w-full overflow-y-auto overflow-x-hidden">
             {/* pb-8 keeps the last field clear of the delete footer */}
-            <div className="min-w-0 max-w-full overflow-x-hidden px-4 pt-4 pb-8 space-y-4">
+            <div className="min-w-0 max-w-full px-4 pt-4 pb-8 space-y-4">
               {guidedStatus && (
                 <GuidedStatusCard
                   title={guidedStatus.title}
@@ -3957,7 +3957,7 @@ export default function PropertiesPanel({
                 onChange={(patch) => updateNodeConfig(selectedNode.id, patch)}
               />
             </div>
-          </ScrollArea>
+          </div>
 
           {/* Delete footer: shrink-0 sibling of the scroll area — never overlays fields */}
           <div className="shrink-0 min-w-0 max-w-full overflow-hidden bg-background px-4 py-3 border-t border-border/40 space-y-1.5">
