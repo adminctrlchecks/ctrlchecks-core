@@ -3,7 +3,6 @@ import { useState, useCallback, useEffect, useRef, useMemo, Suspense, lazy, type
 import type { DebugNodeError } from '@/stores/debugStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { getNodeDefinition, ConfigField } from './nodeTypes';
-import { NODE_USAGE_GUIDES } from './nodeUsageGuides';
 import { nodeSchemaService, NodeDefinition } from '@/services/nodeSchemaService';
 import { convertNodeDefinitionToConfigFields, validateNodeInputsAgainstSchema } from '@/lib/schemaConverter';
 import { Input } from '@/components/ui/input';
@@ -89,6 +88,11 @@ import { invalidateAfterConnectionChange } from '@/lib/queryInvalidation';
 import { shouldShowFieldForContext } from '@/lib/contextualFieldGuides';
 import { NodeCredentialSelector } from '@/components/nodes/NodeCredentialSelector';
 import { resolveFieldHelp } from '@/lib/resolve-field-help-content';
+import {
+  getUsageGuideForType,
+  normalizeNodeTypeForLookup,
+  resolveNodeDescription,
+} from '@/lib/node-inspector-metadata';
 
 // Droppable field wrapper component - MUST be outside PropertiesPanel to avoid hook violations
 interface DroppableFieldWrapperProps {
@@ -582,9 +586,10 @@ export default function PropertiesPanel({
       return;
     }
 
-    const nodeType = selectedNode.data.type;
+    // Normalize aliases/non-canonical stored types before the registry lookup
+    const nodeType = normalizeNodeTypeForLookup(selectedNode.data.type);
     setSchemaLoading(true);
-    
+
     nodeSchemaService.fetchSchemaByType(nodeType)
       .then((schema) => {
         if (schema) {
@@ -1253,9 +1258,9 @@ export default function PropertiesPanel({
       const { fieldKey, expression } = pendingExpression;
       // Check if the field exists in the current node's config
       // ✅ SCHEMA-DRIVEN UI: Use backend schema if available
-      const nodeDef = backendSchema 
+      const nodeDef = backendSchema
         ? { configFields: convertNodeDefinitionToConfigFields(backendSchema) }
-        : getNodeDefinition(selectedNode.data.type);
+        : getNodeDefinition(normalizeNodeTypeForLookup(selectedNode.data.type));
       const field = nodeDef?.configFields?.find(f => f.key === fieldKey);
 
       if (field) {
@@ -2231,7 +2236,7 @@ export default function PropertiesPanel({
       >
 
         {/* Header with Professional Segmented Toggle */}
-        <div className="min-w-0 max-w-full overflow-hidden px-4 py-3 border-b border-border/40">
+        <div className="shrink-0 min-w-0 max-w-full overflow-hidden px-4 py-3 border-b border-border/40">
           <div className="flex min-w-0 max-w-full items-center justify-between gap-3">
             <ToggleGroup
               type="single"
@@ -2314,8 +2319,11 @@ export default function PropertiesPanel({
     );
   }
 
+  // Canonical type used for every lookup (schema, legacy definition, guides, docs)
+  const lookupNodeType = normalizeNodeTypeForLookup(selectedNode.data.type);
+
   // ✅ SCHEMA-DRIVEN UI: Use backend schema if available, fallback to legacy
-  const legacyNodeDefinition = getNodeDefinition(selectedNode.data.type);
+  const legacyNodeDefinition = getNodeDefinition(lookupNodeType);
   const IconComponent = iconMap[selectedNode.data.icon || 'Box'] || Box;
 
   // Convert backend schema to configFields if available
@@ -2359,6 +2367,16 @@ export default function PropertiesPanel({
     canvasLabel.length > 0 &&
     canvasLabel.toLowerCase() !== canonicalTypeDisplayName.toLowerCase() &&
     canvasLabel.toLowerCase() !== String(selectedNode.data.type || '').toLowerCase();
+
+  /** Best-available description: backend schema → docs-content → usage guide → legacy → fallback. */
+  const nodeDescription = resolveNodeDescription({
+    nodeType: lookupNodeType,
+    displayName: canonicalTypeDisplayName,
+    backendDescription: backendSchema?.description,
+    legacyDescription: legacyNodeDefinition?.description,
+  });
+
+  const nodeUsageGuide = getUsageGuideForType(lookupNodeType);
 
   // Get operation-specific helpText for Instagram node
   const getInstagramOperationHelpText = (operation: string): string => {
@@ -2904,6 +2922,45 @@ export default function PropertiesPanel({
     }
   };
 
+  /**
+   * Fields that will actually render in the Configuration section. Mirrors the
+   * per-field guards (credential ownership, contextual visibility, visibleIf /
+   * requiredIf) so the section can show an explicit "no configuration" state
+   * instead of an empty heading when every field is filtered out.
+   */
+  const isConfigFieldVisible = (field: ConfigField): boolean => {
+    const backendFieldDef = (backendSchema?.inputSchema as Record<string, any> | undefined)?.[field.key];
+    if (backendFieldDef?.ownership === 'credential') return false;
+    const currentConfig = (selectedNode.data.config || {}) as Record<string, unknown>;
+    if (!shouldShowFieldForContext(lookupNodeType, field.key, currentConfig)) return false;
+    const ui = backendFieldDef?.ui;
+    const visibleIf =
+      (ui?.visibleIf as { field: string; equals: unknown } | undefined) ||
+      (field.visibleIf as { field: string; equals: unknown } | undefined);
+    if (visibleIf && !conditionMatches(currentConfig[visibleIf.field], visibleIf.equals)) return false;
+    const requiredIf =
+      (ui?.requiredIf as { field: string; equals?: unknown; notEquals?: unknown } | undefined) ||
+      (field.requiredIf as { field: string; equals?: unknown; notEquals?: unknown } | undefined);
+    if (requiredIf && !conditionObjectMatches(currentConfig[requiredIf.field], requiredIf)) return false;
+    return true;
+  };
+  const visibleConfigFields = (nodeDefinition?.configFields || []).filter(isConfigFieldVisible);
+
+  /** Deduped credential requirements — one connection picker per credential type/provider. */
+  const credentialRequirements = (backendSchema?.credentialSchema?.requirements || [])
+    .filter((requirement) => requirement?.provider || requirement?.credentialTypeId || requirement?.credentialTypeIds?.length)
+    // Dedup by credentialTypeId first, then by provider — prevents double picker when backend sends duplicate requirements
+    .filter((req, idx, arr) => {
+      const typeId = req.credentialTypeId || (req.credentialTypeIds || [])[0];
+      if (typeId) return arr.findIndex((r) => (r.credentialTypeId || (r.credentialTypeIds || [])[0]) === typeId) === idx;
+      return arr.findIndex((r) => r.provider === req.provider) === idx;
+    });
+
+  /** Nodes whose inputs are all credential-owned show the connected-account badge instead of fields. */
+  const hasCredentialOwnedFields = Object.values(backendSchema?.inputSchema || {}).some(
+    (fieldSchema) => (fieldSchema as { ownership?: string }).ownership === 'credential'
+  );
+
   return (
     <div
       className={cn("relative bg-background h-full min-w-0 max-w-full overflow-hidden flex flex-col", !debugMode && "border-l border-border/60")}
@@ -2911,18 +2968,18 @@ export default function PropertiesPanel({
     >
 
       {/* Header with Professional Segmented Toggle */}
-      <div className="px-4 py-3 border-b border-border/40 flex min-w-0 max-w-full items-center justify-between gap-3 overflow-hidden">
+      <div className="shrink-0 px-4 py-3 border-b border-border/40 flex min-w-0 max-w-full items-center justify-between gap-3 overflow-hidden">
         <ToggleGroup
           type="single"
           value={viewMode}
           onValueChange={(value) => value && setViewMode(value as ViewMode)}
-          className="min-w-0 justify-start flex-shrink-0"
+          className="min-w-0 flex-1 justify-start overflow-hidden"
         >
           <ToggleGroupItem
             value="properties"
             aria-label="Node Properties"
             className={cn(
-              "h-7 px-3 text-xs font-medium border-0",
+              "h-7 min-w-0 shrink truncate px-3 text-xs font-medium border-0",
               "data-[state=on]:bg-muted/60 data-[state=on]:text-foreground",
               "data-[state=off]:text-muted-foreground/70",
               "hover:bg-muted/40 transition-colors duration-150",
@@ -2935,7 +2992,7 @@ export default function PropertiesPanel({
             value="ai-editor"
             aria-label="AI Editor"
             className={cn(
-              "h-7 px-3 text-xs font-medium border-0",
+              "h-7 min-w-0 shrink truncate px-3 text-xs font-medium border-0",
               "data-[state=on]:bg-muted/60 data-[state=on]:text-foreground",
               "data-[state=off]:text-muted-foreground/70",
               "hover:bg-muted/40 transition-colors duration-150",
@@ -2973,14 +3030,15 @@ export default function PropertiesPanel({
           )}
           {viewMode === 'properties' && (
             <NodeHelpButton
-              nodeSlug={selectedNode.data.type}
+              nodeSlug={lookupNodeType}
               nodeDisplayName={canonicalTypeDisplayName}
             />
           )}
-          {viewMode === 'properties' && (
+          {/* Deselect X only when there is no panel-close X — two identical X icons side by side read as duplicates */}
+          {viewMode === 'properties' && !onClose && (
             <button
               onClick={() => selectNode(null)}
-              className="h-6 w-6 flex items-center justify-center rounded-sm hover:bg-muted/50 transition-colors duration-150"
+              className="h-6 w-6 flex shrink-0 items-center justify-center rounded-sm hover:bg-muted/50 transition-colors duration-150"
               title="Deselect node"
               aria-label="Deselect node"
             >
@@ -3007,7 +3065,8 @@ export default function PropertiesPanel({
       {viewMode === 'properties' ? (
         <>
           <ScrollArea className="flex-1 min-h-0 min-w-0 max-w-full overflow-x-hidden">
-            <div className="min-w-0 max-w-full overflow-x-hidden px-4 py-4 space-y-4">
+            {/* pb-8 keeps the last field clear of the delete footer */}
+            <div className="min-w-0 max-w-full overflow-x-hidden px-4 pt-4 pb-8 space-y-4">
               {guidedStatus && (
                 <GuidedStatusCard
                   title={guidedStatus.title}
@@ -3028,10 +3087,10 @@ export default function PropertiesPanel({
                 </div>
               )}
               {/* Usage Guide Card - For All Nodes */}
-              {NODE_USAGE_GUIDES[selectedNode.data.type] && (
+              {nodeUsageGuide && (
                 <div className="mb-1 min-w-0 max-w-full overflow-hidden">
                   <NodeUsageCard
-                    guide={NODE_USAGE_GUIDES[selectedNode.data.type]}
+                    guide={nodeUsageGuide}
                     nodeLabel={selectedNode.data.label}
                   />
                 </div>
@@ -3060,7 +3119,7 @@ export default function PropertiesPanel({
                 )}
                 <div className="min-w-0 max-w-full overflow-hidden">
                   <Label className="text-xs font-medium text-muted-foreground/70">Description</Label>
-                  <p className="text-xs text-muted-foreground/70 mt-1 leading-relaxed break-words">{nodeDefinition?.description || 'No description available'}</p>
+                  <p className="text-xs text-muted-foreground/70 mt-1 leading-relaxed break-words">{nodeDescription}</p>
                 </div>
               </div>
 
@@ -3430,21 +3489,13 @@ export default function PropertiesPanel({
                             workflowId={workflowId || ''}
                           />
                         </div>
-                      ) : (nodeDefinition.configFields && nodeDefinition.configFields.length > 0) ? (
+                      ) : (
                         <div className="min-w-0 max-w-full space-y-4 overflow-hidden">
                           <h3 className="text-xs font-medium uppercase text-muted-foreground/70 tracking-wide">
                             Configuration
                           </h3>
                           {backendSchema && (() => {
-                            const requirements = (backendSchema.credentialSchema?.requirements || [])
-                              .filter((requirement) => requirement?.provider || requirement?.credentialTypeId || requirement?.credentialTypeIds?.length)
-                              // Dedup by credentialTypeId first, then by provider — prevents double picker when backend sends duplicate requirements
-                              .filter((req, idx, arr) => {
-                                const typeId = req.credentialTypeId || (req.credentialTypeIds || [])[0];
-                                if (typeId) return arr.findIndex((r) => (r.credentialTypeId || (r.credentialTypeIds || [])[0]) === typeId) === idx;
-                                return arr.findIndex((r) => r.provider === req.provider) === idx;
-                              });
-                            if (requirements.length === 0) return null;
+                            if (credentialRequirements.length === 0) return null;
                             const connectionRefs = (
                               (selectedNode.data.connectionRefs as Record<string, string> | undefined) ||
                               ((selectedNode.data.config || {}) as Record<string, any>).connectionRefs ||
@@ -3452,7 +3503,7 @@ export default function PropertiesPanel({
                             ) as Record<string, string>;
                             return (
                               <div className="min-w-0 max-w-full space-y-3 overflow-hidden">
-                                {requirements.map((requirement) => {
+                                {credentialRequirements.map((requirement) => {
                                   const credentialTypeIds = Array.from(new Set([
                                     ...(requirement.credentialTypeIds || []),
                                     ...(requirement.credentialTypeId ? [requirement.credentialTypeId] : []),
@@ -3535,45 +3586,32 @@ export default function PropertiesPanel({
                               {switchConfigHint}
                             </div>
                           )}
-                          {nodeDefinition.configFields.map((field) => {
-                            // Skip credential-ownership fields — managed via the connection picker, not raw inputs
-                            const backendFieldDef = (backendSchema?.inputSchema as any)?.[field.key];
-                            if (backendFieldDef?.ownership === 'credential') return null;
-                            const contextualNodeConfig = (selectedNode.data.config || {}) as Record<string, unknown>;
-                            if (!shouldShowFieldForContext(selectedNode.data.type, field.key, contextualNodeConfig)) return null;
-
-                            // ✅ Systematic UI: visibleIf (optional), then requiredIf (hide + required when true)
-                            // Evaluated for both schema-driven and legacy nodes so nodeTypes.ts
-                            // conditions work even when the backend schema is unavailable.
-                            let effectiveRequired = field.required;
-                            // fieldConditionActive: true = condition met (field is active/required),
-                            // false = condition not met (field shown but dimmed/optional)
-                            let fieldConditionActive = true;
-                            {
-                              const ui = (backendSchema?.inputSchema as any)?.[field.key]?.ui;
-                              const currentConfig = selectedNode.data.config || {};
-                              const visibleIf =
-                                (ui?.visibleIf as { field: string; equals: unknown } | undefined) ||
-                                (field.visibleIf as { field: string; equals: unknown } | undefined);
-                              if (visibleIf) {
-                                const visOk = conditionMatches((currentConfig as any)?.[visibleIf.field], visibleIf.equals);
-                                if (!visOk) return null;
-                                fieldConditionActive = visOk;
-                              }
-                              const requiredIf =
-                                (ui?.requiredIf as { field: string; equals?: any; notEquals?: any } | undefined) ||
-                                (field.requiredIf as { field: string; equals?: any; notEquals?: any } | undefined);
-                              if (requiredIf) {
-                                const conditionMet = conditionObjectMatches((currentConfig as any)?.[requiredIf.field], requiredIf);
-                                if (!conditionMet) return null;
-                                fieldConditionActive = conditionMet;
-                                effectiveRequired = conditionMet;
-                              }
-                            }
+                          {schemaLoading && visibleConfigFields.length === 0 && (
+                            <p className="min-w-0 max-w-full break-words text-xs text-muted-foreground/70">
+                              Loading configuration…
+                            </p>
+                          )}
+                          {!schemaLoading && visibleConfigFields.length === 0 && credentialRequirements.length === 0 && !hasCredentialOwnedFields && (
+                            <div
+                              data-testid="no-config-message"
+                              className="min-w-0 max-w-full overflow-hidden rounded-md border border-dashed border-border/50 bg-muted/20 px-3 py-2.5 text-xs text-muted-foreground/80 break-words"
+                            >
+                              No configuration required for this node.
+                            </div>
+                          )}
+                          {visibleConfigFields.map((field) => {
+                            // Visibility guards (credential ownership, contextual, visibleIf/requiredIf)
+                            // already applied by isConfigFieldVisible — only requiredness is derived here.
+                            const ui = (backendSchema?.inputSchema as any)?.[field.key]?.ui;
+                            const requiredIf =
+                              (ui?.requiredIf as { field: string; equals?: unknown; notEquals?: unknown } | undefined) ||
+                              (field.requiredIf as { field: string; equals?: unknown; notEquals?: unknown } | undefined);
+                            // A visible field with a satisfied requiredIf condition is required.
+                            const effectiveRequired = field.required || !!requiredIf;
 
                             const backendFieldDescription = String((backendSchema?.inputSchema as Record<string, any> | undefined)?.[field.key]?.description || '');
                             const resolvedFieldHelp = resolveFieldHelp({
-                              nodeType: selectedNode.data.type,
+                              nodeType: lookupNodeType,
                               nodeLabel: canonicalTypeDisplayName,
                               fieldName: field.key,
                               fieldKey: field.key,
@@ -3636,7 +3674,7 @@ export default function PropertiesPanel({
                                   : hasAiValue;
 
                             return (
-                              <div key={field.key} className={`min-w-0 max-w-full overflow-hidden rounded-md border border-border/40 bg-muted/10 transition-opacity ${fieldConditionActive ? 'opacity-100' : 'opacity-45'}`}>
+                              <div key={field.key} className="min-w-0 max-w-full overflow-hidden rounded-md border border-border/40 bg-muted/10">
                                 {/* ── Field header row: label + toggle ── */}
                                 <div className="flex min-w-0 items-center justify-between gap-2 px-3 py-2 min-h-[36px]">
                                   <div className="flex min-w-0 flex-1 items-center gap-1.5">
@@ -3866,7 +3904,7 @@ export default function PropertiesPanel({
                                                 fieldKey={field.key}
                                                 fieldLabel={field.label}
                                                 fieldType={field.type}
-                                                nodeType={selectedNode.data.type}
+                                                nodeType={lookupNodeType}
                                                 placeholder={field.placeholder}
                                                 helpText={effectiveHelpText}
                                                 helpCategory={field.helpCategory}
@@ -3887,10 +3925,31 @@ export default function PropertiesPanel({
                             );
                           })}
                         </div>
-                      ) : null}
+                      )}
                     </>
                   )}
                 </>
+              )}
+
+              {/* Unknown node type (no backend schema, no legacy definition): still explain the empty state */}
+              {!nodeDefinition && (
+                <div className="min-w-0 max-w-full space-y-4 overflow-hidden">
+                  <h3 className="text-xs font-medium uppercase text-muted-foreground/70 tracking-wide">
+                    Configuration
+                  </h3>
+                  {schemaLoading ? (
+                    <p className="min-w-0 max-w-full break-words text-xs text-muted-foreground/70">
+                      Loading configuration…
+                    </p>
+                  ) : (
+                    <div
+                      data-testid="no-config-message"
+                      className="min-w-0 max-w-full overflow-hidden rounded-md border border-dashed border-border/50 bg-muted/20 px-3 py-2.5 text-xs text-muted-foreground/80 break-words"
+                    >
+                      No configuration required for this node.
+                    </div>
+                  )}
+                </div>
               )}
 
               <ApprovalGateSection
@@ -3900,7 +3959,8 @@ export default function PropertiesPanel({
             </div>
           </ScrollArea>
 
-          <div className="px-4 py-3 border-t border-border/40 space-y-2">
+          {/* Delete footer: shrink-0 sibling of the scroll area — never overlays fields */}
+          <div className="shrink-0 min-w-0 max-w-full overflow-hidden bg-background px-4 py-3 border-t border-border/40 space-y-1.5">
             <Button
               variant="destructive"
               size="sm"
@@ -3913,8 +3973,11 @@ export default function PropertiesPanel({
               <Trash2 className="mr-1.5 h-3.5 w-3.5" />
               Delete Node
             </Button>
-            <p className="text-xs text-center text-muted-foreground/75">
-              Press <kbd className="px-1 py-0.5 text-xs font-medium text-muted-foreground bg-muted/60 rounded border border-border/40">Del</kbd> or <kbd className="px-1 py-0.5 text-xs font-medium text-muted-foreground bg-muted/60 rounded border border-border/40">Backspace</kbd> to delete
+            <p className="text-[11px] text-center text-muted-foreground/75 leading-relaxed break-words">
+              <kbd className="px-1 py-0.5 text-[10px] font-medium text-muted-foreground bg-muted/60 rounded border border-border/40">Del</kbd>
+              {' '}/{' '}
+              <kbd className="px-1 py-0.5 text-[10px] font-medium text-muted-foreground bg-muted/60 rounded border border-border/40">Backspace</kbd>
+              {' '}to delete
             </p>
           </div>
         </>

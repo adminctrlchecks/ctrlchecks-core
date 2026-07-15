@@ -11,6 +11,7 @@
 
 import { Node, Edge } from '@xyflow/react';
 import { NODE_TYPES } from '@/components/workflow/nodeTypes';
+import { normalizeNodeTypeForLookup } from '@/lib/node-inspector-metadata';
 
 /** Coerce React Flow position from DB/JSON (numeric strings break strict typeof checks in layout). */
 export function coerceReactFlowPosition(position: unknown): { x: number; y: number } | null {
@@ -72,10 +73,7 @@ const NODE_TYPE_MAP: Record<string, string> = {
  */
 export function normalizeBackendNode(backendNode: any): Node {
   const rawNodeType = backendNode.data?.type || backendNode.type || 'unknown';
-  const legacyTypeAliases: Record<string, string> = {
-    csv_processor: 'csv',
-  };
-  const actualNodeType = legacyTypeAliases[rawNodeType] || rawNodeType;
+  const actualNodeType = normalizeNodeTypeForLookup(rawNodeType) || 'unknown';
   
   // Map to frontend React Flow component type
   const frontendType = NODE_TYPE_MAP[actualNodeType] || 'custom';
