@@ -5,8 +5,8 @@ export const typeformDoc: NodeDoc = {
   "displayName": "Typeform",
   "category": "Data",
   "logoUrl": "/icons/nodes/typeform.svg",
-  "description": "Retrieve form responses, create forms, and fetch form definitions using Typeform.",
-  "credentialType": "Typeform API Key",
+  "description": "List forms, retrieve form responses, create forms, and fetch form definitions using Typeform.",
+  "credentialType": "Typeform Personal Access Token",
   "credentialSetupSteps": [
     "What this is: The Typeform connection lets CtrlChecks access your Typeform account safely without putting secrets in workflow fields.",
     "Where to start: Typeform -> Account -> Personal tokens.",
@@ -22,18 +22,55 @@ export const typeformDoc: NodeDoc = {
       "description": "Typeform exposes operation choices directly.",
       "operations": [
         {
+          "name": "Get forms",
+          "value": "get_forms",
+          "description": "List forms available to the connected Typeform account.",
+          "fields": [
+            {
+              "name": "Personal Access Token",
+              "internalKey": "apiKey",
+              "type": "password",
+              "required": false,
+              "description": "Optional fallback Typeform personal access token",
+              "helpText": "Prefer Connections -> Add Connection -> Typeform. Paste a personal access token here only when you need a node-level fallback.",
+              "placeholder": "Optional if saved in Connections",
+              "notes": "Stored and displayed as a masked credential value."
+            }
+          ],
+          "outputExample": {
+            "success": true,
+            "operation": "get_forms",
+            "items": [
+              {
+                "id": "abc123",
+                "title": "Customer intake"
+              }
+            ],
+            "totalItems": 1
+          },
+          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nitems: Available Typeform forms.\ntotalItems: Number of forms returned when provided by Typeform.",
+          "usageExample": {
+            "scenario": "List Typeform forms before selecting one for a response workflow",
+            "inputValues": {
+              "Personal Access Token": ""
+            },
+            "expectedOutput": "Typeform returns forms that downstream nodes can reference with {{$json.items}}."
+          },
+          "externalDocsUrl": "https://www.typeform.com/developers/"
+        },
+        {
           "name": "Get responses",
           "value": "get_responses",
           "description": "Get responses using the Typeform node.",
           "fields": [
             {
-              "name": "Api Key",
+              "name": "Personal Access Token",
               "internalKey": "apiKey",
               "type": "password",
-              "required": true,
-              "description": "Typeform personal access token",
-              "helpText": "What this field is: Typeform personal access token, a secret password that lets CtrlChecks talk to Typeform safely.\nWhere to find it: Typeform -> Account -> Personal tokens.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: tfp_... or the token Typeform shows.\nImportant: Treat this like a bank password. Keep it in Connections when possible.",
-              "placeholder": "sk_...",
+              "required": false,
+              "description": "Optional fallback Typeform personal access token",
+              "helpText": "Prefer Connections -> Add Connection -> Typeform. Paste a personal access token here only when you need a node-level fallback.",
+              "placeholder": "Optional if saved in Connections",
               "notes": "Stored and displayed as a masked credential value."
             },
             {
@@ -82,13 +119,13 @@ export const typeformDoc: NodeDoc = {
           "description": "Create form using the Typeform node.",
           "fields": [
             {
-              "name": "Api Key",
+              "name": "Personal Access Token",
               "internalKey": "apiKey",
               "type": "password",
-              "required": true,
-              "description": "Typeform personal access token",
-              "helpText": "What this field is: Typeform personal access token, a secret password that lets CtrlChecks talk to Typeform safely.\nWhere to find it: Typeform -> Account -> Personal tokens.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: tfp_... or the token Typeform shows.\nImportant: Treat this like a bank password. Keep it in Connections when possible.",
-              "placeholder": "sk_...",
+              "required": false,
+              "description": "Optional fallback Typeform personal access token",
+              "helpText": "Prefer Connections -> Add Connection -> Typeform. Paste a personal access token here only when you need a node-level fallback.",
+              "placeholder": "Optional if saved in Connections",
               "notes": "Stored and displayed as a masked credential value."
             },
             {
@@ -137,13 +174,13 @@ export const typeformDoc: NodeDoc = {
           "description": "Get form using the Typeform node.",
           "fields": [
             {
-              "name": "Api Key",
+              "name": "Personal Access Token",
               "internalKey": "apiKey",
               "type": "password",
-              "required": true,
-              "description": "Typeform personal access token",
-              "helpText": "What this field is: Typeform personal access token, a secret password that lets CtrlChecks talk to Typeform safely.\nWhere to find it: Typeform -> Account -> Personal tokens.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: tfp_... or the token Typeform shows.\nImportant: Treat this like a bank password. Keep it in Connections when possible.",
-              "placeholder": "sk_...",
+              "required": false,
+              "description": "Optional fallback Typeform personal access token",
+              "helpText": "Prefer Connections -> Add Connection -> Typeform. Paste a personal access token here only when you need a node-level fallback.",
+              "placeholder": "Optional if saved in Connections",
               "notes": "Stored and displayed as a masked credential value."
             },
             {

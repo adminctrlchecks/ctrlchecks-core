@@ -1,84 +1,116 @@
 import type { NodeDoc } from '../types';
 
 export const writeBinaryFileDoc: NodeDoc = {
-  "slug": "write_binary_file",
-  "displayName": "Write Binary File",
-  "category": "Data",
-  "logoUrl": "/icons/nodes/write_binary_file.svg",
-  "description": "Write binary files",
-  "credentialType": "None",
-  "credentialSetupSteps": [
-    "This node does not need a saved account connection.",
-    "Open the node settings and fill the visible input fields.",
-    "Run the workflow when the required fields are complete."
+  slug: 'write_binary_file',
+  displayName: 'Write Binary File',
+  category: 'Data',
+  logoUrl: '/icons/nodes/write_binary_file.svg',
+  description: 'Create a managed workflow file asset from base64, a data URL, or plain text.',
+  credentialType: 'None',
+  credentialSetupSteps: [
+    'This node does not need a saved account connection.',
+    'Provide a file name and Binary Data.',
+    'Keep Persist Metadata enabled when later nodes need to read the file by Asset ID.',
+    'Use Google Drive, S3, Dropbox, or OneDrive nodes when you want to upload the file to cloud storage.',
   ],
-  "credentialDocsUrl": "https://docs.ctrlchecks.com",
-  "resources": [
+  credentialDocsUrl: 'https://docs.ctrlchecks.com',
+  resources: [
     {
-      "name": "Configuration",
-      "description": "Write Binary File is configured directly with input fields.",
-      "operations": [
+      name: 'Configuration',
+      description: 'Write Binary File stores bytes in the backend binary storage root and records metadata in workflow_file_assets.',
+      operations: [
         {
-          "name": "Execute",
-          "value": "default",
-          "description": "Execute using the Write Binary File node.",
-          "fields": [
+          name: 'Configure',
+          value: 'default',
+          description: 'Create a managed workflow file asset.',
+          fields: [
             {
-              "name": "File Path",
-              "internalKey": "filePath",
-              "type": "string",
-              "required": true,
-              "description": "File path",
-              "helpText": "What this field is: The File path that tells Write Binary File which item to use.\nWhere to find it: Open the item in Write Binary File and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: /path/to/file.pdf.\nTip: Use {{$json.filePath}} when an earlier Write Binary File step provides this value.",
-              "placeholder": "/path/to/file.pdf",
-              "example": "/path/to/file.pdf"
+              name: 'File Name',
+              internalKey: 'fileName',
+              type: 'string',
+              required: true,
+              description: 'Name for the file asset.',
+              helpText: 'Include an extension so downstream nodes know the type.',
+              placeholder: 'report.pdf',
+              example: 'report.pdf',
             },
             {
-              "name": "Data",
-              "internalKey": "data",
-              "type": "string",
-              "required": true,
-              "description": "Binary data (base64)",
-              "helpText": "What this field is: Structured data for Binary data.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Write Binary File.\nExample: {{$json.data}}.\nTip: Use {{$json.data}} when an earlier step already prepared this data.",
-              "placeholder": "{{$json.data}}",
-              "example": "{{$json.data}}"
-            }
+              name: 'MIME Type',
+              internalKey: 'mimeType',
+              type: 'string',
+              required: false,
+              description: 'File MIME type.',
+              helpText: 'Examples: application/pdf, image/png, text/csv.',
+              placeholder: 'application/pdf',
+              example: 'application/pdf',
+            },
+            {
+              name: 'Binary Data',
+              internalKey: 'dataBase64',
+              type: 'string',
+              required: true,
+              description: 'Base64, data URL, or text payload to store.',
+              helpText: 'Use {{$json.dataBase64}} from a previous download/PDF/file step. Data URLs like data:application/pdf;base64,... are also accepted.',
+              placeholder: '{{$json.dataBase64}}',
+              example: '{{$json.dataBase64}}',
+            },
+            {
+              name: 'Folder',
+              internalKey: 'folder',
+              type: 'string',
+              required: false,
+              description: 'Optional namespace under managed workflow storage.',
+              helpText: 'Examples: reports, invoices/2026.',
+              placeholder: 'reports',
+              example: 'reports',
+            },
+            {
+              name: 'Persist Metadata',
+              internalKey: 'persist',
+              type: 'boolean',
+              required: false,
+              description: 'Save metadata in the database for Asset ID lookup.',
+              helpText: 'Keep enabled for normal workflows.',
+              placeholder: 'true',
+              example: 'true',
+            },
           ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
+          outputExample: {
+            success: true,
+            assetId: 'asset-id',
+            fileName: 'report.pdf',
+            mimeType: 'application/pdf',
+            sizeBytes: 2048,
+            dataBase64: 'JVBERi0x...',
+            storageKey: 'users/.../report.pdf',
+            metadataPersisted: true,
           },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming Write Binary File data with execute after a related upstream event is received",
-            "inputValues": {
-              "File Path": "/path/to/file.pdf",
-              "Data": "{{$json.data}}"
+          outputDescription: 'Returns assetId, dataBase64, fileName, mimeType, sizeBytes, checksumSha256, storageProvider, storageKey, and filePath.',
+          usageExample: {
+            scenario: 'Save a generated PDF and upload it to Google Drive',
+            inputValues: {
+              fileName: 'report.pdf',
+              mimeType: 'application/pdf',
+              dataBase64: '{{$json.dataBase64}}',
             },
-            "expectedOutput": "Write Binary File returns structured execute data that downstream nodes can reference with {{$json.fieldName}}."
+            expectedOutput: 'Use {{$json.assetId}} to read it later or {{$json.dataBase64}} to upload it immediately.',
           },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
-        }
-      ]
-    }
+          externalDocsUrl: 'https://docs.ctrlchecks.com',
+        },
+      ],
+    },
   ],
-  "commonErrors": [
+  commonErrors: [
     {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
+      error: 'dataBase64, data, content, fileData, or fileContent is required',
+      cause: 'No file bytes were provided.',
+      fix: 'Pass {{$json.dataBase64}} from a previous download/PDF/file step or paste a data URL.',
     },
     {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
+      error: 'unsafe file path outside binary storage root',
+      cause: 'A custom path points outside the configured safe storage directory.',
+      fix: 'Leave Custom Storage Path empty or use a relative path under BINARY_FILE_ROOT.',
+    },
   ],
-  "relatedNodes": []
+  relatedNodes: ['read_binary_file', 'google_drive', 'pdf', 'aws_s3', 'dropbox', 'onedrive'],
 };

@@ -1,93 +1,130 @@
 import type { NodeDoc } from '../types';
 
 export const instagramTriggerDoc: NodeDoc = {
-  "slug": "instagram_trigger",
-  "displayName": "Instagram Trigger",
-  "category": "Triggers",
-  "logoUrl": "/icons/nodes/instagram_trigger.svg",
-  "description": "Trigger workflows on Instagram events: new DM, comment, mention, postback",
-  "credentialType": "Meta App Credentials",
-  "credentialSetupSteps": [
-    "What this is: The Instagram Trigger connection lets CtrlChecks access your Instagram Trigger account safely without putting secrets in workflow fields.",
-    "Where to start: Meta for Developers -> your app -> Instagram API setup.",
-    "How to connect: In CtrlChecks, open Connections -> Add Connection -> Instagram Trigger, then sign in or paste the secret value requested there.",
-    "Example: the access token shown by Meta.",
-    "Important: Treat tokens, passwords, API keys, and client secrets like bank passwords. Store them in Connections, not in regular workflow fields.",
-    "Test it: Save the connection, run a simple Instagram Trigger step, and confirm CtrlChecks can reach the account."
+  slug: 'instagram_trigger',
+  displayName: 'Instagram Trigger',
+  category: 'Triggers',
+  logoUrl: '/icons/nodes/instagram_trigger.svg',
+  description: 'Start workflows from real-time Instagram DMs, comments, mentions, story replies, and postbacks received through Meta webhooks.',
+  credentialType: 'Instagram OAuth2',
+  credentialSetupSteps: [
+    'Create or open your Meta app in Meta for Developers.',
+    'Add Instagram API with Instagram Login or the Instagram Graph API product for a professional Instagram account connected to a Facebook Page.',
+    'Request the permissions needed for the events you use: instagram_basic, instagram_manage_messages, instagram_manage_comments, pages_show_list, pages_read_engagement, and pages_manage_metadata.',
+    'In CtrlChecks, open Connections -> Add Connection -> Instagram and connect the Instagram/Meta account.',
+    'Set META_APP_SECRET, INSTAGRAM_APP_SECRET, or FACEBOOK_APP_SECRET on the worker so webhook signatures can be validated.',
+    'Create a workflow with Instagram Trigger, save a random Verify Token, activate the workflow, then use the returned callback URL in Meta for Developers -> Webhooks.',
+    'Subscribe the Instagram object fields you need, commonly messages, comments, and mentions. Some fields require Meta app review before live users can trigger them.',
   ],
-  "credentialDocsUrl": "https://developers.facebook.com/docs/facebook-login/web",
-  "resources": [
+  credentialDocsUrl: 'https://developers.facebook.com/docs/instagram-platform/',
+  resources: [
     {
-      "name": "Configuration",
-      "description": "Instagram Trigger is configured directly with input fields.",
-      "operations": [
+      name: 'Webhook',
+      description: 'Receives Meta Instagram webhook events, validates the challenge/signature, normalizes the payload, and starts the workflow.',
+      operations: [
         {
-          "name": "Execute",
-          "value": "default",
-          "description": "Execute using the Instagram Trigger node.",
-          "fields": [
+          name: 'Receive Instagram Event',
+          value: 'default',
+          description: 'Starts the workflow when an enabled Instagram event arrives.',
+          fields: [
             {
-              "name": "Event",
-              "internalKey": "event",
-              "type": "string",
-              "required": true,
-              "description": "Instagram event type",
-              "helpText": "What this field is: Instagram event type.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: message.received.\nTip: Use {{$json.event}} when this value comes from an earlier step.",
-              "placeholder": "message.received",
-              "example": "message.received",
-              "defaultValue": "message.received"
+              name: 'Event Types',
+              internalKey: 'eventTypes',
+              type: 'array',
+              required: false,
+              description: 'Instagram event types that can start this workflow.',
+              helpText: 'Use message for DMs, message.story_reply for story replies, comment for comments, mention for mentions, and postback for postbacks.',
+              placeholder: 'message, comment, mention',
+              example: ['message', 'comment', 'mention', 'message.story_reply'],
+              defaultValue: ['message', 'comment', 'mention', 'message.story_reply'],
             },
             {
-              "name": "Instagram Business Account Id",
-              "internalKey": "instagramBusinessAccountId",
-              "type": "string",
-              "required": false,
-              "description": "Instagram Business Account ID to listen on",
-              "helpText": "What this field is: The Instagram Business Account ID to listen on that tells Instagram Trigger which item to use.\nWhere to find it: Open the item in Instagram Trigger and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.instagramBusinessAccountId}} when an earlier Instagram Trigger step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            }
+              name: 'Instagram Business Account ID',
+              internalKey: 'instagramBusinessAccountId',
+              type: 'string',
+              required: false,
+              description: 'Optional Instagram Business Account ID filter.',
+              helpText: 'Find it from Meta Graph API Explorer with /me/accounts and the instagram_business_account field. Leave blank to accept the account connected to your saved Instagram credential.',
+              placeholder: '17841400000000000',
+              example: '17841400000000000',
+            },
+            {
+              name: 'Allowed Sender IDs',
+              internalKey: 'allowedSenderIds',
+              type: 'string',
+              required: false,
+              description: 'Optional comma-separated allowlist of Instagram sender IDs.',
+              helpText: 'Leave blank while testing. The trigger output includes senderId and chatId after a test event.',
+              placeholder: '1234567890, 9876543210',
+              example: '1234567890',
+            },
+            {
+              name: 'Verify Token',
+              internalKey: 'verifyToken',
+              type: 'string',
+              required: false,
+              description: 'Secret token Meta checks when verifying the callback URL.',
+              helpText: 'Use a random value and enter the same value in Meta for Developers -> Webhooks.',
+              placeholder: 'random-webhook-token',
+              example: 'ig-webhook-verify-2026',
+            },
+            {
+              name: 'Validate Signature',
+              internalKey: 'validateSignature',
+              type: 'boolean',
+              required: false,
+              description: 'Validate Meta X-Hub-Signature-256 before creating an execution.',
+              helpText: 'Keep enabled in production and configure META_APP_SECRET, INSTAGRAM_APP_SECRET, or FACEBOOK_APP_SECRET on the worker.',
+              defaultValue: true,
+            },
           ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
+          outputExample: {
+            eventId: 'mid.$abc123',
+            eventType: 'message.text',
+            source: 'instagram',
+            userId: '1234567890',
+            username: '',
+            chatId: '1234567890',
+            senderId: '1234567890',
+            recipientId: '17841400000000000',
+            instagramBusinessAccountId: '17841400000000000',
+            text: 'Can you help me?',
+            messageId: 'mid.$abc123',
+            commentId: null,
+            mediaId: null,
+            timestamp: '2026-07-17T10:30:00.000Z',
+            raw: {},
           },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming Instagram Trigger data with execute after a related upstream event is received",
-            "inputValues": {
-              "Event": "message.received",
-              "Instagram Business Account Id": "abc123"
+          outputDescription: 'Use senderId/chatId for DM replies, commentId for comment replies, text for AI Agent prompts, eventType for routing, and raw for provider-specific details.',
+          usageExample: {
+            scenario: 'Reply to an Instagram DM with AI',
+            inputValues: {
+              eventTypes: ['message', 'message.story_reply'],
+              validateSignature: true,
             },
-            "expectedOutput": "Instagram Trigger returns structured execute data that downstream nodes can reference with {{$json.fieldName}}."
+            expectedOutput: 'Instagram Trigger -> AI Agent -> Instagram node with operation sendText, recipientId = {{$json.senderId}}, text = {{$json.aiResponse}}.',
           },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
-        }
-      ]
-    }
+          externalDocsUrl: 'https://developers.facebook.com/docs/instagram-platform/webhooks/',
+        },
+      ],
+    },
   ],
-  "commonErrors": [
+  commonErrors: [
     {
-      "error": "Authentication failed",
-      "cause": "The saved credential, token, API key, or OAuth grant is missing, expired, or lacks the required scope.",
-      "fix": "Reconnect the service in CtrlChecks → Connections, then re-run the Instagram Trigger node."
+      error: 'Invalid verify token',
+      cause: 'The Verify Token in Meta does not match the token saved on the Instagram Trigger node.',
+      fix: 'Copy the exact token from the node into Meta for Developers -> Webhooks and verify again.',
     },
     {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
+      error: 'Invalid Instagram webhook signature',
+      cause: 'Signature validation is enabled but the worker app secret is missing or does not match the Meta app.',
+      fix: 'Set META_APP_SECRET, INSTAGRAM_APP_SECRET, or FACEBOOK_APP_SECRET on the worker, then redeploy/restart.',
     },
     {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
+      error: 'No active Instagram connection found',
+      cause: 'The workflow owner has not connected Instagram or the saved connection expired.',
+      fix: 'Reconnect Instagram in CtrlChecks -> Connections, then activate the workflow again.',
+    },
   ],
-  "relatedNodes": []
+  relatedNodes: ['instagram', 'ai_agent', 'if_else'],
 };

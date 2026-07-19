@@ -1,73 +1,104 @@
 import type { NodeDoc } from '../types';
 
 export const readBinaryFileDoc: NodeDoc = {
-  "slug": "read_binary_file",
-  "displayName": "Read Binary File",
-  "category": "Data",
-  "logoUrl": "/icons/nodes/read_binary_file.svg",
-  "description": "Read binary files",
-  "credentialType": "None",
-  "credentialSetupSteps": [
-    "This node does not need a saved account connection.",
-    "Open the node settings and fill the visible input fields.",
-    "Run the workflow when the required fields are complete."
+  slug: 'read_binary_file',
+  displayName: 'Read Binary File',
+  category: 'Data',
+  logoUrl: '/icons/nodes/read_binary_file.svg',
+  description: 'Read a managed workflow file asset or a file under the backend binary storage root.',
+  credentialType: 'None',
+  credentialSetupSteps: [
+    'This node does not need a saved account connection.',
+    'Use Asset ID when reading a file created by Write Binary File.',
+    'Use Server Storage Path only for files under the configured backend binary storage root.',
+    'Do not paste Google Drive or cloud share links here. Use Google Drive Download, HTTP Request, S3, Dropbox, or OneDrive first.',
   ],
-  "credentialDocsUrl": "https://docs.ctrlchecks.com",
-  "resources": [
+  credentialDocsUrl: 'https://docs.ctrlchecks.com',
+  resources: [
     {
-      "name": "Configuration",
-      "description": "Read Binary File is configured directly with input fields.",
-      "operations": [
+      name: 'Configuration',
+      description: 'Read Binary File returns file bytes as base64 for downstream PDF, email, AI, or storage nodes.',
+      operations: [
         {
-          "name": "Execute",
-          "value": "default",
-          "description": "Execute using the Read Binary File node.",
-          "fields": [
+          name: 'Configure',
+          value: 'default',
+          description: 'Read a workflow file asset or safe server storage path.',
+          fields: [
             {
-              "name": "File Path",
-              "internalKey": "filePath",
-              "type": "string",
-              "required": true,
-              "description": "File path",
-              "helpText": "What this field is: The File path that tells Read Binary File which item to use.\nWhere to find it: Open the item in Read Binary File and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: /path/to/file.pdf.\nTip: Use {{$json.filePath}} when an earlier Read Binary File step provides this value.",
-              "placeholder": "/path/to/file.pdf",
-              "example": "/path/to/file.pdf"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming Read Binary File data with execute after a related upstream event is received",
-            "inputValues": {
-              "File Path": "/path/to/file.pdf"
+              name: 'Source Type',
+              internalKey: 'sourceType',
+              type: 'string',
+              required: true,
+              description: 'assetId or serverPath.',
+              helpText: 'Use assetId for files returned by Write Binary File. Use serverPath only for files already inside the backend binary storage root.',
+              placeholder: 'assetId',
+              example: 'assetId',
             },
-            "expectedOutput": "Read Binary File returns structured execute data that downstream nodes can reference with {{$json.fieldName}}."
+            {
+              name: 'Asset ID',
+              internalKey: 'assetId',
+              type: 'string',
+              required: false,
+              description: 'Workflow file asset ID returned by Write Binary File.',
+              helpText: 'Use {{$json.assetId}} when the previous step created a file asset.',
+              placeholder: '{{$json.assetId}}',
+              example: '{{$json.assetId}}',
+            },
+            {
+              name: 'Storage Path',
+              internalKey: 'filePath',
+              type: 'string',
+              required: false,
+              description: 'Path under the backend binary storage root.',
+              helpText: 'This is not a cloud URL. Use paths such as reports/report.pdf only when the file exists in the configured backend storage root.',
+              placeholder: 'reports/report.pdf',
+              example: 'reports/report.pdf',
+            },
+            {
+              name: 'Max Size',
+              internalKey: 'maxSize',
+              type: 'number',
+              required: false,
+              description: 'Maximum file size in bytes.',
+              helpText: 'Default is 10 MB. Larger files are rejected to protect worker memory.',
+              placeholder: '10485760',
+              example: '10485760',
+            },
+          ],
+          outputExample: {
+            success: true,
+            assetId: 'asset-id',
+            fileName: 'report.pdf',
+            mimeType: 'application/pdf',
+            sizeBytes: 2048,
+            dataBase64: 'JVBERi0x...',
+            storageKey: 'users/.../report.pdf',
           },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
-        }
-      ]
-    }
+          outputDescription: 'Returns dataBase64, fileName, mimeType, sizeBytes, checksumSha256, storageProvider, storageKey, and filePath.',
+          usageExample: {
+            scenario: 'Read a PDF generated earlier in the workflow and pass it to another processor',
+            inputValues: {
+              sourceType: 'assetId',
+              assetId: '{{$json.assetId}}',
+            },
+            expectedOutput: 'The file bytes are available as {{$json.dataBase64}}.',
+          },
+          externalDocsUrl: 'https://docs.ctrlchecks.com',
+        },
+      ],
+    },
   ],
-  "commonErrors": [
+  commonErrors: [
     {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
+      error: 'assetId is required',
+      cause: 'Source Type is Workflow File Asset, but no Asset ID was provided.',
+      fix: 'Pass {{$json.assetId}} from Write Binary File or choose Server Storage Path.',
     },
     {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
+      error: 'unsafe file path outside binary storage root',
+      cause: 'The path points outside the configured safe storage directory.',
+      fix: 'Use a path under BINARY_FILE_ROOT or read the file through its assetId.',
+    },
   ],
-  "relatedNodes": []
+  relatedNodes: ['write_binary_file', 'google_drive', 'pdf', 'aws_s3', 'dropbox', 'onedrive'],
 };

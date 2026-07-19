@@ -1,0 +1,113 @@
+import type { NodeDoc } from '../types';
+
+export const slackTriggerDoc: NodeDoc = {
+  slug: 'slack_trigger',
+  displayName: 'Slack Trigger',
+  category: 'Triggers',
+  logoUrl: '/integrations-logos/Slack.svg',
+  description: 'Start workflows from real-time Slack Events API, slash command, and interaction callbacks.',
+  credentialType: 'Slack OAuth2',
+  credentialSetupSteps: [
+    'Create or open your Slack app at api.slack.com/apps.',
+    'Add bot scopes for the events you need: chat:write, app_mentions:read, channels:history, groups:history, im:history, mpim:history, and commands.',
+    'Install the app to your workspace, then connect Slack in CtrlChecks Connections.',
+    'Copy the app Signing Secret from Slack app settings -> Basic Information and save it on the Slack connection or set SLACK_SIGNING_SECRET on the worker.',
+    'In Slack Event Subscriptions, Slash Commands, and Interactivity settings, use this workflow trigger webhook URL as the callback URL.',
+    'Subscribe to app_mention and message events as needed, and invite the bot to any private channel it should read or reply in.',
+  ],
+  credentialDocsUrl: 'https://api.slack.com/apis/connections/events-api',
+  resources: [
+    {
+      name: 'Webhook',
+      description: 'Receives Slack signed webhook callbacks and emits a normalized event payload.',
+      operations: [
+        {
+          name: 'Receive event',
+          value: 'receive',
+          description: 'Starts the workflow when an accepted Slack event, slash command, or interaction arrives.',
+          fields: [
+            {
+              name: 'Event Types',
+              internalKey: 'eventTypes',
+              type: 'string',
+              required: false,
+              description: 'Comma-separated events to accept.',
+              helpText: 'Use app_mention, message, slash_command, and interaction. Leave broad while testing, then narrow for production.',
+              placeholder: 'app_mention, message, slash_command, interaction',
+              example: 'app_mention, message',
+            },
+            {
+              name: 'Allowed Channel IDs',
+              internalKey: 'channelIds',
+              type: 'string',
+              required: false,
+              description: 'Optional Slack channel allowlist.',
+              helpText: 'Use this when one Slack app callback URL receives events from several channels but this workflow should handle only some of them.',
+              placeholder: 'C0123456789, C9876543210',
+              example: 'C0123456789',
+            },
+            {
+              name: 'Slash Command Filter',
+              internalKey: 'commandFilter',
+              type: 'string',
+              required: false,
+              description: 'Optional slash command filter.',
+              helpText: 'Use a value such as /support when several Slack commands point to the same trigger URL.',
+              placeholder: '/support',
+              example: '/support',
+            },
+            {
+              name: 'Validate Slack Signature',
+              internalKey: 'validateSignature',
+              type: 'boolean',
+              required: false,
+              description: 'Validates X-Slack-Signature and X-Slack-Request-Timestamp.',
+              helpText: 'Keep this enabled in production and store the Slack app signing secret on the connection or worker environment.',
+              example: true,
+            },
+          ],
+          outputExample: {
+            eventId: 'Ev123',
+            eventType: 'app_mention',
+            source: 'slack',
+            userId: 'U123',
+            text: '<@UAPP> can you check this?',
+            teamId: 'T123',
+            channelId: 'C123',
+            chatId: 'C123',
+            threadTs: '1784260800.000100',
+            messageTs: '1784260800.000100',
+            raw: {},
+          },
+          outputDescription: 'Outputs normalized top-level fields: eventId, eventType, source, userId, username, text, timestamp, teamId, channelId, channelName, chatId, threadTs, messageTs, command, triggerId, responseUrl, callbackId, actionId, interactionType, and raw.',
+          usageExample: {
+            scenario: 'AI reply to a Slack app mention',
+            inputValues: {
+              EventTypes: 'app_mention, message',
+            },
+            expectedOutput: 'Use {{$json.channelId}} as the Slack Message channel and {{$json.threadTs}} as Thread Timestamp to reply in the same thread.',
+          },
+          externalDocsUrl: 'https://api.slack.com/events-api',
+        },
+      ],
+    },
+  ],
+  commonErrors: [
+    {
+      error: 'Invalid Slack webhook signature',
+      cause: 'The signing secret is missing, wrong, or the request timestamp is older than five minutes.',
+      fix: 'Save the Slack app Signing Secret on the Slack connection or set SLACK_SIGNING_SECRET on the worker, then retry from Slack.',
+    },
+    {
+      error: 'No events matched this trigger',
+      cause: 'The event type, channel ID, user allowlist, workspace ID, or slash command filter rejected the event.',
+      fix: 'Temporarily accept app_mention, message, slash_command, and interaction and clear filters while testing.',
+    },
+    {
+      error: 'channel_not_found',
+      cause: 'The Slack bot is not in the channel or the workflow is replying to the wrong channel ID.',
+      fix: 'Invite the bot to the Slack channel and use {{$json.channelId}} in the Slack Message channel field.',
+    },
+  ],
+  relatedNodes: ['slack_message', 'ai_agent'],
+};

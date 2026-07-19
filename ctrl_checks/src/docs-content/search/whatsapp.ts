@@ -1,2748 +1,1420 @@
 import type { DocsSearchIndexItem } from '../search-index';
 
-export const whatsappSearchIndex = [
-  {
-    "type": "node",
-    "title": "WhatsApp",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp",
-    "text": "WhatsApp Send messages, manage contacts and conversations via WhatsApp Business API Use this node when a workflow needs whatsapp behavior with schema-driven inputs from the CtrlChecks node registry. Communication"
+export const whatsappSearchIndex: DocsSearchIndexItem[] = [
+  {
+    type: 'node',
+    title: "WhatsApp",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp',
+    text: "WhatsApp Send WhatsApp messages, media, locations, contact cards, templates, and interactive buttons/lists through the WhatsApp Business Cloud API, and manage contacts, conversations, templates, campaigns, and AI Agent assistance for advanced or AI-generated workflows. Communication",
   },
-  {
-    "type": "operation",
-    "title": "WhatsApp: Send Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Send Text with the WhatsApp node using the configured input fields. sendText"
+  {
+    type: 'operation',
+    title: "WhatsApp: Message - Send Text",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendText',
+    text: "WhatsApp Message Send Text Sends a free-form text message to a WhatsApp number. Only allowed within the 24-hour customer service window that opens after the customer messages your business; use Send Template to start a conversation or to message outside that window.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Phone Number Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Phone Number Id phoneNumberId WhatsApp Phone Number ID (auto-resolved if absent)"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Text - Resource",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendText',
+    text: "WhatsApp Message Send Text Resource resource WhatsApp resource to act on.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Business Account Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Business Account Id businessAccountId WhatsApp Business Account ID (auto-resolved if absent)"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Text - Operation",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendText',
+    text: "WhatsApp Message Send Text Operation operation Message action to run.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: To",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text To to Recipient phone number in E.164 format"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Text - Phone Number ID",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendText',
+    text: "WhatsApp Message Send Text Phone Number ID phoneNumberId WhatsApp Business Phone Number ID (auto-resolved if omitted).",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Text text Message text"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Text - To",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendText',
+    text: "WhatsApp Message Send Text To to Recipient phone number in E.164 format.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Preview Url",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Preview Url previewUrl Enable URL preview in text messages"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Text - Message",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendText',
+    text: "WhatsApp Message Send Text Message text The free-form text the recipient reads.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Media Type",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Media Type mediaType Media type"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Text - Show Link Preview",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendText',
+    text: "WhatsApp Message Send Text Show Link Preview previewUrl Whether WhatsApp renders a preview card for the first link in Message.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Media Url",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Media Url mediaUrl Media URL"
+  {
+    type: 'operation',
+    title: "WhatsApp: Message - Send Media",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendMedia',
+    text: "WhatsApp Message Send Media Sends an image, video, audio file, document, or sticker to a WhatsApp number, either from a public URL or a previously uploaded Meta Media ID, with an optional caption for image and document types.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Media Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Media Id mediaId Media ID (alternative to mediaUrl)"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Media - Resource",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendMedia',
+    text: "WhatsApp Message Send Media Resource resource WhatsApp resource to act on.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Caption",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Caption caption Media caption"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Media - Operation",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendMedia',
+    text: "WhatsApp Message Send Media Operation operation Message action to run.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Latitude",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Latitude latitude Location latitude"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Media - Phone Number ID",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendMedia',
+    text: "WhatsApp Message Send Media Phone Number ID phoneNumberId WhatsApp Business Phone Number ID (auto-resolved if omitted).",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Longitude",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Longitude longitude Location longitude"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Media - To",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendMedia',
+    text: "WhatsApp Message Send Media To to Recipient phone number in E.164 format.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Location Name",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Location Name locationName Location name"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Media - Media Type",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendMedia',
+    text: "WhatsApp Message Send Media Media Type mediaType Kind of file being sent.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Address",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Address address Location address"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Media - Media URL",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendMedia',
+    text: "WhatsApp Message Send Media Media URL mediaUrl Public HTTPS link to the file.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contacts",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Contacts contacts Contact objects for sendContact"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Media - Media ID",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendMedia',
+    text: "WhatsApp Message Send Media Media ID mediaId Meta media id from a previous upload, as an alternative to Media URL.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Name",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Template Name templateName Template name"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Media - Caption",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendMedia',
+    text: "WhatsApp Message Send Media Caption caption Optional text shown under image/document media.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Language",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Language language Template language code (e.g. en_US)"
+  {
+    type: 'operation',
+    title: "WhatsApp: Message - Send Location",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendLocation',
+    text: "WhatsApp Message Send Location Shares a map pin with the recipient, including coordinates and an optional name and address, useful for store pickup, delivery, or event locations.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Components",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Template Components templateComponents Template components"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Location - Resource",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendLocation',
+    text: "WhatsApp Message Send Location Resource resource WhatsApp resource to act on.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Category",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Template Category templateCategory Template category"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Location - Operation",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendLocation',
+    text: "WhatsApp Message Send Location Operation operation Message action to run.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Status",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Template Status templateStatus Template approval status (must be APPROVED to send)"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Location - Phone Number ID",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendLocation',
+    text: "WhatsApp Message Send Location Phone Number ID phoneNumberId WhatsApp Business Phone Number ID (auto-resolved if omitted).",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Body Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Body Text bodyText Interactive message body text"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Location - To",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendLocation',
+    text: "WhatsApp Message Send Location To to Recipient phone number in E.164 format.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Header Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Header Text headerText Interactive message header text"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Location - Latitude",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendLocation',
+    text: "WhatsApp Message Send Location Latitude latitude Decimal latitude of the pin.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Footer Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Footer Text footerText Interactive message footer text"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Location - Longitude",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendLocation',
+    text: "WhatsApp Message Send Location Longitude longitude Decimal longitude of the pin.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Buttons",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Buttons buttons Interactive buttons"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Location - Location Name",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendLocation',
+    text: "WhatsApp Message Send Location Location Name locationName Short label shown above the pin.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Button Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Button Text buttonText List button text"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Location - Address",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendLocation',
+    text: "WhatsApp Message Send Location Address address Full street address shown under the location name.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Sections",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Sections sections List sections"
+  {
+    type: 'operation',
+    title: "WhatsApp: Message - Send Contact Card",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendContact',
+    text: "WhatsApp Message Send Contact Card Shares one or more WhatsApp contact cards with the recipient, such as a sales rep or support agent, using Meta's structured contacts message format.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Cta Url",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Cta Url ctaUrl CTA URL object { display_text, url }"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Contact Card - Resource",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendContact',
+    text: "WhatsApp Message Send Contact Card Resource resource WhatsApp resource to act on.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Message Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Message Id messageId Message ID (for markAsRead)"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Contact Card - Operation",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendContact',
+    text: "WhatsApp Message Send Contact Card Operation operation Message action to run.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Contact Id contactId Contact ID"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Contact Card - Phone Number ID",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendContact',
+    text: "WhatsApp Message Send Contact Card Phone Number ID phoneNumberId WhatsApp Business Phone Number ID (auto-resolved if omitted).",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Name",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Contact Name contactName Contact name"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Contact Card - To",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendContact',
+    text: "WhatsApp Message Send Contact Card To to Recipient phone number in E.164 format.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Phone",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Contact Phone contactPhone Contact phone"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Contact Card - Contacts (JSON)",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendContact',
+    text: "WhatsApp Message Send Contact Card Contacts (JSON) contacts Meta contact-card objects to send.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Email",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Contact Email contactEmail Contact email"
+  {
+    type: 'operation',
+    title: "WhatsApp: Message - Send Template",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendTemplate',
+    text: "WhatsApp Message Send Template Sends a pre-approved Meta message template, filling in any placeholder variables. Required to start a new conversation with a customer or to message outside the 24-hour customer service window.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Labels",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Labels labels Contact labels"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Template - Resource",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendTemplate',
+    text: "WhatsApp Message Send Template Resource resource WhatsApp resource to act on.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Conversation Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Conversation Id conversationId Conversation ID"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Template - Operation",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendTemplate',
+    text: "WhatsApp Message Send Template Operation operation Message action to run.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Recipients",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Recipients recipients Campaign recipients (array of phone numbers)"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Template - Phone Number ID",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendTemplate',
+    text: "WhatsApp Message Send Template Phone Number ID phoneNumberId WhatsApp Business Phone Number ID (auto-resolved if omitted).",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Limit",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Limit limit Pagination limit"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Template - To",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendTemplate',
+    text: "WhatsApp Message Send Template To to Recipient phone number in E.164 format.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: After",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text After after Pagination cursor"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Template - Template Name",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendTemplate',
+    text: "WhatsApp Message Send Template Template Name templateName Exact name of the approved template.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Return All",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendText",
-    "text": "WhatsApp Operations Send Text Return All returnAll Return all results (ignores limit)"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Template - Language",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendTemplate',
+    text: "WhatsApp Message Send Template Language language Language code the template was approved in.",
   },
-  {
-    "type": "operation",
-    "title": "WhatsApp: Send Media",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Send Media with the WhatsApp node using the configured input fields. sendMedia"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Template - Template Components (JSON)",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendTemplate',
+    text: "WhatsApp Message Send Template Template Components (JSON) templateComponents Values filling the template's placeholder variables.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Phone Number Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Phone Number Id phoneNumberId WhatsApp Phone Number ID (auto-resolved if absent)"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Template - Known Template Status (optional)",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendTemplate',
+    text: "WhatsApp Message Send Template Known Template Status (optional) templateStatus Local pre-flight check that the template is APPROVED.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Business Account Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Business Account Id businessAccountId WhatsApp Business Account ID (auto-resolved if absent)"
+  {
+    type: 'operation',
+    title: "WhatsApp: Message - Send Interactive Buttons",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendInteractiveButtons',
+    text: "WhatsApp Message Send Interactive Buttons Sends a message with up to 3 tappable reply buttons, optionally with a header and footer, so the customer can respond with a single tap instead of typing.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: To",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media To to Recipient phone number in E.164 format"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Interactive Buttons - Resource",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendInteractiveButtons',
+    text: "WhatsApp Message Send Interactive Buttons Resource resource WhatsApp resource to act on.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Text text Message text"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Interactive Buttons - Operation",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendInteractiveButtons',
+    text: "WhatsApp Message Send Interactive Buttons Operation operation Message action to run.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Preview Url",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Preview Url previewUrl Enable URL preview in text messages"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Interactive Buttons - Phone Number ID",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendInteractiveButtons',
+    text: "WhatsApp Message Send Interactive Buttons Phone Number ID phoneNumberId WhatsApp Business Phone Number ID (auto-resolved if omitted).",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Media Type",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Media Type mediaType Media type"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Interactive Buttons - To",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendInteractiveButtons',
+    text: "WhatsApp Message Send Interactive Buttons To to Recipient phone number in E.164 format.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Media Url",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Media Url mediaUrl Media URL"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Interactive Buttons - Body Text",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendInteractiveButtons',
+    text: "WhatsApp Message Send Interactive Buttons Body Text bodyText Main message shown above the buttons.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Media Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Media Id mediaId Media ID (alternative to mediaUrl)"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Interactive Buttons - Header Text",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendInteractiveButtons',
+    text: "WhatsApp Message Send Interactive Buttons Header Text headerText Optional bold title above Body Text.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Caption",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Caption caption Media caption"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Interactive Buttons - Footer Text",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendInteractiveButtons',
+    text: "WhatsApp Message Send Interactive Buttons Footer Text footerText Optional small note below the buttons.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Latitude",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Latitude latitude Location latitude"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Interactive Buttons - Buttons (JSON)",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendInteractiveButtons',
+    text: "WhatsApp Message Send Interactive Buttons Buttons (JSON) buttons Up to 3 reply buttons.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Longitude",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Longitude longitude Location longitude"
+  {
+    type: 'operation',
+    title: "WhatsApp: Message - Send Interactive List",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendInteractiveList',
+    text: "WhatsApp Message Send Interactive List Sends a message with a single button that opens a scrollable list of grouped options, useful for menus, plan choices, or catalogs with more than 3 options.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Location Name",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Location Name locationName Location name"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Interactive List - Resource",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendInteractiveList',
+    text: "WhatsApp Message Send Interactive List Resource resource WhatsApp resource to act on.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Address",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Address address Location address"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Interactive List - Operation",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendInteractiveList',
+    text: "WhatsApp Message Send Interactive List Operation operation Message action to run.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contacts",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Contacts contacts Contact objects for sendContact"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Interactive List - Phone Number ID",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendInteractiveList',
+    text: "WhatsApp Message Send Interactive List Phone Number ID phoneNumberId WhatsApp Business Phone Number ID (auto-resolved if omitted).",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Name",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Template Name templateName Template name"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Interactive List - To",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendInteractiveList',
+    text: "WhatsApp Message Send Interactive List To to Recipient phone number in E.164 format.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Language",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Language language Template language code (e.g. en_US)"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Interactive List - Body Text",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendInteractiveList',
+    text: "WhatsApp Message Send Interactive List Body Text bodyText Main message shown above the list button.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Components",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Template Components templateComponents Template components"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Interactive List - List Button Text",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendInteractiveList',
+    text: "WhatsApp Message Send Interactive List List Button Text buttonText Label on the button that opens the list.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Category",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Template Category templateCategory Template category"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Interactive List - List Sections (JSON)",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendInteractiveList',
+    text: "WhatsApp Message Send Interactive List List Sections (JSON) sections Grouped, selectable rows shown in the list.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Status",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Template Status templateStatus Template approval status (must be APPROVED to send)"
+  {
+    type: 'operation',
+    title: "WhatsApp: Message - Send Interactive CTA Button",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendInteractiveCTA',
+    text: "WhatsApp Message Send Interactive CTA Button Sends a message with a single button that opens a web page, useful for order tracking, payment links, or booking pages, instead of a reply id.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Body Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Body Text bodyText Interactive message body text"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Interactive CTA Button - Resource",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendInteractiveCTA',
+    text: "WhatsApp Message Send Interactive CTA Button Resource resource WhatsApp resource to act on.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Header Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Header Text headerText Interactive message header text"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Interactive CTA Button - Operation",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendInteractiveCTA',
+    text: "WhatsApp Message Send Interactive CTA Button Operation operation Message action to run.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Footer Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Footer Text footerText Interactive message footer text"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Interactive CTA Button - Phone Number ID",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendInteractiveCTA',
+    text: "WhatsApp Message Send Interactive CTA Button Phone Number ID phoneNumberId WhatsApp Business Phone Number ID (auto-resolved if omitted).",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Buttons",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Buttons buttons Interactive buttons"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Interactive CTA Button - To",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendInteractiveCTA',
+    text: "WhatsApp Message Send Interactive CTA Button To to Recipient phone number in E.164 format.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Button Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Button Text buttonText List button text"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Interactive CTA Button - Body Text",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendInteractiveCTA',
+    text: "WhatsApp Message Send Interactive CTA Button Body Text bodyText Main message shown above the CTA button.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Sections",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Sections sections List sections"
+  {
+    type: 'field',
+    title: "WhatsApp: Send Interactive CTA Button - CTA Button (JSON)",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-sendInteractiveCTA',
+    text: "WhatsApp Message Send Interactive CTA Button CTA Button (JSON) ctaUrl Button label and destination URL.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Cta Url",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Cta Url ctaUrl CTA URL object { display_text, url }"
+  {
+    type: 'operation',
+    title: "WhatsApp: Message - Mark as Read",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-markAsRead',
+    text: "WhatsApp Message Mark as Read Marks a single incoming customer message as read, showing the blue double-check in the customer's WhatsApp chat.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Message Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Message Id messageId Message ID (for markAsRead)"
+  {
+    type: 'field',
+    title: "WhatsApp: Mark as Read - Resource",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-markAsRead',
+    text: "WhatsApp Message Mark as Read Resource resource WhatsApp resource to act on.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Contact Id contactId Contact ID"
+  {
+    type: 'field',
+    title: "WhatsApp: Mark as Read - Operation",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-markAsRead',
+    text: "WhatsApp Message Mark as Read Operation operation Message action to run.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Name",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Contact Name contactName Contact name"
+  {
+    type: 'field',
+    title: "WhatsApp: Mark as Read - Phone Number ID",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-markAsRead',
+    text: "WhatsApp Message Mark as Read Phone Number ID phoneNumberId WhatsApp Business Phone Number ID (auto-resolved if omitted).",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Phone",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Contact Phone contactPhone Contact phone"
+  {
+    type: 'field',
+    title: "WhatsApp: Mark as Read - Message ID",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-markAsRead',
+    text: "WhatsApp Message Mark as Read Message ID messageId Incoming WhatsApp message ID to mark as read.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Email",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Contact Email contactEmail Contact email"
+  {
+    type: 'operation',
+    title: "WhatsApp: Contact - Create Contact",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-create',
+    text: "WhatsApp Contact Create Contact Adds a new saved contact record to your WhatsApp Business Account with a name, phone number, and optional email, so your team can recognize and label the person in later conversations.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Labels",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Labels labels Contact labels"
+  {
+    type: 'field',
+    title: "WhatsApp: Create Contact - Resource",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-create',
+    text: "WhatsApp Contact Create Contact Resource resource WhatsApp resource to act on.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Conversation Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Conversation Id conversationId Conversation ID"
+  {
+    type: 'field',
+    title: "WhatsApp: Create Contact - Operation",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-create',
+    text: "WhatsApp Contact Create Contact Operation operation Contact action to run.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Recipients",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Recipients recipients Campaign recipients (array of phone numbers)"
+  {
+    type: 'field',
+    title: "WhatsApp: Create Contact - Business Account ID",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-create',
+    text: "WhatsApp Contact Create Contact Business Account ID businessAccountId WhatsApp Business Account (WABA) ID (auto-resolved if omitted).",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Limit",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Limit limit Pagination limit"
+  {
+    type: 'field',
+    title: "WhatsApp: Create Contact - Contact Name",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-create',
+    text: "WhatsApp Contact Create Contact Contact Name contactName Display name for the new contact.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: After",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media After after Pagination cursor"
+  {
+    type: 'field',
+    title: "WhatsApp: Create Contact - Contact Phone",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-create',
+    text: "WhatsApp Contact Create Contact Contact Phone contactPhone Phone number in E.164 format.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Return All",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendMedia",
-    "text": "WhatsApp Operations Send Media Return All returnAll Return all results (ignores limit)"
+  {
+    type: 'field',
+    title: "WhatsApp: Create Contact - Contact Email",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-create',
+    text: "WhatsApp Contact Create Contact Contact Email contactEmail Optional email address for the contact.",
   },
-  {
-    "type": "operation",
-    "title": "WhatsApp: Send Location",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Send Location with the WhatsApp node using the configured input fields. sendLocation"
+  {
+    type: 'operation',
+    title: "WhatsApp: Contact - Update Contact",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-update',
+    text: "WhatsApp Contact Update Contact Changes the name, phone number, or email on an existing saved contact record identified by Contact ID.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Phone Number Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Phone Number Id phoneNumberId WhatsApp Phone Number ID (auto-resolved if absent)"
+  {
+    type: 'field',
+    title: "WhatsApp: Update Contact - Resource",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-update',
+    text: "WhatsApp Contact Update Contact Resource resource WhatsApp resource to act on.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Business Account Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Business Account Id businessAccountId WhatsApp Business Account ID (auto-resolved if absent)"
+  {
+    type: 'field',
+    title: "WhatsApp: Update Contact - Operation",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-update',
+    text: "WhatsApp Contact Update Contact Operation operation Contact action to run.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: To",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location To to Recipient phone number in E.164 format"
+  {
+    type: 'field',
+    title: "WhatsApp: Update Contact - Contact ID",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-update',
+    text: "WhatsApp Contact Update Contact Contact ID contactId Existing contact to update.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Text text Message text"
+  {
+    type: 'field',
+    title: "WhatsApp: Update Contact - Contact Name",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-update',
+    text: "WhatsApp Contact Update Contact Contact Name contactName New display name, if changing.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Preview Url",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Preview Url previewUrl Enable URL preview in text messages"
+  {
+    type: 'field',
+    title: "WhatsApp: Update Contact - Contact Phone",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-update',
+    text: "WhatsApp Contact Update Contact Contact Phone contactPhone New phone number, if changing.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Media Type",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Media Type mediaType Media type"
+  {
+    type: 'field',
+    title: "WhatsApp: Update Contact - Contact Email",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-update',
+    text: "WhatsApp Contact Update Contact Contact Email contactEmail New email address, if changing.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Media Url",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Media Url mediaUrl Media URL"
+  {
+    type: 'operation',
+    title: "WhatsApp: Contact - Delete Contact",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-delete',
+    text: "WhatsApp Contact Delete Contact Removes a saved contact record identified by Contact ID from your WhatsApp Business Account, permanently deleting its name, phone, email, and labels.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Media Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Media Id mediaId Media ID (alternative to mediaUrl)"
+  {
+    type: 'field',
+    title: "WhatsApp: Delete Contact - Resource",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-delete',
+    text: "WhatsApp Contact Delete Contact Resource resource WhatsApp resource to act on.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Caption",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Caption caption Media caption"
+  {
+    type: 'field',
+    title: "WhatsApp: Delete Contact - Operation",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-delete',
+    text: "WhatsApp Contact Delete Contact Operation operation Contact action to run.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Latitude",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Latitude latitude Location latitude"
+  {
+    type: 'field',
+    title: "WhatsApp: Delete Contact - Contact ID",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-delete',
+    text: "WhatsApp Contact Delete Contact Contact ID contactId Existing contact to remove.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Longitude",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Longitude longitude Location longitude"
+  {
+    type: 'operation',
+    title: "WhatsApp: Contact - Search Contacts",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-search',
+    text: "WhatsApp Contact Search Contacts Looks up saved contact records by phone number or name, useful before deciding whether to create a new contact or reuse an existing one.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Location Name",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Location Name locationName Location name"
+  {
+    type: 'field',
+    title: "WhatsApp: Search Contacts - Resource",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-search',
+    text: "WhatsApp Contact Search Contacts Resource resource WhatsApp resource to act on.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Address",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Address address Location address"
+  {
+    type: 'field',
+    title: "WhatsApp: Search Contacts - Operation",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-search',
+    text: "WhatsApp Contact Search Contacts Operation operation Contact action to run.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contacts",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Contacts contacts Contact objects for sendContact"
+  {
+    type: 'field',
+    title: "WhatsApp: Search Contacts - Business Account ID",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-search',
+    text: "WhatsApp Contact Search Contacts Business Account ID businessAccountId WhatsApp Business Account (WABA) ID (auto-resolved if omitted).",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Name",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Template Name templateName Template name"
+  {
+    type: 'field',
+    title: "WhatsApp: Search Contacts - Contact Phone",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-search',
+    text: "WhatsApp Contact Search Contacts Contact Phone contactPhone Phone number to search for.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Language",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Language language Template language code (e.g. en_US)"
+  {
+    type: 'field',
+    title: "WhatsApp: Search Contacts - Contact Name",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-search',
+    text: "WhatsApp Contact Search Contacts Contact Name contactName Name to search for if Contact Phone is not known.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Components",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Template Components templateComponents Template components"
+  {
+    type: 'field',
+    title: "WhatsApp: Search Contacts - Limit",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-search',
+    text: "WhatsApp Contact Search Contacts Limit limit Maximum number of matching contacts to return.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Category",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Template Category templateCategory Template category"
+  {
+    type: 'operation',
+    title: "WhatsApp: Contact - Add Label",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-addLabel',
+    text: "WhatsApp Contact Add Label Attaches one or more labels to a saved contact, such as \"vip\" or \"new-lead\", so your team can segment and filter contacts.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Status",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Template Status templateStatus Template approval status (must be APPROVED to send)"
+  {
+    type: 'field',
+    title: "WhatsApp: Add Label - Resource",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-addLabel',
+    text: "WhatsApp Contact Add Label Resource resource WhatsApp resource to act on.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Body Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Body Text bodyText Interactive message body text"
+  {
+    type: 'field',
+    title: "WhatsApp: Add Label - Operation",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-addLabel',
+    text: "WhatsApp Contact Add Label Operation operation Contact action to run.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Header Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Header Text headerText Interactive message header text"
+  {
+    type: 'field',
+    title: "WhatsApp: Add Label - Contact ID",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-addLabel',
+    text: "WhatsApp Contact Add Label Contact ID contactId Existing contact to label.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Footer Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Footer Text footerText Interactive message footer text"
+  {
+    type: 'field',
+    title: "WhatsApp: Add Label - Labels (JSON)",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-addLabel',
+    text: "WhatsApp Contact Add Label Labels (JSON) labels Labels to attach.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Buttons",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Buttons buttons Interactive buttons"
+  {
+    type: 'operation',
+    title: "WhatsApp: Contact - Remove Label",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-removeLabel',
+    text: "WhatsApp Contact Remove Label Removes one or more labels from a saved contact, such as clearing \"new-lead\" once they become a paying customer.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Button Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Button Text buttonText List button text"
+  {
+    type: 'field',
+    title: "WhatsApp: Remove Label - Resource",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-removeLabel',
+    text: "WhatsApp Contact Remove Label Resource resource WhatsApp resource to act on.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Sections",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Sections sections List sections"
+  {
+    type: 'field',
+    title: "WhatsApp: Remove Label - Operation",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-removeLabel',
+    text: "WhatsApp Contact Remove Label Operation operation Contact action to run.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Cta Url",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Cta Url ctaUrl CTA URL object { display_text, url }"
+  {
+    type: 'field',
+    title: "WhatsApp: Remove Label - Contact ID",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-removeLabel',
+    text: "WhatsApp Contact Remove Label Contact ID contactId Existing contact to unlabel.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Message Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Message Id messageId Message ID (for markAsRead)"
+  {
+    type: 'field',
+    title: "WhatsApp: Remove Label - Labels (JSON)",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-removeLabel',
+    text: "WhatsApp Contact Remove Label Labels (JSON) labels Labels to remove.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Contact Id contactId Contact ID"
+  {
+    type: 'operation',
+    title: "WhatsApp: Conversation - List Conversations",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-list',
+    text: "WhatsApp Conversation List Conversations Returns a page of WhatsApp conversation threads for the connected phone number, useful for building a daily support queue digest or auditing open conversations.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Name",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Contact Name contactName Contact name"
+  {
+    type: 'field',
+    title: "WhatsApp: List Conversations - Resource",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-list',
+    text: "WhatsApp Conversation List Conversations Resource resource WhatsApp resource to act on.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Phone",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Contact Phone contactPhone Contact phone"
+  {
+    type: 'field',
+    title: "WhatsApp: List Conversations - Operation",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-list',
+    text: "WhatsApp Conversation List Conversations Operation operation Conversation action to run.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Email",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Contact Email contactEmail Contact email"
+  {
+    type: 'field',
+    title: "WhatsApp: List Conversations - Phone Number ID",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-list',
+    text: "WhatsApp Conversation List Conversations Phone Number ID phoneNumberId WhatsApp Business Phone Number ID (auto-resolved if omitted).",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Labels",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Labels labels Contact labels"
+  {
+    type: 'field',
+    title: "WhatsApp: List Conversations - Limit",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-list',
+    text: "WhatsApp Conversation List Conversations Limit limit Maximum number of conversations to return.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Conversation Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Conversation Id conversationId Conversation ID"
+  {
+    type: 'field',
+    title: "WhatsApp: List Conversations - After",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-list',
+    text: "WhatsApp Conversation List Conversations After after Pagination cursor from a previous list call.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Recipients",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Recipients recipients Campaign recipients (array of phone numbers)"
+  {
+    type: 'field',
+    title: "WhatsApp: List Conversations - Return All",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-list',
+    text: "WhatsApp Conversation List Conversations Return All returnAll Schema flag reserved for auto-pagination; not yet implemented.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Limit",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Limit limit Pagination limit"
+  {
+    type: 'operation',
+    title: "WhatsApp: Conversation - Get Conversation",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-get',
+    text: "WhatsApp Conversation Get Conversation Fetches one conversation's messages and participants by Conversation ID, useful for showing a full thread history to a human agent.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: After",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location After after Pagination cursor"
+  {
+    type: 'field',
+    title: "WhatsApp: Get Conversation - Resource",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-get',
+    text: "WhatsApp Conversation Get Conversation Resource resource WhatsApp resource to act on.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Return All",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendLocation",
-    "text": "WhatsApp Operations Send Location Return All returnAll Return all results (ignores limit)"
+  {
+    type: 'field',
+    title: "WhatsApp: Get Conversation - Operation",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-get',
+    text: "WhatsApp Conversation Get Conversation Operation operation Conversation action to run.",
   },
-  {
-    "type": "operation",
-    "title": "WhatsApp: Send Contact",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Send Contact with the WhatsApp node using the configured input fields. sendContact"
+  {
+    type: 'field',
+    title: "WhatsApp: Get Conversation - Conversation ID",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-get',
+    text: "WhatsApp Conversation Get Conversation Conversation ID conversationId Conversation to fetch.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Phone Number Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Phone Number Id phoneNumberId WhatsApp Phone Number ID (auto-resolved if absent)"
+  {
+    type: 'operation',
+    title: "WhatsApp: Conversation - Close Conversation",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-close',
+    text: "WhatsApp Conversation Close Conversation Marks a conversation as resolved, useful when a support issue has been fully answered and no further follow-up is expected from either side.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Business Account Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Business Account Id businessAccountId WhatsApp Business Account ID (auto-resolved if absent)"
+  {
+    type: 'field',
+    title: "WhatsApp: Close Conversation - Resource",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-close',
+    text: "WhatsApp Conversation Close Conversation Resource resource WhatsApp resource to act on.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: To",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact To to Recipient phone number in E.164 format"
+  {
+    type: 'field',
+    title: "WhatsApp: Close Conversation - Operation",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-close',
+    text: "WhatsApp Conversation Close Conversation Operation operation Conversation action to run.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Text text Message text"
+  {
+    type: 'field',
+    title: "WhatsApp: Close Conversation - Conversation ID",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-close',
+    text: "WhatsApp Conversation Close Conversation Conversation ID conversationId Conversation to close.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Preview Url",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Preview Url previewUrl Enable URL preview in text messages"
+  {
+    type: 'operation',
+    title: "WhatsApp: Conversation - Archive Conversation",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-archive',
+    text: "WhatsApp Conversation Archive Conversation Moves a conversation out of the active list without deleting its history, useful for cleaning up an inbox of stale threads.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Media Type",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Media Type mediaType Media type"
+  {
+    type: 'field',
+    title: "WhatsApp: Archive Conversation - Resource",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-archive',
+    text: "WhatsApp Conversation Archive Conversation Resource resource WhatsApp resource to act on.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Media Url",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Media Url mediaUrl Media URL"
+  {
+    type: 'field',
+    title: "WhatsApp: Archive Conversation - Operation",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-archive',
+    text: "WhatsApp Conversation Archive Conversation Operation operation Conversation action to run.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Media Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Media Id mediaId Media ID (alternative to mediaUrl)"
+  {
+    type: 'field',
+    title: "WhatsApp: Archive Conversation - Conversation ID",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-archive',
+    text: "WhatsApp Conversation Archive Conversation Conversation ID conversationId Conversation to archive.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Caption",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Caption caption Media caption"
+  {
+    type: 'operation',
+    title: "WhatsApp: Conversation - Mark Conversation as Read",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-markAsRead',
+    text: "WhatsApp Conversation Mark Conversation as Read Clears the unread indicator on an entire conversation thread, useful when an agent opens a thread that had several unread customer messages.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Latitude",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Latitude latitude Location latitude"
+  {
+    type: 'field',
+    title: "WhatsApp: Mark Conversation as Read - Resource",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-markAsRead',
+    text: "WhatsApp Conversation Mark Conversation as Read Resource resource WhatsApp resource to act on.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Longitude",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Longitude longitude Location longitude"
+  {
+    type: 'field',
+    title: "WhatsApp: Mark Conversation as Read - Operation",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-markAsRead',
+    text: "WhatsApp Conversation Mark Conversation as Read Operation operation Conversation action to run.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Location Name",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Location Name locationName Location name"
+  {
+    type: 'field',
+    title: "WhatsApp: Mark Conversation as Read - Conversation ID",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-markAsRead',
+    text: "WhatsApp Conversation Mark Conversation as Read Conversation ID conversationId Conversation to mark as read.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Address",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Address address Location address"
+  {
+    type: 'operation',
+    title: "WhatsApp: Template - List Templates",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-list',
+    text: "WhatsApp Template List Templates Returns a page of message templates on your WhatsApp Business Account along with their approval status, useful for auditing which templates are ready to use.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contacts",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Contacts contacts Contact objects for sendContact"
+  {
+    type: 'field',
+    title: "WhatsApp: List Templates - Resource",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-list',
+    text: "WhatsApp Template List Templates Resource resource WhatsApp resource to act on.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Name",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Template Name templateName Template name"
+  {
+    type: 'field',
+    title: "WhatsApp: List Templates - Operation",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-list',
+    text: "WhatsApp Template List Templates Operation operation Template action to run.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Language",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Language language Template language code (e.g. en_US)"
+  {
+    type: 'field',
+    title: "WhatsApp: List Templates - Business Account ID",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-list',
+    text: "WhatsApp Template List Templates Business Account ID businessAccountId WhatsApp Business Account (WABA) ID (auto-resolved if omitted).",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Components",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Template Components templateComponents Template components"
+  {
+    type: 'field',
+    title: "WhatsApp: List Templates - Limit",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-list',
+    text: "WhatsApp Template List Templates Limit limit Maximum number of templates to return.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Category",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Template Category templateCategory Template category"
+  {
+    type: 'operation',
+    title: "WhatsApp: Template - Get Template",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-get',
+    text: "WhatsApp Template Get Template Looks up one message template by name, including its current approval status and component structure, useful for confirming a template is ready before sending it.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Status",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Template Status templateStatus Template approval status (must be APPROVED to send)"
+  {
+    type: 'field',
+    title: "WhatsApp: Get Template - Resource",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-get',
+    text: "WhatsApp Template Get Template Resource resource WhatsApp resource to act on.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Body Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Body Text bodyText Interactive message body text"
+  {
+    type: 'field',
+    title: "WhatsApp: Get Template - Operation",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-get',
+    text: "WhatsApp Template Get Template Operation operation Template action to run.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Header Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Header Text headerText Interactive message header text"
+  {
+    type: 'field',
+    title: "WhatsApp: Get Template - Business Account ID",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-get',
+    text: "WhatsApp Template Get Template Business Account ID businessAccountId WhatsApp Business Account (WABA) ID (auto-resolved if omitted).",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Footer Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Footer Text footerText Interactive message footer text"
+  {
+    type: 'field',
+    title: "WhatsApp: Get Template - Template Name",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-get',
+    text: "WhatsApp Template Get Template Template Name templateName Exact template name to look up.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Buttons",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Buttons buttons Interactive buttons"
+  {
+    type: 'operation',
+    title: "WhatsApp: Template - Create Template",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-create',
+    text: "WhatsApp Template Create Template Submits a new message template to Meta for review. Approval typically takes 24-48 hours; the template cannot be used to send messages until its status becomes APPROVED.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Button Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Button Text buttonText List button text"
+  {
+    type: 'field',
+    title: "WhatsApp: Create Template - Resource",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-create',
+    text: "WhatsApp Template Create Template Resource resource WhatsApp resource to act on.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Sections",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Sections sections List sections"
+  {
+    type: 'field',
+    title: "WhatsApp: Create Template - Operation",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-create',
+    text: "WhatsApp Template Create Template Operation operation Template action to run.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Cta Url",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Cta Url ctaUrl CTA URL object { display_text, url }"
+  {
+    type: 'field',
+    title: "WhatsApp: Create Template - Business Account ID",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-create',
+    text: "WhatsApp Template Create Template Business Account ID businessAccountId WhatsApp Business Account (WABA) ID (auto-resolved if omitted).",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Message Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Message Id messageId Message ID (for markAsRead)"
+  {
+    type: 'field',
+    title: "WhatsApp: Create Template - Template Name",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-create',
+    text: "WhatsApp Template Create Template Template Name templateName Unique technical name for the new template.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Contact Id contactId Contact ID"
+  {
+    type: 'field',
+    title: "WhatsApp: Create Template - Language",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-create',
+    text: "WhatsApp Template Create Template Language language Language code the template is written in.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Name",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Contact Name contactName Contact name"
+  {
+    type: 'field',
+    title: "WhatsApp: Create Template - Template Category",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-create',
+    text: "WhatsApp Template Create Template Template Category templateCategory How Meta classifies this template.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Phone",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Contact Phone contactPhone Contact phone"
+  {
+    type: 'field',
+    title: "WhatsApp: Create Template - Template Components (JSON)",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-create',
+    text: "WhatsApp Template Create Template Template Components (JSON) templateComponents Header/body/button structure and placeholder variables.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Email",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Contact Email contactEmail Contact email"
+  {
+    type: 'operation',
+    title: "WhatsApp: Template - Delete Template",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-delete',
+    text: "WhatsApp Template Delete Template Removes a message template by name from your WhatsApp Business Account so it can no longer be used to send messages.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Labels",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Labels labels Contact labels"
+  {
+    type: 'field',
+    title: "WhatsApp: Delete Template - Resource",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-delete',
+    text: "WhatsApp Template Delete Template Resource resource WhatsApp resource to act on.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Conversation Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Conversation Id conversationId Conversation ID"
+  {
+    type: 'field',
+    title: "WhatsApp: Delete Template - Operation",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-delete',
+    text: "WhatsApp Template Delete Template Operation operation Template action to run.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Recipients",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Recipients recipients Campaign recipients (array of phone numbers)"
+  {
+    type: 'field',
+    title: "WhatsApp: Delete Template - Business Account ID",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-delete',
+    text: "WhatsApp Template Delete Template Business Account ID businessAccountId WhatsApp Business Account (WABA) ID (auto-resolved if omitted).",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Limit",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Limit limit Pagination limit"
+  {
+    type: 'field',
+    title: "WhatsApp: Delete Template - Template Name",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-delete',
+    text: "WhatsApp Template Delete Template Template Name templateName Exact template name to remove.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: After",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact After after Pagination cursor"
+  {
+    type: 'operation',
+    title: "WhatsApp: Campaign - Create Campaign",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-create',
+    text: "WhatsApp Campaign Create Campaign Sends an approved message template to every phone number in Recipients, one WhatsApp message per number, and reports how many succeeded and failed.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Return All",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendContact",
-    "text": "WhatsApp Operations Send Contact Return All returnAll Return all results (ignores limit)"
+  {
+    type: 'field',
+    title: "WhatsApp: Create Campaign - Resource",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-create',
+    text: "WhatsApp Campaign Create Campaign Resource resource WhatsApp resource to act on.",
   },
-  {
-    "type": "operation",
-    "title": "WhatsApp: Send Template",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Send Template with the WhatsApp node using the configured input fields. sendTemplate"
+  {
+    type: 'field',
+    title: "WhatsApp: Create Campaign - Operation",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-create',
+    text: "WhatsApp Campaign Create Campaign Operation operation Campaign action to run.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Phone Number Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Phone Number Id phoneNumberId WhatsApp Phone Number ID (auto-resolved if absent)"
+  {
+    type: 'field',
+    title: "WhatsApp: Create Campaign - Phone Number ID",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-create',
+    text: "WhatsApp Campaign Create Campaign Phone Number ID phoneNumberId WhatsApp Business Phone Number ID (auto-resolved if omitted).",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Business Account Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Business Account Id businessAccountId WhatsApp Business Account ID (auto-resolved if absent)"
+  {
+    type: 'field',
+    title: "WhatsApp: Create Campaign - Template Name",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-create',
+    text: "WhatsApp Campaign Create Campaign Template Name templateName Exact name of the approved template to send.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: To",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template To to Recipient phone number in E.164 format"
+  {
+    type: 'field',
+    title: "WhatsApp: Create Campaign - Language",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-create',
+    text: "WhatsApp Campaign Create Campaign Language language Language code the template was approved in.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Text text Message text"
+  {
+    type: 'field',
+    title: "WhatsApp: Create Campaign - Template Components (JSON)",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-create',
+    text: "WhatsApp Campaign Create Campaign Template Components (JSON) templateComponents Values filling the template's placeholder variables, applied the same way to every recipient.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Preview Url",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Preview Url previewUrl Enable URL preview in text messages"
+  {
+    type: 'field',
+    title: "WhatsApp: Create Campaign - Recipients (JSON)",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-create',
+    text: "WhatsApp Campaign Create Campaign Recipients (JSON) recipients Phone numbers to send the template to.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Media Type",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Media Type mediaType Media type"
+  {
+    type: 'field',
+    title: "WhatsApp: Create Campaign - Known Template Status (optional)",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-create',
+    text: "WhatsApp Campaign Create Campaign Known Template Status (optional) templateStatus Local pre-flight check that the template is APPROVED.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Media Url",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Media Url mediaUrl Media URL"
+  {
+    type: 'operation',
+    title: "WhatsApp: Campaign - List Campaigns",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-list',
+    text: "WhatsApp Campaign List Campaigns Returns a page of past campaign records for the Business Account, useful for reviewing send history and performance over time.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Media Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Media Id mediaId Media ID (alternative to mediaUrl)"
+  {
+    type: 'field',
+    title: "WhatsApp: List Campaigns - Resource",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-list',
+    text: "WhatsApp Campaign List Campaigns Resource resource WhatsApp resource to act on.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Caption",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Caption caption Media caption"
+  {
+    type: 'field',
+    title: "WhatsApp: List Campaigns - Operation",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-list',
+    text: "WhatsApp Campaign List Campaigns Operation operation Campaign action to run.",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Latitude",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Latitude latitude Location latitude"
+  {
+    type: 'field',
+    title: "WhatsApp: List Campaigns - Business Account ID",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-list',
+    text: "WhatsApp Campaign List Campaigns Business Account ID businessAccountId WhatsApp Business Account (WABA) ID (auto-resolved if omitted).",
   },
-  {
-    "type": "field",
-    "title": "WhatsApp: Longitude",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Longitude longitude Location longitude"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Location Name",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Location Name locationName Location name"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Address",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Address address Location address"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contacts",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Contacts contacts Contact objects for sendContact"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Name",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Template Name templateName Template name"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Language",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Language language Template language code (e.g. en_US)"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Components",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Template Components templateComponents Template components"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Category",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Template Category templateCategory Template category"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Status",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Template Status templateStatus Template approval status (must be APPROVED to send)"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Body Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Body Text bodyText Interactive message body text"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Header Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Header Text headerText Interactive message header text"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Footer Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Footer Text footerText Interactive message footer text"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Buttons",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Buttons buttons Interactive buttons"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Button Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Button Text buttonText List button text"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Sections",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Sections sections List sections"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Cta Url",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Cta Url ctaUrl CTA URL object { display_text, url }"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Message Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Message Id messageId Message ID (for markAsRead)"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Contact Id contactId Contact ID"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Name",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Contact Name contactName Contact name"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Phone",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Contact Phone contactPhone Contact phone"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Email",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Contact Email contactEmail Contact email"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Labels",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Labels labels Contact labels"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Conversation Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Conversation Id conversationId Conversation ID"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Recipients",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Recipients recipients Campaign recipients (array of phone numbers)"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Limit",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Limit limit Pagination limit"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: After",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template After after Pagination cursor"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Return All",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendTemplate",
-    "text": "WhatsApp Operations Send Template Return All returnAll Return all results (ignores limit)"
-  },
-  {
-    "type": "operation",
-    "title": "WhatsApp: Send Interactive Buttons",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Send Interactive Buttons with the WhatsApp node using the configured input fields. sendInteractiveButtons"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Phone Number Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Phone Number Id phoneNumberId WhatsApp Phone Number ID (auto-resolved if absent)"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Business Account Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Business Account Id businessAccountId WhatsApp Business Account ID (auto-resolved if absent)"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: To",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons To to Recipient phone number in E.164 format"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Text text Message text"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Preview Url",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Preview Url previewUrl Enable URL preview in text messages"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Media Type",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Media Type mediaType Media type"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Media Url",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Media Url mediaUrl Media URL"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Media Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Media Id mediaId Media ID (alternative to mediaUrl)"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Caption",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Caption caption Media caption"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Latitude",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Latitude latitude Location latitude"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Longitude",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Longitude longitude Location longitude"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Location Name",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Location Name locationName Location name"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Address",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Address address Location address"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contacts",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Contacts contacts Contact objects for sendContact"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Name",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Template Name templateName Template name"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Language",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Language language Template language code (e.g. en_US)"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Components",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Template Components templateComponents Template components"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Category",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Template Category templateCategory Template category"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Status",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Template Status templateStatus Template approval status (must be APPROVED to send)"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Body Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Body Text bodyText Interactive message body text"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Header Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Header Text headerText Interactive message header text"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Footer Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Footer Text footerText Interactive message footer text"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Buttons",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Buttons buttons Interactive buttons"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Button Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Button Text buttonText List button text"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Sections",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Sections sections List sections"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Cta Url",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Cta Url ctaUrl CTA URL object { display_text, url }"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Message Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Message Id messageId Message ID (for markAsRead)"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Contact Id contactId Contact ID"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Name",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Contact Name contactName Contact name"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Phone",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Contact Phone contactPhone Contact phone"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Email",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Contact Email contactEmail Contact email"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Labels",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Labels labels Contact labels"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Conversation Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Conversation Id conversationId Conversation ID"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Recipients",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Recipients recipients Campaign recipients (array of phone numbers)"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Limit",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Limit limit Pagination limit"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: After",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons After after Pagination cursor"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Return All",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveButtons",
-    "text": "WhatsApp Operations Send Interactive Buttons Return All returnAll Return all results (ignores limit)"
-  },
-  {
-    "type": "operation",
-    "title": "WhatsApp: Send Interactive List",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Send Interactive List with the WhatsApp node using the configured input fields. sendInteractiveList"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Phone Number Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Phone Number Id phoneNumberId WhatsApp Phone Number ID (auto-resolved if absent)"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Business Account Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Business Account Id businessAccountId WhatsApp Business Account ID (auto-resolved if absent)"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: To",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List To to Recipient phone number in E.164 format"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Text text Message text"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Preview Url",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Preview Url previewUrl Enable URL preview in text messages"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Media Type",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Media Type mediaType Media type"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Media Url",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Media Url mediaUrl Media URL"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Media Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Media Id mediaId Media ID (alternative to mediaUrl)"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Caption",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Caption caption Media caption"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Latitude",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Latitude latitude Location latitude"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Longitude",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Longitude longitude Location longitude"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Location Name",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Location Name locationName Location name"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Address",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Address address Location address"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contacts",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Contacts contacts Contact objects for sendContact"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Name",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Template Name templateName Template name"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Language",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Language language Template language code (e.g. en_US)"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Components",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Template Components templateComponents Template components"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Category",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Template Category templateCategory Template category"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Status",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Template Status templateStatus Template approval status (must be APPROVED to send)"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Body Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Body Text bodyText Interactive message body text"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Header Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Header Text headerText Interactive message header text"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Footer Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Footer Text footerText Interactive message footer text"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Buttons",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Buttons buttons Interactive buttons"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Button Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Button Text buttonText List button text"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Sections",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Sections sections List sections"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Cta Url",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Cta Url ctaUrl CTA URL object { display_text, url }"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Message Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Message Id messageId Message ID (for markAsRead)"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Contact Id contactId Contact ID"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Name",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Contact Name contactName Contact name"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Phone",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Contact Phone contactPhone Contact phone"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Email",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Contact Email contactEmail Contact email"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Labels",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Labels labels Contact labels"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Conversation Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Conversation Id conversationId Conversation ID"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Recipients",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Recipients recipients Campaign recipients (array of phone numbers)"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Limit",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Limit limit Pagination limit"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: After",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List After after Pagination cursor"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Return All",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveList",
-    "text": "WhatsApp Operations Send Interactive List Return All returnAll Return all results (ignores limit)"
-  },
-  {
-    "type": "operation",
-    "title": "WhatsApp: Send Interactive C T A",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Send Interactive C T A with the WhatsApp node using the configured input fields. sendInteractiveCTA"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Phone Number Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Phone Number Id phoneNumberId WhatsApp Phone Number ID (auto-resolved if absent)"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Business Account Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Business Account Id businessAccountId WhatsApp Business Account ID (auto-resolved if absent)"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: To",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A To to Recipient phone number in E.164 format"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Text text Message text"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Preview Url",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Preview Url previewUrl Enable URL preview in text messages"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Media Type",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Media Type mediaType Media type"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Media Url",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Media Url mediaUrl Media URL"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Media Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Media Id mediaId Media ID (alternative to mediaUrl)"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Caption",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Caption caption Media caption"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Latitude",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Latitude latitude Location latitude"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Longitude",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Longitude longitude Location longitude"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Location Name",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Location Name locationName Location name"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Address",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Address address Location address"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contacts",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Contacts contacts Contact objects for sendContact"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Name",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Template Name templateName Template name"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Language",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Language language Template language code (e.g. en_US)"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Components",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Template Components templateComponents Template components"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Category",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Template Category templateCategory Template category"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Status",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Template Status templateStatus Template approval status (must be APPROVED to send)"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Body Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Body Text bodyText Interactive message body text"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Header Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Header Text headerText Interactive message header text"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Footer Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Footer Text footerText Interactive message footer text"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Buttons",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Buttons buttons Interactive buttons"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Button Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Button Text buttonText List button text"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Sections",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Sections sections List sections"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Cta Url",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Cta Url ctaUrl CTA URL object { display_text, url }"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Message Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Message Id messageId Message ID (for markAsRead)"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Contact Id contactId Contact ID"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Name",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Contact Name contactName Contact name"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Phone",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Contact Phone contactPhone Contact phone"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Email",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Contact Email contactEmail Contact email"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Labels",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Labels labels Contact labels"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Conversation Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Conversation Id conversationId Conversation ID"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Recipients",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Recipients recipients Campaign recipients (array of phone numbers)"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Limit",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Limit limit Pagination limit"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: After",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A After after Pagination cursor"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Return All",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-sendInteractiveCTA",
-    "text": "WhatsApp Operations Send Interactive C T A Return All returnAll Return all results (ignores limit)"
-  },
-  {
-    "type": "operation",
-    "title": "WhatsApp: Mark As Read",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Mark As Read with the WhatsApp node using the configured input fields. markAsRead"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Phone Number Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Phone Number Id phoneNumberId WhatsApp Phone Number ID (auto-resolved if absent)"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Business Account Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Business Account Id businessAccountId WhatsApp Business Account ID (auto-resolved if absent)"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: To",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read To to Recipient phone number in E.164 format"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Text text Message text"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Preview Url",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Preview Url previewUrl Enable URL preview in text messages"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Media Type",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Media Type mediaType Media type"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Media Url",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Media Url mediaUrl Media URL"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Media Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Media Id mediaId Media ID (alternative to mediaUrl)"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Caption",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Caption caption Media caption"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Latitude",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Latitude latitude Location latitude"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Longitude",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Longitude longitude Location longitude"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Location Name",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Location Name locationName Location name"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Address",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Address address Location address"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contacts",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Contacts contacts Contact objects for sendContact"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Name",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Template Name templateName Template name"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Language",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Language language Template language code (e.g. en_US)"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Components",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Template Components templateComponents Template components"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Category",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Template Category templateCategory Template category"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Template Status",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Template Status templateStatus Template approval status (must be APPROVED to send)"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Body Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Body Text bodyText Interactive message body text"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Header Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Header Text headerText Interactive message header text"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Footer Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Footer Text footerText Interactive message footer text"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Buttons",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Buttons buttons Interactive buttons"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Button Text",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Button Text buttonText List button text"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Sections",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Sections sections List sections"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Cta Url",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Cta Url ctaUrl CTA URL object { display_text, url }"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Message Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Message Id messageId Message ID (for markAsRead)"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Contact Id contactId Contact ID"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Name",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Contact Name contactName Contact name"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Phone",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Contact Phone contactPhone Contact phone"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Contact Email",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Contact Email contactEmail Contact email"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Labels",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Labels labels Contact labels"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Conversation Id",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Conversation Id conversationId Conversation ID"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Recipients",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Recipients recipients Campaign recipients (array of phone numbers)"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Limit",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Limit limit Pagination limit"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: After",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read After after Pagination cursor"
-  },
-  {
-    "type": "field",
-    "title": "WhatsApp: Return All",
-    "slug": "whatsapp",
-    "category": "Communication",
-    "href": "/docs/nodes/whatsapp#operation-markAsRead",
-    "text": "WhatsApp Operations Mark As Read Return All returnAll Return all results (ignores limit)"
-  }
-] satisfies DocsSearchIndexItem[];
+  {
+    type: 'field',
+    title: "WhatsApp: List Campaigns - Limit",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-list',
+    text: "WhatsApp Campaign List Campaigns Limit limit Maximum number of campaigns to return.",
+  },
+  {
+    type: 'operation',
+    title: "WhatsApp: AI Agent - Enable AI Agent",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-enable',
+    text: "WhatsApp AI Agent Enable AI Agent Turns on Meta AI Agent assistance for one conversation, so incoming customer messages in that thread receive AI-generated suggestions or automated handling depending on your Meta configuration.",
+  },
+  {
+    type: 'field',
+    title: "WhatsApp: Enable AI Agent - Resource",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-enable',
+    text: "WhatsApp AI Agent Enable AI Agent Resource resource WhatsApp resource to act on.",
+  },
+  {
+    type: 'field',
+    title: "WhatsApp: Enable AI Agent - Operation",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-enable',
+    text: "WhatsApp AI Agent Enable AI Agent Operation operation AI Agent action to run.",
+  },
+  {
+    type: 'field',
+    title: "WhatsApp: Enable AI Agent - Conversation ID",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-enable',
+    text: "WhatsApp AI Agent Enable AI Agent Conversation ID conversationId Conversation to enable AI Agent for.",
+  },
+  {
+    type: 'operation',
+    title: "WhatsApp: AI Agent - Disable AI Agent",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-disable',
+    text: "WhatsApp AI Agent Disable AI Agent Turns off Meta AI Agent assistance for one conversation, for example when a human agent takes over a thread and automated suggestions are no longer needed.",
+  },
+  {
+    type: 'field',
+    title: "WhatsApp: Disable AI Agent - Resource",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-disable',
+    text: "WhatsApp AI Agent Disable AI Agent Resource resource WhatsApp resource to act on.",
+  },
+  {
+    type: 'field',
+    title: "WhatsApp: Disable AI Agent - Operation",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-disable',
+    text: "WhatsApp AI Agent Disable AI Agent Operation operation AI Agent action to run.",
+  },
+  {
+    type: 'field',
+    title: "WhatsApp: Disable AI Agent - Conversation ID",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-disable',
+    text: "WhatsApp AI Agent Disable AI Agent Conversation ID conversationId Conversation to disable AI Agent for.",
+  },
+  {
+    type: 'operation',
+    title: "WhatsApp: AI Agent - Get AI Suggestions",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-getSuggestions',
+    text: "WhatsApp AI Agent Get AI Suggestions Reads AI-generated reply suggestions for a conversation without sending anything, so a human agent can review and choose one before replying.",
+  },
+  {
+    type: 'field',
+    title: "WhatsApp: Get AI Suggestions - Resource",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-getSuggestions',
+    text: "WhatsApp AI Agent Get AI Suggestions Resource resource WhatsApp resource to act on.",
+  },
+  {
+    type: 'field',
+    title: "WhatsApp: Get AI Suggestions - Operation",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-getSuggestions',
+    text: "WhatsApp AI Agent Get AI Suggestions Operation operation AI Agent action to run.",
+  },
+  {
+    type: 'field',
+    title: "WhatsApp: Get AI Suggestions - Conversation ID",
+    slug: 'whatsapp',
+    category: 'Communication',
+    href: '/docs/nodes/whatsapp#operation-getSuggestions',
+    text: "WhatsApp AI Agent Get AI Suggestions Conversation ID conversationId Conversation to fetch AI suggestions for.",
+  },
+];

@@ -40,82 +40,94 @@ Output: {
   },
 
   webhook: {
-    overview: 'Starts a workflow when an external system sends an HTTP request to your webhook URL. Captures headers, query parameters, and body data.',
-    inputs: ['HTTP method (GET/POST/PUT)', 'Incoming request data'],
-    outputs: ['trigger', 'method', 'headers', 'query', 'body'],
-    example: `Webhook URL: https://your-app.com/api/webhook/abc123
+    overview: 'Starts a workflow when an external app, website form, payment system, or internal service sends data to the generated CtrlChecks webhook URL. Captures the request body, headers, query values, and method for the next node.',
+    inputs: ['path: readable URL ending such as /paid-order', 'httpMethod: GET, POST, PUT, PATCH, or DELETE', 'responseMode: responseNode, onReceived, or lastNode', 'verifySignature and secretToken for signed production requests'],
+    outputs: ['body', 'method', 'headers', 'query', 'event-specific fields such as orderId or customerEmail'],
+    example: `Path: /paid-order
+HTTP Method: POST
+Response Mode: responseNode
 
-External Service sends POST:
+Checkout system sends:
 {
   "event": "order_created",
-  "data": { "id": 123, "total": 99.99 }
+  "orderId": "ORD-1048",
+  "customerEmail": "alex@example.com",
+  "total": 249.50
 }
 
-Output: { 
-  trigger: "webhook",
+Output: {
+  event: "order_created",
+  orderId: "ORD-1048",
+  customerEmail: "alex@example.com",
+  total: 249.50,
   method: "POST",
-  headers: {"Content-Type": "application/json"},
-  query: {},
-  body: {"event": "order_created", "data": {...}}
+  headers: {"content-type": "application/json"},
+  query: {"source": "website"},
+  body: {"event": "order_created", "orderId": "ORD-1048"}
 }`,
     tips: [
-      'Enable the webhook URL in Webhook settings',
-      'Supports GET, POST, PUT methods',
-      'Headers and query params are available in output',
-      'JSON body is parsed safely when possible',
+      'Enable the workflow Webhook button after saving, then paste the generated URL into the sending app.',
+      'Use POST for most workplace events that include JSON data.',
+      'Use responseNode with a Respond to Webhook node when the caller needs a custom status or JSON reply.',
+      'Turn on signature verification for production or public URLs when the sender supports signed requests.',
+      'Map request data from the execution output, usually {{$json.body.email}}, {{$json.orderId}}, {{$json.headers}}, or {{$json.query.source}}.',
     ],
   },
 
   chat_trigger: {
-    overview: 'Starting node that activates when a user sends a chat message. It captures the message and context (user, session, channel, timestamp) so the workflow can respond or take action.',
+    overview: 'Starting node that runs when someone sends a message through the CtrlChecks chat interface for an active workflow. The node panel has no setup fields today; the chat page supplies the message and session details at runtime.',
     inputs: [
-      'message (text content)',
-      'session_id or conversation_id',
-      'user_id / sender_id',
-      'user_context (optional metadata)',
-      'channel or source (optional)',
+      'No visible setup fields in the node panel',
+      'message comes from the chat box or a compatible /message API call',
+      'sessionId is generated as workflowId_nodeId so replies go back to the same chat',
+      'channel and allowedSenders are backend schema fields for generated/test payloads, not enforced visual filters',
     ],
-    outputs: ['trigger', 'message', 'session_id', 'user_id', 'timestamp', 'channel', 'metadata'],
-    example: `Chat Input:
+    outputs: ['message', 'channel', 'sessionId', 'trigger', 'node_id', 'workflow_id', 'timestamp', '_chat'],
+    example: `Chat message request:
 {
-  "message": "I want to track my order",
-  "session_id": "session_20260201_001",
-  "user_id": "user_839204",
-  "channel": "Web Chat",
-  "metadata": {"device": "Mobile"}
+  "message": "I want to track order ORD-1048",
+  "sessionId": "workflow_123_chat-trigger-1"
 }
 
 Output: {
   trigger: "chat",
-  message: "I want to track my order",
-  session_id: "session_20260201_001",
-  user_id: "user_839204",
-  channel: "Web Chat",
-  timestamp: "2026-02-01T10:45:32Z",
-  metadata: {"device": "Mobile"}
+  message: "I want to track order ORD-1048",
+  sessionId: "workflow_123_chat-trigger-1",
+  channel: "workflow_123_chat-trigger-1",
+  workflow_id: "workflow_123",
+  node_id: "chat-trigger-1",
+  timestamp: "2026-07-19T09:15:00.000Z",
+  _chat: true
 }`,
     tips: [
-      'Use as the first node in the workflow',
-      'Store session_id for multi-step conversations',
-      'Add rate limits to prevent spam triggers',
-      'Keep trigger conditions simple',
-      'Handle empty or very short messages gracefully',
+      'Use as the first node in chatbot, assistant, support intake, or guided request workflows',
+      'Map {{$json.message}} into AI Agent or HTTP Request when the next step needs the visitor question',
+      'Use Chat Send after the answer is prepared; it can read {{$json.sessionId}} from the connected Chat Trigger output',
+      'The workflow must be active before the public chat URL accepts messages',
+      'Downstream app nodes such as Slack, Gmail, CRM, or database actions still need their own account connection',
     ],
   },
 
   error_trigger: {
-    overview: 'Automatically fires when any node fails in the workflow. Global scope - cannot be manually executed. Fires on unhandled exceptions.',
-    inputs: ['Error information from failed node'],
-    outputs: ['trigger', 'failed_node', 'error_message', 'stack_trace'],
+    overview: 'Runs when another node in the same workflow fails. Error Trigger is skipped during normal successful execution and is invoked by the failure handler with the failed node name, error message, and error type.',
+    inputs: ['No visible setup fields', 'Internal failure payload from the workflow executor', 'Simulation payloads should use failed_node, error_message, and error_type'],
+    outputs: ['failed_node', 'error_message', 'error_type', 'error_stack (optional)', 'node_output (optional)'],
     example: `When a node fails:
 
 Output: {
-  trigger: "error",
-  failed_node: "http_request",
-  error_message: "HTTP Request failed: Connection timeout",
-  stack_trace: "Error: Connection timeout\n    at executeNode..."
+  failed_node: "HTTP Request",
+  error_message: "HTTP Request node: URL is required",
+  error_type: "Error",
+  error_stack: "Error: HTTP Request node: URL is required\\n    at executeNode...",
+  node_output: {"_error": "HTTP Request node: URL is required"}
 }`,
-    tips: ['Cannot be manually executed', 'Fires automatically on node failures', 'Global scope - catches all errors', 'Use for error logging and recovery workflows'],
+    tips: [
+      'Use {{$json.error_message}} for Slack, email, ticket, or log text.',
+      'Use {{$json.failed_node}} to name the failing step in the alert.',
+      'Do not map old fields like {{$json.error.message}}, {{$json.failedWorkflowId}}, or {{$json.failedNodeId}}.',
+      'Downstream alert or ticket nodes still need their own service account connection.',
+      'Test with a controlled failure before relying on the error path in production.',
+    ],
   },
 
   interval: {
@@ -135,23 +147,37 @@ Output: {
   },
 
   workflow_trigger: {
-    overview: 'Triggers one workflow from another workflow. Accepts source workflow_id and passes execution payload. Prevents circular triggers.',
-    inputs: ['payload from source workflow'],
-    outputs: ['trigger', 'source_workflow_id', 'payload'],
-    example: `Source Workflow A triggers Target Workflow B:
+    overview: 'Starts this workflow when an allowed parent workflow calls it with Execute Workflow. Use it to make reusable child workflows for notifications, enrichment, approvals, or shared cleanup steps.',
+    inputs: ['source_workflow_id: the parent workflow allowed to call this child workflow', 'payload passed by the parent Execute Workflow node'],
+    outputs: ['payload fields sent by the parent, such as customerEmail, ticketId, or priority', 'inputData object when the parent wraps the payload', 'workflowId and timestamp when provided for logging'],
+    example: `Parent workflow: Support Intake
+Child workflow: Send Escalation Alert
 
-Workflow B receives:
+Parent Execute Workflow sends:
 {
-  trigger: "workflow",
-  source_workflow_id: "workflow-a-uuid",
-  payload: {
-    "order_id": 123,
-    "status": "completed"
-  }
-}`,
-    tips: ['source_workflow_id is required', 'Payload is passed from source workflow', 'Prevents circular triggers', 'Great for workflow orchestration'],
-  },
+  "customerEmail": "maya@acme.com",
+  "ticketId": "SUP-1042",
+  "priority": "high"
+}
 
+Child workflow receives:
+{
+  customerEmail: "maya@acme.com",
+  ticketId: "SUP-1042",
+  priority: "high"
+}
+
+Use in child nodes:
+customerEmail = {{$json.customerEmail}}
+ticketId = {{$json.ticketId}}`,
+    tips: [
+      'Source Workflow ID should be the parent workflow ID, not this child workflow ID.',
+      'The parent still needs an Execute Workflow node that selects this child workflow.',
+      'Run the parent once and inspect the child execution before mapping fields.',
+      'Use {{$json.customerEmail}} for top-level payload fields or {{$json.inputData.customerEmail}} when the parent wraps input under inputData.',
+      'Avoid circular calls where a child workflow eventually calls the parent again.',
+    ],
+  },
   // AI Processing
   openai_gpt: {
     overview: 'Processes text using OpenAI GPT models. Provide a system prompt and the input will be sent as the user message.',
@@ -225,48 +251,78 @@ Connect: Webhook → Sentiment → If/Else (route by sentiment)`,
 
   // Logic & Control
   if_else: {
-    overview: 'Routes workflow based on conditions. Creates two branches: one for when condition is true, another for false.',
-    inputs: ['condition'],
-    outputs: ['true_branch', 'false_branch'],
-    example: `Condition: {{input.score}} > 0.5
+    overview: 'Makes a yes/no decision from previous-step data and routes matching work through TRUE and non-matching work through FALSE.',
+    inputs: ['conditions', 'condition field', 'condition operator', 'condition value', 'combineOperation'],
+    outputs: ['TRUE branch', 'FALSE branch', 'conditionResult', 'original input data'],
+    example: `Conditions:
+1. Field: $json.orderTotal
+   Operator: Greater than or equal
+   Value: 500
+2. Field: $json.status
+   Operator: Equals
+   Value: paid
 
-If score is 0.8 → Takes TRUE branch
-If score is 0.3 → Takes FALSE branch
+Combine Operation: AND
 
-Connect TRUE → Send Happy Email
-Connect FALSE → Send Followup Email`,
-    tips: ['Use {{input.field}} to reference data', 'Supports ==, !=, >, <, >=, <=', 'Combine conditions with && or ||'],
+If orderTotal is 725 and status is paid, the run leaves through TRUE.
+If orderTotal is 120 or status is unpaid, the run leaves through FALSE.
+
+Connect TRUE to Finance Review.
+Connect FALSE to Standard Fulfillment.
+
+Both branches can still use {{$json.customerEmail}}, {{$json.orderTotal}}, and other incoming fields.`,
+    tips: [
+      'Use the builder for normal setup; use JSON mode only when pasting prepared condition objects.',
+      'Choose AND when every row must match; choose OR when any row can match.',
+      'Use equals for statuses and categories, greater-than operators for numeric thresholds, and contains for text or lists.',
+      'Connect both TRUE and FALSE outputs so no business case silently disappears.',
+    ],
   },
 
   switch: {
-    overview: 'Routes to different branches based on matching values. Like multiple if/else statements combined.',
-    inputs: ['expression', 'cases'],
-    outputs: ['matched_case', 'default'],
-    example: `Expression: {{input.status}}
+    overview: 'Routes a run into one of several named branches by matching one incoming value against configured case values.',
+    inputs: ['expression', 'cases', 'routingType (legacy optional)', 'rules (legacy alias)'],
+    outputs: ['case outputs named by cases[].value', '__routing.matchedCase', 'original input data'],
+    example: `Expression: {{$json.category}}
 Cases: [
-  {"value": "pending", "label": "Pending"},
-  {"value": "approved", "label": "Approved"},
-  {"value": "rejected", "label": "Rejected"}
+  {"value": "billing", "label": "Billing"},
+  {"value": "technical", "label": "Technical"},
+  {"value": "general", "label": "General"}
 ]
 
-Connects to different nodes based on status value.`,
-    tips: ['Add a default case for unmatched values', 'Great for status-based routing', 'Each case can connect to different nodes'],
+If category is billing, the billing branch runs.
+If category is technical, the technical branch runs.
+If category is general, the general branch runs.
+
+Connect billing to Finance Queue.
+Connect technical to Engineering Support.
+Connect general to Customer Care.
+
+Each branch can still use {{$json.customerEmail}} and {{$json.ticketId}}.`,
+    tips: [
+      'Use Switch for three or more outcomes; use If/Else for a yes/no decision.',
+      'The case value is the real branch handle, so keep values unique and stable.',
+      'Make case values exactly match the expression result, including spelling.',
+      'Add a fallback or review path for unexpected values when the business process needs one.',
+    ],
   },
 
   loop: {
-    overview: 'Exposes an input array downstream with loop metadata. The current DAG runtime does not execute the downstream branch once per item.',
-    inputs: ['array expression (optional)', 'maxIterations'],
-    outputs: ['items', 'loop.maxIterations', 'loop.iterations', 'loop.truncated'],
-    example: `Input: { items: ["email1", "email2", "email3"] }
-Array Expression: {{$json.items}}
-Max Iterations: 100
+    overview: 'Exposes an upstream array as {{$json.items}}, caps it with Max Iterations, and adds loop metadata. The current DAG runtime does not run the next branch once per item.',
+    inputs: ['array expression (optional)', 'maxIterations limit'],
+    outputs: ['items', 'loop.maxIterations', 'loop.iterations', 'loop.truncated', '_warning'],
+    example: `Input: { reportDate: "2026-07-18", overdueTickets: [{ticketId: "SUP-1001"}, {ticketId: "SUP-1002"}] }
+Array Expression: {{$json.overdueTickets}}
+Max Iterations: 25
 
 Output metadata:
 {
-  items: ["email1", "email2", "email3"],
-  loop: {maxIterations: 100, iterations: 3, truncated: false}
+  reportDate: "2026-07-18",
+  items: [{ticketId: "SUP-1001"}, {ticketId: "SUP-1002"}],
+  loop: {maxIterations: 25, iterations: 2, truncated: false},
+  _warning: "Loop exposes items and metadata; DAG runtime does not run the next branch once per item."
 }`,
-    tips: ['Leave array empty to use input.items', 'Set max iterations to cap large arrays', 'Use function_item when you need a transform once for each item'],
+    tips: ['Leave Array Expression empty only when input.items already contains the list', 'Use Max Iterations to cap large lists before rate-limited services', 'Use Function Item or a supported batch path when each item needs its own action', 'Loop has no credentials; downstream service nodes still need connected accounts'],
   },
 
   wait: {
@@ -300,41 +356,58 @@ If connected node fails:
   },
 
   filter: {
-    overview: 'Filters an array to keep only items matching a condition. Removes items that do not meet criteria.',
-    inputs: ['array of items'],
-    outputs: ['filtered_array', 'removed_count'],
-    example: `Array: {{input.users}}
-Condition: item.age >= 18
+    overview: 'Keeps only the records in a list that match a rule, then passes the smaller list to the next node.',
+    inputs: ['array expression (optional)', 'condition'],
+    outputs: ['items replaced with filtered list', 'other incoming fields preserved', '_error when filtering cannot run'],
+    example: `Array: {{$json.contacts}}
+Condition: item.status === "active" && item.email && !item.email.includes("test")
 
-Input: [
-  {name: "John", age: 25},
-  {name: "Jane", age: 16},
-  {name: "Bob", age: 30}
+Input contacts:
+[
+  {name: "Asha", status: "active", email: "asha@example.com"},
+  {name: "Ben", status: "inactive", email: "ben@example.com"},
+  {name: "Test", status: "active", email: "test@example.com"}
 ]
-Output: [John, Bob] (filtered out Jane)`,
-    tips: ['Use "item" to reference current element', 'Returns new array, original unchanged', 'Chain multiple filters for complex logic'],
+
+Output {{$json.items}}:
+[
+  {name: "Asha", status: "active", email: "asha@example.com"}
+]
+
+Other incoming fields, such as {{$json.batchId}}, stay available.`,
+    tips: [
+      'Leave Array empty when the previous node already outputs items.',
+      'Use item.fieldName inside the condition because the rule runs once per array item.',
+      'Use source-node filters when possible for very large lists.',
+      'Some secured deployments disable JavaScript-style filtering; in that case the output includes _error.',
+    ],
   },
 
   merge: {
-    overview: 'Combines data from multiple input branches into one output. Supported modes are overwrite, append, and deep_merge.',
+    overview: 'Rejoins multiple workflow branches and combines their data into one payload for the next step.',
     inputs: ['mode', 'multiple data inputs from different branches'],
-    outputs: ['combined branch data'],
+    outputs: ['combined payload', 'items in append mode', 'mergeMode/sourceCount metadata'],
     example: `Mode: overwrite
-Input 1: {name: "John", age: 30}
-Input 2: {email: "john@test.com", city: "NYC"}
+Input 1: {ticketId: "TCK-2048", status: "approved"}
+Input 2: {assignee: "finance@example.com", status: "reviewed"}
 
-Output: {name: "John", age: 30, email: "john@test.com", city: "NYC"}
+Output: {ticketId: "TCK-2048", status: "reviewed", assignee: "finance@example.com"}
 
 Mode: append
-Input 1: [1, 2]
-Input 2: [3, 4]
-Output: {items: [1, 2, 3, 4]}
+Input 1: {ticketId: "TCK-2048", branch: "billing"}
+Input 2: {ticketId: "TCK-2048", branch: "technical"}
+Output: {items: [{ticketId: "TCK-2048", branch: "billing"}, {ticketId: "TCK-2048", branch: "technical"}]}
 
 Mode: deep_merge
-Input 1: {user: {name: "John"}}
-Input 2: {user: {email: "john@test.com"}}
-Output: {user: {name: "John", email: "john@test.com"}}`,
-    tips: ['Use overwrite to combine flat objects', 'Use append to collect branch outputs into items', 'Use deep_merge for nested objects', 'Connect multiple nodes as inputs to merge'],
+Input 1: {customer: {email: "customer@example.com"}}
+Input 2: {approval: {status: "approved"}}
+Output: {customer: {email: "customer@example.com"}, approval: {status: "approved"}}`,
+    tips: [
+      'Use overwrite for simple flat objects when duplicate keys can be replaced.',
+      'Use append when the next node should receive a list at {{$json.items}}.',
+      'Use deep_merge when branches add different nested details that should survive together.',
+      'Connect every branch that should rejoin into Merge, then connect Merge output to the final action.',
+    ],
   },
 
   noop: {
@@ -367,41 +440,42 @@ If/Else (condition fails) → Stop And Error`,
   },
 
   split_in_batches: {
-    overview: 'Splits a large array into smaller batches. Useful for processing large datasets in chunks, avoiding memory issues, or respecting API rate limits.',
-    inputs: ['array of items'],
-    outputs: ['batches array', 'batch_index', 'current_batch'],
-    example: `Array: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-Batch Size: 3
+    overview: 'Divides an incoming array into smaller groups, returns every group in batches, and exposes the first group as items. Current DAG runtime does not run the next branch once per batch.',
+    inputs: ['array expression (optional)', 'batchSize'],
+    outputs: ['batches', 'batchSize', 'totalBatches', 'items', '_warning'],
+    example: `Input: { syncDate: "2026-07-18", contacts: [{id: 1}, {id: 2}, {id: 3}, {id: 4}, {id: 5}] }
+Array Expression: {{$json.contacts}}
+Batch Size: 2
 
-Output: [
-  [1, 2, 3],    // Batch 1
-  [4, 5, 6],    // Batch 2
-  [7, 8, 9],    // Batch 3
-  [10]          // Batch 4
-]
-
-Each batch can be processed separately in a loop.`,
-    tips: ['Set appropriate batch size for your use case', 'Useful for large API calls', 'Prevents memory overflow', 'Each batch can be processed independently'],
+Output:
+{
+  syncDate: "2026-07-18",
+  batches: [[{id: 1}, {id: 2}], [{id: 3}, {id: 4}], [{id: 5}]],
+  batchSize: 2,
+  totalBatches: 3,
+  items: [{id: 1}, {id: 2}],
+  _warning: "Split In Batches exposes batch data; DAG runtime does not run the next branch once per batch."
+}`,
+    tips: ['Leave Array Expression empty only when input.items already contains the list', 'Use smaller batch sizes for rate-limited services', 'Use {{$json.batches}} for all groups and {{$json.items}} for the first exposed group', 'Split In Batches has no credentials; downstream service nodes still need connected accounts'],
   },
 
   // Data Transformation
   javascript: {
-    overview: 'Execute sandboxed JavaScript code to transform, calculate, or process workflow data.',
-    inputs: ['current workflow data as $json/input'],
-    outputs: ['script return value'],
+    overview: 'Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.',
+    inputs: ['current workflow data as input, $json, or json', 'optional timeout in milliseconds', 'optional outputSchema top-level type hint'],
+    outputs: ['whatever the script returns as downstream {{$json}} data', '_error when code is missing, execution is disabled, the script throws, or it times out'],
     example: `Code:
-const total = $json.items.reduce(
-  (sum, item) => sum + item.price, 0
-);
+const total = Number($json.orderTotal || 0);
 return {
-  total,
-  count: $json.items.length,
-  average: total / $json.items.length
+  ...$json,
+  riskScore: total > 5000 ? 90 : 20,
+  eligibleForReview: total > 5000,
+  processedAt: "2026-07-18T09:30:00.000Z"
 };
 
-Input: {items: [{price: 10}, {price: 20}]}
-Output: {total: 30, count: 2, average: 15}`,
-    tips: ['Always return a value', 'Default timeout is 5000ms and runtime caps at 30000ms', 'Use for transformations that built-in nodes cannot express'],
+Input: {orderId: "ord_1042", customerEmail: "asha.rao@example.com", orderTotal: 6400}
+Output: {orderId: "ord_1042", customerEmail: "asha.rao@example.com", orderTotal: 6400, riskScore: 90, eligibleForReview: true, processedAt: "2026-07-18T09:30:00.000Z"}`,
+    tips: ['Always return the value the next node should receive', 'Default timeout is 5000ms and runtime caps at 30000ms', 'Use Output Schema such as {"type":"object"} only as a top-level shape hint', 'JavaScript has no credentials; connect downstream service node accounts separately', 'Do not paste API keys, tokens, or passwords into code'],
   },
 
   function: {
@@ -469,38 +543,44 @@ Output: {
   },
 
   set: {
-    overview: 'Sets or updates field values in an object. Creates new fields or overwrites existing ones. Supports template variables for dynamic values.',
-    inputs: ['object to modify'],
-    outputs: ['object with updated fields'],
+    overview: 'Adds clean field names to the current item or overwrites existing fields before later steps use the data. Use it to normalize form, webhook, sheet, CRM, or API payloads.',
+    inputs: ['incoming workflow item', 'required fields JSON object'],
+    outputs: ['incoming item plus configured fields'],
     example: `Fields (JSON): {
-  "name": "{{input.userName}}",
-  "status": "active",
-  "updated_at": "2024-01-15"
+  "customerEmail": "{{$json.email}}",
+  "fullName": "{{$json.firstName}} {{$json.lastName}}",
+  "leadSource": "Website demo request",
+  "readyForSales": true
 }
 
-Input: {userName: "John", id: 123}
+Input: {firstName: "Asha", lastName: "Rao", email: "asha.rao@example.com", leadId: "lead_1042"}
 Output: {
-  userName: "John",
-  id: 123,
-  name: "John",
-  status: "active",
-  updated_at: "2024-01-15"
+  firstName: "Asha",
+  lastName: "Rao",
+  email: "asha.rao@example.com",
+  leadId: "lead_1042",
+  customerEmail: "asha.rao@example.com",
+  fullName: "Asha Rao",
+  leadSource: "Website demo request",
+  readyForSales: true
 }`,
-    tips: ['Use {{input.field}} for dynamic values', 'New fields are added, existing ones are overwritten', 'Supports nested object paths', 'Great for data normalization'],
+    tips: ['Use {{$json.field}} expressions for values from earlier steps', 'Keys you set are available later as {{$json.keyName}}', 'Matching field names overwrite incoming values', 'Set has no credentials; connect accounts on downstream service nodes'],
   },
 
   edit_fields: {
-    overview: 'Adds or overwrites configured fields on the current object. Each field value can be static or resolved from upstream data.',
-    inputs: ['object to modify'],
-    outputs: ['modified object'],
+    overview: 'Adds or overwrites fields on the current item with simple key-value rows. Use it to make messy incoming data easier for later nodes to map.',
+    inputs: ['incoming workflow item', 'optional field mappings'],
+    outputs: ['incoming item plus edited fields'],
     example: `Fields: {
-  "status": "active",
-  "fullName": "{{$json.firstName}} {{$json.lastName}}"
+  "customerEmail": "{{$json.email}}",
+  "fullName": "{{$json.fname}} {{$json.lname}}",
+  "priorityLabel": "High",
+  "needsManagerReview": true
 }
 
-Input: {firstName: "John", lastName: "Smith", id: 123}
-Output: {firstName: "John", lastName: "Smith", id: 123, status: "active", fullName: "John Smith"}`,
-    tips: ['Configured fields are added or overwritten', 'Use Rename Keys to rename or remove existing keys', 'Values support {{$json.field}} expressions'],
+Input: {ticketId: "SUP-1042", email: "maya@example.com", fname: "Maya", lname: "Chen"}
+Output: {ticketId: "SUP-1042", email: "maya@example.com", fname: "Maya", lname: "Chen", customerEmail: "maya@example.com", fullName: "Maya Chen", priorityLabel: "High", needsManagerReview: true}`,
+    tips: ['Configured fields are added or overwritten', 'Leave fields empty only when pass-through is intentional', 'Use {{$json.field}} expressions for values from earlier steps', 'Edit Fields has no credentials; downstream service nodes still need connected accounts'],
   },
 
   aggregate: {
@@ -620,18 +700,23 @@ Output: "Hello John! Your order #123 ships on Jan 20."`,
   },
 
   http_request: {
-    overview: 'Make HTTP requests to external APIs. Fetch data, call webhooks, or interact with any REST API.',
-    inputs: ['URL params', 'body data'],
-    outputs: ['response', 'status', 'headers'],
-    example: `URL: https://api.example.com/users/{{input.userId}}
+    overview: 'Call an external API or webhook, optionally adding headers, query parameters, body data, and a timeout.',
+    inputs: ['url', 'method', 'headers', 'body for POST/PUT/PATCH', 'qs query parameters', 'timeout'],
+    outputs: ['status and statusText', 'headers', 'body and data', 'final url', 'acknowledgementStatus', '_error on request failures'],
+    example: `URL: https://api.billing.example.com/v1/customers/{{$json.customerId}}/invoices
 Method: GET
-Headers: {"Authorization": "Bearer {{input.token}}"}
+Headers: {"Accept":"application/json","X-Request-Source":"ctrlchecks-workflow"}
+Query String Params: {"limit":1,"status":"latest"}
 
 Output: {
-  response: {id: 1, name: "John"},
-  status: 200
+  status: 200,
+  statusText: "OK",
+  body: {customerEmail: "asha.rao@example.com", invoiceStatus: "paid"},
+  data: {customerEmail: "asha.rao@example.com", invoiceStatus: "paid"},
+  url: "https://api.billing.example.com/v1/customers/cus_1042/invoices?limit=1&status=latest",
+  acknowledgementStatus: "acknowledged"
 }`,
-    tips: ['Use {{input.x}} in URL for dynamic values', 'Add auth headers for protected APIs', 'Set timeout for slow APIs'],
+    tips: ['Use {{$json.field}} in the URL, body, or query values when data comes from an earlier step', 'GET reads, POST creates, PUT replaces, PATCH partially updates, DELETE removes', 'Runtime sends Body only for POST, PUT, and PATCH', 'HTTP Request has no saved credentials; use secure secret references for protected API headers', 'Downstream service nodes still need their own account connections'],
   },
 
   graphql: {
@@ -704,9 +789,9 @@ Useful for storing computed values to use in multiple places.`,
   },
 
   google_sheets: {
-    overview: 'Read or write data from Google Sheets. Connect your spreadsheets to workflows for data analysis, validation, and automation.',
-    inputs: ['operation', 'spreadsheetId', 'sheetName', 'range', 'outputFormat', 'readDirection', 'allowWrite', 'data'],
-    outputs: ['data', 'rows', 'columns', 'formatted_data'],
+    overview: 'Read, write, append, or update data in Google Sheets. Connect your spreadsheets to workflows for data extraction, logging, and automation.',
+    inputs: ['operation', 'spreadsheetId', 'sheetName', 'range', 'outputFormat', 'readDirection (read)', 'values or data (write/append/update)'],
+    outputs: ['rows/items, headers, values (read)', 'success, updatedRange, updatedCells, values (write/update)', 'success, tableRange, updatedRange, appendedValues (append)'],
     example: `Operation: Read
 Spreadsheet ID: 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms
 Sheet: Sheet1
@@ -714,21 +799,42 @@ Range: A1:D100
 Output Format: JSON
 
 Output: {
-  data: [
-    {Name: "John", Email: "john@example.com", Status: "Active"},
-    {Name: "Jane", Email: "jane@example.com", Status: "Pending"}
+  rows: [
+    {row_number: 2, Name: "John", Email: "john@example.com", Status: "Active"},
+    {row_number: 3, Name: "Jane", Email: "jane@example.com", Status: "Pending"}
   ],
-  rows: 2,
-  columns: 4
+  headers: ["Name", "Email", "Status"]
 }
 
 AI Agent can then analyze, filter, or process this data.`,
     tips: [
       'Get Spreadsheet ID from URL: /d/SPREADSHEET_ID/edit',
       'Leave range empty to read all used cells',
-      'Use key-value format for easier AI processing',
-      'Admin can enable write access for updates',
+      'Use key-value or text Output Format for easier AI processing',
+      'Allow Write Access has no runtime effect — write/append/update run regardless of this checkbox',
+      'Data is checked before Values when both are filled',
       'Authenticate with Google account first',
+    ],
+  },
+
+  google_sheets_trigger: {
+    overview: 'Start a workflow from Google Sheets row changes by polling a watched spreadsheet about every two minutes. Activation captures the current rows as a baseline, so old rows do not fire as new events.',
+    inputs: ['spreadsheetId', 'sheetName (optional)', 'hasHeaderRow', 'eventTypes: row_added and/or row_updated', 'query keyword filter (optional)', 'Google OAuth2 connection'],
+    outputs: ['eventId', 'eventType', 'source', 'timestamp', 'spreadsheetId', 'sheetName', 'rowNumber', 'values', 'row', 'raw', 'trigger', 'workflow_id', 'node_id', 'sessionId', '_googleSheets'],
+    example: `Spreadsheet ID: 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms
+Sheet Name: Leads
+Has Header Row: true
+Event Types: row_added
+Keyword Filter: urgent
+
+When a new row containing "urgent" appears after activation, the workflow receives {{$json.row.Email}}, {{$json.row.Priority}}, {{$json.rowNumber}}, and {{$json.eventType}}.`,
+    tips: [
+      'Google Sheets does not push cell-change webhooks, so this trigger polls about every two minutes',
+      'Existing rows become the activation baseline; add or edit rows after activation to test it',
+      'Use row_added for new appended rows and row_updated for changes to tracked rows',
+      'Keep Has Header Row on when downstream nodes should use {{$json.row.ColumnName}}; use {{$json.values[0]}} style paths when it is off',
+      'Save Google OAuth2 in Connections with Sheets access; do not put OAuth tokens or Google passwords into workflow fields',
+      'Connect downstream service accounts separately; this connection only authorizes sheet polling',
     ],
   },
 
@@ -781,44 +887,182 @@ Sends personalized order confirmation.`,
     tips: ['Requires RESEND_API_KEY secret', 'Use HTML for rich emails', 'Use {{input.x}} for personalization'],
   },
   email: {
-    overview: 'Send emails through your own SMTP server or mail relay. Use for notifications, alerts, and reports when Gmail/Outlook OAuth is not an option.',
+    overview: 'Send plain-text or HTML emails through a saved SMTP Account connection. Use this for company mail relays or SMTP providers when Gmail/Outlook OAuth is not the right sender path.',
     inputs: ['to', 'subject', 'text', 'html (optional)', 'from (optional)'],
-    outputs: ['success', 'messageId', 'accepted', 'rejected'],
-    example: `To: user@example.com
-Subject: "Order Confirmed"
-Text: "Thanks for your purchase!"
+    outputs: ['incoming fields are kept', 'success', 'messageId', 'accepted', 'rejected', '_error on missing fields, missing SMTP credentials, or SMTP send failure'],
+    example: `To: {{$json.customerEmail}}
+Subject: "Invoice {{$json.invoiceNumber}} is ready"
+Text: "Hi {{$json.firstName}}, your invoice is ready: {{$json.invoiceUrl}}"
+HTML: "<p>Hi {{$json.firstName}},</p><p><a href='{{$json.invoiceUrl}}'>View invoice</a></p>"
+From: billing@company.com
 
-Sends a notification email.`,
+Output: {
+  customerEmail: "asha.rao@example.com",
+  invoiceNumber: "INV-1042",
+  success: true,
+  messageId: "<abc123@smtp.example.com>",
+  accepted: ["asha.rao@example.com"],
+  rejected: []
+}`,
     tips: [
-      'Save your SMTP host, port, username, and password as an SMTP Account connection',
-      'Gmail/Outlook personal accounts need an app password, not the login password',
-      'Use text for plain emails, add html for rich formatting',
+      'Save SMTP host, port, username, and password or app password in an SMTP Account connection',
+      'Do not paste SMTP passwords into To, Subject, Text, HTML, or From fields',
+      'Use text as a reliable fallback, even when html is provided',
+      'Leave From blank unless the SMTP provider allows the sender address',
+      'Connect downstream service accounts separately; SMTP only authorizes this email send',
+    ],
+  },
+
+  amazon_ses: {
+    overview: 'Send transactional or templated emails through Amazon Simple Email Service (SES) using a saved AWS Access Key connection. Use it for order confirmations, notifications, and bulk transactional sends when you need AWS-native retry logic, delivery tracking, and attachments.',
+    inputs: ['recipients', 'fromAddress', 'subject/body (raw send) or templateName/templateData (template send)', 'awsRegion (optional)', 'attachments (optional)'],
+    outputs: ['success', 'messageId', 'recipientCount', 'failedRecipients (always empty)', 'attempts', 'timestamp', '_error on validation failures, error on AWS SES send failures'],
+    example: `Recipients: {"to": ["{{$json.customerEmail}}"]}
+From Address: orders@yourcompany.com
+Subject: "Order {{$json.orderId}} Confirmation"
+Body: "Hi {{$json.customerName}}, your order {{$json.orderId}} is confirmed."
+
+Output: {
+  success: true,
+  messageId: "0102018e2b3c7abc-def1234-...",
+  recipientCount: 1,
+  failedRecipients: [],
+  attempts: 1,
+  timestamp: "2026-07-18T09:15:00.000Z"
+}`,
+    tips: [
+      'Verify the From Address (and Return Path, if used) in AWS SES for the exact AWS Region set on this node — verification is per-region',
+      'Field-validation failures (missing recipients/subject/body) return _error; actual AWS SES send failures (unverified sender, rate limiting, missing connection) return a plain error field instead — check both downstream',
+      'Attachments are limited to specific file types (PDF, Word, Excel, common images, TXT/CSV, ZIP) and a 40MB total email size',
+      'Do not paste the Access Key ID or Secret Access Key into Recipients, Subject, Body, or any other workflow field — save them in Connections',
+      'Connect downstream service accounts separately; the Amazon SES connection only authorizes this node\'s own email send',
+    ],
+  },
+
+  mailgun: {
+    overview: 'Send transactional emails through Mailgun using a saved API Key connection (private API key, sending domain, and region). Use it for password resets, receipts, and other transactional emails, with support for stored Mailgun templates.',
+    inputs: ['from', 'to', 'subject', 'text and/or html (or template)', 'cc/bcc/replyTo/tags (optional)', 'templateVariables (optional, with template)'],
+    outputs: ['success (on success only)', 'messageId', 'message', 'mailgun', '_error / _errorDetails on failure'],
+    example: `From: noreply@mg.yourcompany.com
+To: {{$json.email}}
+Subject: "Reset your password"
+Html: "<p>Click <a href=\\"{{$json.resetUrl}}\\">here</a> to reset your password.</p>"
+
+Output: {
+  success: true,
+  messageId: "<20260718091500.1.ABCDEF@mg.yourcompany.com>",
+  message: "Queued. Thank you.",
+  mailgun: { id: "...", message: "Queued. Thank you." }
+}`,
+    tips: [
+      'To/CC/BCC are comma-separated strings on this node, not a JSON {"to": [...]} object like Amazon SES uses',
+      'Mailgun requires at least one of Text, HTML, or Template — leaving all three empty fails before Mailgun is contacted',
+      'There is no success: false on failure — only check {{$json._error}} downstream to detect a failed send',
+      'Sandbox domains can only send to recipients you have explicitly authorized in the Mailgun dashboard',
+      'Do not paste the Private API Key into From, To, or any other workflow field — save it in the Mailgun connection under Connections',
+      'Connect downstream service accounts separately; the Mailgun connection only authorizes this node\'s own email send',
+    ],
+  },
+
+  sendgrid: {
+    overview: 'Send a one-off transactional email through SendGrid\'s Mail Send API using a saved API Key connection. Only From, To, Subject, Text, and HTML are supported — this node does not implement SendGrid CC/BCC, Reply-To, attachments, categories, or Dynamic Templates.',
+    inputs: ['from', 'to', 'subject (optional)', 'text and/or html (optional)'],
+    outputs: ['success (on success only)', 'status', 'messageId', '_error / _errorDetails on failure'],
+    example: `From: receipts@yourapp.com
+To: {{$json.customerEmail}}
+Subject: "Your receipt for order #{{$json.orderId}}"
+Html: "<h1>Thank you!</h1><p>You paid \${{$json.amount}}.</p>"
+
+Output: {
+  success: true,
+  status: 202,
+  messageId: "a1B2c3D4e5F6.filter-node-1...@sgrp"
+}`,
+    tips: [
+      'To is a comma-separated string on this node, not a JSON {"to": [...]} object like Amazon SES uses',
+      'Neither Text nor HTML is actually required — leaving both blank sends an email with an empty body instead of failing',
+      'There is no success: false on failure — only check {{$json._error}} downstream to detect a failed send',
+      'This node does not support CC, BCC, Reply-To, attachments, or SendGrid Dynamic Templates; use Mailgun or the HTTP Request node for those',
+      'Do not paste the API Key into From, To, or any other workflow field — save it in the SendGrid connection under Connections',
+      'Connect downstream service accounts separately; the SendGrid connection only authorizes this node\'s own email send',
     ],
   },
 
   slack_message: {
-    overview: 'Send messages to Slack channels through a Slack OAuth app/bot connection. Supports Block Kit and optional bot appearance overrides when the app allows them.',
-    inputs: ['channel', 'message', 'blocks (optional)', 'username/iconEmoji (optional)'],
-    outputs: ['id', 'status', 'channel', 'ts', 'message'],
-    example: `Channel: #alerts
-Message: "New order: {{input.orderId}} - Total: {{input.total}}"
+    overview: 'Send Slack bot messages to channels, direct messages, or existing threads through a saved Slack OAuth2 connection. Use it for workplace alerts, support replies, incident updates, approvals, report summaries, and deployment notifications.',
+    inputs: ['channel', 'message', 'threadTs (optional)', 'blocks (optional)', 'username (optional)', 'iconEmoji (optional)'],
+    outputs: ['id', 'status', 'provider', 'ok', 'channel', 'ts', 'threadTs', 'message', 'error'],
+    example: `Channel: {{$json.channelId}}
+Message: "Priority ticket {{$json.ticketId}} from {{$json.customerEmail}} needs review"
+Thread Timestamp: {{$json.threadTs}}
 Blocks: []
+Bot Name: Support Workflow
+Icon Emoji: :memo:
 
-Sends a bot message through chat.postMessage.`,
-    tips: ['Select a Slack OAuth2 connection', 'Invite the bot to private channels', 'Use Slack Webhook for a saved Incoming Webhook URL'],
+Sends a Slack bot message with chat.postMessage and returns the Slack timestamp in {{$json.ts}}.`,
+    tips: [
+      'Select a Slack OAuth2 connection; do not paste bot tokens into message fields',
+      'The Slack app needs chat:write, and the bot must be invited before it can post in private channels',
+      'Use {{$json.channelId}} and {{$json.threadTs}} from Slack Trigger to reply in the same conversation',
+      'Keep Message filled as readable fallback text even when Blocks contains a rich Block Kit layout',
+      'Connect downstream service accounts separately; Slack OAuth2 only authorizes the Slack send',
+    ],
+  },
+  discord_trigger: {
+    overview: 'Start workflows from Discord slash commands, interactions, modal submits, autocomplete, message-like events, or supported Discord Webhook Events. The worker validates Discord signatures, applies optional filters, and emits normalized Discord fields for downstream nodes.',
+    inputs: ['eventTypes', 'guildIds', 'channelIds', 'allowedUserIds', 'commandFilter', 'applicationId', 'publicKey fallback', 'validateSignature', 'Discord Bot Token connection'],
+    outputs: ['eventId', 'eventType', 'text', 'userId', 'username', 'guildId', 'channelId', 'messageId', 'command', 'interactionToken', 'applicationId', 'responseUrl', 'rawEventType', 'raw', 'sessionId', '_discord'],
+    example: `Event Types: slash_command, interaction
+Command Filter: /support
+Validate Signature: true
+
+Output:
+{
+  eventType: "slash_command",
+  text: "priority:urgent",
+  command: "/support",
+  channelId: "333333333333333333",
+  interactionToken: "interaction-token",
+  applicationId: "999999999999999999"
+}`,
+    tips: [
+      'Use the generated CtrlChecks URL as the Discord Interactions Endpoint URL and optional Webhook Events URL',
+      'Save bot token, public key, and application ID in the Discord Bot Token connection; do not store private credentials in normal fields',
+      'Keep Validate Signature enabled for production',
+      'Use {{$json.channelId}} for same-channel bot replies and {{$json.interactionToken}} with {{$json.applicationId}} for interaction follow-ups',
+      'Downstream Discord action nodes still need a Discord Bot Token connection and bot permissions in the server',
+    ],
+  },
+
+  discord: {
+    overview: 'Send messages to Discord channels via a Discord bot token, or reply to a slash command/component interaction using an interaction token. Use it for bot notifications, support bot replies, and Discord Trigger follow-ups.',
+    inputs: ['channelId', 'message', 'interactionToken (optional)', 'applicationId (optional)', 'replyToMessageId (optional)'],
+    outputs: ['success', 'discord', 'interactionReply', '_error', '_errorDetails'],
+    example: `Channel ID: {{$json.channelId}}
+Message: "New ticket {{$json.ticketId}} from {{$json.customerEmail}} needs review"
+
+Posts the message with the Discord Bot API and returns the new message object in {{$json.discord}}.`,
+    tips: [
+      'Create a bot at discord.com/developers/applications and save the Bot Token in Connections; do not paste it into workflow fields',
+      'Invite the bot to your server via OAuth2 → URL Generator with the bot scope and Send Messages permission',
+      'Use {{$json.channelId}} from Discord Trigger to reply in the same channel, or use Interaction Token + Application ID to reply to a slash command without a bot token',
+      'Reference the sent message later with {{$json.discord.id}}',
+      'Connect downstream service accounts separately; the Discord Bot Token only authorizes Discord sends',
+    ],
   },
   discord_webhook: {
     overview: 'Send messages to Discord channels via a selected webhook connection. Great for notifications and alerts.',
     inputs: ['message', 'username (optional)', 'avatarUrl (optional)'],
-    outputs: ['message_id'],
+    outputs: ['success', 'sent', 'message', 'discord_webhook', '_error'],
     example: `Message: "✅ Workflow completed successfully!"
 Username: "Alert Bot"
 
 Sends message to Discord channel.`,
     tips: [
-      'Save the Discord webhook URL as a Connection',
-      'Customize username and avatar per message',
+      'Save the Discord webhook URL as a Connection; anyone with the raw URL can post to that channel',
+      'Customize username and avatar per message to distinguish sources sharing one webhook',
       'Supports markdown formatting',
+      'Discord returns HTTP 204 with no body on success; check {{$json.success}} and {{$json.discord_webhook.status}}',
     ],
   },
 
@@ -983,97 +1227,164 @@ Output: HMAC signature`,
   },
 
   slack_webhook: {
-    overview: 'Send simple Slack messages through a saved Slack Incoming Webhook connection.',
+    overview: 'Send a simple Slack message through a saved Slack Incoming Webhook connection.',
     inputs: ['message'],
     outputs: ['id', 'status', 'provider', 'message'],
     example: `Message: "Workflow completed at {{input.timestamp}}"
 
 Sends a simple text payload to the webhook channel.`,
-    tips: ['Save the Incoming Webhook URL as a Connection', 'The target channel is chosen when the webhook is created in Slack', 'Use Slack for OAuth bot sending and Block Kit'],
+    tips: [
+      'Save the Incoming Webhook URL as a Connection',
+      'The target channel is chosen when the webhook is created in Slack',
+      'Use Slack Message for OAuth bot sending, dynamic channels, and Block Kit',
+      'This node\'s output replaces $json entirely — fields from before this node do not survive past it, so capture anything needed later first',
+      'Failures set status to "failed" and add a plain error field (no underscore), unlike most nodes\' _error convention',
+    ],
   },
   google_doc: {
-    overview: 'Read, create, or update Google Docs documents. Extract text content from existing documents, create new documents, or add content to existing ones. The read operation extracts ALL text including paragraphs, tables, and lists.',
-    inputs: ['documentId or full URL (required for read/update)', 'title (required for create)', 'content (required for create/update)'],
-    outputs: ['documentId', 'title', 'content (full extracted text)', 'body (same as content)', 'text (same as content)', 'contentLength', 'hasContent', 'documentUrl'],
+    overview: 'Read, overwrite (write), create, or append content in Google Docs. Read extracts plain text only; the Output Format "Markdown" option is currently a label and does not actually convert formatting.',
+    inputs: ['operation', 'documentId (read only in this panel) or documentUrl (works for write/append)', 'title (for create)', 'content (for write/create/append)', 'format (for read)'],
+    outputs: ['content, format, documentId (read)', 'success, documentId, content (write/append)', 'success, documentId, title, documentUrl, content (create)'],
     example: `Operation: Read
 Document ID or URL: https://docs.google.com/document/d/1a2b3c4d5e6f7g8h9i0j/edit
-(You can paste the full URL or just the ID: 1a2b3c4d5e6f7g8h9i0j)
+(You can paste the full URL or just the DOCUMENT_ID part)
 
 Output: {
-  documentId: "1a2b3c4d5e6f7g8h9i0j",
-  title: "My Document",
-  content: "Full text content extracted from the document including all paragraphs, tables, and formatted text...",
-  body: "Full text content...", // Same as content
-  text: "Full text content...", // Same as content
-  contentLength: 1234,
-  hasContent: true,
-  documentUrl: "https://docs.google.com/document/d/1a2b3c4d5e6f7g8h9i0j/edit"
+  content: "Full plain text extracted from the document...",
+  format: "text",
+  documentId: "1a2b3c4d5e6f7g8h9i0j"
 }
 
-Access the content in next nodes using: {{input.content}}, {{input.body}}, or {{input.text}}
+Access the content in the next node using: {{$json.content}}
 
 Operation: Create
 Title: "New Report"
 Content: "This is the document content..."
 
 Output: {
+  success: true,
   documentId: "new_doc_id",
   title: "New Report",
-  documentUrl: "https://docs.google.com/document/d/new_doc_id/edit"
+  documentUrl: "https://docs.google.com/document/d/new_doc_id/edit",
+  content: "This is the document content..."
 }
 
-Operation: Update
-Document ID: 1a2b3c4d5e6f7g8h9i0j
-Content: "New content to append"
+Operation: Append
+Document Url: https://docs.google.com/document/d/1a2b3c4d5e6f7g8h9i0j/edit
+Content: "New content added at the end"
 
 Output: {
+  success: true,
   documentId: "1a2b3c4d5e6f7g8h9i0j",
-  updated: true
+  content: "New content added at the end"
 }`,
     tips: [
-      'Get Document ID from Google Docs URL: https://docs.google.com/document/d/DOCUMENT_ID/edit - you can paste the full URL or just the DOCUMENT_ID part',
-      'Read operation extracts ALL text content including paragraphs, tables, lists, and formatted text',
-      'The content/body/text fields in read output contain the full document text as a string - use {{input.content}} to access it',
-      'Create operation creates an empty document first, then inserts content if provided',
-      'Update operation appends new content to the beginning of the document',
-      'Always authenticate with Google account first via Settings > Integrations > Google',
-      'For read operation, ensure the document is shared with your Google account or is publicly accessible',
+      'Get Document ID from the Google Docs URL: https://docs.google.com/document/d/DOCUMENT_ID/edit — you can paste the full Document URL, or just the DOCUMENT_ID into Document ID',
+      'Read only extracts plain text — there is no table/list structure in the output, and choosing Markdown does not convert formatting',
+      'Write deletes ALL existing content before inserting the new text — use Append to add without removing what is already there',
+      'Create makes a brand-new document and returns documentUrl to share it',
+      'Always connect a Google account first via Connections',
+      'For read/write/append, ensure the connected Google account has access to the target document',
     ],
   },
 
   google_drive: {
-    overview: 'List, upload, download, or delete files in Google Drive. Manage your Drive files programmatically.',
-    inputs: ['folderId (for list)', 'fileId (for download/delete)', 'fileName and fileContent (for upload)'],
-    outputs: ['files array (list)', 'fileId and webViewLink (upload)', 'content (download)', 'deleted status (delete)'],
+    overview: 'List, upload, or download files in Google Drive. The Delete option is shown in the dropdown but is not implemented by the runtime executor — selecting it always fails.',
+    inputs: ['operation', 'folderId (for list/upload)', 'fileId (for download)', 'fileName and fileData (for upload)', 'mimeType (optional for upload)'],
+    outputs: ['files array (list)', 'id/fileId and webViewLink (upload)', 'id/fileId and dataBase64 or content (download)'],
     example: `Operation: List Files
-Folder ID: (leave empty for root)
+Folder ID: (leave empty for whole Drive)
 
-Output: [
-  {id: "file1", name: "document.pdf", mimeType: "application/pdf"},
-  {id: "file2", name: "image.jpg", mimeType: "image/jpeg"}
-]
+Output: {
+  files: [
+    {id: "file1", name: "document.pdf", mimeType: "application/pdf"},
+    {id: "file2", name: "image.jpg", mimeType: "image/jpeg"}
+  ]
+}
 
 Operation: Upload File
 File Name: "report.pdf"
-File Content: [Base64 encoded content]
+File Data: [Base64 encoded content]
 
 Output: {
-  fileId: "uploaded_file_id",
+  id: "uploaded_file_id",
   name: "report.pdf",
   webViewLink: "https://drive.google.com/file/d/.../view"
 }`,
     tips: [
-      'Leave Folder ID empty to list root folder',
-      'File IDs are in URL: /file/d/FILE_ID/view',
-      'Upload requires Base64 encoded file content',
-      'Download returns Base64 encoded content',
+      'Leave Folder ID empty to list/upload across the whole Drive, not just the root',
+      'File IDs are in the URL: /file/d/FILE_ID/view',
+      'Upload requires base64, plain text, or a data URL for File Data',
+      'Download returns dataBase64 for binary files (PDFs, images), or content for text/JSON files',
+      'Delete is not implemented — it always fails with "Unsupported Google Drive operation: delete"',
+    ],
+  },
+
+  gmail_trigger: {
+    overview: 'Start a workflow when Gmail reports a watched mailbox change through Google Cloud Pub/Sub. CtrlChecks registers Gmail users.watch for the connected Google account, validates each Pub/Sub push request, reads Gmail history from the saved historyId, and emits normalized message or label events.',
+    inputs: ['pubsubTopic full projects/PROJECT/topics/TOPIC path', 'eventTypes: message_added, label_added, label_removed, or message_deleted', 'labelIds filter such as INBOX or IMPORTANT', 'query keyword filter against subject, sender, and snippet', 'validateAuth, audience, and validationSecret for Pub/Sub push security', 'Google OAuth2 connection with gmail.readonly access'],
+    outputs: ['eventId', 'eventType', 'source', 'userId', 'username', 'text', 'timestamp', 'emailAddress', 'historyId', 'messageId', 'threadId', 'subject', 'from', 'to', 'snippet', 'labelIds', 'raw', 'trigger', 'workflow_id', 'node_id', 'sessionId', '_gmail'],
+    example: `Pub/Sub Topic: projects/acme-support/topics/gmail-inbox-notifications
+Event Types: message_added
+Label IDs: INBOX, IMPORTANT
+Keyword Filter: invoice
+Validate Push Auth: enabled
+
+When a new matching email arrives after activation, the workflow receives {{$json.subject}}, {{$json.from}}, {{$json.snippet}}, {{$json.threadId}}, and {{$json.eventType}}.`,
+    tips: [
+      'Create the Pub/Sub topic yourself, then grant Pub/Sub Publisher to gmail-api-push@system.gserviceaccount.com',
+      'Create a Pub/Sub push subscription whose endpoint is the generated CtrlChecks webhook URL',
+      'Keep Validate Push Auth enabled in production; use Google-signed OIDC or a shared Validation Secret for controlled simulations',
+      'Leave OIDC Audience empty unless your Pub/Sub subscription uses a custom audience; the default is the webhook URL',
+      'Label IDs must be Gmail API label IDs such as INBOX or IMPORTANT, not always the visible custom label name',
+      'Keyword Filter is a simple case-insensitive contains check against subject, sender, and snippet, not Gmail search syntax',
+      'Existing messages are not replayed: registration stores a Gmail historyId baseline and future pushes read changes after that point',
+      'Use {{$json.threadId}} with the Google Gmail action node when replying in the same conversation',
+    ],
+  },
+
+  google_drive_trigger: {
+    overview: 'Start a workflow when Google Drive reports that files changed. CtrlChecks registers a Drive push notification channel automatically, validates channel notifications, and then syncs changed file metadata from the Drive changes feed.',
+    inputs: ['folderId (optional)', 'eventTypes: file_changed and/or file_deleted', 'query keyword filter (optional)', 'Google OAuth2 connection with drive.readonly access'],
+    outputs: ['eventId', 'eventType', 'source', 'userId', 'username', 'text', 'timestamp', 'fileId', 'name', 'mimeType', 'parents', 'modifiedTime', 'webViewLink', 'raw', 'trigger', 'workflow_id', 'node_id', 'sessionId', '_googleDrive'],
+    example: `Folder ID: 1a2b3c4d5e6f7g8h9i0j
+Event Types: file_changed
+Keyword Filter: invoice
+
+When a matching file is created or updated after activation, the workflow receives {{$json.name}}, {{$json.fileId}}, {{$json.mimeType}}, {{$json.webViewLink}}, and {{$json.eventType}}.`,
+    tips: [
+      'Leave Folder ID empty to consider broad Drive changes, or copy a folder ID from the URL after /folders/',
+      'Activation stores a fresh start page token, so old Drive changes do not replay',
+      'Google sends an initial sync notification when the channel is created; that handshake does not start the workflow',
+      'file_changed covers created, edited, or metadata-changed files; file_deleted covers removed or trashed files',
+      'Keyword Filter checks the file name only, not the file contents',
+      'Connect downstream service accounts separately; this Google OAuth2 connection only authorizes Drive watch and sync',
+    ],
+  },
+
+  google_calendar_trigger: {
+    overview: 'Start a workflow when Google Calendar reports that a watched calendar changed. CtrlChecks registers the push notification channel automatically, validates channel notifications, and then syncs the changed events.',
+    inputs: ['calendarId (default primary)', 'eventTypes: event_changed and/or event_cancelled', 'query keyword filter (optional)', 'Google OAuth2 connection with calendar.events access'],
+    outputs: ['eventId', 'eventType', 'source', 'userId', 'username', 'text', 'timestamp', 'calendarId', 'eventIdRaw', 'subject', 'organizer', 'start', 'end', 'attendees', 'htmlLink', 'raw', 'trigger', 'workflow_id', 'node_id', 'sessionId', '_googleCalendar'],
+    example: `Calendar ID: primary
+Event Types: event_changed, event_cancelled
+Keyword Filter: renewal
+
+When a matching event is created, updated, or cancelled after activation, the workflow receives {{$json.subject}}, {{$json.start}}, {{$json.organizer}}, {{$json.attendees}}, and {{$json.eventType}}.`,
+    tips: [
+      'Use primary for the connected account main calendar, or copy a shared Calendar ID from Google Calendar settings',
+      'Google sends an initial sync notification when the channel is created; that handshake does not start the workflow',
+      'event_changed covers created and updated events; event_cancelled covers events with cancelled status',
+      'Keyword Filter matches event title plus description, not attendee names or a Calendar search query',
+      'Watch channels last roughly 7 days and CtrlChecks renews them on a background sweep',
+      'Connect downstream service accounts separately; this Google OAuth2 connection only authorizes Calendar watch and sync',
     ],
   },
 
   google_calendar: {
-    overview: 'Create, list, update, or delete Google Calendar events. Manage your calendar programmatically.',
-    inputs: ['calendarId', 'eventId (for update/delete)', 'summary', 'startTime', 'endTime', 'description'],
-    outputs: ['events array (list)', 'eventId and htmlLink (create)', 'updated event (update)', 'deleted status (delete)'],
+    overview: 'Create, list, update, or delete Google Calendar events. Manage your calendar programmatically. Runtime also supports get, quickAdd, and move for events, plus non-event resources, when set directly in workflow JSON.',
+    inputs: ['operation', 'calendarId', 'eventId (for update/delete)', 'summary', 'startTime', 'endTime', 'description'],
+    outputs: ['items array (list)', 'id and htmlLink (create/update/get)', 'success (delete)'],
     example: `Operation: Create Event
 Calendar ID: primary
 Event Title: "Team Meeting"
@@ -1082,53 +1393,56 @@ End Time: 2024-01-15T15:00:00Z
 Description: "Weekly sync"
 
 Output: {
-  eventId: "event_id",
+  id: "event_id",
   summary: "Team Meeting",
   htmlLink: "https://calendar.google.com/event?eid=..."
 }`,
     tips: [
       'Use "primary" for main calendar',
-      'Times must be ISO 8601 format (UTC)',
-      'Event IDs returned when creating events',
-      'List shows upcoming events only',
+      'Times must be ISO 8601 format (UTC) — Start Time/End Time are converted automatically',
+      'The new/updated event ID is returned as id, not eventId',
+      'List returns events in the Time Min/Time Max window, with no date filtering by default',
     ],
   },
 
   google_gmail: {
-    overview: 'Send, list, get, or search Gmail messages. Automate email operations in your workflows.',
-    inputs: ['recipientEmails, subject, body (for send)', 'cc, bcc, from (optional for send)', 'messageId (for get)', 'query and maxResults (for list/search)'],
-    outputs: ['messageId and threadId (send)', 'messages array (list/search)', 'full message (get)'],
+    overview: 'Send, list, get, or search Gmail messages. Send recipients can be typed manually or extracted from upstream/fallback Google Sheets rows.',
+    inputs: ['recipientSource, recipientEmails, subject, body (for send)', 'cc, bcc, from, spreadsheetId/sheetName/range fallback (optional for send)', 'messageId (for get)', 'query and maxResults (for list/search)'],
+    outputs: ['success, messageId, sentCount, failedCount, results (send)', 'messages array of {id, threadId} (list/search)', 'full raw message object (get)'],
     example: `Operation: Send Email
 Recipient Emails: recipient@example.com
 Subject: "Workflow Notification"
 Body: "Your workflow completed successfully!"
 
 Output: {
-  messageId: "sent_message_id",
-  threadId: "thread_id"
+  success: true,
+  messageId: "18abc123def456",
+  sentCount: 1,
+  failedCount: 0
 }
 
 Operation: Search Messages
 Search Query: from:example@gmail.com
 Max Results: 10
 
-Output: [
-  {id: "message_id_1"},
-  {id: "message_id_2"}
-]`,
+Output: {
+  messages: [{id: "18abc1", threadId: "18abc1"}, {id: "18abc2", threadId: "18abc2"}],
+  resultSizeEstimate: 2
+}`,
     tips: [
       'Connect Google OAuth in Connections; do not paste tokens into workflow fields',
       'Gmail search syntax: from:, subject:, is:unread, has:attachment',
-      'Message IDs returned when listing/searching',
+      'List/Search only return {id, threadId} per message — use a Get step with that id for full content',
       'Body is plain text only',
+      'Get returns Gmail\'s raw API message; the body text is base64url-encoded inside message.payload.body.data',
       'Use search to filter messages before getting details',
     ],
   },
 
   google_tasks: {
-    overview: 'Create, read, update, or delete Google Tasks. Manage your task list programmatically.',
-    inputs: ['taskListId', 'taskId (for read/update/delete)', 'title', 'notes', 'due'],
-    outputs: ['tasks array or task (read)', 'created task (create)', 'updated task (update)', 'deleted status (delete)'],
+    overview: 'Create, read, update, or delete Google Tasks, including marking tasks complete via Status. Manage your task list programmatically.',
+    inputs: ['operation', 'taskListId', 'taskId (for read-one/update/delete)', 'title', 'notes', 'due', 'status (update only)'],
+    outputs: ['data.items or data (single task) for read', 'data (task object) for create/update', 'data.deleted, data.taskId for delete'],
     example: `Operation: Create Task
 Task List ID: @default
 Task Title: "Review proposal"
@@ -1136,37 +1450,46 @@ Notes: "Check budget and timeline"
 Due Date: 2026-12-31
 
 Output: {
-  id: "task_id",
-  title: "Review proposal",
-  status: "needsAction"
+  operation: "create",
+  data: {
+    id: "task_id",
+    title: "Review proposal",
+    status: "needsAction"
+  }
 }`,
     tips: [
-      'Use "@default" for default task list',
-      'Task IDs returned when creating tasks',
+      'Use "@default" for the default task list',
+      'Task IDs are returned at {{$json.data.id}} when creating tasks — everything is nested under data, not top-level',
       'Due dates are selected as local calendar dates; Google Tasks stores the day, not a time of day',
-      'Completed tasks hidden from list by default',
+      'Set Status to Completed on Update to check a task off; Google Tasks records the completion time automatically',
+      'Completed tasks may be hidden from a plain listing depending on Google Tasks defaults',
     ],
   },
 
   google_contacts: {
-    overview: 'List, create, update, or delete Google Contacts. Manage your contact list programmatically.',
-    inputs: ['contactId (for update/delete)', 'name', 'email', 'phone', 'maxResults'],
-    outputs: ['contacts array (list)', 'created contact (create)', 'updated contact (update)', 'deleted status (delete)'],
+    overview: 'List, create, update, or delete Google Contacts.',
+    inputs: ['operation', 'contactId (for list-one/update/delete)', 'name', 'email', 'phone', 'pageSize (for listing)'],
+    outputs: ['data.connections (list, Contact ID empty)', 'data.resourceName, data.names, data.emailAddresses, data.phoneNumbers (list-one/create/update)', 'data.deleted, data.contactId (delete)'],
     example: `Operation: Create Contact
 Name: "John Doe"
 Email: john@example.com
 Phone: +1234567890
 
 Output: {
-  resourceName: "people/c1234567890",
-  name: "John Doe",
-  email: "john@example.com"
+  operation: "create",
+  data: {
+    resourceName: "people/c1234567890",
+    names: [{ displayName: "John Doe" }],
+    emailAddresses: [{ value: "john@example.com" }]
+  }
 }`,
     tips: [
-      'Contact ID is resourceName field (e.g., people/c1234567890)',
-      'Email required for creating contacts',
-      'Phone should include country code (e.g., +1234567890)',
-      'Max results limit applies to list operation',
+      'Contact ID is the resourceName field (e.g., people/c1234567890) from a previous List/Create/Update result',
+      'At least one of Name, Email, or Phone is required for create and update',
+      'Phone should include a country code (e.g., +1234567890)',
+      'All contact fields are nested under data — there is no top-level resourceName/names/emailAddresses',
+      'List Contacts with Contact ID empty returns every contact in data.connections; filling Contact ID fetches just that one contact instead',
+      'Max Results (pageSize) only limits how many contacts a full listing returns — it does not filter or search',
     ],
   },
 
@@ -1529,47 +1852,43 @@ Output: {
   // MISSING TRIGGER NODES
   // ============================================
   form: {
-    overview: 'Creates a user-friendly form that collects structured data and starts your workflow on submission. Supports text, numbers, email, files, selections, and confirmations. Perfect for lead capture, surveys, applications, or support requests.',
-    inputs: ['None - Triggered by form submission'],
-    outputs: ['trigger', 'form_id', 'submission_data', 'form_fields', 'submitted_at', 'user_id (if authenticated)'],
+    overview: 'Creates a public CtrlChecks form that starts the workflow when someone submits structured answers. Use it for lead capture, support intake, employee requests, surveys, applications, registrations, and feedback.',
+    inputs: ['formTitle and at least one field', 'field labels, internal names, field types, required settings, placeholders, and options', 'submit button text, success message, optional redirect URL', 'allowMultipleSubmissions, requireAuthentication, and captcha behavior'],
+    outputs: ['answers at top level by internal name, such as customer_email', 'data object with the same submitted answers', 'submitted_at timestamp', 'form title and id', 'files for upload fields', 'meta with submittedAt, masked IP, and userAgent'],
     example: `Form Fields:
-- Name (Text, Required)
-- Email (Email, Required)
-- Message (Textarea, Optional)
-- Category (Dropdown: Support, Sales, General)
+- Name (text, required, internal name: name)
+- Customer Email (email, required, internal name: customer_email)
+- Issue Category (select, required, options: billing, technical, sales)
+- Message (textarea, required, internal name: message)
 
 User submits form with:
 {
-  "name": "John Doe",
-  "email": "john@example.com",
-  "message": "Need help with order",
-  "category": "Support"
+  "name": "Alex Morgan",
+  "customer_email": "alex@example.com",
+  "issue_category": "billing",
+  "message": "Invoice INV-4821 has the wrong address."
 }
 
 Output: {
-  trigger: "form",
-  form_id: "form_abc123",
-  submission_data: {
-    "name": "John Doe",
-    "email": "john@example.com",
-    "message": "Need help with order",
-    "category": "Support"
-  },
-  submitted_at: "2026-02-01T10:30:00Z"
+  name: "Alex Morgan",
+  customer_email: "alex@example.com",
+  issue_category: "billing",
+  message: "Invoice INV-4821 has the wrong address.",
+  data: { customer_email: "alex@example.com", issue_category: "billing" },
+  submitted_at: "2026-07-18T08:45:00.000Z",
+  form: { title: "Support Request", id: "form_node_1" }
 }
 
-Connect: Form → Validate → Notify Team`,
+Connect: Form -> If/Else -> Helpdesk Ticket -> Email Confirmation`,
     tips: [
-      'Use clear field labels and short descriptions',
-      'Keep forms concise to improve completion rates',
-      'Use validation rules to prevent bad data',
-      'Enable CAPTCHA if you expect spam',
-      'Require authentication only when necessary',
-      'Review submissions during testing before sharing the form URL',
-      'Use meaningful field keys for downstream mapping',
+      'Use friendly labels for submitters and stable internal names for workflow mapping.',
+      'Map answers with {{$json.customer_email}} or {{$json.data.customer_email}} after checking a test execution.',
+      'Use select or radio options for values that drive routing, approvals, reporting, or branch conditions.',
+      'Turn CAPTCHA on for public forms that can create tickets, leads, or notifications.',
+      'Require authentication only for internal or sensitive forms.',
+      'Changing an internal name after downstream nodes are mapped requires updating those mappings too.',
     ],
   },
-
   // ============================================
   // MISSING LOGIC & CONTROL NODES
   // ============================================
@@ -1930,29 +2249,32 @@ Output: {
   // MISSING GOOGLE NODES (Already have most)
   // ============================================
   google_bigquery: {
-    overview: 'Execute SQL queries on BigQuery datasets. Run analytics queries and get results as JSON. Supports standard SQL and legacy SQL modes. Perfect for data analytics, reporting, or data warehouse operations.',
-    inputs: ['projectId', 'datasetId', 'query', 'useLegacySql'],
-    outputs: ['rows', 'totalRows', 'jobComplete'],
+    overview: 'Execute a SQL query against BigQuery and get back the raw BigQuery API response. Supports standard SQL and legacy SQL modes.',
+    inputs: ['projectId', 'query', 'useLegacySql (optional)', 'datasetId (reference-only note, not sent to BigQuery)'],
+    outputs: ['data.rows (raw {f: [{v}]} format)', 'data.schema.fields', 'data.totalRows', 'data.jobComplete'],
     example: `Project ID: my-project-id
-Dataset ID: my_dataset
 SQL Query: SELECT * FROM \`my-project-id.my_dataset.my_table\` LIMIT 10
 Use Legacy SQL: false
 
 Output: {
-  rows: [
-    {column1: "value1", column2: "value2"},
-    {column1: "value3", column2: "value4"}
-  ],
-  totalRows: "2",
-  jobComplete: true
+  operation: "query",
+  data: {
+    rows: [
+      { f: [{ v: "value1" }, { v: "value2" }] },
+      { f: [{ v: "value3" }, { v: "value4" }] }
+    ],
+    schema: { fields: [{ name: "column1", type: "STRING" }, { name: "column2", type: "STRING" }] },
+    totalRows: "2",
+    jobComplete: true
+  }
 }`,
     tips: [
-      'Use backticks for table names: `project.dataset.table`',
-      'Standard SQL recommended (set Use Legacy SQL to false)',
-      'Results automatically formatted as JSON objects',
+      'Use backticks and fully qualify table names as `project.dataset.table` — Dataset ID above is not applied automatically',
+      'Standard SQL recommended (leave Use Legacy SQL off)',
+      'Results are BigQuery\'s raw {f: [{v}]} row format, not plain column-named objects — zip data.schema.fields with each row in a JavaScript node to get friendly objects',
       'Large queries may take time',
       'Authenticate with Google account first',
-      'Project ID and Dataset ID are required',
+      'Only Project ID and SQL Query are actually required; Dataset ID is a reference-only note',
     ],
   },
 
@@ -2373,15 +2695,15 @@ Output: {
     ],
   },
 
-  mssql: {
-    overview: 'Query Microsoft SQL Server databases using SELECT queries or raw SQL. Supports Azure SQL Database and on-premise SQL Server. Perfect for enterprise databases, data analysis, or SQL Server-specific operations.',
-    inputs: ['server', 'database', 'username', 'password', 'operation', 'table', 'query', 'filters', 'limit'],
-    outputs: ['rows', 'count'],
-    example: `Server: myserver.database.windows.net
+  sql_server: {
+    overview: 'Query Microsoft SQL Server databases using T-SQL, table operations, or stored procedures. Supports Azure SQL Database and on-premise SQL Server.',
+    inputs: ['host', 'port', 'database', 'username', 'password', 'operation', 'query', 'table', 'data', 'where', 'procedureName', 'params'],
+    outputs: ['rows', 'rowsAffected', 'inserted', 'records', 'returnValue'],
+    example: `Host: myserver.database.windows.net
 Database: mydb
-Operation: select
-Table: users
-Filters: {"status": "active"}
+Operation: executeQuery
+Query: SELECT TOP 100 * FROM dbo.Users WHERE status = @status
+Params: {"status": "active"}
 
 Output: {
   rows: [
@@ -2392,9 +2714,9 @@ Output: {
 }`,
     tips: [
       'Azure SQL format: username@servername',
-      'Use Raw SQL for stored procedures or complex queries',
-      'Select operation uses simple filters',
-      'Supports T-SQL specific features in Raw SQL mode',
+      'Use Execute Query for custom T-SQL',
+      'Use Stored Procedure when the database already owns the logic',
+      'Insert and Update use Data JSON; Update and Delete also require Where JSON',
       'Use connection pooling for better performance',
     ],
   },
@@ -2479,23 +2801,27 @@ Output: {
   // STORAGE NODES
   // ============================================
   read_binary_file: {
-    overview: 'Read binary files from the file system. Supports images, PDFs, or any binary file format. Useful for processing files in workflows. Set max size to prevent memory issues with large files.',
-    inputs: ['filePath', 'maxSize'],
-    outputs: ['content', 'size', 'mimeType'],
-    example: `File Path: /tmp/document.pdf
+    overview: 'Read managed workflow file assets or files under the backend binary storage root. Use this after Write Binary File, or for server-side temporary files. For Drive/cloud links, use Google Drive, HTTP Request, S3, Dropbox, or OneDrive first.',
+    inputs: ['sourceType', 'assetId', 'filePath', 'maxSize'],
+    outputs: ['assetId', 'fileName', 'mimeType', 'dataBase64', 'sizeBytes', 'storageKey'],
+    example: `Source Type: assetId
+Asset ID: {{$json.assetId}}
 Max Size: 10485760 (10 MB)
 
 Output: {
-  content: "base64_encoded_content...",
-  size: 5242880,
-  mimeType: "application/pdf"
+  assetId: "asset-id",
+  fileName: "document.pdf",
+  dataBase64: "JVBERi0x...",
+  sizeBytes: 5242880,
+  mimeType: "application/pdf",
+  storageKey: "users/.../document.pdf"
 }`,
     tips: [
-      'Returns content as base64-encoded string',
+      'Returns file bytes as dataBase64',
       'Set max size to prevent memory issues',
-      'Supports absolute and relative paths',
-      'Useful for file processing workflows',
-      'Binary files must be base64-encoded',
+      'Use assetId from Write Binary File for durable workflow handoff',
+      'Server paths are restricted to the backend binary storage root',
+      'Do not paste Google Drive/share URLs here',
     ],
   },
 
@@ -2591,58 +2917,231 @@ Output: {
   },
 
   telegram: {
-    overview: 'Send messages to Telegram chats, groups, or channels using a bot connection. Create the connection with a bot token from @BotFather. Perfect for notifications, alerts, or chatbot integrations.',
-    inputs: ['chatId', 'message'],
-    outputs: ['messageId', 'timestamp'],
-    example: `Chat ID: 123456789
-Message: "Hello from CtrlChecks!"
+    overview: 'Send Telegram text messages, media URLs, and message edits through a saved Telegram Bot Token connection. Use it for Telegram bot replies, support alerts, report delivery, approval buttons, and status updates.',
+    inputs: ['operation', 'chatId', 'messageType', 'message/text', 'parseMode', 'mediaUrl', 'caption', 'replyToMessageId', 'editMessageId', 'replyMarkup', 'disableNotification', 'protectContent', 'allowSendingWithoutReply'],
+    outputs: ['success', 'operation', 'chatId', 'messageId', 'data', 'raw', 'telegram', '_error', '_errorDetails'],
+    example: `Operation: send_message
+Chat ID: {{$json.chatId}}
+Message Type: text
+Message: "Answer for ticket {{$json.ticketId}}: {{$json.aiResponse}}"
+Reply To Message ID: {{$json.messageId}}
+Reply Markup: {"inline_keyboard":[[{"text":"Open ticket","url":"{{$json.ticketUrl}}"}]]}
 
-Output: {
-  messageId: 12345,
-  timestamp: "2024-01-15T10:30:00Z"
-}`,
+Replies to the same Telegram chat and returns {{$json.messageId}} for later edits or logs.`,
     tips: [
-      'Connect a Telegram Bot Token in Connections — get the token from @BotFather on Telegram',
-      'Chat ID: User ID or group chat ID',
-      'Bot must be added to chat first',
-      'Supports basic text messages',
-      'Use for notifications and alerts',
+      'Create the bot with @BotFather, then save the Telegram Bot Token in Connections',
+      'Use {{$json.chatId}} and {{$json.messageId}} from Telegram Trigger to reply in the same chat',
+      'Choose send_message for text, send_photo plus Media URL for images, and edit_message when updating a previous bot message',
+      'For media message types, use a public HTTPS Media URL that Telegram can fetch without signing in',
+      'Connect downstream service accounts separately; Telegram credentials only authorize Telegram sends',
+    ],
+  },
+  telegram_trigger: {
+    overview: 'Start a workflow in real time when your Telegram bot receives a message. Use this for chatbot workflows such as Telegram Trigger -> AI Agent -> Telegram Send Message.',
+    inputs: ['updateTypes', 'allowedChatIds', 'commandFilter', 'secretToken'],
+    outputs: ['chatId', 'messageId', 'text', 'username', 'firstName', 'lastName', 'userId', 'updateType', 'raw'],
+    example: `Incoming Telegram message:
+{
+  chatId: "123456789",
+  messageId: 42,
+  text: "Can you help me?"
+}
+
+Reply node:
+chatId = {{$json.chatId}}
+message = {{$json.aiResponse}}`,
+    tips: [
+      'Create a bot in Telegram with BotFather, then save the bot token in Connections',
+      'Telegram allows one webhook URL per bot token; use separate bots for separate active workflows',
+      'Allowed Chat IDs and Command Filter are optional but useful for production bot control',
+    ],
+  },
+
+  whatsapp_trigger: {
+    overview: 'Start a workflow in real time when your WhatsApp Business number receives a Meta WhatsApp Cloud webhook. Use this for chatbot workflows such as WhatsApp Trigger -> AI Agent -> WhatsApp Send Text.',
+    inputs: ['eventTypes', 'phoneNumberId', 'allowedWaIds', 'verifyToken', 'validateSignature'],
+    outputs: ['chatId', 'from', 'waId', 'text', 'messageId', 'phoneNumberId', 'eventType', 'status', 'raw'],
+    example: `Incoming WhatsApp message:
+{
+  chatId: "15551234567",
+  from: "15551234567",
+  text: "Can you help me?"
+}
+
+Reply node:
+to = {{$json.chatId}}
+text = {{$json.aiResponse}}`,
+    tips: [
+      'Save a WhatsApp connection with a permanent access token and Phone Number ID before activating the workflow',
+      'Use the same Verify Token in Meta for Developers -> WhatsApp -> Configuration',
+      'Keep signature validation on in production and configure META_APP_SECRET, FACEBOOK_APP_SECRET, or WHATSAPP_APP_SECRET on the worker',
+    ],
+  },
+
+  instagram_trigger: {
+    overview: 'Start a workflow in real time when Instagram receives a DM, comment, mention, story reply, or postback through Meta webhooks. Use this for workflows such as Instagram Trigger -> AI Agent -> Instagram Send Text or Reply to Comment.',
+    inputs: ['eventTypes', 'instagramBusinessAccountId', 'allowedSenderIds', 'verifyToken', 'validateSignature'],
+    outputs: ['chatId', 'senderId', 'recipientId', 'text', 'eventType', 'messageId', 'commentId', 'mediaId', 'mentionId', 'instagramBusinessAccountId', 'raw'],
+    example: `Incoming Instagram DM:
+{
+  chatId: "1234567890",
+  senderId: "1234567890",
+  recipientId: "17841400000000000",
+  text: "Can you help me?"
+}
+
+Reply node:
+resource = message
+operation = sendText
+recipientId = {{$json.senderId}}
+text = {{$json.aiResponse}}`,
+    tips: [
+      'Connect Instagram through Connections with Instagram messaging/comment permissions before activating the workflow',
+      'Use the same Verify Token in Meta for Developers -> Webhooks when verifying the callback URL',
+      'Keep signature validation on in production and configure META_APP_SECRET, INSTAGRAM_APP_SECRET, or FACEBOOK_APP_SECRET on the worker',
+      'Use commentId for comment reply operations and senderId for DM reply operations',
+    ],
+  },
+
+  facebook_trigger: {
+    overview: 'Start a workflow in real time when Meta sends a Facebook Page or Messenger webhook. It normalizes Messenger messages, comments, mentions, postbacks, lead ads, and feed changes into one event output.',
+    inputs: ['eventTypes: message, comment, mention, postback, leadgen, feed', 'pageId: optional Facebook Page ID filter', 'allowedSenderIds: optional sender allowlist', 'verifyToken: shared Meta webhook verification value', 'validateSignature: verify X-Hub-Signature-256 with META_APP_SECRET or FACEBOOK_APP_SECRET'],
+    outputs: ['eventId', 'eventType', 'source', 'userId', 'username', 'text', 'timestamp', 'chatId', 'senderId', 'recipientId', 'pageId', 'messageId', 'messageType', 'commentId', 'postId', 'parentId', 'leadgenId', 'formId', 'postbackPayload', 'field', 'verb', 'item', 'raw', 'trigger', 'workflow_id', 'node_id', 'sessionId', '_facebook'],
+    example: `Incoming Facebook Messenger message:
+{
+  eventId: "m_abc123",
+  eventType: "message.text",
+  chatId: "1234567890",
+  senderId: "1234567890",
+  recipientId: "123456789012345",
+  pageId: "123456789012345",
+  text: "Can you help me track my order?",
+  sessionId: "facebook_workflow_123_1234567890"
+}
+
+Reply node:
+operation = sendTextMessage
+pageId = {{$json.pageId}}
+recipientId = {{$json.senderId}}
+text = {{$json.aiResponse}}
+
+Comment reply:
+operation = createComment
+commentId = {{$json.commentId}}
+replyText = "Thanks, our team is checking this."`,
+    tips: [
+      'Connect Facebook OAuth2 through Connections with a Page-managing account before activating the workflow.',
+      'Use the same Verify Token in CtrlChecks and Meta for Developers -> Webhooks when verifying the callback URL.',
+      'Keep signature validation on in production and configure META_APP_SECRET or FACEBOOK_APP_SECRET on the worker.',
+      'Use {{$json.eventType}} to branch before relying on event-specific fields.',
+      'Use senderId for Messenger replies, commentId for comment replies, and leadgenId/formId for Lead Ads routing.',
+      'Downstream Slack, CRM, email, ticketing, or database nodes still need their own account connection.',
+    ],
+  },
+
+  github_trigger: {
+    overview: 'Start a workflow in real time when GitHub sends a signed repository webhook for pushes, issues, pull requests, releases, comments, or other configured repository events.',
+    inputs: ['owner: GitHub user or organization', 'repo: repository name', 'eventTypes: push, issues, pull_request, release, issue_comment, or another GitHub webhook event', 'webhookSecret: optional signing secret override; normally leave blank', 'query: optional keyword filter against normalized event text'],
+    outputs: ['eventId', 'eventType', 'source', 'userId', 'username', 'text', 'timestamp', 'repository', 'action', 'ref', 'commits', 'issueNumber', 'issueTitle', 'issueUrl', 'prNumber', 'prTitle', 'prUrl', 'merged', 'releaseTag', 'releaseName', 'commentBody', 'commentUrl', 'raw', 'trigger', 'workflow_id', 'node_id', 'sessionId', '_github'],
+    example: `Incoming GitHub issue:
+{
+  eventId: "a1b2c3d4-0000-0000-0000-000000000000",
+  eventType: "issues.opened",
+  repository: "acme-platform/api-service",
+  username: "octocat",
+  issueNumber: 42,
+  issueTitle: "Bug: billing export fails for July invoices",
+  issueUrl: "https://github.com/acme-platform/api-service/issues/42",
+  text: "Bug: billing export fails for July invoices",
+  sessionId: "github_workflow_123_a1b2c3d4-0000-0000-0000-000000000000"
+}
+
+AI triage:
+prompt = "Summarize {{$json.issueTitle}} from {{$json.repository}}"
+
+Slack alert:
+message = "New {{$json.eventType}} by {{$json.username}}: {{$json.issueUrl}}"`,
+    tips: [
+      'Connect GitHub in Connections with a PAT or OAuth token that can administer repository webhooks.',
+      'Owner and Repository are path parts from github.com/owner/repo, not the full URL.',
+      'Leave Webhook Secret Override blank unless you are reusing a manually managed signing secret.',
+      'GitHub ping deliveries confirm the webhook exists but do not start workflow executions.',
+      'Use {{$json.eventType}} before mapping event-specific fields, because push events have commits while issue_comment events have commentBody.',
+      'Downstream Slack, email, CRM, database, ticketing, or GitHub action nodes still need their own account connection.',
+    ],
+  },
+
+  gitlab_trigger: {
+    overview: 'Start a workflow in real time when GitLab sends a project webhook for pushes, tag pushes, issues, merge requests, notes/comments, pipelines, jobs, or releases. CtrlChecks validates GitLab deliveries with the X-Gitlab-Token shared secret header, not an HMAC signature.',
+    inputs: ['baseUrl: GitLab instance root, usually https://gitlab.com', 'projectId: numeric GitLab project ID or URL-encoded path such as group%2Fproject', 'eventTypes: push, tag_push, issue, merge_request, note, pipeline, job, release', 'secretToken: optional X-Gitlab-Token shared secret override; normally leave blank', 'query: optional keyword filter against normalized event text'],
+    outputs: ['eventId', 'eventType', 'source', 'userId', 'username', 'text', 'timestamp', 'projectId', 'projectName', 'action', 'ref', 'commits', 'issueIid', 'issueTitle', 'issueUrl', 'mrIid', 'mrTitle', 'mrUrl', 'mrState', 'noteBody', 'noteUrl', 'raw', 'trigger', 'workflow_id', 'node_id', 'sessionId', '_gitlab'],
+    example: `Incoming GitLab issue:
+{
+  eventId: "987654321",
+  eventType: "issue",
+  projectId: "12345",
+  projectName: "acme-platform/api-service",
+  username: "asha",
+  issueIid: 42,
+  issueTitle: "Bug: billing export fails for July invoices",
+  issueUrl: "https://gitlab.com/acme-platform/api-service/-/issues/42",
+  text: "Bug: billing export fails for July invoices",
+  sessionId: "gitlab_workflow_123_987654321"
+}
+
+AI triage:
+prompt = "Summarize {{$json.issueTitle}} from {{$json.projectName}}"
+
+Slack alert:
+message = "New {{$json.eventType}} by {{$json.username}}: {{$json.issueUrl}}"`,
+    tips: [
+      'Connect GitLab in Connections with OAuth api scope or a Personal Access Token with api scope before activating the workflow.',
+      'Use Project ID from GitLab project Settings -> General, or URL-encode the group/project path as group%2Fproject.',
+      'Leave Webhook Secret Override blank unless you are reusing a manually managed GitLab project webhook secret token.',
+      'Use exact GitLab object_kind values such as merge_request and note, not friendly labels like merge requests or comments.',
+      'Use {{$json.eventType}} before mapping event-specific fields, because push events have commits while note events have noteBody.',
+      'Downstream GitLab action nodes, Slack, email, CRM, database, or ticketing nodes still need their own account connection.',
     ],
   },
 
   whatsapp: {
-    overview: 'Send WhatsApp messages via the WhatsApp Business API. Connect a WhatsApp/Facebook account under Connections — credentials are resolved automatically. Perfect for business messaging, notifications, or customer communication.',
-    inputs: ['to', 'message', 'messageType'],
-    outputs: ['messageId', 'data'],
-    example: `To: +1234567890
-Message: "Hello from CtrlChecks!"
+    overview: 'Send WhatsApp messages, media, locations, contact cards, approved templates, and interactive buttons/lists through the WhatsApp Business Cloud API. Connect a WhatsApp/Facebook account under Connections — credentials are resolved automatically. The visual panel exposes the Message resource; Contact, Conversation, Template, Campaign, and AI Agent resources are runtime-supported for advanced or AI-generated workflows.',
+    inputs: ['resource', 'operation', 'to', 'text', 'mediaType/mediaUrl', 'templateName/language', 'bodyText/buttons'],
+    outputs: ['messages[0].id', 'contacts', 'success', '_error', '_errorCode', '_errorDetails'],
+    example: `Operation: sendText
+To: {{$json.chatId}}
+Message: "Hi {{$json.customerName}}, your order #{{$json.orderId}} has been confirmed! Expected delivery: {{$json.deliveryDate}}."
 
 Output: {
-  messageId: "wamid.xxx",
-  data: { ... }
+  messaging_product: "whatsapp",
+  contacts: [{ input: "+12345678900", wa_id: "12345678900" }],
+  messages: [{ id: "wamid.xxx" }]
 }`,
     tips: [
-      'Connect a WhatsApp account under Connections — no API keys entered on the node itself',
+      'Connect a WhatsApp account under Connections — no access tokens entered on the node itself',
       'Phone numbers should be in E.164 format, e.g. +12345678900',
-      'First message to a new contact must use an approved message template',
-      'Supports interactive buttons/lists, contacts, and campaigns in addition to plain text',
+      'First message to a new contact must use Send Template; free-form Send Text only works inside the 24-hour customer service window',
+      'Use {{$json.messages[0].id}} to track delivery, and {{$json.chatId}} or {{$json.from}} from WhatsApp Trigger for replies',
+      'Contact, Conversation, Template, Campaign, and AI Agent actions are documented on the WhatsApp node page but are only reachable via AI-generated or manually edited workflow configs, not this visual Resource dropdown yet',
     ],
   },
 
   // Deprecated alias for 'whatsapp' — kept only for workflows saved before the merge.
   whatsapp_cloud: {
-    overview: 'Deprecated — use the WhatsApp node instead. This node is kept only for backward compatibility with existing workflows and behaves identically to WhatsApp under the hood.',
-    inputs: ['to', 'message', 'messageType'],
-    outputs: ['messageId', 'data'],
+    overview: 'Deprecated — use the WhatsApp node instead. This node only ever sends a plain WhatsApp text message and is kept only for backward compatibility with existing workflows; it delegates execution and credentials to the WhatsApp node under the hood.',
+    inputs: ['to', 'text (labeled "Message" in the panel)', 'messageType (inert)'],
+    outputs: ['success', 'data', '_error / _errorCode / _errorDetails on failure'],
     example: `To: +1234567890
 Message: "Hello from CtrlChecks!"
 
 Output: {
-  messageId: "wamid.xxx",
-  data: { ... }
+  success: true,
+  data: { messaging_product: "whatsapp", contacts: [...], messages: [{ id: "wamid.xxx" }] }
 }`,
     tips: [
-      'Deprecated — replace with the WhatsApp node in new workflows',
+      'Deprecated — replace with the WhatsApp node in new workflows; it supports media, locations, contacts, templates, and interactive messages that this node cannot reach',
+      'The Message field is stored under the key text, not message — a prior panel version used message, which the shared runtime never read, so those sends went out empty',
+      'Message Type has no effect on the send — this node always sends plain text regardless of its value',
       'Connect a WhatsApp account under Connections — no API keys entered on the node itself',
     ],
   },
@@ -2650,23 +3149,56 @@ Output: {
   twilio: {
     overview: 'Send SMS or MMS messages using a Twilio account connection. Requires a From number or Messaging Service SID. Perfect for SMS notifications, alerts, or two-factor authentication.',
     inputs: ['to', 'message', 'from', 'messagingServiceSid', 'mediaUrl'],
-    outputs: ['sid', 'status', 'twilio'],
+    outputs: ['success (on success only)', 'sid', 'status', 'twilio', '_error / _errorDetails on failure'],
     example: `From: +1234567890
 To: +1987654321
 Message: "Hello from CtrlChecks!"
 
 Output: {
-  sid: "SM1234567890abcdef",
+  success: true,
+  sid: "SM1234567890abcdef1234567890abcd",
   status: "queued",
   twilio: { sid, status, to, from, body, price, ... }
 }`,
     tips: [
       'Phone numbers in E.164 format (include + and country code)',
       "Connect your Twilio account from the node's connection picker (Account SID + Auth Token)",
-      'Use either a From number or a Messaging Service SID',
+      'Use either a From number or a Messaging Service SID, not both',
       'Set Media URL to send an MMS attachment',
-      'Message limit: 1600 characters',
+      'status is the initial queue state (queued/sent), not final delivery — this node does not poll for delivered/failed',
+      'On failure, check {{$json._errorDetails}} for the real reason — {{$json._error}} alone is just a bare status-code message, and there is no success: false to check instead',
+      'Trial Twilio accounts can only send to Verified Caller IDs until upgraded',
       'Supports template variables',
+    ],
+  },
+
+  zoom_video: {
+    overview: 'Create, list, get, update, or delete Zoom meetings using a saved Zoom OAuth2 connection. Use it for booking flows, support calls, classes, sales demos, and cancellation workflows where Zoom meeting details need to move through the workflow.',
+    inputs: ['operation', 'topic, duration, startTime for createMeeting/updateMeeting', 'meetingId for getMeeting/updateMeeting/deleteMeeting', 'Zoom OAuth2 connection selected in Connections'],
+    outputs: ['success and raw Zoom data for create/list/get', 'data.updated and data.meetingId for updateMeeting', 'data.deleted and data.meetingId for deleteMeeting', '_error and _errorDetails on failures'],
+    example: `Operation: Create Meeting
+Topic: "Discovery call with {{$json.companyName}}"
+Start Time: {{$json.startsAt}}
+Duration: 30
+
+Output: {
+  success: true,
+  data: {
+    id: 81234567890,
+    topic: "Discovery call with Acme Corp",
+    join_url: "https://zoom.us/j/81234567890",
+    start_url: "https://zoom.us/s/81234567890",
+    start_time: "2026-05-01T10:00:00Z",
+    duration: 30
+  }
+}`,
+    tips: [
+      'Connect Zoom OAuth2 from Connections; CtrlChecks stores OAuth tokens in the credential vault, not in normal node fields',
+      'Required scopes are meeting:write:meeting, meeting:read:meeting, meeting:read:list_meetings, and user:read:user',
+      'Leave Start Time blank on Create Meeting only when you want an instant meeting; use ISO 8601 timestamps for scheduled meetings',
+      'Use {{$json.data.id}} as Meeting ID for later Get, Update, or Delete Meeting steps; do not use join_url as the ID',
+      'Update and Delete return small confirmation objects, not the full meeting details, so run Get Meeting first if later steps need the join link or topic',
+      'Downstream nodes such as Gmail, Slack, or Google Calendar need their own account connection before they can share the Zoom link',
     ],
   },
 
@@ -4251,23 +4783,26 @@ Output: {
   },
 
   write_binary_file: {
-    overview: 'Write binary files to the file system. Accepts base64-encoded content and writes it to the specified path. Perfect for file generation, backup creation, or file processing workflows.',
-    inputs: ['filePath', 'content'],
-    outputs: ['result', 'filePath', 'size'],
-    example: `File Path: /tmp/data.txt
-Content: "SGVsbG8gV29ybGQ=" (base64 for "Hello World")
+    overview: 'Create a managed workflow file asset from base64, a data URL, or plain text. Perfect for staging generated PDFs/images before upload, email attachment, OCR, or later workflow steps.',
+    inputs: ['fileName', 'mimeType', 'dataBase64', 'folder', 'persist'],
+    outputs: ['assetId', 'fileName', 'mimeType', 'dataBase64', 'sizeBytes', 'storageKey', 'metadataPersisted'],
+    example: `File Name: report.pdf
+MIME Type: application/pdf
+Binary Data: {{$json.dataBase64}}
 
 Output: {
-  result: "success",
-  filePath: "/tmp/data.txt",
-  size: 11
+  assetId: "asset-id",
+  fileName: "report.pdf",
+  dataBase64: "JVBERi0x...",
+  sizeBytes: 2048,
+  metadataPersisted: true
 }`,
     tips: [
-      'Content must be base64-encoded',
-      'File will be created if it doesn\'t exist',
-      'Supports absolute and relative paths',
-      'Use for file generation and backups',
-      'Files are written to the local filesystem (default /tmp/ on the backend)',
+      'Use dataBase64 from download/PDF/file nodes',
+      'Data URLs like data:application/pdf;base64,... are accepted',
+      'Keep Persist Metadata enabled when later nodes should read by assetId',
+      'Custom paths are restricted to the backend binary storage root',
+      'Use Google Drive/S3/Dropbox/OneDrive nodes for cloud storage upload',
     ],
   },
 
@@ -5084,18 +5619,22 @@ Output: {
   },
 
   microsoft_teams: {
-    overview: 'Send messages to Microsoft Teams channels via Incoming Webhook. Great for notifications and alerts.',
-    inputs: ['webhookUrl', 'title (optional)', 'message'],
-    outputs: ['status'],
-    example: `Webhook URL: https://outlook.office.com/webhook/...
-Title: "Workflow Notification"
-Message: "Your workflow completed successfully!"
+    overview: 'Send Microsoft Teams channel notifications through an Incoming Webhook, or reply to Microsoft Teams Trigger conversations through a saved Microsoft Teams Bot connection.',
+    inputs: ['webhookUrl (for channel webhooks)', 'message', 'serviceUrl (for trigger replies)', 'conversationId (for trigger replies)', 'replyToId (optional)'],
+    outputs: ['success', 'teams.status', 'teams.response', 'teams.id', 'botReply', '_error', '_errorDetails'],
+    example: `Webhook URL: 
+Message: "Answer for {{$json.userName}} about ticket {{$json.ticketId}}: {{$json.response}}"
+Service URL: {{$json.serviceUrl}}
+Conversation ID: {{$json.conversationId}}
+Reply To Activity ID: {{$json.replyToId}}
 
-Sends message to Microsoft Teams channel.`,
+Replies in the same Teams bot conversation and returns {{$json.success}} plus Teams response details.`,
     tips: [
-      'Create webhook in Teams channel connectors',
-      'Use for alerts and notifications',
-      'Keep messages short and clear',
+      'Use Webhook URL for fixed channel notifications, and Service URL plus Conversation ID for Microsoft Teams Trigger replies',
+      'Save Incoming Webhook URLs or Microsoft Teams Bot credentials in Connections when possible',
+      'The Teams Bot connection needs Microsoft App ID and Microsoft App Password / client secret',
+      'Use {{$json.serviceUrl}}, {{$json.conversationId}}, and {{$json.replyToId}} directly from Microsoft Teams Trigger',
+      'Connect downstream service accounts separately; Teams credentials only authorize the Teams send',
     ],
   },
 

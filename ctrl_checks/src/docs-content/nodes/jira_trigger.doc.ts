@@ -1,0 +1,110 @@
+import type { NodeDoc } from '../types';
+
+export const jiraTriggerDoc: NodeDoc = {
+  slug: 'jira_trigger',
+  displayName: 'Jira Trigger',
+  category: 'Triggers',
+  logoUrl: '/integrations-logos/Jira.svg',
+  description: 'Start workflows from Jira issue created/updated/deleted or comment created/updated/deleted events, delivered through a manually configured Jira Cloud webhook.',
+  credentialType: 'Jira API Token (Email + API Token)',
+  credentialSetupSteps: [
+    'Create a Jira API token at id.atlassian.com/manage-profile/security/api-tokens.',
+    'Connect Jira in Connections using your Atlassian account email, the API token, and your site domain (e.g. yourcompany.atlassian.net).',
+    'Add this trigger to a workflow, optionally set a Project Key, and save/activate the workflow — CtrlChecks generates the exact webhook URL and secret.',
+    'As a Jira site admin, open Jira Settings -> System -> WebHooks and create a webhook using the generated URL (the secret is already embedded as a query parameter). If you are not a site admin, use an "Automation for Jira" rule with a "Send web request" action instead.',
+  ],
+  credentialDocsUrl: 'https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/',
+  resources: [
+    {
+      name: 'Webhook',
+      description: 'Receives Jira webhook deliveries and emits a normalized event payload.',
+      operations: [
+        {
+          name: 'Receive event',
+          value: 'receive',
+          description: 'Starts the workflow when a matching Jira event (jira:issue_created, jira:issue_updated, jira:issue_deleted, comment_created, comment_updated, comment_deleted, or any other webhookEvent) is delivered.',
+          fields: [
+            {
+              name: 'Jira Site URL',
+              internalKey: 'siteUrl',
+              type: 'string',
+              required: false,
+              description: 'Your Atlassian domain. Defaults to the domain saved in your Jira connection if left blank.',
+              placeholder: 'yourcompany.atlassian.net',
+              example: 'yourcompany.atlassian.net',
+            },
+            {
+              name: 'Project Key',
+              internalKey: 'projectKey',
+              type: 'string',
+              required: false,
+              description: 'Optional. Scope this trigger to one Jira project key.',
+              placeholder: 'PROJ',
+              example: 'PROJ',
+            },
+            {
+              name: 'Event Types',
+              internalKey: 'eventTypes',
+              type: 'string',
+              required: false,
+              description: 'Comma-separated Jira webhook event types to listen for.',
+              helpText: 'Defaults to jira:issue_created, jira:issue_updated, comment_created. Also accepts jira:issue_deleted, comment_updated, comment_deleted.',
+              placeholder: 'jira:issue_created, jira:issue_updated, comment_created',
+              example: 'jira:issue_created',
+            },
+            {
+              name: 'Keyword Filter',
+              internalKey: 'query',
+              type: 'string',
+              required: false,
+              description: 'Optional keyword matched against the event text (issue summary or comment body).',
+              placeholder: 'urgent',
+              example: 'urgent',
+            },
+          ],
+          outputExample: {
+            eventId: '10002',
+            eventType: 'jira:issue_created',
+            source: 'jira',
+            issueKey: 'PROJ-123',
+            issueId: '10002',
+            issueSummary: 'Bug: something broke',
+            issueUrl: 'https://yourcompany.atlassian.net/browse/PROJ-123',
+            issueType: 'Bug',
+            issueStatus: 'To Do',
+            projectKey: 'PROJ',
+            raw: {},
+          },
+          outputDescription: 'Outputs normalized top-level fields: eventId, eventType (the raw webhookEvent value), source, timestamp, siteUrl, issueKey, issueId, issueSummary, issueUrl, issueType, issueStatus, projectKey, commentBody/commentUrl (comment events), userId/username, and raw.',
+          usageExample: {
+            scenario: 'Triage new Jira issues with AI and post a summary comment',
+            inputValues: {
+              projectKey: 'PROJ',
+              eventTypes: 'jira:issue_created',
+            },
+            expectedOutput: 'Use {{$json.issueKey}} and {{$json.issueSummary}} in an AI Agent or downstream Jira action node.',
+          },
+          externalDocsUrl: 'https://developer.atlassian.com/cloud/jira/platform/webhooks/',
+        },
+      ],
+    },
+  ],
+  commonErrors: [
+    {
+      error: 'No active Jira connection found',
+      cause: 'The workflow owner has not connected Jira, or the saved email/API token/domain is invalid.',
+      fix: 'Save a valid Jira email + API token + site domain in Connections and re-activate the workflow.',
+    },
+    {
+      error: 'Invalid or missing Jira webhook secret',
+      cause: 'Jira does not sign webhook payloads. Validation relies on a per-node secret CtrlChecks generates and embeds in the webhook URL (or an X-Jira-Webhook-Secret header). The secret was missing or did not match.',
+      fix: 'Re-register the webhook from the node to get a fresh URL with the correct secret, then update the URL configured in Jira\'s WebHooks admin page or Automation for Jira rule.',
+    },
+    {
+      error: 'Webhook not receiving events after saving the workflow',
+      cause: 'Unlike GitHub/GitLab, Jira Cloud webhook registration cannot be fully automated with an API-token credential — Jira restricts the dynamic webhooks REST endpoint to Connect/OAuth apps. CtrlChecks only generates the URL; nothing is registered on Jira\'s side automatically.',
+      fix: 'As a Jira site admin, add the generated URL under Jira Settings -> System -> WebHooks, or use an Automation for Jira "Send web request" action if you do not have site-admin access.',
+    },
+  ],
+  relatedNodes: ['jira', 'ai_agent'],
+};

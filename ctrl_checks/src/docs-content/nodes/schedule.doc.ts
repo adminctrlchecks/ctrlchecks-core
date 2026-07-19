@@ -1,80 +1,153 @@
 import type { NodeDoc } from '../types';
 
 export const scheduleDoc: NodeDoc = {
-  "slug": "schedule",
-  "displayName": "Schedule Trigger",
-  "category": "Triggers",
-  "logoUrl": "/icons/nodes/schedule.svg",
-  "description": "Executes workflow on a time-based schedule using cron expressions",
-  "credentialType": "None",
-  "credentialSetupSteps": [
-    "This node does not need a saved account connection.",
-    "Open the node settings and fill the visible input fields.",
-    "Run the workflow when the required fields are complete."
+  slug: 'schedule',
+  displayName: 'Schedule Trigger',
+  category: 'Triggers',
+  logoUrl: '/icons/nodes/schedule.svg',
+  description: 'Start a workflow automatically at a planned time. Use Schedule Trigger for daily reports, recurring reminders, morning checks, weekly exports, and other work that should run without someone pressing Run.',
+  credentialType: 'None',
+  credentialSetupSteps: [
+    'No third-party account, API key, token, or saved connection is needed for this trigger.',
+    'Place Schedule Trigger as the first node in the workflow and connect its output to the first action node.',
+    'Save the workflow before relying on the schedule. CtrlChecks stores the cron expression on the workflow record so the scheduler can start it.',
+    'Choose the business timezone for the schedule, then set either a simple daily time or an advanced cron expression.',
+    'If a later node sends email, writes to a spreadsheet, posts to Slack, or calls another service, connect the account on that later service node.',
   ],
-  "credentialDocsUrl": "https://docs.ctrlchecks.com",
-  "resources": [
+  credentialDocsUrl: 'https://docs.ctrlchecks.com',
+  resources: [
     {
-      "name": "Configuration",
-      "description": "Schedule Trigger is configured directly with input fields.",
-      "operations": [
+      name: 'Configuration',
+      description: 'Schedule Trigger has one operation: start the workflow when the selected time rule matches. The UI supports a simple daily time picker and an advanced cron expression for weekly, monthly, or repeated schedules.',
+      operations: [
         {
-          "name": "Execute",
-          "value": "default",
-          "description": "Start the workflow automatically on a defined cron schedule.",
-          "fields": [
+          name: 'Execute',
+          value: 'default',
+          description: 'Starts the workflow automatically whenever the schedule matches. Use the daily time picker for once-a-day tasks, or edit the cron expression when the workflow should run weekly, monthly, hourly, or on business-day patterns.',
+          fields: [
             {
-              "name": "Cron",
-              "internalKey": "cron",
-              "type": "string",
-              "required": true,
-              "description": "Cron expression (e.g., \"0 9 * * *\" for daily at 9 AM)",
-              "helpText": "What this field is: Cron expression.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: 0 9 * * *.\nTip: Use {{$json.cron}} when this value comes from an earlier step.",
-              "placeholder": "0 9 * * *",
-              "example": "0 9 * * *"
+              name: 'Cron',
+              internalKey: 'cron',
+              type: 'string',
+              required: true,
+              description: 'The advanced schedule rule saved by CtrlChecks. A daily time such as 09:00 becomes a cron expression such as 0 9 * * *.',
+              helpText: 'What this field means: Cron is the compact schedule rule that tells CtrlChecks exactly when to start the workflow.\nWhy it matters: The scheduler uses this value after the workflow is saved. If it is wrong, the workflow may run at the wrong time or not run at all.\nWhen to fill it: Use the daily time picker for simple once-a-day schedules. Edit Cron directly when you need weekly, monthly, hourly, or business-hour patterns.\nWhat to enter: Use five space-separated parts: minute, hour, day of month, month, weekday.\nWhere the value comes from: CtrlChecks can create it from the time picker. Advanced users can type it manually after confirming the business schedule.\nHow to use it later: Later nodes can read the schedule metadata with expressions such as {{$json.cronExpression}}, {{$json.scheduledTime}}, or {{$json.timezone}}.\nAccepted format: Examples include 0 9 * * * for every day at 9:00, 0 9 * * 1-5 for weekdays at 9:00, 30 18 * * 5 for Fridays at 18:30, and 0 */4 * * * for every 4 hours.\nReal workplace example: An operations manager schedules a daily stock report with 0 8 * * * so it runs at 8:00 every morning in the selected timezone.\nIf it is empty or wrong: The scheduler cannot activate, or it may run at an unexpected time. Validation errors usually mention the cron part that is invalid.\nCommon mistake to avoid: Do not type regular words such as daily at 9. Use the time picker or a valid cron expression.',
+              placeholder: '0 9 * * *',
+              example: '0 9 * * *',
             },
             {
-              "name": "Timezone",
-              "internalKey": "timezone",
-              "type": "string",
-              "required": false,
-              "description": "Timezone for schedule",
-              "helpText": "What this field is: The date or time value for Timezone for schedule.\nHow to fill it: Use a clear date such as 2026-06-01, or a full date and time with timezone when the service needs exact timing.\nExample: UTC.\nTip: Use {{$json.timezone}} when an earlier calendar, form, or database step provides the date.",
-              "placeholder": "UTC",
-              "example": "UTC",
-              "defaultValue": "UTC"
-            }
+              name: 'Time (HH:MM)',
+              internalKey: 'time',
+              type: 'string',
+              required: true,
+              description: 'The simple daily time shown in the Schedule Trigger picker. It creates a daily cron expression automatically.',
+              helpText: 'What this field means: Time is the local clock time when a daily schedule should run.\nWhy it matters: It is the easiest way to run a workflow once every day without learning cron.\nWhen to fill it: Use this for daily reminders, reports, checks, exports, or cleanup jobs.\nWhat to enter: Use 24-hour HH:MM time, such as 09:00 for 9 AM or 14:30 for 2:30 PM.\nWhere the value comes from: Choose the time your team expects the work to happen in the selected business timezone.\nHow to use it later: The schedule output can be used by the next node with {{$json.scheduledTime}} or {{$json.timezone}}.\nAccepted format: Two-digit hour, colon, two-digit minute. Hours are 00 through 23 and minutes are 00 through 59.\nReal workplace example: A sales manager sets 08:30 in America/New_York so the pipeline summary is ready every weekday morning.\nIf it is empty or wrong: CtrlChecks cannot create the daily schedule, and the panel may show that the time must be in HH:MM format.\nCommon mistake to avoid: Do not enter 9 AM, 9.00, or 25:00. Use 09:00.',
+              placeholder: '09:00',
+              example: '09:00',
+            },
+            {
+              name: 'Timezone',
+              internalKey: 'timezone',
+              type: 'select',
+              required: true,
+              description: 'The business timezone used to interpret the schedule time.',
+              helpText: 'What this field means: Timezone tells CtrlChecks which local clock to use for the schedule.\nWhy it matters: 09:00 in New York is not the same moment as 09:00 in India, London, or Sydney.\nWhen to fill it: Always choose the timezone where the business process is supposed to happen.\nWhat to enter: Pick a dropdown option. Use UTC for system-wide technical jobs, or a city/region option for local business hours.\nWhere the value comes from: Use the office, customer region, warehouse, support team, or reporting team that owns the scheduled work.\nHow to use it later: Later nodes can include the timezone in messages or logs with {{$json.timezone}}.\nAccepted format: CtrlChecks stores IANA timezone values such as Asia/Kolkata, UTC, America/New_York, Europe/London, or Australia/Sydney.\nOptions and when to choose them: Indian Standard Time (IST) - choose for India-wide schedules. UTC (Coordinated Universal Time) - choose for global server jobs and neutral audit timestamps. Eastern Time (US) - choose for US East Coast teams. Central Time (US) - choose for US Central teams. Mountain Time (US) - choose for US Mountain teams. Pacific Time (US) - choose for US West Coast teams. London (GMT/BST) - choose for UK schedules. Paris (CET/CEST) - choose for France-based schedules. Berlin (CET/CEST) - choose for Germany-based schedules. Tokyo (JST) - choose for Japan schedules. Shanghai (CST) - choose for mainland China schedules. Singapore (SGT) - choose for Singapore and many Southeast Asia operations. Sydney (AEDT/AEST) - choose for New South Wales or Sydney-led schedules. Melbourne (AEDT/AEST) - choose for Victoria or Melbourne-led schedules. Dubai (GST) - choose for UAE schedules. Mumbai (IST), New Delhi (IST), and Bangalore (IST) are city-friendly India choices that all use Asia/Kolkata.\nReal workplace example: A finance workflow for the India office runs at 18:00 Asia/Kolkata so invoices close after the local workday.\nIf it is empty or wrong: The workflow may run hours earlier or later than the team expects.\nCommon mistake to avoid: Do not choose your personal timezone when the schedule belongs to a customer region, warehouse, or office in another timezone.',
+              placeholder: 'Asia/Kolkata',
+              example: 'Asia/Kolkata',
+              defaultValue: 'Asia/Kolkata',
+              options: [
+                'Indian Standard Time (IST)',
+                'UTC (Coordinated Universal Time)',
+                'Eastern Time (US)',
+                'Central Time (US)',
+                'Mountain Time (US)',
+                'Pacific Time (US)',
+                'London (GMT/BST)',
+                'Paris (CET/CEST)',
+                'Berlin (CET/CEST)',
+                'Tokyo (JST)',
+                'Shanghai (CST)',
+                'Singapore (SGT)',
+                'Sydney (AEDT/AEST)',
+                'Melbourne (AEDT/AEST)',
+                'Dubai (GST)',
+                'Mumbai (IST)',
+                'New Delhi (IST)',
+                'Bangalore (IST)',
+              ],
+            },
+            {
+              name: 'Hour',
+              internalKey: 'hour',
+              type: 'number',
+              required: false,
+              description: 'The hour control in the daily time picker.',
+              helpText: 'What this field means: Hour is the hour of the day for a simple daily schedule.\nWhy it matters: It helps CtrlChecks build the cron expression without making you type cron manually.\nWhen to fill it: Use it when you want the workflow to run once per day.\nWhat to enter: Choose a number from 00 to 23.\nWhere the value comes from: Use the hour your team expects the job to start in the selected timezone.\nHow to use it later: CtrlChecks converts the hour and minute into {{$json.cronExpression}} when the schedule fires.\nAccepted format: 00 through 23, where 00 is midnight, 09 is 9 AM, and 14 is 2 PM.\nReal workplace example: Set Hour to 18 for an end-of-day sales digest.\nIf it is empty or wrong: The time picker cannot create the expected daily schedule.\nCommon mistake to avoid: Do not use 12-hour values with AM or PM. Use 14 for 2 PM.',
+              placeholder: '09',
+              example: '09',
+              notes: 'This is a UI helper for the daily time picker, not a separate backend field.',
+            },
+            {
+              name: 'Minute',
+              internalKey: 'minute',
+              type: 'number',
+              required: false,
+              description: 'The minute control in the daily time picker.',
+              helpText: 'What this field means: Minute is the minute within the selected hour for a simple daily schedule.\nWhy it matters: It lets you run at precise times such as 08:30, 09:15, or 18:45.\nWhen to fill it: Use it together with Hour when creating a daily schedule from the time picker.\nWhat to enter: Choose a number from 00 to 59.\nWhere the value comes from: Use the exact minute your team expects the workflow to start.\nHow to use it later: CtrlChecks combines minute and hour into {{$json.cronExpression}} when the schedule fires.\nAccepted format: 00 through 59.\nReal workplace example: Set Hour to 08 and Minute to 30 so a daily inventory report runs at 08:30.\nIf it is empty or wrong: The time picker cannot create the expected daily schedule.\nCommon mistake to avoid: Do not use 60 or text such as half past. Use 30.',
+              placeholder: '00',
+              example: '30',
+              notes: 'This is a UI helper for the daily time picker, not a separate backend field.',
+            },
           ],
-          "outputExample": {
-            "scheduledTime": "2025-01-15T09:00:00.000Z",
-            "timezone": "UTC",
-            "cronExpression": "0 9 * * 1-5"
+          outputExample: {
+            scheduledTime: '2026-07-31T03:30:00.000Z',
+            localTime: '2026-07-31 09:00',
+            timezone: 'Asia/Kolkata',
+            cronExpression: '0 9 * * *',
+            triggeredBy: 'schedule',
+            output: {},
           },
-          "outputDescription": "scheduledTime: ISO timestamp when the trigger fired. timezone: The schedule timezone. cronExpression: The cron expression that matched.",
-          "usageExample": {
-            "scenario": "Send a daily summary email every weekday at 9 AM",
-            "inputValues": {
-              "cronExpression": "0 9 * * 1-5",
-              "timezone": "America/New_York"
+          outputDescription: 'scheduledTime: The exact timestamp when the schedule fired. localTime: The scheduled clock time in the selected timezone. timezone: The timezone used to interpret the schedule. cronExpression: The saved cron rule that matched. triggeredBy: Shows that the workflow started from the scheduler. output: A reserved object for trigger output metadata.',
+          usageExample: {
+            scenario: 'Send a daily sales summary to managers every morning before standup.',
+            inputValues: {
+              time: '09:00',
+              cron: '0 9 * * *',
+              timezone: 'Asia/Kolkata',
             },
-            "expectedOutput": "The workflow fires at 9 AM Mon–Fri. Connect a Gmail Send node downstream to send the email."
+            expectedOutput: 'The workflow fires at 09:00 in the selected timezone. The next node can use {{$json.scheduledTime}}, {{$json.timezone}}, and {{$json.cronExpression}} in reports, logs, or notification messages.',
           },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
-        }
-      ]
-    }
+          externalDocsUrl: 'https://docs.ctrlchecks.com',
+        },
+      ],
+    },
   ],
-  "commonErrors": [
+  commonErrors: [
     {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
+      error: 'Schedule is missing a time or cron expression',
+      cause: 'The schedule cannot be saved because neither the daily time picker nor the cron field has a usable value.',
+      fix: 'Choose a daily time such as 09:00, or enter a valid cron expression such as 0 9 * * *.',
     },
     {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
+      error: 'Invalid cron expression',
+      cause: 'The cron value has the wrong number of parts or a part contains a value outside the allowed range.',
+      fix: 'Use five parts in this order: minute hour day month weekday. Example: 0 9 * * 1-5 for weekdays at 9:00.',
+    },
+    {
+      error: 'Workflow does not run at the expected local time',
+      cause: 'The timezone does not match the office, customer region, or business process that owns the schedule.',
+      fix: 'Select the correct business timezone, save the workflow, and check the next scheduled run time shown after saving.',
+    },
+    {
+      error: 'Schedule saved but automation does not start',
+      cause: 'The workflow may not be saved yet, the scheduler did not store the cron expression, or Schedule Trigger is not connected to the first action node.',
+      fix: 'Save the workflow, confirm the Schedule Trigger has an outgoing line to the next node, then edit the schedule once more to restart the scheduler.',
+    },
+    {
+      error: 'Permission denied in a later service node',
+      cause: 'Schedule Trigger does not use credentials, but later nodes such as Gmail, Slack, Google Sheets, or a database still need their own account connection.',
+      fix: 'Open the service node that failed, connect the correct account, and make sure that account has permission for the scheduled read, write, send, upload, or delete action.',
+    },
   ],
-  "relatedNodes": []
+  relatedNodes: ['manual_trigger', 'webhook', 'interval', 'form'],
 };

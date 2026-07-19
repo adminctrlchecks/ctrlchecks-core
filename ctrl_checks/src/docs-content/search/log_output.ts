@@ -7,30 +7,30 @@ export const logOutputSearchIndex = [
     "slug": "log_output",
     "category": "Utility",
     "href": "/docs/nodes/log_output",
-    "text": "Log Output Log data to console or file Use this node when a workflow needs log output behavior with schema-driven inputs from the CtrlChecks node registry. Utility"
+    "text": "Log Output Write a labeled checkpoint message to the workflow execution log for debugging, monitoring, and audit trails. This is always a terminal node — it cannot have an outgoing connection to any other node. Utility"
   },
   {
     "type": "operation",
-    "title": "Log Output: Configure",
+    "title": "Log Output: Write Log Entry",
     "slug": "log_output",
     "category": "Utility",
-    "href": "/docs/nodes/log_output#operation-configure",
-    "text": "Log Output Configuration Configure Configure with the Log Output node using the configured input fields. configure"
+    "href": "/docs/nodes/log_output#operation-default",
+    "text": "Log Output Configuration Write Log Entry Resolves Message against the data from the connected upstream node, writes it to the CtrlChecks execution log under the chosen Level, and returns that resolved text as this node's own output. default"
   },
   {
     "type": "field",
     "title": "Log Output: Level",
     "slug": "log_output",
     "category": "Utility",
-    "href": "/docs/nodes/log_output#operation-configure",
-    "text": "Log Output Configuration Configure Level level Log level"
+    "href": "/docs/nodes/log_output#operation-default",
+    "text": "Log Output Configuration Write Log Entry Level level Log severity label used only for filtering and display in the execution log"
   },
   {
     "type": "field",
     "title": "Log Output: Message",
     "slug": "log_output",
     "category": "Utility",
-    "href": "/docs/nodes/log_output#operation-configure",
-    "text": "Log Output Configuration Configure Message message Log message"
+    "href": "/docs/nodes/log_output#operation-default",
+    "text": "Log Output Configuration Write Log Entry Message message The text written to the execution log, and this node's entire output value"
   }
 ] satisfies DocsSearchIndexItem[];

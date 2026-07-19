@@ -3,11 +3,11 @@ import type { DocsSearchIndexItem } from '../search-index';
 export const slackMessageSearchIndex = [
   {
     type: 'node',
-    title: 'Slack',
+    title: 'Slack Message',
     slug: 'slack_message',
     category: 'Communication',
     href: '/docs/nodes/slack_message',
-    text: 'Slack Send messages using a Slack OAuth app or bot connection with chat.postMessage.',
+    text: 'Slack Message Send Slack bot messages to channels, direct messages, or threads through a saved Slack OAuth2 connection. Requires chat:write and returns id, status, channel, ts, threadTs, message, or error.',
   },
   {
     type: 'operation',
@@ -15,7 +15,7 @@ export const slackMessageSearchIndex = [
     slug: 'slack_message',
     category: 'Communication',
     href: '/docs/nodes/slack_message#operation-configure',
-    text: 'Send a Slack message to a channel or direct message using the selected Slack OAuth2 connection.',
+    text: 'Send one Slack message with chat.postMessage. Use this for alerts, support replies, incident updates, approvals, report summaries, deployment notes, and Slack Trigger thread replies.',
   },
   {
     type: 'field',
@@ -23,7 +23,7 @@ export const slackMessageSearchIndex = [
     slug: 'slack_message',
     category: 'Communication',
     href: '/docs/nodes/slack_message#operation-configure',
-    text: 'Channel channel Slack channel name, channel ID, or user ID for chat.postMessage.',
+    text: 'Channel channel Slack destination. Use #alerts, a channel ID like C01234ABCDE, a user/direct-message ID, or {{$json.channelId}} from Slack Trigger. Required for Slack OAuth bot sends; invite the bot to private channels.',
   },
   {
     type: 'field',
@@ -31,7 +31,15 @@ export const slackMessageSearchIndex = [
     slug: 'slack_message',
     category: 'Communication',
     href: '/docs/nodes/slack_message#operation-configure',
-    text: 'Message message Text to send to Slack.',
+    text: 'Message message readable Slack text and fallback notification. Combine fixed wording with {{$json.ticketId}}, {{$json.customerEmail}}, or other workflow data. Supports Slack mrkdwn and should stay filled when Blocks are used.',
+  },
+  {
+    type: 'field',
+    title: 'Slack: Thread Timestamp',
+    slug: 'slack_message',
+    category: 'Communication',
+    href: '/docs/nodes/slack_message#operation-configure',
+    text: 'Thread Timestamp threadTs optional Slack thread timestamp. Map {{$json.threadTs}}, {{$json.thread_ts}}, {{$json.messageTs}}, or {{$json.ts}} to reply inside an existing Slack thread. Leave empty for a new top-level post.',
   },
   {
     type: 'field',
@@ -39,6 +47,22 @@ export const slackMessageSearchIndex = [
     slug: 'slack_message',
     category: 'Communication',
     href: '/docs/nodes/slack_message#operation-configure',
-    text: 'Blocks blocks Optional Slack Block Kit JSON array.',
+    text: 'Blocks blocks optional Slack Block Kit JSON array. Paste only the array from Slack Block Kit Builder for sections, fields, dividers, buttons, or context. Invalid JSON may be ignored or rejected as invalid_blocks.',
+  },
+  {
+    type: 'field',
+    title: 'Slack: Bot Name',
+    slug: 'slack_message',
+    category: 'Communication',
+    href: '/docs/nodes/slack_message#operation-configure',
+    text: 'Bot Name username optional Slack sender display name override. Use an approved name such as Ops Alert Bot only when the Slack app and workspace allow customization. The OAuth2 connection still controls the real sender.',
+  },
+  {
+    type: 'field',
+    title: 'Slack: Icon Emoji',
+    slug: 'slack_message',
+    category: 'Communication',
+    href: '/docs/nodes/slack_message#operation-configure',
+    text: 'Icon Emoji iconEmoji optional Slack bot avatar override. Enter an emoji shortcode such as :rotating_light: or :memo:. Leave blank to use the app default icon.',
   },
 ] satisfies DocsSearchIndexItem[];

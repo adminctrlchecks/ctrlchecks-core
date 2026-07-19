@@ -7,22 +7,22 @@ export const manualTriggerSearchIndex = [
     "slug": "manual_trigger",
     "category": "Triggers",
     "href": "/docs/nodes/manual_trigger",
-    "text": "Manual Trigger Workflow executes when user manually triggers it Use this node when a workflow needs manual trigger behavior with schema-driven inputs from the CtrlChecks node registry. Triggers"
+    "text": "Manual Trigger Start a workflow only when a person clicks Run. Use it for testing, approvals, one-off operations, month-end work, and internal workflows that should not run automatically. Triggers"
   },
   {
     "type": "operation",
-    "title": "Manual Trigger: Configure",
+    "title": "Manual Trigger: Execute",
     "slug": "manual_trigger",
     "category": "Triggers",
-    "href": "/docs/nodes/manual_trigger#operation-configure",
-    "text": "Manual Trigger Configuration Configure Configure with the Manual Trigger node using the configured input fields. configure"
+    "href": "/docs/nodes/manual_trigger#operation-default",
+    "text": "Manual Trigger Execute Starts the workflow when you click Run. Choose this for testing a workflow, running an approved report, reprocessing a record, or starting an on-demand internal task."
   },
   {
     "type": "field",
     "title": "Manual Trigger: Input Data",
     "slug": "manual_trigger",
     "category": "Triggers",
-    "href": "/docs/nodes/manual_trigger#operation-configure",
-    "text": "Manual Trigger Configuration Configure Input Data inputData Optional input data when triggered manually"
+    "href": "/docs/nodes/manual_trigger#operation-default",
+    "text": "Manual Trigger Input Data inputData Optional JSON sample data passed to the next node. Use workplace values like ticketId, customerEmail, reportDate, department, or requestedBy."
   }
 ] satisfies DocsSearchIndexItem[];

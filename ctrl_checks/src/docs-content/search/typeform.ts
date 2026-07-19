@@ -7,7 +7,15 @@ export const typeformSearchIndex = [
     "slug": "typeform",
     "category": "Data",
     "href": "/docs/nodes/typeform",
-    "text": "Typeform Retrieve form responses, create forms, and fetch form definitions using Typeform. Use this node when a workflow needs typeform behavior with schema-driven inputs from the CtrlChecks node registry. Data"
+    "text": "Typeform List forms, retrieve form responses, create forms, and fetch form definitions using Typeform. Use this node when a workflow needs typeform behavior with schema-driven inputs from the CtrlChecks node registry. Data"
+  },
+  {
+    "type": "operation",
+    "title": "Typeform: Get Forms",
+    "slug": "typeform",
+    "category": "Data",
+    "href": "/docs/nodes/typeform#operation-get_forms",
+    "text": "Typeform Operations Get Forms List forms available to the connected Typeform account. get_forms"
   },
   {
     "type": "operation",

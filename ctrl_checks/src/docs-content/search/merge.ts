@@ -7,7 +7,7 @@ export const mergeSearchIndex = [
     slug: 'merge',
     category: 'Logic',
     href: '/docs/nodes/merge',
-    text: 'Merge combine multiple incoming branches into one output'
+    text: 'Merge rejoin multiple workflow branches combine data no credentials',
   },
   {
     type: 'operation',
@@ -15,7 +15,7 @@ export const mergeSearchIndex = [
     slug: 'merge',
     category: 'Logic',
     href: '/docs/nodes/merge#operation-configure',
-    text: 'Merge Configure overwrite append deep_merge branch outputs'
+    text: 'Merge Configure mode overwrite append deep_merge branch outputs sourceCount mergeMode',
   },
   {
     type: 'field',
@@ -23,6 +23,14 @@ export const mergeSearchIndex = [
     slug: 'merge',
     category: 'Logic',
     href: '/docs/nodes/merge#operation-configure',
-    text: 'Merge Mode mode overwrite append deep_merge'
-  }
+    text: 'Merge Mode overwrite objects append items deep_merge nested objects when to choose each output shape',
+  },
+  {
+    type: 'connection',
+    title: 'Merge: Connection Guidance',
+    slug: 'merge',
+    category: 'Logic',
+    href: '/docs/nodes/merge#operation-configure',
+    text: 'Merge connect multiple incoming branch outputs connect output downstream service node account connection',
+  },
 ] satisfies DocsSearchIndexItem[];

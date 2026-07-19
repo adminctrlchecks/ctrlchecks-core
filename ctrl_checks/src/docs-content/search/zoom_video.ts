@@ -7,7 +7,7 @@ export const zoomVideoSearchIndex = [
     type: 'node' as const,
     category: 'Communication',
     href: '/docs/nodes/zoom_video',
-    text: 'Zoom Video Create and manage Zoom meetings using a Zoom OAuth connection. Operations createMeeting listMeetings getMeeting updateMeeting deleteMeeting. Requires Zoom OAuth2 connection.',
+    text: 'Zoom Video creates, lists, reads, updates, and deletes Zoom meetings through a saved Zoom OAuth2 connection. Operation values: createMeeting, listMeetings, getMeeting, updateMeeting, deleteMeeting. Required connection: Zoom OAuth2 with meeting:write:meeting, meeting:read:meeting, meeting:read:list_meetings, and user:read:user scopes. Runtime returns success plus data, or _error and _errorDetails on failures.',
   },
   {
     title: 'Zoom Video: Create Meeting',
@@ -15,7 +15,7 @@ export const zoomVideoSearchIndex = [
     type: 'operation' as const,
     category: 'Communication',
     href: '/docs/nodes/zoom_video#operation-createMeeting',
-    text: 'Create a Zoom meeting with topic startTime and duration using a selected Zoom OAuth2 connection.',
+    text: 'Create a Zoom meeting for the connected Zoom user. Fields: operation=createMeeting, optional topic, duration, and startTime. Leave startTime blank for an instant meeting; fill ISO 8601 startTime for a scheduled meeting. Output data includes id, join_url, start_url, topic, start_time, and duration when Zoom returns them.',
   },
   {
     title: 'Zoom Video: List Meetings',
@@ -23,7 +23,7 @@ export const zoomVideoSearchIndex = [
     type: 'operation' as const,
     category: 'Communication',
     href: '/docs/nodes/zoom_video#operation-listMeetings',
-    text: 'List scheduled Zoom meetings for the connected user.',
+    text: 'List scheduled Zoom meetings for the connected user. Fields: operation=listMeetings only. Use this to find meeting IDs before a get, update, delete, report, or reminder workflow. Output data usually includes meetings, page_size, page_number, and total_records.',
   },
   {
     title: 'Zoom Video: Get Meeting',
@@ -31,7 +31,7 @@ export const zoomVideoSearchIndex = [
     type: 'operation' as const,
     category: 'Communication',
     href: '/docs/nodes/zoom_video#operation-getMeeting',
-    text: 'Get Zoom meeting details by meetingId.',
+    text: 'Get one Zoom meeting by meetingId. Fields: operation=getMeeting and required meetingId. Use an id from Create Meeting, List Meetings, or a stored CRM/calendar record. Output data includes the raw Zoom meeting details such as id, topic, join_url, start_time, duration, and settings.',
   },
   {
     title: 'Zoom Video: Update Meeting',
@@ -39,7 +39,7 @@ export const zoomVideoSearchIndex = [
     type: 'operation' as const,
     category: 'Communication',
     href: '/docs/nodes/zoom_video#operation-updateMeeting',
-    text: 'Update a Zoom meeting by meetingId with optional topic duration or startTime.',
+    text: 'Update one Zoom meeting by meetingId. Fields: operation=updateMeeting, required meetingId, and optional topic, duration, or startTime. Runtime sends only the fields you fill and returns data.updated plus data.meetingId after Zoom accepts the change.',
   },
   {
     title: 'Zoom Video: Delete Meeting',
@@ -47,7 +47,7 @@ export const zoomVideoSearchIndex = [
     type: 'operation' as const,
     category: 'Communication',
     href: '/docs/nodes/zoom_video#operation-deleteMeeting',
-    text: 'Delete a Zoom meeting by meetingId.',
+    text: 'Delete one Zoom meeting by meetingId. Fields: operation=deleteMeeting and required meetingId. Use only for cancellation workflows where the meeting should be removed. Runtime returns data.deleted plus data.meetingId after Zoom confirms deletion.',
   },
   {
     title: 'Zoom OAuth2 Connection',
@@ -55,6 +55,14 @@ export const zoomVideoSearchIndex = [
     type: 'field' as const,
     category: 'Communication',
     href: '/docs/nodes/zoom_video#credentials',
-    text: 'Connect Zoom through the generic OAuth flow. Required scopes meeting:write:meeting meeting:read:meeting meeting:read:list_meetings user:read:user. Redirect URI https://worker.ctrlchecks.ai/api/credential-connections/oauth/callback.',
+    text: 'Connect Zoom through the generic OAuth flow. Required scopes: meeting:write:meeting, meeting:read:meeting, meeting:read:list_meetings, user:read:user. CtrlChecks stores OAuth access and refresh tokens in Connections and the credential vault; do not put OAuth tokens or client secrets in normal workflow fields. Test request calls https://api.zoom.us/v2/users/me. Redirect URI: https://worker.ctrlchecks.ai/api/credential-connections/oauth/callback.',
+  },
+  {
+    title: 'Zoom Video Fields',
+    slug: 'zoom_video',
+    type: 'field' as const,
+    category: 'Communication',
+    href: '/docs/nodes/zoom_video#fields',
+    text: 'Zoom Video fields: operation chooses createMeeting, listMeetings, getMeeting, updateMeeting, or deleteMeeting; topic is the meeting title for create/update; duration is minutes for create/update; startTime is an ISO 8601 timestamp and blank creates an instant meeting; meetingId is required for get/update/delete and should be the numeric id, not the join_url.',
   },
 ] satisfies DocsSearchIndexItem[];

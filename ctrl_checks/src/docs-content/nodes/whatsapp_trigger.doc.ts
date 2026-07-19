@@ -1,93 +1,125 @@
 import type { NodeDoc } from '../types';
 
 export const whatsappTriggerDoc: NodeDoc = {
-  "slug": "whatsapp_trigger",
-  "displayName": "WhatsApp Trigger",
-  "category": "Triggers",
-  "logoUrl": "/icons/nodes/whatsapp_trigger.svg",
-  "description": "Trigger workflows on WhatsApp events: message received, delivered, read, conversation created",
-  "credentialType": "Meta App Credentials",
-  "credentialSetupSteps": [
-    "What this is: The WhatsApp Trigger connection lets CtrlChecks access your WhatsApp Trigger account safely without putting secrets in workflow fields.",
-    "Where to start: Meta for Developers -> your app -> WhatsApp -> API Setup.",
-    "How to connect: In CtrlChecks, open Connections -> Add Connection -> WhatsApp Trigger, then sign in or paste the secret value requested there.",
-    "Example: the access token shown by Meta.",
-    "Important: Treat tokens, passwords, API keys, and client secrets like bank passwords. Store them in Connections, not in regular workflow fields.",
-    "Test it: Save the connection, run a simple WhatsApp Trigger step, and confirm CtrlChecks can reach the account."
+  slug: 'whatsapp_trigger',
+  displayName: 'WhatsApp Trigger',
+  category: 'Triggers',
+  logoUrl: '/icons/nodes/whatsapp_trigger.svg',
+  description: 'Start a workflow in real time when Meta WhatsApp Cloud sends an incoming message or delivery status webhook.',
+  credentialType: 'WhatsApp Business API',
+  credentialSetupSteps: [
+    'Create or open a Meta app with the WhatsApp product enabled.',
+    'In Meta for Developers -> WhatsApp -> API Setup, copy the permanent access token and Phone Number ID.',
+    'In CtrlChecks -> Connections -> Add Connection -> WhatsApp, save the access token and Phone Number ID.',
+    'Set META_APP_SECRET, FACEBOOK_APP_SECRET, or WHATSAPP_APP_SECRET on the worker so CtrlChecks can validate X-Hub-Signature-256.',
+    'In your WhatsApp Trigger node, choose Incoming Messages, enter a Verify Token, save and activate the workflow.',
+    'Use the webhook URL returned after save or from /api/whatsapp/webhook/register as the Meta callback URL, and use the same Verify Token in Meta.',
   ],
-  "credentialDocsUrl": "https://developers.facebook.com/docs/facebook-login/web",
-  "resources": [
+  credentialDocsUrl: 'https://developers.facebook.com/docs/whatsapp/cloud-api/webhooks',
+  resources: [
     {
-      "name": "Configuration",
-      "description": "WhatsApp Trigger is configured directly with input fields.",
-      "operations": [
+      name: 'Webhook',
+      description: 'Receive Meta WhatsApp Cloud webhook events and normalize them for downstream nodes.',
+      operations: [
         {
-          "name": "Execute",
-          "value": "default",
-          "description": "Execute using the WhatsApp Trigger node.",
-          "fields": [
+          name: 'Receive Event',
+          value: 'receive_event',
+          description: 'Starts the workflow when a matching WhatsApp message or status event arrives.',
+          fields: [
             {
-              "name": "Event",
-              "internalKey": "event",
-              "type": "string",
-              "required": true,
-              "description": "WhatsApp event type",
-              "helpText": "What this field is: The type of WhatsApp event that will fire this trigger.\nOptions: message.received (incoming text), message.delivered, message.read, conversation.created.\nExample: message.received — the workflow starts when someone sends your business a WhatsApp message.",
-              "placeholder": "message.received",
-              "example": "message.received",
-              "defaultValue": "message.received"
+              name: 'Event Types',
+              internalKey: 'eventTypes',
+              type: 'string',
+              required: true,
+              description: 'WhatsApp event type that can start the workflow.',
+              helpText: 'Use message for chatbot workflows. Status options such as status.delivered and status.read track delivery events.',
+              placeholder: 'message',
+              example: 'message',
+              defaultValue: 'message',
             },
             {
-              "name": "Phone Number Id",
-              "internalKey": "phoneNumberId",
-              "type": "string",
-              "required": false,
-              "description": "WhatsApp Phone Number ID to listen on",
-              "helpText": "What this field is: The WhatsApp Phone Number ID to listen on that tells WhatsApp Trigger which item to use.\nWhere to find it: Open the item in WhatsApp Trigger and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.phoneNumberId}} when an earlier WhatsApp Trigger step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            }
+              name: 'Phone Number ID',
+              internalKey: 'phoneNumberId',
+              type: 'string',
+              required: false,
+              description: 'Optional Meta WhatsApp Phone Number ID filter.',
+              helpText: 'Leave blank to accept events for the connected account, or set it to the exact Phone Number ID from Meta.',
+              placeholder: '123456789012345',
+              example: '123456789012345',
+            },
+            {
+              name: 'Allowed Senders',
+              internalKey: 'allowedWaIds',
+              type: 'string',
+              required: false,
+              description: 'Optional comma-separated WhatsApp sender allowlist.',
+              helpText: 'Use this when only specific users should start the workflow.',
+              placeholder: '15551234567,15557654321',
+              example: '15551234567',
+            },
+            {
+              name: 'Verify Token',
+              internalKey: 'verifyToken',
+              type: 'string',
+              required: true,
+              description: 'Secret value Meta sends during webhook URL verification.',
+              helpText: 'Create a random value, put it here, and put the same value in Meta for Developers -> WhatsApp -> Configuration.',
+              placeholder: 'a-long-random-secret',
+              example: 'wa_verify_abc123',
+            },
+            {
+              name: 'Validate Signature',
+              internalKey: 'validateSignature',
+              type: 'boolean',
+              required: false,
+              description: 'Validates Meta X-Hub-Signature-256 using the worker app secret.',
+              helpText: 'Keep enabled in production. The worker needs META_APP_SECRET, FACEBOOK_APP_SECRET, or WHATSAPP_APP_SECRET configured.',
+              defaultValue: true,
+            },
           ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
+          outputExample: {
+            eventId: 'wamid.HBgM...',
+            eventType: 'message.text',
+            source: 'whatsapp',
+            chatId: '15551234567',
+            from: '15551234567',
+            waId: '15551234567',
+            text: 'Hi, I need help with my order',
+            messageId: 'wamid.HBgM...',
+            phoneNumberId: '123456789012345',
+            timestamp: '2026-07-17T12:00:00.000Z',
+            raw: {},
           },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming WhatsApp Trigger data with execute after a related upstream event is received",
-            "inputValues": {
-              "Event": "message.received",
-              "Phone Number Id": "abc123"
+          outputDescription: 'Use chatId or from as the WhatsApp action recipient. text contains the incoming message. raw contains the Meta webhook payload for advanced routing.',
+          usageExample: {
+            scenario: 'Reply to incoming WhatsApp messages with an AI Agent',
+            inputValues: {
+              EventTypes: 'message',
+              VerifyToken: 'wa_verify_abc123',
             },
-            "expectedOutput": "WhatsApp Trigger returns structured execute data that downstream nodes can reference with {{$json.fieldName}}."
+            expectedOutput: 'WhatsApp Trigger -> AI Agent -> WhatsApp Send Text with To = {{$json.chatId}}.',
           },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
-        }
-      ]
-    }
+          externalDocsUrl: 'https://developers.facebook.com/docs/whatsapp/cloud-api/webhooks',
+        },
+      ],
+    },
   ],
-  "commonErrors": [
+  commonErrors: [
     {
-      "error": "Authentication failed",
-      "cause": "The saved credential, token, API key, or OAuth grant is missing, expired, or lacks the required scope.",
-      "fix": "Reconnect the service in CtrlChecks → Connections, then re-run the WhatsApp Trigger node."
+      error: 'Invalid verify token',
+      cause: 'The token in Meta does not match the Verify Token configured on the node.',
+      fix: 'Copy the exact Verify Token from the WhatsApp Trigger node into Meta webhook configuration.',
     },
     {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
+      error: 'Invalid WhatsApp webhook signature',
+      cause: 'The worker app secret is missing or does not match the Meta app sending the webhook.',
+      fix: 'Set META_APP_SECRET, FACEBOOK_APP_SECRET, or WHATSAPP_APP_SECRET on the worker and redeploy.',
     },
     {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
+      error: 'No active WhatsApp connection found',
+      cause: 'The workflow owner has not saved a WhatsApp connection or it is expired/revoked.',
+      fix: 'Reconnect WhatsApp in CtrlChecks -> Connections and save the active workflow again.',
+    },
   ],
-  "relatedNodes": []
+  relatedNodes: ['whatsapp', 'ai_agent'],
 };

@@ -1,0 +1,112 @@
+import type { NodeDoc } from '../types';
+
+export const telegramTriggerDoc: NodeDoc = {
+  slug: 'telegram_trigger',
+  displayName: 'Telegram Trigger',
+  category: 'Triggers',
+  logoUrl: '/icons/nodes/telegram.svg',
+  description: 'Start a workflow in real time when your Telegram bot receives a message or supported update.',
+  credentialType: 'Telegram Bot Token',
+  credentialSetupSteps: [
+    'Open Telegram on your phone, desktop app, or web.telegram.org.',
+    'Search for BotFather and start a chat.',
+    'Send /newbot and follow the prompts to choose a bot name and username.',
+    'Copy the bot token from BotFather. It looks like 123456789:ABCdef...',
+    'In CtrlChecks, open Connections -> Add Connection -> Telegram, paste the token, save it, and run Test Telegram.',
+    'Register the Telegram Trigger webhook for the workflow. Telegram allows only one webhook URL per bot token, so use a separate bot token for each independently active workflow.',
+  ],
+  credentialDocsUrl: 'https://core.telegram.org/bots/features#botfather',
+  resources: [
+    {
+      name: 'Configuration',
+      description: 'Configure which Telegram updates can start the workflow.',
+      operations: [
+        {
+          name: 'Receive Update',
+          value: 'default',
+          description: 'Receive Telegram Bot API webhook updates and normalize them for downstream nodes.',
+          fields: [
+            {
+              name: 'Update Types',
+              internalKey: 'updateTypes',
+              type: 'select',
+              required: false,
+              description: 'Telegram update type to accept.',
+              helpText: 'Use message for a chatbot. Add callback_query when your bot uses inline buttons.',
+              placeholder: 'message',
+              defaultValue: 'message',
+              options: ['message', 'edited_message', 'channel_post', 'callback_query'],
+            },
+            {
+              name: 'Allowed Chat IDs',
+              internalKey: 'allowedChatIds',
+              type: 'textarea',
+              required: false,
+              description: 'Optional comma-separated list of chat IDs allowed to trigger this workflow.',
+              helpText: 'Leave blank to accept any chat that can message the bot. Use this when one bot is installed in multiple chats.',
+              placeholder: '123456789, -1009876543210',
+            },
+            {
+              name: 'Command Filter',
+              internalKey: 'commandFilter',
+              type: 'string',
+              required: false,
+              description: 'Optional slash command required at the start of the message.',
+              helpText: 'Use /support or /start to trigger only command-specific workflows.',
+              placeholder: '/support',
+            },
+            {
+              name: 'Secret Token',
+              internalKey: 'secretToken',
+              type: 'password',
+              required: false,
+              description: 'Optional webhook secret token validated against Telegram request headers.',
+              helpText: 'When set during webhook registration, Telegram sends it in X-Telegram-Bot-Api-Secret-Token and CtrlChecks rejects mismatches.',
+              placeholder: 'optional-random-secret',
+            },
+          ],
+          outputExample: {
+            chatId: '123456789',
+            messageId: 42,
+            text: 'Hello bot',
+            username: 'alice',
+            firstName: 'Alice',
+            lastName: 'Ng',
+            userId: '987654321',
+            updateType: 'message',
+            raw: { update_id: 10001, message: { text: 'Hello bot' } },
+          },
+          outputDescription: 'Outputs chatId, messageId, text, username, firstName, lastName, userId, updateType, and raw Telegram update.',
+          usageExample: {
+            scenario: 'Telegram chatbot that replies with an AI-generated answer',
+            inputValues: {
+              workflow: 'Telegram Trigger -> AI Agent -> Telegram Send Message',
+              sendMessageChatId: '{{$json.chatId}}',
+              sendMessageText: '{{$json.aiResponse || $json.reply || "I received your message."}}',
+            },
+            expectedOutput: 'A user sends your bot a message, the workflow starts immediately, and the Telegram action replies to the same chat.',
+          },
+          externalDocsUrl: 'https://core.telegram.org/bots/api#setwebhook',
+        },
+      ],
+    },
+  ],
+  commonErrors: [
+    {
+      error: 'Webhook secret rejected',
+      cause: 'The Secret Token in the node does not match the token used when registering the Telegram webhook.',
+      fix: 'Re-register the webhook with the same Secret Token, or clear the field and register again.',
+    },
+    {
+      error: 'Bot already has a webhook',
+      cause: 'Telegram allows one webhook URL per bot token, and this bot is already registered elsewhere.',
+      fix: 'Use a separate bot token for this workflow, or force re-register only if this workflow should own the bot.',
+    },
+    {
+      error: 'Workflow is not active',
+      cause: 'Telegram sent an update, but the saved workflow is not active.',
+      fix: 'Activate and save the workflow, then send another message to the bot.',
+    },
+  ],
+  relatedNodes: ['telegram', 'ai_agent'],
+};

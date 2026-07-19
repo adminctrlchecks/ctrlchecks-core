@@ -21,39 +21,61 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
 
   schedule: {
     default: {
-      description: 'Start the workflow automatically on a defined cron schedule.',
-      outputExample: { scheduledTime: '2025-01-15T09:00:00.000Z', timezone: 'UTC', cronExpression: '0 9 * * 1-5' },
-      outputDescription: 'scheduledTime: ISO timestamp when the trigger fired. timezone: The schedule timezone. cronExpression: The cron expression that matched.',
+      description: 'Start the workflow automatically when the selected time rule matches. Use the daily time picker for once-a-day work or cron for weekly, monthly, hourly, and business-day patterns.',
+      outputExample: {
+        scheduledTime: '2026-07-31T03:30:00.000Z',
+        localTime: '2026-07-31 09:00',
+        timezone: 'Asia/Kolkata',
+        cronExpression: '0 9 * * *',
+        triggeredBy: 'schedule',
+        output: {},
+      },
+      outputDescription: 'scheduledTime: The exact timestamp when the schedule fired. localTime: The scheduled clock time in the selected timezone. timezone: The timezone used to interpret the schedule. cronExpression: The saved cron rule that matched. triggeredBy: Shows that the workflow started from the scheduler. output: A reserved object for trigger output metadata.',
       usageExample: {
-        scenario: 'Send a daily summary email every weekday at 9 AM',
-        inputValues: { cronExpression: '0 9 * * 1-5', timezone: 'America/New_York' },
-        expectedOutput: 'The workflow fires at 9 AM Mon–Fri. Connect a Gmail Send node downstream to send the email.',
+        scenario: 'Send a daily sales summary to managers every morning before standup',
+        inputValues: { time: '09:00', cron: '0 9 * * *', timezone: 'Asia/Kolkata' },
+        expectedOutput: 'The workflow fires at 09:00 in the selected timezone. The next node can use {{$json.scheduledTime}}, {{$json.timezone}}, and {{$json.cronExpression}} in reports, logs, or notification messages.',
       },
     },
   },
 
   webhook: {
     default: {
-      description: 'Start the workflow when an HTTP request hits the generated webhook URL.',
-      outputExample: { body: { event: 'user.created', userId: 'u_123', email: 'alice@example.com' }, headers: { 'content-type': 'application/json' }, method: 'POST', query: {} },
-      outputDescription: 'body: The parsed request body sent by the caller. headers: HTTP headers from the request. method: HTTP method used (POST, GET, etc.). query: URL query parameters.',
+      description: 'Starts the workflow when a form, app, website, or internal system sends an HTTP request to the generated CtrlChecks webhook URL.',
+      outputExample: {
+        event: 'order.created',
+        orderId: 'ORD-1048',
+        customerEmail: 'alex@example.com',
+        total: 249.5,
+        headers: { 'content-type': 'application/json', 'x-webhook-signature': 'sha256=...' },
+        method: 'POST',
+        query: { source: 'website' },
+        body: { event: 'order.created', orderId: 'ORD-1048', customerEmail: 'alex@example.com', total: 249.5 },
+      },
+      outputDescription: 'body: The parsed request body sent by the caller. event/orderId/customerEmail/total: common payload fields available for easy mapping when present. headers: HTTP headers from the request. method: HTTP method used, usually POST. query: URL query parameters such as source or campaign.',
       usageExample: {
-        scenario: 'Receive a Stripe payment webhook and store the order in a database',
-        inputValues: { method: 'POST', path: '/webhooks/stripe-payment' },
-        expectedOutput: 'The workflow receives `{{$json.body.type}}` (e.g. payment_intent.succeeded) and `{{$json.body.data.object.amount}}` from Stripe.',
+        scenario: 'Receive a paid-order webhook, create a fulfillment task, and notify finance',
+        inputValues: { path: '/paid-order', httpMethod: 'POST', responseMode: 'responseNode', verifySignature: 'true' },
+        expectedOutput: 'The workflow receives {{$json.body.orderId}}, {{$json.customerEmail}}, {{$json.headers}}, {{$json.method}}, and {{$json.query.source}} for downstream task, database, and message nodes.',
       },
     },
   },
 
   manual_trigger: {
     default: {
-      description: 'Start the workflow when you click the "Run" button in CtrlChecks.',
-      outputExample: { executedAt: '2025-01-15T14:30:00.000Z', triggeredBy: 'manual', workflowId: 'wf_abc123' },
-      outputDescription: 'executedAt: ISO timestamp of the manual run. triggeredBy: Always "manual" for this trigger. workflowId: The current workflow ID.',
+      description: 'Start the workflow when a person clicks Run. Use it for testing, approvals, one-off tasks, and workflows that should not start automatically.',
+      outputExample: {
+        executedAt: '2025-01-15T14:30:00.000Z',
+        triggeredBy: 'manual',
+        workflowId: 'wf_abc123',
+        inputData: { reportDate: '2026-07-31', department: 'Sales', requestedBy: 'nina@company.com' },
+        output: {},
+      },
+      outputDescription: 'executedAt: The date and time when the manual run started. triggeredBy: Shows that this run was started by a person. workflowId: The workflow that was run. inputData: The optional sample payload you provided, which the next node can read. output: A reserved object for trigger output metadata.',
       usageExample: {
-        scenario: 'Manually run a data migration workflow on demand',
-        inputValues: {},
-        expectedOutput: 'The workflow starts immediately. Use this trigger when testing or running one-off automation tasks.',
+        scenario: 'A support lead manually reruns a priority ticket notification after confirming the ticket should be escalated',
+        inputValues: { inputData: '{"ticketId":"SUP-1042","customerEmail":"maya@acme.com","priority":"high"}' },
+        expectedOutput: 'The workflow starts immediately. The next node can use {{$json.ticketId}}, {{$json.customerEmail}}, and {{$json.priority}} to look up the ticket, send a message, or create an audit log.',
       },
     },
   },
@@ -73,52 +95,234 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
 
   chat_trigger: {
     default: {
-      description: 'Start the workflow when a user sends a chat message in the CtrlChecks chat interface.',
-      outputExample: { message: 'What is the status of order #1234?', sessionId: 'sess_xyz', userId: 'user_42', timestamp: '2025-01-15T11:00:00.000Z' },
-      outputDescription: 'message: The text typed by the user. sessionId: The current chat session ID. userId: The user who sent the message. timestamp: When the message was sent.',
+      description: 'Start the workflow when someone sends a message through the CtrlChecks chat interface for an active workflow. The current visual panel has no setup fields; the chat route supplies the runtime message and session metadata.',
+      outputExample: {
+        message: 'What is the status of order ORD-1048?',
+        channel: 'workflow_123_chat-trigger-1',
+        sessionId: 'workflow_123_chat-trigger-1',
+        trigger: 'chat',
+        node_id: 'chat-trigger-1',
+        workflow_id: 'workflow_123',
+        timestamp: '2026-07-19T09:15:00.000Z',
+        _chat: true,
+      },
+      outputDescription: 'message: The trimmed chat text. channel: In the migrated registry path this is the sessionId when one exists, otherwise the supplied channel value. sessionId: Stable chat session ID in workflowId_nodeId format so Chat Send can reply to the same open chat. trigger: chat marker. node_id: Chat Trigger node ID. workflow_id: Workflow receiving the message. timestamp: Time the chat request was accepted, or the supplied timestamp in tests. _chat: true marker for chat-triggered executions. Legacy simple execution paths may return only the message string.',
       usageExample: {
-        scenario: 'Build a customer support chatbot that answers order status queries',
-        inputValues: {},
-        expectedOutput: 'Use `{{$json.message}}` in a downstream AI Agent or HTTP Request node to process the user\'s question.',
+        scenario: 'Build a customer support chatbot that answers order status questions and replies in the same chat window',
+        inputValues: {
+          message: 'What is the status of order ORD-1048?',
+          channel: 'support-chat',
+          allowedSenders: '[]',
+        },
+        expectedOutput: 'The next node can use {{$json.message}} as the user question and {{$json.sessionId}} in Chat Send to reply to the same chat.',
       },
     },
   },
 
   form: {
     default: {
-      description: 'Start the workflow when a user submits a CtrlChecks form.',
-      outputExample: { formData: { name: 'Alice', email: 'alice@example.com', message: 'I need help with billing.' }, submittedAt: '2025-01-15T09:45:00.000Z', formId: 'form_xyz' },
-      outputDescription: 'formData: Key-value pairs of form field names and the submitted values. submittedAt: ISO timestamp of the form submission. formId: The ID of the form that was submitted.',
+      description: 'Start the workflow when a person submits a CtrlChecks-hosted public form.',
+      outputExample: {
+        name: 'Alex Morgan',
+        customer_email: 'alex@example.com',
+        issue_category: 'billing',
+        message: 'Invoice INV-4821 shows the wrong billing address.',
+        submitted_at: '2026-07-18T08:45:00.000Z',
+        form: { title: 'Support Request', id: 'form_node_1' },
+        data: { name: 'Alex Morgan', customer_email: 'alex@example.com', issue_category: 'billing', message: 'Invoice INV-4821 shows the wrong billing address.' },
+        files: [],
+        meta: { submittedAt: '2026-07-18T08:45:00.000Z', ip: 'masked', userAgent: 'Mozilla/5.0' },
+      },
+      outputDescription: 'Submitted answers are available at the top level by internal name and under data. submitted_at records when the form was submitted. form contains the form title and node id. files contains uploaded files. meta contains submittedAt, masked IP, and userAgent.',
       usageExample: {
-        scenario: 'Send a welcome email after a contact form submission',
-        inputValues: {},
-        expectedOutput: 'Access submitted fields via `{{$json.formData.email}}`, `{{$json.formData.name}}`, etc. Connect a Gmail Send node to respond to the submitter.',
+        scenario: 'Collect a support request, create a helpdesk ticket, and send the customer a confirmation email',
+        inputValues: { formTitle: 'Support Request', fields: 'name, customer_email, issue_category, message', captcha: 'true' },
+        expectedOutput: 'Access submitted answers with {{$json.customer_email}}, {{$json.data.issue_category}}, {{$json.message}}, {{$json.submitted_at}}, {{$json.form.id}}, and {{$json.meta.submittedAt}}.',
       },
     },
   },
 
   error_trigger: {
     default: {
-      description: 'Start the workflow when another workflow encounters an unhandled error.',
-      outputExample: { error: { message: 'Request timeout after 10000ms', code: 'TIMEOUT', stack: '...' }, failedWorkflowId: 'wf_abc', failedNodeId: 'node_3', timestamp: '2025-01-15T12:00:00.000Z' },
-      outputDescription: 'error.message: The error message from the failed node. error.code: The error code if available. failedWorkflowId: The ID of the workflow that failed. failedNodeId: The specific node that threw the error.',
+      description: 'Runs when another node in the same workflow fails. The executor skips Error Trigger during normal successful runs and invokes it out-of-band from the failure handler with the failed node name, error message, and error type.',
+      outputExample: {
+        failed_node: 'HTTP Request',
+        error_message: 'HTTP Request node: URL is required',
+        error_type: 'Error',
+        error_stack: 'Error: HTTP Request node: URL is required\n    at executeNode...',
+        node_output: { _error: 'HTTP Request node: URL is required', _nodeType: 'http_request' },
+      },
+      outputDescription: 'failed_node: Label or ID of the node that failed. error_message: Plain text failure message for alerts, logs, tickets, or recovery notes. error_type: JavaScript error class name such as Error, TypeError, or unknown. error_stack: Optional stack trace when the error payload includes it. node_output: Optional failed-node output object when supplied. The normal failure handler passes workflow_id and execution_id into the trigger input, but the current output keeps only failed_node, error_message, error_type, and optional diagnostics.',
       usageExample: {
-        scenario: 'Send a Slack alert whenever any workflow fails',
+        scenario: 'Log workflow failures and notify operations when a customer-facing automation breaks',
         inputValues: {},
-        expectedOutput: 'Use `{{$json.error.message}}` and `{{$json.failedWorkflowId}}` in a Slack Message node to alert your team.',
+        expectedOutput: 'Use {{$json.error_message}} in the alert body, {{$json.failed_node}} in the subject or log title, and {{$json.error_type}} for routing different kinds of failures.',
+      },
+    },
+  },
+
+  facebook_trigger: {
+    receive: {
+      description: 'Receive Meta webhook deliveries for Facebook Page and Messenger activity, verify the callback token during setup, optionally validate X-Hub-Signature-256, filter accepted event types/Page/senders, and start one workflow execution per accepted event.',
+      outputExample: {
+        eventId: 'm_abc123',
+        eventType: 'message.text',
+        source: 'facebook',
+        userId: '1234567890',
+        username: '',
+        text: 'Can you help me track my order?',
+        timestamp: '2026-07-19T10:20:00.000Z',
+        chatId: '1234567890',
+        senderId: '1234567890',
+        recipientId: '123456789012345',
+        pageId: '123456789012345',
+        messageId: 'm_abc123',
+        messageType: 'text',
+        commentId: null,
+        postId: null,
+        parentId: null,
+        leadgenId: null,
+        formId: null,
+        postbackPayload: '',
+        field: 'messages',
+        verb: '',
+        item: '',
+        raw: { entry: { id: '123456789012345' } },
+        trigger: 'facebook',
+        workflow_id: 'workflow_123',
+        node_id: 'facebook-trigger-1',
+        sessionId: 'facebook_workflow_123_1234567890',
+        _facebook: true,
+      },
+      outputDescription: 'eventId: event identifier. eventType: message.text, message.media, comment, mention, postback, leadgen, feed.post, or feed.comment. source: facebook. userId/username: sender identity when available. text: normalized message/comment/postback text. timestamp: ISO event time. chatId/senderId: values for Messenger replies. recipientId/pageId: Page identity. messageId/messageType: Messenger message details. commentId/postId/parentId: Page comment/feed identifiers. leadgenId/formId: Lead Ads identifiers. postbackPayload: quick reply/postback payload. field/verb/item: Meta webhook change metadata. raw: original event fragment. trigger/workflow_id/node_id/sessionId/_facebook: CtrlChecks trigger metadata.',
+      usageExample: {
+        scenario: 'Reply to Facebook Messenger questions with an AI Agent and send the answer back from the same Page',
+        inputValues: {
+          connectionId: '',
+          eventTypes: 'message, postback',
+          pageId: '123456789012345',
+          allowedSenderIds: '',
+          verifyToken: 'fb-webhook-verify-2026-support',
+          validateSignature: 'true',
+        },
+        expectedOutput: 'Use {{$json.text}} as the visitor question, {{$json.senderId}} as the Facebook recipientId, {{$json.pageId}} as the Page ID, and {{$json.eventType}} for routing.',
+      },
+    },
+  },
+
+  github_trigger: {
+    receive: {
+      description: 'Receive signed GitHub repository webhook deliveries, ignore webhook pings, validate X-Hub-Signature-256, filter accepted event types and keyword text, normalize push/issues/pull_request/release/issue_comment payloads, and start one workflow execution per accepted delivery.',
+      outputExample: {
+        eventId: 'a1b2c3d4-0000-0000-0000-000000000000',
+        eventType: 'issues.opened',
+        source: 'github',
+        userId: '583231',
+        username: 'octocat',
+        text: 'Bug: billing export fails for July invoices',
+        timestamp: '2026-07-19T10:20:00.000Z',
+        repository: 'acme-platform/api-service',
+        action: 'opened',
+        ref: null,
+        commits: null,
+        issueNumber: 42,
+        issueTitle: 'Bug: billing export fails for July invoices',
+        issueUrl: 'https://github.com/acme-platform/api-service/issues/42',
+        prNumber: null,
+        prTitle: null,
+        prUrl: null,
+        merged: null,
+        releaseTag: null,
+        releaseName: null,
+        commentBody: null,
+        commentUrl: null,
+        raw: { action: 'opened', repository: { full_name: 'acme-platform/api-service' } },
+        trigger: 'github',
+        workflow_id: 'workflow_123',
+        node_id: 'github-trigger-1',
+        sessionId: 'github_workflow_123_a1b2c3d4-0000-0000-0000-000000000000',
+        _github: true,
+      },
+      outputDescription: 'eventId: delivery ID. eventType: push, issues.opened, pull_request.closed, release.published, issue_comment.created, or another normalized GitHub event. source: github. userId/username: sender identity. text: normalized title/body/message fallback. timestamp: normalized delivery time. repository: owner/repo. action: GitHub payload action. ref: branch/tag or PR head ref. commits: push commits. issueNumber/issueTitle/issueUrl: issue fields. prNumber/prTitle/prUrl/merged: pull request fields. releaseTag/releaseName: release fields. commentBody/commentUrl: issue comment fields. raw: original payload. trigger/workflow_id/node_id/sessionId/_github: CtrlChecks trigger metadata.',
+      usageExample: {
+        scenario: 'Triage new GitHub issues with AI and notify the engineering channel',
+        inputValues: {
+          connectionId: '',
+          owner: 'acme-platform',
+          repo: 'api-service',
+          eventTypes: 'issues, pull_request',
+          webhookSecret: '',
+          query: 'billing',
+        },
+        expectedOutput: 'Use {{$json.eventType}} to branch issues from pull requests, {{$json.issueTitle}} or {{$json.prTitle}} as the AI prompt, and {{$json.issueUrl}} or {{$json.prUrl}} as the reviewer link.',
+      },
+    },
+  },
+
+  gitlab_trigger: {
+    receive: {
+      description: 'Receive GitLab project webhook deliveries, validate the X-Gitlab-Token shared secret header, filter accepted event types and keyword text, normalize push/tag_push/issue/merge_request/note/pipeline/job/release payloads, and start one workflow execution per accepted delivery.',
+      outputExample: {
+        eventId: '987654321',
+        eventType: 'issue',
+        source: 'gitlab',
+        userId: '42',
+        username: 'asha',
+        text: 'Bug: billing export fails for July invoices',
+        timestamp: '2026-07-19T10:20:00.000Z',
+        projectId: '12345',
+        projectName: 'acme-platform/api-service',
+        action: 'open',
+        ref: null,
+        commits: null,
+        issueIid: 42,
+        issueTitle: 'Bug: billing export fails for July invoices',
+        issueUrl: 'https://gitlab.com/acme-platform/api-service/-/issues/42',
+        mrIid: null,
+        mrTitle: null,
+        mrUrl: null,
+        mrState: null,
+        noteBody: null,
+        noteUrl: null,
+        raw: { object_kind: 'issue', project: { path_with_namespace: 'acme-platform/api-service' } },
+        trigger: 'gitlab',
+        workflow_id: 'workflow_123',
+        node_id: 'gitlab-trigger-1',
+        sessionId: 'gitlab_workflow_123_987654321',
+        _gitlab: true,
+      },
+      outputDescription: 'eventId: normalized event identifier. eventType: GitLab object_kind such as push, tag_push, issue, merge_request, note, pipeline, job, or release. source: gitlab. userId/username: actor identity when available. text: normalized commit message, issue title, merge request title, note body, pipeline status, release name, or fallback text. timestamp: ISO event time when available. projectId/projectName: project identity. action: issue/MR/pipeline/release action or status when present. ref: branch or tag for push, tag_push, merge_request, and pipeline events. commits: push or tag push commit list. issueIid/issueTitle/issueUrl: issue fields. mrIid/mrTitle/mrUrl/mrState: merge request fields. noteBody/noteUrl: comment fields. raw: original GitLab payload. trigger/workflow_id/node_id/sessionId/_gitlab: CtrlChecks trigger metadata.',
+      usageExample: {
+        scenario: 'Triage new GitLab issues and merge requests with AI, then post a team alert with the project link',
+        inputValues: {
+          connectionId: '',
+          baseUrl: 'https://gitlab.com',
+          projectId: '12345',
+          eventTypes: 'issue, merge_request, note',
+          secretToken: '',
+          query: 'billing',
+        },
+        expectedOutput: 'Use {{$json.eventType}} to branch issue, merge_request, and note events; use {{$json.issueTitle}}, {{$json.mrTitle}}, or {{$json.noteBody}} as AI input; and include {{$json.issueUrl}} or {{$json.mrUrl}} in the alert.',
       },
     },
   },
 
   workflow_trigger: {
     default: {
-      description: 'Start the workflow when called by an Execute Workflow node in another workflow.',
-      outputExample: { inputData: { userId: 'u_456', action: 'send_report' }, callerWorkflowId: 'wf_parent', calledAt: '2025-01-15T13:00:00.000Z' },
-      outputDescription: 'inputData: The data passed from the Execute Workflow node in the parent workflow. callerWorkflowId: The ID of the parent workflow that triggered this one.',
+      description: 'Start this workflow when an allowed parent workflow calls it with an Execute Workflow node.',
+      outputExample: {
+        customerEmail: 'maya@acme.com',
+        ticketId: 'SUP-1042',
+        priority: 'high',
+        inputData: { customerEmail: 'maya@acme.com', ticketId: 'SUP-1042', priority: 'high' },
+        workflowId: 'workflow_parent_123',
+        timestamp: '2026-07-18T09:15:00.000Z',
+      },
+      outputDescription: 'The child workflow receives the payload sent by the parent Execute Workflow node. Use top-level fields such as customerEmail, ticketId, and priority, or wrapped fields such as inputData.customerEmail when the parent passes an inputData object. workflowId and timestamp can be used for logging when present.',
       usageExample: {
-        scenario: 'Create a reusable "send notification" sub-workflow that other workflows call',
-        inputValues: {},
-        expectedOutput: 'Access passed data via `{{$json.inputData.userId}}` etc. The parent workflow continues after this sub-workflow completes.',
+        scenario: 'Create a reusable Send Escalation Alert child workflow that the Support Intake workflow can call',
+        inputValues: { source_workflow_id: 'workflow_support_intake_123' },
+        expectedOutput: 'The child workflow can use {{$json.customerEmail}}, {{$json.ticketId}}, {{$json.priority}}, or {{$json.inputData.customerEmail}} in downstream Slack, Email, database, or approval nodes.',
       },
     },
   },
@@ -127,9 +331,9 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
 
   google_gmail: {
     send: {
-      description: 'Send an email to one or more recipients via Gmail.',
-      outputExample: { messageId: '18abc123def456', threadId: '18abc123def456', labelIds: ['SENT'] },
-      outputDescription: 'messageId: Unique Gmail message ID — use this to reference the sent message. threadId: The email thread ID. labelIds: Gmail labels applied to the sent message.',
+      description: 'Send an email to one or more recipients via Gmail, with recipients typed manually or extracted from upstream/fallback Google Sheets rows.',
+      outputExample: { success: true, subject: 'Your order #1048 has shipped!', to: 'alice@example.com', messageId: '18abc123def456', sentCount: 1, failedCount: 0 },
+      outputDescription: 'success: true only when every recipient sent successfully. messageId: Gmail message ID, present only for a single-recipient send (check results for multi-recipient sends). sentCount/failedCount: per-recipient delivery counts. Failures return _error instead.',
       usageExample: {
         scenario: 'Send a personalised welcome email to a new user after form sign-up',
         inputValues: { recipientEmails: '{{$json.email}}', subject: 'Welcome to CtrlChecks, {{$json.name}}!', body: 'Hi {{$json.name}},\n\nYour account is ready. Visit your dashboard to get started.\n\nCheers,\nThe CtrlChecks Team' },
@@ -137,33 +341,33 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
       },
     },
     list: {
-      description: 'List email messages from the connected Gmail inbox, optionally filtered by a query.',
-      outputExample: { messages: [{ id: '18abc1', threadId: '18abc1', snippet: 'Hi, I have a question about...' }, { id: '18abc2', threadId: '18abc2', snippet: 'Your invoice for January...' }], resultSizeEstimate: 2 },
-      outputDescription: 'messages: Array of message objects. Each has id, threadId, and snippet. resultSizeEstimate: Approximate total number of matching messages.',
+      description: 'List lightweight message references from the connected Gmail inbox, optionally filtered by a query.',
+      outputExample: { messages: [{ id: '18abc1', threadId: '18abc1' }, { id: '18abc2', threadId: '18abc2' }], resultSizeEstimate: 2, count: 2 },
+      outputDescription: 'messages: Array of Gmail message references — only id and threadId, no subject/snippet/body. resultSizeEstimate: Gmail\'s approximate total match count. count: actual items returned. Use a Get step with each id to read full content. Failures return _error.',
       usageExample: {
         scenario: 'Fetch unread support emails and create Jira tickets for each',
         inputValues: { query: 'is:unread label:support', maxResults: '10' },
-        expectedOutput: 'Returns up to 10 unread emails. Loop over `{{$json.messages}}` and use each message id in a Gmail Get node to fetch the full content.',
+        expectedOutput: 'Returns up to 10 unread message references. Loop over `{{$json.messages}}` and use each `{{$json.id}}` in a Gmail Get node to fetch the full content.',
       },
     },
     get: {
-      description: 'Fetch the full content of a specific Gmail message by its ID.',
-      outputExample: { id: '18abc123', subject: 'Invoice #1234', from: 'billing@vendor.com', to: 'me@company.com', body: 'Please find attached your invoice for January.', date: '2025-01-15T08:00:00Z' },
-      outputDescription: 'id: The Gmail message ID. subject: Email subject. from: Sender address. to: Recipient address. body: Full email body text. date: When the email was received.',
+      description: 'Fetch the full raw Gmail message resource for one specific message ID.',
+      outputExample: { messageId: '18abc123', message: { id: '18abc123', snippet: 'Please find attached your invoice for January...', payload: { headers: [{ name: 'Subject', value: 'Invoice #1234' }, { name: 'From', value: 'billing@vendor.com' }] } } },
+      outputDescription: 'message: the full raw Gmail API message resource — subject/from are inside message.payload.headers as {name, value} pairs, and the body text is base64url-encoded inside message.payload.body.data (or message.payload.parts for multi-part mail). messageId echoes the requested ID. Failures return _error.',
       usageExample: {
         scenario: 'Read the full body of each email returned by a Gmail List node',
         inputValues: { messageId: '{{$json.id}}' },
-        expectedOutput: 'Returns the full message with body text. Use `{{$json.body}}` in a downstream AI or text processing node.',
+        expectedOutput: 'Returns the full raw Gmail message. Decode `{{$json.message.payload.body.data}}` (base64url) in a JavaScript node to get the plain-text body.',
       },
     },
     search: {
-      description: 'Search Gmail messages using Gmail search syntax (same as the Gmail search bar).',
-      outputExample: { messages: [{ id: '18abc9', threadId: '18abc9', snippet: 'Your order has shipped...' }], resultSizeEstimate: 1 },
-      outputDescription: 'messages: Array of messages matching the search query. resultSizeEstimate: Approximate total matches.',
+      description: 'Search Gmail messages using Gmail search syntax (same as the Gmail search bar), returning lightweight message references.',
+      outputExample: { messages: [{ id: '18abc9', threadId: '18abc9' }], resultSizeEstimate: 1, query: 'from:vendor@example.com newer_than:7d', count: 1 },
+      outputDescription: 'messages: Array of Gmail message references matching the query — only id and threadId, no snippet/body. resultSizeEstimate: Gmail\'s approximate total matches. query: the search text used. Use a Get step with each id for full content. Failures return _error.',
       usageExample: {
         scenario: 'Find all emails from a specific sender in the last 7 days',
         inputValues: { query: 'from:vendor@example.com newer_than:7d', maxResults: '25' },
-        expectedOutput: 'Returns messages matching the query. Process each result with a Gmail Get node to access the full email content.',
+        expectedOutput: 'Returns matching message references. Process each `{{$json.id}}` with a Gmail Get node to access the full email content.',
       },
     },
   },
@@ -183,26 +387,54 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
 
   slack_message: {
     default: {
-      description: 'Send a message to a Slack channel or direct message.',
-      outputExample: { ok: true, ts: '1704067200.123456', channel: 'C01234ABCDE', message: { text: 'Deployment complete ✅', user: 'U01234' } },
-      outputDescription: 'ok: true if the message was sent successfully. ts: Message timestamp (Slack message ID). channel: The channel ID where the message was sent. message.text: The message text that was posted.',
+      description: 'Send one Slack bot message through the saved Slack OAuth2 connection using chat.postMessage.',
+      outputExample: {
+        id: '1704067200.123456',
+        status: 'sent',
+        provider: 'slack',
+        ok: true,
+        channel: 'C01234ABCDE',
+        ts: '1704067200.123456',
+        threadTs: '1704067000.111111',
+        message: 'Priority ticket TCK-1042 from asha.rao@example.com needs review.',
+      },
+      outputDescription: 'On success, the runtime returns id, status, provider, ok, channel, ts, threadTs, and message. Use {{$json.ts}} or {{$json.id}} to reference the Slack message, {{$json.channel}} to confirm where it posted, {{$json.threadTs}} for follow-up threaded replies, and {{$json.status}} or {{$json.error}} for routing failures.',
       usageExample: {
-        scenario: 'Alert the #deployments channel when a workflow completes or fails',
-        inputValues: { channel: '#deployments', message: 'Deploy complete for `{{$json.version}}` at {{$now}}' },
-        expectedOutput: 'The message appears in the specified channel. Use `{{$json.ts}}` to reference or thread the message later.',
+        scenario: 'Reply in the original Slack incident thread after an AI Agent summarizes a support ticket',
+        inputValues: {
+          channel: '{{$json.channelId}}',
+          message: 'Summary for ticket {{$json.ticketId}}: {{$json.summary}}',
+          threadTs: '{{$json.threadTs}}',
+          blocks: '[]',
+          username: 'Support Workflow',
+          iconEmoji: ':memo:',
+        },
+        expectedOutput: 'The message appears in Slack. Later nodes can use {{$json.status}}, {{$json.ts}}, {{$json.channel}}, {{$json.threadTs}}, or {{$json.error}} to log, branch, or send a follow-up.',
       },
     },
   },
-
   email: {
     default: {
-      description: 'Send an email via SMTP using custom server credentials.',
-      outputExample: { accepted: ['recipient@example.com'], rejected: [], response: '250 Message queued', messageId: '<abc@smtp.example.com>' },
-      outputDescription: 'accepted: List of email addresses that accepted the message. rejected: Addresses rejected by the server. response: SMTP server response. messageId: The SMTP message ID.',
+      description: 'Send one plain-text or HTML email through a saved SMTP Account connection.',
+      outputExample: {
+        customerEmail: 'asha.rao@example.com',
+        invoiceNumber: 'INV-1042',
+        success: true,
+        messageId: '<abc123@smtp.example.com>',
+        accepted: ['asha.rao@example.com'],
+        rejected: [],
+      },
+      outputDescription: 'The output keeps incoming fields such as customerEmail and invoiceNumber, then adds success, messageId, accepted, and rejected from the SMTP send attempt. If required fields, SMTP credentials, sender permission, or delivery fail, runtime returns _error.',
       usageExample: {
-        scenario: 'Send transactional emails via your own SMTP server (e.g. a company mail relay)',
-        inputValues: { to: '{{$json.email}}', subject: 'Password Reset', html: '<p>Click <a href="{{$json.resetLink}}">here</a> to reset your password.</p>' },
-        expectedOutput: 'Email is delivered. Check `accepted` to confirm delivery was accepted by the server.',
+        scenario: 'Send a customer invoice notification through the company SMTP relay after an accounting system creates the invoice',
+        inputValues: {
+          to: '{{$json.customerEmail}}',
+          subject: 'Invoice {{$json.invoiceNumber}} is ready',
+          text: 'Hi {{$json.firstName}}, your invoice {{$json.invoiceNumber}} is ready: {{$json.invoiceUrl}}',
+          html: '<p>Hi {{$json.firstName}},</p><p>Your invoice <strong>{{$json.invoiceNumber}}</strong> is ready.</p><p><a href="{{$json.invoiceUrl}}">View invoice</a></p>',
+          from: 'billing@company.com',
+        },
+        expectedOutput: 'Use {{$json.success}}, {{$json.messageId}}, {{$json.accepted}}, {{$json.rejected}}, and {{$json.customerEmail}} in a downstream log, Slack alert, or If/Else branch.',
       },
     },
   },
@@ -210,8 +442,8 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
   log_output: {
     default: {
       description: 'Write a log message to the CtrlChecks execution log for debugging and monitoring. This is a terminal node — it cannot connect to further downstream nodes.',
-      outputExample: { message: 'Processed 42 rows from orders_table' },
-      outputDescription: 'message: The resolved log text, with any {{...}} template expressions substituted — this is the entire output value (a plain string, not an object with separate fields). Because log_output is a terminal node with no outgoing edges, this value is not forwarded to any further node; it is recorded in the execution history only.',
+      outputExample: { '(entire output)': 'Processed 42 rows from orders_table' },
+      outputDescription: 'The resolved log text, with any {{...}} template expressions substituted, is the entire output value (a plain string, not an object with separate message/level/success fields — the "(entire output)" key here is only a documentation label). Because log_output is a terminal node with no outgoing edges, this value is not forwarded to any further node; it is recorded in the execution history only.',
       usageExample: {
         scenario: 'Log progress checkpoints in a long-running data pipeline',
         inputValues: { message: 'Processed {{$json.rowCount}} rows from {{$json.tableName}}', level: 'info' },
@@ -222,134 +454,138 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
 
   telegram: {
     default: {
-      description: 'Send a message to a Telegram chat, group, or channel via a bot.',
-      outputExample: { ok: true, result: { message_id: 101, from: { username: 'my_bot' }, chat: { id: -100123456 }, text: 'Alert: server CPU above 90%' } },
-      outputDescription: 'ok: true if message was sent. result.message_id: Telegram message ID. result.chat.id: The chat ID the message was sent to. result.text: The message text.',
+      description: 'Send Telegram text, media, or message edits through a saved Telegram Bot Token connection.',
+      outputExample: {
+        ticketId: 'TCK-1042',
+        success: true,
+        operation: 'sendMessage',
+        chatId: '-1001234567890',
+        messageId: 245,
+        data: { message_id: 245, chat: { id: -1001234567890, title: 'Support Alerts' }, text: 'Ticket TCK-1042 is assigned to Maya.' },
+        raw: { ok: true },
+        telegram: { ok: true },
+      },
+      outputDescription: 'Successful sends and edits keep incoming data and add success, operation, chatId, messageId, data, raw, and telegram. Failures add _error and sometimes _errorDetails. Later nodes can use {{$json.success}}, {{$json.operation}}, {{$json.chatId}}, {{$json.messageId}}, {{$json.data}}, {{$json.raw}}, {{$json.telegram}}, {{$json._error}}, or {{$json._errorDetails}}.',
       usageExample: {
-        scenario: 'Send a server alert to a monitoring group when CPU exceeds a threshold',
-        inputValues: { chatId: '-100123456', text: '🚨 Alert: {{$json.serverName}} CPU is {{$json.cpuPercent}}%\nTime: {{$now}}' },
-        expectedOutput: 'Message appears in the Telegram chat. Use `{{$json.result.message_id}}` to track or reply to the message.',
+        scenario: 'Reply to a Telegram support question after an AI Agent drafts a concise answer',
+        inputValues: {
+          operation: 'send_message',
+          chatId: '{{$json.chatId}}',
+          messageType: 'text',
+          message: 'Answer for ticket {{$json.ticketId}}: {{$json.aiResponse}}',
+          text: '',
+          parseMode: 'HTML',
+          disableWebPagePreview: true,
+          mediaUrl: '',
+          caption: '',
+          replyToMessageId: '{{$json.messageId}}',
+          editMessageId: '',
+          replyMarkup: '{"inline_keyboard":[[{"text":"Open ticket","url":"{{$json.ticketUrl}}"}]]}',
+          disableNotification: false,
+          protectContent: false,
+          allowSendingWithoutReply: true,
+        },
+        expectedOutput: 'The reply appears in Telegram. A later log, edit step, or If/Else node can use {{$json.success}}, {{$json.operation}}, {{$json.chatId}}, {{$json.messageId}}, {{$json.data}}, {{$json._error}}, and {{$json._errorDetails}}.',
       },
     },
   },
-
-  linkedin: {
-    post: {
-      description: 'Publish a post to LinkedIn on behalf of the authenticated user or company page.',
-      outputExample: { id: 'urn:li:share:123456789', activity: 'urn:li:activity:987654321', created: true },
-      outputDescription: 'id: The LinkedIn share URN. activity: The LinkedIn activity URN. created: true if the post was published successfully.',
-      usageExample: {
-        scenario: 'Auto-post blog article announcements to your company LinkedIn page',
-        inputValues: { text: '📢 New article: "{{$json.title}}"\n\n{{$json.summary}}\n\nRead more: {{$json.url}}', visibility: 'PUBLIC' },
-        expectedOutput: 'The post appears on LinkedIn. `{{$json.id}}` can be used to track engagement.',
-      },
-    },
-    get: {
-      description: 'Get the LinkedIn profile of the authenticated user.',
-      outputExample: { id: 'urn:li:person:abc123', firstName: { localized: { en_US: 'Alice' } }, lastName: { localized: { en_US: 'Smith' } }, headline: 'CTO at CtrlChecks' },
-      outputDescription: 'id: LinkedIn person URN. firstName / lastName: Localized name objects. headline: The profile headline.',
-      usageExample: {
-        scenario: 'Retrieve the authenticated user\'s LinkedIn profile to personalise an email',
-        inputValues: {},
-        expectedOutput: 'Returns profile data. Access name via `{{$json.firstName.localized.en_US}}`.',
-      },
-    },
-  },
-
-  twitter: {
-    tweet: {
-      description: 'Post a new tweet to the authenticated Twitter/X account.',
-      outputExample: { data: { id: '1749876543210', text: 'We just launched 🚀 Check it out: https://example.com', edit_history_tweet_ids: ['1749876543210'] } },
-      outputDescription: 'data.id: The tweet ID. data.text: The full text of the tweet posted.',
-      usageExample: {
-        scenario: 'Auto-post a tweet when a new product is published',
-        inputValues: { text: '🆕 {{$json.productName}} is now live!\n\n{{$json.description}}\n\nhttps://example.com/products/{{$json.slug}}' },
-        expectedOutput: 'The tweet is posted. Use `{{$json.data.id}}` to link back to the tweet.',
-      },
-    },
-    get: {
-      description: 'Fetch a specific tweet by its ID.',
-      outputExample: { data: { id: '1749876543210', text: 'Hello world!', public_metrics: { retweet_count: 5, like_count: 42 } } },
-      outputDescription: 'data.id: The tweet ID. data.text: Tweet text. data.public_metrics: Engagement counts (likes, retweets, replies).',
-      usageExample: {
-        scenario: 'Fetch engagement metrics for a specific tweet to track campaign performance',
-        inputValues: { tweetId: '{{$json.tweetId}}' },
-        expectedOutput: 'Returns the tweet with `{{$json.data.public_metrics.like_count}}` likes and `{{$json.data.public_metrics.retweet_count}}` retweets.',
-      },
-    },
-  },
-
-  instagram: {
-    post: {
-      description: 'Publish an image or video post to Instagram.',
-      outputExample: { id: '17858893269000001', status: 'PUBLISHED' },
-      outputDescription: 'id: Instagram media ID of the published post. status: PUBLISHED if the post went live.',
-      usageExample: {
-        scenario: 'Auto-post product images to Instagram when a new item is added to Shopify',
-        inputValues: { imageUrl: '{{$json.image_url}}', caption: '✨ New arrival: {{$json.title}}\n\nShop now ↗️ link in bio\n\n#newproduct #shop' },
-        expectedOutput: 'The image is posted. `{{$json.id}}` can be used to fetch post insights later.',
-      },
-    },
-    get: {
-      description: 'Get details about an Instagram media post.',
-      outputExample: { id: '17858893269000001', caption: '✨ New arrival...', like_count: 124, comments_count: 7, timestamp: '2025-01-15T12:00:00+0000' },
-      outputDescription: 'id: Media ID. caption: Post caption. like_count: Number of likes. comments_count: Number of comments. timestamp: When the post was published.',
-      usageExample: {
-        scenario: 'Track post engagement metrics after publishing',
-        inputValues: { mediaId: '{{$json.id}}' },
-        expectedOutput: 'Returns post insights with `{{$json.like_count}}` and `{{$json.comments_count}}`.',
-      },
-    },
-  },
-
-  discord: {
-    default: {
-      description: 'Send a message to a Discord channel via a bot.',
-      outputExample: { id: '1234567890123456789', channelId: '9876543210987654321', content: 'Build #42 passed ✅', timestamp: '2025-01-15T11:00:00.000000+00:00' },
-      outputDescription: 'id: Discord message ID. channelId: The channel it was sent to. content: The message text. timestamp: When the message was sent.',
-      usageExample: {
-        scenario: 'Post CI/CD build status to a #ci-notifications Discord channel',
-        inputValues: { channelId: '{{$env.DISCORD_CI_CHANNEL_ID}}', message: '{{$json.status === "pass" ? "✅" : "❌"}} Build #{{$json.buildNumber}} — {{$json.status}}' },
-        expectedOutput: 'Message appears in the Discord channel. Use `{{$json.id}}` to track or edit the message.',
-      },
-    },
-  },
-
   zoom_video: {
     createMeeting: {
-      description: 'Create a new Zoom meeting and get the join link.',
-      outputExample: { id: 81234567890, uuid: 'abcdef...', topic: 'Q4 Planning', start_url: 'https://zoom.us/s/81234567890', join_url: 'https://zoom.us/j/81234567890', start_time: '2025-01-20T14:00:00Z' },
-      outputDescription: 'id: Zoom meeting ID. join_url: The URL to share with attendees. start_url: The host link to start the meeting. start_time: Scheduled start time.',
+      description: 'Create a new Zoom meeting for the connected Zoom user and return the raw Zoom meeting object under data.',
+      outputExample: { success: true, data: { id: 81234567890, uuid: 'abcdef...', topic: 'Q4 Planning', start_url: 'https://zoom.us/s/81234567890', join_url: 'https://zoom.us/j/81234567890', start_time: '2026-05-01T10:00:00Z', duration: 30 } },
+      outputDescription: 'success: true when Zoom created the meeting. data.id is the Zoom meeting ID, data.join_url is the attendee link, data.start_url is the host link, data.start_time is the scheduled time, and _error/_errorDetails appear on failure.',
       usageExample: {
-        scenario: 'Create a Zoom meeting when a calendly event is booked',
-        inputValues: { topic: '{{$json.eventName}} with {{$json.inviteeName}}', startTime: '{{$json.startTime}}', duration: '60' },
-        expectedOutput: 'Meeting is created. Share `{{$json.join_url}}` with attendees via a Slack or email node.',
+        scenario: 'Create a Zoom meeting when a booking request is approved',
+        inputValues: { operation: 'createMeeting', topic: '{{$json.eventName}} with {{$json.inviteeName}}', startTime: '{{$json.startTime}}', duration: '60' },
+        expectedOutput: 'Meeting is created. Share {{$json.data.join_url}} with attendees and store {{$json.data.id}} for later update or delete workflows.',
+      },
+    },
+    listMeetings: {
+      description: 'List scheduled meetings for the connected Zoom user so a workflow can choose a meeting ID before reading, updating, deleting, or reporting on it.',
+      outputExample: { success: true, data: { page_size: 30, total_records: 1, meetings: [{ id: 81234567890, topic: 'Weekly Sync', start_time: '2026-05-01T10:00:00Z', join_url: 'https://zoom.us/j/81234567890' }] } },
+      outputDescription: 'success: true when Zoom returned the list. data.meetings contains scheduled meeting objects, while data.page_size and data.total_records describe the page returned by the API.',
+      usageExample: {
+        scenario: 'Find the scheduled Zoom meetings for an account manager before selecting the one to update',
+        inputValues: { operation: 'listMeetings' },
+        expectedOutput: 'Use {{$json.data.meetings}} to choose a meeting and map {{$json.data.meetings[0].id}} into Get, Update, or Delete Meeting.',
+      },
+    },
+    getMeeting: {
+      description: 'Read the latest Zoom details for one meeting ID, including topic, start time, duration, and attendee join URL when Zoom returns them.',
+      outputExample: { success: true, data: { id: 81234567890, topic: 'Customer onboarding', join_url: 'https://zoom.us/j/81234567890', start_time: '2026-05-01T10:00:00Z', duration: 45 } },
+      outputDescription: 'success: true when Zoom returned the meeting. data contains the raw meeting details. _error/_errorDetails appear when the ID is wrong, missing, or inaccessible.',
+      usageExample: {
+        scenario: 'Look up a stored Zoom meeting before sending a reminder',
+        inputValues: { operation: 'getMeeting', meetingId: '{{$json.zoomMeetingId}}' },
+        expectedOutput: 'Use {{$json.data.join_url}}, {{$json.data.topic}}, and {{$json.data.start_time}} in the reminder message.',
+      },
+    },
+    updateMeeting: {
+      description: 'Update one Zoom meeting by ID, sending only the topic, duration, or start time fields that the workflow fills.',
+      outputExample: { success: true, data: { updated: true, meetingId: '81234567890' } },
+      outputDescription: 'success: true when Zoom accepted the PATCH request. For HTTP 204 responses runtime returns data.updated and data.meetingId rather than the full meeting object.',
+      usageExample: {
+        scenario: 'Reschedule a customer onboarding call after a booking update',
+        inputValues: { operation: 'updateMeeting', meetingId: '{{$json.zoomMeetingId}}', startTime: '{{$json.newStartsAt}}', duration: '45' },
+        expectedOutput: 'Check {{$json.data.updated}} and log {{$json.data.meetingId}} before notifying attendees.',
+      },
+    },
+    deleteMeeting: {
+      description: 'Delete one Zoom meeting by ID for cancellation workflows where the meeting should be removed from the connected user account.',
+      outputExample: { success: true, data: { deleted: true, meetingId: '81234567890' } },
+      outputDescription: 'success: true when Zoom accepted the DELETE request. For HTTP 204 responses runtime returns data.deleted and data.meetingId. _error/_errorDetails appear when the meeting is missing or unauthorized.',
+      usageExample: {
+        scenario: 'Cancel a Zoom meeting after a customer cancels a scheduled session',
+        inputValues: { operation: 'deleteMeeting', meetingId: '{{$json.zoomMeetingId}}' },
+        expectedOutput: 'Check {{$json.data.deleted}} and send a cancellation notice using attendee data saved before the delete step.',
       },
     },
   },
 
   microsoft_teams: {
     default: {
-      description: 'Send a message to a Microsoft Teams channel through an incoming webhook URL.',
-      outputExample: { success: true, teams: { status: 200, response: '1' } },
-      outputDescription: 'success: True when the webhook accepted the request. teams.status: HTTP status returned by Teams. teams.response: Raw Teams webhook response text.',
+      description: 'Send one Microsoft Teams message through an Incoming Webhook, or reply to a Microsoft Teams Trigger conversation through Bot Framework.',
+      outputExample: {
+        ticketId: 'TCK-1042',
+        customerEmail: 'asha.rao@example.com',
+        success: true,
+        teams: { id: '1784369000000', status: 200, response: '1' },
+        botReply: true,
+      },
+      outputDescription: 'Webhook success keeps incoming data and adds success plus teams.status and teams.response. Bot reply success keeps incoming data and adds success, teams, and botReply. Failures add _error and sometimes _errorDetails. Later nodes can use {{$json.success}}, {{$json.teams.status}}, {{$json.teams.response}}, {{$json.teams.id}}, {{$json.botReply}}, {{$json._error}}, or {{$json._errorDetails}}.',
       usageExample: {
-        scenario: 'Post a sprint completion summary to a Teams channel',
-        inputValues: { webhookUrl: '{{$env.TEAMS_WEBHOOK_URL}}', message: 'Sprint {{$json.sprintName}} completed!\n\nDelivered: {{$json.storiesCompleted}} stories\nVelocity: {{$json.velocity}} points' },
-        expectedOutput: 'The message is posted in Teams and the node returns the webhook HTTP status.',
+        scenario: 'Reply to a Teams helpdesk question in the same conversation after an AI Agent drafts the answer',
+        inputValues: {
+          webhookUrl: '',
+          message: 'Answer for {{$json.userName}} about ticket {{$json.ticketId}}: {{$json.response}}',
+          serviceUrl: '{{$json.serviceUrl}}',
+          conversationId: '{{$json.conversationId}}',
+          replyToId: '{{$json.replyToId}}',
+        },
+        expectedOutput: 'The reply appears in Microsoft Teams. A later If/Else, log, or escalation node can use {{$json.success}}, {{$json.botReply}}, {{$json.teams}}, {{$json._error}}, and {{$json._errorDetails}}.',
       },
     },
   },
 
   whatsapp: {
-    default: {
-      description: 'Send a WhatsApp message via the WhatsApp Business API.',
+    sendText: {
+      description: 'Send a free-form WhatsApp text message via the WhatsApp Business Cloud API, allowed only within the 24-hour customer service window that opens after the customer messages you.',
       outputExample: { messaging_product: 'whatsapp', contacts: [{ input: '+1234567890', wa_id: '1234567890' }], messages: [{ id: 'wamid.abc123' }] },
-      outputDescription: 'contacts: Array of recipient contact objects. messages[0].id: The WhatsApp message ID.',
+      outputDescription: 'messaging_product: Always "whatsapp". contacts: Array with the resolved recipient wa_id. messages[0].id: The WhatsApp message ID to track delivery or reference later. Failures instead return success:false with _error, _errorCode (WHATSAPP_ERROR), and optionally _errorDetails.',
       usageExample: {
-        scenario: 'Send an order confirmation via WhatsApp after a Shopify purchase',
-        inputValues: { to: '{{$json.customerPhone}}', text: 'Hi {{$json.customerName}} 👋 Your order #{{$json.orderId}} has been confirmed! Expected delivery: {{$json.deliveryDate}}.' },
-        expectedOutput: 'WhatsApp message is delivered. Track delivery status using the message ID.',
+        scenario: 'Reply to a customer inside the 24-hour window with an AI Agent-drafted answer',
+        inputValues: { resource: 'message', operation: 'sendText', to: '{{$json.chatId}}', text: '{{$json.aiResponse}}' },
+        expectedOutput: 'WhatsApp delivers the reply. A later node can use {{$json.messages[0].id}}, {{$json.success}}, and {{$json._error}}.',
+      },
+    },
+    sendTemplate: {
+      description: 'Send a pre-approved Meta message template, required to start a new conversation with a customer or to message outside the 24-hour customer service window.',
+      outputExample: { messaging_product: 'whatsapp', contacts: [{ input: '+1234567890', wa_id: '1234567890' }], messages: [{ id: 'wamid.abc123' }] },
+      outputDescription: 'messaging_product: Always "whatsapp". contacts: Array with the resolved recipient wa_id. messages[0].id: The WhatsApp message ID. Failures (for example an unapproved template) instead return success:false with _error and _errorCode.',
+      usageExample: {
+        scenario: 'Send an order confirmation template via WhatsApp after a Shopify purchase',
+        inputValues: { resource: 'message', operation: 'sendTemplate', to: '{{$json.customerPhone}}', templateName: 'order_confirmation', language: 'en_US' },
+        expectedOutput: 'WhatsApp message is delivered. Track delivery status using {{$json.messages[0].id}}.',
       },
     },
   },
@@ -357,27 +593,27 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
   // Deprecated alias for 'whatsapp' — kept only for workflows saved before the merge.
   whatsapp_cloud: {
     default: {
-      description: 'Deprecated — use the WhatsApp node instead. Kept for backward compatibility with existing workflows.',
-      outputExample: { messaging_product: 'whatsapp', contacts: [{ input: '+1234567890', wa_id: '1234567890' }], messages: [{ id: 'wamid.abc123' }] },
-      outputDescription: 'contacts: Array of recipient contact objects. messages[0].id: The WhatsApp message ID.',
+      description: 'Deprecated — sends a plain WhatsApp text message using the same runtime as the WhatsApp node. Use the WhatsApp node for anything beyond plain text.',
+      outputExample: { success: true, data: { messaging_product: 'whatsapp', contacts: [{ input: '+1234567890', wa_id: '1234567890' }], messages: [{ id: 'wamid.HBgLMTIzNDU2Nzg5MA==' }] } },
+      outputDescription: 'success: true when the WhatsApp Business Cloud API accepted the message. data: Meta\'s raw API response, containing contacts (resolved recipient) and messages[0].id (the new message ID). On failure: success: false plus _error/_errorCode/_errorDetails. The field key for message text is `text`, not `message` — an older panel version stored it under `message`, which the shared executor never read, so those sends went out empty.',
       usageExample: {
-        scenario: 'Existing workflows created before the WhatsApp Cloud → WhatsApp merge',
-        inputValues: { to: '{{$json.customerPhone}}', message: 'Hi {{$json.customerName}} 👋 Your order #{{$json.orderId}} has been confirmed!' },
-        expectedOutput: 'WhatsApp message is delivered, identical behavior to the WhatsApp node.',
+        scenario: 'Reply to a customer on an existing legacy workflow not yet migrated to the WhatsApp node',
+        inputValues: { to: '{{$json.chatId}}', text: 'Hi {{$json.customerName}} 👋 Your order #{{$json.orderId}} has been confirmed!' },
+        expectedOutput: 'WhatsApp message is delivered, identical behavior to the WhatsApp node. Check `{{$json.success}}` and `{{$json._error}}` downstream.',
       },
     },
   },
 
   twilio: {
     default: {
-      description: 'Send an SMS message via a Twilio account connection.',
+      description: 'Send an SMS or MMS message via a Twilio Account Credentials connection.',
       outputExample: {
         success: true,
-        sid: 'SM1234abcd5678efgh',
+        sid: 'SM1234abcd5678efgh1234abcd5678ef',
         status: 'queued',
-        twilio: { sid: 'SM1234abcd5678efgh', status: 'queued', to: '+15551234567', from: '+15559876543', body: 'Your verification code is 4821.' },
+        twilio: { sid: 'SM1234abcd5678efgh1234abcd5678ef', status: 'queued', to: '+15551234567', from: '+15559876543', body: 'Your verification code is 4821.' },
       },
-      outputDescription: 'sid / status: Twilio message SID and delivery status (queued, sent, delivered, failed), flattened for convenience. twilio: the full raw Twilio API response.',
+      outputDescription: 'sid / status: Twilio message SID and the initial queue status (queued/sent — not final delivery confirmation; this node does not poll for delivered/failed), flattened for convenience. twilio: the full raw Twilio API response. On failure there is no success: false — only `_error` (a bare "Twilio send failed (status)" string) and `_errorDetails` (Twilio\'s actual error message/code); check `_errorDetails` for the real reason, not just `_error`.',
       usageExample: {
         scenario: 'Send a 2FA SMS verification code to a user who is logging in',
         inputValues: { to: '{{$json.phoneNumber}}', message: 'Your CtrlChecks verification code is {{$json.otpCode}}. Expires in 10 minutes.' },
@@ -388,39 +624,39 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
 
   mailgun: {
     default: {
-      description: 'Send a transactional email via Mailgun.',
-      outputExample: { success: true, messageId: '<20250115.abc123@mg.example.com>', message: 'Queued. Thank you.' },
-      outputDescription: 'success: true when Mailgun accepts the message. messageId: Mailgun message ID for tracking. message: Confirmation from Mailgun.',
+      description: 'Send a transactional email via Mailgun, as raw Text/HTML or a stored Mailgun template.',
+      outputExample: { success: true, messageId: '<20260718091500.1.ABCDEF1234567890@mg.example.com>', message: 'Queued. Thank you.', mailgun: { id: '<20260718091500.1.ABCDEF1234567890@mg.example.com>', message: 'Queued. Thank you.' } },
+      outputDescription: 'success: true when Mailgun accepts the message (there is no success: false on failure — only _error). messageId: Mailgun\'s message ID for tracking delivery in Mailgun\'s logs. message: Mailgun\'s own queue confirmation text. mailgun: the full raw JSON response Mailgun returned. Unlike slack_webhook, original upstream $json fields are preserved alongside these on both success and failure.',
       usageExample: {
         scenario: 'Send a password reset email using Mailgun',
         inputValues: { from: 'noreply@yourapp.com', to: '{{$json.email}}', subject: 'Reset your password', html: '<p>Click <a href="{{$json.resetUrl}}">here</a> to reset your password. Link expires in 1 hour.</p>' },
-        expectedOutput: 'Email is queued by Mailgun. Track delivery in the Mailgun logs using `{{$json.messageId}}`.',
+        expectedOutput: 'Email is queued by Mailgun. Track delivery in the Mailgun logs using `{{$json.messageId}}`, and check `{{$json._error}}` downstream to detect a failed send.',
       },
     },
   },
 
   sendgrid: {
     default: {
-      description: 'Send a transactional or marketing email via SendGrid.',
-      outputExample: { success: true, status: 202, messageId: 'ABC123' },
-      outputDescription: 'success: true when SendGrid accepts the message. status: HTTP 202 means accepted. messageId: SendGrid message ID from the x-message-id response header for tracking in the SendGrid Activity Feed.',
+      description: 'Send a one-off transactional email via SendGrid\'s Mail Send API. Only From/To/Subject/Text/HTML are supported — no CC/BCC, attachments, or Dynamic Templates.',
+      outputExample: { success: true, status: 202, messageId: 'a1B2c3D4e5F6.filter-node-1.abcdef1234567890@sgrp' },
+      outputDescription: 'success: true when SendGrid accepts the message (there is no success: false on failure — only _error). status: always 202 on success (SendGrid\'s accepted-for-delivery response). messageId: read from the x-message-id response header, for tracking in the SendGrid Activity Feed. On failure, the node returns _error and _errorDetails (SendGrid\'s raw error body) instead.',
       usageExample: {
         scenario: 'Send a receipt email after a successful payment',
         inputValues: { to: '{{$json.customerEmail}}', from: 'receipts@yourapp.com', subject: 'Your receipt for order #{{$json.orderId}}', html: '<h1>Thank you!</h1><p>You paid ${{$json.amount}} on {{$json.date}}.</p>' },
-        expectedOutput: 'Email is accepted by SendGrid for delivery. Track via `{{$json.messageId}}` in the SendGrid Activity Feed.',
+        expectedOutput: 'Email is accepted by SendGrid for delivery. Track via `{{$json.messageId}}` in the SendGrid Activity Feed, and check `{{$json._error}}` downstream to detect a failed send.',
       },
     },
   },
 
   amazon_ses: {
     default: {
-      description: 'Send an email via Amazon Simple Email Service (SES).',
-      outputExample: { MessageId: '0102018e2b3c7abc-def1234-...', ResponseMetadata: { RequestId: 'abc-123', HTTPStatusCode: 200 } },
-      outputDescription: 'MessageId: The SES message ID for tracking. ResponseMetadata.HTTPStatusCode: 200 means success.',
+      description: 'Send an email via Amazon Simple Email Service (SES), as raw Subject/Body or a saved AWS SES template.',
+      outputExample: { success: true, messageId: '0102018e2b3c7abc-def1234-5678-90ab-cdef12345678-000000', recipientCount: 1, failedRecipients: [], attempts: 1, timestamp: '2026-07-18T09:15:00.000Z' },
+      outputDescription: 'success: true when Amazon SES accepted the send. messageId: the lowercase SES message ID used to look the send up in the AWS SES console (not a PascalCase MessageId/ResponseMetadata object). recipientCount: total To+Cc+Bcc addresses sent to. failedRecipients: always an empty array, since SES accepts or rejects the whole call, not individual recipients. Field-validation failures (missing recipients/subject/body) return `_error`; actual AWS SES send failures (unverified sender, rate limiting) return a plain `error` field instead — check both.',
       usageExample: {
-        scenario: 'Send bulk email notifications to a list of subscribers',
-        inputValues: { to: '{{$json.email}}', from: 'notifications@yourapp.com', subject: '{{$json.subject}}', body: '{{$json.bodyText}}' },
-        expectedOutput: 'Email is sent via SES. Use `{{$json.MessageId}}` to track in the SES console.',
+        scenario: 'Send an order confirmation email to a customer after checkout',
+        inputValues: { recipients: '{"to": ["{{$json.customerEmail}}"]}', fromAddress: 'orders@yourapp.com', subject: '{{$json.subject}}', body: '{{$json.bodyText}}' },
+        expectedOutput: 'Email is sent via SES. Use `{{$json.messageId}}` to track in the SES console.',
       },
     },
   },
@@ -441,12 +677,55 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
   slack_webhook: {
     default: {
       description: 'Send a message to Slack using a saved Incoming Webhook connection.',
-      outputExample: { success: true, status: 200, response: 'ok' },
-      outputDescription: 'success: true if Slack accepted the message. status: HTTP response code. response: "ok" indicates success.',
+      outputExample: { id: 'ok', status: 'sent', provider: 'slack_webhook', message: 'New sign-up: customer@example.com' },
+      outputDescription: 'id: Slack\'s literal webhook response body ("ok" on success). status: "sent" or "failed" (not an _error field like most nodes — failure adds a plain error field instead). provider: always "slack_webhook". message: the text that was sent. This output completely replaces incoming $json data; no upstream fields carry through.',
       usageExample: {
         scenario: 'Post a quick alert to Slack without setting up a full bot integration',
         inputValues: { message: 'New sign-up: {{$json.email}} at {{$now}}' },
-        expectedOutput: 'Message appears in the configured channel. This is the simplest way to send Slack messages.',
+        expectedOutput: 'Message appears in the configured channel. Check `{{$json.status}}` in the very next node, since prior fields like `{{$json.email}}` do not survive past this node.',
+      },
+    },
+  },
+
+  discord_trigger: {
+    receive: {
+      description: 'Start a workflow from an accepted Discord slash command, interaction, modal, message-like event, or supported Discord Webhook Event after signature and filter checks pass.',
+      outputExample: {
+        eventId: '123456789012345678',
+        eventType: 'slash_command',
+        source: 'discord',
+        userId: '111111111111111111',
+        username: 'alice',
+        text: 'priority:urgent',
+        applicationId: '999999999999999999',
+        guildId: '222222222222222222',
+        channelId: '333333333333333333',
+        command: '/support',
+        interactionToken: 'interaction-token',
+        responseUrl: 'https://discord.com/api/v10/webhooks/999999999999999999/interaction-token',
+        raw: {},
+      },
+      outputDescription: 'The trigger emits normalized Discord fields at the top level: eventId, eventType, source, userId, username, text, timestamp, applicationId, guildId, channelId, threadId, chatId, messageId, command, customId, interactionId, interactionToken, responseUrl, rawEventType, raw, trigger, sessionId, and _discord.',
+      usageExample: {
+        scenario: 'A Discord user runs /support, the workflow classifies the request, then replies in the same channel.',
+        inputValues: { eventTypes: 'slash_command, interaction', commandFilter: '/support', validateSignature: 'true' },
+        expectedOutput: 'Use {{$json.text}} as the request, {{$json.channelId}} for a same-channel Discord reply, and {{$json.interactionToken}} with {{$json.applicationId}} for interaction follow-up replies.',
+      },
+    },
+  },
+
+  discord: {
+    default: {
+      description: 'Send a message to a Discord channel via a bot token, or reply to a slash command/component interaction via an interaction token.',
+      outputExample: {
+        success: true,
+        discord: { id: '1234567890123456789', channel_id: '987654321098765432', content: 'Build #42 passed', timestamp: '2025-01-15T11:00:00.000000+00:00' },
+      },
+      outputDescription: 'success: true when Discord accepted the message. discord: the raw Discord API message object (id, channel_id, content, author, timestamp). interactionReply: true is added when the reply used Interaction Token + Application ID instead of Channel ID.',
+      usageExample: {
+        scenario: 'Post CI/CD build status to a #ci-notifications Discord channel',
+        inputValues: { channelId: '{{$json.channelId}}', message: 'Build #{{$json.buildNumber}} — {{$json.status}}' },
+        expectedOutput: 'Message appears in the Discord channel. Use {{$json.discord.id}} to reference or reply to it later.',
       },
     },
   },
@@ -454,8 +733,8 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
   discord_webhook: {
     default: {
       description: 'Send a message to a Discord channel using a Webhook URL — no bot required.',
-      outputExample: { success: true, status: 204 },
-      outputDescription: 'success: true if the message was accepted. status: HTTP 204 means Discord accepted the webhook payload.',
+      outputExample: { success: true, sent: true, message: 'Build #42 passed', discord_webhook: { status: 204, delivered: true } },
+      outputDescription: 'success: true if the message was accepted. sent: true confirms dispatch. discord_webhook.status: the HTTP status Discord returned (204 means accepted with no body). discord_webhook.delivered: true once Discord accepts the payload.',
       usageExample: {
         scenario: 'Post GitHub commit notifications to a Discord channel',
         inputValues: { message: '📦 New commit by {{$json.author}}: {{$json.message}}\n{{$json.url}}' },
@@ -479,11 +758,49 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
 
   // ─── DATA & DATABASES ─────────────────────────────────────────────────────
 
+  google_sheets_trigger: {
+    default: {
+      description: 'Poll a Google Sheet about every two minutes and start the workflow when a row_added or row_updated event passes the configured event type and keyword filters. Activation captures the current row count and row hashes as a baseline, so existing rows do not trigger until they are changed.',
+      outputExample: {
+        eventId: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms-Leads-5-row_added-1784397000000',
+        eventType: 'row_added',
+        source: 'google_sheets',
+        userId: null,
+        username: '',
+        text: 'Jane Doe jane@example.com urgent New signup',
+        timestamp: '2026-07-18T09:50:00.000Z',
+        spreadsheetId: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms',
+        sheetName: 'Leads',
+        rowNumber: 5,
+        values: ['Jane Doe', 'jane@example.com', 'urgent', 'New signup'],
+        row: { Name: 'Jane Doe', Email: 'jane@example.com', Priority: 'urgent', Notes: 'New signup' },
+        raw: { values: ['Jane Doe', 'jane@example.com', 'urgent', 'New signup'] },
+        trigger: 'google_sheets',
+        workflow_id: 'workflow_123',
+        node_id: 'sheet-trigger-1',
+        sessionId: 'gsheet_workflow_123_1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms_5',
+        _googleSheets: true,
+      },
+      outputDescription: 'eventId: Unique event ID. eventType: row_added or row_updated. source: google_sheets. userId: null for sheet events. username: empty for sheet events. text: joined row values. timestamp: normalization time. spreadsheetId: watched file ID. sheetName: watched tab. rowNumber: one-based spreadsheet row number. values: raw row cells. row: header-keyed row object when headers are enabled. raw: raw values payload. trigger: google_sheets marker. workflow_id: workflow receiving the event. node_id: trigger node ID. sessionId: polling session ID. _googleSheets: internal true marker.',
+      usageExample: {
+        scenario: 'Create a support ticket when a new urgent row appears in the shared support intake sheet',
+        inputValues: {
+          spreadsheetId: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms',
+          sheetName: 'Leads',
+          hasHeaderRow: 'true',
+          eventTypes: 'row_added',
+          query: 'urgent',
+        },
+        expectedOutput: 'The next node can use {{$json.row.Email}}, {{$json.row.Priority}}, {{$json.rowNumber}}, {{$json.eventType}}, and {{$json.values[0]}}.',
+      },
+    },
+  },
+
   google_sheets: {
     read: {
-      description: 'Read rows from a Google Sheets spreadsheet.',
-      outputExample: { rows: [{ Name: 'Alice', Email: 'alice@example.com', Status: 'Active' }, { Name: 'Bob', Email: 'bob@example.com', Status: 'Inactive' }], count: 2 },
-      outputDescription: 'rows: Array of objects where each key is a column header and each value is the cell value. count: Total number of rows returned.',
+      description: 'Read rows from a Google Sheets spreadsheet, normalized into row objects keyed by column header.',
+      outputExample: { rows: [{ row_number: 2, Name: 'Alice', Email: 'alice@example.com', Status: 'Active' }, { row_number: 3, Name: 'Bob', Email: 'bob@example.com', Status: 'Inactive' }], headers: ['Name', 'Email', 'Status'] },
+      outputDescription: 'rows/items: Array of objects keyed by detected column header plus row_number. headers: detected column names. values: raw array-of-arrays including the header row. There is no count field — use rows.length.',
       usageExample: {
         scenario: 'Read a list of customers from a Google Sheet and send each a personalised email',
         inputValues: { spreadsheetId: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms', sheetName: 'Customers', range: 'A:D' },
@@ -491,9 +808,9 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
       },
     },
     write: {
-      description: 'Write data to specific cells or a range in a Google Sheet.',
-      outputExample: { updatedRange: 'Sheet1!A2:C2', updatedRows: 1, updatedColumns: 3, updatedCells: 3 },
-      outputDescription: 'updatedRange: The A1 notation of the range that was written. updatedRows / Columns / Cells: How many rows, columns, and cells were updated.',
+      description: 'Replace cell values in a range (or the sheet\'s used area) of a Google Sheet.',
+      outputExample: { success: true, updatedRange: 'Sheet1!A2:C2', updatedRows: 1, updatedColumns: 3, updatedCells: 3 },
+      outputDescription: 'success: true once the write completes. updatedRange: The A1 notation of the range that was written. updatedRows / Columns / Cells: How many rows, columns, and cells were updated. Google Sheets API errors and missing payloads throw rather than returning _error.',
       usageExample: {
         scenario: 'Write form submission data to a Google Sheet',
         inputValues: { spreadsheetId: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms', range: 'Sheet1!A:C', values: '[["{{$json.name}}", "{{$json.email}}", "{{$now}}"]]' },
@@ -501,19 +818,19 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
       },
     },
     append: {
-      description: 'Append a new row to the end of a Google Sheet.',
-      outputExample: { tableRange: 'Sheet1!A1:C100', updates: { updatedRange: 'Sheet1!A101:C101', updatedRows: 1 } },
-      outputDescription: 'tableRange: The entire table range including the new row. updates.updatedRange: The specific range of the newly appended row.',
+      description: 'Append new row(s) after the last existing row of a Google Sheet.',
+      outputExample: { success: true, tableRange: 'Sheet1!A1:C100', updatedRange: 'Sheet1!A101:C101', updatedRows: 1, appendedValues: [['Charlie', 'charlie@example.com']] },
+      outputDescription: 'success: true once the append completes. tableRange: The entire table range detected before appending. updatedRange/updatedRows: where the new row(s) landed — flattened to the top level, not nested under "updates". appendedValues: the row values Google Sheets recorded.',
       usageExample: {
         scenario: 'Append a new order row to a tracking spreadsheet each time a Shopify order is placed',
         inputValues: { spreadsheetId: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms', sheetName: 'Orders', values: '[["{{$json.orderId}}", "{{$json.customerEmail}}", "{{$json.total}}", "{{$now}}"]]' },
-        expectedOutput: 'A new row is appended. `{{$json.updates.updatedRange}}` shows where it was placed.',
+        expectedOutput: 'A new row is appended. `{{$json.updatedRange}}` shows where it was placed (there is no nested "updates" object).',
       },
     },
     update: {
-      description: 'Update specific cells in an existing Google Sheet row.',
-      outputExample: { spreadsheetId: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms', updatedRange: 'Sheet1!D5', updatedCells: 1 },
-      outputDescription: 'updatedRange: The range that was updated. updatedCells: The number of cells that changed.',
+      description: 'Update specific existing cells identified by Range in a Google Sheet.',
+      outputExample: { success: true, spreadsheetId: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms', updatedRange: 'Sheet1!D5', updatedCells: 1 },
+      outputDescription: 'success: true once the update completes. updatedRange: The range that was updated. updatedRows/Columns/Cells: The number of rows, columns, and cells that changed. Google Sheets API errors throw rather than returning _error.',
       usageExample: {
         scenario: 'Update the "Status" column of a row when an order is fulfilled',
         inputValues: { spreadsheetId: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms', range: 'Sheet1!D{{$json.rowNumber}}', values: '[["Fulfilled"]]' },
@@ -524,66 +841,188 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
 
   google_doc: {
     read: {
-      description: 'Read the full content and structure of a Google Doc.',
-      outputExample: { documentId: 'abc123', title: 'Q4 Report', body: { content: [{ paragraph: { elements: [{ textRun: { content: 'Executive Summary\n' } }] } }] } },
-      outputDescription: 'documentId: The Google Doc ID. title: Document title. body.content: Array of structural content elements.',
+      description: 'Extract the plain text content of an existing Google Doc.',
+      outputExample: { content: 'Quarterly Report\n\nRevenue increased 12% year over year...', format: 'text', documentId: '1a2b3c4d5e6f7g8h9i0j' },
+      outputDescription: 'content: the document\'s extracted plain text. format: echoes back the selected Output Format without changing extraction — Markdown conversion is not implemented. documentId: the resolved document ID.',
       usageExample: {
         scenario: 'Read a Google Doc template to use as an email body',
-        inputValues: { documentId: '{{$json.docId}}' },
-        expectedOutput: 'Returns the full document structure. Extract text from `body.content` to use in downstream nodes.',
+        inputValues: { operation: 'read', documentId: '{{$json.docId}}' },
+        expectedOutput: 'Returns the document\'s plain text. Map `{{$json.content}}` into an Email or Gmail node body.',
+      },
+    },
+    write: {
+      description: 'Delete all existing content and replace it with new Content, in one step.',
+      outputExample: { success: true, documentId: '1a2b3c4d5e6f7g8h9i0j', content: 'Updated report content...' },
+      outputDescription: 'success: true once the document body is replaced. documentId: the resolved document. content: the exact text that was written, echoed back for confirmation.',
+      usageExample: {
+        scenario: 'Overwrite a template document with freshly generated report content each week',
+        inputValues: { operation: 'write', documentUrl: 'https://docs.google.com/document/d/{{$json.documentId}}/edit', content: '{{$json.reportText}}' },
+        expectedOutput: 'The document\'s entire body is replaced. Use `{{$json.success}}` to confirm before notifying stakeholders.',
       },
     },
     create: {
-      description: 'Create a new Google Doc with a title and optional body content.',
-      outputExample: { documentId: 'newDoc123', title: 'Meeting Notes — 2025-01-15', revisionId: 'ABC123' },
-      outputDescription: 'documentId: The ID of the newly created document. title: The document title. revisionId: The initial revision ID.',
+      description: 'Create a new Google Doc with a title and optional initial content.',
+      outputExample: { success: true, documentId: 'newDoc123', title: 'Meeting Notes — 2025-01-15', documentUrl: 'https://docs.google.com/document/d/newDoc123/edit', content: 'Attendees: ...' },
+      outputDescription: 'success: true once the document is created. documentId: the ID of the newly created document. title: the document title. documentUrl: a ready-to-share link. content: the initial content that was inserted, if any.',
       usageExample: {
         scenario: 'Auto-create a meeting notes document for each calendar event',
-        inputValues: { title: 'Meeting Notes — {{$json.eventTitle}} — {{$json.date}}', content: 'Attendees: {{$json.attendees}}\nAgenda: {{$json.agenda}}' },
-        expectedOutput: 'New doc is created in Google Drive. Use `{{$json.documentId}}` to share a link: https://docs.google.com/document/d/{{$json.documentId}}',
+        inputValues: { operation: 'create', title: 'Meeting Notes — {{$json.eventTitle}} — {{$json.date}}', content: 'Attendees: {{$json.attendees}}\nAgenda: {{$json.agenda}}' },
+        expectedOutput: 'New doc is created in Google Drive. Use `{{$json.documentUrl}}` to share it directly.',
       },
     },
-    update: {
-      description: 'Append text or replace content in an existing Google Doc.',
-      outputExample: { documentId: 'abc123', replies: [{ insertText: { objectId: 'obj1' } }] },
-      outputDescription: 'documentId: The updated document ID. replies: Array of batch update replies.',
+    append: {
+      description: 'Insert new text just before the end of an existing Google Doc, leaving existing content untouched.',
+      outputExample: { success: true, documentId: '1a2b3c4d5e6f7g8h9i0j', content: '\n2025-01-19: Deployment completed successfully.' },
+      outputDescription: 'success: true once the new text is inserted. documentId: the resolved document. content: the text that was added, echoed back for confirmation (prior content is not returned).',
       usageExample: {
         scenario: 'Append a summary to a running report document',
-        inputValues: { documentId: '{{$json.docId}}', text: '\n\n--- {{$now}} ---\n{{$json.summary}}' },
-        expectedOutput: 'Text is appended to the end of the document.',
+        inputValues: { operation: 'append', documentUrl: 'https://docs.google.com/document/d/{{$json.docId}}/edit', content: '\n\n--- {{$now}} ---\n{{$json.summary}}' },
+        expectedOutput: 'Text is appended to the end of the document, after everything already there.',
+      },
+    },
+  },
+
+  gmail_trigger: {
+    default: {
+      description: 'Receive a Gmail Pub/Sub push notification, validate OIDC or shared-secret auth, read Gmail history from the stored historyId, filter accepted message and label events, and start one workflow execution per accepted event. Watch registration calls Gmail users.watch for the connected account and stores watch state under gmail:watch:${workflowId}:${nodeId}.',
+      outputExample: {
+        eventId: 'msg_1784399000-message_added',
+        eventType: 'message_added',
+        source: 'gmail',
+        userId: 'support@example.com',
+        username: 'support@example.com',
+        text: 'Hi, I need help with invoice INV-1042...',
+        timestamp: '2026-07-18T10:15:00.000Z',
+        emailAddress: 'support@example.com',
+        historyId: '1234567',
+        messageId: 'msg_1784399000',
+        threadId: 'thread_1042',
+        subject: 'Invoice INV-1042 question',
+        from: 'Customer Ops <customer@example.com>',
+        to: 'support@example.com',
+        snippet: 'Hi, I need help with invoice INV-1042...',
+        labelIds: ['INBOX', 'IMPORTANT'],
+        raw: { id: 'msg_1784399000', threadId: 'thread_1042', snippet: 'Hi, I need help with invoice INV-1042...' },
+        trigger: 'gmail',
+        workflow_id: 'workflow_123',
+        node_id: 'gmail-trigger-1',
+        sessionId: 'gmail_workflow_123_thread_1042',
+        _gmail: true,
+      },
+      outputDescription: 'eventId: normalized message-event ID. eventType: message_added, label_added, label_removed, or message_deleted. source: gmail. userId: watched mailbox. username: watched mailbox. text: Gmail snippet. timestamp: message time or processing time. emailAddress: mailbox address from the Pub/Sub envelope. historyId: latest Gmail history cursor. messageId: Gmail message ID. threadId: Gmail thread ID. subject/from/to/snippet: metadata fetched from Gmail. labelIds: Gmail label IDs on the message. raw: raw Gmail metadata or deleted-message fallback. trigger: gmail marker. workflow_id: workflow receiving the event. node_id: trigger node ID. sessionId: Gmail trigger session ID. _gmail: internal true marker.',
+      usageExample: {
+        scenario: 'Send new invoice emails from a shared support inbox into AI triage and reply in the same Gmail thread',
+        inputValues: {
+          pubsubTopic: 'projects/acme-support/topics/gmail-inbox-notifications',
+          eventTypes: 'message_added',
+          labelIds: 'INBOX, IMPORTANT',
+          query: 'invoice',
+          validateAuth: 'true',
+          audience: '',
+          validationSecret: '',
+        },
+        expectedOutput: 'The next node can use {{$json.subject}}, {{$json.from}}, {{$json.snippet}}, {{$json.threadId}}, {{$json.messageId}}, {{$json.labelIds}}, and {{$json.eventType}}.',
+      },
+    },
+  },
+
+  google_drive_trigger: {
+    default: {
+      description: 'Receive a Google Drive push notification for the connected account, validate the stored channel ID/token, then read changed files from the Drive changes feed using the saved page token. Folder ID and Keyword Filter are applied after Drive returns file metadata, and activation stores a fresh start page token so old changes do not replay.',
+      outputExample: {
+        eventId: 'file_1-1784399000000',
+        eventType: 'file_changed',
+        source: 'google_drive',
+        userId: 'owner@example.com',
+        username: 'Owner Name',
+        text: 'Vendor Invoice - July.pdf',
+        timestamp: '2026-07-18T10:15:00.000Z',
+        fileId: 'file_1',
+        name: 'Vendor Invoice - July.pdf',
+        mimeType: 'application/pdf',
+        parents: ['1a2b3c4d5e6f7g8h9i0j'],
+        modifiedTime: '2026-07-18T10:15:00.000Z',
+        webViewLink: 'https://drive.google.com/file/d/file_1/view',
+        raw: { fileId: 'file_1', removed: false, file: { id: 'file_1', name: 'Vendor Invoice - July.pdf' } },
+        trigger: 'google_drive',
+        workflow_id: 'workflow_123',
+        node_id: 'drive-trigger-1',
+        sessionId: 'gdrive_workflow_123_file_1',
+        _googleDrive: true,
+      },
+      outputDescription: 'eventId: normalized change ID. eventType: file_changed or file_deleted. source: google_drive. userId: owner email when available. username: owner display name. text: file name. timestamp: modifiedTime or processing time. fileId: Drive file ID. name: Drive file name. mimeType: Drive MIME type. parents: parent folder IDs. modifiedTime: Drive modified timestamp or null. webViewLink: file link when available. raw: original Drive change object. trigger: google_drive marker. workflow_id: workflow receiving the event. node_id: trigger node ID. sessionId: Drive trigger session ID. _googleDrive: internal true marker.',
+      usageExample: {
+        scenario: 'Route new invoice PDFs uploaded to a shared finance folder into an approval workflow',
+        inputValues: { folderId: '1a2b3c4d5e6f7g8h9i0j', eventTypes: 'file_changed', query: 'invoice' },
+        expectedOutput: 'The next node can use {{$json.name}}, {{$json.fileId}}, {{$json.mimeType}}, {{$json.webViewLink}}, {{$json.parents}}, and {{$json.eventType}}.',
       },
     },
   },
 
   google_drive: {
     list: {
-      description: 'List files and folders in Google Drive.',
-      outputExample: { files: [{ id: 'file1', name: 'Q4 Report.pdf', mimeType: 'application/pdf', modifiedTime: '2025-01-14T10:00:00Z' }], nextPageToken: null },
-      outputDescription: 'files: Array of file/folder objects with id, name, mimeType, and modifiedTime. nextPageToken: Token for paginating results.',
+      description: 'List files in Google Drive, optionally scoped to one folder.',
+      outputExample: { files: [{ id: 'file1', name: 'Q4 Report.pdf', mimeType: 'application/pdf', modifiedTime: '2025-01-14T10:00:00Z' }] },
+      outputDescription: 'files: Array of file objects with id, name, mimeType, size, and modifiedTime, available directly at {{$json.files}}. data: the same raw Drive API response, duplicated for reference.',
       usageExample: {
-        scenario: 'List all PDF files in a specific Drive folder to process each one',
-        inputValues: { folderId: '{{$env.DRIVE_FOLDER_ID}}', mimeType: 'application/pdf', maxResults: '50' },
+        scenario: 'List all files in a specific Drive folder to process each one',
+        inputValues: { operation: 'list', folderId: '{{$env.DRIVE_FOLDER_ID}}' },
         expectedOutput: 'Returns matching files. Loop over `{{$json.files}}` and use each `{{$json.id}}` in a Download operation.',
       },
     },
     upload: {
-      description: 'Upload a file to Google Drive.',
+      description: 'Upload a file to Google Drive, given File Name and File Data (base64, plain text, or a data URL).',
       outputExample: { id: 'newFile456', name: 'report-2025-01.pdf', webViewLink: 'https://drive.google.com/file/d/newFile456/view', mimeType: 'application/pdf' },
-      outputDescription: 'id: The new file ID in Drive. name: File name. webViewLink: Browser-accessible URL to the file.',
+      outputDescription: 'id/fileId: The new file ID in Drive (both keys hold the same value). name/fileName: File name. webViewLink: Browser-accessible URL to the file.',
       usageExample: {
         scenario: 'Upload a generated PDF report to a shared Drive folder',
-        inputValues: { folderId: '{{$env.REPORTS_FOLDER_ID}}', fileName: 'report-{{$now}}.pdf', content: '{{$json.pdfContent}}', mimeType: 'application/pdf' },
+        inputValues: { operation: 'upload', folderId: '{{$env.REPORTS_FOLDER_ID}}', fileName: 'report-{{$now}}.pdf', fileData: '{{$json.dataBase64}}', mimeType: 'application/pdf' },
         expectedOutput: 'File is uploaded. Share `{{$json.webViewLink}}` with stakeholders.',
       },
     },
     download: {
-      description: 'Download the content of a file from Google Drive.',
-      outputExample: { fileId: 'file1', fileName: 'data.csv', content: 'Name,Email\nAlice,alice@example.com\n', mimeType: 'text/csv', size: 1024 },
-      outputDescription: 'fileId: The Drive file ID. fileName: The file name. content: The raw file content as a string. mimeType: The file MIME type.',
+      description: 'Download an existing file\'s metadata and content by File ID.',
+      outputExample: { fileId: 'file1', fileName: 'invoice.pdf', dataBase64: 'JVBERi0x...', mimeType: 'application/pdf', size: 204800 },
+      outputDescription: 'fileId/id: The Drive file ID. fileName/name: The file name. dataBase64: base64-encoded content for binary files (used for most real files); a plain content field is used instead for text/JSON files. mimeType/size: file metadata.',
       usageExample: {
-        scenario: 'Download a CSV export from Drive and process each row',
-        inputValues: { fileId: '{{$json.fileId}}' },
-        expectedOutput: 'File content is returned in `{{$json.content}}`. Pass to a CSV node to parse rows.',
+        scenario: 'Download an invoice PDF from Drive and attach it to an email',
+        inputValues: { operation: 'download', fileId: '{{$json.id}}' },
+        expectedOutput: 'File content is returned. Map `{{$json.dataBase64}}` into an Email attachment or a Write Binary File node.',
+      },
+    },
+  },
+
+  google_calendar_trigger: {
+    default: {
+      description: 'Receive a Google Calendar push notification for a watched calendar, validate the saved channel ID/token, then incrementally sync changed events and start the workflow for accepted event_changed or event_cancelled items. Initial channel sync notifications are only handshakes and do not start runs.',
+      outputExample: {
+        eventId: 'abc123-2026-07-18T09:30:00.000Z',
+        eventType: 'event_changed',
+        source: 'google_calendar',
+        userId: 'organizer@example.com',
+        username: 'organizer@example.com',
+        text: 'Discuss renewal risks and next steps',
+        timestamp: '2026-07-18T09:30:00.000Z',
+        calendarId: 'primary',
+        eventIdRaw: 'abc123',
+        subject: 'Customer renewal review',
+        organizer: 'organizer@example.com',
+        start: '2026-07-20T14:00:00-04:00',
+        end: '2026-07-20T14:30:00-04:00',
+        attendees: ['ae@example.com', 'csm@example.com'],
+        htmlLink: 'https://www.google.com/calendar/event?eid=abc123',
+        raw: { id: 'abc123', status: 'confirmed', summary: 'Customer renewal review' },
+        trigger: 'google_calendar',
+        workflow_id: 'workflow_123',
+        node_id: 'calendar-trigger-1',
+        sessionId: 'gcal_workflow_123_abc123',
+        _googleCalendar: true,
+      },
+      outputDescription: 'eventId: normalized event ID. eventType: event_changed or event_cancelled. source: google_calendar. userId: organizer email when available. username: organizer display name or email. text: description text. timestamp: updated time. calendarId: watched calendar. eventIdRaw: raw Google event ID. subject: event title. organizer: organizer email. start/end: event dates or timestamps. attendees: attendee email list. htmlLink: event link. raw: original Google event object. trigger: google_calendar marker. workflow_id: workflow receiving the event. node_id: trigger node ID. sessionId: calendar trigger session ID. _googleCalendar: internal true marker.',
+      usageExample: {
+        scenario: 'Prepare a customer renewal brief whenever a matching calendar event is created or updated',
+        inputValues: { calendarId: 'primary', eventTypes: 'event_changed, event_cancelled', query: 'renewal' },
+        expectedOutput: 'The next node can use {{$json.subject}}, {{$json.start}}, {{$json.organizer}}, {{$json.attendees}}, {{$json.eventType}}, and {{$json.htmlLink}}.',
       },
     },
   },
@@ -591,8 +1030,8 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
   google_calendar: {
     list: {
       description: 'List events from a Google Calendar within a time range.',
-      outputExample: { items: [{ id: 'event1', summary: 'Team Standup', start: { dateTime: '2025-01-15T09:00:00Z' }, end: { dateTime: '2025-01-15T09:30:00Z' }, attendees: [{ email: 'alice@example.com' }] }], nextPageToken: null },
-      outputDescription: 'items: Array of calendar event objects. Each has id, summary, start, end, and attendees. nextPageToken: For paginating more events.',
+      outputExample: { items: [{ id: 'event1', summary: 'Team Standup', start: { dateTime: '2025-01-15T09:00:00Z' }, end: { dateTime: '2025-01-15T09:30:00Z' }, attendees: [{ email: 'alice@example.com' }] }] },
+      outputDescription: 'items: Array of raw Google Calendar event objects. Each has id, summary, start, end, and attendees. No separate count field — use items.length.',
       usageExample: {
         scenario: 'Get today\'s meetings and post them as a morning summary to Slack',
         inputValues: { calendarId: 'primary', timeMin: '{{$now}}T00:00:00Z', timeMax: '{{$now}}T23:59:59Z', maxResults: '20' },
@@ -600,67 +1039,90 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
       },
     },
     create: {
-      description: 'Create a new event on a Google Calendar.',
+      description: 'Create a new event on a Google Calendar. Start Time/End Time are converted automatically into the API\'s start/end objects.',
       outputExample: { id: 'newEvent789', summary: 'Product Demo', start: { dateTime: '2025-01-20T14:00:00Z' }, end: { dateTime: '2025-01-20T15:00:00Z' }, htmlLink: 'https://calendar.google.com/event?eid=...' },
-      outputDescription: 'id: The new calendar event ID. summary: Event title. start/end: Event timestamps. htmlLink: URL to view the event in Google Calendar.',
+      outputDescription: 'id: The new calendar event ID (not eventId). summary: Event title. start/end: Event timestamps. htmlLink: URL to view the event in Google Calendar. The raw event object is merged directly into $json, not nested.',
       usageExample: {
         scenario: 'Create a Google Calendar event when a Calendly booking is confirmed',
-        inputValues: { calendarId: 'primary', summary: '{{$json.eventType}} with {{$json.inviteeName}}', startDateTime: '{{$json.startTime}}', endDateTime: '{{$json.endTime}}', description: 'Booked via Calendly' },
-        expectedOutput: 'Event is created. Share `{{$json.htmlLink}}` as a calendar invite link.',
+        inputValues: { calendarId: 'primary', summary: '{{$json.eventType}} with {{$json.inviteeName}}', startTime: '{{$json.startTime}}', endTime: '{{$json.endTime}}', description: 'Booked via Calendly' },
+        expectedOutput: 'Event is created. Share `{{$json.htmlLink}}` as a calendar invite link, and use `{{$json.id}}` to update or cancel it later.',
       },
     },
     update: {
       description: 'Update an existing Google Calendar event.',
       outputExample: { id: 'event1', summary: 'Rescheduled: Team Standup', start: { dateTime: '2025-01-16T10:00:00Z' }, updated: '2025-01-15T12:00:00Z' },
-      outputDescription: 'id: The updated event ID. summary: Updated event title. updated: ISO timestamp of the last update.',
+      outputDescription: 'id: The updated event ID. summary: Updated event title. updated: ISO timestamp of the last update. Only the fields you filled in are changed; everything else stays the same.',
       usageExample: {
         scenario: 'Reschedule an event when a Typeform rescheduling request comes in',
-        inputValues: { calendarId: 'primary', eventId: '{{$json.eventId}}', summary: '{{$json.newTitle}}', startDateTime: '{{$json.newStartTime}}' },
+        inputValues: { calendarId: 'primary', eventId: '{{$json.id}}', summary: '{{$json.newTitle}}', startTime: '{{$json.newStartTime}}' },
         expectedOutput: 'Event is updated. `{{$json.updated}}` confirms the time of the change.',
       },
     },
   },
 
-  google_contacts: {
-    list: {
-      description: 'List contacts from Google Contacts.',
-      outputExample: { connections: [{ resourceName: 'people/c123', names: [{ displayName: 'Alice Smith' }], emailAddresses: [{ value: 'alice@example.com' }] }], totalItems: 1 },
-      outputDescription: 'connections: Array of contact objects. Each has resourceName, names, and emailAddresses.',
-      usageExample: { scenario: 'Sync Google Contacts with a CRM', inputValues: { pageSize: '100' }, expectedOutput: 'Returns contacts. Map `emailAddresses[0].value` to CRM fields.' },
+  google_tasks: {
+    read: {
+      description: 'Fetch every task in a list, or one specific task when Task Id is filled.',
+      outputExample: { operation: 'read', data: { items: [{ id: 'task1', title: 'Follow up with vendor', status: 'needsAction' }] } },
+      outputDescription: 'operation: echoes back "read". data.items: array of task objects when Task Id is empty. When Task Id is filled, data is a single task object instead.',
+      usageExample: { scenario: 'Pull open tasks into a morning team digest', inputValues: { operation: 'read', taskListId: '@default', taskId: '' }, expectedOutput: 'Loop over `{{$json.data.items}}` and map `{{$json.data.items[].title}}` into a digest message.' },
     },
     create: {
-      description: 'Create a new contact in Google Contacts.',
-      outputExample: { resourceName: 'people/newContact456', names: [{ displayName: 'Bob Jones' }], emailAddresses: [{ value: 'bob@example.com' }] },
-      outputDescription: 'resourceName: The new contact\'s resource name. names[0].displayName: Full name. emailAddresses[0].value: Primary email.',
-      usageExample: { scenario: 'Add form respondents as Google Contacts', inputValues: { givenName: '{{$json.firstName}}', familyName: '{{$json.lastName}}', email: '{{$json.email}}' }, expectedOutput: 'Contact created. Use `{{$json.resourceName}}` to look up later.' },
+      description: 'Add a new task to a task list, given a Title and optional Notes/Due Date.',
+      outputExample: { operation: 'create', data: { id: 'newTask789', title: 'Review proposal', status: 'needsAction' } },
+      outputDescription: 'operation: echoes back "create". data.id: the new task\'s ID, needed for later Update/Delete steps.',
+      usageExample: { scenario: 'Create a follow-up task after a sales call is logged', inputValues: { operation: 'create', title: 'Follow up with {{$json.customerName}}', notes: '{{$json.callSummary}}' }, expectedOutput: 'A new task appears. Save `{{$json.data.id}}` to mark it complete later.' },
     },
-    get: {
-      description: 'Get a specific Google Contact by resource name.',
-      outputExample: { resourceName: 'people/c123', names: [{ displayName: 'Alice Smith' }], emailAddresses: [{ value: 'alice@example.com' }], phoneNumbers: [{ value: '+14155551234' }] },
-      outputDescription: 'resourceName: Contact identifier. names: Name objects. emailAddresses / phoneNumbers: Contact info arrays.',
-      usageExample: { scenario: 'Retrieve contact details before sending a personalised email', inputValues: { resourceName: '{{$json.resourceName}}' }, expectedOutput: 'Returns full contact info including all email and phone fields.' },
+    update: {
+      description: 'Change a task\'s title, notes, due date, and/or completion status by Task Id.',
+      outputExample: { operation: 'update', data: { id: 'task1', status: 'completed', completed: '2026-02-25T09:00:00.000Z' } },
+      outputDescription: 'operation: echoes back "update". data.status/data.completed confirm completion state when Status is set to completed.',
+      usageExample: { scenario: 'Mark a task complete when its related order ships', inputValues: { operation: 'update', taskId: '{{$json.data.id}}', status: 'completed' }, expectedOutput: 'The task is checked off. Use `{{$json.data.completed}}` to confirm when.' },
+    },
+    delete: {
+      description: 'Permanently remove a task from a task list by Task Id.',
+      outputExample: { operation: 'delete', data: { deleted: true, taskId: 'task1' } },
+      outputDescription: 'operation: echoes back "delete". data.deleted: true once removed.',
+      usageExample: { scenario: 'Remove a task when its related ticket is cancelled', inputValues: { operation: 'delete', taskId: '{{$json.data.id}}' }, expectedOutput: 'The task is removed. Use `{{$json.data.deleted}}` to confirm.' },
+    },
+  },
+
+  google_contacts: {
+    create: {
+      description: 'Create a new contact in Google Contacts using Name, Email, and/or Phone.',
+      outputExample: { operation: 'create', data: { resourceName: 'people/newContact456', names: [{ displayName: 'Bob Jones' }], emailAddresses: [{ value: 'bob@example.com' }] } },
+      outputDescription: 'operation: echoes back "create". data.resourceName: The new contact\'s resource name/ID. data.names[0].displayName: Full name. data.emailAddresses[0].value: Primary email. All contact fields are nested under data, not at the top level.',
+      usageExample: { scenario: 'Add form respondents as Google Contacts', inputValues: { operation: 'create', name: '{{$json.fullName}}', email: '{{$json.email}}' }, expectedOutput: 'Contact created. Use `{{$json.data.resourceName}}` to look up or update it later.' },
+    },
+    update: {
+      description: 'Change the name, email, and/or phone of an existing contact identified by Contact ID.',
+      outputExample: { operation: 'update', data: { resourceName: 'people/c123', names: [{ displayName: 'Alice M. Smith' }], phoneNumbers: [{ value: '+14155551234' }] } },
+      outputDescription: 'operation: echoes back "update". data: the updated Google People API person resource, reflecting the new values.',
+      usageExample: { scenario: 'Update a contact\'s phone number after a CRM record changes', inputValues: { operation: 'update', contactId: '{{$json.contactId}}', phone: '{{$json.newPhone}}' }, expectedOutput: 'Contact updated. Use `{{$json.data.phoneNumbers}}` to confirm the new number.' },
+    },
+    delete: {
+      description: 'Permanently remove a contact from Google Contacts by Contact ID.',
+      outputExample: { operation: 'delete', data: { deleted: true, contactId: 'people/c123' } },
+      outputDescription: 'operation: echoes back "delete". data.deleted: true once removed. data.contactId: the identifier that was deleted.',
+      usageExample: { scenario: 'Remove a contact when someone unsubscribes', inputValues: { operation: 'delete', contactId: '{{$json.contactId}}' }, expectedOutput: 'Contact removed. Use `{{$json.data.deleted}}` to confirm.' },
+    },
+    read: {
+      description: 'List every contact (Contact ID empty) or fetch one specific contact (Contact ID filled). Shown as "List Contacts" in the operation dropdown.',
+      outputExample: { operation: 'read', data: { connections: [{ resourceName: 'people/c123', names: [{ displayName: 'Alice Smith' }], emailAddresses: [{ value: 'alice@example.com' }] }], totalItems: 1 } },
+      outputDescription: 'operation: echoes back "read". data.connections: array of contact objects when Contact Id is empty. Each has resourceName, names, and emailAddresses. When Contact Id is filled, data is a single contact object instead.',
+      usageExample: { scenario: 'Sync Google Contacts with a CRM', inputValues: { operation: 'read', contactId: '', pageSize: '100' }, expectedOutput: 'Returns contacts. Map `{{$json.data.connections[].emailAddresses[0].value}}` to CRM fields.' },
     },
   },
 
   google_bigquery: {
     query: {
-      description: 'Run a SQL query against a Google BigQuery dataset.',
-      outputExample: { rows: [{ user_id: '123', revenue: 450.00, sign_up_date: '2024-11-01' }], totalRows: '1250', jobId: 'bq-job-abc123', schema: { fields: [{ name: 'user_id', type: 'STRING' }] } },
-      outputDescription: 'rows: Array of result objects where keys are column names. totalRows: Total matching rows. jobId: BigQuery job ID for billing/tracking.',
+      description: 'Run a SQL query against Google BigQuery and return the raw jobs.query API response.',
+      outputExample: { operation: 'query', data: { jobComplete: true, totalRows: '1250', schema: { fields: [{ name: 'user_id', type: 'STRING' }, { name: 'revenue', type: 'FLOAT' }] }, rows: [{ f: [{ v: '123' }, { v: '450.00' }] }] } },
+      outputDescription: 'operation: echoes back "query". data.rows: BigQuery\'s raw {f: [{v}]} row format — not plain column-named objects. data.schema.fields: column names/types in the same order as each row\'s values; zip them together (e.g. in a JavaScript node) to get friendly objects. data.totalRows: total matching row count as a string.',
       usageExample: {
         scenario: 'Pull last 30 days of user revenue data for a monthly report',
         inputValues: { projectId: '{{$env.GCP_PROJECT_ID}}', query: 'SELECT user_id, SUM(amount) AS revenue FROM `myproject.analytics.orders` WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY) GROUP BY user_id ORDER BY revenue DESC LIMIT 1000' },
-        expectedOutput: 'Returns up to 1000 rows with revenue totals. Pass `{{$json.rows}}` to a Google Sheets append node to update a dashboard.',
-      },
-    },
-    insert: {
-      description: 'Insert rows into a BigQuery table using the streaming insert API.',
-      outputExample: { insertErrors: [], kind: 'bigquery#tableDataInsertAllResponse' },
-      outputDescription: 'insertErrors: Empty array means all rows were inserted successfully. Any errors here indicate row-level failures.',
-      usageExample: {
-        scenario: 'Stream event data from a webhook into a BigQuery events table',
-        inputValues: { projectId: '{{$env.GCP_PROJECT_ID}}', datasetId: 'analytics', tableId: 'events', rows: '[{"event_type": "{{$json.event}}", "user_id": "{{$json.userId}}", "timestamp": "{{$now}}"}]' },
-        expectedOutput: 'Rows are streamed to BigQuery. Empty `insertErrors` confirms success.',
+        expectedOutput: 'Returns up to 1000 rows. Zip `{{$json.data.schema.fields}}` with each `{{$json.data.rows[].f}}` in a JavaScript node, then pass the resulting objects to a Google Sheets append node.',
       },
     },
   },
@@ -988,36 +1450,98 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
 
   if_else: {
     default: {
-      description: 'Branch the workflow: if the condition is true, the "true" path runs; otherwise the "false" path runs.',
-      outputExample: { condition: true, branch: 'true', value: 'premium', expression: '{{$json.plan}} === "premium"' },
-      outputDescription: 'condition: The evaluated boolean result. branch: "true" or "false" indicating which path was taken. value: The value that was evaluated.',
+      description: 'Make a yes-or-no workflow decision from previous-step data, then route matching work to TRUE and non-matching work to FALSE.',
+      outputExample: {
+        orderId: 'ORD-1042',
+        customerEmail: 'buyer@example.com',
+        orderTotal: 725,
+        status: 'paid',
+        condition: true,
+        condition_result: true,
+        conditionResult: true,
+        result: true,
+        branch: 'true',
+      },
+      outputDescription: 'The node preserves incoming business fields such as orderId, customerEmail, orderTotal, and status, then adds routing fields such as condition, condition_result, conditionResult, result, and branch. Downstream nodes can keep using the original {{$json.customerEmail}} and {{$json.orderTotal}} values.',
       usageExample: {
-        scenario: 'Route premium users to a VIP welcome email and free users to a trial email',
-        inputValues: { condition: '{{$json.plan === "premium"}}' },
-        expectedOutput: 'If `condition` is true, the "true" output path runs (connect a Gmail Send node). Otherwise the "false" path runs (connect a different email node).',
+        scenario: 'Route paid orders over $500 to finance review and all other orders to standard fulfillment',
+        inputValues: {
+          conditions: '[{"field":"$json.orderTotal","operator":"greater_than_or_equal","value":500},{"field":"$json.status","operator":"equals","value":"paid"}]',
+          combineOperation: 'AND',
+        },
+        expectedOutput: 'A paid order with {{$json.orderTotal}} of 725 leaves through TRUE; smaller or unpaid orders leave through FALSE. Both branches can still use {{$json.customerEmail}}.',
       },
     },
   },
 
   switch: {
     default: {
-      description: 'Branch the workflow into multiple paths based on a value match.',
-      outputExample: { matched: 'billing', value: 'billing', branch: 1 },
-      outputDescription: 'matched: The case that was matched. value: The actual value evaluated. branch: The index of the matched case (1-based).',
+      description: 'Branch the workflow into multiple named paths by matching one incoming value against configured case values.',
+      outputExample: {
+        ticketId: 'TCK-2048',
+        customerEmail: 'customer@example.com',
+        category: 'billing',
+        priority: 'normal',
+        __routing: {
+          matchedCase: 'billing',
+          matchedLabel: 'Billing',
+          expression: '{{$json.category}}',
+          expressionValue: 'billing',
+        },
+      },
+      outputDescription: 'The node preserves incoming business fields such as ticketId, customerEmail, category, and priority, then stores routing metadata under __routing with matchedCase, matchedLabel, expression, and expressionValue. Runtime metadata reports branch and caseMatched.',
       usageExample: {
-        scenario: 'Route a support ticket to the right team based on the category',
-        inputValues: { value: '{{$json.category}}', cases: '["billing", "technical", "general"]' },
-        expectedOutput: 'Connect different downstream nodes to the "billing", "technical", and "general" output ports.',
+        scenario: 'Route support tickets to Billing, Technical Support, or Customer Care based on category',
+        inputValues: {
+          expression: '{{$json.category}}',
+          cases: '[{"value":"billing","label":"Billing"},{"value":"technical","label":"Technical"},{"value":"general","label":"General"}]',
+        },
+        expectedOutput: 'A ticket where {{$json.category}} is billing leaves through the billing case output; downstream nodes can still use {{$json.customerEmail}} and {{$json.ticketId}}.',
+      },
+    },
+  },
+
+  set: {
+    default: {
+      description: 'Add clean, predictable fields to the current item or overwrite existing fields so later workflow steps can map data without guessing the original source names.',
+      outputExample: {
+        leadId: 'lead_1042',
+        firstName: 'Asha',
+        lastName: 'Rao',
+        email: 'asha.rao@example.com',
+        customerEmail: 'asha.rao@example.com',
+        fullName: 'Asha Rao',
+        leadSource: 'Website demo request',
+        lifecycleStage: 'new_lead',
+        readyForSales: true,
+      },
+      outputDescription: 'The output keeps incoming values and applies the configured fields on top. Existing fields remain available unless a configured key overwrites them. New fields such as customerEmail, fullName, leadSource, lifecycleStage, and readyForSales can be used by the next node with {{$json.customerEmail}}, {{$json.fullName}}, {{$json.leadSource}}, {{$json.lifecycleStage}}, and {{$json.readyForSales}}.',
+      usageExample: {
+        scenario: 'Normalize a website demo request before creating a CRM lead and sending a sales alert',
+        inputValues: {
+          fields: '{"customerEmail":"{{$json.email}}","fullName":"{{$json.firstName}} {{$json.lastName}}","leadSource":"Website demo request","lifecycleStage":"new_lead","readyForSales":true}',
+        },
+        expectedOutput: 'The next node can use {{$json.customerEmail}}, {{$json.fullName}}, {{$json.leadSource}}, {{$json.lifecycleStage}}, and {{$json.readyForSales}} instead of depending on the original form labels.',
       },
     },
   },
 
   merge: {
     default: {
-      description: 'Merge data from multiple input branches into a single output.',
-      outputExample: { merged: [{ id: 1, name: 'Alice' }, { id: 2, name: 'Bob' }], inputCount: 2 },
-      outputDescription: 'merged: Combined array of all items from all input branches. inputCount: Number of inputs that were merged.',
-      usageExample: { scenario: 'Combine results from two parallel API calls before writing to a database', inputValues: { mode: 'combine' }, expectedOutput: 'All items from both branches are available in `{{$json.merged}}`.' },
+      description: 'Rejoin multiple workflow branches and combine their data into one output.',
+      outputExample: {
+        ticketId: 'TCK-2048',
+        customer: { email: 'customer@example.com', tier: 'VIP' },
+        approval: { status: 'approved', reviewer: 'finance@example.com' },
+        mergeMode: 'deep_merge',
+        sourceCount: 2,
+      },
+      outputDescription: 'The output is one combined payload. overwrite combines object fields with later branch values winning, append collects branch outputs into items, and deep_merge recursively combines nested objects. Runtime metadata can include mergeMode and sourceCount.',
+      usageExample: {
+        scenario: 'Rejoin approval and customer-enrichment branches before sending one summary email',
+        inputValues: { mode: 'deep_merge' },
+        expectedOutput: 'The next node can use {{$json.customer.email}} and {{$json.approval.status}} from the merged payload.',
+      },
     },
   },
 
@@ -1086,28 +1610,68 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
 
   filter: {
     default: {
-      description: 'Filter an array of items, keeping only those that match a condition.',
-      outputExample: { items: [{ id: 2, status: 'active', name: 'Bob' }] },
-      outputDescription: 'items: The incoming `items` array replaced with only the entries where condition returned true. Other input fields are preserved.',
-      usageExample: { scenario: 'Keep only active users from a database query result', inputValues: { condition: 'item.status === "active"' }, expectedOutput: 'Only items where status is "active" remain in `{{$json.items}}`.' },
+      description: 'Keep only the records in an array that match a rule, then pass the smaller list to the next step.',
+      outputExample: {
+        batchId: 'weekly-active-customers',
+        items: [
+          { id: 'cus_1001', name: 'Asha Rao', email: 'asha@example.com', status: 'active' },
+          { id: 'cus_1003', name: 'Miguel Torres', email: 'miguel@example.com', status: 'active' },
+        ],
+        sourceCount: 4,
+      },
+      outputDescription: 'items: The incoming list replaced with only records where the condition returned true. Other fields such as batchId and sourceCount are preserved. If no array is found, the input may pass through unchanged; if filtering cannot run, _error explains the failure.',
+      usageExample: {
+        scenario: 'Keep only active contacts with real email addresses before a renewal campaign',
+        inputValues: {
+          array: '{{$json.contacts}}',
+          condition: 'item.status === "active" && item.email && !item.email.includes("test")',
+        },
+        expectedOutput: 'The next node receives {{$json.items}} containing only matching contacts, while {{$json.batchId}} remains available.',
+      },
     },
   },
 
   loop: {
     default: {
-      description: 'Loop over an array of items and run the connected branch for each one.',
-      outputExample: { processedCount: 3, results: [{ id: 1, sent: true }, { id: 2, sent: true }, { id: 3, sent: true }] },
-      outputDescription: 'processedCount: How many items were processed. results: Array of outputs from each iteration.',
-      usageExample: { scenario: 'Send a personalised email to each user in a list', inputValues: { items: '{{$json.users}}' }, expectedOutput: 'The connected branch runs once per user. Each iteration receives `{{$item}}` as the current user.' },
+      description: 'Expose an upstream array as items, cap it at maxIterations, and add loop metadata. The current DAG runtime does not execute the downstream branch once per item.',
+      outputExample: {
+        reportDate: '2026-07-18',
+        items: [
+          { ticketId: 'SUP-1001', customerEmail: 'ana@example.com', priority: 'high' },
+          { ticketId: 'SUP-1002', customerEmail: 'lee@example.com', priority: 'medium' },
+        ],
+        loop: { maxIterations: 25, iterations: 2, truncated: false },
+        _warning: 'Loop: iteration over downstream subgraph is not supported in DAG runtime yet; use function_item for per-item transforms.',
+      },
+      outputDescription: 'items: The resolved array after applying maxIterations. loop.maxIterations: The configured cap. loop.iterations: Number of items exposed. loop.truncated: true when the original array was longer than the cap. _warning explains that DAG runtime exposes items and metadata but does not run the next branch once per item. Other incoming fields such as reportDate remain available.',
+      usageExample: {
+        scenario: 'Cap overdue support tickets before sending a review summary to a manager',
+        inputValues: { array: '{{$json.overdueTickets}}', maxIterations: '25' },
+        expectedOutput: 'The next node can use {{$json.items}}, {{$json.loop.iterations}}, {{$json.loop.truncated}}, and {{$json.reportDate}} to build a summary or decide whether more tickets need another run.',
+      },
     },
   },
 
   split_in_batches: {
     default: {
-      description: 'Split a large array into smaller batches and process each batch separately.',
-      outputExample: { batch: [{ id: 1 }, { id: 2 }, { id: 3 }], batchIndex: 0, totalBatches: 4, totalItems: 12, isLastBatch: false },
-      outputDescription: 'batch: The items in this batch. batchIndex: Zero-based batch number. totalBatches: Total number of batches. isLastBatch: true on the final batch.',
-      usageExample: { scenario: 'Process 1000 API records in batches of 100 to avoid rate limits', inputValues: { items: '{{$json.records}}', batchSize: '100' }, expectedOutput: 'Each batch runs through the connected branch. Use `{{$json.isLastBatch}}` to trigger a completion action.' },
+      description: 'Divide an incoming array into smaller batch groups and expose batch metadata for downstream steps. The current DAG runtime does not automatically run the next branch once per batch.',
+      outputExample: {
+        syncDate: '2026-07-18',
+        batches: [
+          [{ contactId: 'con_1001', customerEmail: 'ana@example.com' }, { contactId: 'con_1002', customerEmail: 'lee@example.com' }],
+          [{ contactId: 'con_1003', customerEmail: 'maya@example.com' }],
+        ],
+        batchSize: 2,
+        totalBatches: 2,
+        items: [{ contactId: 'con_1001', customerEmail: 'ana@example.com' }, { contactId: 'con_1002', customerEmail: 'lee@example.com' }],
+        _warning: 'split_in_batches exposes batches; to iterate batches, use agent/loop mode (not yet enabled in DAG runtime).',
+      },
+      outputDescription: 'batches: All created groups as an array of arrays. batchSize: The group size used by runtime. totalBatches: Number of groups created. items: The first batch exposed for the next node. _warning explains that Split In Batches exposes batch data but does not execute the downstream branch once per batch in the current DAG runtime. Other incoming fields such as syncDate remain available.',
+      usageExample: {
+        scenario: 'Split new CRM contacts from a nightly export into smaller groups before a controlled sync',
+        inputValues: { array: '{{$json.contacts}}', batchSize: '100' },
+        expectedOutput: 'The next node can use {{$json.items}} for the first exposed batch, {{$json.batches}} for all groups, {{$json.totalBatches}} for logging, and {{$json.syncDate}} for audit notes.',
+      },
     },
   },
 
@@ -1124,13 +1688,24 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
 
   javascript: {
     default: {
-      description: 'Execute sandboxed JavaScript code to transform data or perform calculations.',
-      outputExample: { totalRevenue: 12450, averageOrderValue: 207.5, orderCount: 60 },
-      outputDescription: 'The node output is whatever the script returns. Errors are returned in _error.',
+      description: 'Run sandboxed JavaScript once against the current workflow data and return the script result directly.',
+      outputExample: {
+        orderId: 'ord_1042',
+        customerEmail: 'asha.rao@example.com',
+        orderTotal: 6400,
+        riskScore: 90,
+        eligibleForReview: true,
+        processedAt: '2026-07-18T09:30:00.000Z',
+      },
+      outputDescription: 'The output, data, and result are whatever the script returns. Returned fields such as customerEmail, riskScore, eligibleForReview, and processedAt become the next node\'s {{$json}} values. Missing code, disabled execution, thrown errors, and timeouts can return _error.',
       usageExample: {
-        scenario: 'Calculate revenue statistics from an array of orders',
-        inputValues: { code: 'const orders = $json.orders;\nconst total = orders.reduce((sum, o) => sum + o.amount, 0);\nreturn { totalRevenue: total, averageOrderValue: total / orders.length, orderCount: orders.length };' },
-        expectedOutput: '`{{$json.totalRevenue}}` holds the computed total. Use in downstream email or Slack notifications.',
+        scenario: 'Score large checkout orders before routing them to finance review or normal fulfillment',
+        inputValues: {
+          code: 'const total = Number($json.orderTotal || 0);\nreturn { ...$json, riskScore: total > 5000 ? 90 : 20, eligibleForReview: total > 5000, processedAt: "2026-07-18T09:30:00.000Z" };',
+          timeout: '10000',
+          outputSchema: '{"type":"object"}',
+        },
+        expectedOutput: 'Use {{$json.riskScore}} and {{$json.eligibleForReview}} in an If/Else node, and {{$json.customerEmail}} in downstream email, Slack, or CRM nodes.',
       },
     },
   },
@@ -1209,10 +1784,23 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
 
   edit_fields: {
     default: {
-      description: 'Add or overwrite fields on the current object.',
-      outputExample: { id: 1, firstName: 'Alice', lastName: 'Smith', fullName: 'Alice Smith' },
-      outputDescription: 'The output is the original object plus each configured field value.',
-      usageExample: { scenario: 'Add a normalized fullName field before writing a record', inputValues: { fields: '{"fullName":"{{$json.firstName}} {{$json.lastName}}"}' }, expectedOutput: 'The object passes downstream with `{{$json.fullName}}` set.' },
+      description: 'Add, overwrite, or normalize fields on the current item using simple key-value mappings.',
+      outputExample: {
+        ticketId: 'SUP-1042',
+        email: 'maya@example.com',
+        fname: 'Maya',
+        lname: 'Chen',
+        customerEmail: 'maya@example.com',
+        fullName: 'Maya Chen',
+        priorityLabel: 'High',
+        needsManagerReview: true,
+      },
+      outputDescription: 'The output is the incoming item plus each configured field value. Existing values remain available unless a configured field overwrites the same key. New fields such as customerEmail, fullName, priorityLabel, and needsManagerReview can be used by the next node. If fields is not an object, runtime returns _error.',
+      usageExample: {
+        scenario: 'Normalize support webhook data before creating a helpdesk ticket and alerting a manager',
+        inputValues: { fields: '{"customerEmail":"{{$json.email}}","fullName":"{{$json.fname}} {{$json.lname}}","priorityLabel":"High","needsManagerReview":true}' },
+        expectedOutput: 'The next node can use {{$json.customerEmail}}, {{$json.fullName}}, {{$json.priorityLabel}}, and {{$json.needsManagerReview}} while {{$json.ticketId}} remains available.',
+      },
     },
   },
 
@@ -1292,13 +1880,28 @@ export const nodeContentOverrides: Record<string, Record<string, OperationOverri
 
   http_request: {
     default: {
-      description: 'Make an HTTP request (GET, POST, PUT, PATCH, DELETE) to any URL.',
-      outputExample: { status: 200, body: { id: 101, title: 'Hello World', completed: false }, headers: { 'content-type': 'application/json; charset=utf-8' } },
-      outputDescription: 'status: HTTP response code. body: Parsed response body (object if JSON, string otherwise). headers: Response headers.',
+      description: 'Call an external API or webhook using GET, POST, PUT, PATCH, or DELETE, then pass the response status, headers, body, data mirror, final URL, and acknowledgement metadata to the next node.',
+      outputExample: {
+        status: 200,
+        statusText: 'OK',
+        headers: { 'content-type': 'application/json; charset=utf-8', 'x-request-id': 'req_789' },
+        body: { customerId: 'cus_1042', customerEmail: 'asha.rao@example.com', invoiceStatus: 'paid', balanceDue: 0 },
+        data: { customerId: 'cus_1042', customerEmail: 'asha.rao@example.com', invoiceStatus: 'paid', balanceDue: 0 },
+        url: 'https://api.billing.example.com/v1/customers/cus_1042/invoices?limit=1',
+        acknowledgementStatus: 'acknowledged',
+      },
+      outputDescription: 'status: HTTP response code. statusText: server reason text. headers: response headers. body: parsed JSON response or response text. data: same response body for mapping convenience. url: final URL after Query String Params are applied. acknowledgementStatus: runtime response-read metadata. Network failures and timeouts can return _error with url, method, and errorDetails.',
       usageExample: {
-        scenario: 'Fetch user details from a REST API to enrich webhook data',
-        inputValues: { url: 'https://api.example.com/users/{{$json.userId}}', method: 'GET', headers: '{"Authorization": "Bearer {{$env.API_TOKEN}}", "Accept": "application/json"}' },
-        expectedOutput: 'API response in `{{$json.body}}`. Access fields via `{{$json.body.email}}`.',
+        scenario: 'Fetch the latest billing status for a customer after a CRM trigger provides the customer ID',
+        inputValues: {
+          url: 'https://api.billing.example.com/v1/customers/{{$json.customerId}}/invoices',
+          method: 'GET',
+          headers: '{"Accept":"application/json","X-Request-Source":"ctrlchecks-workflow"}',
+          body: '',
+          qs: '{"limit":1,"status":"latest"}',
+          timeout: '30000',
+        },
+        expectedOutput: 'Use {{$json.status}} to branch on the HTTP result, {{$json.body.invoiceStatus}} or {{$json.data.customerEmail}} for response fields, and {{$json.url}} for audit logs.',
       },
     },
   },

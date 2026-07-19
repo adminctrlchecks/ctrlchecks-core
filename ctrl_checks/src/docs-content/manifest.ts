@@ -11,21 +11,21 @@ export const nodeDocManifest = [
     "slug": "schedule",
     "displayName": "Schedule Trigger",
     "category": "Triggers",
-    "description": "Executes workflow on a time-based schedule using cron expressions Use this node when a workflow needs schedule trigger behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Start a workflow automatically at a planned time. Use Schedule Trigger for daily reports, recurring reminders, weekly exports, and other work that should run without someone pressing Run.",
     "logoUrl": "/icons/nodes/schedule.svg"
   },
   {
     "slug": "webhook",
     "displayName": "Webhook Trigger",
     "category": "Triggers",
-    "description": "Executes workflow when HTTP request is received Use this node when a workflow needs webhook trigger behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Start a workflow when a form, app, website, payment system, or internal service sends data to a generated CtrlChecks webhook URL.",
     "logoUrl": "/icons/nodes/webhook.svg"
   },
   {
     "slug": "manual_trigger",
     "displayName": "Manual Trigger",
     "category": "Triggers",
-    "description": "Workflow executes when user manually triggers it Use this node when a workflow needs manual trigger behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Start a workflow only when a person clicks Run. Use Manual Trigger for testing, approvals, one-off operations, and internal workflows that should not run automatically.",
     "logoUrl": "/icons/nodes/manual_trigger.svg"
   },
   {
@@ -39,21 +39,21 @@ export const nodeDocManifest = [
     "slug": "chat_trigger",
     "displayName": "Chat Trigger",
     "category": "Triggers",
-    "description": "Trigger workflow from chat/AI interactions Use this node when a workflow needs chat trigger behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Start a workflow from the CtrlChecks chat interface. Use Chat Trigger for chatbots, AI assistants, support intake, and guided request flows that should run once for each accepted message.",
     "logoUrl": "/icons/nodes/chat_trigger.svg"
   },
   {
     "slug": "form",
     "displayName": "Form Trigger",
     "category": "Triggers",
-    "description": "Trigger workflow when user submits a form Use this node when a workflow needs form trigger behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Build a public CtrlChecks form and start the workflow when someone submits structured answers, files, or intake details.",
     "logoUrl": "/icons/nodes/form.svg"
   },
   {
     "slug": "http_request",
     "displayName": "HTTP Request",
-    "category": "Utility",
-    "description": "Makes HTTP requests to external APIs or services Use this node when a workflow needs http request behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "HTTP & API",
+    "description": "Call an external API or webhook with method, headers, query parameters, optional body data, and timeout control.",
     "logoUrl": "/icons/nodes/http_request.svg"
   },
   {
@@ -78,25 +78,18 @@ export const nodeDocManifest = [
     "logoUrl": "/icons/nodes/supabase.svg"
   },
   {
-    "slug": "database_read",
-    "displayName": "Database Read",
-    "category": "Data",
-    "description": "Read data from database using SQL queries Use this node when a workflow needs database read behavior with schema-driven inputs from the CtrlChecks node registry.",
-    "logoUrl": "/icons/nodes/database_read.svg"
-  },
-  {
-    "slug": "database_write",
-    "displayName": "Database Write",
-    "category": "Data",
-    "description": "Execute SQL queries on database (INSERT, UPDATE, DELETE) Use this node when a workflow needs database write behavior with schema-driven inputs from the CtrlChecks node registry.",
-    "logoUrl": "/icons/nodes/database_write.svg"
-  },
-  {
     "slug": "google_sheets",
     "displayName": "Google Sheets",
     "category": "Data",
     "description": "Read, write, append, or update data in Google Sheets Use this node when a workflow needs google sheets behavior with schema-driven inputs from the CtrlChecks node registry.",
     "logoUrl": "/icons/nodes/google_sheets.svg"
+  },
+  {
+    "slug": "google_sheets_trigger",
+    "displayName": "Google Sheets Trigger",
+    "category": "Triggers",
+    "description": "Poll a Google Sheet about every two minutes, compare rows against the activation baseline, and start workflows from accepted row_added or row_updated events.",
+    "logoUrl": "/integrations-logos/Google-Sheets.svg"
   },
   {
     "slug": "google_doc",
@@ -117,6 +110,13 @@ export const nodeDocManifest = [
     "displayName": "Outlook",
     "category": "Communication",
     "description": "Send emails via Microsoft Outlook using Microsoft Graph OAuth. Use this node when a workflow needs Outlook email sending with a Microsoft Connection.",
+    "logoUrl": "/integrations-logos/Outlook.svg"
+  },
+  {
+    "slug": "outlook_trigger",
+    "displayName": "Outlook Trigger",
+    "category": "Triggers",
+    "description": "Start workflows from new Outlook email or calendar events via Microsoft Graph change notifications.",
     "logoUrl": "/integrations-logos/Outlook.svg"
   },
   {
@@ -158,7 +158,7 @@ export const nodeDocManifest = [
     "slug": "javascript",
     "displayName": "JavaScript",
     "category": "Data",
-    "description": "Execute sandboxed JavaScript to transform workflow data.",
+    "description": "Run sandboxed JavaScript against incoming workflow data and return the transformed value for downstream steps.",
     "logoUrl": "/icons/nodes/javascript.svg"
   },
   {
@@ -193,21 +193,21 @@ export const nodeDocManifest = [
     "slug": "if_else",
     "displayName": "If/Else",
     "category": "Logic",
-    "description": "Route execution to the true or false branch by evaluating one or more conditions.",
+    "description": "Make a yes-or-no workflow decision from previous-step data and route matching work to TRUE or FALSE.",
     "logoUrl": "/icons/nodes/if_else.svg"
   },
   {
     "slug": "switch",
     "displayName": "Switch",
     "category": "Logic",
-    "description": "Multi-path conditional logic based on value matching Use this node when a workflow needs switch behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Route workflow runs into several named paths by matching one incoming value against case values.",
     "logoUrl": "/icons/nodes/switch.svg"
   },
   {
     "slug": "merge",
     "displayName": "Merge",
     "category": "Logic",
-    "description": "Combine multiple incoming branches into one output.",
+    "description": "Rejoin multiple workflow paths and combine their data into one output for the next step.",
     "logoUrl": "/icons/nodes/merge.svg"
   },
   {
@@ -317,30 +317,44 @@ export const nodeDocManifest = [
   },
   {
     "slug": "slack_message",
-    "displayName": "Slack",
+    "displayName": "Slack Message",
     "category": "Communication",
-    "description": "Send messages to Slack channels or users Use this node when a workflow needs slack behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Send Slack bot messages to channels, direct messages, or threads through a saved Slack OAuth2 connection, with optional Block Kit layout and threaded replies.",
     "logoUrl": "/icons/nodes/slack_message.svg"
   },
   {
+    "slug": "slack_trigger",
+    "displayName": "Slack Trigger",
+    "category": "Triggers",
+    "description": "Start workflows from real-time Slack app mentions, messages, slash commands, and interaction callbacks.",
+    "logoUrl": "/integrations-logos/Slack.svg"
+  },
+  {
     "slug": "email",
-    "displayName": "Email",
+    "displayName": "Send Email (SMTP)",
     "category": "Communication",
-    "description": "Send emails via SMTP Use this node when a workflow needs email behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Send plain-text or HTML email through a saved SMTP Account connection.",
     "logoUrl": "/icons/nodes/email.svg"
   },
   {
     "slug": "log_output",
     "displayName": "Log Output",
     "category": "Utility",
-    "description": "Log data to console or file Use this node when a workflow needs log output behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Write a labeled checkpoint message to the workflow execution log for debugging, monitoring, and audit trails. This is always a terminal node — it cannot have an outgoing connection to any other node.",
     "logoUrl": "/icons/nodes/log_output.svg"
   },
   {
     "slug": "telegram",
     "displayName": "Telegram",
     "category": "Communication",
-    "description": "Send messages to Telegram chats, groups, or channels using a bot connection. Use this node when a workflow needs telegram behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Send Telegram text messages, media URLs, and message edits through a saved Telegram Bot Token connection.",
+    "logoUrl": "/icons/nodes/telegram.svg"
+  },
+  {
+    "slug": "telegram_trigger",
+    "displayName": "Telegram Trigger",
+    "category": "Triggers",
+    "description": "Start a workflow in real time when your Telegram bot receives a message or supported update.",
     "logoUrl": "/icons/nodes/telegram.svg"
   },
   {
@@ -393,6 +407,34 @@ export const nodeDocManifest = [
     "logoUrl": "/icons/nodes/notion.svg"
   },
   {
+    "slug": "linear",
+    "displayName": "Linear",
+    "category": "Productivity",
+    "description": "Create, update, fetch, and list Linear issues and teams.",
+    "logoUrl": "/icons/nodes/linear.svg"
+  },
+  {
+    "slug": "linear_trigger",
+    "displayName": "Linear Trigger",
+    "category": "Triggers",
+    "description": "Start a workflow from signed Linear webhook events for issues, comments, projects, cycles, labels, reactions, documents, initiatives, customers, and users.",
+    "logoUrl": "/icons/nodes/linear.svg"
+  },
+  {
+    "slug": "trello",
+    "displayName": "Trello",
+    "category": "Productivity",
+    "description": "Manage Trello boards, lists, cards, labels, movement, and checklists.",
+    "logoUrl": "/icons/nodes/trello.svg"
+  },
+  {
+    "slug": "trello_trigger",
+    "displayName": "Trello Trigger",
+    "category": "Triggers",
+    "description": "Start a workflow from signed Trello webhook events for cards, lists, comments, members, and checklists.",
+    "logoUrl": "/icons/nodes/trello.svg"
+  },
+  {
     "slug": "zoho_crm",
     "displayName": "Zoho CRM",
     "category": "Data",
@@ -428,10 +470,17 @@ export const nodeDocManifest = [
     "logoUrl": "/integrations-logos/Discord.svg"
   },
   {
+    "slug": "discord_trigger",
+    "displayName": "Discord Trigger",
+    "category": "Triggers",
+    "description": "Start workflows from Discord slash commands, interactions, modal submissions, message-like events, and supported Discord Webhook Events with signature validation and filtering guidance.",
+    "logoUrl": "/integrations-logos/Discord.svg"
+  },
+  {
     "slug": "zoom_video",
     "displayName": "Zoom Video",
     "category": "Communication",
-    "description": "Create and manage Zoom meetings using a Zoom OAuth connection. Use this node to create, list, get, update, or delete Zoom meetings with schema-driven inputs.",
+    "description": "Create, list, read, update, and delete Zoom meetings with a saved Zoom OAuth2 connection, including meeting ID, schedule, output, and permission guidance.",
     "logoUrl": "/icons/nodes/zoom_video.svg"
   },
   {
@@ -452,35 +501,35 @@ export const nodeDocManifest = [
     "slug": "edit_fields",
     "displayName": "Edit Fields",
     "category": "Data",
-    "description": "Add or overwrite fields on the current data object.",
+    "description": "Add, overwrite, or normalize fields on the current item using simple key-value mappings.",
     "logoUrl": "/icons/nodes/edit_fields.svg"
   },
   {
     "slug": "error_trigger",
     "displayName": "Error Trigger",
     "category": "Triggers",
-    "description": "Trigger workflow when errors occur Use this node when a workflow needs error trigger behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Start an error-handling path when another node in the same workflow fails. Use Error Trigger for failure logs, operations alerts, incident tickets, and recovery workflows.",
     "logoUrl": "/icons/nodes/error_trigger.svg"
   },
   {
     "slug": "workflow_trigger",
     "displayName": "Workflow Trigger",
     "category": "Triggers",
-    "description": "Trigger workflow from another workflow Use this node when a workflow needs workflow trigger behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Start this reusable child workflow when an allowed parent workflow calls it with an Execute Workflow node.",
     "logoUrl": "/icons/nodes/workflow_trigger.svg"
   },
   {
     "slug": "filter",
     "displayName": "Filter",
     "category": "Logic",
-    "description": "Filter array items by condition Use this node when a workflow needs filter behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Keep only records in a list that match a rule, then pass the smaller list to the next step.",
     "logoUrl": "/icons/nodes/filter.svg"
   },
   {
     "slug": "loop",
     "displayName": "Loop",
     "category": "Logic",
-    "description": "Expose an array downstream with max-iteration metadata.",
+    "description": "Expose an array downstream with max-iteration metadata; current DAG runtime does not run the next branch once per item.",
     "logoUrl": "/icons/nodes/loop.svg"
   },
   {
@@ -494,14 +543,14 @@ export const nodeDocManifest = [
     "slug": "set",
     "displayName": "Set",
     "category": "Data",
-    "description": "Set or override fields on the current workflow item.",
+    "description": "Add or overwrite fields on the current workflow item so later steps can use predictable data names.",
     "logoUrl": "/icons/nodes/set.svg"
   },
   {
     "slug": "split_in_batches",
     "displayName": "Split In Batches",
     "category": "Logic",
-    "description": "Split array into batches for processing Use this node when a workflow needs split in batches behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Divide an incoming array into smaller batch groups and expose batch metadata for downstream steps.",
     "logoUrl": "/icons/nodes/split_in_batches.svg"
   },
   {
@@ -659,11 +708,25 @@ export const nodeDocManifest = [
     "logoUrl": "/icons/nodes/google_drive.svg"
   },
   {
+    "slug": "google_drive_trigger",
+    "displayName": "Google Drive Trigger",
+    "category": "Triggers",
+    "description": "Register a Google Drive push notification channel, sync changed file metadata from the Drive changes feed, and start workflows from accepted file_changed or file_deleted updates.",
+    "logoUrl": "/integrations-logos/Google-Drive.svg"
+  },
+  {
     "slug": "google_calendar",
     "displayName": "Google Calendar",
     "category": "Data",
     "description": "Create, read, update calendar events Use this node when a workflow needs google calendar behavior with schema-driven inputs from the CtrlChecks node registry.",
     "logoUrl": "/icons/nodes/google_calendar.svg"
+  },
+  {
+    "slug": "google_calendar_trigger",
+    "displayName": "Google Calendar Trigger",
+    "category": "Triggers",
+    "description": "Register a Google Calendar push notification channel, incrementally sync changed events, and start workflows from accepted event_changed or event_cancelled updates.",
+    "logoUrl": "/integrations-logos/Google-Calender.svg"
   },
   {
     "slug": "google_contacts",
@@ -704,21 +767,35 @@ export const nodeDocManifest = [
     "slug": "microsoft_teams",
     "displayName": "Microsoft Teams",
     "category": "Communication",
-    "description": "Send messages to Microsoft Teams through an incoming webhook URL.",
+    "description": "Send Microsoft Teams channel notifications through an Incoming Webhook or reply to Microsoft Teams Trigger conversations through Bot Framework.",
     "logoUrl": "/integrations-logos/Microsoft-Teams.svg"
+  },
+  {
+    "slug": "microsoft_teams_trigger",
+    "displayName": "Microsoft Teams Trigger",
+    "category": "Triggers",
+    "description": "Start workflows from Microsoft Teams bot messages and activities.",
+    "logoUrl": "/integrations-logos/Microsoft-Teams.svg"
+  },
+  {
+    "slug": "gmail_trigger",
+    "displayName": "Gmail Trigger",
+    "category": "Triggers",
+    "description": "Start workflows from watched Gmail mailbox changes delivered through Google Cloud Pub/Sub push notifications.",
+    "logoUrl": "/integrations-logos/Gmail.svg"
   },
   {
     "slug": "whatsapp_cloud",
     "displayName": "WhatsApp Cloud (Deprecated)",
     "category": "Communication",
-    "description": "Deprecated — use the WhatsApp node instead. Kept for backward compatibility with existing workflows.",
+    "description": "Deprecated — sends a plain WhatsApp text message. Kept only so existing saved workflows that already reference this node type keep working; do not add this node to new workflows. Use the WhatsApp node instead.",
     "logoUrl": "/icons/nodes/whatsapp_cloud.svg"
   },
   {
     "slug": "twilio",
     "displayName": "Twilio",
     "category": "Communication",
-    "description": "Send SMS messages via a Twilio account connection. Use this node when a workflow needs twilio behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Send an SMS or MMS text message through Twilio using a saved Twilio Account Credentials connection (Account SID + Auth Token).",
     "logoUrl": "/icons/nodes/twilio.svg"
   },
   {
@@ -732,14 +809,14 @@ export const nodeDocManifest = [
     "slug": "sendgrid",
     "displayName": "SendGrid",
     "category": "Communication",
-    "description": "Send transactional emails using the SendGrid API. Use this node when a workflow needs sendgrid behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Send a one-off transactional email through SendGrid's Mail Send API using a saved API Key connection. This node supports only From/To/Subject/Text/HTML — SendGrid features like CC/BCC, Reply-To, attachments, categories, and Dynamic Templates are not implemented here.",
     "logoUrl": "/icons/nodes/sendgrid.svg"
   },
   {
     "slug": "amazon_ses",
     "displayName": "Amazon SES",
     "category": "Communication",
-    "description": "Send emails through Amazon Simple Email Service (SES) Use this node when a workflow needs amazon ses behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Send transactional or templated emails through Amazon Simple Email Service (SES) using a saved AWS Access Key connection, with automatic retry on temporary AWS errors.",
     "logoUrl": "/integrations-logos/Amazon-SES.svg"
   },
   {
@@ -750,24 +827,31 @@ export const nodeDocManifest = [
     "logoUrl": "/icons/nodes/facebook.svg"
   },
   {
+    "slug": "facebook_trigger",
+    "displayName": "Facebook Page/Messenger Trigger",
+    "category": "Triggers",
+    "description": "Start workflows from real-time Facebook Page messages, comments, mentions, postbacks, lead ads, and feed updates through Meta webhooks.",
+    "logoUrl": "/icons/nodes/facebook_trigger.svg"
+  },
+  {
     "slug": "whatsapp",
     "displayName": "WhatsApp",
     "category": "Communication",
-    "description": "Send messages, manage contacts and conversations via WhatsApp Business API Use this node when a workflow needs whatsapp behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Send WhatsApp messages, media, locations, contact cards, templates, and interactive buttons/lists through the WhatsApp Business Cloud API, and manage contacts, conversations, templates, campaigns, and AI Agent assistance for advanced or AI-generated workflows.",
     "logoUrl": "/icons/nodes/whatsapp.svg"
   },
   {
     "slug": "whatsapp_trigger",
     "displayName": "WhatsApp Trigger",
     "category": "Triggers",
-    "description": "Trigger workflows on WhatsApp events: message received, delivered, read, conversation created Use this node when a workflow needs whatsapp trigger behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Start a workflow in real time from Meta WhatsApp Cloud incoming messages and status webhooks.",
     "logoUrl": "/icons/nodes/whatsapp_trigger.svg"
   },
   {
     "slug": "instagram_trigger",
     "displayName": "Instagram Trigger",
     "category": "Triggers",
-    "description": "Trigger workflows on Instagram events: new DM, comment, mention, postback Use this node when a workflow needs instagram trigger behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Start workflows from real-time Instagram DMs, comments, mentions, story replies, and postbacks through Meta webhooks.",
     "logoUrl": "/icons/nodes/instagram_trigger.svg"
   },
   {
@@ -932,6 +1016,13 @@ export const nodeDocManifest = [
     "logoUrl": "/icons/nodes/shopify.svg"
   },
   {
+    "slug": "shopify_trigger",
+    "displayName": "Shopify Trigger",
+    "category": "Triggers",
+    "description": "Start workflows from signed Shopify order, customer, product, checkout, refund, and app uninstall webhooks.",
+    "logoUrl": "/integrations-logos/Shopify.svg"
+  },
+  {
     "slug": "woocommerce",
     "displayName": "WooCommerce",
     "category": "Data",
@@ -944,6 +1035,13 @@ export const nodeDocManifest = [
     "category": "Data",
     "description": "Stripe payment processing Use this node when a workflow needs stripe behavior with schema-driven inputs from the CtrlChecks node registry.",
     "logoUrl": "/icons/nodes/stripe.svg"
+  },
+  {
+    "slug": "stripe_trigger",
+    "displayName": "Stripe Trigger",
+    "category": "Triggers",
+    "description": "Start workflows from Stripe payment, checkout, invoice, subscription, customer, and refund events via a signed webhook.",
+    "logoUrl": "/integrations-logos/Stripe.svg"
   },
   {
     "slug": "paypal",
@@ -986,6 +1084,41 @@ export const nodeDocManifest = [
     "category": "Data",
     "description": "Retrieve form responses, create forms, and fetch form definitions using Typeform. Use this node when a workflow needs typeform behavior with schema-driven inputs from the CtrlChecks node registry.",
     "logoUrl": "/icons/nodes/typeform.svg"
+  },
+  {
+    "slug": "typeform_trigger",
+    "displayName": "Typeform Trigger",
+    "category": "Triggers",
+    "description": "Start workflows from new Typeform form responses via a signed webhook.",
+    "logoUrl": "/integrations-logos/Typeform.svg"
+  },
+  {
+    "slug": "tally_trigger",
+    "displayName": "Tally Trigger",
+    "category": "Triggers",
+    "description": "Start workflows from new Tally (tally.so) form submissions via a signed webhook.",
+    "logoUrl": "/integrations-logos/Tally.svg"
+  },
+  {
+    "slug": "github_trigger",
+    "displayName": "GitHub Trigger",
+    "category": "Triggers",
+    "description": "Start workflows from signed GitHub repository webhook events such as pushes, issues, pull requests, releases, and comments.",
+    "logoUrl": "/integrations-logos/Github.svg"
+  },
+  {
+    "slug": "gitlab_trigger",
+    "displayName": "GitLab Trigger",
+    "category": "Triggers",
+    "description": "Start workflows from GitLab push, issue, merge request, comment, tag push, pipeline, or release events via a project webhook (X-Gitlab-Token shared secret, not HMAC).",
+    "logoUrl": "/integrations-logos/Gitlab.svg"
+  },
+  {
+    "slug": "jira_trigger",
+    "displayName": "Jira Trigger",
+    "category": "Triggers",
+    "description": "Start workflows from Jira issue created/updated/deleted or comment created/updated/deleted events via a manually configured webhook (shared secret in the URL, not HMAC).",
+    "logoUrl": "/integrations-logos/Jira.svg"
   },
   {
     "slug": "xero",

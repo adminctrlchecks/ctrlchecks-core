@@ -9,12 +9,12 @@ import { httpRequestDoc } from './nodes/http_request.doc';
 import { respondToWebhookDoc } from './nodes/respond_to_webhook.doc';
 import { postgresqlDoc } from './nodes/postgresql.doc';
 import { supabaseDoc } from './nodes/supabase.doc';
-import { databaseReadDoc } from './nodes/database_read.doc';
-import { databaseWriteDoc } from './nodes/database_write.doc';
 import { googleSheetsDoc } from './nodes/google_sheets.doc';
+import { googleSheetsTriggerDoc } from './nodes/google_sheets_trigger.doc';
 import { googleDocDoc } from './nodes/google_doc.doc';
 import { googleGmailDoc } from './nodes/google_gmail.doc';
 import { outlookDoc } from './nodes/outlook.doc';
+import { outlookTriggerDoc } from './nodes/outlook_trigger.doc';
 import { salesforceDoc } from './nodes/salesforce.doc';
 import { microsoftDynamicsDoc } from './nodes/microsoft_dynamics.doc';
 import { sapDoc } from './nodes/sap.doc';
@@ -44,9 +44,11 @@ import { cacheSetDoc } from './nodes/cache_set.doc';
 import { aiAgentDoc } from './nodes/ai_agent.doc';
 import { aiChatModelDoc } from './nodes/ai_chat_model.doc';
 import { slackMessageDoc } from './nodes/slack_message.doc';
+import { slackTriggerDoc } from './nodes/slack_trigger.doc';
 import { emailDoc } from './nodes/email.doc';
 import { logOutputDoc } from './nodes/log_output.doc';
 import { telegramDoc } from './nodes/telegram.doc';
+import { telegramTriggerDoc } from './nodes/telegram_trigger.doc';
 import { linkedinDoc } from './nodes/linkedin.doc';
 import { twitterDoc } from './nodes/twitter.doc';
 import { instagramDoc } from './nodes/instagram.doc';
@@ -54,11 +56,16 @@ import { youtubeDoc } from './nodes/youtube.doc';
 import { hubspotDoc } from './nodes/hubspot.doc';
 import { airtableDoc } from './nodes/airtable.doc';
 import { notionDoc } from './nodes/notion.doc';
+import { linearDoc } from './nodes/linear.doc';
+import { linearTriggerDoc } from './nodes/linear_trigger.doc';
+import { trelloDoc } from './nodes/trello.doc';
+import { trelloTriggerDoc } from './nodes/trello_trigger.doc';
 import { zohoCrmDoc } from './nodes/zoho_crm.doc';
 import { pipedriveDoc } from './nodes/pipedrive.doc';
 import { intuitSmesDoc } from './nodes/intuit_smes.doc';
 import { tallyDoc } from './nodes/tally.doc';
 import { discordDoc } from './nodes/discord.doc';
+import { discordTriggerDoc } from './nodes/discord_trigger.doc';
 import { zoomVideoDoc } from './nodes/zoom_video.doc';
 import { jsonParserDoc } from './nodes/json_parser.doc';
 import { mergeDataDoc } from './nodes/merge_data.doc';
@@ -92,19 +99,24 @@ import { httpPostDoc } from './nodes/http_post.doc';
 import { webhookResponseDoc } from './nodes/webhook_response.doc';
 import { graphqlDoc } from './nodes/graphql.doc';
 import { googleDriveDoc } from './nodes/google_drive.doc';
+import { googleDriveTriggerDoc } from './nodes/google_drive_trigger.doc';
 import { googleCalendarDoc } from './nodes/google_calendar.doc';
+import { googleCalendarTriggerDoc } from './nodes/google_calendar_trigger.doc';
 import { googleContactsDoc } from './nodes/google_contacts.doc';
 import { googleTasksDoc } from './nodes/google_tasks.doc';
 import { googleBigqueryDoc } from './nodes/google_bigquery.doc';
 import { slackWebhookDoc } from './nodes/slack_webhook.doc';
 import { discordWebhookDoc } from './nodes/discord_webhook.doc';
 import { microsoftTeamsDoc } from './nodes/microsoft_teams.doc';
+import { microsoftTeamsTriggerDoc } from './nodes/microsoft_teams_trigger.doc';
+import { gmailTriggerDoc } from './nodes/gmail_trigger.doc';
 import { whatsappCloudDoc } from './nodes/whatsapp_cloud.doc';
 import { twilioDoc } from './nodes/twilio.doc';
 import { mailgunDoc } from './nodes/mailgun.doc';
 import { sendgridDoc } from './nodes/sendgrid.doc';
 import { amazonSesDoc } from './nodes/amazon_ses.doc';
 import { facebookDoc } from './nodes/facebook.doc';
+import { facebookTriggerDoc } from './nodes/facebook_trigger.doc';
 import { whatsappDoc } from './nodes/whatsapp.doc';
 import { whatsappTriggerDoc } from './nodes/whatsapp_trigger.doc';
 import { instagramTriggerDoc } from './nodes/instagram_trigger.doc';
@@ -131,14 +143,21 @@ import { bitbucketDoc } from './nodes/bitbucket.doc';
 import { jiraDoc } from './nodes/jira.doc';
 import { jenkinsDoc } from './nodes/jenkins.doc';
 import { shopifyDoc } from './nodes/shopify.doc';
+import { shopifyTriggerDoc } from './nodes/shopify_trigger.doc';
 import { woocommerceDoc } from './nodes/woocommerce.doc';
 import { stripeDoc } from './nodes/stripe.doc';
+import { stripeTriggerDoc } from './nodes/stripe_trigger.doc';
 import { paypalDoc } from './nodes/paypal.doc';
 import { vercelDoc } from './nodes/vercel.doc';
 import { schedulewiseDoc } from './nodes/schedulewise.doc';
 import { calendlyDoc } from './nodes/calendly.doc';
 import { chargebeeDoc } from './nodes/chargebee.doc';
 import { typeformDoc } from './nodes/typeform.doc';
+import { typeformTriggerDoc } from './nodes/typeform_trigger.doc';
+import { tallyTriggerDoc } from './nodes/tally_trigger.doc';
+import { githubTriggerDoc } from './nodes/github_trigger.doc';
+import { gitlabTriggerDoc } from './nodes/gitlab_trigger.doc';
+import { jiraTriggerDoc } from './nodes/jira_trigger.doc';
 import { xeroDoc } from './nodes/xero.doc';
 import { oracleDatabaseDoc } from './nodes/oracle_database.doc';
 import { sqlServerDoc } from './nodes/sql_server.doc';
@@ -163,12 +182,12 @@ export const allNodes: NodeDoc[] = [
   respondToWebhookDoc,
   postgresqlDoc,
   supabaseDoc,
-  databaseReadDoc,
-  databaseWriteDoc,
   googleSheetsDoc,
+  googleSheetsTriggerDoc,
   googleDocDoc,
   googleGmailDoc,
   outlookDoc,
+  outlookTriggerDoc,
   salesforceDoc,
   microsoftDynamicsDoc,
   sapDoc,
@@ -198,9 +217,11 @@ export const allNodes: NodeDoc[] = [
   aiAgentDoc,
   aiChatModelDoc,
   slackMessageDoc,
+  slackTriggerDoc,
   emailDoc,
   logOutputDoc,
   telegramDoc,
+  telegramTriggerDoc,
   linkedinDoc,
   twitterDoc,
   instagramDoc,
@@ -208,11 +229,16 @@ export const allNodes: NodeDoc[] = [
   hubspotDoc,
   airtableDoc,
   notionDoc,
+  linearDoc,
+  linearTriggerDoc,
+  trelloDoc,
+  trelloTriggerDoc,
   zohoCrmDoc,
   pipedriveDoc,
   intuitSmesDoc,
   tallyDoc,
   discordDoc,
+  discordTriggerDoc,
   zoomVideoDoc,
   jsonParserDoc,
   mergeDataDoc,
@@ -246,19 +272,24 @@ export const allNodes: NodeDoc[] = [
   webhookResponseDoc,
   graphqlDoc,
   googleDriveDoc,
+  googleDriveTriggerDoc,
   googleCalendarDoc,
+  googleCalendarTriggerDoc,
   googleContactsDoc,
   googleTasksDoc,
   googleBigqueryDoc,
   slackWebhookDoc,
   discordWebhookDoc,
   microsoftTeamsDoc,
+  microsoftTeamsTriggerDoc,
+  gmailTriggerDoc,
   whatsappCloudDoc,
   twilioDoc,
   mailgunDoc,
   sendgridDoc,
   amazonSesDoc,
   facebookDoc,
+  facebookTriggerDoc,
   whatsappDoc,
   whatsappTriggerDoc,
   instagramTriggerDoc,
@@ -285,14 +316,21 @@ export const allNodes: NodeDoc[] = [
   jiraDoc,
   jenkinsDoc,
   shopifyDoc,
+  shopifyTriggerDoc,
   woocommerceDoc,
   stripeDoc,
+  stripeTriggerDoc,
   paypalDoc,
   vercelDoc,
   schedulewiseDoc,
   calendlyDoc,
   chargebeeDoc,
   typeformDoc,
+  typeformTriggerDoc,
+  tallyTriggerDoc,
+  githubTriggerDoc,
+  gitlabTriggerDoc,
+  jiraTriggerDoc,
   xeroDoc,
   oracleDatabaseDoc,
   sqlServerDoc,

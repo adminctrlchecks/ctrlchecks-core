@@ -12,6 +12,277 @@ export type FieldKey = string;
 
 // Guide data structure: nodeType -> fieldKey -> guide
 export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
+  chat_trigger: {
+    message: {
+      title: 'How to use Chat Message?',
+      steps: [
+        'You usually do not type this in the Chat Trigger panel because the chat page sends it when a visitor submits a message.',
+        'Use {{$json.message}} in the next node when an AI Agent, lookup, ticket, or log needs the visitor question.',
+        'For tests or generated workflow payloads, send a plain non-empty string such as I want to track order ORD-1048.',
+        'Blank or whitespace-only messages are rejected by the chat message endpoint before the workflow starts.'
+      ],
+      example: '{{$json.message}}'
+    },
+    channel: {
+      title: 'How to use Channel?',
+      steps: [
+        'Channel is a backend schema context field for generated or simulated chat payloads.',
+        'The current visual Chat Trigger panel does not expose Channel and the chat API does not use it to filter messages before starting a workflow.',
+        'When a channel value is present, downstream nodes can use {{$json.channel}} to route support, sales, or billing chat paths.',
+        'In normal chat UI runs, the migrated registry output sets channel from sessionId first so replies stay tied to the same chat session.'
+      ],
+      example: 'support-chat'
+    },
+    allowedSenders: {
+      title: 'How to use Allowed Senders?',
+      steps: [
+        'Allowed Senders is a backend schema allowlist field for controlled tests, generated workflows, or future chat contexts.',
+        'The current visual panel does not expose or enforce it, so do not rely on it to protect a public chat link today.',
+        'If your payload includes sender data, use a later If/Else, Switch, or JavaScript node to check the sender before taking sensitive action.',
+        'Use a JSON list of sender names or IDs, such as ["ops-lead@example.com","finance-lead@example.com"].'
+      ],
+      example: '["ops-lead@example.com","finance-lead@example.com"]'
+    }
+  },
+  facebook_trigger: {
+    connectionId: {
+      title: 'How to choose Facebook Connection?',
+      steps: [
+        'Use the saved Facebook OAuth2 connection for the account that manages the Page.',
+        'Leave blank when CtrlChecks should use the active/default Facebook connection for this workspace.',
+        'Do not paste a Graph API access token into a workflow field; connect Facebook under Connections.',
+        'Use a specific connection only when the workspace has more than one Facebook account.'
+      ],
+      example: 'facebook_oauth_123'
+    },
+    eventTypes: {
+      title: 'How to set Event Types?',
+      steps: [
+        'Enter comma-separated event families such as message, comment, mention, postback, leadgen, feed.',
+        'Use message and postback for Messenger assistant workflows.',
+        'Use comment or feed for Page moderation and public reply workflows.',
+        'Use leadgen only when the Meta app/Page is subscribed to leadgen and the Facebook connection has leads_retrieval.'
+      ],
+      example: 'message, postback'
+    },
+    pageId: {
+      title: 'How to set Facebook Page ID?',
+      steps: [
+        'Enter the numeric Facebook Page ID, not the Page URL, username, post ID, or comment ID.',
+        'Leave blank when the workflow may accept events from any subscribed Page on the connected account.',
+        'Use this filter when the same Facebook account manages multiple Pages.',
+        'The trigger output includes pageId so reply nodes can act on the same Page.'
+      ],
+      example: '123456789012345'
+    },
+    allowedSenderIds: {
+      title: 'How to set Allowed Sender IDs?',
+      steps: [
+        'Optional comma-separated sender IDs or Page-scoped IDs that are allowed to start the workflow.',
+        'Use senderId or chatId from a previous Facebook Trigger test run.',
+        'Leave blank for normal public Page automations.',
+        'A wrong sender ID silently filters out that user, so test with a fresh webhook event.'
+      ],
+      example: '1234567890, 9876543210'
+    },
+    verifyToken: {
+      title: 'How to set Verify Token?',
+      steps: [
+        'Create a random setup token and enter the exact same value in Meta for Developers -> Webhooks.',
+        'Meta sends this during callback verification before it saves the webhook URL.',
+        'This is not the Facebook OAuth access token, Page token, app secret, or account password.',
+        'If the token differs between CtrlChecks and Meta, verification returns Invalid verify token.'
+      ],
+      example: 'fb-webhook-verify-2026-support'
+    },
+    validateSignature: {
+      title: 'How to use Validate Meta Signature?',
+      steps: [
+        'Keep this enabled for production Facebook webhooks.',
+        'The worker validates X-Hub-Signature-256 with META_APP_SECRET or FACEBOOK_APP_SECRET.',
+        'Disable only for a temporary local test where Meta signatures are not available.',
+        'If the worker secret is missing or wrong, incoming webhooks return Invalid Facebook webhook signature.'
+      ],
+      example: 'true'
+    }
+  },
+  github_trigger: {
+    connectionId: {
+      title: 'How to choose GitHub Connection?',
+      steps: [
+        'Use the saved GitHub PAT or OAuth connection that can create repository webhooks.',
+        'Leave blank in normal visual workflows so CtrlChecks uses the active GitHub connection.',
+        'Do not paste ghp_ tokens into workflow fields; save them under Connections.',
+        'Use a specific connection only when the workspace has more than one GitHub account.'
+      ],
+      example: 'github_pat_123'
+    },
+    owner: {
+      title: 'How to set Owner/Organization?',
+      steps: [
+        'Open the repository in GitHub and copy the first path segment after github.com.',
+        'For https://github.com/acme-platform/api-service, enter acme-platform.',
+        'Do not include https://github.com/, the repository name, branch, issue number, or full URL.',
+        'This value is required before CtrlChecks can register the repository webhook.'
+      ],
+      example: 'acme-platform'
+    },
+    repo: {
+      title: 'How to set Repository?',
+      steps: [
+        'Open the repository in GitHub and copy the second path segment after the owner.',
+        'For https://github.com/acme-platform/api-service, enter api-service.',
+        'Do not enter owner/repo if Owner/Organization is already filled separately.',
+        'A wrong repository name usually causes a 404 or permission error during webhook registration.'
+      ],
+      example: 'api-service'
+    },
+    eventTypes: {
+      title: 'How to set Event Types?',
+      steps: [
+        'Enter GitHub webhook event names separated by commas.',
+        'Use issues and pull_request for triage workflows, push for commit workflows, release for release announcements, and issue_comment for comment workflows.',
+        'Use raw event names like pull_request, not friendly labels like pull requests.',
+        'Use {{$json.eventType}} later to branch detailed actions such as issues.opened or pull_request.closed.'
+      ],
+      example: 'issues, pull_request'
+    },
+    webhookSecret: {
+      title: 'How to use Webhook Secret Override?',
+      steps: [
+        'Leave blank for normal workflows so CtrlChecks generates and stores the signing secret.',
+        'Use this only when migrating or manually managing a webhook that must reuse an existing secret.',
+        'Enter the same value in the GitHub repository webhook settings if you manage the webhook manually.',
+        'This is not the GitHub PAT or OAuth token used to create the webhook.'
+      ],
+      example: 'Leave blank'
+    },
+    query: {
+      title: 'How to set Keyword Filter?',
+      steps: [
+        'Leave blank to accept every configured GitHub event type.',
+        'Enter a simple word or phrase such as urgent, security, billing, or release-candidate.',
+        'The filter checks normalized event text such as commit message, issue title, PR title, release name, or comment body.',
+        'Do not use GitHub search syntax here; it is only a case-insensitive text contains filter.'
+      ],
+      example: 'security'
+    }
+  },
+  gitlab_trigger: {
+    connectionId: {
+      title: 'How to choose GitLab Connection?',
+      steps: [
+        'Use the saved GitLab PAT or OAuth connection that can create project webhooks.',
+        'Leave blank in normal visual workflows so CtrlChecks uses the active GitLab connection.',
+        'Do not paste glpat tokens into workflow fields; save them under Connections.',
+        'Use a specific connection only when the workspace has more than one GitLab account or self-managed instance connection.'
+      ],
+      example: 'gitlab_pat_123'
+    },
+    baseUrl: {
+      title: 'How to set GitLab URL?',
+      steps: [
+        'Leave https://gitlab.com for GitLab.com projects.',
+        'For self-managed GitLab, enter only the instance root such as https://gitlab.company.com.',
+        'Do not include /api/v4, the project path, an issue URL, or a merge request URL.',
+        'The worker trims trailing slashes and uses this value when calling /api/v4/projects/:id/hooks.'
+      ],
+      example: 'https://gitlab.com'
+    },
+    projectId: {
+      title: 'How to set Project ID?',
+      steps: [
+        'Open the GitLab project and copy the numeric Project ID from Settings -> General.',
+        'You can also use a URL-encoded path such as acme-platform%2Fapi-service.',
+        'This value is required before CtrlChecks can register the project webhook.',
+        'A wrong ID usually causes a GitLab API 404 or permission error during activation.'
+      ],
+      example: '12345'
+    },
+    eventTypes: {
+      title: 'How to set Event Types?',
+      steps: [
+        'Enter GitLab object_kind values separated by commas.',
+        'Use issue and merge_request for triage workflows, note for comments, push or tag_push for code changes, and pipeline, job, or release for delivery workflows.',
+        'Use exact values like merge_request and note, not friendly labels like merge requests or comments.',
+        'Use {{$json.eventType}} later to branch before reading issueTitle, mrTitle, noteBody, ref, or commits.'
+      ],
+      example: 'issue, merge_request, note'
+    },
+    secretToken: {
+      title: 'How to use Webhook Secret Override?',
+      steps: [
+        'Leave blank for normal workflows so CtrlChecks generates and stores the X-Gitlab-Token shared secret.',
+        'Use this only when migrating or manually managing a GitLab project webhook that must reuse an existing Secret token.',
+        'GitLab echoes this plain shared secret in X-Gitlab-Token; it is not an HMAC signature.',
+        'This is not the GitLab PAT, OAuth token, account password, or CI/CD pipeline trigger token.'
+      ],
+      example: 'Leave blank'
+    },
+    query: {
+      title: 'How to set Keyword Filter?',
+      steps: [
+        'Leave blank to accept every configured GitLab event type.',
+        'Enter a simple word or phrase such as urgent, security, billing, or release-candidate.',
+        'The filter checks normalized event text such as commit message, issue title, merge request title, note body, pipeline status, or release name.',
+        'Do not use GitLab search syntax here; it is only a case-insensitive text contains filter.'
+      ],
+      example: 'security'
+    }
+  },
+  zoom_video: {
+    operation: {
+      title: 'How to choose Zoom Operation?',
+      steps: [
+        'Choose Create Meeting to make a new Zoom room and get a join link.',
+        'Choose List Meetings when the workflow needs scheduled meeting IDs before choosing one meeting.',
+        'Choose Get Meeting to read one meeting by Meeting ID.',
+        'Choose Update Meeting to change topic, duration, or start time for one Meeting ID.',
+        'Choose Delete Meeting only for real cancellation workflows, and save any attendee details before deleting.'
+      ],
+      example: 'createMeeting'
+    },
+    topic: {
+      title: 'How to set Meeting Topic?',
+      steps: [
+        'Use a short title attendees will recognize.',
+        'Type fixed text or map a value such as Discovery call with {{$json.companyName}}.',
+        'Create Meeting uses "Meeting" when this is blank.',
+        'Update Meeting only changes the title when this field has a value.'
+      ],
+      example: 'Discovery call with {{$json.companyName}}'
+    },
+    meetingId: {
+      title: 'How to set Meeting ID?',
+      steps: [
+        'Use the numeric Zoom meeting id, not the attendee join URL.',
+        'Map {{$json.data.id}} from Create Meeting, or select an id from {{$json.data.meetings}} after List Meetings.',
+        'Required for Get Meeting, Update Meeting, and Delete Meeting.',
+        'Run List Meetings or Get Meeting with the same connected Zoom account if a stored ID fails.'
+      ],
+      example: '{{$json.data.id}}'
+    },
+    duration: {
+      title: 'How to set Duration?',
+      steps: [
+        'Enter the meeting length in minutes.',
+        'Use 15, 30, 45, 60, 90, or map {{$json.durationMinutes}} from a booking step.',
+        'Create Meeting defaults to 60 minutes when this is blank.',
+        'Use 90 for a 90-minute meeting, not 1.5 or "90 minutes".'
+      ],
+      example: '30'
+    },
+    startTime: {
+      title: 'How to set Start Time?',
+      steps: [
+        'Use an ISO 8601 timestamp such as 2026-05-01T10:00:00Z.',
+        'Map {{$json.startsAt}} when the time comes from Calendly, Google Calendar, a form, or a CRM appointment.',
+        'Leave blank on Create Meeting only when the workflow should create an instant meeting.',
+        'Avoid local phrases like Friday 3 PM unless an earlier step converts them to a timestamp.'
+      ],
+      example: '{{$json.startsAt}}'
+    }
+  },
   amazon_ses: {
     recipients: {
       title: 'How to set Recipients?',
@@ -22,6 +293,36 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         'Use workflow values such as {{input.email}} when the address comes from an earlier step.'
       ],
       example: '{"to":["customer@example.com"]}'
+    },
+    subject: {
+      title: 'How to set Subject?',
+      steps: [
+        'Required only when Use AWS SES Template is off — hidden and ignored when it is on.',
+        'Type the exact subject line recipients should see.',
+        'Use workflow values such as {{$json.orderId}} to personalize it.',
+        'An empty Subject with Use AWS SES Template off returns "Email subject is required".'
+      ],
+      example: 'Order {{$json.orderId}} Confirmation'
+    },
+    body: {
+      title: 'How to set Body?',
+      steps: [
+        'Required only when Use AWS SES Template is off — hidden and ignored when it is on.',
+        'CtrlChecks sends this exact text as both the HTML part and the plain-text part of the email.',
+        'Add your own <br> or <p> tags if you need real HTML line breaks — plain newlines render as one run-on line in HTML clients.',
+        'An empty Body with Use AWS SES Template off returns "Email body (HTML or text) is required".'
+      ],
+      example: 'Hi {{$json.name}}, your order {{$json.orderId}} is confirmed.'
+    },
+    useTemplate: {
+      title: 'How to use "Use AWS SES Template"?',
+      steps: [
+        'Turn it on to send an existing AWS SES template instead of the Subject and Body fields.',
+        'Leave it off to write the subject and body directly in this node.',
+        'Turning it on hides Subject/Body and shows Template Name/Template Data instead.',
+        'Create the named template in AWS SES for the same AWS Region set on this node before turning this on.'
+      ],
+      example: 'false'
     },
     fromAddress: {
       title: 'How to set From Address?',
@@ -34,12 +335,23 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       ],
       example: 'notifications@yourdomain.com'
     },
+    replyToAddresses: {
+      title: 'How to set Reply-To Addresses?',
+      steps: [
+        'Optional — enter a JSON array of one or more email addresses.',
+        'Replies to this email go to these addresses instead of From Address.',
+        'Leave empty to let replies go to From Address as normal.',
+        'Example: ["support@example.com"]'
+      ],
+      example: '["support@example.com"]'
+    },
     awsRegion: {
       title: 'How to choose AWS Region?',
       steps: [
         'Choose the region where your SES identities, templates, and configuration sets exist.',
         'The node defaults to us-east-1 when no region is set.',
-        'If your saved Amazon SES connection includes a region, leave this field at the matching value or override it deliberately.'
+        'This field overrides the saved Amazon SES connection\'s region whenever it is set.',
+        'Options: us-east-1 (N. Virginia), us-west-2 (Oregon), eu-west-1 (Ireland), eu-central-1 (Frankfurt), ap-southeast-1 (Singapore), ap-northeast-1 (Tokyo), ap-southeast-2 (Sydney).'
       ],
       example: 'us-east-1'
     },
@@ -59,7 +371,8 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       steps: [
         'Enter a JSON object whose keys match the variables in the SES template.',
         'Example: {"name":"Ada","orderId":"12345"}',
-        'Use workflow values such as {{$json.name}} or {{input.orderId}} when values come from earlier steps.'
+        'Use workflow values such as {{$json.name}} or {{input.orderId}} when values come from earlier steps.',
+        'A variable used by the template but missing here fails the send with "Template data validation failed: missing: ...".'
       ],
       example: '{"name":"Ada","orderId":"12345"}'
     },
@@ -68,9 +381,40 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       steps: [
         'Enter a JSON array of attachment objects.',
         'Each item needs filename, base64 content, and contentType.',
-        'SES sends attachments through a raw MIME email and enforces the total message size limit.'
+        'SES sends attachments through a raw MIME email and enforces the total message size limit (40MB).',
+        'Only these types are accepted, and the extension must match contentType: PDF, Word, Excel, JPG/PNG/GIF/WEBP, TXT/CSV, ZIP.'
       ],
       example: '[{"filename":"report.pdf","content":"{{input.pdfBase64}}","contentType":"application/pdf"}]'
+    },
+    configurationSetName: {
+      title: 'How to set Configuration Set Name?',
+      steps: [
+        'Optional — enter the exact name of an existing AWS SES configuration set.',
+        'Open AWS Console -> Amazon SES -> Configuration sets in the same region as this node.',
+        'Used for CloudWatch/SNS delivery-event tracking, not for controlling send behavior.',
+        'Leave empty to send normally with no configuration-set-based tracking.'
+      ],
+      example: 'transactional-emails-tracked'
+    },
+    tags: {
+      title: 'How to set Tags?',
+      steps: [
+        'Optional — enter a JSON object of simple key/value pairs.',
+        'Each pair becomes one SES message tag, used with a configuration set for CloudWatch filtering.',
+        'Tags are never visible to the email recipient.',
+        'Example: {"campaign":"newsletter","type":"promotional"}'
+      ],
+      example: '{"campaign":"newsletter","type":"promotional"}'
+    },
+    returnPath: {
+      title: 'How to set Return Path?',
+      steps: [
+        'Optional — enter a verified email address for bounce handling (envelope-from).',
+        'Bounce notifications go here instead of the default AWS SES bounce handling.',
+        'This address generally needs its own SES verification, the same as From Address.',
+        'Leave empty to use AWS SES\'s default bounce-handling behavior.'
+      ],
+      example: 'bounces@example.com'
     }
   },
   mailgun: {
@@ -128,6 +472,114 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         'Use workflow values when variables come from earlier steps.'
       ],
       example: '{"name":"Ada","resetUrl":"{{input.resetUrl}}"}'
+    },
+    operation: {
+      title: 'How to set Operation?',
+      steps: [
+        'Leave it on Send Email — it is the only implemented action today.',
+        'The dropdown exists for future Mailgun actions; nothing else is selectable yet.'
+      ],
+      example: 'send_email'
+    },
+    subject: {
+      title: 'How to set Subject?',
+      steps: [
+        'Optional at the schema level, but fill it unless a Mailgun template already supplies its own subject.',
+        'Use workflow values such as {{input.orderId}} to personalize it.'
+      ],
+      example: 'Your order {{input.orderId}} has shipped'
+    },
+    cc: {
+      title: 'How to set CC?',
+      steps: [
+        'Optional — enter one address or comma-separated addresses.',
+        'CC recipients are visible to every other recipient, unlike BCC.'
+      ],
+      example: 'manager@example.com'
+    },
+    bcc: {
+      title: 'How to set BCC?',
+      steps: [
+        'Optional — enter one address or comma-separated addresses.',
+        'BCC recipients are hidden from To and CC recipients.'
+      ],
+      example: 'audit@example.com'
+    },
+    replyTo: {
+      title: 'How to set Reply-To?',
+      steps: [
+        'Optional — enter a single address that should receive replies instead of From.',
+        'Leave empty to let replies go to From as normal.'
+      ],
+      example: 'support@mg.yourdomain.com'
+    },
+    tags: {
+      title: 'How to set Tags?',
+      steps: [
+        'Optional — enter one tag or comma-separated tags.',
+        'Each tag is sent to Mailgun as a separate o:tag value, used for Mailgun\'s own delivery analytics and filtering.',
+        'Tags are never visible to the email recipient.'
+      ],
+      example: 'welcome,onboarding'
+    },
+    domain: {
+      title: 'How to set Domain?',
+      steps: [
+        'Not typed directly in this node — select a Mailgun connection instead.',
+        'Open Connections -> Mailgun API Key and set the Sending Domain there.',
+        'Open Mailgun -> Sending -> Domains to copy the verified domain.'
+      ],
+      example: 'mg.yourcompany.com'
+    },
+    apiKey: {
+      title: 'How to set Api Key?',
+      url: 'https://documentation.mailgun.com/docs/mailgun/api-reference/authentication',
+      steps: [
+        'Not typed directly in this node — select a Mailgun connection instead.',
+        'Open Connections -> Mailgun API Key and paste the Private API Key there.',
+        'Open Mailgun -> Settings -> API Keys to copy the key. It starts with key-.'
+      ],
+      example: 'key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+    }
+  },
+  sendgrid: {
+    operation: {
+      title: 'How to set Operation?',
+      steps: [
+        'Leave it on Send Email — it is the only implemented action today.',
+        'This node does not support SendGrid Dynamic Templates, categories, or marketing campaigns.'
+      ],
+      example: 'send_email'
+    },
+    from: {
+      title: 'How to set From?',
+      url: 'https://docs.sendgrid.com/ui/sending-email/sender-verification',
+      steps: [
+        'Use an address verified in SendGrid -> Settings -> Sender Authentication.',
+        'Verify either a single sender address or your whole domain before sending.',
+        'An unverified From address is rejected by SendGrid at send time.'
+      ],
+      example: 'noreply@yourdomain.com'
+    },
+    to: {
+      title: 'How to set To?',
+      steps: [
+        'Enter one recipient email address, or comma-separated addresses for multiple recipients.',
+        'Do not use JSON brackets — this is a plain comma-separated string, not a {"to": [...]} object.',
+        'Use workflow values such as {{input.email}} when the recipient comes from an earlier step.'
+      ],
+      example: 'customer@example.com'
+    },
+    apiKey: {
+      title: 'How to set the SendGrid API Key?',
+      url: 'https://docs.sendgrid.com/ui/account-and-settings/api-keys',
+      steps: [
+        'Not typed directly in this node — select a SendGrid connection instead.',
+        'Open Connections -> SendGrid API Key and paste the key there.',
+        'Open SendGrid -> Settings -> API Keys -> Create API Key, choose Restricted Access, and enable Mail Send.',
+        'Copy the key immediately — it starts with SG. and is shown only once.'
+      ],
+      example: 'SG.xxxxxxxxxxxxxxxxxxxxxx.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
     }
   },
   google_gemini: {
@@ -867,118 +1319,88 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
   },
   http_request: {
     url: {
-      title: 'API Endpoint URL – Step-by-Step',
+      title: 'How to set URL',
       steps: [
-        '1️⃣ Identify the Service',
-        '   Determine which API you need to connect to',
-        '   Check the service\'s official documentation',
+        'URL is the full API endpoint or webhook address this node should call.',
         '',
-        '2️⃣ Find Base URL',
-        '   Look for "Base URL" or "API Endpoint" in docs',
-        '   Common formats:',
-        '   • https://api.service.com',
-        '   • https://service.com/api/v1',
-        '   • https://api.service.com/v2',
+        'Use the complete address, including https:// or http:// and the resource path.',
+        'Map IDs from previous steps when needed, such as https://api.example.com/customers/{{$json.customerId}}.',
         '',
-        '3️⃣ Check API Documentation',
-        '   Most services provide URLs in:',
-        '   • API Documentation page',
-        '   • Developer Dashboard → API Settings',
-        '   • Integration Guides',
+        'Keep fixed record IDs in the URL path, and put filters such as status, page, or limit in Query String Params.',
+        'Runtime returns the final called URL as {{$json.url}}, which is useful for troubleshooting.',
         '',
-        '4️⃣ For REST APIs',
-        '   Base URL + Resource Path',
-        '   Example: https://api.example.com/users',
-        '   Example: https://api.example.com/data?id=123',
-        '',
-        '5️⃣ For Webhooks',
-        '   Use your server\'s public URL',
-        '   Format: https://your-domain.com/webhook',
-        '',
-        '6️⃣ Verify the URL',
-        '   Test in browser or API client (Postman)',
-        '   Ensure it includes protocol (https://)',
-        '   Check if authentication is required',
-        '',
-        'Example:',
-        'https://api.example.com/v1/data'
+        'If URL is blank, the node returns _error: HTTP Request node: URL is required.'
       ],
-      example: 'https://api.example.com/v1/data'
+      example: 'https://api.billing.example.com/v1/customers/{{$json.customerId}}/invoices'
     },
     method: {
-      title: 'How to get Method?',
+      title: 'How to choose Method',
       steps: [
-        'Choose the HTTP method required by the API.',
+        'Choose the action shown in the API documentation for this endpoint.',
         '',
-        '• GET – Read data',
-        '• POST – Create data',
-        '• PUT – Replace data',
-        '• PATCH – Update part of data',
-        '• DELETE – Remove data',
+        'GET reads data and usually has no Body.',
+        'POST creates or submits data and commonly uses Body.',
+        'PUT replaces a whole resource and commonly uses Body.',
+        'PATCH updates selected fields and commonly uses Body.',
+        'DELETE removes or cancels a resource and usually has no Body.',
         '',
-        'Check the API documentation for the correct method.'
+        'Runtime uppercases the method and sends Body only for POST, PUT, and PATCH.',
+        'The wrong method can return 405, skip your Body, create duplicates, or delete data.'
       ],
       example: 'GET'
     },
     headers: {
-      title: 'HTTP Request Headers – Step-by-Step',
+      title: 'How to set Headers',
       steps: [
-        '1️⃣ Common Headers',
-        '   Headers are key-value pairs in JSON format',
-        '   Used for authentication and content type',
+        'Headers are optional JSON key-value instructions sent with the request.',
         '',
-        '2️⃣ Authorization Header',
-        '   For API keys:',
-        '   {"Authorization": "Bearer YOUR_API_KEY"}',
-        '   For Basic Auth:',
-        '   {"Authorization": "Basic base64(username:password)"}',
+        'Use Content-Type and Accept for JSON APIs.',
+        'Use service-specific headers only when the API documentation asks for them, such as X-API-Key or X-Request-Source.',
         '',
-        '3️⃣ Content-Type Header',
-        '   For JSON data:',
-        '   {"Content-Type": "application/json"}',
-        '   For form data:',
-        '   {"Content-Type": "application/x-www-form-urlencoded"}',
-        '',
-        '4️⃣ Custom Headers',
-        '   Some APIs require custom headers:',
-        '   {"X-API-Key": "your-key"}',
-        '   {"X-Custom-Header": "value"}',
-        '',
-        '5️⃣ Format',
-        '   Use valid JSON format',
-        '   All keys and string values in quotes',
-        '   Separate multiple headers with commas',
-        '',
-        'Example:',
-        '{"Authorization": "Bearer sk-xxx", "Content-Type": "application/json"}'
+        'For protected APIs, use a secure connection, environment value, or approved secret reference instead of pasting private tokens into the workflow.',
+        'Response headers come back as {{$json.headers}}, including content type, request IDs, and rate-limit information.'
       ],
-      example: '{"Authorization": "Bearer sk-xxx", "Content-Type": "application/json"}'
+      example: '{"Content-Type":"application/json","Accept":"application/json","X-Request-Source":"ctrlchecks-workflow"}'
     },
     body: {
-      title: 'How to get Body (JSON)?',
+      title: 'How to set Body',
       steps: [
-        'Body is required for POST, PUT, or PATCH requests.',
+        'Body is the data sent to APIs that create or update something.',
         '',
-        'Use JSON format and follow the API schema.',
+        'Fill it for POST, PUT, or PATCH when the API documentation expects a request payload.',
+        'Leave it empty for GET and DELETE because runtime does not send Body for those methods.',
         '',
-        'Example:',
-        '{"name": "John Doe", "email": "john@example.com"}'
+        'Use a small JSON object that matches the API schema. Map values from previous nodes with {{$json.fieldName}}.',
+        'The request Body is not returned unless the API echoes it; the response is available as {{$json.body}} and {{$json.data}}.'
       ],
-      example: '{"name": "John Doe"}'
+      example: '{"requesterEmail":"{{$json.email}}","subject":"New billing question","message":"{{$json.message}}"}'
+    },
+    qs: {
+      title: 'How to set Query String Params',
+      steps: [
+        'Query String Params are filters and options appended to the URL.',
+        '',
+        'Use them for page, limit, status, date ranges, search terms, sort order, or optional include flags.',
+        'Enter a JSON object without the leading question mark.',
+        '',
+        'Runtime appends these values to the URL and returns the final URL as {{$json.url}}.',
+        'Avoid adding the same parameter in both URL and Query String Params.'
+      ],
+      example: '{"status":"open","created_after":"{{$json.reportStartDate}}","limit":100}'
     },
     timeout: {
-      title: 'How to get Timeout (ms)?',
+      title: 'How to set Timeout',
       steps: [
-        'Set how long to wait before the request fails.',
+        'Timeout is how long the workflow waits for the remote server to respond.',
         '',
-        'Default is 30000 (30 seconds).',
+        'Use 30000 for ordinary APIs, lower values when the workflow should fail fast, and higher values only for slow reports or large responses.',
+        'Blank or invalid values default to 30000.',
         '',
-        'Increase for slow APIs or large responses.'
+        'Timeout is not retry behavior. If the API takes too long, the node returns _error and errorDetails.timeout for downstream alerts.'
       ],
       example: '30000'
     }
-  },
-  google_sheets: {
+  },  google_sheets: {
     operation: {
       title: 'How to choose Operation?',
       steps: [
@@ -1624,8 +2046,8 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       example: 'true'
     }
   },
-  mssql: {
-    server: {
+  sql_server: {
+    host: {
       title: 'SQL Server Connection – Step-by-Step',
       steps: [
         '1️⃣ For Azure SQL Database',
@@ -2805,81 +3227,142 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
     }
   },
   telegram: {
-    botToken: {
-      title: 'Telegram Bot Token – Step-by-Step',
-      url: 'https://t.me/BotFather',
-      steps: [
-        '1️⃣ Open Telegram',
-        '   Open Telegram app or web.telegram.org',
-        '   Make sure you\'re logged in',
-        '',
-        '2️⃣ Find BotFather',
-        '   Search for @BotFather in Telegram',
-        '   Or go to: t.me/BotFather',
-        '',
-        '3️⃣ Start Chat with BotFather',
-        '   Click "Start" or send /start',
-        '   BotFather will show available commands',
-        '',
-        '4️⃣ Create New Bot',
-        '   Send: /newbot',
-        '   BotFather will ask for bot name',
-        '   Enter a name (e.g., "My Workflow Bot")',
-        '',
-        '5️⃣ Set Bot Username',
-        '   BotFather will ask for username',
-        '   Must end with "bot" (e.g., "myworkflow_bot")',
-        '   Must be unique',
-        '',
-        '6️⃣ Copy Bot Token',
-        '   BotFather will send you a token',
-        '   Format: 123456789:ABCdefGHIjklMNOpqrsTUVwxyz',
-        '   ⚠️ Keep this token secret!',
-        '',
-        '7️⃣ Store Securely',
-        '   Paste it into the Bot Token field above',
-        '   Never share publicly',
-        '',
-        'Example:',
-        '123456789:ABCdefGHIjklMNOpqrsTUVwxyz'
-      ],
-      example: '123456789:ABCdefGHIjklMNOpqrsTUVwxyz'
-    },
     chatId: {
-      title: 'Telegram Chat ID – Step-by-Step',
+      title: 'Telegram Chat ID',
       steps: [
-        '1️⃣ For Personal Chat',
-        '   Start a chat with your bot',
-        '   Send any message to your bot',
-        '   Use @userinfobot to get your chat ID',
-        '',
-        '2️⃣ For Group Chat',
-        '   Add your bot to the group',
-        '   Send a message in the group',
-        '   Use @userinfobot or @getidsbot',
-        '',
-        '3️⃣ Method: Use @userinfobot',
-        '   Search for @userinfobot in Telegram',
-        '   Start chat and send /start',
-        '   It will show your chat ID',
-        '',
-        '4️⃣ Method: Use @getidsbot',
-        '   Add @getidsbot to your group',
-        '   It will show the group chat ID',
-        '',
-        '5️⃣ Method: Use Bot API',
-        '   Send message to your bot',
-        '   Call: https://api.telegram.org/bot<TOKEN>/getUpdates',
-        '   Find "chat":{"id":123456789} in response',
-        '',
-        '6️⃣ Use the Chat ID',
-        '   Copy the numeric ID',
-        '   Paste it into the Chat ID field above',
-        '',
-        'Example:',
-        '123456789'
+        'Use {{$json.chatId}} from Telegram Trigger when replying to the same chat.',
+        'For a personal chat, the user must start the bot first; then use Telegram Trigger, @userinfobot, or getUpdates to see the numeric chat ID.',
+        'For a group or channel, add the bot first. Channels and supergroups often use negative IDs that start with -100.',
+        'Do not use a phone number, @username, invite link, or channel URL here.'
       ],
-      example: '123456789'
+      example: '{{$json.chatId}}'
+    },
+    operation: {
+      title: 'Telegram Operation',
+      steps: [
+        'Send Message posts text and needs Chat ID plus Message.',
+        'Send Photo posts an image URL and needs Chat ID plus Media URL; Caption is optional.',
+        'Edit Message updates a previous bot message and needs Chat ID, Message ID, and new Message text.',
+        'Use {{$json.operation}} only when an earlier step intentionally chooses one of the supported values.'
+      ],
+      example: 'send_message'
+    },
+    messageType: {
+      title: 'Telegram Message Type',
+      steps: [
+        'Text uses Message and sendMessage.',
+        'Photo, Video, Document, Audio, and Animation use Media URL and can include Caption.',
+        'Use Photo for charts or screenshots, Document for PDFs, Audio for sound files, and Animation for GIF-style updates.',
+        'Media URL must be public and directly fetchable by Telegram.'
+      ],
+      example: 'text'
+    },
+    message: {
+      title: 'Telegram Message Text',
+      steps: [
+        'Write the text people should read in Telegram.',
+        'Required for Send Message and Edit Message.',
+        'Map AI or trigger output with {{$json.aiResponse}}, {{$json.response}}, {{$json.message}}, or {{$json.text}}.',
+        'Use Parse Mode only when the text is formatted correctly for that mode.'
+      ],
+      example: 'Answer for ticket {{$json.ticketId}}: {{$json.aiResponse}}'
+    },
+    parseMode: {
+      title: 'Telegram Parse Mode',
+      steps: [
+        'None sends plain text and is safest for customer-provided text.',
+        'HTML supports simple tags such as b, i, code, pre, and links.',
+        'Markdown uses Telegram legacy markdown.',
+        'MarkdownV2 supports richer formatting but requires escaping special characters.'
+      ],
+      example: 'HTML'
+    },
+    disableWebPagePreview: {
+      title: 'Disable Web Page Preview',
+      steps: [
+        'Turn on to hide Telegram preview cards for links.',
+        'Use it for compact report links, status feeds, or messages with several URLs.',
+        'Leave off when the preview helps people understand the link before opening it.',
+        'This does not hide the URL text itself.'
+      ],
+      example: 'true'
+    },
+    mediaUrl: {
+      title: 'Telegram Media URL',
+      steps: [
+        'Required for photo, video, document, audio, and animation sends.',
+        'Use a public HTTPS direct file URL from cloud storage, a CDN, or a previous export step.',
+        'Map values such as {{$json.chartImageUrl}}, {{$json.reportUrl}}, or {{$json.file.downloadUrl}}.',
+        'Avoid private dashboard pages, local paths, or URLs that expire before Telegram can fetch them.'
+      ],
+      example: '{{$json.chartImageUrl}}'
+    },
+    caption: {
+      title: 'Telegram Caption',
+      steps: [
+        'Optional text shown under a media file.',
+        'Use it for report date, owner, summary, customer, or next action.',
+        'Caption formatting follows Parse Mode.',
+        'Keep it short; send the full content as a document or link when needed.'
+      ],
+      example: 'Report for {{$json.reportDate}}: {{$json.summary}}'
+    },
+    replyToMessageId: {
+      title: 'Reply To Message ID',
+      steps: [
+        'Use this when the new Telegram message should reply to an existing message.',
+        'Map {{$json.messageId}}, {{$json.message_id}}, or {{$json.replyToMessageId}} from Telegram Trigger or an earlier Telegram output.',
+        'Leave blank for a normal message.',
+        'Do not use Chat ID here; this field identifies the specific message inside the chat.'
+      ],
+      example: '{{$json.messageId}}'
+    },
+    editMessageId: {
+      title: 'Edit Message ID',
+      steps: [
+        'Required when Operation is Edit Message.',
+        'Use {{$json.messageId}} from a previous Telegram Send Message output or a stored workflow record.',
+        'Telegram usually lets a bot edit only its own messages.',
+        'Pair it with Message text that should replace the old content.'
+      ],
+      example: '{{$json.messageId}}'
+    },
+    replyMarkup: {
+      title: 'Telegram Reply Markup',
+      steps: [
+        'Optional JSON for inline buttons, reply keyboards, removing keyboards, or force reply.',
+        'Use inline_keyboard for buttons under the message and keyboard for a custom reply keyboard.',
+        'Keep valid JSON with double quotes and no trailing commas.',
+        'Use callback_data or URLs that your downstream trigger or app can handle.'
+      ],
+      example: '{"inline_keyboard":[[{"text":"Approve","callback_data":"approve"}]]}'
+    },
+    disableNotification: {
+      title: 'Disable Notification',
+      steps: [
+        'Turn on to send silently without a push sound.',
+        'Use for routine digests, logs, or low-priority updates.',
+        'Leave off for urgent alerts where someone must act quickly.'
+      ],
+      example: 'false'
+    },
+    protectContent: {
+      title: 'Protect Content',
+      steps: [
+        'Turn on to ask Telegram to prevent forwarding or saving where supported.',
+        'Use for confidential reports or internal-only media.',
+        'This is not a substitute for sending only to the right chat.'
+      ],
+      example: 'false'
+    },
+    allowSendingWithoutReply: {
+      title: 'Allow Sending Without Reply',
+      steps: [
+        'Turn on to send even if the replied-to message is missing or deleted.',
+        'Use when the answer should still reach the chat without the reply link.',
+        'Leave off when the workflow must fail unless it can attach to the original message.'
+      ],
+      example: 'true'
     }
   },
   notion: {
@@ -3544,6 +4027,8 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       title: 'BigQuery Dataset ID – Step-by-Step',
       url: 'https://console.cloud.google.com/bigquery',
       steps: [
+        'IMPORTANT: This field is reference-only. It is not sent to BigQuery and does not affect the query — the SQL Query field must fully qualify every table as `project.dataset.table` regardless of what you type here.',
+        '',
         '1️⃣ Open BigQuery Console',
         '   Go to 👉 https://console.cloud.google.com/bigquery',
         '   Sign in with your Google account',
@@ -3552,20 +4037,175 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         '   In left sidebar, expand your project',
         '   You\'ll see list of datasets',
         '',
-        '3️⃣ Get Dataset ID',
-        '   Dataset ID is the name shown',
-        '   Or create new: Click "Create dataset"',
-        '   Enter dataset ID (lowercase, no spaces)',
-        '',
-        '4️⃣ Use the Dataset ID',
-        '   Paste it into the Dataset ID field above',
-        '   Format: my_dataset',
+        '3️⃣ Use it as your own note',
+        '   Enter the dataset name here purely so you (or a teammate) can see at a glance which dataset this query targets',
         '',
         'Example:',
         'my_dataset'
       ],
       example: 'my_dataset'
+    },
+    query: {
+      title: 'How to write SQL Query?',
+      steps: [
+        'The exact Standard SQL statement BigQuery will run — this is the only field that determines what data comes back.',
+        '',
+        'Always fully qualify tables as `project.dataset.table` with backticks; Dataset ID above is not applied automatically.',
+        '',
+        'Example: SELECT customer_id, SUM(order_total) AS lifetime_value FROM `my-project.sales_2026.orders` GROUP BY customer_id LIMIT 100',
+        '',
+        'Map dynamic values with expressions where your platform supports them, e.g. a WHERE clause built from {{input.startDate}}.'
+      ],
+      example: 'SELECT * FROM `project.dataset.table` LIMIT 10'
+    },
+    useLegacySql: {
+      title: 'How to choose Use Legacy SQL?',
+      steps: [
+        'Leave off (false) for modern Standard SQL — this is correct for the vast majority of queries.',
+        '',
+        'Turn on only when reusing an older query written in BigQuery\'s legacy SQL dialect; Standard SQL syntax can fail to parse under legacy mode.'
+      ],
+      example: 'false'
     }
+  },
+  gmail_trigger: {
+    pubsubTopic: {
+      title: 'How to set Pub/Sub Topic?',
+      steps: [
+        'Open Google Cloud Console and go to Pub/Sub > Topics.',
+        'Create or choose the topic that Gmail will publish mailbox notifications to.',
+        'Copy the full topic path in the format projects/PROJECT_ID/topics/TOPIC_NAME.',
+        'Grant Pub/Sub Publisher on the topic to gmail-api-push@system.gserviceaccount.com.',
+        'Create a push subscription on this topic with the CtrlChecks webhook URL as the push endpoint.'
+      ],
+      example: 'projects/acme-support/topics/gmail-inbox-notifications'
+    },
+    eventTypes: {
+      title: 'How to choose Event Types?',
+      steps: [
+        'message_added starts the workflow for new messages added to the watched mailbox.',
+        'label_added starts it when Gmail adds a label to a message.',
+        'label_removed starts it when Gmail removes a label from a message.',
+        'message_deleted starts it for deleted messages, but deleted events may not include normal message metadata.',
+        'Leave empty to use the runtime default: message_added.'
+      ],
+      example: 'message_added, label_added'
+    },
+    labelIds: {
+      title: 'How to set Label IDs?',
+      steps: [
+        'Leave empty to accept messages from any label.',
+        'Use built-in Gmail API label IDs such as INBOX, IMPORTANT, SENT, or TRASH.',
+        'For custom labels, use the Gmail API label ID your admin or setup flow provides.',
+        'Separate multiple labels with commas.',
+        'Do not use a visible custom label name if Gmail returned a different API label ID.'
+      ],
+      example: 'INBOX, IMPORTANT'
+    },
+    query: {
+      title: 'How to set Keyword Filter?',
+      steps: [
+        'Leave empty to accept every event matching Event Types and Label IDs.',
+        'Enter a word or short phrase that must appear in the message subject, sender, or snippet.',
+        'Matching is case-insensitive and happens after CtrlChecks fetches Gmail message metadata.',
+        'This is not Gmail search syntax; operators like from:vendor or has:attachment are treated as plain text.'
+      ],
+      example: 'invoice'
+    },
+    validateAuth: {
+      title: 'How to choose Validate Push Auth?',
+      steps: [
+        'Keep this enabled for production workflows.',
+        'When enabled, CtrlChecks accepts a matching Validation Secret or a Google-signed OIDC bearer token.',
+        'Disable only for temporary local testing where you control every request to the webhook.',
+        'Do not turn this off to work around Pub/Sub setup issues; fix the push subscription authentication instead.'
+      ],
+      example: 'true'
+    },
+    audience: {
+      title: 'How to set OIDC Audience?',
+      steps: [
+        'Leave empty if the Pub/Sub push subscription uses the webhook URL as its audience.',
+        'Fill this only when your Google Cloud Pub/Sub subscription has a custom OIDC audience configured.',
+        'Copy the exact audience value from the subscription push authentication settings.',
+        'Do not enter the Pub/Sub topic name, subscription name, or Google Cloud project ID here.'
+      ],
+      example: 'https://app.ctrlchecks.com/api/gmail/webhook/workflow_123/gmail-trigger-1'
+    },
+    validationSecret: {
+      title: 'How to set Validation Secret?',
+      steps: [
+        'Leave empty when using Google-signed OIDC authentication.',
+        'Use this for controlled simulations or staging environments that cannot send OIDC tokens.',
+        'Generate a long random value and pass it as token query parameter or x-goog-pubsub-token header in test pushes.',
+        'Do not paste Google OAuth access tokens here; OAuth credentials belong in Connections.'
+      ],
+      example: 'staging-gmail-push-token-rotate-me'
+    },
+  },
+  google_drive_trigger: {
+    folderId: {
+      title: 'How to find Folder ID?',
+      steps: [
+        'Open the target folder in Google Drive.',
+        'Copy only the long ID after /folders/ in the browser URL.',
+        'Leave this empty when the workflow should consider all Drive changes visible to the connected account.',
+        'Do not paste the folder name, the full URL, or a file ID.'
+      ],
+      example: '1a2b3c4d5e6f7g8h9i0j'
+    },
+    eventTypes: {
+      title: 'How to choose Event Types?',
+      steps: [
+        'file_changed starts the workflow for created, updated, or metadata-changed files.',
+        'file_deleted starts the workflow for removed or trashed files.',
+        'Use both for broad Drive monitoring, only file_changed for file-processing workflows, or only file_deleted for audit alerts.',
+        'Existing changes before activation are skipped because CtrlChecks stores a fresh start page token.'
+      ],
+      example: 'file_changed, file_deleted'
+    },
+    query: {
+      title: 'How to set Keyword Filter?',
+      steps: [
+        'Leave empty to accept every file that matches Event Types and Folder ID.',
+        'Enter a word or short phrase that must appear in the Drive file name.',
+        'Matching is case-insensitive and checks the file name only, not file contents.',
+        'Use this for focused workflows such as invoice, contract, resume, or report.'
+      ],
+      example: 'invoice'
+    },
+  },
+  google_calendar_trigger: {
+    calendarId: {
+      title: 'How to set Calendar ID?',
+      steps: [
+        'Use primary for the connected account main calendar.',
+        'For a shared calendar, open Google Calendar settings, select the calendar, and copy Calendar ID from Integrate calendar.',
+        'Calendar IDs often look like an email address or end in @group.calendar.google.com.',
+        'Do not use the visible calendar name, event URL, or event ID.'
+      ],
+      example: 'primary'
+    },
+    eventTypes: {
+      title: 'How to choose Event Types?',
+      steps: [
+        'event_changed starts the workflow when a Google event is created or updated.',
+        'event_cancelled starts the workflow when Google marks an event as cancelled.',
+        'Use both for all changes, only event_changed for meeting-prep flows, or only event_cancelled for cancellation follow-up.',
+        'This trigger runs when the calendar record changes, not when the meeting start time arrives.'
+      ],
+      example: 'event_changed, event_cancelled'
+    },
+    query: {
+      title: 'How to set Keyword Filter?',
+      steps: [
+        'Leave empty to accept every event that matches Event Types.',
+        'Enter a word or short phrase that must appear in the event title or description.',
+        'Matching is case-insensitive and happens after CtrlChecks fetches the changed event.',
+        'Use this for focused workflows such as demo, interview, renewal, or incident.'
+      ],
+      example: 'renewal'
+    },
   },
   google_calendar: {
     operation: {
@@ -3698,11 +4338,13 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       steps: [
         'You choose this from the dropdown in the node—you do not get it from elsewhere.',
         '',
-        '• Read – Use when you want to extract all text from an existing document. You must fill Document ID or URL.',
+        '• Read – Use when you want to extract the plain text of an existing document. You must fill Document ID or Document Url.',
         '',
-        '• Create – Use when you want to create a new document. You must fill Document Title (and usually Content). Leave Document ID empty.',
+        '• Write (overwrite) – Use when you want to replace ALL existing content. You must fill Document Url and Content. This deletes what was there before.',
         '',
-        '• Update – Use when you want to add or change content in an existing document. You must fill Document ID or URL and Content.'
+        '• Create – Use when you want to create a new document. You must fill Document Title (and usually Content). Document ID/Url are not used.',
+        '',
+        '• Append – Use when you want to add content after what is already there, without deleting anything. You must fill Document Url and Content.'
       ]
     },
     documentId: {
@@ -3739,9 +4381,29 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         '',
         'Dynamic title: If your platform supports expressions, use data from earlier steps, e.g. "Report – {{input.date}}" or "Contract – {{input.clientName}}".',
         '',
-        'This field is only used when Operation = Create. It is ignored for Read and Update.'
+        'This field is only used when Operation = Create. It is ignored for Read, Write, and Append.'
       ],
       example: 'My Document'
+    },
+    documentUrl: {
+      title: 'How to get Document Url?',
+      steps: [
+        'Paste the full Google Docs URL from your browser — runtime extracts the document ID from it automatically.',
+        '',
+        'This is the only way to select a document for Write and Append in this panel — Document ID is only shown for Read.',
+        '',
+        'Not used for Create, which always makes a brand-new document.'
+      ],
+      example: 'https://docs.google.com/document/d/1a2b3c4d5e6f7g8h9i0j/edit'
+    },
+    format: {
+      title: 'How to choose Output Format?',
+      steps: [
+        'Only used for Read. Choose text or markdown.',
+        '',
+        'Important: both options currently return the same plain text in {{$json.content}} — Markdown conversion is not implemented yet. This field only changes the {{$json.format}} label that is echoed back.'
+      ],
+      example: 'text'
     },
     content: {
       title: 'How to get Content?',
@@ -3752,7 +4414,7 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         '',
         'Option 3: Template with placeholders – Mix fixed text and dynamic values, e.g. "Hello {{input.name}}, your request #{{input.id}} has been received."',
         '',
-        'This field is only used when Operation = Create or Update. It is ignored for Read.'
+        'This field is used for Write and Append (required) and Create (optional). It is ignored for Read.'
       ],
       example: 'Document content...'
     }
@@ -3763,13 +4425,13 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       steps: [
         'You don’t get this from anywhere—you choose it from the dropdown in this node.',
         '',
-        '• List Files – Use when you want to retrieve files from a folder. Set Folder ID (or leave empty for root). The node returns a list of files.',
+        '• List Files – Use when you want to retrieve files, optionally scoped to a folder. Set Folder ID (or leave empty for the whole Drive). The node returns a files array.',
         '',
-        '• Upload File – Use when you want to add a new file to Drive. You need File Name and File Content (Base64). Optionally Folder ID if your platform supports uploading to a folder.',
+        '• Upload File – Use when you want to add a new file to Drive. You need File Name and File Data. Optionally Folder ID to choose the destination folder.',
         '',
-        '• Download File – Use when you want to get the content of an existing file. You need File ID. The node returns the file content (e.g. Base64).',
+        '• Download File – Use when you want to get the metadata and content of an existing file. You need File ID. The node returns dataBase64 for binary files or content for text/JSON files.',
         '',
-        '• Delete File – Use when you want to remove a file. You need File ID only.'
+        '• Delete File – This option appears in the dropdown but is NOT implemented by the runtime. Selecting it always fails with "Unsupported Google Drive operation: delete". Do not use it to remove files.'
       ],
       example: 'List Files'
     },
@@ -3839,8 +4501,8 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       ],
       example: 'report_2024-01-15.pdf'
     },
-    fileContent: {
-      title: 'How to get File Content (Base64)?',
+    fileData: {
+      title: 'How to get File Data?',
       steps: [
         'File content must be Base64-encoded—you do not type it by hand.',
         '',
@@ -3854,7 +4516,7 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         '',
         'This field is only used when Operation = Upload. It is ignored for List, Download, and Delete.'
       ],
-      example: 'Base64 encoded content...'
+      example: '{{$json.dataBase64}}'
     }
   },
   google_gmail: {
@@ -3872,6 +4534,17 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         '• Search Messages – Use when this node should find emails matching a search. Fill Search Query (and optionally Max Results).'
       ]
     },
+    recipientSource: {
+      title: 'How to choose Recipient Source?',
+      steps: [
+        'Manual entry – type addresses directly into Recipient Emails below.',
+        '',
+        'Extract from sheet – use recipient rows already provided by an upstream node (typically a Google Sheets node before this Gmail node). If upstream has none, the optional Fallback Spreadsheet ID / Sheet Name / Range below are used as a backup.',
+        '',
+        'Upstream data always wins over the fallback fields when both could apply.'
+      ],
+      example: 'manual_entry'
+    },
     recipientEmails: {
       title: 'How to set Recipient Emails?',
       steps: [
@@ -3884,6 +4557,48 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         'For sheet-driven sends, choose Extract from sheet in Recipient Source and leave this field empty.'
       ],
       example: 'alice@example.com, bob@example.com'
+    },
+    spreadsheetId: {
+      title: 'How to set Fallback Spreadsheet ID?',
+      steps: [
+        'Only used when Recipient Source is Extract from sheet and no upstream node already supplied recipient rows.',
+        '',
+        'Copy the ID from the sheet\'s URL — the long string between /d/ and /edit.',
+        '',
+        'Leave empty when a Google Sheets node already runs right before this Gmail node.'
+      ],
+      example: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms'
+    },
+    sheetName: {
+      title: 'How to set Fallback Sheet Name?',
+      steps: [
+        'The tab name inside the Fallback Spreadsheet ID above.',
+        '',
+        'Match it exactly to the tab label shown at the bottom of Google Sheets.',
+        '',
+        'Defaults to Sheet1 when left empty.'
+      ],
+      example: 'Sheet1'
+    },
+    range: {
+      title: 'How to set Fallback Range?',
+      steps: [
+        'Optional A1-style range inside the fallback sheet tab, to skip header rows or unrelated columns.',
+        '',
+        'Example: A2:D500 skips row 1 and stops at row 500.',
+        '',
+        'Leave empty to read the entire tab.'
+      ],
+      example: 'A2:D500'
+    },
+    useAiRecipientMapping: {
+      title: 'How to use Scan All Columns For Emails?',
+      steps: [
+        'Turn on when the fallback sheet\'s column headers are messy, inconsistent, or missing.',
+        '',
+        'When on, every cell in each row is scanned for anything that looks like an email address, not just columns literally named "email".'
+      ],
+      example: 'true'
     },
     to: {
       title: 'How to get To?',
@@ -4022,6 +4737,166 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       ],
       example: '10'
     }
+  },
+  google_sheets_trigger: {
+    spreadsheetId: {
+      title: 'How to find Spreadsheet ID?',
+      steps: [
+        'Open the Google Sheet in a browser.',
+        'Copy only the long ID between /d/ and /edit in the URL.',
+        'Do not use the full sharing URL, the tab gid, or the file name.',
+        'The connected Google account needs access to this spreadsheet before activation can capture the baseline.'
+      ],
+      example: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms'
+    },
+    sheetName: {
+      title: 'How to set Sheet Name?',
+      steps: [
+        'Use the exact tab name shown at the bottom of the spreadsheet.',
+        'Leave empty only when the first/default sheet is the one you want to poll.',
+        'Names are spelling-sensitive. Leads and leads may point to different tabs.',
+        'Later nodes can read the tab with {{$json.sheetName}}.'
+      ],
+      example: 'Leads'
+    },
+    hasHeaderRow: {
+      title: 'How does Has Header Row work?',
+      steps: [
+        'Keep it on when row 1 contains labels such as Name, Email, Status, or Priority.',
+        'With headers on, downstream nodes can use {{$json.row.Email}}.',
+        'Turn it off only when row 1 is real data.',
+        'With headers off, use {{$json.values[0]}}, {{$json.values[1]}}, and similar array positions.'
+      ],
+      example: 'true'
+    },
+    eventTypes: {
+      title: 'How to choose Event Types?',
+      steps: [
+        'row_added starts the workflow for rows added after activation.',
+        'row_updated starts the workflow when a tracked row changes after the baseline exists.',
+        'Use row_added for intake flows, and row_added, row_updated when edits should also start work.',
+        'Rows that existed before activation are baseline rows; they do not fire as new rows.'
+      ],
+      example: 'row_added, row_updated'
+    },
+    query: {
+      title: 'How to set Keyword Filter?',
+      steps: [
+        'Leave empty to accept every row that matches Event Types.',
+        'Enter a word or short phrase that must appear somewhere in the row values.',
+        'Matching is case-insensitive and checks the joined row text, not a formula.',
+        'Use this to split one shared sheet into workflows such as urgent, refund, or enterprise.'
+      ],
+      example: 'urgent'
+    },
+  },
+  google_sheets: {
+    operation: {
+      title: 'How to choose Operation?',
+      steps: [
+        'Read – pull existing rows out of the sheet. Only Spreadsheet ID is required.',
+        '',
+        'Write – replace cells in a range. Needs Sheet Name and Values or Data.',
+        '',
+        'Append – add new row(s) after the last row. Needs Sheet Name and Values or Data.',
+        '',
+        'Update – change specific existing cells. Needs Sheet Name, Range, and Values or Data.'
+      ],
+      example: 'read'
+    },
+    spreadsheetId: {
+      title: 'How to find Spreadsheet ID?',
+      steps: [
+        'Open the target Google Sheet in a browser.',
+        '',
+        'Copy the long ID segment from the URL, between /d/ and /edit:',
+        'https://docs.google.com/spreadsheets/d/THIS_PART/edit',
+        '',
+        'The ID stays the same even if the file is renamed.'
+      ],
+      example: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms'
+    },
+    sheetName: {
+      title: 'How to set Sheet Name?',
+      steps: [
+        'Match the tab label exactly as shown at the bottom of Google Sheets — it is case-sensitive.',
+        '',
+        'Optional for Read (leaves empty to use the first tab).',
+        '',
+        'Required for Write, Append, and Update.'
+      ],
+      example: 'Sheet1'
+    },
+    range: {
+      title: 'How to set Range?',
+      steps: [
+        'Use A1 notation, optionally with the tab name: Sheet1!A1:D100.',
+        '',
+        'Optional for Read (empty reads all used cells) and Write/Append.',
+        '',
+        'Required for Update — it must point at the exact cells to change.'
+      ],
+      example: 'A1:D100'
+    },
+    outputFormat: {
+      title: 'How to choose Output Format?',
+      steps: [
+        'json — returns rows/items as objects keyed by column header (default).',
+        '',
+        'keyvalue — same row objects, also exposed under keyValue.',
+        '',
+        'text — a plain tab-separated text block, useful for AI prompts.',
+        '',
+        'Only affects Read; ignored for Write/Append/Update.'
+      ],
+      example: 'json'
+    },
+    readDirection: {
+      title: 'How to choose Read Direction?',
+      steps: [
+        'rows (default) — use for typical spreadsheets where each row is one record.',
+        '',
+        'columns — use only when the sheet stores each record as a column instead.',
+        '',
+        'Only affects Read.'
+      ],
+      example: 'rows'
+    },
+    values: {
+      title: 'How to set Values?',
+      steps: [
+        'An array of arrays — each inner array is one row, each item is one cell.',
+        '',
+        'Also accepts an array of row objects or a single object; runtime converts them.',
+        '',
+        'Ignored if Data is also filled — Data is checked first.',
+        '',
+        'Required (together with, or instead of, Data) for Write, Append, and Update.'
+      ],
+      example: '[["Alice", "alice@example.com", "Active"]]'
+    },
+    data: {
+      title: 'How to set Data?',
+      steps: [
+        'An alternative to Values — accepts an object, an array of objects, or an array of arrays.',
+        '',
+        'Checked before Values: if both are filled, Data wins.',
+        '',
+        'Object key order becomes column order, not the key names.'
+      ],
+      example: '{{$json}}'
+    },
+    allowWrite: {
+      title: 'How does Allow Write Access work?',
+      steps: [
+        'This checkbox has no effect at runtime — Write, Append, and Update all run regardless of its value.',
+        '',
+        'It exists only as a visual team convention, not an enforced safety gate.',
+        '',
+        'Do not rely on it to block accidental writes.'
+      ],
+      example: 'false'
+    },
   },
   // CRM Services
   hubspot: {
@@ -4705,7 +5580,7 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       ],
       example: 'docs/readme.md'
     },
-    fileContent: {
+    fileData: {
       title: 'How to get File Content?',
       steps: [
         'You provide the content—the exact text or bytes to write to the file.',
@@ -5043,30 +5918,62 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       title: 'Slack Channel',
       url: 'https://api.slack.com/methods/chat.postMessage',
       steps: [
-        'Use a channel name such as #general, a channel ID such as C01234567, or a user ID for direct messages.',
-        'For private channels, invite the connected Slack bot before running the workflow.',
-        'Use Slack channel details to copy a stable channel ID when names may change.'
+        'Choose where the saved Slack OAuth2 bot should post: a public channel like #alerts, a Slack channel ID like C01234ABCDE, or a user/direct-message ID.',
+        'Use {{$json.channelId}} from Slack Trigger when replying to the same channel that started the workflow.',
+        'For private channels, invite the connected bot before running the workflow; otherwise Slack can return not_in_channel or channel_not_found.',
+        'Use Slack channel details to copy a stable channel ID when channel names may change.'
       ],
       example: '#alerts'
     },
     message: {
       title: 'Slack Message',
       steps: [
-        'Write the message text to send with chat.postMessage.',
-        'Slack markdown such as *bold*, _italic_, and `code` is supported.',
-        'Use template values like {{input.orderId}} for dynamic content.'
+        'Write the readable text people should see in Slack notifications, search results, and the message body.',
+        'Combine fixed wording with workflow data such as {{$json.ticketId}}, {{$json.customerEmail}}, or {{$json.orderTotal}}.',
+        'Slack mrkdwn such as *bold*, _italic_, `code`, links, and line breaks is supported.',
+        'Keep Message filled as fallback text even when Blocks contains the visual layout.'
       ],
-      example: 'New order: {{input.orderId}}'
+      example: 'Priority ticket {{$json.ticketId}} from {{$json.customerEmail}} needs review'
+    },
+    threadTs: {
+      title: 'Slack Thread Timestamp',
+      url: 'https://api.slack.com/methods/chat.postMessage',
+      steps: [
+        'Use this only when the Slack message should be a reply in an existing thread.',
+        'Map {{$json.threadTs}}, {{$json.thread_ts}}, {{$json.messageTs}}, or {{$json.ts}} from Slack Trigger or a previous Slack Message output.',
+        'Leave it empty for a new top-level channel message.',
+        'Use the timestamp value itself, not a Slack permalink or human-readable date.'
+      ],
+      example: '{{$json.threadTs}}'
     },
     blocks: {
       title: 'Slack Blocks JSON',
       url: 'https://app.slack.com/block-kit-builder',
       steps: [
-        'Use Slack Block Kit Builder to design rich message blocks.',
-        'Copy the JSON array and paste it into Blocks.',
-        'Keep Message filled as fallback text for notifications.'
+        'Use Slack Block Kit Builder to design rich message blocks for summaries, approvals, reports, or incident updates.',
+        'Copy and paste only the JSON array, for example [{"type":"section",...}], not an object with a blocks property.',
+        'Keep Message filled as fallback text for notifications and clients that do not show Blocks.',
+        'If Slack returns invalid_blocks, validate the JSON array and remove unsupported fields.'
       ],
       example: '[{"type":"section","text":{"type":"mrkdwn","text":"Hello"}}]'
+    },
+    username: {
+      title: 'Slack Bot Name',
+      steps: [
+        'Use this optional display name only when your Slack app and workspace allow bot message customization.',
+        'Choose a clear team-approved name such as Ops Alert Bot, Billing Bot, or Support Workflow.',
+        'This changes message appearance only; the saved Slack OAuth2 connection still controls the real sender and permissions.'
+      ],
+      example: 'Support Workflow'
+    },
+    iconEmoji: {
+      title: 'Slack Icon Emoji',
+      steps: [
+        'Use this optional avatar only when your Slack app allows customized bot icons.',
+        'Enter a Slack emoji shortcode with colons, such as :rotating_light:, :memo:, or :bar_chart:.',
+        'Leave it blank to use the app default icon. This field does not affect routing or workflow output.'
+      ],
+      example: ':memo:'
     }
   },
   slack_webhook: {
@@ -5075,54 +5982,141 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       steps: [
         'Write the simple text payload sent through the selected Slack Incoming Webhook connection.',
         'The webhook URL is stored in Connections, not in this node field.',
-        'Slack markdown and template values like {{input.field}} are supported.'
+        'Slack markdown and template values like {{input.field}} are supported.',
+        '',
+        'Important: this node\'s output replaces the incoming data entirely (id/status/provider/message only) — capture any fields you need in a later step before this node, not after it.'
       ],
       example: 'New user registered: {{input.email}}'
     }
-  },  microsoft_teams: {
+  },
+  microsoft_teams: {
     webhookUrl: {
-      title: 'Microsoft Teams Webhook URL - Step-by-Step',
+      title: 'Microsoft Teams Webhook URL',
       steps: [
-        '1. Open Microsoft Teams',
-        '   Open Teams app or web',
-        '   Go to your team/channel',
-        '',
-        '2. Go to Channel Settings',
-        '   Click "..." next to channel name',
-        '   Click "Connectors"',
-        '',
-        '3. Find Incoming Webhook',
-        '   Search for "Incoming Webhook"',
-        '   Click "Configure"',
-        '',
-        '4. Configure Webhook',
-        '   Give it a name',
-        '   Optionally upload image',
-        '   Click "Create"',
-        '',
-        '5. Copy Webhook URL',
-        '   You\'ll see the Webhook URL',
-        '   Format: https://outlook.office.com/webhook/...',
-        '   Copy the entire URL',
-        '',
-        '6. Store Securely',
-        '   Paste it into the Webhook URL field above',
-        '   Never share publicly',
-        '',
-        'Example:',
-        'https://outlook.office.com/webhook/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx@xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/IncomingWebhook/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+        'Use this for simple Teams channel notifications.',
+        'Create an Incoming Webhook in the exact Teams channel that should receive the message, then copy the full HTTPS URL.',
+        'Prefer saving the URL in Connections under Microsoft Teams when possible; the URL can post to that channel, so keep it private.',
+        'Leave this blank when replying to a Microsoft Teams Trigger with Service URL, Conversation ID, and a Microsoft Teams Bot connection.',
+        'If Teams returns webhook failed, create a fresh webhook for the target channel and test a short message.'
       ],
       example: 'https://outlook.office.com/webhook/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx@xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/IncomingWebhook/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
     },
     message: {
-      title: 'How to write Message?',
+      title: 'Microsoft Teams Message',
       steps: [
-        'Message is the main content sent to Teams.',
-        '',
-        'The webhook sends this value as the text field.',
-        'Use dynamic values like {{input.field}} if needed.'
+        'Write the text people should read in the Teams channel or bot conversation.',
+        'Include the useful workplace details: ticket ID, customer, owner, status, error summary, or next action.',
+        'Map data from earlier steps with {{$json.ticketId}}, {{$json.customerEmail}}, {{$json.response}}, or {{$json.text}}.',
+        'Blank messages return Teams: message is required.',
+        'Keep messages short and specific so busy Teams channels can act on them quickly.'
       ],
-      example: 'Task completed successfully'
+      example: 'Priority ticket {{$json.ticketId}} from {{$json.customerEmail}} needs manager review'
+    },
+    serviceUrl: {
+      title: 'Microsoft Teams Service URL',
+      steps: [
+        'Use this only for Bot Framework replies after a Microsoft Teams Trigger.',
+        'Map {{$json.serviceUrl}} directly from the trigger output.',
+        'Do not paste a Teams browser link here; runtime expects an HTTPS Bot Framework service URL.',
+        'Use it together with Conversation ID and a saved Microsoft Teams Bot connection.'
+      ],
+      example: '{{$json.serviceUrl}}'
+    },
+    conversationId: {
+      title: 'Microsoft Teams Conversation ID',
+      steps: [
+        'Use this only for Bot Framework replies after a Microsoft Teams Trigger.',
+        'Map {{$json.conversationId}} directly from the trigger output.',
+        'This is the chat or channel conversation ID, not the Microsoft Team ID or Channel ID.',
+        'Use it with Service URL so the reply goes back to the same Teams conversation.'
+      ],
+      example: '{{$json.conversationId}}'
+    },
+    replyToId: {
+      title: 'Microsoft Teams Reply To Activity ID',
+      steps: [
+        'Use this optional field when the bot response should attach to the original Teams activity.',
+        'Map {{$json.replyToId}} from Microsoft Teams Trigger, or {{$json.activityId}} if that is the field available.',
+        'Leave it blank to send a new bot message in the conversation.',
+        'Do not paste a Teams message permalink; use the activity ID from the trigger output.'
+      ],
+      example: '{{$json.replyToId}}'
+    }
+  },
+  whatsapp: {
+    resource: {
+      title: 'WhatsApp Resource',
+      steps: [
+        'Message is the only resource selectable here; it sends and manages WhatsApp Cloud API messages.',
+        'The WhatsApp runtime also supports Contact, Conversation, Template, Campaign, and AI Agent resources for AI-generated or manually edited workflow configs — see the WhatsApp documentation page for details.',
+        'Set Resource before Operation, since Operation options depend on it.'
+      ],
+      example: 'message'
+    },
+    operation: {
+      title: 'WhatsApp Operation',
+      steps: [
+        'Send Text replies with free-form text inside the 24-hour customer service window.',
+        'Send Template is required to start a conversation or to message outside that window.',
+        'Send Media, Send Location, and Send Contact Card share rich content; Send Interactive Buttons/List/CTA send tappable UI elements.',
+        'Mark as Read shows the blue double-check on an incoming customer message.'
+      ],
+      example: 'sendText'
+    },
+    to: {
+      title: 'WhatsApp To',
+      steps: [
+        'Enter the recipient WhatsApp phone number in E.164 format: + country code + number, no spaces or dashes.',
+        'For WhatsApp Trigger replies, map {{$json.chatId}} or {{$json.from}}.',
+        'Not used by Mark as Read, which targets an existing message instead of a recipient.',
+        'Do not use a locally formatted number such as 0412 345 678; use +61412345678 instead.'
+      ],
+      example: '{{$json.chatId}}'
+    },
+    text: {
+      title: 'WhatsApp Message',
+      steps: [
+        'Write the free-form text the recipient reads. Required for Send Text.',
+        'Only allowed within the 24-hour customer service window; use Send Template outside that window or for a brand-new contact.',
+        'Map AI Agent output or trigger fields with {{$json.aiResponse}}, {{$json.response}}, or {{$json.text}}.'
+      ],
+      example: 'Hello {{$json.name}}, your delivery is arriving today between 2-4 PM.'
+    },
+    mediaUrl: {
+      title: 'WhatsApp Media URL',
+      steps: [
+        'Required for Send Media unless Media ID is set instead.',
+        'Use a public HTTPS direct file URL — not a preview page, dashboard link, or signed URL that expires quickly.',
+        'Map values such as {{$json.invoicePdfUrl}} or {{$json.chartImageUrl}}.'
+      ],
+      example: '{{$json.invoicePdfUrl}}'
+    },
+    templateName: {
+      title: 'WhatsApp Template Name',
+      steps: [
+        'Enter the exact technical name of an approved template from Meta Business Suite -> WhatsApp -> Message Templates.',
+        'Required for Send Template.',
+        'Template approval typically takes 24-48 hours; sending before approval fails.'
+      ],
+      example: 'order_confirmation'
+    },
+    language: {
+      title: 'WhatsApp Template Language',
+      steps: [
+        'Enter the exact language code the template was approved in, such as en_US, pt_BR, or ar.',
+        'Required for Send Template.',
+        'Sending with the wrong language code makes WhatsApp report the template as not found even if the name is correct.'
+      ],
+      example: 'en_US'
+    },
+    messageId: {
+      title: 'WhatsApp Message ID',
+      steps: [
+        'Enter the WhatsApp message ID of the incoming customer message to mark as read.',
+        'Required for Mark as Read.',
+        'Map {{$json.messageId}} from WhatsApp Trigger output for the message you are responding to.'
+      ],
+      example: '{{$json.messageId}}'
     }
   },
   outlook: {
@@ -7411,7 +8405,7 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       ],
       example: 'src/file.js'
     },
-    fileContent: {
+    fileData: {
       title: 'How to get File Content?',
       steps: [
         'You provide the content—the exact text (or encoded content) to write to the file.',
@@ -7799,81 +8793,278 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       example: '{"Content-Type":"application/json"}'
     }
   },
+  split_in_batches: {
+    array: {
+      title: 'How to set Array Expression',
+      steps: [
+        'Array Expression points Split In Batches to the list it should divide into groups.',
+        '',
+        'Leave it empty only when the previous node already outputs input.items.',
+        'Fill it when the list is under another field, such as {{$json.rows}}, {{$json.contacts}}, {{$json.orders}}, {{$json.messages}}, or {{$json.data.records}}.',
+        '',
+        'Use the full list path, not one record. Use {{$json.contacts}}, not {{$json.contacts[0]}}.',
+        'The node returns every group in {{$json.batches}} and exposes the first group as {{$json.items}}.',
+        '',
+        'Important: the current DAG runtime does not automatically run the next branch once per batch.'
+      ],
+      example: '{{$json.contacts}}'
+    },
+    batchSize: {
+      title: 'How to set Batch Size',
+      steps: [
+        'Batch Size is the number of records to place in each batch.',
+        '',
+        'Use 10 for tests, 25 or 50 for review queues, and 100 for ordinary API or spreadsheet batches.',
+        'Use smaller values for strict rate limits or large records.',
+        '',
+        'The output includes {{$json.batchSize}}, {{$json.totalBatches}}, {{$json.batches}}, and {{$json.items}}.',
+        'Blank or invalid values default to 10, and runtime enforces at least 1.',
+        '',
+        'Batch Size controls group size only; downstream service nodes still need their own account connection and supported batch handling.'
+      ],
+      example: '100'
+    }
+  },
+  javascript: {
+    code: {
+      title: 'How to set JavaScript Code',
+      steps: [
+        'Write the script that should run on the current workflow data.',
+        '',
+        'Read incoming data as input, $json, or json. Use exact field names from the previous node output.',
+        'Return the value the next node should receive. Return an object when downstream nodes need named fields such as customerEmail, riskScore, or eligibleForReview.',
+        '',
+        'Workplace example:',
+        'const total = Number($json.orderTotal || 0);',
+        'return { ...$json, riskScore: total > 5000 ? 90 : 20, eligibleForReview: total > 5000 };',
+        '',
+        'If the field is blank, runtime returns _error: JavaScript node: Code is required.',
+        'JavaScript has no credentials. Do not paste API keys or passwords into code; connect downstream service accounts separately.'
+      ],
+      example: 'return { ...$json, processed: true };'
+    },
+    timeout: {
+      title: 'How to set Timeout',
+      steps: [
+        'Timeout is the maximum time the script may run, in milliseconds.',
+        '',
+        'Use 5000 for ordinary quick transformations.',
+        'Use 10000 when processing a larger list or calculating several totals.',
+        'Runtime caps the value at 30000 even if you enter a larger number.',
+        '',
+        'If the script exceeds the timeout, the output can include {{$json._error}} with an execution timeout message.',
+        'Raise this value only after checking that your code is not looping forever or reading the wrong field.'
+      ],
+      example: '10000'
+    },
+    outputSchema: {
+      title: 'How to set Output Schema',
+      steps: [
+        'Output Schema is an optional JSON hint for the top-level value your code should return.',
+        '',
+        'Use {"type":"object"} when downstream nodes map named fields.',
+        'Use {"type":"array"} when your script returns a list.',
+        'Other top-level hints include string, number, and boolean.',
+        '',
+        'This field does not transform the output. Your JavaScript Code must still return the actual object, list, text, number, or boolean.',
+        'Runtime logs a warning on mismatch today, so test the downstream mapping after changing code.'
+      ],
+      example: '{"type":"object"}'
+    }
+  },
+  loop: {
+    array: {
+      title: 'How to set Array Expression',
+      steps: [
+        'Array Expression points Loop to the list it should expose as {{$json.items}}.',
+        '',
+        'Leave it empty only when the previous node already outputs input.items.',
+        'Fill it when the list is under another field, such as {{$json.rows}}, {{$json.contacts}}, {{$json.orders}}, {{$json.messages}}, or {{$json.data.records}}.',
+        '',
+        'Use the full list path, not one record. Use {{$json.rows}}, not {{$json.rows[0]}}.',
+        'Loop keeps other incoming fields and adds metadata under {{$json.loop}}.',
+        '',
+        'Important: the current DAG runtime does not run the next branch once per item. Use Function Item or a supported batch path for true per-record work.'
+      ],
+      example: '{{$json.rows}}'
+    },
+    maxIterations: {
+      title: 'How to set Max Iterations',
+      steps: [
+        'Max Iterations is the largest number of list records Loop exposes downstream.',
+        '',
+        'Use small numbers such as 10 or 25 for previews, approvals, or rate-limited services.',
+        'Use 100 for ordinary batches when downstream nodes can handle the volume.',
+        'Use higher values only after checking the next service limits and account permissions.',
+        '',
+        'If the incoming list is longer than this value, Loop truncates {{$json.items}} and sets {{$json.loop.truncated}} to true.',
+        'Blank or invalid values default to 100, and runtime enforces at least 1.'
+      ],
+      example: '25'
+    }
+  },
+  edit_fields: {
+    fields: {
+      title: 'How to set Fields',
+      steps: [
+        'Fields are the key-value rows Edit Fields adds to the current item.',
+        '',
+        'Left side: type the output field name the next node should use, such as customerEmail, fullName, priorityLabel, or needsManagerReview.',
+        'Right side: type the value for that field. It can be fixed text, a number, true/false, or a previous-step value such as {{$json.email}}.',
+        '',
+        'Every field you add becomes available after this node as {{$json.fieldName}}.',
+        'If you reuse an incoming field name, Edit Fields overwrites that value.',
+        'If you leave fields empty, the node usually passes the incoming item through unchanged.',
+        '',
+        'Edit Fields has no credentials. Connect the output to the next action, then connect that service node account separately.'
+      ],
+      example: '{"customerEmail":"{{$json.email}}","fullName":"{{$json.fname}} {{$json.lname}}","priorityLabel":"High"}'
+    }
+  },
+  set: {
+    fields: {
+      title: 'How to set Fields (JSON)',
+      steps: [
+        'Fields is the JSON object of new or replacement values that Set adds to the current item.',
+        '',
+        'Use keys that later nodes should read, such as customerEmail, fullName, leadSource, status, or readyForSales.',
+        '',
+        'Use fixed values for labels and decisions: {"status":"new_lead","readyForSales":true}.',
+        'Use previous-step values when the data came from a form, webhook, sheet, CRM, or API response: {"customerEmail":"{{$json.email}}","fullName":"{{$json.firstName}} {{$json.lastName}}"}.',
+        '',
+        'Every key becomes available after this node as {{$json.keyName}}.',
+        'If a key already exists on the incoming item, Set overwrites that value.',
+        '',
+        'Set has no credentials. Connect the Set output to the next service node, then connect that service node account separately.'
+      ],
+      example: '{"customerEmail":"{{$json.email}}","fullName":"{{$json.firstName}} {{$json.lastName}}","leadSource":"Website demo request"}'
+    }
+  },
+  filter: {
+    array: {
+      title: 'How to set Array Expression',
+      steps: [
+        'Array Expression is the list you want to narrow down.',
+        '',
+        'Leave it empty when the previous step already outputs items.',
+        'Fill it when the list is under another field, such as {{$json.contacts}}, {{$json.orders}}, {{$json.rows}}, or {{$json.data.records}}.',
+        '',
+        'The Filter node writes the smaller list back to {{$json.items}}, while keeping other incoming fields available.',
+        '',
+        'Common mistake: pointing to one record instead of the list. Use {{$json.contacts}}, not {{$json.contacts[0]}}.'
+      ],
+      example: '{{$json.contacts}}'
+    },
+    condition: {
+      title: 'How to set Filter Condition',
+      steps: [
+        'Condition is the rule each item must pass to stay in the list.',
+        '',
+        'Use item for the current record.',
+        'Examples:',
+        '- item.status === "active"',
+        '- item.total >= 500',
+        '- item.email && !item.email.includes("test")',
+        '- item.completed !== true',
+        '',
+        'Use {{$json.field}} for workflow-level values outside the list, but use item.field for values inside each record.',
+        '',
+        'Some secured deployments disable JavaScript-style filtering; if that happens, use a source-node filter or approved Function path.'
+      ],
+      example: 'item.status === "active"'
+    }
+  },
   switch: {
     expression: {
-      title: 'How to set Expression?',
+      title: 'How to set Expression',
       steps: [
-        'Expression is the value you want to match against cases.',
+        'Expression is the previous-step value Switch checks to choose a branch.',
         '',
-        'Use a field from previous nodes, e.g. {{input.status}}.',
-        'The expression result is compared to each case value.'
+        'Use a field from earlier data, such as {{$json.category}}, {{$json.status}}, {{$json.region}}, or {{$json.priority}}.',
+        'The resolved value is compared to each case value.',
+        '',
+        'Example: if {{$json.category}} resolves to billing, the billing case output runs.',
+        '',
+        'Common mistake: using a visible form label instead of the internal field key. Use {{$json.category}}, not "Ticket Category".'
       ],
-      example: '{{input.status}}'
+      example: '{{$json.category}}'
     },
     cases: {
-      title: 'How to set Cases (JSON)?',
+      title: 'How to set Cases',
       steps: [
-        'Cases is a JSON array. Each case creates a branch.',
+        'Cases is the JSON list of branch outputs.',
         '',
         'Format:',
-        '[{"value":"success","label":"Success"},{"value":"failed","label":"Failed"}]',
+        '[{"value":"billing","label":"Billing"},{"value":"technical","label":"Technical"},{"value":"general","label":"General"}]',
         '',
         'Value must match the expression result exactly.',
-        'Label becomes the output branch name.'
+        'Value also becomes the outgoing branch handle used by connections.',
+        'Label is the friendly name people see in the UI.',
+        '',
+        'Keep values unique. After renaming a value, re-check the outgoing branch lines.'
       ],
-      example: '[{"value":"success","label":"Success"},{"value":"failed","label":"Failed"}]'
+      example: '[{"value":"billing","label":"Billing"},{"value":"technical","label":"Technical"}]'
     }
   },
   if_else: {
-    // Legacy single-condition guide (for old UIs)
     condition: {
-      title: 'How to write Condition?',
+      title: 'How to set a condition',
       steps: [
-        'Condition is a JavaScript-style expression that returns true or false.',
+        'Use this only if you see an older single-condition field. Most workflows now use the Conditions builder.',
+        '',
+        'Choose the value from the previous node, compare it to the value that should count as a match, then connect TRUE and FALSE outputs.',
         '',
         'Examples:',
-        '• {{input.value}} > 10',
-        '• {{input.status}} === "active"',
-        '• {{input.count}} >= 5',
+        '- $json.orderTotal >= 500',
+        '- $json.status == "paid"',
+        '- $json.customerTier == "VIP"',
         '',
-        'Tip: Combine checks with && (AND) or || (OR), e.g. {{input.age}} >= 18 && {{input.country}} === "US".'
+        'For several rules, use the Conditions builder and Combine Operation instead of packing everything into one expression.'
       ],
-      example: '{{input.value}} > 10'
+      example: '$json.orderTotal >= 500'
     },
-    // New multi-condition builder
     conditions: {
-      title: 'How to write Conditions?',
+      title: 'How to set Conditions',
       steps: [
-        'Conditions control when the TRUE or FALSE branch runs. Each row in the table is one condition.',
+        'Conditions decide whether the run leaves through TRUE or FALSE. Each row is one plain workplace rule.',
         '',
         'Step 1: Choose the Field to check.',
-        '• Use fields from trigger or previous nodes, e.g. input.age, input.status, data.total.',
-        '• The dropdown shows common fields; you can also type a custom path.',
+        '- Use a value from the trigger or previous node, such as $json.orderTotal, $json.status, $json.customer.plan, input.email, or input.score.',
+        '- If the dropdown does not show it, choose Custom and type the field path.',
         '',
         'Step 2: Select the Operator.',
-        '• Common operators: equals, not_equals, greater_than, greater_than_or_equal, less_than, contains.',
-        '• Example: age greater_than_or_equal 18, status equals "active".',
+        '- equals: exact matches like status equals paid.',
+        '- not_equals: exclusions like status not_equals cancelled.',
+        '- greater_than: numbers above a threshold, not including the threshold.',
+        '- less_than: numbers below a threshold, not including the threshold.',
+        '- greater_than_or_equal: numbers at least the threshold, such as orderTotal at least 500.',
+        '- less_than_or_equal: numbers up to the threshold, such as riskScore 3 or lower.',
+        '- contains: text or a list includes a word, tag, or item.',
+        '- not_contains: text or a list must not include a word, tag, or item.',
         '',
         'Step 3: Enter the Value to compare against.',
-        '• Numbers: 18, 100, 0.',
-        '• Text: active, US, high (no quotes needed in the Value box).',
+        '- Numbers: 18, 500, 10000.',
+        '- Text: paid, approved, enterprise, urgent.',
+        '- Booleans: true or false.',
         '',
-        'You can add multiple rows – they will be combined using the Combine Operation setting below (AND/OR).'
+        'Step 4: Connect both outputs.',
+        '- TRUE goes to the matching action, such as Finance Review.',
+        '- FALSE goes to the fallback action, such as Standard Fulfillment.',
+        '',
+        'Use JSON mode only when pasting prepared condition objects.'
       ],
-      example: 'Field: input.age, Operator: greater_than_or_equal, Value: 18'
+      example: 'Field: $json.orderTotal, Operator: greater_than_or_equal, Value: 500'
     },
     combineOperation: {
-      title: 'How to write Combine Operation?',
+      title: 'How to set Combine Operation',
       steps: [
         'Combine Operation decides how multiple conditions work together.',
         '',
-        'Option 1: AND (all conditions must be true).',
-        '• TRUE branch runs only if every row evaluates to true.',
-        '• Example: age >= 18 AND country == "US" → both must match.',
+        'AND: every condition row must be true.',
+        '- Choose AND for strict routing, such as status equals paid AND orderTotal is at least 500.',
         '',
-        'Option 2: OR (any condition can be true).',
-        '• TRUE branch runs if at least one row is true.',
-        '• Example: country == "US" OR country == "CA" → either value matches.',
+        'OR: any one condition row can be true.',
+        '- Choose OR for flexible routing, such as priority equals urgent OR customerTier equals VIP.',
         '',
         'If you are not sure, use AND for stricter checks, OR for more permissive routing.'
       ],
@@ -7882,43 +9073,62 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
   },
   email: {
     to: {
-      title: 'How to set To?',
+      title: 'How to set To',
       steps: [
-        'To is the recipient email address.',
+        'To is the recipient address or comma-separated recipient list.',
         '',
-        'You can enter a static address or a variable like {{input.email}}.'
+        'Use a fixed address for internal alerts, or map a previous field such as {{$json.customerEmail}} for customer messages.',
+        'Check the previous node output and map the actual email address field, not a display name or customer ID.',
+        '',
+        'After sending, SMTP output includes {{$json.accepted}} and {{$json.rejected}} so you can log or route delivery acceptance.'
       ],
-      example: 'user@example.com'
+      example: '{{$json.customerEmail}}'
     },
     subject: {
-      title: 'How to set Subject?',
+      title: 'How to set Subject',
       steps: [
-        'Subject is the email title shown in the inbox.',
+        'Subject is the short title shown in the recipient inbox.',
         '',
-        'Keep it short and clear.'
+        'Keep it short, clear, and specific.',
+        'Use values such as order ID, ticket ID, invoice number, or report date when they help the recipient recognize the message.',
+        'Avoid putting private details or the full message body in the subject.'
       ],
-      example: 'Your Order Has Been Shipped'
+      example: 'Invoice {{$json.invoiceNumber}} is ready'
     },
     text: {
-      title: 'How to write Text?',
+      title: 'How to write Text',
       steps: [
-        'Text is the plain‑text email body.',
+        'Text is the plain-text email body.',
         '',
-        'Use it for simple messages or as a fallback.'
+        'Use it for simple messages and as the reliable fallback when an inbox blocks HTML.',
+        'Backend marks this field required, and runtime needs either Text or HTML before sending.',
+        'Map safe values from previous steps, such as {{$json.firstName}}, {{$json.orderId}}, or {{$json.invoiceUrl}}.'
       ],
-      example: 'Hello, your order is on the way!'
+      example: 'Hi {{$json.firstName}}, your invoice {{$json.invoiceNumber}} is ready: {{$json.invoiceUrl}}'
     },
     html: {
-      title: 'How to write HTML?',
+      title: 'How to write HTML',
       steps: [
-        'HTML is the rich‑text email body.',
+        'HTML is the rich formatted version of the email body.',
         '',
-        'Use valid HTML tags and keep it lightweight.'
+        'Use simple email-safe HTML for links, paragraphs, emphasis, and light formatting.',
+        'Keep scripts, forms, secrets, and complex interactive content out of email bodies.',
+        'Provide Text too when the message is important, so recipients have a fallback.'
       ],
-      example: '<h1>Hello</h1><p>Your order is on the way!</p>'
-    }
-  },
-  email_sequence_sender: {
+      example: '<p>Hi {{$json.firstName}},</p><p><a href="{{$json.invoiceUrl}}">View invoice</a></p>'
+    },
+    from: {
+      title: 'How to set From',
+      steps: [
+        'From is the sender address shown on the email.',
+        '',
+        'Leave it empty to use the SMTP username or the default From address saved in the SMTP Account connection.',
+        'Fill it only when your SMTP provider or company mail relay allows that sender address.',
+        'Unauthorized sender addresses can be rejected or flagged as spoofing.'
+      ],
+      example: 'billing@company.com'
+    },
+  },  email_sequence_sender: {
     recipient: {
       title: 'How to set Recipient (JSON)?',
       steps: [
@@ -7968,18 +9178,18 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
   },
   merge: {
     mode: {
-      title: 'How to choose Mode?',
+      title: 'How to choose Mode',
       steps: [
-        'Mode defines how inputs are combined.',
+        'Mode defines how incoming branch outputs are combined.',
         '',
         'Options:',
-        '• overwrite – combine object fields, with later branches winning',
-        '• append – collect branch outputs into items',
-        '• deep_merge – recursively combine nested object fields',
+        '- overwrite: combine flat object fields. If two branches use the same key, the later branch wins. Choose this for simple payloads.',
+        '- append: collect each branch output into {{$json.items}}. Choose this when the next step expects a list of branch results.',
+        '- deep_merge: recursively combine nested object fields. Choose this when branches add different details under customer, approval, ticket, or similar objects.',
         '',
-        'Choose the simplest mode that fits your data.'
+        'After changing modes, check the next node mappings. Append mode uses {{$json.items}}, while overwrite and deep_merge usually use top-level or nested fields.'
       ],
-      example: 'overwrite'
+      example: 'deep_merge'
     }
   },
   webhook: {
@@ -8034,6 +9244,136 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       ],
       example: 'https://example.com/thank-you'
     }
+  },
+  discord_trigger: {
+    eventTypes: {
+      title: 'How to set Discord Event Types?',
+      steps: [
+        'Use slash_command for slash commands such as /support.',
+        'Use interaction for buttons, select menus, modals, and autocomplete.',
+        'Use webhook_event for Discord Webhook Events configured in the Developer Portal.',
+        'Use message only when Discord is actually delivering message-like events to this endpoint.'
+      ],
+      example: 'slash_command, interaction'
+    },
+    guildIds: {
+      title: 'How to set Allowed Guild IDs?',
+      steps: [
+        'Enable Developer Mode in Discord.',
+        'Right-click the server name and copy Server ID.',
+        'Enter one or more IDs separated by commas or new lines.',
+        'Leave blank to accept any delivered server.'
+      ],
+      example: '222222222222222222'
+    },
+    channelIds: {
+      title: 'How to set Allowed Channel IDs?',
+      steps: [
+        'Enable Developer Mode in Discord.',
+        'Right-click the target channel and copy Channel ID.',
+        'Enter numeric IDs, not channel names like #support.',
+        'Use {{$json.channelId}} later when replying with the Discord action node.'
+      ],
+      example: '333333333333333333'
+    },
+    allowedUserIds: {
+      title: 'How to set Allowed User IDs?',
+      steps: [
+        'Enable Developer Mode in Discord.',
+        'Right-click an approved user and copy User ID.',
+        'Enter one or more numeric IDs for admin-only or moderator-only workflows.',
+        'Leave blank when any delivered user can trigger the workflow.'
+      ],
+      example: '111111111111111111'
+    },
+    commandFilter: {
+      title: 'How to set Command Filter?',
+      steps: [
+        'Enter the slash command name only, such as /support.',
+        'Do not include command options or user-entered text.',
+        'Leave blank to accept all configured commands.',
+        'Route by {{$json.command}} later with Switch when several commands share the workflow.'
+      ],
+      example: '/support'
+    },
+    applicationId: {
+      title: 'How to set Application ID?',
+      steps: [
+        'Open discord.com/developers/applications.',
+        'Choose your application and open General Information.',
+        'Copy Application ID.',
+        'Prefer saving this on the Discord Bot Token connection when possible.'
+      ],
+      example: '999999999999999999'
+    },
+    publicKey: {
+      title: 'How to set Public Key Fallback?',
+      steps: [
+        'Open the Discord application General Information page.',
+        'Copy Public Key, not Bot Token or Client Secret.',
+        'Prefer saving it on the Discord Bot Token connection or DISCORD_PUBLIC_KEY.',
+        'Use this fallback only when the connection or worker environment does not already provide it.'
+      ],
+      example: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+    },
+    validateSignature: {
+      title: 'How to use Validate Signature?',
+      steps: [
+        'Keep it on for production Discord endpoints.',
+        'It checks X-Signature-Ed25519 and X-Signature-Timestamp.',
+        'Turn it off only for controlled local simulations.',
+        'If validation fails, fix the saved Public Key instead of disabling this setting.'
+      ],
+      example: 'true'
+    }
+  },
+
+  discord: {
+    channelId: {
+      title: 'Discord Channel ID',
+      steps: [
+        'Enable Developer Mode in Discord: User Settings → Advanced → Developer Mode.',
+        'Right-click the target channel → Copy Channel ID.',
+        'Use {{$json.channelId}} after Discord Trigger to reply in the same channel.',
+        'Leave blank only when replying with Interaction Token + Application ID instead.'
+      ],
+      example: '{{$json.channelId}}'
+    },
+    message: {
+      title: 'Discord Message',
+      steps: [
+        'Text the bot should post. Required for every send.',
+        'Supports Discord markdown: **bold**, *italic*, `code`, ||spoiler||.',
+        'Map AI Agent or trigger output, e.g. {{$json.response}} or {{$json.text}}.'
+      ],
+      example: 'New ticket {{$json.ticketId}} needs review'
+    },
+    interactionToken: {
+      title: 'Discord Interaction Token',
+      steps: [
+        'Only fill this when replying to a Discord slash command or component interaction.',
+        'Map {{$json.interactionToken}} from Discord Trigger — it expires 15 minutes after the interaction.',
+        'Must be paired with Application ID; together they skip the bot-token channel path entirely.'
+      ],
+      example: '{{$json.interactionToken}}'
+    },
+    applicationId: {
+      title: 'Discord Application ID',
+      steps: [
+        'Required together with Interaction Token for slash-command/component follow-up replies.',
+        'Map {{$json.applicationId}} from Discord Trigger, or copy it from the Developer Portal → General Information.'
+      ],
+      example: '{{$json.applicationId}}'
+    },
+    replyToMessageId: {
+      title: 'Discord Reply To Message ID',
+      steps: [
+        'Optional. Makes the new bot message visually reply to an earlier channel message.',
+        'Only applies to the Channel ID + Bot Token path, not the interaction-reply path.',
+        'Map {{$json.messageId}} from Discord Trigger or a previous Discord send.'
+      ],
+      example: '{{$json.messageId}}'
+    },
   },
   discord_webhook: {
     message: {
@@ -9294,11 +10634,11 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       steps: [
         'You choose this from the dropdown in the node.',
         '',
-        '• List Contacts – Use when you want to retrieve contacts from Google Contacts. You can set Max Results to limit how many are returned.',
+        '• List Contacts – Use when you want to retrieve contacts. Leave Contact ID empty to get every contact (up to Max Results), or fill Contact ID to fetch just that one contact.',
         '',
-        '• Create Contact – Use when you want to add a new contact. You need Name and Email (and optionally Phone).',
+        '• Create Contact – Use when you want to add a new contact. You need at least one of Name, Email, or Phone.',
         '',
-        '• Update Contact – Use when you want to change an existing contact. You need Contact ID and the fields you want to change (Name, Email, Phone).',
+        '• Update Contact – Use when you want to change an existing contact. You need Contact ID and at least one field to change (Name, Email, Phone).',
         '',
         '• Delete Contact – Use when you want to remove a contact. You need Contact ID only.'
       ]
@@ -9367,14 +10707,14 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       ],
       example: '+1234567890'
     },
-    maxResults: {
+    pageSize: {
       title: 'How to get Max Results?',
       steps: [
         'You choose the number—it is not copied from Google Contacts.',
         '',
         'What to use: 10–100 for most cases (e.g. "last 50 contacts"); 500–1000 only if you need a larger list.',
         '',
-        'This field only affects List Contacts. It is ignored when Operation = Create, Update, or Delete.'
+        'This field only affects List Contacts when Contact ID is empty. It is ignored when Contact ID is filled, or when Operation = Create, Update, or Delete.'
       ],
       example: '100'
     }
@@ -9495,6 +10835,17 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         'Google Tasks stores task due dates at day level. Time of day is not saved by the Google Tasks API.'
       ],
       example: '2026-12-31'
+    },
+    status: {
+      title: 'How to choose Status?',
+      steps: [
+        'Only used for Update. Choose Completed to check the task off, or Needs Action to reopen it.',
+        '',
+        'Google Tasks records the completion time automatically when you set Completed — there is no field to pick a custom completion time.',
+        '',
+        'Leave empty to update other fields (title/notes/due) without changing completion state.'
+      ],
+      example: 'completed'
     }
   },
   fraud_detection_node: {

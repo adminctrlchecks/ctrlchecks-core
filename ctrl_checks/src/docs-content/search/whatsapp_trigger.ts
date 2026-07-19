@@ -2,35 +2,35 @@ import type { DocsSearchIndexItem } from '../search-index';
 
 export const whatsappTriggerSearchIndex = [
   {
-    "type": "node",
-    "title": "WhatsApp Trigger",
-    "slug": "whatsapp_trigger",
-    "category": "Triggers",
-    "href": "/docs/nodes/whatsapp_trigger",
-    "text": "WhatsApp Trigger Trigger workflows on WhatsApp events: message received, delivered, read, conversation created Use this node when a workflow needs whatsapp trigger behavior with schema-driven inputs from the CtrlChecks node registry. Triggers"
+    type: 'node',
+    title: 'WhatsApp Trigger',
+    slug: 'whatsapp_trigger',
+    category: 'Triggers',
+    href: '/docs/nodes/whatsapp_trigger',
+    text: 'WhatsApp Trigger starts workflows in real time from Meta WhatsApp Cloud incoming messages and status webhooks.',
   },
   {
-    "type": "operation",
-    "title": "WhatsApp Trigger: Configure",
-    "slug": "whatsapp_trigger",
-    "category": "Triggers",
-    "href": "/docs/nodes/whatsapp_trigger#operation-configure",
-    "text": "WhatsApp Trigger Configuration Configure Configure with the WhatsApp Trigger node using the configured input fields. configure"
+    type: 'operation',
+    title: 'WhatsApp Trigger: Receive Event',
+    slug: 'whatsapp_trigger',
+    category: 'Triggers',
+    href: '/docs/nodes/whatsapp_trigger#operation-receive_event',
+    text: 'Receive WhatsApp Cloud webhook events and normalize chatId from waId text messageId phoneNumberId eventType status timestamp raw.',
   },
   {
-    "type": "field",
-    "title": "WhatsApp Trigger: Event",
-    "slug": "whatsapp_trigger",
-    "category": "Triggers",
-    "href": "/docs/nodes/whatsapp_trigger#operation-configure",
-    "text": "WhatsApp Trigger Configuration Configure Event event WhatsApp event type to listen for"
+    type: 'field',
+    title: 'WhatsApp Trigger: Verify Token',
+    slug: 'whatsapp_trigger',
+    category: 'Triggers',
+    href: '/docs/nodes/whatsapp_trigger#operation-receive_event',
+    text: 'Verify Token validates Meta webhook subscription challenge requests.',
   },
   {
-    "type": "field",
-    "title": "WhatsApp Trigger: Phone Number Id",
-    "slug": "whatsapp_trigger",
-    "category": "Triggers",
-    "href": "/docs/nodes/whatsapp_trigger#operation-configure",
-    "text": "WhatsApp Trigger Configuration Configure Phone Number Id phoneNumberId WhatsApp Phone Number ID to listen on (optional)"
-  }
+    type: 'field',
+    title: 'WhatsApp Trigger: Signature Validation',
+    slug: 'whatsapp_trigger',
+    category: 'Triggers',
+    href: '/docs/nodes/whatsapp_trigger#operation-receive_event',
+    text: 'Validate X-Hub-Signature-256 with META_APP_SECRET FACEBOOK_APP_SECRET or WHATSAPP_APP_SECRET.',
+  },
 ] satisfies DocsSearchIndexItem[];
