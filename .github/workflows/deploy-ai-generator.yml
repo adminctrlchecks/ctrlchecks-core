@@ -1,22 +1,30 @@
 name: Deploy AI Generator
 
 # Triggers:
-#   - push to main when services/ai-generator/ files change
-#   - workflow_dispatch for manual deploys
+#   - push to master/main when services/ai-generator/ changes
+#   - workflow_dispatch for manual deploys / hotfixes
 #
-# Build runs in CI (fast, ~30s). Artifact is tarball-SCP'd to server.
-# Server .env is never overwritten — managed separately per Task 5.
+# Target: root@187.127.185.105 /opt/ctrlchecks-ai-generator (Hostinger KVM4)
+#
+# Deploy strategy (mirrors deploy-worker.yml):
+#   1. Build dist/ in CI.
+#   2. Backup existing dist/ on server (dist.bak/).
+#   3. Upload new tar, extract, npm ci, restart service.
+#   4. Health-check retry loop: 5 attempts × 10s.
+#   5. On failure: restore dist.bak/ + restart + exit 1.
 
 on:
   push:
-    branches: [main]
+    branches:
+      - master
+      - main
     paths:
       - 'services/ai-generator/**'
       - '!services/ai-generator/**/*.test.ts'
-      - '!services/ai-generator/**/*.md'
+      - '.github/workflows/deploy-ai-generator.yml'
   workflow_dispatch:
     inputs:
-      skip_tests:
+      skip_quality_gate:
         description: 'Skip type-check (emergency hotfix only)'
         required: false
         default: 'false'
@@ -27,9 +35,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
-    name: AI Generator Build
+  # ── Quality gate ─────────────────────────────────────────────────────────────
+  quality-gate:
+    name: AI Generator Quality Gate
     runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.skip_quality_gate != 'true' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -45,93 +55,142 @@ jobs:
         run: npm ci
 
       - name: Type-check
-        if: ${{ github.event.inputs.skip_tests != 'true' }}
         working-directory: ./services/ai-generator
         run: npm run type-check
+
+      # Known pre-existing test failures are tracked separately from this
+      # deploy pipeline — informational only, not a deploy blocker.
+      - name: Tests (informational)
+        working-directory: ./services/ai-generator
+        run: npm test
+        continue-on-error: true
+
+  # ── Deploy ───────────────────────────────────────────────────────────────────
+  deploy:
+    name: Deploy AI Generator to Hostinger
+    runs-on: ubuntu-latest
+    needs: quality-gate
+    if: always() && (needs.quality-gate.result == 'success' || needs.quality-gate.result == 'skipped')
+
+    env:
+      SERVER_HOST: ${{ secrets.HOSTINGER_HOST || '187.127.185.105' }}
+      SERVER_USER: root
+      SERVER_PATH: /opt/ctrlchecks-ai-generator
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: services/ai-generator/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./services/ai-generator
+        run: npm ci
 
       - name: Build
         working-directory: ./services/ai-generator
         run: npm run build
 
-      - name: Package artifact
+      - name: Package dist
         working-directory: ./services/ai-generator
         run: |
           tar -czf /tmp/ai-generator-deploy.tar.gz \
-            dist/ \
-            package.json \
-            package-lock.json
-          echo "Artifact size: $(du -sh /tmp/ai-generator-deploy.tar.gz | cut -f1)"
+            dist/ package.json package-lock.json
+          echo "Package size: $(du -sh /tmp/ai-generator-deploy.tar.gz | cut -f1)"
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ai-generator-dist
-          path: /tmp/ai-generator-deploy.tar.gz
-          retention-days: 1
-
-  deploy:
-    name: Deploy AI Generator to EC2
-    runs-on: ubuntu-latest
-    needs: build
-
-    steps:
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: ai-generator-dist
-          path: /tmp/
-
-      - name: Setup SSH key
+      - name: Configure SSH key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy_key
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H ${{ secrets.EC2_HOST || '3.7.115.58' }} >> ~/.ssh/known_hosts 2>/dev/null
+          ssh-keyscan -H "$SERVER_HOST" >> ~/.ssh/known_hosts 2>/dev/null
 
-      - name: SCP artifact to server
-        env:
-          EC2_HOST: ${{ secrets.EC2_HOST || '3.7.115.58' }}
-          EC2_USER: ${{ secrets.EC2_USER || 'ubuntu' }}
+      - name: Upload package to server
         run: |
-          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
-              /tmp/ai-generator-deploy.tar.gz \
-              "$EC2_USER@$EC2_HOST:/tmp/ai-generator-deploy.tar.gz"
+          scp -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            -o ConnectTimeout=15 \
+            /tmp/ai-generator-deploy.tar.gz \
+            "$SERVER_USER@$SERVER_HOST:/tmp/ai-generator-deploy.tar.gz"
 
-      - name: Extract, install deps, restart
-        env:
-          EC2_HOST: ${{ secrets.EC2_HOST || '3.7.115.58' }}
-          EC2_USER: ${{ secrets.EC2_USER || 'ubuntu' }}
+      - name: Deploy on server
         run: |
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
-              "$EC2_USER@$EC2_HOST" bash << 'REMOTE'
-            set -euo pipefail
-            TARGET=/opt/ctrlchecks-ai-generator
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            -o ConnectTimeout=15 \
+            "$SERVER_USER@$SERVER_HOST" bash << 'REMOTE'
+          set -euo pipefail
+          TARGET=/opt/ctrlchecks-ai-generator
 
-            echo "── Extracting artifact ──────────────────────────────────"
-            tar -xzf /tmp/ai-generator-deploy.tar.gz -C "$TARGET"
-            rm -f /tmp/ai-generator-deploy.tar.gz
+          echo "── Backup current dist/ ─────────────────────────────────────"
+          if [ -d "$TARGET/dist" ]; then
+            rm -rf "$TARGET/dist.bak"
+            cp -a "$TARGET/dist" "$TARGET/dist.bak"
+            echo "✅ dist.bak created"
+          else
+            echo "⚠  No existing dist/ — skipping backup (first deploy)"
+          fi
 
-            echo "── Installing production deps ───────────────────────────"
-            cd "$TARGET"
-            npm ci --omit=dev
+          echo "── Extract new package ──────────────────────────────────────"
+          tar -xzf /tmp/ai-generator-deploy.tar.gz -C "$TARGET"
+          rm /tmp/ai-generator-deploy.tar.gz
 
-            echo "── Restarting service ───────────────────────────────────"
-            sudo systemctl restart ctrlchecks-ai-generator
-            sleep 6
+          echo "── npm ci ───────────────────────────────────────────────────"
+          cd "$TARGET"
+          npm ci --omit=dev 2>&1 | tail -5
 
-            echo "── Health check ─────────────────────────────────────────"
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3002/health)
-            if [[ "$STATUS" == "200" ]]; then
-              echo "✅ ai-generator healthy on :3002"
-            else
-              echo "❌ Health check failed: HTTP $STATUS"
-              sudo journalctl -u ctrlchecks-ai-generator -n 30 --no-pager
-              exit 1
-            fi
-
-            echo "── Deploy complete ──────────────────────────────────────"
+          echo "── Restart service ──────────────────────────────────────────"
+          systemctl restart ctrlchecks-ai-generator
+          echo "  Waiting 8s for startup..."
+          sleep 8
           REMOTE
 
-      - name: Cleanup SSH key
-        if: always()
-        run: rm -f ~/.ssh/deploy_key
+      # ai-generator's /health/live and /health/ready require auth (401) —
+      # plain /health is the unauthenticated liveness check for this service.
+      - name: Health-check retry loop (5 × 10s)
+        run: |
+          for attempt in 1 2 3 4 5; do
+            echo "Health check attempt $attempt/5..."
+            CODE=$(ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+              "$SERVER_USER@$SERVER_HOST" \
+              "curl -s -o /dev/null -w '%{http_code}' http://localhost:3002/health" 2>/dev/null || echo "000")
+            echo "  HTTP $CODE"
+            if [ "$CODE" = "200" ]; then
+              echo "✅ Health check passed on attempt $attempt"
+              exit 0
+            fi
+            if [ "$attempt" -lt 5 ]; then
+              echo "  Waiting 10s before retry..."
+              sleep 10
+            fi
+          done
+          echo "❌ Health check failed after 5 attempts — initiating rollback"
+          exit 1
+
+      - name: Rollback on health-check failure
+        if: failure()
+        run: |
+          echo "── Rolling back to previous dist.bak/ ───────────────────────"
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o ConnectTimeout=15 \
+            "$SERVER_USER@$SERVER_HOST" bash << 'ROLLBACK'
+          set -euo pipefail
+          TARGET=/opt/ctrlchecks-ai-generator
+          if [ -d "$TARGET/dist.bak" ]; then
+            rm -rf "$TARGET/dist"
+            cp -a "$TARGET/dist.bak" "$TARGET/dist"
+            systemctl restart ctrlchecks-ai-generator
+            sleep 8
+            CODE=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3002/health)
+            if [ "$CODE" = "200" ]; then
+              echo "✅ Rollback successful — previous version restored"
+            else
+              echo "❌ Rollback health check also failed (HTTP $CODE). Manual intervention needed."
+            fi
+          else
+            echo "⚠  No dist.bak/ available — cannot rollback. Manual restore needed."
+          fi
+          ROLLBACK
+          exit 1   # Always fail the job so the team is alerted
