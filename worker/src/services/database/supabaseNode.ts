@@ -39,15 +39,24 @@ function validateCredentials(credentials: SupabaseCredentials): { valid: boolean
 }
 
 async function loadSupabaseClient(url: string, key: string): Promise<any> {
+  let mod: any;
   try {
-    const mod = await import('@supabase/supabase-js');
-    return mod.createClient(url, key);
+    mod = await import('@supabase/supabase-js');
   } catch {
     throw new Error(
       'The @supabase/supabase-js package is not installed. ' +
       'Run: cd worker && npm install @supabase/supabase-js'
     );
   }
+
+  // Node < 22 has no native WebSocket and createClient throws without one
+  // (production runs Node 20). Supply the ws package as the realtime transport.
+  const options: Record<string, any> = {};
+  if (typeof (globalThis as any).WebSocket === 'undefined') {
+    const ws = await import('ws');
+    options.realtime = { transport: ws.WebSocket };
+  }
+  return mod.createClient(url, key, options);
 }
 
 async function executeOperation(client: any, operation: SupabaseOperation, schema: string): Promise<any> {
