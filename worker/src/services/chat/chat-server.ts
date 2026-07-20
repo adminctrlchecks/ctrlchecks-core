@@ -2,6 +2,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { Server } from 'http';
 import { EventEmitter } from 'events';
 import { IncomingMessage } from 'http';
+import { config } from '../../core/config';
 
 // Type guard to ensure we have a valid HTTP server
 function isHttpServer(server: any): server is Server {
@@ -41,6 +42,11 @@ export class ChatServer extends EventEmitter {
    */
   initialize(server: Server): void {
     try {
+      if (this.wss) {
+        console.log('[ChatServer] WebSocket server already initialized');
+        return;
+      }
+
       // Validate server object
       if (!isHttpServer(server)) {
         throw new Error('Invalid server object provided. Expected HTTP Server instance.');
@@ -279,8 +285,7 @@ export class ChatServer extends EventEmitter {
     // CRITICAL: Trigger workflow execution by calling the chat-trigger API endpoint internally
     // This ensures messages sent via WebSocket also trigger workflow execution
     try {
-      const config = require('../core/config').config;
-      const baseUrl = config.publicBaseUrl || `http://localhost:${config.port}`;
+      const baseUrl = `http://127.0.0.1:${config.port}`;
       const apiUrl = `${baseUrl}/api/chat-trigger/${session.workflowId}/${session.nodeId}/message`;
       
       console.log(`[ChatServer] Triggering workflow execution via internal API: ${apiUrl}`);

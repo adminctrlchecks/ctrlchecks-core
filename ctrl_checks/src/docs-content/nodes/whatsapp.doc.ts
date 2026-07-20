@@ -1,5 +1,4 @@
-import type { NodeDoc } from '../types';
-import type { FieldDoc } from '../types';
+import type { NodeDoc, FieldDoc } from '../types';
 
 // ─── Shared field help text (reused across operations/resources that share a field) ───
 

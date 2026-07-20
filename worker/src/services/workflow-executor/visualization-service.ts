@@ -60,9 +60,31 @@ export class VisualizationService extends EventEmitter {
    * Initialize WebSocket server
    */
   initialize(server: Server): void {
+    if (this.wss) {
+      console.log('[VisualizationService] WebSocket server already initialized');
+      return;
+    }
+
     this.wss = new WebSocketServer({ 
-      server,
-      path: '/ws/executions',
+      noServer: true,
+    });
+
+    server.on('upgrade', (request, socket, head) => {
+      try {
+        const url = new URL(request.url || '', `http://${request.headers.host}`);
+        if (url.pathname !== '/ws/executions') {
+          return;
+        }
+
+        this.wss!.handleUpgrade(request, socket, head, (ws) => {
+          this.wss!.emit('connection', ws, request);
+        });
+      } catch (error) {
+        console.error('[VisualizationService] Error processing upgrade request:', error);
+        if (!socket.destroyed) {
+          socket.destroy();
+        }
+      }
     });
 
     this.wss.on('connection', (ws: WebSocket, req) => {

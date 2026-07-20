@@ -15,6 +15,7 @@ import type { WorkflowEdge, WorkflowNode } from '../types/ai-types';
 import { shouldSkipForSwitchIncomingEdge } from './switch-branch-router';
 import { ExecutionContext, createExecutionContext, setNodeOutput } from './typed-execution-context';
 import { LRUNodeOutputsCache } from '../cache/lru-node-outputs-cache';
+import { preserveOutputContextForDownstream } from './context-preserving-output';
 
 export interface ExecutionPlan {
   nodes: WorkflowNode[];
@@ -220,8 +221,9 @@ export function updateExecutionContext(
   mergedInput: unknown
 ): void {
   // ✅ Store output in isolated storage (nodeOutputs map)
-  execCtx.nodeOutputs.set(nodeId, output);
-  setNodeOutput(execCtx.context, nodeId, output);
+  const downstreamOutput = preserveOutputContextForDownstream(mergedInput, output);
+  execCtx.nodeOutputs.set(nodeId, downstreamOutput);
+  setNodeOutput(execCtx.context, nodeId, downstreamOutput);
 
   // ✅ Restore $json to merged input (not last node output)
   // This ensures {{$json.items}} resolves to current node's input, not previous node's output
@@ -231,7 +233,7 @@ export function updateExecutionContext(
   
   execCtx.context.variables.$json = mergedInputObj;
   execCtx.context.variables.json = mergedInputObj;
-  execCtx.context.lastOutput = output; // lastOutput is the node's output (for backward compatibility)
+  execCtx.context.lastOutput = downstreamOutput; // lastOutput is the downstream handoff payload
 }
 
 /**

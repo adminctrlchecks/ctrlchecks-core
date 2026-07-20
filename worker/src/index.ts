@@ -2176,6 +2176,20 @@ async function startServer() {
     console.log(`[ServerStartup] 🔵 Calling app.listen(${PORT}, '0.0.0.0')...`);
     const server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`[ServerStartup] ✅ app.listen() callback fired - server is listening on port ${PORT}`);
+      // Initialize Chat Server for chat trigger first. Its upgrade handler ignores
+      // non-chat paths so /ws/executions can still be handled by visualization.
+      try {
+        const { getChatServer } = require('./services/chat/chat-server');
+        const chatServer = getChatServer();
+        chatServer.initialize(server);
+        console.log('[ChatServer] Chat WebSocket server initialized');
+        console.log(`   Chat WebSocket endpoint: ws://localhost:${PORT}/ws/chat`);
+        console.log('   Manual upgrade handling enabled');
+      } catch (chatError: any) {
+        console.warn('[ChatServer] WebSocket initialization failed:', chatError?.message || chatError);
+        console.log('[ChatServer] Chat trigger functionality may be unavailable');
+      }
+
       // Initialize WebSocket server for real-time visualization
       try {
         const { getExecutionStateManager } = require('./services/workflow-executor/execution-state-manager');
@@ -2200,19 +2214,6 @@ async function startServer() {
         console.log('💡 Make sure "ws" package is installed: npm install ws');
       }
 
-      // Initialize Chat Server for chat trigger
-      try {
-        const { getChatServer } = require('./services/chat/chat-server');
-        const chatServer = getChatServer();
-        chatServer.initialize(server);
-        
-        console.log('💬 Chat WebSocket server initialized');
-        console.log(`   Chat WebSocket endpoint: ws://localhost:${PORT}/ws/chat`);
-        console.log('   ✅ Manual upgrade handling enabled');
-      } catch (chatError: any) {
-        console.warn('⚠️  Chat WebSocket initialization failed:', chatError?.message || chatError);
-        console.log('⚠️  Chat trigger functionality may be unavailable');
-      }
       const networkAddresses = getNetworkAddresses(PORT);
       
       console.log('\n' + '='.repeat(60));

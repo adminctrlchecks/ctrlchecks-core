@@ -10,7 +10,7 @@ function rich(label: string, meaning: string, enter: string, wrong: string, late
     `What to enter: ${enter}\n` +
     `Where the value comes from: ${source}\n` +
     `How to use it later: ${later}\n` +
-    `Accepted format: Operation is select, insert, update, delete, or rpc. Filters/filter are JSON objects, data is a JSON object or array, order is {\"column\":\"created_at\",\"ascending\":false}, and URL starts with https://.\n` +
+    `Accepted format: Operation is select, insert, update, delete, or rpc. Filters/filter are JSON objects, data is a JSON object or array, order is {"column":"created_at","ascending":false}, and URL starts with https://.\n` +
     `Real workplace example: A SaaS signup workflow inserts {{$json.email}} into a Supabase profiles table, then a later step selects the same profile by user_id.\n` +
     `If it is empty or wrong: ${wrong}\n` +
     `Common mistake: Choosing the panel's Raw SQL/query option. The db runtime does not execute raw SQL; use PostgreSQL or database_read/write for SQL text.`

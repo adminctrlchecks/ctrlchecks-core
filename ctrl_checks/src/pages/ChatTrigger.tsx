@@ -30,6 +30,8 @@ export default function ChatTrigger() {
   const [chatNode, setChatNode] = useState<any>(null);
   
   const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const shouldReconnectRef = useRef(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -80,6 +82,21 @@ export default function ChatTrigger() {
   }, [workflowId, nodeId]);
 
   const connectWebSocket = useCallback(async () => {
+    const existingSocket = wsRef.current;
+    if (
+      existingSocket &&
+      (existingSocket.readyState === WebSocket.OPEN || existingSocket.readyState === WebSocket.CONNECTING)
+    ) {
+      console.log('[Chat] WebSocket already active, skipping duplicate connect');
+      return;
+    }
+
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+    shouldReconnectRef.current = true;
+
     // CRITICAL: Always use static sessionId format: workflowId_nodeId
     // This ensures consistency with backend and allows AI agent responses to come back
     if (!workflowId || !nodeId) {
@@ -122,13 +139,17 @@ export default function ChatTrigger() {
 
     try {
       const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
 
       ws.onopen = () => {
+        if (wsRef.current !== ws) return;
         console.log('[Chat] WebSocket connected');
         setConnected(true);
+        setError(null);
       };
 
       ws.onmessage = (event) => {
+        if (wsRef.current !== ws) return;
         try {
           const data = JSON.parse(event.data);
           
@@ -151,6 +172,18 @@ export default function ChatTrigger() {
               }, 100);
             }
           } else if (data.type === 'system') {
+            if (data.message === 'Connected to chat. You can now send messages.') {
+              setMessages(prev => prev.some(message => message.id === 'ws-connected')
+                ? prev
+                : [...prev, {
+                  id: 'ws-connected',
+                  text: data.message,
+                  sender: 'system',
+                  timestamp: new Date(),
+                }]);
+              return;
+            }
+
             setMessages(prev => [...prev, {
               id: `msg-${Date.now()}-${Math.random()}`,
               text: data.message,
@@ -171,6 +204,7 @@ export default function ChatTrigger() {
       };
 
       ws.onerror = (wsError) => {
+        if (wsRef.current !== ws) return;
         console.error('[Chat] WebSocket error:', wsError);
         console.error('[Chat] WebSocket readyState:', ws.readyState);
         console.error('[Chat] WebSocket URL attempted:', wsUrl);
@@ -185,29 +219,33 @@ export default function ChatTrigger() {
       };
 
       ws.onclose = (event) => {
+        if (wsRef.current !== ws) return;
+
         console.log('[Chat] WebSocket closed', { code: event.code, reason: event.reason, wasClean: event.wasClean });
+        wsRef.current = null;
         setConnected(false);
         
+        if (!shouldReconnectRef.current || event.code === 1000) {
+          console.log('[Chat] Not reconnecting after intentional close');
+          return;
+        }
+
         // Only attempt to reconnect if we have workflowId and nodeId
-        if (workflowId && nodeId) {
-          // Attempt to reconnect after a delay (but not if it was a clean close with error code)
-          if (event.code !== 1008) { // Don't reconnect if session not found
-            setTimeout(() => {
-              console.log('[Chat] Attempting to reconnect...');
-              connectWebSocket();
-            }, 3000);
-          } else {
-            console.warn('[Chat] Not reconnecting - session not found (code 1008)');
-          }
+        if (workflowId && nodeId && event.code !== 1008) {
+          reconnectTimeoutRef.current = setTimeout(() => {
+            reconnectTimeoutRef.current = null;
+            console.log('[Chat] Attempting to reconnect...');
+            connectWebSocket();
+          }, 3000);
+        } else if (event.code === 1008) {
+          console.warn('[Chat] Not reconnecting - session not found (code 1008)');
         }
       };
-
-      wsRef.current = ws;
     } catch (err) {
       console.error('[Chat] Error creating WebSocket:', err);
       setError('Failed to connect to chat server');
     }
-  }, [sessionId]);
+  }, [workflowId, nodeId]);
 
   useEffect(() => {
     loadChatConfig();
@@ -220,8 +258,13 @@ export default function ChatTrigger() {
     }
 
     return () => {
+      shouldReconnectRef.current = false;
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
       if (wsRef.current) {
-        wsRef.current.close();
+        wsRef.current.close(1000, 'Chat page cleanup');
         wsRef.current = null;
       }
     };

@@ -32,6 +32,7 @@ import { createExecutionContext, setNodeOutput } from '../core/execution/typed-e
 import { evaluateCondition, Condition } from '../core/execution/typed-condition-evaluator';
 import { normalizeNodeOutput as normalizeNodeOutputContract } from '../core/execution/node-output-contract';
 import { normalizeLegacyWrappedNodeOutput } from '../core/execution/legacy-node-output-normalize';
+import { preserveOutputContextForDownstream } from '../core/execution/context-preserving-output';
 import { executeLogOutputWithCache } from '../core/execution/nodes/log-output-executor';
 import { readBinaryFileAsset, writeBinaryFileAsset } from '../services/files/binary-file-service';
 import { resolveTypedValue, resolveWithSchema } from '../core/execution/typed-value-resolver';
@@ -12829,98 +12830,6 @@ export async function executeNodeLegacy(
       return result;
     }
 
-    case 'chat_send': {
-      // Chat Send node - sends message back to chat interface
-      const message = getStringProperty(config, 'message', '');
-      const sessionIdConfig = getStringProperty(config, 'sessionId', '');
-      
-      // Get sessionId from config, input, or execution context
-      // Ensure it's always a string
-      let sessionId: string = sessionIdConfig;
-      if (!sessionId && inputObj.sessionId) {
-        sessionId = String(inputObj.sessionId);
-      }
-      if (!sessionId && inputObj.executionId) {
-        sessionId = String(inputObj.executionId);
-      }
-
-      if (!message) {
-        return {
-          ...inputObj,
-          _error: 'Chat Send node: Message is required',
-        };
-      }
-
-      // ✅ REFACTORED: Chat Send with typed resolution
-      // Use typed execution context
-      const execContext = createTypedContext();
-      const resolvedMessage = typeof resolveWithSchema(message, execContext, 'string') === 'string'
-        ? resolveWithSchema(message, execContext, 'string') as string
-        : String(resolveTypedValue(message, execContext));
-      
-      // Resolve sessionId template if it's not empty, otherwise try to get from context
-      let resolvedSessionId: string = '';
-      if (sessionId) {
-        resolvedSessionId = typeof resolveWithSchema(sessionId, execContext, 'string') === 'string'
-          ? resolveWithSchema(sessionId, execContext, 'string') as string
-          : String(resolveTypedValue(sessionId, execContext));
-      } else {
-        // Try to get sessionId from chat_trigger node output
-        const allOutputs = nodeOutputs.getAll();
-        for (const [nodeId, output] of Object.entries(allOutputs)) {
-          if (output && typeof output === 'object' && output !== null && 'sessionId' in output) {
-            resolvedSessionId = String((output as any).sessionId);
-            break;
-          }
-        }
-      }
-      
-      if (!resolvedSessionId) {
-        return {
-          ...inputObj,
-          _error: 'Chat Send node: Session ID is required. Connect this node to a Chat Trigger node to get the session ID, or provide it in the Session ID field.',
-        };
-      }
-
-      try {
-        // Get chat server instance
-        const { getChatServer } = require('../services/chat/chat-server');
-        const chatServer = getChatServer();
-
-        // Send message to chat interface
-        const sent = chatServer.sendToSession(resolvedSessionId, {
-          type: 'chat',
-          message: resolvedMessage,
-        });
-
-        if (!sent) {
-          return {
-            ...inputObj,
-            _error: `Chat Send node: Failed to send message. Chat session ${resolvedSessionId} may not be connected.`,
-            _warning: 'The chat interface may not be open or the session may have expired.',
-          };
-        }
-
-        // ✅ REFACTORED: Return messaging result object
-        return {
-          id: resolvedSessionId,
-          status: 'sent' as const,
-          provider: 'chat',
-          message: resolvedMessage,
-          sessionId: resolvedSessionId,
-          sentAt: new Date().toISOString(),
-        };
-      } catch (error) {
-        logger.error('[Chat Send] Error sending message:', error);
-        return {
-          id: resolvedSessionId || '',
-          status: 'failed' as const,
-          provider: 'chat',
-          error: error instanceof Error ? error.message : 'Chat Send failed',
-        };
-      }
-    }
-
     case 'google_gmail': {
       // ✅ Gmail Node Execution - Complete implementation with credential resolution
       const operation = getStringProperty(config, 'operation', 'send');
@@ -20568,7 +20477,7 @@ export default async function executeWorkflowHandler(req: Request, res: Response
           if (existingStep && existingStep.status === 'completed' && existingStep.output_json) {
             // Node already completed - use cached output (resume)
             logger.info(`[Resume] Node ${node.id} (${node.data?.label || node.id}) already completed - using cached output`);
-            output = existingStep.output_json;
+            output = preserveOutputContextForDownstream(nodeInput, existingStep.output_json);
             
             // Log resume event
             await logExecutionEvent(db, executionId, workflowId, 'NODE_FINISHED', {
@@ -20763,6 +20672,8 @@ export default async function executeWorkflowHandler(req: Request, res: Response
           // 1. Memory cache (fast access, backward compatibility)
           // 2. Database (ACID compliance, source of truth)
           // 3. Object storage (if payload >1MB)
+
+          output = preserveOutputContextForDownstream(nodeInput, output);
           
           nodeOutputs.set(node.id, output); // Backward compatibility
           // ✅ CORE DATAFLOW FIX: also store by node type so templates like {{google_sheets.rows}} resolve

@@ -685,11 +685,11 @@ Output: {
   },
 
   execute_command: {
-    overview: 'Execute system commands or shell scripts. âš ï¸ WARNING: Disabled by default for security. Enable only if you trust the command and understand the risks.',
+    overview: 'Execute system commands or shell scripts. âš ï¸ WARNING: Disabled by default for security. Enable only if you trust the command and understand the risks.',
     inputs: ['command parameters'],
     outputs: ['stdout', 'stderr', 'exitCode'],
     example: `Command: echo "Hello {{input.name}}"
-Enabled: true (âš ï¸ Security risk)
+Enabled: true (âš ï¸ Security risk)
 
 Input: {name: "World"}
 Output: {
@@ -698,8 +698,8 @@ Output: {
   exitCode: 0
 }
 
-âš ï¸ Only enable for trusted commands in secure environments.`,
-    tips: ['âš ï¸ Disabled by default for security', 'Only enable if you trust the command', 'Use for system operations and scripts', 'Set appropriate timeout', 'Be careful with user input'],
+âš ï¸ Only enable for trusted commands in secure environments.`,
+    tips: ['âš ï¸ Disabled by default for security', 'Only enable if you trust the command', 'Use for system operations and scripts', 'Set appropriate timeout', 'Be careful with user input'],
   },
 
   set: {
@@ -2943,7 +2943,7 @@ Output: {
   success: true,
   operation: "run_agent",
   response: "",
-  steps: [{ id: "call_123", type: "function", function: { name: "lookup_order", arguments: "{\"orderId\":\"ORD-1048\"}" } }],
+  steps: [{ id: "call_123", type: "function", function: { name: "lookup_order", arguments: "{"orderId":"ORD-1048"}" } }],
   error: null
 }`,
     tips: [

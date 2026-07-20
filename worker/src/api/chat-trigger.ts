@@ -310,22 +310,9 @@ export async function submitChatMessage(req: Request, res: Response) {
       logger.warn(`[Chat Trigger] Failed to update chat session (non-fatal):`, sessionError?.message || sessionError);
     }
 
-    // Trigger workflow execution asynchronously (like webhook does)
-    const executeUrl = config.publicBaseUrl 
-      ? `${config.publicBaseUrl}/api/execute-workflow`
-      : (process.env.NODE_ENV === 'production' 
-          ? (() => {
-              logger.error('[Chat Trigger] PUBLIC_BASE_URL is required in production');
-              return null;
-            })()
-          : `http://localhost:${config.port}/api/execute-workflow`);
-
-    if (!executeUrl) {
-      return res.status(500).json({
-        error: 'Configuration error',
-        message: 'PUBLIC_BASE_URL environment variable is required in production.',
-      });
-    }
+    // Trigger workflow execution through the local worker process. Chat execution is
+    // internal; PUBLIC_BASE_URL may point at the frontend or public proxy.
+    const executeUrl = `http://127.0.0.1:${config.port}/api/execute-workflow`;
 
     // Trigger workflow execution (don't wait for it)
     fetch(executeUrl, {

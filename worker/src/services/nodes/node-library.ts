@@ -1244,6 +1244,7 @@ export class NodeLibrary {
     this.addSchema(this.createSlackTriggerSchema());
     this.addSchema(this.createEmailSchema());
     this.addSchema(this.createLogOutputSchema());
+    this.addSchema(this.createChatSendSchema());
     this.addSchema(this.createTelegramSchema());
     
     // Social Media Nodes
@@ -4813,6 +4814,103 @@ export class NodeLibrary {
       },
       commonPatterns: [],
       validationRules: [],
+    };
+  }
+
+  private createChatSendSchema(): NodeSchema {
+    return {
+      type: 'chat_send',
+      label: 'Chat Send',
+      category: 'output',
+      description: 'Send a message back to the active chat-trigger interface.',
+      capabilities: [
+        'chat.send',
+        'message.send',
+        'terminal',
+      ],
+      providers: ['chat'],
+      keywords: [
+        'chat send', 'send chat response', 'reply to chat', 'chat reply',
+        'chat trigger response', 'send message to chat', 'chat output'
+      ],
+      configSchema: {
+        required: ['message'],
+        optional: {
+          message: {
+            type: 'string',
+            description: 'Message to send to the chat interface. Supports template variables from previous nodes.',
+            default: '',
+            examples: ['{{$json.response_text}}', '{{$json.body}}', 'Hello! How can I help you?'],
+            fillMode: { default: 'runtime_ai', supportsRuntimeAI: true, supportsBuildtimeAI: true },
+            runtimeContract: {
+              aiGeneratable: true,
+              validation: { format: 'non_empty' },
+              repair: ['derive_body'],
+            },
+          },
+          sessionId: {
+            type: 'string',
+            description: 'Chat session ID. Leave empty to use the upstream Chat Trigger sessionId.',
+            default: '',
+            examples: ['{{chat_trigger.sessionId}}', '{{$json.sessionId}}', '{{executionId}}'],
+            fillMode: { default: 'manual_static', supportsRuntimeAI: true, supportsBuildtimeAI: true },
+            runtimeContract: {
+              role: 'identifier',
+              validation: { format: 'non_empty', allowEmpty: true },
+            },
+          },
+        },
+      },
+      aiSelectionCriteria: {
+        whenToUse: [
+          'A chat-triggered workflow should explicitly send a response back to the chat UI',
+          'The final output from an HTTP, data, or utility node should be echoed to chat',
+          'A chatbot workflow needs a non-AI-agent node result returned to the user',
+        ],
+        whenNotToUse: [
+          'The workflow is not started by a Chat Trigger',
+          'The response is already handled by an AI Agent auto-forwarding response_text',
+          'The user wants to send a message to Slack, email, Discord, Telegram, or another external channel',
+        ],
+        keywords: [
+          'chat send', 'chat response', 'reply to chat', 'send to chat',
+          'respond in chat', 'return result to chat', 'chat output',
+        ],
+        useCases: [
+          'Chat Trigger to HTTP request response',
+          'Chat Trigger to data lookup response',
+          'Chatbot workflows that need an explicit final reply node',
+        ],
+        intentDescription: 'Chat Send sends an explicit response to the browser chat session created by a Chat Trigger. It is the terminal output node for chat-triggered workflows when downstream node output, such as an HTTP response or transformed data, should be returned to the user.',
+        intentCategories: ['chat', 'chatbot', 'response', 'output', 'terminal'],
+      },
+      commonPatterns: [
+        {
+          name: 'send_upstream_text_to_chat',
+          description: 'Send the previous node output back to the Chat Trigger session',
+          config: {
+            message: '{{$json.output}}',
+            sessionId: '{{chat_trigger.sessionId}}',
+          },
+        },
+      ],
+      validationRules: [],
+      nodeCapability: {
+        inputType: ['text', 'object'],
+        outputType: 'object',
+        acceptsArray: false,
+        producesArray: false,
+      },
+      outputType: 'object',
+      outputSchema: {
+        id: { type: 'string', description: 'Chat session ID' },
+        status: { type: 'string', description: 'Send status' },
+        provider: { type: 'string', description: 'Message provider' },
+        message: { type: 'string', description: 'Message sent to chat' },
+        sessionId: { type: 'string', description: 'Chat session ID' },
+        sentAt: { type: 'string', description: 'ISO timestamp when the message was sent' },
+        error: { type: 'string', description: 'Failure message when sending fails' },
+      },
     };
   }
 

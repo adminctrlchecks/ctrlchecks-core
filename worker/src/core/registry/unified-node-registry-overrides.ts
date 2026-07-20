@@ -20,6 +20,7 @@ import { overrideRetry } from './overrides/retry';
 import { overrideParallel } from './overrides/parallel';
 import { overrideManualTrigger } from './overrides/manual-trigger';
 import { overrideChatTrigger } from './overrides/chat-trigger';
+import { overrideChatSend } from './overrides/chat-send';
 import { overrideWebhook } from './overrides/webhook';
 import { overrideSchedule } from './overrides/schedule';
 import { overrideInterval } from './overrides/interval';
@@ -188,6 +189,7 @@ const overridesByType: Record<string, OverrideFn> = {
   // ✅ NEWLY MIGRATED NODES
   manual_trigger: overrideManualTrigger,
   chat_trigger: overrideChatTrigger,
+  chat_send: overrideChatSend,
   webhook: overrideWebhook,
   schedule: overrideSchedule,
   interval: overrideInterval,

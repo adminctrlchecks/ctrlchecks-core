@@ -200,7 +200,7 @@ Accepted format: Plain text, ideally short enough to display fully in an inbox p
 
 Real workplace example: "Your order #{{$json.orderId}} has shipped!" or "Welcome to CtrlChecks, {{$json.name}}!"
 
-If it is empty or wrong: Runtime returns "Gmail: \"subject\" field is required" before attempting to send.
+If it is empty or wrong: Runtime returns "Gmail: "subject" field is required" before attempting to send.
 
 Common mistake: Leaving Subject as generic placeholder text like "Test" in a production workflow, which looks unprofessional to recipients.`;
 
@@ -220,7 +220,7 @@ Accepted format: Plain text; this node sends text/plain messages, so HTML markup
 
 Real workplace example: "Hi {{$json.name}}, thank you for your purchase! Your order will arrive in 3-5 business days."
 
-If it is empty or wrong: Runtime returns "Gmail: \"body\" field is required" before attempting to send.
+If it is empty or wrong: Runtime returns "Gmail: "body" field is required" before attempting to send.
 
 Common mistake: Pasting rich HTML expecting bold text or images to render — this node sends plain text, so HTML tags appear as literal text to the recipient.`;
 
@@ -300,7 +300,7 @@ Accepted format: A Gmail message ID string, such as 18abc123def456.
 
 Real workplace example: Loop over {{$json.messages}} from a List step, and use {{$json.id}} from each item as this Get step's Message ID to read the full content.
 
-If it is empty or wrong: Runtime returns "Gmail: \"messageId\" field is required for get operation". A wrong or deleted message ID returns a Gmail API error.
+If it is empty or wrong: Runtime returns "Gmail: "messageId" field is required for get operation". A wrong or deleted message ID returns a Gmail API error.
 
 Common mistake: Using a message's threadId here instead of its id — they can differ, and Get expects the specific message id.`;
 
@@ -320,7 +320,7 @@ Accepted format: Gmail search syntax text, such as "is:unread label:support" or 
 
 Real workplace example: "from:vendor@example.com newer_than:7d" to find recent invoices from one vendor.
 
-If it is empty or wrong: For search, an empty query returns "Gmail: \"query\" field is required" is not explicitly enforced by this field alone, but an empty or overly broad query can return unrelated or too many messages; check {{$json.resultSizeEstimate}}. For list, empty simply returns the most recent inbox messages.
+If it is empty or wrong: For search, an empty query returns "Gmail: "query" field is required" is not explicitly enforced by this field alone, but an empty or overly broad query can return unrelated or too many messages; check {{$json.resultSizeEstimate}}. For list, empty simply returns the most recent inbox messages.
 
 Common mistake: Typing plain keywords expecting a full-text description search — Gmail search syntax favors operators like from:, subject:, and is: over free-text guesses.`;
 
