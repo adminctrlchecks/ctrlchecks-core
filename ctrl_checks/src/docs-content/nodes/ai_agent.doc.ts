@@ -1,101 +1,321 @@
-import type { NodeDoc } from '../types';
+import type { FieldDoc, NodeDoc } from '../types';
+
+const help = (
+  field: string,
+  why: string,
+  when: string,
+  enter: string,
+  source: string,
+  later: string,
+  format: string,
+  example: string,
+  wrong: string,
+  mistake: string,
+) => `What this field is: ${field}
+Why it matters: ${why}
+When to fill it: ${when}
+What to enter: ${enter}
+Where the value comes from: ${source}
+How to use it later: ${later}
+Accepted format: ${format}
+Real workplace example: ${example}
+If it is empty or wrong: ${wrong}
+Common mistake: ${mistake}`;
+
+const field = (doc: FieldDoc): FieldDoc => doc;
+
+const fields: FieldDoc[] = [
+  field({
+    name: 'User Input',
+    internalKey: 'userInput',
+    type: 'textarea',
+    required: false,
+    description: 'Optional direct message for the agent. Runtime also accepts upstream message, text, input, or the whole incoming object.',
+    helpText: help(
+      'The message or task the agent should answer when you want to set it directly in this node.',
+      'The runtime ultimately sends one user message to the selected language model; this field can provide that message when the previous node did not already provide one.',
+      'Fill it for test runs, scheduled jobs, or workflows where the task is fixed. Leave it blank when a Chat Trigger, form, webhook, or previous node supplies message, text, input, or another payload.',
+      'Enter a natural-language request or an expression such as {{$json.message}}. Objects from upstream are converted to text when no message-like field is found.',
+      'Usually from a chat trigger, webhook body, ticket text, form answer, or a previous transform node.',
+      'The response is returned as {{$json.response_text}} and, for JSON/key-value modes, {{$json.response_json}}.',
+      'Plain text or a template expression that resolves to text. JSON objects are allowed upstream but may be stringified.',
+      'A support workflow maps {{$json.message}} so the agent replies directly to the customer question.',
+      'If no useful input is available, the model may receive an empty string or a stringified object and produce a poor answer rather than a validation error.',
+      'Do not paste a whole webhook object here when you only want one field; map the exact message text instead.',
+    ),
+    example: '{{$json.message}}',
+  }),
+  field({
+    name: 'Model',
+    internalKey: 'model',
+    type: 'select',
+    required: true,
+    description: 'Language model used by the agent. Provider is inferred from the model name.',
+    options: ['gemini-3.5-flash', 'gemini-3.1-pro-preview', 'claude-3-5-sonnet', 'gpt-4o'],
+    defaultValue: 'gemini-3.5-flash',
+    helpText: help(
+      'The model that generates the agent answer: gemini-3.5-flash, gemini-3.1-pro-preview, claude-3-5-sonnet, or gpt-4o in the current UI.',
+      'The runtime infers the provider from this value, so it decides whether Gemini, Claude, or OpenAI credentials are needed.',
+      'Choose it for every agent. Use Gemini for the platform-default path, Claude for Claude-specific behavior, and GPT-4o for OpenAI workflows that provide an OpenAI key.',
+      'Select one dropdown value exactly. Generated configs may also send another model string, but the provider detector only recognizes gpt-, claude-, and gemini-style names.',
+      'Comes from the workflow designer or from a previous setup step only when model choice is dynamic.',
+      'The chosen provider/model is included in {{$json.reasoning.model}} when Include Reasoning is enabled.',
+      'Model identifier string such as gemini-3.5-flash, gemini-3.1-pro-preview, claude-3-5-sonnet, or gpt-4o.',
+      'A customer support agent uses gemini-3.5-flash for fast replies; a legal-review agent uses claude-3-5-sonnet.',
+      'If the provider has no usable key, Gemini paths return {{$json._error}} and non-Gemini provider calls can fail the node.',
+      'Do not assume changing the model also changes the rest of the prompt; the system prompt still controls the job.',
+    ),
+    example: 'gemini-3.5-flash',
+  }),
+  field({
+    name: 'System Prompt / Instructions',
+    internalKey: 'systemPrompt',
+    type: 'textarea',
+    required: true,
+    description: 'Instruction text that sets the agent role, behavior, boundaries, and response style.',
+    helpText: help(
+      'The standing instruction sent as the system message before the user input.',
+      'It shapes every answer and is the main guardrail for tone, task scope, formatting, and what the agent should refuse or ask back.',
+      'Fill it for every production agent. Leave it blank only when you deliberately want the runtime default automation-agent prompt or the chatbot-specific default.',
+      'Write the role, task, constraints, output format, and any business rules. You may include expressions for workflow-specific context.',
+      'Usually written by the workflow builder from the team process, support policy, review checklist, or business SOP.',
+      'A good prompt makes {{$json.response_text}} predictable and makes {{$json.response_json}} easier to map downstream.',
+      'Plain text. Bullets and short sections are fine. Template expressions such as {{$json.policy}} are supported.',
+      'A support team sets: You are a concise support assistant. Answer from the help-center text and ask for an order ID when missing.',
+      'If weak or blank, the agent may answer too broadly, explain workflow internals, or produce a format downstream nodes cannot use.',
+      'Do not put API keys, passwords, or customer secrets into the prompt; use service connections and mapped business data only.',
+    ),
+    example: 'You are a concise support assistant. Return JSON when asked.',
+  }),
+  field({
+    name: 'Temperature',
+    internalKey: 'temperature',
+    type: 'number',
+    required: false,
+    description: 'Sampling temperature passed to the model call.',
+    defaultValue: '0.7',
+    helpText: help(
+      'A number that controls how varied the model response can be.',
+      'Lower values make answers more repeatable; higher values allow more variation for brainstorming or drafting.',
+      'Use lower values for extraction, classification, and JSON. Use higher values for creative writing or idea generation.',
+      'Enter a decimal number, commonly 0.2, 0.7, or 1.0.',
+      'Usually chosen by the workflow designer based on how predictable the downstream step must be.',
+      'It affects the text in {{$json.response_text}} and any parsed {{$json.response_json}}.',
+      'Number. The UI suggests a broad 0.0 to 2.0 range, but keep ordinary workflows near 0.0 to 1.0.',
+      'An invoice classifier uses 0.2; a campaign-idea generator uses 0.9.',
+      'Blank or invalid values fall back to 0.7. Very high values can make JSON or policy-sensitive output less stable.',
+      'Do not use high temperature to fix missing context; map the needed data into User Input or System Prompt instead.',
+    ),
+    example: '0.7',
+  }),
+  field({
+    name: 'Max Tokens',
+    internalKey: 'maxTokens',
+    type: 'number',
+    required: false,
+    description: 'Maximum response length requested from the model.',
+    defaultValue: '2000',
+    helpText: help(
+      'The approximate maximum amount of text the agent may generate.',
+      'It limits cost and prevents a response from becoming too long for the next workflow step.',
+      'Increase it for reports, summaries, and JSON with many fields. Lower it for chat replies and labels.',
+      'Enter a whole number such as 500, 2000, or 4000.',
+      'Comes from the expected response size for this workflow.',
+      'Downstream nodes read whatever was returned in {{$json.response_text}} or {{$json.response_json}}.',
+      'Positive integer token limit. One token is roughly a few characters, not one exact word.',
+      'A weekly report generator uses 3000; a chatbot answer uses 500.',
+      'Blank or invalid values fall back to 2000. Too small a value can truncate the answer.',
+      'Do not set a huge value just in case; it can increase cost and delay the workflow.',
+    ),
+    example: '2000',
+  }),
+  field({
+    name: 'Top-P',
+    internalKey: 'topP',
+    type: 'number',
+    required: false,
+    description: 'Nucleus sampling value read by the runtime but not currently passed into the LLM adapter call.',
+    defaultValue: '1.0',
+    helpText: help(
+      'A legacy sampling-control field in the visual panel.',
+      'It looks like an AI generation control, but the current AI Agent runtime reads it and then does not pass it to the model adapter.',
+      'Leave it at the default unless a future runtime update starts honoring it.',
+      'Use 1.0. Changing it today should not affect the generated answer.',
+      'This is chosen in the workflow UI, not from an external service.',
+      'There is no reliable downstream signal showing this value was applied because the current runtime does not send it to the provider.',
+      'Number such as 1.0.',
+      'An existing workflow leaves Top-P at 1.0 while using Temperature for actual variation control.',
+      'If changed, the workflow still runs, but the current response is not expected to change because Top-P is ignored by the adapter call.',
+      'Do not tune Top-P expecting it to fix output quality; tune System Prompt, User Input, Temperature, and Max Tokens instead.',
+    ),
+    example: '1.0',
+  }),
+  field({
+    name: 'Frequency Penalty',
+    internalKey: 'frequencyPenalty',
+    type: 'number',
+    required: false,
+    description: 'Legacy repetition-control field read by the runtime but not passed into the model adapter call.',
+    defaultValue: '0.0',
+    helpText: help(
+      'A panel field intended to discourage repeated wording.',
+      'The current runtime parses it but does not send it to the provider, so it is effectively a no-op today.',
+      'Leave it at 0.0 unless a later worker change documents support.',
+      'Enter 0.0. Other numbers are accepted by the UI but should not change current output.',
+      'Chosen by the workflow designer; it does not come from credentials or account setup.',
+      'No downstream field confirms it was used, because the model call does not receive it.',
+      'Number, commonly 0.0.',
+      'A report-writing workflow leaves Frequency Penalty at 0.0 and reduces repetition through prompt instructions instead.',
+      'Changing it does not raise an error, but it also is not expected to reduce repetition in the current runtime.',
+      'Do not rely on this field for production behavior until worker support is added.',
+    ),
+    example: '0.0',
+  }),
+  field({
+    name: 'Presence Penalty',
+    internalKey: 'presencePenalty',
+    type: 'number',
+    required: false,
+    description: 'Legacy topic-diversity field read by the runtime but not passed into the model adapter call.',
+    defaultValue: '0.0',
+    helpText: help(
+      'A panel field intended to encourage or discourage new topics.',
+      'The current runtime parses it but does not pass it to the LLM adapter, so it has no reliable effect today.',
+      'Leave it at 0.0 in production workflows.',
+      'Enter 0.0 unless you are preserving an old config for compatibility.',
+      'Chosen in the node settings, not retrieved from any AI provider.',
+      'The agent output in {{$json.response_text}} will not indicate whether this field was used.',
+      'Number, commonly 0.0.',
+      'A policy-answering bot leaves Presence Penalty at 0.0 and tells the model to stay on policy in the system prompt.',
+      'Changing it does not fail the workflow, but the model call currently ignores it.',
+      'Do not use this as a substitute for precise prompt instructions.',
+    ),
+    example: '0.0',
+  }),
+  field({
+    name: 'Timeout',
+    internalKey: 'timeoutLimit',
+    type: 'number',
+    required: false,
+    description: 'Maximum milliseconds the agent waits for one model attempt.',
+    defaultValue: '30000',
+    helpText: help(
+      'The time limit for an individual model call attempt.',
+      'It prevents a workflow from waiting indefinitely on a slow provider response.',
+      'Increase it for large prompts or complex responses. Lower it when workflows need fast failure.',
+      'Enter milliseconds such as 30000, 60000, or 120000.',
+      'Comes from your workflow latency requirement and provider speed expectations.',
+      'If the call times out after retries, there may be no normal {{$json.response_text}} because the node throws after exhausting attempts.',
+      'Positive integer milliseconds. 30000 means 30 seconds.',
+      'A chatbot uses 30000 so the user is not left waiting too long.',
+      'Blank or invalid values fall back to 30000. Too low a value can cause avoidable timeout failures.',
+      'Do not set it lower than your provider normally needs for the selected model and response length.',
+    ),
+    example: '30000',
+  }),
+  field({
+    name: 'Retry Count',
+    internalKey: 'retryCount',
+    type: 'number',
+    required: false,
+    description: 'Number of retry attempts after a model call fails.',
+    defaultValue: '3',
+    helpText: help(
+      'How many extra attempts the node should make when the model call errors or times out.',
+      'Retries can recover from temporary provider failures but add time and cost.',
+      'Use the default for ordinary workflows, 0 for fail-fast workflows, and a small higher value only for important batch jobs.',
+      'Enter a whole number such as 0, 1, or 3.',
+      'Chosen from business tolerance for delay, duplicate model calls, and cost.',
+      'If a retry succeeds, downstream nodes receive {{$json.response_text}} normally; if all fail, the node throws or returns a provider-specific error.',
+      'Non-negative integer.',
+      'A nightly summarization workflow uses 3 retries because a delayed run is acceptable.',
+      'Invalid values fall back to 3. Too many retries can slow a workflow and spend more tokens.',
+      'Do not use retries to hide bad prompts or missing credentials; fix the root cause first.',
+    ),
+    example: '3',
+  }),
+  field({
+    name: 'Output Format',
+    internalKey: 'outputFormat',
+    type: 'select',
+    required: false,
+    description: 'How the runtime formats the response into response_text, response_json, or response_markdown.',
+    options: ['text', 'json', 'keyvalue', 'markdown'],
+    defaultValue: 'text',
+    helpText: help(
+      'The output packaging mode: text, json, keyvalue, or markdown.',
+      'It decides whether the runtime tries to parse the model answer into {{$json.response_json}} or also returns {{$json.response_markdown}}.',
+      'Use text for normal replies, json for structured data, keyvalue for simple colon-separated lines, and markdown for formatted human-readable content.',
+      'Choose text, json, keyvalue, or markdown from the dropdown and tell the model the same format in the System Prompt.',
+      'Chosen by the workflow designer based on what the next node expects.',
+      'Downstream nodes can map {{$json.response_text}}, {{$json.response_json}}, or {{$json.response_markdown}} depending on this setting.',
+      'One of text, json, keyvalue, markdown.',
+      'A triage workflow chooses json and asks for {"priority":"high","reason":"..."}.',
+      'If json parsing fails, the runtime wraps the raw text as response_json.content rather than raising a parse error.',
+      'Do not choose JSON without also instructing the model to return valid JSON.',
+    ),
+    example: 'json',
+  }),
+  field({
+    name: 'Include Reasoning',
+    internalKey: 'includeReasoning',
+    type: 'boolean',
+    required: false,
+    description: 'Adds a small runtime metadata object with provider and model, not full chain-of-thought.',
+    defaultValue: 'false',
+    helpText: help(
+      'A toggle that adds a reasoning metadata object to the output.',
+      'The current runtime adds steps, provider, and model; it does not expose private chain-of-thought.',
+      'Enable it while testing or when audit logs need to know which provider/model answered.',
+      'Use true to include {{$json.reasoning}} or false for cleaner production output.',
+      'Chosen by the workflow designer for debugging and audit needs.',
+      'When enabled, downstream nodes can map {{$json.reasoning.provider}} and {{$json.reasoning.model}}.',
+      'Boolean true or false.',
+      'A QA workflow enables it during rollout to confirm Gemini answered before notifications are sent.',
+      'If false, the answer still works but no reasoning metadata is returned.',
+      'Do not expect this to show the model private reasoning process; it is runtime metadata only.',
+    ),
+    example: 'false',
+  }),
+];
 
 export const aiAgentDoc: NodeDoc = {
-  "slug": "ai_agent",
-  "displayName": "AI Agent",
-  "category": "AI",
-  "logoUrl": "/icons/nodes/ai_agent.svg",
-  "description": "AI service node for prompt-based text generation and reasoning",
-  "credentialType": "None",
-  "credentialSetupSteps": [
-    "This node does not need a saved account connection.",
-    "Open the node settings and fill the visible input fields.",
-    "Run the workflow when the required fields are complete."
+  slug: 'ai_agent',
+  displayName: 'AI Agent',
+  category: 'AI',
+  logoUrl: '/icons/nodes/ai_agent.svg',
+  description: 'Run a prompt-driven AI agent that extracts user input from workflow data, calls the selected LLM provider, and returns structured response fields.',
+  credentialType: 'AI provider credentials',
+  credentialSetupSteps: [
+    'Create the provider connection or environment key needed by the selected Model. Gemini can use the configured Gemini wallet/key pool; Claude and OpenAI model choices need their matching provider key.',
+    'Store provider secrets in CtrlChecks Connections, credential vault, wallet, or worker environment variables. Do not put API keys in User Input, System Prompt, or ordinary business payload fields.',
+    'Connect this node output to downstream parser, message, approval, or storage steps; any service node account connection belongs on that downstream service node.',
+    'Test with a short harmless prompt before using long customer data, because retries and long max token limits can increase provider cost.',
   ],
-  "credentialDocsUrl": "https://docs.ctrlchecks.com",
-  "resources": [
+  credentialDocsUrl: 'https://docs.ctrlchecks.com',
+  resources: [
     {
-      "name": "Configuration",
-      "description": "AI Agent is configured directly with input fields.",
-      "operations": [
+      name: 'Configuration',
+      description: 'AI Agent has one runtime operation: prepare a system/user message pair, call the detected LLM provider, and package the response.',
+      operations: [
         {
-          "name": "Execute",
-          "value": "default",
-          "description": "Execute using the AI Agent node.",
-          "fields": [
-            {
-              "name": "User Input",
-              "internalKey": "userInput",
-              "type": "string",
-              "required": false,
-              "description": "User input or prompt for the AI node",
-              "helpText": "What this field is: User input or prompt for the AI node.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Process this data.\nTip: Use {{$json.userInput}} when this value comes from an earlier step.",
-              "placeholder": "Process this data",
-              "example": "Process this data"
-            },
-            {
-              "name": "Model",
-              "internalKey": "model",
-              "type": "string",
-              "required": false,
-              "description": "LLM model selection",
-              "helpText": "What this field is: LLM model selection.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: gemini-3.5-flash.\nTip: Use {{$json.model}} when this value comes from an earlier step.",
-              "placeholder": "gemini-3.5-flash",
-              "example": "gemini-3.5-flash",
-              "defaultValue": "gemini-3.5-flash"
-            },
-            {
-              "name": "Memory",
-              "internalKey": "memory",
-              "type": "json",
-              "required": false,
-              "description": "Optional memory configuration (disabled by default)",
-              "helpText": "What this field is: Structured data for memory configuration.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by AI Agent.\nExample: {\"name\":\"Alice\",\"email\":\"alice@example.com\"}.\nTip: Use {{$json.memory}} when an earlier step already prepared this data.",
-              "placeholder": "{\"key\":\"value\"}",
-              "example": "{\"key\":\"value\"}"
-            },
-            {
-              "name": "Tool",
-              "internalKey": "tool",
-              "type": "json",
-              "required": false,
-              "description": "Optional tool configuration (disabled by default)",
-              "helpText": "What this field is: Structured data for tool configuration.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by AI Agent.\nExample: {\"name\":\"Alice\",\"email\":\"alice@example.com\"}.\nTip: Use {{$json.tool}} when an earlier step already prepared this data.",
-              "placeholder": "{\"key\":\"value\"}",
-              "example": "{\"key\":\"value\"}"
-            }
-          ],
-          "outputExample": {
-            "text": "The order is ready to ship and the customer has been notified.",
-            "length": 62
-          },
-          "outputDescription": "text: Value returned by this operation.\nlength: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming AI Agent data with execute after a related upstream event is received",
-            "inputValues": {
-              "User Input": "Process this data",
-              "Model": "gemini-3.5-flash",
-              "Memory": "{\"key\":\"value\"}",
-              "Tool": "{\"key\":\"value\"}"
-            },
-            "expectedOutput": "AI Agent returns structured execute data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
-        }
-      ]
-    }
-  ],
-  "commonErrors": [
-    {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
+          name: 'Run Agent',
+          value: 'default',
+          description: 'Extracts a user message from User Input or upstream fields, applies the System Prompt, calls the selected model with timeout/retry handling, and returns response_text plus optional response_json, response_markdown, and reasoning metadata.',
+          fields,
+          outputExample: { response_text: 'The ticket is billing related and should be routed to Tier 2.', response_json: { category: 'billing', priority: 'medium' }, confidence_score: 0.8, used_tools: [], memory_written: false, error_flag: false, error_message: null, reasoning: { steps: 1, provider: 'gemini', model: 'gemini-3.5-flash' } },
+          outputDescription: 'response_text contains the model answer. response_json is parsed JSON/key-value output or null. response_markdown appears only for markdown mode. confidence_score is fixed at 0.8 today. used_tools is currently an empty list. memory_written is false. error_flag and error_message are normal output flags, while provider failures may return _error or throw. reasoning appears only when Include Reasoning is true.',
+          usageExample: { scenario: 'Classify a support message and return structured routing data for the next workflow step', inputValues: { userInput: '{{$json.message}}', model: 'gemini-3.5-flash', systemPrompt: 'Classify the support request and return JSON with category and priority.', temperature: '0.2', maxTokens: '800', topP: '1.0', frequencyPenalty: '0.0', presencePenalty: '0.0', timeoutLimit: '30000', retryCount: '3', outputFormat: 'json', includeReasoning: 'true' }, expectedOutput: 'Use {{$json.response_json.category}} to route the ticket and {{$json.response_text}} for the audit note.' },
+          externalDocsUrl: 'https://docs.ctrlchecks.com',
+        },
+      ],
     },
-    {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
   ],
-  "relatedNodes": []
+  commonErrors: [
+    { error: 'Gemini/provider credential error in _error', cause: 'The selected provider has no usable key, wallet, vault value, or key-pool access.', fix: 'Connect the correct AI provider account or configure the worker environment key for the selected model.' },
+    { error: 'Timeout', cause: 'One model attempt exceeded Timeout and retries were exhausted.', fix: 'Raise Timeout, lower Max Tokens, simplify the prompt, or use a faster model.' },
+    { error: 'JSON output is wrapped as response_json.content', cause: 'Output Format is json but the model returned text that could not be parsed as JSON.', fix: 'Add strict JSON instructions to System Prompt and lower Temperature.' },
+    { error: 'No message-like field found in upstream object', cause: 'The incoming object did not contain message, text, input, content, query, prompt, or userInput.', fix: 'Map the exact field into User Input or create a Set/Edit Fields node that exposes message.' },
+  ],
+  relatedNodes: ['ai_chat_model', 'chat_model', 'memory', 'tool', 'openai_gpt', 'anthropic_claude', 'google_gemini'],
 };

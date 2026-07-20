@@ -1,20 +1,44 @@
+import type { DocsSearchIndexItem } from '../search-index';
+
 export const outlookTriggerSearchIndex = [
   {
-    slug: 'outlook_trigger',
+    type: 'node',
     title: 'Outlook Trigger',
+    slug: 'outlook_trigger',
+    category: 'Triggers',
     href: '/docs/nodes/outlook_trigger',
-    text: 'Outlook Trigger Start workflows from new Outlook email or calendar events using Microsoft Graph change notifications Triggers',
+    text: 'Outlook Trigger starts workflows from new Outlook email or calendar events delivered through Microsoft Graph change notifications. Subscriptions are created and renewed automatically.',
   },
   {
+    type: 'operation',
+    title: 'Outlook Trigger: Receive notification',
     slug: 'outlook_trigger',
-    title: 'Outlook Trigger setup',
+    category: 'Triggers',
     href: '/docs/nodes/outlook_trigger#operation-receive',
-    text: 'Configure Microsoft Graph subscription mail folder calendar changeType webhook URL clientState',
+    text: 'Receive notification validates the Graph clientState secret, re-fetches the referenced message or event, filters resource changeTypes query, and starts workflow executions.',
   },
   {
+    type: 'field',
+    title: 'Outlook Trigger fields',
     slug: 'outlook_trigger',
+    category: 'Triggers',
+    href: '/docs/nodes/outlook_trigger#operation-receive',
+    text: 'Fields include connectionId, resource mail calendar, changeTypes created updated deleted, folderName, and query.',
+  },
+  {
+    type: 'field',
     title: 'Outlook Trigger outputs',
+    slug: 'outlook_trigger',
+    category: 'Triggers',
     href: '/docs/nodes/outlook_trigger#operation-receive',
-    text: 'Outputs eventId eventType subject from to snippet conversationId start end attendees raw',
+    text: 'Outputs eventId eventType source userId username text timestamp resourceId subject from to snippet conversationId start end attendees raw trigger workflow_id node_id sessionId _outlook.',
   },
-];
+  {
+    type: 'field',
+    title: 'Outlook Trigger connection setup',
+    slug: 'outlook_trigger',
+    category: 'Triggers',
+    href: '/docs/nodes/outlook_trigger#connection-setup',
+    text: 'Connect Microsoft OAuth2 in Connections with Mail.Read and Calendars.Read scopes. CtrlChecks automatically creates and renews the Microsoft Graph subscription — no manual webhook setup required.',
+  },
+] satisfies DocsSearchIndexItem[];

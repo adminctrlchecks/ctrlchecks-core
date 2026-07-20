@@ -1,0 +1,376 @@
+{
+  "version_id": "62d3300a7b2b",
+  "full_hash": "62d3300a7b2b981f7c380e824bad05b0eb15b37d0fe097e360993077e0f5ef04",
+  "created_at": "2026-07-14T19:02:18.952Z",
+  "workflow": {
+    "nodes": [
+      {
+        "id": "node_2293df07-0574-4935-a631-796a466bc694",
+        "type": "form",
+        "position": {
+          "x": 432,
+          "y": -32
+        },
+        "data": {
+          "label": "Form Trigger",
+          "type": "form",
+          "category": "trigger",
+          "config": {
+            "fields": [
+              {
+                "id": "email",
+                "key": "customer_email_address",
+                "name": "customer_email_address",
+                "type": "email",
+                "label": "Customer Email Address",
+                "required": true
+              },
+              {
+                "id": "status",
+                "key": "payment_status",
+                "name": "payment_status",
+                "type": "select",
+                "label": "Payment Status",
+                "options": [
+                  {
+                    "label": "Success",
+                    "value": "success"
+                  },
+                  {
+                    "label": "Pending",
+                    "value": "pending"
+                  },
+                  {
+                    "label": "Failed",
+                    "value": "failed"
+                  }
+                ],
+                "required": true
+              },
+              {
+                "id": "amount",
+                "key": "transaction_amount",
+                "name": "transaction_amount",
+                "type": "number",
+                "label": "Transaction Amount ($)",
+                "required": true
+              }
+            ],
+            "captcha": "false",
+            "_fillMode": {
+              "fields": "buildtime_ai_once",
+              "captcha": "manual_static",
+              "formTitle": "buildtime_ai_once",
+              "successMessage": "buildtime_ai_once",
+              "formDescription": "buildtime_ai_once",
+              "submitButtonText": "buildtime_ai_once",
+              "requireAuthentication": "manual_static",
+              "allowMultipleSubmissions": "manual_static"
+            },
+            "formTitle": "Payment Status and Amount Submission Form",
+            "successMessage": "Payment details submitted successfully. The automated workflow has been initiated.",
+            "formDescription": "Please submit the customer's payment details to trigger the automated post-payment engagement and notification workflow.",
+            "submitButtonText": "Submit Payment Details",
+            "requireAuthentication": "false",
+            "allowMultipleSubmissions": "true"
+          }
+        }
+      },
+      {
+        "id": "node_712aea28-f401-4732-abad-e16a65610968",
+        "type": "switch",
+        "position": {
+          "x": 544,
+          "y": 160
+        },
+        "data": {
+          "label": "Switch",
+          "type": "switch",
+          "category": "logic",
+          "config": {
+            "cases": [
+              {
+                "label": "Success",
+                "value": "success"
+              },
+              {
+                "label": "Pending",
+                "value": "pending"
+              },
+              {
+                "label": "Failed",
+                "value": "failed"
+              }
+            ],
+            "rules": [
+              {
+                "label": "Success",
+                "value": "success"
+              },
+              {
+                "label": "Pending",
+                "value": "pending"
+              },
+              {
+                "label": "Failed",
+                "value": "failed"
+              }
+            ],
+            "_fillMode": {
+              "cases": "buildtime_ai_once",
+              "rules": "manual_static",
+              "expression": "buildtime_ai_once",
+              "routingType": "manual_static"
+            },
+            "expression": "{{$json.status}}"
+          }
+        }
+      },
+      {
+        "id": "node_ae5e86b4-22b9-44b0-9c88-1e59ee486640",
+        "type": "if_else",
+        "position": {
+          "x": 208,
+          "y": 384
+        },
+        "data": {
+          "label": "If/Else",
+          "type": "if_else",
+          "category": "logic",
+          "config": {
+            "_fillMode": {
+              "conditions": "buildtime_ai_once",
+              "combineOperation": "manual_static"
+            },
+            "conditions": [
+              {
+                "field": "$json.amount",
+                "operator": "greater_than",
+                "value": 5000
+              }
+            ],
+            "combineOperation": "AND"
+          }
+        }
+      },
+      {
+        "id": "node_d9716f25-1a73-4182-be8f-b12eeb66bb08",
+        "type": "google_gmail",
+        "position": {
+          "x": 192,
+          "y": 544
+        },
+        "data": {
+          "label": "Gmail",
+          "type": "google_gmail",
+          "category": "output",
+          "config": {
+            "cc": "",
+            "bcc": "",
+            "body": "Dear Customer,\n\nWe have successfully received your premium payment of ${{$json.amount}}. Thank you for your business!\n\nBest regards,\nTeam",
+            "from": "",
+            "query": "",
+            "range": "",
+            "subject": "Premium Payment Confirmation",
+            "_fillMode": {
+              "cc": "manual_static",
+              "bcc": "manual_static",
+              "body": "buildtime_ai_once",
+              "from": "manual_static",
+              "query": "manual_static",
+              "range": "manual_static",
+              "subject": "buildtime_ai_once",
+              "messageId": "manual_static",
+              "operation": "manual_static",
+              "sheetName": "manual_static",
+              "maxResults": "manual_static",
+              "credentialId": "manual_static",
+              "spreadsheetId": "manual_static",
+              "recipientEmails": "buildtime_ai_once",
+              "recipientSource": "buildtime_ai_once",
+              "useAiRecipientMapping": "manual_static"
+            },
+            "operation": "send",
+            "sheetName": "Sheet1",
+            "maxResults": 10,
+            "spreadsheetId": "",
+            "recipientEmails": "{{$json.email}}",
+            "recipientSource": "manual_entry",
+            "_ownershipUnlock": {},
+            "useAiRecipientMapping": false
+          }
+        }
+      },
+      {
+        "id": "node_07433607-feea-4be5-8ad4-f7748226b2a7",
+        "type": "log_output",
+        "position": {
+          "x": 688,
+          "y": 800
+        },
+        "data": {
+          "label": "Log Output",
+          "type": "log_output",
+          "category": "output",
+          "config": {
+            "level": "error",
+            "_fillMode": {
+              "level": "buildtime_ai_once",
+              "message": "runtime_ai"
+            }
+          }
+        }
+      },
+      {
+        "id": "node_6dd700b8-c8d9-4bb5-8a50-8a96cd5d2da3",
+        "type": "slack_message",
+        "position": {
+          "x": 496,
+          "y": 544
+        },
+        "data": {
+          "label": "Slack",
+          "type": "slack_message",
+          "category": "output",
+          "config": {
+            "message": "Payment of {{$json.amount}} received from {{$json.email}}.",
+            "channel": "#finance-alerts"
+          }
+        }
+      },
+      {
+        "id": "node_c2b33a53-f956-487b-8c43-437278f2ddb9",
+        "type": "google_gmail",
+        "position": {
+          "x": 672,
+          "y": 384
+        },
+        "data": {
+          "label": "Gmail",
+          "type": "google_gmail",
+          "category": "output",
+          "config": {
+            "credentialId": "slack",
+            "operation": "send",
+            "recipientSource": "manual_entry",
+            "recipientEmails": "{{$json.email}}",
+            "sheetName": "Sheet1",
+            "useAiRecipientMapping": false,
+            "subject": "Payment Pending Notification",
+            "body": "A payment of {{$json.amount}} from {{$json.email}} is currently pending. Please follow up.",
+            "maxResults": 10
+          }
+        }
+      },
+      {
+        "id": "node_df8ec3b9-96da-4a4c-9114-17dc430053a5",
+        "type": "slack_message",
+        "position": {
+          "x": 992,
+          "y": 400
+        },
+        "data": {
+          "label": "Slack",
+          "type": "slack_message",
+          "category": "output",
+          "config": {
+            "blocks": "",
+            "channel": "#support",
+            "message": "Urgent Alert: A payment of {{$json.amount}} has failed for customer {{$json.email}}. Please review the transaction details.",
+            "username": "Payment Alert Bot",
+            "_fillMode": {
+              "blocks": "manual_static",
+              "channel": "buildtime_ai_once",
+              "message": "buildtime_ai_once",
+              "username": "buildtime_ai_once",
+              "iconEmoji": "manual_static"
+            },
+            "credentialId": "slack"
+          }
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_node_712aea28-f401-4732-abad-e16a65610968_node_ae5e86b4-22b9-44b0-9c88-1e59ee486640_0cebddc5-0e83-45b1-86cc-c4a8498469ca",
+        "source": "node_712aea28-f401-4732-abad-e16a65610968",
+        "target": "node_ae5e86b4-22b9-44b0-9c88-1e59ee486640",
+        "sourceHandle": "success",
+        "targetHandle": "input",
+        "type": "success"
+      },
+      {
+        "id": "edge_node_712aea28-f401-4732-abad-e16a65610968_node_c2b33a53-f956-487b-8c43-437278f2ddb9_02284c06-854f-4173-a289-beac913478dc",
+        "source": "node_712aea28-f401-4732-abad-e16a65610968",
+        "target": "node_c2b33a53-f956-487b-8c43-437278f2ddb9",
+        "sourceHandle": "pending",
+        "targetHandle": "input",
+        "type": "pending"
+      },
+      {
+        "id": "edge_node_712aea28-f401-4732-abad-e16a65610968_node_df8ec3b9-96da-4a4c-9114-17dc430053a5_5ef2f681-2bda-414c-88db-ce841fcdcb2c",
+        "source": "node_712aea28-f401-4732-abad-e16a65610968",
+        "target": "node_df8ec3b9-96da-4a4c-9114-17dc430053a5",
+        "sourceHandle": "failed",
+        "targetHandle": "input",
+        "type": "failed"
+      },
+      {
+        "id": "edge_node_ae5e86b4-22b9-44b0-9c88-1e59ee486640_node_d9716f25-1a73-4182-be8f-b12eeb66bb08_bbafa991-3ce9-4704-8ec7-991517cddbcf",
+        "source": "node_ae5e86b4-22b9-44b0-9c88-1e59ee486640",
+        "target": "node_d9716f25-1a73-4182-be8f-b12eeb66bb08",
+        "sourceHandle": "true",
+        "targetHandle": "input",
+        "type": "true"
+      },
+      {
+        "id": "edge_node_ae5e86b4-22b9-44b0-9c88-1e59ee486640_node_6dd700b8-c8d9-4bb5-8a50-8a96cd5d2da3_59ca5330-7d09-40fc-b992-62a5f008351b",
+        "source": "node_ae5e86b4-22b9-44b0-9c88-1e59ee486640",
+        "target": "node_6dd700b8-c8d9-4bb5-8a50-8a96cd5d2da3",
+        "sourceHandle": "false",
+        "targetHandle": "input",
+        "type": "false"
+      },
+      {
+        "id": "edge_node_2293df07-0574-4935-a631-796a466bc694_node_712aea28-f401-4732-abad-e16a65610968_119b914a-0ef1-4ede-8b2d-72633d2d0458",
+        "source": "node_2293df07-0574-4935-a631-796a466bc694",
+        "target": "node_712aea28-f401-4732-abad-e16a65610968",
+        "sourceHandle": "output",
+        "targetHandle": "input",
+        "type": "default"
+      },
+      {
+        "id": "edge_node_6dd700b8-c8d9-4bb5-8a50-8a96cd5d2da3_node_07433607-feea-4be5-8ad4-f7748226b2a7_320fff06-d4e6-4b5e-8778-91a8ce624790",
+        "source": "node_6dd700b8-c8d9-4bb5-8a50-8a96cd5d2da3",
+        "target": "node_07433607-feea-4be5-8ad4-f7748226b2a7",
+        "sourceHandle": "output",
+        "targetHandle": "input",
+        "type": "default"
+      }
+    ],
+    "metadata": {
+      "id": "3dea9d10-e12b-4d67-8623-60fbc774af0b",
+      "workflow_id": "3dea9d10-e12b-4d67-8623-60fbc774af0b"
+    }
+  },
+  "metadata": {
+    "source": "ai_editor",
+    "workflowId": "3dea9d10-e12b-4d67-8623-60fbc774af0b",
+    "actor": "d1f3dd1a-2081-7056-9577-8ef4e3a8082a",
+    "prompt": "in the workflow when the status id sucess and condition is false then can you remove the gmail node and update it with the slack node and when start is pending replace slack with gmail with proper node properties"
+  },
+  "dependencies": {
+    "node_library_version": "1.0.0",
+    "assembler_version": "1.0.0"
+  },
+  "compatibility": {
+    "backward_compatible": true,
+    "breaking_changes": [],
+    "deprecated_nodes": [],
+    "migration_path": {
+      "automated": true,
+      "steps": [],
+      "estimated_time": "5 minutes"
+    }
+  }
+}

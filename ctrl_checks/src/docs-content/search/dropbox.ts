@@ -1,132 +1,31 @@
 import type { DocsSearchIndexItem } from '../search-index';
 
+const fields = ['accessToken', 'operation', 'path', 'content', 'dataBase64', 'data', 'recursive'];
+const operations = ['read', 'upload', 'list', 'delete'];
+
 export const dropboxSearchIndex = [
   {
-    "type": "node",
-    "title": "Dropbox",
-    "slug": "dropbox",
-    "category": "Data",
-    "href": "/docs/nodes/dropbox",
-    "text": "Dropbox Dropbox file operations Use this node when a workflow needs dropbox behavior with schema-driven inputs from the CtrlChecks node registry. Data"
+    type: 'node',
+    title: 'Dropbox',
+    slug: 'dropbox',
+    category: 'File',
+    href: '/docs/nodes/dropbox',
+    text: 'Dropbox OAuth2 read download upload list delete path content dataBase64 recursive items cursor metadata sizeBytes deleted connection credential.',
   },
-  {
-    "type": "operation",
-    "title": "Dropbox: Upload",
-    "slug": "dropbox",
-    "category": "Data",
-    "href": "/docs/nodes/dropbox#operation-upload",
-    "text": "Dropbox Operations Upload Upload with the Dropbox node using the configured input fields. upload"
-  },
-  {
-    "type": "field",
-    "title": "Dropbox: Path",
-    "slug": "dropbox",
-    "category": "Data",
-    "href": "/docs/nodes/dropbox#operation-upload",
-    "text": "Dropbox Operations Upload Path path File path"
-  },
-  {
-    "type": "field",
-    "title": "Dropbox: Data Base64",
-    "slug": "dropbox",
-    "category": "Data",
-    "href": "/docs/nodes/dropbox#operation-upload",
-    "text": "Dropbox Operations Upload Data Base64 dataBase64 Base64 payload for upload (alternative to data)"
-  },
-  {
-    "type": "field",
-    "title": "Dropbox: Data",
-    "slug": "dropbox",
-    "category": "Data",
-    "href": "/docs/nodes/dropbox#operation-upload",
-    "text": "Dropbox Operations Upload Data data Base64 payload for upload"
-  },
-  {
-    "type": "field",
-    "title": "Dropbox: Recursive",
-    "slug": "dropbox",
-    "category": "Data",
-    "href": "/docs/nodes/dropbox#operation-upload",
-    "text": "Dropbox Operations Upload Recursive recursive List recursively (list operation)"
-  },
-  {
-    "type": "operation",
-    "title": "Dropbox: Download",
-    "slug": "dropbox",
-    "category": "Data",
-    "href": "/docs/nodes/dropbox#operation-download",
-    "text": "Dropbox Operations Download Download with the Dropbox node using the configured input fields. download"
-  },
-  {
-    "type": "field",
-    "title": "Dropbox: Path",
-    "slug": "dropbox",
-    "category": "Data",
-    "href": "/docs/nodes/dropbox#operation-download",
-    "text": "Dropbox Operations Download Path path File path"
-  },
-  {
-    "type": "field",
-    "title": "Dropbox: Data Base64",
-    "slug": "dropbox",
-    "category": "Data",
-    "href": "/docs/nodes/dropbox#operation-download",
-    "text": "Dropbox Operations Download Data Base64 dataBase64 Base64 payload for upload (alternative to data)"
-  },
-  {
-    "type": "field",
-    "title": "Dropbox: Data",
-    "slug": "dropbox",
-    "category": "Data",
-    "href": "/docs/nodes/dropbox#operation-download",
-    "text": "Dropbox Operations Download Data data Base64 payload for upload"
-  },
-  {
-    "type": "field",
-    "title": "Dropbox: Recursive",
-    "slug": "dropbox",
-    "category": "Data",
-    "href": "/docs/nodes/dropbox#operation-download",
-    "text": "Dropbox Operations Download Recursive recursive List recursively (list operation)"
-  },
-  {
-    "type": "operation",
-    "title": "Dropbox: List",
-    "slug": "dropbox",
-    "category": "Data",
-    "href": "/docs/nodes/dropbox#operation-list",
-    "text": "Dropbox Operations List List with the Dropbox node using the configured input fields. list"
-  },
-  {
-    "type": "field",
-    "title": "Dropbox: Path",
-    "slug": "dropbox",
-    "category": "Data",
-    "href": "/docs/nodes/dropbox#operation-list",
-    "text": "Dropbox Operations List Path path File path"
-  },
-  {
-    "type": "field",
-    "title": "Dropbox: Data Base64",
-    "slug": "dropbox",
-    "category": "Data",
-    "href": "/docs/nodes/dropbox#operation-list",
-    "text": "Dropbox Operations List Data Base64 dataBase64 Base64 payload for upload (alternative to data)"
-  },
-  {
-    "type": "field",
-    "title": "Dropbox: Data",
-    "slug": "dropbox",
-    "category": "Data",
-    "href": "/docs/nodes/dropbox#operation-list",
-    "text": "Dropbox Operations List Data data Base64 payload for upload"
-  },
-  {
-    "type": "field",
-    "title": "Dropbox: Recursive",
-    "slug": "dropbox",
-    "category": "Data",
-    "href": "/docs/nodes/dropbox#operation-list",
-    "text": "Dropbox Operations List Recursive recursive List recursively (list operation)"
-  }
+  ...operations.map((operation) => ({
+    type: 'operation' as const,
+    title: `Dropbox: ${operation}`,
+    slug: 'dropbox',
+    category: 'File',
+    href: `/docs/nodes/dropbox#operation-${operation}`,
+    text: `Dropbox ${operation} file folder path metadata dataBase64 items cursor deleted _error.`,
+  })),
+  ...fields.map((field) => ({
+    type: 'field' as const,
+    title: `Dropbox: ${field}`,
+    slug: 'dropbox',
+    category: 'File',
+    href: '/docs/nodes/dropbox',
+    text: `Dropbox field ${field} OAuth file path upload download list delete credential workflow.`,
+  })),
 ] satisfies DocsSearchIndexItem[];

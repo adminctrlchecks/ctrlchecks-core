@@ -2,203 +2,59 @@ import type { DocsSearchIndexItem } from '../search-index';
 
 export const activecampaignSearchIndex = [
   {
-    "type": "node",
-    "title": "ActiveCampaign",
-    "slug": "activecampaign",
-    "category": "Data",
-    "href": "/docs/nodes/activecampaign",
-    "text": "ActiveCampaign ActiveCampaign marketing automation Use this node when a workflow needs activecampaign behavior with schema-driven inputs from the CtrlChecks node registry. Data"
+    type: 'node',
+    title: 'ActiveCampaign',
+    slug: 'activecampaign',
+    category: 'CRM',
+    href: '/docs/nodes/activecampaign',
+    text: 'ActiveCampaign adds, updates, or deletes contacts in your ActiveCampaign marketing automation account via API key.',
   },
   {
-    "type": "operation",
-    "title": "ActiveCampaign: Add",
-    "slug": "activecampaign",
-    "category": "Data",
-    "href": "/docs/nodes/activecampaign#operation-add",
-    "text": "ActiveCampaign Operations Add Add with the ActiveCampaign node using the configured input fields. add"
+    type: 'operation',
+    title: 'ActiveCampaign: Add',
+    slug: 'activecampaign',
+    category: 'CRM',
+    href: '/docs/nodes/activecampaign#operation-add',
+    text: 'Add creates a new ActiveCampaign contact using Email, First Name, Last Name, or a raw Data payload.',
   },
   {
-    "type": "field",
-    "title": "ActiveCampaign: Contact Id",
-    "slug": "activecampaign",
-    "category": "Data",
-    "href": "/docs/nodes/activecampaign#operation-add",
-    "text": "ActiveCampaign Operations Add Contact Id contactId Contact ID"
+    type: 'operation',
+    title: 'ActiveCampaign: Update',
+    slug: 'activecampaign',
+    category: 'CRM',
+    href: '/docs/nodes/activecampaign#operation-update',
+    text: 'Update changes an existing ActiveCampaign contact identified by Contact ID.',
   },
   {
-    "type": "field",
-    "title": "ActiveCampaign: Api Url",
-    "slug": "activecampaign",
-    "category": "Data",
-    "href": "/docs/nodes/activecampaign#operation-add",
-    "text": "ActiveCampaign Operations Add Api Url apiUrl ActiveCampaign API URL, e.g. https://account.api-us1.com"
+    type: 'operation',
+    title: 'ActiveCampaign: Delete',
+    slug: 'activecampaign',
+    category: 'CRM',
+    href: '/docs/nodes/activecampaign#operation-delete',
+    text: 'Delete permanently removes an ActiveCampaign contact identified by Contact ID.',
   },
   {
-    "type": "field",
-    "title": "ActiveCampaign: Api Key",
-    "slug": "activecampaign",
-    "category": "Data",
-    "href": "/docs/nodes/activecampaign#operation-add",
-    "text": "ActiveCampaign Operations Add Api Key apiKey ActiveCampaign API key"
+    type: 'field',
+    title: 'ActiveCampaign fields',
+    slug: 'activecampaign',
+    category: 'CRM',
+    href: '/docs/nodes/activecampaign#operation-add',
+    text: 'Fields include apiUrl, apiKey, operation add update delete, contactId, email, firstName, lastName, and data (raw JSON override).',
   },
   {
-    "type": "field",
-    "title": "ActiveCampaign: Email",
-    "slug": "activecampaign",
-    "category": "Data",
-    "href": "/docs/nodes/activecampaign#operation-add",
-    "text": "ActiveCampaign Operations Add Email email Contact email address"
+    type: 'field',
+    title: 'ActiveCampaign outputs',
+    slug: 'activecampaign',
+    category: 'CRM',
+    href: '/docs/nodes/activecampaign#operation-add',
+    text: 'Outputs operation and data. data.contact contains id, email, firstName, lastName for add/update; Delete returns data.deleted and data.contactId instead.',
   },
   {
-    "type": "field",
-    "title": "ActiveCampaign: First Name",
-    "slug": "activecampaign",
-    "category": "Data",
-    "href": "/docs/nodes/activecampaign#operation-add",
-    "text": "ActiveCampaign Operations Add First Name firstName Contact first name"
+    type: 'field',
+    title: 'ActiveCampaign connection setup',
+    slug: 'activecampaign',
+    category: 'CRM',
+    href: '/docs/nodes/activecampaign#connection-setup',
+    text: 'Get your API URL and API Key from ActiveCampaign Settings -> Developer. Save the API Key under Connections; the API URL must still be entered on the node since it is account-specific.',
   },
-  {
-    "type": "field",
-    "title": "ActiveCampaign: Last Name",
-    "slug": "activecampaign",
-    "category": "Data",
-    "href": "/docs/nodes/activecampaign#operation-add",
-    "text": "ActiveCampaign Operations Add Last Name lastName Contact last name"
-  },
-  {
-    "type": "field",
-    "title": "ActiveCampaign: Data",
-    "slug": "activecampaign",
-    "category": "Data",
-    "href": "/docs/nodes/activecampaign#operation-add",
-    "text": "ActiveCampaign Operations Add Data data Raw ActiveCampaign contact payload override"
-  },
-  {
-    "type": "operation",
-    "title": "ActiveCampaign: Update",
-    "slug": "activecampaign",
-    "category": "Data",
-    "href": "/docs/nodes/activecampaign#operation-update",
-    "text": "ActiveCampaign Operations Update Update with the ActiveCampaign node using the configured input fields. update"
-  },
-  {
-    "type": "field",
-    "title": "ActiveCampaign: Contact Id",
-    "slug": "activecampaign",
-    "category": "Data",
-    "href": "/docs/nodes/activecampaign#operation-update",
-    "text": "ActiveCampaign Operations Update Contact Id contactId Contact ID"
-  },
-  {
-    "type": "field",
-    "title": "ActiveCampaign: Api Url",
-    "slug": "activecampaign",
-    "category": "Data",
-    "href": "/docs/nodes/activecampaign#operation-update",
-    "text": "ActiveCampaign Operations Update Api Url apiUrl ActiveCampaign API URL, e.g. https://account.api-us1.com"
-  },
-  {
-    "type": "field",
-    "title": "ActiveCampaign: Api Key",
-    "slug": "activecampaign",
-    "category": "Data",
-    "href": "/docs/nodes/activecampaign#operation-update",
-    "text": "ActiveCampaign Operations Update Api Key apiKey ActiveCampaign API key"
-  },
-  {
-    "type": "field",
-    "title": "ActiveCampaign: Email",
-    "slug": "activecampaign",
-    "category": "Data",
-    "href": "/docs/nodes/activecampaign#operation-update",
-    "text": "ActiveCampaign Operations Update Email email Contact email address"
-  },
-  {
-    "type": "field",
-    "title": "ActiveCampaign: First Name",
-    "slug": "activecampaign",
-    "category": "Data",
-    "href": "/docs/nodes/activecampaign#operation-update",
-    "text": "ActiveCampaign Operations Update First Name firstName Contact first name"
-  },
-  {
-    "type": "field",
-    "title": "ActiveCampaign: Last Name",
-    "slug": "activecampaign",
-    "category": "Data",
-    "href": "/docs/nodes/activecampaign#operation-update",
-    "text": "ActiveCampaign Operations Update Last Name lastName Contact last name"
-  },
-  {
-    "type": "field",
-    "title": "ActiveCampaign: Data",
-    "slug": "activecampaign",
-    "category": "Data",
-    "href": "/docs/nodes/activecampaign#operation-update",
-    "text": "ActiveCampaign Operations Update Data data Raw ActiveCampaign contact payload override"
-  },
-  {
-    "type": "operation",
-    "title": "ActiveCampaign: Delete",
-    "slug": "activecampaign",
-    "category": "Data",
-    "href": "/docs/nodes/activecampaign#operation-delete",
-    "text": "ActiveCampaign Operations Delete Delete with the ActiveCampaign node using the configured input fields. delete"
-  },
-  {
-    "type": "field",
-    "title": "ActiveCampaign: Contact Id",
-    "slug": "activecampaign",
-    "category": "Data",
-    "href": "/docs/nodes/activecampaign#operation-delete",
-    "text": "ActiveCampaign Operations Delete Contact Id contactId Contact ID"
-  },
-  {
-    "type": "field",
-    "title": "ActiveCampaign: Api Url",
-    "slug": "activecampaign",
-    "category": "Data",
-    "href": "/docs/nodes/activecampaign#operation-delete",
-    "text": "ActiveCampaign Operations Delete Api Url apiUrl ActiveCampaign API URL, e.g. https://account.api-us1.com"
-  },
-  {
-    "type": "field",
-    "title": "ActiveCampaign: Api Key",
-    "slug": "activecampaign",
-    "category": "Data",
-    "href": "/docs/nodes/activecampaign#operation-delete",
-    "text": "ActiveCampaign Operations Delete Api Key apiKey ActiveCampaign API key"
-  },
-  {
-    "type": "field",
-    "title": "ActiveCampaign: Email",
-    "slug": "activecampaign",
-    "category": "Data",
-    "href": "/docs/nodes/activecampaign#operation-delete",
-    "text": "ActiveCampaign Operations Delete Email email Contact email address"
-  },
-  {
-    "type": "field",
-    "title": "ActiveCampaign: First Name",
-    "slug": "activecampaign",
-    "category": "Data",
-    "href": "/docs/nodes/activecampaign#operation-delete",
-    "text": "ActiveCampaign Operations Delete First Name firstName Contact first name"
-  },
-  {
-    "type": "field",
-    "title": "ActiveCampaign: Last Name",
-    "slug": "activecampaign",
-    "category": "Data",
-    "href": "/docs/nodes/activecampaign#operation-delete",
-    "text": "ActiveCampaign Operations Delete Last Name lastName Contact last name"
-  },
-  {
-    "type": "field",
-    "title": "ActiveCampaign: Data",
-    "slug": "activecampaign",
-    "category": "Data",
-    "href": "/docs/nodes/activecampaign#operation-delete",
-    "text": "ActiveCampaign Operations Delete Data data Raw ActiveCampaign contact payload override"
-  }
 ] satisfies DocsSearchIndexItem[];

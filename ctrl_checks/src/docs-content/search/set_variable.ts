@@ -7,7 +7,7 @@ export const setVariableSearchIndex = [
     slug: 'set_variable',
     category: 'Data',
     href: '/docs/nodes/set_variable',
-    text: 'Set Variable Create one or more named values for later workflow steps.'
+    text: 'Set Variable Create exactly one named value for later workflow steps; every other incoming field is discarded.'
   },
   {
     type: 'operation',
@@ -15,7 +15,7 @@ export const setVariableSearchIndex = [
     slug: 'set_variable',
     category: 'Data',
     href: '/docs/nodes/set_variable#operation-default',
-    text: 'Set one name/value pair or legacy values array.'
+    text: 'Set one name/value pair. Legacy values array and Keep Source are not functional.'
   },
   {
     type: 'field',
@@ -39,7 +39,7 @@ export const setVariableSearchIndex = [
     slug: 'set_variable',
     category: 'Data',
     href: '/docs/nodes/set_variable#operation-default',
-    text: 'values Legacy multi-assignment array'
+    text: 'values Legacy multi-assignment array — not functional, never read at runtime'
   },
   {
     type: 'field',
@@ -47,6 +47,6 @@ export const setVariableSearchIndex = [
     slug: 'set_variable',
     category: 'Data',
     href: '/docs/nodes/set_variable#operation-default',
-    text: 'keepSource Keep incoming fields and add variables'
+    text: 'keepSource Not functional — never read at runtime, incoming fields are always discarded'
   }
 ] satisfies DocsSearchIndexItem[];

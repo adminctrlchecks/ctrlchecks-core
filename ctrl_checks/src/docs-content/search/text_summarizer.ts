@@ -2,35 +2,35 @@ import type { DocsSearchIndexItem } from '../search-index';
 
 export const textSummarizerSearchIndex = [
   {
-    "type": "node",
-    "title": "Text Summarizer",
-    "slug": "text_summarizer",
-    "category": "AI",
-    "href": "/docs/nodes/text_summarizer",
-    "text": "Text Summarizer Summarize long text into shorter versions Use this node when a workflow needs text summarizer behavior with schema-driven inputs from the CtrlChecks node registry. AI"
+    type: 'node',
+    title: 'Text Summarizer',
+    slug: 'text_summarizer',
+    category: 'AI',
+    href: '/docs/nodes/text_summarizer',
+    text: 'Text Summarizer Gemini AI Chat Model alias summary output is response not summary wordCount originalLength preserves incoming fields maxLength prompt hint _error',
   },
   {
-    "type": "operation",
-    "title": "Text Summarizer: Configure",
-    "slug": "text_summarizer",
-    "category": "AI",
-    "href": "/docs/nodes/text_summarizer#operation-configure",
-    "text": "Text Summarizer Configuration Configure Configure with the Text Summarizer node using the configured input fields. configure"
+    type: 'operation',
+    title: 'Text Summarizer: Execute',
+    slug: 'text_summarizer',
+    category: 'AI',
+    href: '/docs/nodes/text_summarizer',
+    text: 'Execute builds Summarize the following text prompt optional maxLength in <= words delegates to ai_chat_model Gemini 3.5 Flash',
   },
   {
-    "type": "field",
-    "title": "Text Summarizer: Text",
-    "slug": "text_summarizer",
-    "category": "AI",
-    "href": "/docs/nodes/text_summarizer#operation-configure",
-    "text": "Text Summarizer Configuration Configure Text text Text to summarize"
+    type: 'field',
+    title: 'Text Summarizer: Text',
+    slug: 'text_summarizer',
+    category: 'AI',
+    href: '/docs/nodes/text_summarizer',
+    text: 'Text inserted into generated summarization prompt blank text not locally rejected response contains summary',
   },
   {
-    "type": "field",
-    "title": "Text Summarizer: Max Length",
-    "slug": "text_summarizer",
-    "category": "AI",
-    "href": "/docs/nodes/text_summarizer#operation-configure",
-    "text": "Text Summarizer Configuration Configure Max Length maxLength Maximum summary length"
-  }
+    type: 'field',
+    title: 'Text Summarizer: Max Length',
+    slug: 'text_summarizer',
+    category: 'AI',
+    href: '/docs/nodes/text_summarizer',
+    text: 'Max Length only changes generated prompt not hard truncation no wordCount output',
+  },
 ] satisfies DocsSearchIndexItem[];

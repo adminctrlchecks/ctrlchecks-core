@@ -3,11 +3,99 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from 'react-router-dom';
 import { ENDPOINTS } from '@/config/endpoints';
 import { awsClient } from '@/integrations/aws/client';
+import { QUERY_KEYS } from '@/lib/queryKeys';
+
+export type ConnectionReadinessStatus = 'ready' | 'missing' | 'expired' | 'missing_scope' | 'error';
 
 export interface WorkflowMissingConnection {
   provider: string;
   displayName: string;
   nodes: string[];
+  /** Present when the backend returned the scope-aware readiness envelope. */
+  status?: ConnectionReadinessStatus;
+  /** Human-readable explanation (e.g. "missing Gmail send permission"). */
+  reason?: string;
+}
+
+interface ConnectionReadinessRow {
+  nodeId: string;
+  provider: string;
+  status: ConnectionReadinessStatus;
+  reason?: string;
+}
+
+const PROVIDER_DISPLAY: Record<string, string> = {
+  google: 'Google',
+  microsoft: 'Microsoft',
+  slack: 'Slack',
+  github: 'GitHub',
+  notion: 'Notion',
+  twitter: 'Twitter / X',
+  instagram: 'Instagram',
+  facebook: 'Facebook',
+  linkedin: 'LinkedIn',
+  whatsapp: 'WhatsApp',
+  salesforce: 'Salesforce',
+  zoho: 'Zoho',
+  youtube: 'YouTube',
+  calendly: 'Calendly',
+  linear: 'Linear',
+  trello: 'Trello',
+  typeform: 'Typeform',
+};
+
+function providerDisplayName(provider: string): string {
+  return PROVIDER_DISPLAY[provider.toLowerCase()] ?? provider.charAt(0).toUpperCase() + provider.slice(1);
+}
+
+export function missingConnectionsFromResponse(body: {
+  connectionReadiness?: { missing?: ConnectionReadinessRow[] };
+  credentials?: Array<{ provider: string; displayName?: string; nodes?: string[]; satisfied?: boolean }>;
+}): WorkflowMissingConnection[] {
+  // Prefer the scope-aware readiness envelope when the backend provides it —
+  // it distinguishes missing / missing_scope / expired instead of a generic
+  // not-connected state.
+  const missingRows = body.connectionReadiness?.missing;
+  if (Array.isArray(missingRows)) {
+    const byProvider = new Map<string, WorkflowMissingConnection>();
+    for (const row of missingRows) {
+      const existing = byProvider.get(row.provider);
+      if (existing) {
+        if (!existing.nodes.includes(row.nodeId)) existing.nodes.push(row.nodeId);
+        if (!existing.reason && row.reason) existing.reason = row.reason;
+      } else {
+        byProvider.set(row.provider, {
+          provider: row.provider,
+          displayName: providerDisplayName(row.provider),
+          nodes: [row.nodeId],
+          status: row.status,
+          reason: row.reason,
+        });
+      }
+    }
+
+    // The readiness envelope only covers OAuth providers it knows about;
+    // legacy credentials may still report other missing items (api keys etc.).
+    for (const c of body.credentials || []) {
+      if (c.satisfied !== false || byProvider.has(c.provider)) continue;
+      byProvider.set(c.provider, {
+        provider: c.provider,
+        displayName: c.displayName || providerDisplayName(c.provider),
+        nodes: c.nodes || [],
+      });
+    }
+
+    return Array.from(byProvider.values());
+  }
+
+  // Legacy fallback: only credentials that are explicitly missing
+  return (body.credentials || [])
+    .filter((c) => c.satisfied === false)
+    .map((c) => ({
+      provider: c.provider,
+      displayName: c.displayName || providerDisplayName(c.provider),
+      nodes: c.nodes || [],
+    }));
 }
 
 async function fetchWorkflowMissingConnections(workflowId: string): Promise<WorkflowMissingConnection[]> {
@@ -21,17 +109,7 @@ async function fetchWorkflowMissingConnections(workflowId: string): Promise<Work
   if (!res.ok) return [];
 
   const body = await res.json();
-  const credentials: Array<{ provider: string; displayName: string; nodes?: string[]; satisfied?: boolean }> =
-    body.credentials || [];
-
-  // Only return credentials that are explicitly missing (satisfied === false)
-  return credentials
-    .filter((c) => c.satisfied === false)
-    .map((c) => ({
-      provider: c.provider,
-      displayName: c.displayName || c.provider,
-      nodes: c.nodes || [],
-    }));
+  return missingConnectionsFromResponse(body);
 }
 
 export function useWorkflowConnectionStatus(workflowId: string | null | undefined) {
@@ -50,21 +128,23 @@ export function useWorkflowConnectionStatus(workflowId: string | null | undefine
   }, [workflowId]);
 
   const { data, isFetching, refetch } = useQuery({
-    queryKey: ['workflow-connection-status', workflowId],
+    queryKey: QUERY_KEYS.workflowConnectionStatus(workflowId ?? 'unknown'),
     queryFn: () => fetchWorkflowMissingConnections(workflowId!),
     enabled: queryEnabled && !!workflowId && workflowId !== 'new',
     staleTime: 30_000,
     retry: 1,
   });
 
-  // Auto-recheck when user navigates back from /connections
+  // Auto-recheck when user navigates back from /connections while this hook
+  // stays mounted. (The Connections page also invalidates the query on exit,
+  // which covers the case where the workflow page unmounted in between.)
   useEffect(() => {
     const path = location.pathname;
     if (path.startsWith('/connections')) {
       wasOnConnections.current = true;
     } else if (wasOnConnections.current && workflowId && workflowId !== 'new') {
       wasOnConnections.current = false;
-      queryClient.invalidateQueries({ queryKey: ['workflow-connection-status', workflowId] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workflowConnectionStatus(workflowId) });
     }
   }, [location.pathname, workflowId, queryClient]);
 

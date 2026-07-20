@@ -1,4 +1,4 @@
-// Comprehensive node-specific guides for getting API keys, URLs, and credentials
+﻿// Comprehensive node-specific guides for getting API keys, URLs, and credentials
 
 export interface NodeGuide {
   title: string;
@@ -102,6 +102,804 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         'The worker validates X-Hub-Signature-256 with META_APP_SECRET or FACEBOOK_APP_SECRET.',
         'Disable only for a temporary local test where Meta signatures are not available.',
         'If the worker secret is missing or wrong, incoming webhooks return Invalid Facebook webhook signature.'
+      ],
+      example: 'true'
+    }
+  },
+  interval: {
+    interval: {
+      title: 'How to set Interval?',
+      steps: [
+        'Type a whole positive number for how often the workflow repeats.',
+        'Combine it with the Unit field below — 5 + Minutes runs every 5 minutes.',
+        'The panel clamps this to 1-59 for Minutes or 1-23 for Hours; there is no seconds option.',
+        'Save the workflow first — the interval activates automatically right after saving.'
+      ],
+      example: '5'
+    },
+    unit: {
+      title: 'How to set Unit?',
+      steps: [
+        'Choose Minutes for anything from every 1 to every 59 minutes.',
+        'Choose Hours for anything from every 1 to every 23 hours.',
+        'Use the Schedule Trigger node instead when you need an exact daily time or a weekly/monthly pattern.',
+        'Changing Unit immediately regenerates and saves the workflow schedule.'
+      ],
+      example: 'minutes'
+    }
+  },
+  instagram_trigger: {
+    connectionId: {
+      title: 'How to choose Instagram Connection?',
+      steps: [
+        'Use the saved Instagram OAuth2 connection for the Facebook account linked to the Instagram professional account.',
+        'Leave blank when CtrlChecks should use the active/default Instagram connection for this workspace.',
+        'Do not paste a Graph API access token into a workflow field; connect Instagram under Connections.',
+        'Use a specific connection only when the workspace has more than one Instagram account.'
+      ],
+      example: 'instagram_oauth_123'
+    },
+    eventTypes: {
+      title: 'How to set Event Types?',
+      steps: [
+        'Enter comma-separated event families such as message, comment, mention, message.story_reply, postback.',
+        'Use message and message.story_reply for DM assistant workflows.',
+        'Use comment or mention for moderation and public reply workflows.',
+        'Leave the default set while testing, then narrow it before production.'
+      ],
+      example: 'message, message.story_reply'
+    },
+    instagramBusinessAccountId: {
+      title: 'How to set Instagram Business Account ID?',
+      steps: [
+        'Enter the numeric Instagram Business Account ID, not the @username, display name, or Facebook Page ID.',
+        'Leave blank when the workflow may accept events from any subscribed Instagram account on the connection.',
+        'Use this filter when the same connection can access multiple Instagram accounts.',
+        'The trigger output includes instagramBusinessAccountId so reply nodes can confirm the receiving account.'
+      ],
+      example: '17841400000000000'
+    },
+    allowedSenderIds: {
+      title: 'How to set Allowed Sender IDs?',
+      steps: [
+        'Optional comma-separated Instagram sender IDs that are allowed to start the workflow.',
+        'Use senderId or chatId from a previous Instagram Trigger test run.',
+        'Leave blank for normal public automations.',
+        'A wrong sender ID silently filters out that user, so test with a fresh webhook event.'
+      ],
+      example: '1234567890, 9876543210'
+    },
+    verifyToken: {
+      title: 'How to set Verify Token?',
+      steps: [
+        'Create a random setup token and enter the exact same value in Meta for Developers -> Webhooks.',
+        'Meta sends this during callback verification before it saves the webhook URL.',
+        'This is not an Instagram/Facebook OAuth access token, app secret, or account password.',
+        'If the token differs between CtrlChecks and Meta, verification returns Invalid verify token.'
+      ],
+      example: 'ig-webhook-verify-2026-support'
+    },
+    validateSignature: {
+      title: 'How to use Validate Signature?',
+      steps: [
+        'Keep this enabled for production Instagram webhooks.',
+        'The worker validates X-Hub-Signature-256 with META_APP_SECRET, INSTAGRAM_APP_SECRET, or FACEBOOK_APP_SECRET.',
+        'Disable only for a temporary local test where Meta signatures are not available.',
+        'If the worker secret is missing or wrong, incoming webhooks return Invalid Instagram webhook signature.'
+      ],
+      example: 'true'
+    }
+  },
+  jira_trigger: {
+    siteUrl: {
+      title: 'How to set Jira Site URL?',
+      steps: [
+        'Enter the bare Atlassian domain, such as yourcompany.atlassian.net, not a full URL.',
+        'Leave blank to use the domain already saved in your Jira connection.',
+        'Only fill it when your workspace connects more than one Atlassian site.',
+        'The trigger output includes siteUrl and uses it to build issueUrl links.'
+      ],
+      example: 'yourcompany.atlassian.net'
+    },
+    projectKey: {
+      title: 'How to set Project Key?',
+      steps: [
+        'Enter the short project key shown before the dash in issue keys, such as PROJ.',
+        'Leave blank to accept events from every project the Jira webhook is configured to send.',
+        'Use this filter when one Jira webhook covers multiple projects but this workflow should only react to one.',
+        'A key that never matches an incoming event silently ignores that event.'
+      ],
+      example: 'PROJ'
+    },
+    eventTypes: {
+      title: 'How to set Event Types?',
+      steps: [
+        'Enter comma-separated Jira webhookEvent values such as jira:issue_created, jira:issue_updated, comment_created.',
+        'Also accepted: jira:issue_deleted, comment_updated, comment_deleted, or any other event your Jira webhook sends.',
+        'Leave the default while testing, then narrow it before production.',
+        'Route with {{$json.eventType}}, which always equals the raw value Jira sent.'
+      ],
+      example: 'jira:issue_created, jira:issue_updated, comment_created'
+    },
+    secretToken: {
+      title: 'How to use Webhook Secret Override?',
+      steps: [
+        'Leave this blank in almost every setup — CtrlChecks generates and stores a secret automatically.',
+        'Fill it only when migrating an existing Automation for Jira rule that must reuse one known secret.',
+        'This is not your Atlassian API token or account password.',
+        'A mismatched value causes Invalid or missing Jira webhook secret.'
+      ],
+      example: 'a1b2c3d4e5f6'
+    },
+    jql: {
+      title: 'How to use JQL Filter?',
+      steps: [
+        'This is a documentation-only reminder field — CtrlChecks never sends or enforces it.',
+        'Copy the real JQL filter from the webhook entry in Jira Settings -> System -> WebHooks.',
+        'For filtering CtrlChecks actually enforces, use Project Key and Keyword Filter instead.',
+        'Leaving it blank has no effect on which events are delivered.'
+      ],
+      example: 'project = PROJ AND status = "In Progress"'
+    },
+    query: {
+      title: 'How to set Keyword Filter?',
+      steps: [
+        'Enter a simple keyword or phrase, not JQL syntax.',
+        'Only events whose issue summary or comment body contains this text will start the workflow.',
+        'Leave blank to accept every event matching Event Types and Project Key.',
+        'A too-specific or misspelled filter causes Ignored Jira event not matching this trigger.'
+      ],
+      example: 'urgent'
+    }
+  },
+  linear_trigger: {
+    teamId: {
+      title: 'How to set Team ID?',
+      steps: [
+        'Enter the Linear team UUID, not its short key (such as ENG) or display name.',
+        'Leave blank with All Public Teams enabled to watch every public team.',
+        'Copy it from the team\'s Settings page in Linear, or from a previous test event\'s teamId output.',
+        'A team ID that never matches an incoming event silently ignores that event.'
+      ],
+      example: 'team uuid'
+    },
+    allPublicTeams: {
+      title: 'How to use All Public Teams?',
+      steps: [
+        'Keep this enabled (the default) whenever Team ID is blank.',
+        'This controls how broadly the Linear webhook itself is registered, separate from per-workflow filtering.',
+        'Disable it only when supplying a Team ID and you want the webhook itself scoped to just that team.',
+        'Use Team ID for per-workflow filtering regardless of this setting.'
+      ],
+      example: 'true'
+    },
+    resourceTypes: {
+      title: 'How to set Resource Types?',
+      steps: [
+        'Enter comma-separated Linear resource names such as Issue, Comment, Project, Cycle, IssueLabel, Reaction.',
+        'Only resource types listed here are ever delivered by the underlying webhook — Event Types cannot filter in data that was never subscribed to.',
+        'Keep the default (Issue, Comment) for most triage/notification workflows.',
+        'Add Project, Document, Initiative, Customer, or User only when you need those change types.'
+      ],
+      example: 'Issue, Comment'
+    },
+    eventTypes: {
+      title: 'How to set Event Types?',
+      steps: [
+        'Enter comma-separated normalized values such as issue_created, issue_updated, comment_created.',
+        'This filters after Resource Types has already let the delivery through.',
+        'Leave the default while testing, then narrow it before production.',
+        'Route with {{$json.eventType}}, which always equals the normalized value this filter compares against.'
+      ],
+      example: 'issue_created, issue_updated, comment_created'
+    },
+    issueId: {
+      title: 'How to set Issue ID?',
+      steps: [
+        'Enter the issue\'s UUID or human identifier such as ENG-123 — both are checked.',
+        'Leave blank for normal team- or project-wide triage workflows.',
+        'Use this only to watch one already-known issue.',
+        'The trigger output still includes both issueId and issueIdentifier for confirmation.'
+      ],
+      example: 'ENG-123'
+    },
+    projectId: {
+      title: 'How to set Project ID?',
+      steps: [
+        'Enter the project\'s UUID, not its display name.',
+        'Leave blank to accept events from every project.',
+        'Copy it from the project settings/API details in Linear, or a previous test event\'s projectId output.',
+        'A project ID that never matches an incoming event silently ignores that event.'
+      ],
+      example: 'project uuid'
+    },
+    actorId: {
+      title: 'How to set Actor ID?',
+      steps: [
+        'Enter the Linear user\'s UUID, not their display name or email.',
+        'Leave blank for normal team-wide triggers so any teammate\'s activity can start the workflow.',
+        'Use this only for person-specific automations.',
+        'Read {{$json.userId}} from a previous test event triggered by that person to find the right value.'
+      ],
+      example: 'actor uuid'
+    },
+    query: {
+      title: 'How to set Keyword Filter?',
+      steps: [
+        'Enter a simple keyword or phrase, not Linear search syntax.',
+        'Only events whose issue title, comment body, or project name contains this text will start the workflow.',
+        'Leave blank to accept every event matching the other filters.',
+        'A too-specific or misspelled filter causes Ignored Linear event not matching this trigger.'
+      ],
+      example: 'urgent'
+    }
+  },
+  microsoft_teams_trigger: {
+    eventTypes: {
+      title: 'How to set Event Types?',
+      steps: [
+        'Enter comma-separated Bot Framework activity types such as message, conversation_update, message_reaction, invoke.',
+        'Use message for a chat/support bot; invoke for adaptive card button clicks.',
+        'installation_update is not included by default — list it explicitly if you need it.',
+        'Route with {{$json.eventType}} downstream.'
+      ],
+      example: 'message, conversation_update, invoke'
+    },
+    teamIds: {
+      title: 'How to set Allowed Team IDs?',
+      steps: [
+        'Enter comma-separated Teams team IDs such as 19:team-id@thread.tacv2, not the display name.',
+        'Leave blank to accept activity from any team and from personal chats.',
+        'Read teamId from a previous test activity if you are not sure of the exact ID.',
+        'A team ID that never matches an incoming activity silently ignores it.'
+      ],
+      example: '19:team-id@thread.tacv2'
+    },
+    channelIds: {
+      title: 'How to set Allowed Channel IDs?',
+      steps: [
+        'Enter comma-separated Teams channel IDs such as 19:channel-id@thread.tacv2.',
+        'Leave blank for personal chats or broad testing across every channel.',
+        'This is different from Team ID — a channel ID scopes to one channel inside a team.',
+        'Read channelId from a previous test activity if you are not sure of the exact ID.'
+      ],
+      example: '19:channel-id@thread.tacv2'
+    },
+    allowedUserIds: {
+      title: 'How to set Allowed User IDs?',
+      steps: [
+        'Enter comma-separated Azure AD object IDs or Bot Framework user IDs, not display names or emails.',
+        'Leave blank for a normal bot that should respond to any user.',
+        'Use this for internal testing or a controlled rollout to approved reviewers.',
+        'Read userId from a previous test activity sent by that person.'
+      ],
+      example: '00000000-0000-0000-0000-000000000000'
+    },
+    tenantId: {
+      title: 'How to set Tenant ID?',
+      steps: [
+        'Enter the Microsoft 365 tenant GUID, not the organization\'s domain name or display name.',
+        'Leave blank for a single-tenant bot or when any tenant should be accepted.',
+        'Use this for a multi-tenant bot that should only react to one specific customer organization.',
+        'Read tenantId from a previous test activity from that organization.'
+      ],
+      example: '00000000-0000-0000-0000-000000000000'
+    },
+    appId: {
+      title: 'How to use Microsoft App ID?',
+      steps: [
+        'Leave this blank in almost every setup — CtrlChecks reads it from the saved Teams Bot connection.',
+        'Fill it only to override the connection\'s App ID for this specific node, such as testing a second bot registration.',
+        'This is the Azure Bot registration\'s Application (client) ID, not the App Password/client secret.',
+        'A wrong value causes real Bot Framework requests to fail JWT audience validation.'
+      ],
+      example: '00000000-0000-0000-0000-000000000000'
+    },
+    validationSecret: {
+      title: 'How to use Validation Secret?',
+      steps: [
+        'Leave this blank for production bots — rely on real Bot Framework JWT validation instead.',
+        'Fill it only for controlled local testing or a simulation harness where generating a real JWT is impractical.',
+        'This is not your Azure app client secret/App Password.',
+        'Send it as an X-Ms-Teams-Secret header or a secret query parameter to skip JWT validation during tests.'
+      ],
+      example: 'a1b2c3d4e5f6'
+    },
+    validateJwt: {
+      title: 'How to use Validate Bot Framework Auth?',
+      steps: [
+        'Keep this enabled for production Microsoft Teams bots.',
+        'The worker validates the Bot Framework bearer JWT signature, audience, and expiry against your Microsoft App ID.',
+        'Disable only for a temporary local test where you cannot generate a real Bot Framework token.',
+        'Setting this to false skips all validation and accepts any request to the webhook URL — never leave it disabled in production.'
+      ],
+      example: 'true'
+    }
+  },
+  outlook_trigger: {
+    resource: {
+      title: 'How to set Resource?',
+      steps: [
+        'Choose mail to watch a mailbox folder, or calendar to watch calendar events.',
+        'These are separate Microsoft Graph subscriptions with different available output fields.',
+        'Calendar mode populates start/end/attendees; Mail mode populates subject/from/snippet/conversationId.',
+        'Check {{$json.eventType}} to confirm which resource actually fired.'
+      ],
+      example: 'mail'
+    },
+    changeTypes: {
+      title: 'How to set Change Types?',
+      steps: [
+        'Enter comma-separated Graph change types: created, updated, deleted.',
+        'Keep the default (created) for most mail and simple calendar-invite workflows.',
+        'Add updated and/or deleted for a calendar workflow that reacts to reschedules or cancellations.',
+        'Mail resources here only ever subscribe to created — there is no delete tracking for messages.'
+      ],
+      example: 'created'
+    },
+    folderName: {
+      title: 'How to set Mail Folder?',
+      steps: [
+        'Enter the exact Outlook folder display name, such as Inbox or Support Queue, not a nested path.',
+        'Leave as Inbox (the default) for normal incoming-mail workflows.',
+        'Only used when Resource is set to mail.',
+        'A folder name that does not exist in the mailbox causes subscription creation to fail.'
+      ],
+      example: 'Inbox'
+    },
+    query: {
+      title: 'How to set Keyword Filter?',
+      steps: [
+        'Enter a simple keyword or phrase, not Outlook search syntax.',
+        'Matched against the combined subject, sender address, and body preview.',
+        'Leave blank to accept every event matching Resource and Change Types.',
+        'A too-specific or misspelled filter silently drops matching notifications with no visible error.'
+      ],
+      example: 'invoice'
+    }
+  },
+  shopify_trigger: {
+    shopDomain: {
+      title: 'How to set Shop Domain Filter?',
+      steps: [
+        'Enter the bare myshopify.com domain, such as your-shop.myshopify.com, not a custom storefront domain.',
+        'Leave blank to use the Store URL saved in the Shopify connection.',
+        'Only fill this when a connection could be reused across more than one store.',
+        'A mismatched domain silently ignores incoming events.'
+      ],
+      example: 'my-store.myshopify.com'
+    },
+    topics: {
+      title: 'How to set Webhook Topics?',
+      steps: [
+        'Enter comma-separated Shopify topic names such as orders/create, orders/paid, customers/create.',
+        'This value both creates the real Shopify webhook subscriptions and filters what this trigger accepts.',
+        'Use slashes (orders/create), not underscores.',
+        'Route with {{$json.eventType}} or {{$json.topic}} downstream.'
+      ],
+      example: 'orders/create, orders/paid, customers/create'
+    },
+    financialStatus: {
+      title: 'How to use Financial Status?',
+      steps: [
+        'Choose paid, pending, authorized, partially_paid, refunded, or voided.',
+        'Leave on Any to accept orders regardless of payment status.',
+        'Only affects order-shaped topics — has no effect on customers/create or products/update.',
+        'Use this to only run fulfillment workflows once payment clears.'
+      ],
+      example: 'paid'
+    },
+    fulfillmentStatus: {
+      title: 'How to use Fulfillment Status?',
+      steps: [
+        'Choose fulfilled, partial, unfulfilled, or restocked.',
+        'Leave on Any to accept orders regardless of fulfillment status.',
+        'Only affects order-shaped topics.',
+        'Use this to only send shipping notifications once an order is fulfilled.'
+      ],
+      example: 'fulfilled'
+    },
+    customerId: {
+      title: 'How to set Customer ID?',
+      steps: [
+        'Enter the numeric Shopify customer ID, not their name or email.',
+        'Leave blank for normal store-wide workflows.',
+        'Use this only to watch one already-known customer account.',
+        'Read customerId from a previous test event if you are not sure of the exact ID.'
+      ],
+      example: '1234567890'
+    },
+    productId: {
+      title: 'How to set Product ID?',
+      steps: [
+        'Enter the numeric Shopify product ID, not its title or handle.',
+        'Leave blank for normal store-wide workflows.',
+        'Use this only to watch one already-known product.',
+        'Read productId from a previous test event if you are not sure of the exact ID.'
+      ],
+      example: '1234567890'
+    },
+    minTotalPrice: {
+      title: 'How to set Minimum Total Price?',
+      steps: [
+        'Enter a plain number in the store\'s currency, no currency symbol or commas.',
+        'Leave blank to accept orders of any size.',
+        'Use this to focus a workflow on high-value orders only.',
+        'Check {{$json.currency}} alongside {{$json.totalPrice}} to confirm the actual currency.'
+      ],
+      example: '100'
+    },
+    currency: {
+      title: 'How to set Currency?',
+      steps: [
+        'Enter a lowercase 3-letter ISO currency code such as usd, eur, or inr.',
+        'Leave blank to accept orders in any currency.',
+        'Use this only for a multi-currency store where the workflow should react to one currency.',
+        'Shopify sends currency in lowercase — do not use USD or a symbol.'
+      ],
+      example: 'usd'
+    },
+    query: {
+      title: 'How to set Keyword Filter?',
+      steps: [
+        'Enter a simple keyword or phrase, not Shopify search syntax.',
+        'Matched against the combined order name, customer email/name, product title, ID, and status fields.',
+        'Leave blank to accept every event matching the other filters.',
+        'A too-specific or misspelled filter causes Ignored Shopify event not matching this trigger.'
+      ],
+      example: 'wholesale'
+    }
+  },
+  slack_trigger: {
+    eventTypes: {
+      title: 'How to set Event Types?',
+      steps: [
+        'Enter comma-separated Slack event types such as app_mention, message, slash_command, interaction.',
+        'Use app_mention/message for an AI assistant, slash_command for a /command workflow, interaction for button/modal clicks.',
+        'Leave the default while testing, then narrow it before production.',
+        'Route with {{$json.eventType}} downstream.'
+      ],
+      example: 'app_mention, message, slash_command, interaction'
+    },
+    channelIds: {
+      title: 'How to set Allowed Channel IDs?',
+      steps: [
+        'Enter comma-separated Slack channel IDs such as C0123456789, not the #channel-name.',
+        'Leave blank to accept events from any channel the bot is in.',
+        'Use this when one Slack app callback URL serves several channels but this workflow should only handle some.',
+        'Copy the ID from channel details -> View channel details in Slack.'
+      ],
+      example: 'C0123456789, C9876543210'
+    },
+    allowedUserIds: {
+      title: 'How to set Allowed User IDs?',
+      steps: [
+        'Enter comma-separated Slack user IDs such as U0123456789, not display names.',
+        'Leave blank for a normal bot that should respond to any workspace member.',
+        'Use this for internal testing or a controlled rollout.',
+        'Copy the ID from a person\'s Slack profile -> Copy member ID.'
+      ],
+      example: 'U0123456789, U9876543210'
+    },
+    commandFilter: {
+      title: 'How to set Slash Command Filter?',
+      steps: [
+        'Enter the exact command including the leading slash, such as /support.',
+        'Use this when the same Slack app has more than one slash command pointed at this trigger.',
+        'Leave blank if this trigger only ever receives one slash command.',
+        'Match it exactly to the command configured in Slack app settings -> Slash Commands.'
+      ],
+      example: '/support'
+    },
+    teamId: {
+      title: 'How to set Workspace Team ID?',
+      steps: [
+        'Enter the Slack workspace/team ID, such as T0123456789, not the workspace name.',
+        'Leave blank for a single-workspace Slack app.',
+        'Use this only if your app is installed into multiple workspaces and this workflow should react to just one.',
+        'Read teamId from a previous test event if you are not sure of the exact ID.'
+      ],
+      example: 'T0123456789'
+    },
+    signingSecret: {
+      title: 'How to use Signing Secret?',
+      steps: [
+        'Leave this blank — save the signing secret on the Slack connection under Connections instead.',
+        'Fill it only as a last-resort override for a single node.',
+        'Copy it from Slack app settings -> Basic Information -> App Credentials -> Signing Secret.',
+        'This is not the bot token (which starts with xoxb-).'
+      ],
+      example: 'a1b2c3d4e5f6'
+    },
+    validateSignature: {
+      title: 'How to use Validate Slack Signature?',
+      steps: [
+        'Keep this enabled for production Slack webhooks.',
+        'The worker validates X-Slack-Signature and X-Slack-Request-Timestamp using the app signing secret.',
+        'Disable only for a temporary local test where Slack signatures are not available.',
+        'If the signing secret is missing or wrong, incoming requests return Invalid Slack webhook signature.'
+      ],
+      example: 'true'
+    }
+  },
+  stripe_trigger: {
+    eventTypes: {
+      title: 'How to set Event Types?',
+      steps: [
+        'Enter comma-separated exact Stripe event names such as checkout.session.completed, payment_intent.succeeded.',
+        'This value both creates the real Stripe webhook subscription and filters what this trigger accepts.',
+        'Copy names exactly from Stripe\'s event type reference — they use dots, not underscores.',
+        'Route with {{$json.eventType}} downstream.'
+      ],
+      example: 'checkout.session.completed, payment_intent.succeeded'
+    },
+    connect: {
+      title: 'How to use Stripe Connect Events?',
+      steps: [
+        'Enable only if you operate a Stripe Connect platform with connected merchant/seller accounts.',
+        'Leave disabled for a normal single-account Stripe integration.',
+        'This controls whether Connect events are received at all — it does not filter to one connected account.',
+        'Check {{$json.accountId}} to see which connected account an event came from.'
+      ],
+      example: 'false'
+    },
+    livemode: {
+      title: 'How to use Live Mode Only?',
+      steps: [
+        'Leave completely unset while building and testing with Stripe test-mode data.',
+        'Enable it once the workflow is ready so production only reacts to real payments.',
+        'Unchecking it after checking may save an explicit false, which then only accepts test-mode events.',
+        'Regenerate the field from defaults if you need a true no-filter state again.'
+      ],
+      example: 'true'
+    },
+    customerId: {
+      title: 'How to set Customer ID?',
+      steps: [
+        'Enter the Stripe customer ID starting with cus_, not their name or email.',
+        'Leave blank for normal account-wide workflows.',
+        'Use this only to watch one already-known customer.',
+        'Read customerId from a previous test event if you are not sure of the exact ID.'
+      ],
+      example: 'cus_ABC123'
+    },
+    currency: {
+      title: 'How to set Currency?',
+      steps: [
+        'Enter a lowercase 3-letter ISO currency code such as usd, eur, or gbp.',
+        'Leave blank to accept events in any currency.',
+        'Use this only for a multi-currency account where the workflow should react to one currency.',
+        'Stripe sends currency in lowercase — do not use USD or a symbol.'
+      ],
+      example: 'usd'
+    },
+    minAmount: {
+      title: 'How to set Minimum Amount?',
+      steps: [
+        'Enter a plain whole number in the smallest currency unit — cents for usd/eur, so 1000 means $10.00.',
+        'Leave blank to accept transactions of any size.',
+        'Use this to focus a workflow on high-value transactions only.',
+        'Remember Stripe amounts are never whole dollars — 500 means $5.00, not $500.'
+      ],
+      example: '1000'
+    },
+    query: {
+      title: 'How to set Keyword Filter?',
+      steps: [
+        'Enter a simple keyword or phrase, not Stripe search syntax.',
+        'Matched against the combined text, customer email/ID, object ID, status, and description.',
+        'Leave blank to accept every event matching the other filters.',
+        'A too-specific or misspelled filter causes Ignored Stripe event not matching this trigger.'
+      ],
+      example: 'enterprise'
+    }
+  },
+  tally_trigger: {
+    formId: {
+      title: 'How to set Form ID?',
+      steps: [
+        'Enter the short form ID from the form\'s share URL, such as wA1b2C in tally.so/forms/wA1b2C.',
+        'Do not paste the full URL — just the ID segment after /forms/.',
+        'This is always required; the trigger cannot register a webhook without it.',
+        'A wrong ID causes Tally API errors during registration since that form may not exist or belong to your account.'
+      ],
+      example: 'wA1b2C'
+    },
+    query: {
+      title: 'How to set Keyword Filter?',
+      steps: [
+        'Enter a simple keyword or phrase, not a field name or Tally filter syntax.',
+        'Matched against the combined text of every answer on the submission.',
+        'Leave blank to accept every submission to the form.',
+        'A too-specific or misspelled filter causes Ignored Tally response not matching this trigger.'
+      ],
+      example: 'urgent'
+    }
+  },
+  telegram_trigger: {
+    updateTypes: {
+      title: 'How to set Update Types?',
+      steps: [
+        'Choose message for a normal chatbot.',
+        'Add callback_query when your bot uses inline keyboard buttons.',
+        'Use channel_post if the bot posts to or monitors a channel rather than a private chat.',
+        'edited_message is separate from message — select it explicitly to react to edited messages.'
+      ],
+      example: 'message'
+    },
+    allowedChatIds: {
+      title: 'How to set Allowed Chat IDs?',
+      steps: [
+        'Enter comma-separated numeric Telegram chat IDs, not display names or @usernames.',
+        'Use a negative number for groups/supergroups.',
+        'Leave blank to accept any chat that can message the bot.',
+        'Look up a chat\'s ID with @userinfobot or @RawDataBot in Telegram.'
+      ],
+      example: '123456789, -1009876543210'
+    },
+    commandFilter: {
+      title: 'How to set Command Filter?',
+      steps: [
+        'Enter just the command word, with or without the leading slash (CtrlChecks adds it if missing).',
+        'Do not include arguments or trailing text — only the command itself.',
+        'Leave blank to accept every message regardless of command.',
+        'Match it exactly to a command you registered with BotFather.'
+      ],
+      example: '/support'
+    },
+    secretToken: {
+      title: 'How to use Secret Token?',
+      steps: [
+        'Generate a random string yourself — it does not come from Telegram or BotFather.',
+        'Set it before registering the webhook, and keep it the same for the life of the workflow.',
+        'Leaving it blank skips request validation entirely — any caller who knows the URL can send fake updates.',
+        'If you change it, re-register the webhook so both sides agree again.'
+      ],
+      example: 'a1b2c3d4e5f6'
+    }
+  },
+  trello_trigger: {
+    modelId: {
+      title: 'How to set Model ID?',
+      steps: [
+        'Enter a Trello board ID for broad board/list/card activity, or a card/member ID for a narrower webhook.',
+        'This is a 24-character hex string, not the board\'s display name or short URL slug.',
+        'This is the most important field — it decides what Trello sends at all.',
+        'Always required; the webhook cannot be registered without it.'
+      ],
+      example: 'board id'
+    },
+    eventTypes: {
+      title: 'How to set Event Types?',
+      steps: [
+        'Enter comma-separated normalized values such as card_created, card_moved, card_commented, list_activity.',
+        'This filters after the webhook has already delivered events based on Model ID.',
+        'Keep the default while testing, then narrow it before production.',
+        'Route with {{$json.eventType}} downstream.'
+      ],
+      example: 'card_created, card_moved, card_commented'
+    },
+    boardId: {
+      title: 'How to set Board ID?',
+      steps: [
+        'Enter the Trello board ID, not its name or short URL slug.',
+        'Mainly useful when Model ID points to a member or organization spanning multiple boards.',
+        'Leave blank when Model ID is already a specific board.',
+        'A board ID that never matches silently ignores the event.'
+      ],
+      example: 'board id'
+    },
+    listId: {
+      title: 'How to set List ID?',
+      steps: [
+        'Enter the Trello list ID, not its display name.',
+        'Matches against either the before or after list for moved cards.',
+        'Leave blank to accept activity from every list on the board.',
+        'Use this for a "notify when a card reaches Done" style workflow.'
+      ],
+      example: 'list id'
+    },
+    cardId: {
+      title: 'How to set Card ID?',
+      steps: [
+        'Enter the Trello card ID, not its name or short link.',
+        'Leave blank for normal board-wide workflows.',
+        'Use this only to watch one already-known card.',
+        'Read cardId from a previous test event if you are not sure of the exact ID.'
+      ],
+      example: 'card id'
+    },
+    memberId: {
+      title: 'How to set Member ID Filter?',
+      steps: [
+        'Enter the Trello member ID, not their @username or display name.',
+        'Leave blank for normal team-wide triggers.',
+        'Use this only for person-specific automations.',
+        'Matches either the action performer or the affected member.'
+      ],
+      example: 'member id'
+    },
+    query: {
+      title: 'How to set Keyword Filter?',
+      steps: [
+        'Enter a simple keyword or phrase, not Trello search syntax.',
+        'Matched against card names and comment text.',
+        'Leave blank to accept every event matching the other filters.',
+        'A too-specific or misspelled filter causes Ignored Trello event not matching this trigger.'
+      ],
+      example: 'urgent'
+    }
+  },
+  typeform_trigger: {
+    formId: {
+      title: 'How to set Form ID?',
+      steps: [
+        'Enter the short form ID from the form\'s share URL, such as abc123 in typeform.com/to/abc123.',
+        'Do not paste the full URL — just the ID segment after /to/.',
+        'This is always required; the trigger cannot register a webhook without it.',
+        'A wrong ID causes Typeform API errors during registration since that form may not exist or belong to your account.'
+      ],
+      example: 'abc123'
+    },
+    query: {
+      title: 'How to set Keyword Filter?',
+      steps: [
+        'Enter a simple keyword or phrase, not a field name or Typeform filter syntax.',
+        'Matched against the combined text of every answer on the response.',
+        'Leave blank to accept every response to the form.',
+        'A too-specific or misspelled filter causes Ignored Typeform response not matching this trigger.'
+      ],
+      example: 'urgent'
+    }
+  },
+  whatsapp_trigger: {
+    eventTypes: {
+      title: 'How to set Event Types?',
+      steps: [
+        'Choose Incoming Messages for a normal chatbot workflow.',
+        'Use Delivered/Read/Failed for a workflow tracking message delivery status instead of content.',
+        'Status events never include message text — only chatbot/message events populate {{$json.text}}.',
+        'Route with {{$json.eventType}} downstream.'
+      ],
+      example: 'message'
+    },
+    phoneNumberId: {
+      title: 'How to set Phone Number ID?',
+      steps: [
+        'Enter the numeric Phone Number ID from Meta for Developers -> WhatsApp -> API Setup, not the actual phone number.',
+        'Leave blank to accept events for the connected account\'s number.',
+        'Use this only when your Meta app manages multiple WhatsApp numbers.',
+        'A wrong ID silently ignores every event as belonging to a different number.'
+      ],
+      example: '123456789012345'
+    },
+    allowedWaIds: {
+      title: 'How to set Allowed Senders?',
+      steps: [
+        'Enter comma-separated WhatsApp IDs (country code + number, no + or spaces), such as 15551234567.',
+        'Leave blank for a normal public WhatsApp automation.',
+        'Use this for internal testing or a controlled rollout.',
+        'Read waId or chatId from a previous test message to find the exact value.'
+      ],
+      example: '15551234567, 15557654321'
+    },
+    verifyToken: {
+      title: 'How to set Verify Token?',
+      steps: [
+        'Create a random setup token and enter the exact same value in Meta for Developers -> WhatsApp -> Configuration.',
+        'Meta sends this during callback verification before it saves the webhook URL.',
+        'This is not the WhatsApp access token, app secret, or account password.',
+        'If the token differs between CtrlChecks and Meta, verification returns Invalid verify token.'
+      ],
+      example: 'wa_verify_abc123'
+    },
+    validateSignature: {
+      title: 'How to use Validate Signature?',
+      steps: [
+        'Keep this enabled for production Meta webhooks.',
+        'The worker validates X-Hub-Signature-256 with META_APP_SECRET, FACEBOOK_APP_SECRET, or WHATSAPP_APP_SECRET.',
+        'Disable only for a temporary local test where Meta signatures are not available.',
+        'If the worker secret is missing or wrong, incoming webhooks return Invalid WhatsApp webhook signature.'
       ],
       example: 'true'
     }
@@ -584,149 +1382,107 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
   },
   google_gemini: {
     apiKey: {
-      title: 'Gemini AI Studio API Key – Step-by-Step',
-      url: 'https://aistudio.google.com',
+      title: 'How to connect Gemini credentials?',
+      url: 'https://ai.google.dev/gemini-api/docs/api-key',
       steps: [
-        '1️⃣ Open Gemini AI Studio',
-        '   Go to 👉 https://aistudio.google.com',
-        '   Make sure you\'re logged in with your Google account.',
-        '',
-        '2️⃣ Sign in with Google',
-        '   Use your Gmail / Google Workspace account',
-        '   Accept the basic terms if prompted',
-        '',
-        '3️⃣ Go to "Get API key"',
-        '   On the left sidebar (or top menu):',
-        '   ➡️ Click "Get API key"',
-        '   or',
-        '   ➡️ Click "API keys"',
-        '',
-        '4️⃣ Create a New API Key',
-        '   Click "Create API key"',
-        '   Select a Google Cloud Project',
-        '   You can:',
-        '   • Use an existing project, OR',
-        '   • Create a new project (recommended)',
-        '',
-        '5️⃣ Copy the API Key',
-        '   Once created:',
-        '   • Copy the key immediately 🔐',
-        '   • Store it securely (env file, secret manager, etc.)',
-        '',
-        'Example:',
-        'AIzaSyDxxxxxxxxxxxxxxxxxxxxx'
+        'Prefer a saved Gemini connection, credential vault value, wallet, key pool, or worker-level key.',
+        'Use this apiKey field only as a direct fallback for legacy workflows that cannot use the shared credential resolver.',
+        'If you need a direct key, create it in Google AI Studio and keep it secret; do not paste it into Prompt or upstream data.',
+        'If no Gemini credential resolves, runtime returns success=false with error; wallet/key-pool failures may include code.'
       ],
-      example: 'AIzaSyDxxxxxxxxxxxxxxxxxxxxx'
+      example: '{{$credentials.gemini.apiKey}}'
+    },
+    prompt: {
+      title: 'How to set Gemini Prompt?',
+      steps: [
+        'Enter the instruction or message Gemini should answer.',
+        'Map business text from earlier steps with expressions such as {{$json.emailBody}} or {{$json.chatMessage}}.',
+        'When Prompt is static and upstream text exists, runtime can use Prompt as context and upstream text as the user message.',
+        'Do not include API keys or unrelated full webhook payloads in Prompt.'
+      ],
+      example: 'Summarize {{$json.emailBody}} and list follow-up actions.'
+    },
+    model: {
+      title: 'How to choose Gemini Model?',
+      steps: [
+        'Use gemini-3.5-flash for fast everyday summaries, extraction, and routing.',
+        'Use gemini-3.1-pro-preview for more complex reasoning when your account/key supports it.',
+        'Use gemini-3.1-flash-lite for lighter high-volume tasks.',
+        'The selected model is returned as {{$json.model}}.'
+      ],
+      example: 'gemini-3.5-flash'
     },
     temperature: {
       title: 'How to set Temperature?',
       steps: [
-        'Temperature controls how random or focused Gemini’s responses are.',
-        '',
-        'Range: 0.0 to 2.0 (default 0.7).',
-        '',
-        'Recommended ranges:',
-        '• 0.0 – 0.3 → Very deterministic and factual (good for code, calculations, data extraction).',
-        '• 0.4 – 0.8 → Balanced, natural answers (good general setting).',
-        '• 0.9 – 1.5 → More creative and varied (brainstorming, story writing).',
-        '',
-        'Tip: If outputs feel too random, lower the temperature; if they feel too rigid or repetitive, increase it slightly.'
+        'Temperature is visible for compatibility, but the current google_gemini executor does not pass it to the Gemini adapter.',
+        'Changing this value is not expected to affect output today.',
+        'Control behavior through Prompt and Model until worker support is added.',
+        'Leave the default unless you are preserving an older configuration.'
       ],
       example: '0.7'
     },
     memory: {
       title: 'How to set Memory?',
       steps: [
-        'Memory is how many recent conversation turns this node keeps when sending context to Gemini.',
-        '',
-        'Each turn = 1 user message + 1 AI response.',
-        '',
-        'Guidelines:',
-        '• 0–2 → One-off questions or very short interactions.',
-        '• 3–10 → Typical chatbots and assistants (remembers recent part of the conversation).',
-        '• 10+ → Long dialogues; more context but higher token usage and cost.',
-        '',
-        'Tip: Increase Memory only if the AI is “forgetting” earlier parts of the conversation that still matter.'
+        'Memory is visible for compatibility, but the current google_gemini executor does not read it.',
+        'This node does not remember previous runs or preserve conversation turns.',
+        'Put the needed conversation history or context directly in Prompt or upstream text.',
+        'Successful Gemini output contains response/model/usage/finishReason only and does not include a memory field.'
       ],
       example: '10'
     }
   },
   openai_gpt: {
     apiKey: {
-      title: 'OpenAI API Key – Step-by-Step',
+      title: 'OpenAI API Key',
       url: 'https://platform.openai.com/api-keys',
       steps: [
-        '1️⃣ Open OpenAI Platform',
-        '   Go to 👉 https://platform.openai.com/api-keys',
-        '   Sign in or create an account',
-        '',
-        '2️⃣ Navigate to API Keys',
-        '   Click on your profile icon (top right)',
-        '   Select "API keys" from the dropdown',
-        '   Or go directly to: platform.openai.com/api-keys',
-        '',
-        '3️⃣ Create New Secret Key',
-        '   Click "Create new secret key" button',
-        '   Give it a name (e.g., "Workflow Integration")',
-        '   Select permissions if prompted',
-        '',
-        '4️⃣ Copy the API Key',
-        '   ⚠️ IMPORTANT: Copy the key immediately!',
-        '   You won\'t be able to see it again after closing',
-        '   The key starts with "sk-"',
-        '',
-        '5️⃣ Store Securely',
-        '   Paste it into the input field above',
-        '   Never commit to version control',
-        '   Use environment variables in production',
-        '',
-        'Example:',
-        'sk-proj-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+        'Prefer a saved OpenAI connection, credential vault value, wallet, or key pool.',
+        'This field is a direct fallback; runtime also checks accessToken and token if apiKey is blank.',
+        'Resolver errors return success=false with error before any model call.',
+        'The key is never returned downstream; downstream nodes use response/model/usage/finishReason.'
       ],
       example: 'sk-proj-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
     },
     model: {
       title: 'How to choose Model?',
       steps: [
-        'Select the OpenAI model that matches your task.',
-        '',
-        'Options:',
-        '• gpt-4o – most capable',
-        '• gpt-4o-mini – faster, lower cost',
-        '• gpt-4-turbo – strong general performance'
+        'Choose the OpenAI model sent to the adapter.',
+        'Runtime defaults to gpt-4o when the value is blank.',
+        'Use gpt-4o-mini for high-volume simple work and gpt-4o for stronger reasoning.',
+        'Do not enter Gemini, Claude, or Ollama model names here.'
       ],
       example: 'gpt-4o'
     },
     prompt: {
-      title: 'How to write System Prompt?',
+      title: 'How to write Prompt?',
       steps: [
-        'System Prompt defines the AI’s role and behavior.',
-        '',
-        'Example:',
-        'You are a helpful assistant that summarizes text clearly.',
-        '',
-        'Tip: Be explicit about format and tone.'
+        'Prompt is the primary OpenAI input.',
+        'If Prompt is static and upstream text exists, runtime can use Prompt as system context and upstream text as the user message.',
+        'If Prompt is blank, a messages array can be joined as fallback.',
+        'Successful output does not preserve incoming fields, so keep needed IDs before this node.',
+        'Use {{$json.response}} downstream; there is no content output key.'
       ],
-      example: 'You are a helpful assistant that summarizes text clearly.'
+      example: 'Summarize {{$json.emailBody}} in three bullets.'
     },
     temperature: {
-      title: 'How to set Temperature?',
+      title: 'Temperature is ignored',
       steps: [
-        'Temperature controls creativity vs. determinism.',
-        '',
-        'Guidelines:',
-        '• 0.0–0.3 for factual tasks',
-        '• 0.7 for balanced output',
-        '• 1.0+ for creative tasks'
+        'This is a visible legacy field.',
+        'The current openai_gpt executor does not pass temperature to llmAdapter.chat.',
+        'Change the prompt when you need stricter or more creative output.',
+        'Leave this at the default until the worker code is updated to honor it.'
       ],
       example: '0.7'
     },
     memory: {
-      title: 'How to set Memory?',
+      title: 'Memory is ignored',
       steps: [
-        'Memory is the number of conversation turns remembered.',
-        '',
-        'Set higher values for longer context, lower for short tasks.'
+        'This is a visible legacy field.',
+        'The current openai_gpt executor does not read memory or preserve conversation turns.',
+        'Put needed history directly in Prompt or upstream text.',
+        'Successful output contains response/model/usage/finishReason only.'
       ],
       example: '10'
     }
@@ -735,29 +1491,26 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
     prompt: {
       title: 'How to write Prompt?',
       steps: [
-        'Prompt is the instruction sent to the model.',
-        '',
-        'Example:',
-        'Summarize the text in 3 bullet points.',
-        '',
-        'Tip: Be clear and specific.'
+        'This legacy Ollama slug does not call a local Ollama server.',
+        'Runtime rewrites the node to AI Chat Model and forces Gemini 3.5 Flash.',
+        'Prompt is passed to that delegated Gemini call.',
+        'Successful output preserves incoming fields and adds response/model.',
+        'A blank effective prompt can return _error: AI Chat Model node: prompt is required.'
       ],
-      example: 'Summarize the text in 3 bullet points.'
+      example: 'Answer this customer question: {{$json.question}}'
     },
     temperature: {
       title: 'How to set Temperature?',
       steps: [
-        'Temperature controls creativity vs. determinism.',
-        '',
-        'Guidelines:',
-        '• 0.0–0.3 for factual tasks',
-        '• 0.7 for balanced output',
-        '• 1.0+ for creative tasks'
+        'Temperature is passed through to the delegated Gemini-backed AI Chat Model call.',
+        'Use a lower value for factual answers and a higher value for more varied wording.',
+        'This field does not select an Ollama model.',
+        'Use {{$json.response}} downstream for the generated text.'
       ],
       example: '0.7'
     }
   },
-  anthropic_claude: {
+  anthropic_claude_legacy_unused: {
     apiKey: {
       title: 'Anthropic Claude API Key – Step-by-Step',
       url: 'https://console.anthropic.com/settings/keys',
@@ -897,7 +1650,7 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       example: 'hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
     }
   },
-  cohere: {
+  cohere_legacy_unused: {
     apiKey: {
       title: 'Cohere API Key – Step-by-Step',
       url: 'https://dashboard.cohere.com',
@@ -931,71 +1684,83 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       example: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
     }
   },
-  // Shared guides for nodes that use OpenAI API key
+  // AI alias node guides
   text_summarizer: {
-    apiKey: {
-      title: 'OpenAI API Key – Step-by-Step',
-      url: 'https://platform.openai.com/api-keys',
+    text: {
+      title: 'How to set Text?',
       steps: [
-        '1️⃣ Open OpenAI Platform',
-        '   Go to 👉 https://platform.openai.com/api-keys',
-        '   Sign in or create an account',
-        '',
-        '2️⃣ Navigate to API Keys',
-        '   Click on your profile icon (top right)',
-        '   Select "API keys" from the dropdown',
-        '   Or go directly to: platform.openai.com/api-keys',
-        '',
-        '3️⃣ Create New Secret Key',
-        '   Click "Create new secret key" button',
-        '   Give it a name (e.g., "Workflow Integration")',
-        '   Select permissions if prompted',
-        '',
-        '4️⃣ Copy the API Key',
-        '   ⚠️ IMPORTANT: Copy the key immediately!',
-        '   You won\'t be able to see it again after closing',
-        '   The key starts with "sk-"',
-        '',
-        '5️⃣ Store Securely',
-        '   Paste it into the input field above',
-        '   Never commit to version control',
-        '   Use environment variables in production',
-        '',
-        'Example:',
-        'sk-proj-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+        'Text is inserted into a generated Gemini summarization prompt.',
+        'Use an upstream field such as {{$json.articleText}}, {{$json.emailBody}}, or {{$json.ticketBody}}.',
+        'Runtime does not locally reject blank text; it can send an empty-source summarization prompt.',
+        'The summary returns in {{$json.response}}, not {{$json.summary}}.',
+        'Incoming fields are preserved by the delegated AI Chat Model output.'
       ],
-      example: 'sk-proj-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+      example: '{{$json.articleText}}'
+    },
+    maxLength: {
+      title: 'How to set Max Length?',
+      steps: [
+        'Max Length is a word-limit hint inserted into the generated prompt.',
+        'It is not a hard truncation step and does not produce wordCount.',
+        'Use values like 50, 100, or 200 for compact summaries.',
+        'For strict limits, add a downstream validation or truncation step.'
+      ],
+      example: '100'
+    },
+    apiKey: {
+      title: 'Gemini API Key',
+      url: 'https://ai.google.dev/gemini-api/docs/api-key',
+      steps: [
+        'This node delegates to AI Chat Model and uses Gemini 3.5 Flash.',
+        'Prefer a saved Gemini connection, credential vault value, wallet, or key pool.',
+        'This field is only a direct fallback when your environment supports it.',
+        'Gemini credential failures return _error from the delegated AI Chat Model.'
+      ],
+      example: '{{$credentials.gemini.apiKey}}'
+    },
+    temperature: {
+      title: 'How to set Temperature?',
+      steps: [
+        'Temperature is passed through to the delegated Gemini-backed AI Chat Model call.',
+        'Use lower values for steadier summaries.',
+        'It does not create bullets or word counts by itself.',
+        'Write required format rules into the text or preceding context.'
+      ],
+      example: '0.2'
     }
   },
   sentiment_analyzer: {
-    apiKey: {
-      title: 'OpenAI API Key – Step-by-Step',
-      url: 'https://platform.openai.com/api-keys',
+    text: {
+      title: 'How to set Text?',
       steps: [
-        '1️⃣ Open OpenAI Platform',
-        '   Go to 👉 https://platform.openai.com/api-keys',
-        '   Sign in or create an account',
-        '',
-        '2️⃣ Navigate to API Keys',
-        '   Click on your profile icon (top right)',
-        '   Select "API keys" from the dropdown',
-        '',
-        '3️⃣ Create New Secret Key',
-        '   Click "Create new secret key" button',
-        '   Give it a name (e.g., "Workflow Integration")',
-        '',
-        '4️⃣ Copy the API Key',
-        '   ⚠️ IMPORTANT: Copy the key immediately!',
-        '   The key starts with "sk-"',
-        '',
-        '5️⃣ Store Securely',
-        '   Paste it into the input field above',
-        '   Never commit to version control',
-        '',
-        'Example:',
-        'sk-proj-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+        'Text is inserted into a generated Gemini sentiment-analysis prompt.',
+        'Use an upstream field such as {{$json.reviewText}}, {{$json.comment}}, or {{$json.ticketBody}}.',
+        'Runtime asks Gemini for JSON with sentiment, score, and summary.',
+        'Use {{$json.response.sentiment}} downstream, not {{$json.sentiment}}.',
+        'Blank text is not locally rejected, so validate upstream when empty text should stop.'
       ],
-      example: 'sk-proj-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+      example: '{{$json.reviewText}}'
+    },
+    apiKey: {
+      title: 'Gemini API Key',
+      url: 'https://ai.google.dev/gemini-api/docs/api-key',
+      steps: [
+        'This node delegates to AI Chat Model and uses Gemini 3.5 Flash.',
+        'Prefer a saved Gemini connection, credential vault value, wallet, or key pool.',
+        'This field is only a direct fallback when your environment supports it.',
+        'Gemini credential failures return _error from the delegated AI Chat Model.'
+      ],
+      example: '{{$credentials.gemini.apiKey}}'
+    },
+    temperature: {
+      title: 'How to set Temperature?',
+      steps: [
+        'Temperature is passed through to the delegated Gemini-backed AI Chat Model call.',
+        'Use a low value for stable labels and JSON shape.',
+        'If Gemini returns invalid JSON, runtime falls back to raw text in response.',
+        'There are no top-level sentiment, score, confidence, or label fields.'
+      ],
+      example: '0.2'
     }
   },
   llm_chain: {
@@ -1061,6 +1826,186 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         'hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
       ],
       example: 'hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+    }
+  },
+  huggingface: {
+    apiKey: {
+      title: 'How to connect Hugging Face?',
+      url: 'https://huggingface.co/settings/tokens',
+      steps: [
+        'Create a Hugging Face Access Token with Read access for inference.',
+        'Store the hf_ token in CtrlChecks Connections or the credential vault, then map it into apiKey.',
+        'The current executor reads apiKey directly and returns success=false with error when it is blank.',
+        'Do not put the token in Prompt, Parameters, or upstream workflow data.'
+      ],
+      example: '{{$credentials.huggingface.apiKey}}'
+    },
+    model: {
+      title: 'How to set Hugging Face Model?',
+      steps: [
+        'Copy the exact model ID from huggingface.co/models or the model card URL.',
+        'Use IDs such as facebook/bart-large-cnn, gpt2, google/flan-t5-large, or deepset/roberta-base-squad2.',
+        'Make sure your token has access to gated/private models before using them.',
+        'Wrong IDs or inaccessible models return a HuggingFace API error.'
+      ],
+      example: 'facebook/bart-large-cnn'
+    },
+    prompt: {
+      title: 'How to set Hugging Face Prompt?',
+      steps: [
+        'Enter the text the model should process, or map it from a previous step with {{$json.reviewText}} or {{$json.article}}.',
+        'Runtime sends this value as inputs in the request body.',
+        'If Prompt is blank, runtime returns success=false with error: prompt is required.',
+        'Task and Parameters do not change the prompt shape in the current executor.'
+      ],
+      example: 'Summarize {{$json.reviewText}} in one sentence.'
+    },
+    task: {
+      title: 'How to set Task?',
+      steps: [
+        'Task is a visible hint for humans and generated configs.',
+        'The current executor does not send task to Hugging Face.',
+        'Use it to remind yourself which model family you selected, not to change runtime behavior.',
+        'Choose a model whose card already supports the task you need.'
+      ],
+      example: 'summarization'
+    },
+    parameters: {
+      title: 'How to set Parameters?',
+      steps: [
+        'Parameters is a legacy visible JSON field ignored by the current executor.',
+        'Use Max Tokens and Temperature for the two parameter values that runtime actually sends.',
+        'Leave this as {} unless a future worker change starts reading it.',
+        'Do not store secrets or model input text in this JSON field.'
+      ],
+      example: '{}'
+    }
+  },
+  memory: {
+    sessionId: {
+      title: 'How to set Memory Session ID?',
+      steps: [
+        'Use a stable customer, ticket, chat, or workflow ID that downstream AI/logging steps can recognize.',
+        'Map values such as ticket-{{$json.ticketId}} or {{$json.sessionId}}.',
+        'If blank, runtime returns a generated value like mem_<node id>.',
+        'Do not use a random ID every run when later steps need stable grouping.'
+      ],
+      example: 'ticket-{{$json.ticketId}}'
+    },
+    context: {
+      title: 'How to set Memory Context?',
+      steps: [
+        'Enter the context text you want downstream AI steps to see.',
+        'Map prepared summaries such as {{$json.customerContext}} or {{$json.summary}}.',
+        'If blank and incoming data has no context, runtime returns context as null.',
+        'This node does not create or retrieve context by itself.'
+      ],
+      example: '{{$json.customerContext}}'
+    },
+    operation: {
+      title: 'How to set Memory Operation?',
+      steps: [
+        'Store, Retrieve, Clear, and Search are visible legacy options.',
+        'The current executor ignores the selected operation and always returns sessionId, context, and messages.',
+        'No Redis/vector write, read, clear, or search is performed.',
+        'Leave Store selected unless preserving an older visual config.'
+      ],
+      example: 'store'
+    },
+    ttl: {
+      title: 'How to set Memory TTL?',
+      steps: [
+        'TTL is visible for legacy short-term memory designs.',
+        'The current runtime does not persist memory, so TTL has no effect.',
+        'Do not rely on this field for retention, expiry, or privacy controls.',
+        'Handle retention in a real storage node or external service.'
+      ],
+      example: '3600'
+    }
+  },
+  mistral: {
+    apiKey: {
+      title: 'How to connect Mistral?',
+      url: 'https://docs.mistral.ai',
+      steps: [
+        'Create a Mistral API key in La Plateforme or the Mistral console.',
+        'Store it in CtrlChecks Connections or credential vault, then map it into apiKey.',
+        'The current executor reads apiKey directly and returns success=false with error when it is blank.',
+        'Use a key that has access to the selected model.'
+      ],
+      example: '{{$credentials.mistral.apiKey}}'
+    },
+    prompt: {
+      title: 'How to set Mistral Prompt?',
+      steps: [
+        'Enter the user message Mistral should answer.',
+        'Map previous text with expressions such as {{$json.ticketBody}} or {{$json.customerQuestion}}.',
+        'If Prompt is blank, runtime returns success=false with error: prompt is required.',
+        'Successful output preserves upstream fields and adds response/token fields.'
+      ],
+      example: 'Summarize {{$json.ticketBody}} and identify the refund reason.'
+    },
+    systemPrompt: {
+      title: 'How to set Mistral System Prompt?',
+      steps: [
+        'Use this for standing rules such as tone, role, or output format.',
+        'Runtime sends it as a system message before Prompt when it is not blank.',
+        'Keep it short and do not include API keys or unnecessary private data.',
+        'Leave blank for a simple one-off request.'
+      ],
+      example: 'Return one concise sentence.'
+    },
+    model: {
+      title: 'How to choose Mistral Model?',
+      steps: [
+        'Use mistral-small-latest for fast everyday work.',
+        'Use mistral-medium-latest or mistral-large-latest for more complex reasoning when available.',
+        'Use codestral-latest for code-focused tasks.',
+        'Wrong or unavailable model names return a Mistral API error.'
+      ],
+      example: 'mistral-small-latest'
+    }
+  },
+  langchain: {
+    apiKey: {
+      title: 'How to connect LangChain provider credentials?',
+      steps: [
+        'Use an OpenAI key when Provider is openai and an Anthropic key when Provider is anthropic.',
+        'Store keys in Connections or the credential vault, then map the correct one into apiKey.',
+        'The current executor reads apiKey directly and does not auto-select a saved LangChain connection.',
+        'Do not put provider secrets in Prompt, Tools, Memory, or upstream data.'
+      ],
+      example: '{{$credentials.openai.apiKey}}'
+    },
+    prompt: {
+      title: 'How to set LangChain Prompt?',
+      steps: [
+        'Enter the task or user message to send to OpenAI or Anthropic.',
+        'Map business data from earlier steps with {{$json.ticketBody}}, {{$json.transcript}}, or {{$json.customerQuestion}}.',
+        'The response is returned as {{$json.response}}.',
+        'Successful output does not preserve incoming fields, so keep required IDs before this node.'
+      ],
+      example: 'Summarize {{$json.ticketBody}} and list the next best action.'
+    },
+    tools: {
+      title: 'How to set LangChain Tools?',
+      steps: [
+        'Tools must be a JSON array of OpenAI function definitions.',
+        'The current executor sends tools only when Operation is run_agent and Provider is openai.',
+        'Anthropic does not receive tools through this node today.',
+        'Tools define possible calls; this node returns tool-call steps but does not execute your API by itself.'
+      ],
+      example: '[{"name":"lookup_order","description":"Find order details","parameters":{"type":"object","properties":{"orderId":{"type":"string"}}}}]'
+    },
+    memory: {
+      title: 'How to set LangChain Memory?',
+      steps: [
+        'Memory is a visible legacy toggle ignored by the current executor.',
+        'Turning it on does not retrieve conversation history or preserve previous runs.',
+        'Map needed context directly into Prompt, for example Context: {{$json.context}}.',
+        'No downstream output confirms memory was used.'
+      ],
+      example: 'false'
     }
   },
   embeddings: {
@@ -1131,7 +2076,7 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       example: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
     }
   },
-  chat_model: {
+  chat_model_legacy_unused: {
     apiKey: {
       title: 'AI Provider API Key – Step-by-Step',
       steps: [
@@ -2046,7 +2991,7 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       example: 'true'
     }
   },
-  sql_server: {
+  sql_server_legacy_unused: {
     host: {
       title: 'SQL Server Connection – Step-by-Step',
       steps: [
@@ -2217,32 +3162,32 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
     operation: {
       title: 'How to get Operation?',
       steps: [
-        'You don’t get this from anywhere—you choose it from the dropdown in this node.',
+        'You choose this from the dropdown in this node.',
         '',
-        '• Create Page Post (Text/Image/Link/Video) – Create a post. Requires Page ID and Message (plus URL for image/link/video).',
+        'Implemented today:',
         '',
-        '• Get Page Posts – List posts from the Page. Requires Page ID and optional Limit.',
+        '• Page + List - lists managed Pages and returns pages/count.',
         '',
-        '• Delete Page Post – Delete a post. Requires Post ID.',
+        '• Messenger Message + Send Messenger Text - sends a text reply. Requires Page ID, Recipient PSID, and Message or Text.',
         '',
-        '• Create Comment / Reply to Comment – Add a comment. Requires Comment Text and Comment ID for replies.',
+        '• Comment + Create Comment - replies to a post or comment. Requires Post ID or Comment ID plus reply text.',
         '',
-        '• Get Page Insights – Retrieve metrics like reach or impressions. Requires Insight Metric.',
+        'Other visible options such as createPost, upload, getInsights, markSeen, typingOn, and delete are scaffolded and return _error until handlers are implemented.',
       ],
-      example: 'Create Page Post (Text)'
+      example: 'page + list'
     },
     message: {
-      title: 'How to get Post Message?',
+      title: 'How to get Message?',
       steps: [
-        'You type or provide the post content.',
+        'Type the Messenger/comment reply text, or map it from an earlier workflow step.',
         '',
-        '• Static: Type it directly (e.g. "New product launched!").',
+        'Static example: "Thanks for reaching out. We are checking this now."',
         '',
-        '• Dynamic: Use data from earlier steps, e.g. "{{input.message}}".',
+        'Dynamic example: "{{$json.aiResponse}}" from an AI Agent or support classifier.',
         '',
-        'Required for create_post operations.'
+        'Required for sendTextMessage when Text is blank, and for createComment when Reply Text is blank.'
       ],
-      example: 'Your post content'
+      example: '{{$json.aiResponse}}'
     },
     imageUrl: {
       title: 'How to get Image URL?',
@@ -2658,7 +3603,7 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       example: '[YOUR_STRIPE_TEST_KEY]'
     }
   },
-  postgresql: {
+  postgresql_legacy_select_ui_unused: {
     host: {
       title: 'PostgreSQL Host – Step-by-Step',
       steps: [
@@ -2906,7 +3851,7 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       example: 'true'
     }
   },
-  mysql: {
+  mysql_legacy_select_ui_unused: {
     host: {
       title: 'MySQL Host – Step-by-Step',
       steps: [
@@ -3171,7 +4116,7 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       example: '100'
     }
   },
-  redis: {
+  redis_legacy_unused: {
     host: {
       title: 'Redis Host – Step-by-Step',
       steps: [
@@ -3471,44 +4416,30 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       steps: [
         'You do not fetch this value from Notion; you select it from the Operation dropdown in this node.',
         '',
-        'Available operations in this node:',
+        'Use the operation value that matches the selected resource. The current visual values are get, list, create, update, archive, restore, query, appendChildren, listChildren, delete, getMe, and search.',
         '',
-        '• Create Page (create_page)',
-        '  - Creates a new page under a parent page or inside a database.',
-        '  - Typically requires: Parent Page ID (or Database ID), Page Title, and optional Content/Properties.',
+        'Common valid pairs:',
         '',
-        '• Update Page (update_page)',
-        '  - Updates title, content, or properties of an existing page.',
-        '  - Requires: Page ID.',
+        '• page + get/create/update/archive/restore',
         '',
-        '• Read Page (read_page)',
-        '  - Fetches metadata and/or content blocks for a single page.',
-        '  - Requires: Page ID.',
+        '• database + get/list/query/create/update',
         '',
-        '• Delete Page (delete_page)',
-        '  - Archives (soft‑deletes) a page in Notion.',
-        '  - Requires: Page ID.',
+        '• block + get/listChildren/appendChildren/update/delete',
         '',
-        '• Query Database (query_database)',
-        '  - Runs a filtered/sorted query against a database.',
-        '  - Requires: Database ID. Optional: Filter JSON, Sorts JSON, Page Size, Cursor.',
+        '• user + get/list/getMe',
         '',
-        '• Create Database Entry (create_database_entry)',
-        '  - Inserts a new row into a database.',
-        '  - Requires: Database ID and Properties JSON matching your database schema.',
+        '• comment + list/create. comment + get returns _error because this Notion API path cannot retrieve one comment by ID.',
         '',
-        '• Update Database Entry (update_database_entry)',
-        '  - Updates an existing database row (which is a page in that database).',
-        '  - Requires: Page ID (of the row) and Properties JSON.',
+        '• search + search',
         '',
-        'Pick the operation that matches what you want this node to do, then fill the required IDs and JSON fields accordingly.'
+        'Pick the pair first, then fill the IDs and JSON fields required for that pair.'
       ],
-      example: 'create_page'
+      example: 'database + query'
     },
     parentPageId: {
       title: 'Notion Parent Page ID – Step-by-Step',
       steps: [
-        '1️⃣ Open the parent page where you want new pages to be created (for create_page).',
+        '1️⃣ Open the parent page where you want new pages or databases to be created.',
         '',
         '2️⃣ Click "Share" → "Copy link", or copy the URL from your browser.',
         '',
@@ -3545,14 +4476,13 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
     content: {
       title: 'How to get Page Content (JSON)?',
       steps: [
-        'Page content is a JSON array of Notion blocks.',
+        'For the visible Content field, type plain text. Runtime converts simple text into a paragraph block for page create or appendChildren when Children Blocks is blank.',
         '',
-        '• For simple text, use a paragraph block:',
-        '  [{"type":"paragraph","paragraph":{"rich_text":[{"text":{"content":"Hello"}}]}}]',
+        'For the Children Blocks JSON field, use a Notion block array for page create/appendChildren.',
         '',
         '• You can build blocks from previous steps or templates.',
         '',
-        'Used for Create Page and Update Page.'
+        'For block update, Children Blocks must be a block content object, not an array.'
       ],
       example: '[{"type":"paragraph","paragraph":{"rich_text":[{"text":{"content":"Hello"}}]}}]'
     },
@@ -3567,7 +4497,7 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         '   Example:',
         '   {"Name":{"title":[{"text":{"content":"Task Name"}}]},"Status":{"select":{"name":"In Progress"}}}',
         '',
-        'Required for Create Database Entry and Update Database Entry.'
+        'Required for page create inside a database and page update.'
       ],
       example: '{"Name":{"title":[{"text":{"content":"Task Name"}}]}}'
     },
@@ -3584,17 +4514,17 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       ],
       example: '{"property":"Status","select":{"equals":"Done"}}'
     },
-    sorts: {
-      title: 'How to get Sorts (JSON)?',
+    sort: {
+      title: 'How to get Sort (JSON)?',
       steps: [
-        'Sorts control the order of query results.',
+        'Sort controls Notion search result ordering. Runtime reads the field key sort, not the old sorts key.',
         '',
         'Example:',
-        '[{"property":"Created","direction":"descending"}]',
+        '{"direction":"descending","timestamp":"last_edited_time"}',
         '',
-        'Use property names exactly as they appear in your database.'
+        'Use Query Body JSON if you need database query sorts; this Sort field is for resource search.'
       ],
-      example: '[{"property":"Created","direction":"descending"}]'
+      example: '{"direction":"descending","timestamp":"last_edited_time"}'
     },
     pageSize: {
       title: 'How to get Page Size?',
@@ -4913,38 +5843,17 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       example: 'oauth'
     },
     apiKey: {
-      title: 'HubSpot API Key – Step-by-Step',
+      title: 'HubSpot API Key (Legacy - Deprecated)',
       url: 'https://app.hubspot.com',
       steps: [
-        '1️⃣ Open HubSpot Account',
-        '   Go to 👉 https://app.hubspot.com',
-        '   Sign in to your HubSpot account',
+        'HubSpot has phased out legacy API keys - most accounts can no longer generate new ones.',
+        'This field only exists as a fallback for older saved credentials created before the deprecation.',
         '',
-        '2️⃣ Go to Settings',
-        '   Click "Settings" icon (gear) in top right',
-        '   Or go to: app.hubspot.com/settings',
+        'For a new connection, use a Private App token (Access Token field) or OAuth2 instead - both are the modern, supported way to authenticate.',
         '',
-        '3️⃣ Navigate to API Keys',
-        '   In left sidebar, click "Integrations"',
-        '   Click "Private Apps" or "API Key"',
-        '',
-        '4️⃣ Create API Key',
-        '   Click "Create API key"',
-        '   Give it a name (e.g., "Workflow Integration")',
-        '   Select required scopes',
-        '',
-        '5️⃣ Copy API Key',
-        '   ⚠️ IMPORTANT: Copy immediately!',
-        '   You may only see it once',
-        '',
-        '6️⃣ Store Securely',
-        '   Paste it into the API Key field above',
-        '   Never share publicly',
-        '',
-        'Example:',
-        'pat-na1-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+        'If you already have a legacy API key from before the deprecation, paste it here only if Access Token is not available for your account.'
       ],
-      example: 'pat-na1-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+      example: '(legacy - not recommended for new connections)'
     },
     accessToken: {
       title: 'HubSpot OAuth2 Access Token – Step-by-Step',
@@ -6125,7 +7034,7 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       steps: [
         'Choose Send Email.',
         'Outlook currently sends email through Microsoft Graph sendMail.',
-        'Only Send Email is available in the Outlook operation dropdown.'
+        'Only Send Email is available in the Outlook operation dropdown; use Outlook Trigger for incoming mail or calendar events.'
       ],
       example: 'send_email'
     },
@@ -6133,7 +7042,7 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       title: 'How to set To?',
       steps: [
         'Enter one recipient email address, or comma-separated addresses for multiple recipients.',
-        'Use workflow values such as {{$json.email}} when the recipient comes from an earlier step.',
+        'Use workflow values such as {{$json.customerEmail}} when the recipient comes from an earlier step.',
         'Do not put Microsoft tokens or connection details here; the Microsoft connection is selected separately.'
       ],
       example: 'customer@example.com'
@@ -6142,7 +7051,7 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       title: 'How to write Subject?',
       steps: [
         'Enter the email subject line.',
-        'Use workflow values such as {{$json.subject}} when another node prepared the subject.',
+        'Use workflow values such as Order {{$json.orderId}} received when another node prepared the subject.',
         'Keep it clear and short so recipients can scan it in Outlook.'
       ],
       example: 'Weekly report'
@@ -6152,9 +7061,78 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       steps: [
         'Enter the plain-text message body.',
         'Use workflow values such as {{$json.message}} or {{$json.digest}} for dynamic content.',
-        'The current Outlook executor sends this value as Text content through Microsoft Graph.'
+        'The current Outlook executor sends this value as Text content through Microsoft Graph and does not return a message ID.'
       ],
       example: 'Your report is ready.'
+    }
+  },
+  stop_and_error: {
+    errorMessage: {
+      title: 'How to write Error Message?',
+      steps: [
+        'Write the clear business reason this workflow should stop.',
+        'Include safe context such as an order ID or missing field name, for example Customer email is missing.',
+        'The workflow throws this message and normal next nodes do not run, so do not expect {{$json.errorMessage}} downstream.'
+      ],
+      example: 'Customer email is missing. Cannot send confirmation.'
+    },
+    errorCode: {
+      title: 'How to write Error Code?',
+      steps: [
+        'Use a short uppercase category such as VALIDATION_FAILED, PAYMENT_BLOCKED, or PERMISSION_DENIED.',
+        'Leave it blank to use STOPPED.',
+        'Do not paste secrets or stack traces because this value can appear in run logs.'
+      ],
+      example: 'VALIDATION_FAILED'
+    }
+  },
+  wait: {
+    duration: {
+      title: 'How to set Duration?',
+      steps: [
+        'Enter the pause length in milliseconds.',
+        'Use 1000 for 1 second, 5000 for 5 seconds, or 60000 for 1 minute.',
+        'The Wait node passes input data through unchanged and is capped at 300000 ms, so it does not return waitedMs or wait for a condition.'
+      ],
+      example: '5000'
+    }
+  },
+  calendly: {
+    operation: {
+      title: 'How to choose Operation?',
+      steps: [
+        'Choose Get User first when you need the Calendly User URI.',
+        'Choose Get Event Types to list booking-page types for a User URI.',
+        'Choose Get Scheduled Events to list booked meetings, optionally filtered by Event Type URI.'
+      ],
+      example: 'get_user'
+    },
+    accessToken: {
+      title: 'How to set Personal Access Token?',
+      steps: [
+        'Prefer a saved Calendly connection in Connections and leave this field blank.',
+        'Use this field only as a legacy fallback or controlled test token.',
+        'Do not map or paste tokens into normal workflow data; store secrets in the credential vault.'
+      ],
+      example: 'Saved in Connections'
+    },
+    userUri: {
+      title: 'How to set User URI?',
+      steps: [
+        'Run Get User first and map {{$json.user.uri}} into this field.',
+        'Required for Get Event Types and Get Scheduled Events.',
+        'Use the api.calendly.com/users URI, not the public scheduling page URL.'
+      ],
+      example: '{{$json.user.uri}}'
+    },
+    eventTypeUri: {
+      title: 'How to set Event Type URI?',
+      steps: [
+        'Run Get Event Types and map a returned event type URI such as {{$json.collection[0].uri}}.',
+        'Use it only when Get Scheduled Events should be filtered to one booking type.',
+        'Leave it blank to list all scheduled events for the selected User URI.'
+      ],
+      example: '{{$json.collection[0].uri}}'
     }
   },
   salesforce: {
@@ -6500,7 +7478,7 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
     }
   },
   // Cloud Storage
-  aws_s3: {
+  aws_s3_legacy_unused: {
     accessKeyId: {
       title: 'AWS Access Key ID – Step-by-Step',
       url: 'https://console.aws.amazon.com',
@@ -6592,7 +7570,7 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       example: 'my-bucket-name'
     }
   },
-  dropbox: {
+  dropbox_legacy_unused: {
     accessToken: {
       title: 'Dropbox Access Token – Step-by-Step',
       url: 'https://www.dropbox.com/developers',
@@ -6630,7 +7608,7 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       example: 'sl.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
     }
   },
-  onedrive: {
+  onedrive_legacy_unused: {
     accessToken: {
       title: 'OneDrive Access Token – Step-by-Step',
       url: 'https://portal.azure.com',
@@ -6713,7 +7691,7 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       example: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
     }
   },
-  ftp: {
+  ftp_legacy_unused: {
     host: {
       title: 'FTP Host – Step-by-Step',
       steps: [
@@ -6826,7 +7804,7 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       example: 'Hello World'
     }
   },
-  sftp: {
+  sftp_legacy_unused: {
     host: {
       title: 'SFTP Host – Step-by-Step',
       steps: [
@@ -7801,7 +8779,7 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
     }
   },
   // TimescaleDB (similar to PostgreSQL)
-  timescaledb: {
+  timescaledb_legacy_unused: {
     host: {
       title: 'TimescaleDB Host – Step-by-Step',
       steps: [
@@ -7876,56 +8854,81 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
   },
   // GraphQL
   graphql: {
-    endpoint: {
-      title: 'GraphQL Endpoint URL – Step-by-Step',
+    url: {
+      title: 'GraphQL Endpoint URL',
       steps: [
-        '1️⃣ Get GraphQL Endpoint',
-        '   From your GraphQL API documentation',
-        '   Or from your API provider',
-        '   Format: https://api.example.com/graphql',
-        '',
-        '2️⃣ Common GraphQL Endpoints',
-        '   GitHub: https://api.github.com/graphql',
-        '   Shopify: https://yourstore.myshopify.com/admin/api/2024-01/graphql.json',
-        '   Custom: https://your-api.com/graphql',
-        '',
-        '3️⃣ Use the Endpoint',
-        '   Paste it into the Endpoint field above',
-        '   Include full URL with https://',
-        '',
-        'Examples:',
+        'Use the full GraphQL endpoint URL, including https:// and the path.',
+        'The runtime sends this node as an HTTP POST request to that URL.',
+        'Common examples:',
+        'https://api.github.com/graphql',
+        'https://yourstore.myshopify.com/admin/api/2024-01/graphql.json',
         'https://api.example.com/graphql',
-        'https://yourstore.myshopify.com/admin/api/2024-01/graphql.json'
+        '',
+        'Use {{$json.graphqlUrl}} when a previous node provides the endpoint.',
+        'Later nodes can inspect the final URL at {{$json.url}}.'
       ],
       example: 'https://api.example.com/graphql'
     },
-    headers: {
-      title: 'GraphQL Headers – Step-by-Step',
+    query: {
+      title: 'GraphQL Query or Mutation',
       steps: [
-        '1️⃣ Common Headers Needed',
-        '   Authorization: Bearer token or API key',
-        '   Content-Type: application/json',
-        '',
-        '2️⃣ Format Headers as JSON',
-        '   Format: {"Header-Name": "value"}',
-        '',
-        '3️⃣ Examples',
-        '   For API Key:',
-        '   {"Authorization": "Bearer YOUR_API_KEY"}',
-        '',
-        '   For OAuth:',
-        '   {"Authorization": "Bearer YOUR_ACCESS_TOKEN"}',
-        '',
-        '   Multiple headers:',
-        '   {"Authorization": "Bearer TOKEN", "Content-Type": "application/json"}',
-        '',
-        '4️⃣ Use the Headers',
-        '   Paste JSON into the Headers field above',
+        'Paste the GraphQL document that the API should run.',
+        'Use query for reads and mutation for writes.',
+        'Prefer variables such as $customerId instead of placing mapped values directly in the query text.',
         '',
         'Example:',
-        '{"Authorization": "Bearer YOUR_TOKEN", "Content-Type": "application/json"}'
+        'query GetCustomer($id: ID!) { customer(id: $id) { id email } }',
+        '',
+        'Results usually appear under {{$json.body.data}}.',
+        'GraphQL validation errors usually appear under {{$json.body.errors}}.'
       ],
-      example: '{"Authorization": "Bearer YOUR_TOKEN", "Content-Type": "application/json"}'
+      example: 'query GetCustomer($id: ID!) { customer(id: $id) { id email } }'
+    },
+    operationName: {
+      title: 'Operation Name',
+      steps: [
+        'Fill this only when the query text contains more than one named operation.',
+        'Type the exact name from the query document, such as GetCustomer or CreateOrder.',
+        'Do not include the word query, mutation, parentheses, or braces.',
+        '',
+        'Leave it blank when the Query field contains a single operation.'
+      ],
+      example: 'GetCustomer'
+    },
+    variables: {
+      title: 'GraphQL Variables JSON',
+      steps: [
+        'Enter a JSON object whose keys match variables in the Query field.',
+        'Example:',
+        '{"id":"{{$json.customerId}}"}',
+        '',
+        'If Variables is blank, invalid JSON, or cannot be parsed after mapping, runtime silently sends {}.',
+        'Use {{$json.variables}} only when the previous node already produced a valid object.'
+      ],
+      example: '{"id":"{{$json.customerId}}"}'
+    },
+    headers: {
+      title: 'GraphQL Headers JSON',
+      steps: [
+        'Use a JSON object for request headers.',
+        'Common headers are Content-Type, Authorization, Accept, and tenant IDs.',
+        '',
+        'Example:',
+        '{"Authorization":"Bearer {{$json.accessToken}}","Content-Type":"application/json"}',
+        '',
+        'Prefer secure secret or credential references for long-lived tokens.'
+      ],
+      example: '{"Authorization":"Bearer {{$json.accessToken}}","Content-Type":"application/json"}'
+    },
+    timeout: {
+      title: 'GraphQL Timeout',
+      steps: [
+        'Enter the maximum wait time in milliseconds.',
+        'Default is 30000, which means 30 seconds.',
+        'Increase it for slow report queries and lower it for webhook-style workflows that must answer quickly.',
+        'Timeout failures come back through the wrapped HTTP Request error output as {{$json._error}}.'
+      ],
+      example: '30000'
     }
   },
   // QuickBooks
@@ -8080,7 +9083,7 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
   },
   // DevOps Tools
   gitlab: {
-    token: {
+    accessToken: {
       title: 'GitLab Personal Access Token – Step-by-Step',
       url: 'https://gitlab.com',
       steps: [
@@ -8112,8 +9115,9 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         '   You won\'t see it again!',
         '',
         '6️⃣ Store Securely',
-        '   Paste it into the GitLab Token field above',
-        '   Never commit to version control',
+        '   Prefer saving it in Connections so the credential vault can supply it at runtime',
+        '   If you paste it into this node, paste it into Access Token',
+        '   Never commit it to version control',
         '',
         'Example:',
         'glpat-xxxxxxxxxxxxxxxxxxxxxxxx'
@@ -8138,17 +9142,13 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       steps: [
         'You don’t get this from anywhere—you choose it from the dropdown in this node.',
         '',
-        '• Get Project / List Projects – Get project details or list projects. Need Project ID for get.',
+        'This GitLab action node supports only two issue operations today:',
         '',
-        '• Create Issue / Update Issue / Close Issue / List Issues / Get Issue – Manage issues. Need Project ID; for update/close/get, need Issue IID.',
+        '• Read/List Issues - Choose this to list project issues or read one issue. Fill Project ID. Leave Issue IID blank to list issues, or enter an Issue IID to fetch one issue.',
         '',
-        '• Create Merge Request / Update MR / Approve MR / Merge MR / List MRs / Get MR – Manage merge requests. Need Project ID; for create, need Source Branch, Target Branch, Title, Description; for update/approve/merge/get, need Merge Request IID.',
+        '• Create Issue - Choose this to open a new project issue. Fill Project ID, Title, and optional Description Text.',
         '',
-        '• Trigger Pipeline / Get Pipeline / List Pipelines / Get Pipeline Jobs / Get Job Log – Pipelines. Need Project ID; for trigger, need Trigger Token and Branch/Ref; for get pipeline/jobs, need Pipeline ID; for job log, need Job ID.',
-        '',
-        '• Create Branch / List Branches / Delete Branch – Manage branches. Need Project ID; for create/delete, need Branch Name; for create, need Ref/Branch as source.',
-        '',
-        '• Get File / Create File / Update File / Delete File – File operations. Need Project ID, Branch Name, File Path; for create/update, need File Content and Commit Message.'
+        'Merge requests, pipelines, branches, files, and releases are not supported by this action executor today.'
       ],
       example: 'Create Issue'
     },
@@ -8184,18 +9184,18 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       ],
       example: 'Login Bug'
     },
-    description: {
+    descriptionText: {
       title: 'How to get Description?',
       steps: [
-        'You type or provide the description—the detailed explanation of the issue or merge request. Markdown supported.',
+        'You type or provide the description—the detailed explanation of the GitLab issue. Markdown supported.',
         '',
         '• Static: Type or paste directly. You can use Markdown.',
         '',
         '• Dynamic: Use an expression from a previous step, e.g. {{aiNode.summary}} or {{trigger.body}}',
         '',
-        'Required for Create Issue and Create Merge Request. Ignored for other operations.'
+        'Optional for Create Issue. The runtime reads Description Text / descriptionText, not the old description field.'
       ],
-      example: 'Issue/MR description'
+      example: 'Issue description'
     },
     sourceBranch: {
       title: 'How to get Source Branch?',
@@ -8461,7 +9461,7 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       ],
       example: 'jenkins-user'
     },
-    token: {
+    apiToken: {
       title: 'Jenkins API Token – Step-by-Step',
       steps: [
         '1️⃣ Log in to Jenkins',
@@ -8482,7 +9482,7 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         '   You won\'t see it again!',
         '',
         '5️⃣ Store Securely',
-        '   Paste it into the Token field above',
+        '   Paste it into the API Token field above',
         '',
         'Example:',
         '11xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
@@ -8494,15 +9494,14 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       steps: [
         'Operation tells Jenkins what action to run.',
         '',
-        'Common options:',
-        '• Get Job / List Jobs',
-        '• Build Job / Stop Build',
-        '• Get Build / Get Build Status / Get Build Log',
-        '• Poll Build Status (for long builds)',
+        'Supported options in this runtime:',
+        '• Build Job - starts the Jenkins job. Fill Job Name and optional Parameters.',
+        '• Get Build Status - reads lastBuild when Build Number is empty, or a specific build when you enter Build Number.',
+        '• Cancel Build - stops a specific build. Fill Job Name and Build Number.',
         '',
-        'Choose the action that matches your workflow step.'
+        'The old polling/log/list operations are not executed by this node today.'
       ],
-      example: 'build_job'
+      example: 'build'
     },
     jobName: {
       title: 'How to get Job Name?',
@@ -8558,6 +9557,130 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         'Increase if your builds take longer.'
       ],
       example: '60'
+    }
+  },
+  vercel: {
+    token: {
+      title: 'Vercel API Token - Step-by-Step',
+      url: 'https://vercel.com/account/tokens',
+      steps: [
+        '1. Open Vercel Account Settings -> Tokens.',
+        '2. Create a token for this workflow, or use an existing saved Vercel connection.',
+        '3. Prefer storing the token in Connections so the credential vault can provide it.',
+        '4. If you paste it into this node, paste it into Token only.',
+        '5. Test the token against https://api.vercel.com/v13/deployments before using it in production.',
+        '',
+        'The token must stay secret. Do not map customer data or normal workflow text into this field.'
+      ],
+      example: 'vercel_xxxxxxxxxxxxxxxxxxxxxxxx'
+    },
+    operation: {
+      title: 'How to choose Operation?',
+      steps: [
+        'Choose Deploy Project when you want Vercel to create a deployment for a project.',
+        '',
+        'Choose List Deployments when you want to read recent deployments from the account.',
+        '',
+        'Deploy Project requires Project Name. List Deployments only needs the token or saved Vercel connection.',
+        '',
+        'Unsupported values return INVALID_OPERATION.'
+      ],
+      example: 'deploy'
+    },
+    projectName: {
+      title: 'How to get Project Name?',
+      steps: [
+        'Open the project in Vercel and copy the project slug/name from the project settings or URL.',
+        '',
+        'Example URL: https://vercel.com/acme/marketing-site',
+        'Project Name: marketing-site',
+        '',
+        'Use a previous step only when it outputs the exact Vercel project name. Deploy fails with INVALID_PROJECT_NAME when this is empty or malformed.'
+      ],
+      example: 'marketing-site'
+    }
+  },
+  netlify: {
+    accessToken: {
+      title: 'Netlify Personal Access Token - Step-by-Step',
+      url: 'https://app.netlify.com/user/applications#personal-access-tokens',
+      steps: [
+        '1. Open Netlify User Settings -> Applications -> Personal access tokens.',
+        '2. Create a token for CtrlChecks, or use a saved Netlify connection.',
+        '3. Prefer saving it in Connections so the credential vault stores it securely.',
+        '4. If you paste it into this node, paste it into Access Token only.',
+        '5. Test it against https://api.netlify.com/api/v1/sites before using it in production.',
+        '',
+        'Missing or expired tokens return Missing Access Token or a Netlify API error.'
+      ],
+      example: 'nfp_xxxxxxxxxxxxxxxxxxxxxxxx'
+    },
+    operation: {
+      title: 'How to choose Operation?',
+      steps: [
+        'Choose List Sites to read sites in the Netlify account.',
+        'Choose Get Site when you already have a Site ID.',
+        'Choose Create Deploy to create a deploy for a Site ID using a JSON Payload.',
+        'Choose List Deploys to read deploys for a Site ID.',
+        'Choose Get Deploy when you already have a Deploy ID.',
+        '',
+        'Forms are not returned by this node today.'
+      ],
+      example: 'list_sites'
+    },
+    resource: {
+      title: 'How to choose Resource?',
+      steps: [
+        'Choose Sites for List Sites, Get Site, or Create Deploy.',
+        'Choose Deploys for List Deploys or Get Deploy.',
+        '',
+        'The runtime echoes this value in the output as resource. It does not enable Netlify forms today.'
+      ],
+      example: 'sites'
+    },
+    siteId: {
+      title: 'How to get Site ID?',
+      steps: [
+        'Open the Netlify site dashboard.',
+        'Go to Site configuration -> General -> Site details.',
+        'Copy the API ID / Site ID.',
+        '',
+        'Use Site ID for Get Site, Create Deploy, and List Deploys.'
+      ],
+      example: 'site_1234567890abcdef'
+    },
+    deployId: {
+      title: 'How to get Deploy ID?',
+      steps: [
+        'Open the Netlify site dashboard and go to Deploys.',
+        'Open the deploy you want to inspect.',
+        'Copy the deploy ID from the deploy details or URL.',
+        '',
+        'Get Deploy requires Deploy ID.'
+      ],
+      example: 'deploy_1234567890abcdef'
+    },
+    payload: {
+      title: 'How to set Deploy Payload?',
+      steps: [
+        'Enter a JSON object for Netlify create_deploy.',
+        '',
+        'Use this only when you know the Netlify deploy API body you need.',
+        'Map files, draft flags, or deploy options from earlier workflow steps only if they are already valid JSON.',
+        '',
+        'Invalid JSON fails before Netlify can create the deploy.'
+      ],
+      example: '{"draft":true}'
+    },
+    limit: {
+      title: 'How to set Limit?',
+      steps: [
+        'Enter the maximum number of records to return for list operations.',
+        '',
+        'Use a smaller number for quick checks and a larger number when the next step needs more history.',
+        'If empty, the runtime uses its default list behavior.'
+      ],
+      example: '20'
     }
   },
   pagerduty: {
@@ -8709,86 +9832,136 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
   },
   http_post: {
     url: {
-      title: 'How to set the URL?',
+      title: 'HTTP POST URL',
       steps: [
         'URL is the full endpoint where the POST request is sent.',
+        'Include https:// and the API path.',
+        'Map dynamic pieces with {{$json.field}} if the endpoint depends on upstream data.',
         '',
         'Examples:',
-        '• https://api.example.com/create-user',
-        '• https://hooks.service.com/trigger?id=123',
+        'https://api.example.com/create-user',
+        'https://hooks.service.com/trigger?id={{$json.id}}',
         '',
-        'Tip: Include http:// or https://.'
+        'The final URL is returned as {{$json.url}}.'
       ],
       example: 'https://api.example.com/create-user'
     },
     headers: {
-      title: 'How to set Headers (JSON)?',
+      title: 'HTTP POST Headers JSON',
       steps: [
         'Headers are key-value pairs for authentication and content type.',
+        'Enter them as JSON, not as raw Header: value lines.',
         '',
         'Common headers:',
-        '• Content-Type: application/json',
-        '• Authorization: Bearer YOUR_TOKEN',
+        'Content-Type: application/json',
+        'Authorization: Bearer {{$json.accessToken}}',
         '',
         'Example JSON:',
-        '{ "Content-Type": "application/json", "Authorization": "Bearer YOUR_TOKEN" }'
+        '{ "Content-Type": "application/json", "Authorization": "Bearer {{$json.accessToken}}" }'
       ],
-      example: '{"Content-Type":"application/json","Authorization":"Bearer YOUR_TOKEN"}'
+      example: '{"Content-Type":"application/json","Authorization":"Bearer {{$json.accessToken}}"}'
     },
-    bodyTemplate: {
-      title: 'How to write Body Template?',
+    body: {
+      title: 'HTTP POST Body JSON',
       steps: [
-        'Body Template is the request body sent to the API.',
+        'Body is the request payload sent to the API.',
         '',
-        'Use JSON for most APIs, or plain text if required.',
-        'You can insert dynamic values like {{input}} or {{input.field}}.',
+        'Use JSON for most APIs.',
+        'Insert dynamic values with {{$json.field}}.',
         '',
         'Example:',
-        '{ "event": "created", "data": {{input}} }'
+        '{ "event": "created", "email": "{{$json.email}}", "orderId": "{{$json.orderId}}" }',
+        '',
+        'Runtime rewrites this node to HTTP Request with method POST, so the response is available as {{$json.body}} and {{$json.data}}.'
       ],
-      example: '{"event":"created","data":{{input}}}'
+      example: '{"event":"created","email":"{{$json.email}}"}'
     }
   },
   respond_to_webhook: {
     statusCode: {
-      title: 'How to set Status Code?',
+      title: 'Webhook Status Code',
       steps: [
         'Status Code is the HTTP code returned to the webhook caller.',
         '',
         'Common values:',
-        '• 200 – Success',
-        '• 201 – Created',
-        '• 400 – Bad request',
-        '• 401 – Unauthorized',
-        '• 404 – Not found',
-        '• 500 – Server error',
+        '200 success',
+        '201 created',
+        '400 bad request',
+        '401 unauthorized',
+        '404 not found',
+        '500 server error',
         '',
-        'Tip: Use 200 when processing succeeds.'
+        'Runtime returns this as {{$json.statusCode}} and falls back to 200 if the value is not numeric.'
       ],
       example: '200'
     },
     responseBody: {
-      title: 'How to write Response Body (JSON)?',
+      title: 'Response Body JSON',
       steps: [
-        'Response Body is the JSON sent back to the caller.',
+        'Response Body is the visible field for the JSON sent back to the caller.',
+        'Runtime normalizes it to {{$json.body}}.',
         '',
         'Example:',
-        '{ "status": "success", "message": "Processed" }',
+        '{ "received": true, "orderId": "{{$json.orderId}}" }',
         '',
-        'You can include dynamic values like {{input}}.'
+        'If a backend body alias is also set, body wins over responseBody.'
       ],
-      example: '{"status":"success","message":"Processed"}'
+      example: '{"received":true,"orderId":"{{$json.orderId}}"}'
     },
     headers: {
-      title: 'How to set Custom Headers (JSON)?',
+      title: 'Response Headers JSON',
       steps: [
-        'Headers are optional key‑value pairs in JSON.',
+        'Headers are optional response headers in JSON.',
         '',
         'Common header:',
-        '• Content-Type: application/json',
+        'Content-Type: application/json',
         '',
         'Example:',
-        '{ "Content-Type": "application/json" }'
+        '{ "Content-Type": "application/json" }',
+        '',
+        'These are response headers, not request authentication headers.'
+      ],
+      example: '{"Content-Type":"application/json"}'
+    },
+    body: {
+      title: 'Backend Body Alias',
+      steps: [
+        'body is accepted by runtime and generated workflow JSON.',
+        'The visual panel normally uses responseBody.',
+        'If both body and responseBody are set, body wins.',
+        'The normalized output is still {{$json.body}}.'
+      ],
+      example: '{"success":true}'
+    }
+  },
+  webhook_response: {
+    statusCode: {
+      title: 'Webhook Response Status Code',
+      steps: [
+        'Status Code is the HTTP number for the caller response.',
+        'Use 200 for success, 201 for created, 400 for bad request, or 500 for server failure.',
+        'Runtime returns {{$json.statusCode}} and does not return a top-level responseCode.',
+        'responseCode is accepted only as a compatibility alias.'
+      ],
+      example: '200'
+    },
+    body: {
+      title: 'Webhook Response Body',
+      steps: [
+        'Body is the response payload returned to the caller.',
+        'Use JSON when the caller is another API or app.',
+        'Map workflow values with {{$json.field}}.',
+        'If body is empty, runtime falls back to the incoming body or full input object.'
+      ],
+      example: '{"success":true,"ticketId":"{{$json.ticketId}}"}'
+    },
+    headers: {
+      title: 'Webhook Response Headers',
+      steps: [
+        'Headers are optional response headers such as Content-Type, CORS, or Cache-Control.',
+        'Use key/value rows in the panel.',
+        'Runtime returns them as {{$json.headers}}.',
+        'Do not put request authentication headers here.'
       ],
       example: '{"Content-Type":"application/json"}'
     }
@@ -9192,6 +10365,143 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       example: 'deep_merge'
     }
   },
+  parallel: {
+    mode: {
+      title: 'How to choose Mode',
+      steps: [
+        'Mode records the parallel orchestration style for this point in the workflow.',
+        '',
+        'Choose Wait for all when every connected branch should conceptually finish before a later merge.',
+        'Choose Race (first completes) only when the first successful branch should decide the next path.',
+        '',
+        'Runtime output includes {{$json.mode}} and an empty {{$json.results}} placeholder. The Parallel node itself does not collect real branch output.',
+        'Connect branch lines on the canvas and use Merge when you need to recombine data.'
+      ],
+      example: 'all'
+    }
+  },
+  retry: {
+    maxAttempts: {
+      title: 'How to set Max Attempts',
+      steps: [
+        'Max Attempts is the retry count recorded for engine-level retry orchestration.',
+        '',
+        'Use 3 for most temporary API or network failures.',
+        'Use 1 when you only want the retry policy recorded without additional attempts.',
+        'Use higher values only when downstream work is safe to repeat.',
+        '',
+        'The runtime output includes {{$json.maxAttempts}} and {{$json.attempts}}. This node does not rerun the previous node by itself.'
+      ],
+      example: '3'
+    },
+    delayBetween: {
+      title: 'How to set Delay Between',
+      steps: [
+        'Delay Between is the wait time recorded between retry attempts, in milliseconds.',
+        '',
+        'Use 1000 for one second or 5000 for five seconds.',
+        'Map {{$json.retryDelayMs}} only when a previous node already provides a number.',
+        '',
+        'The executor reads delayBetween. Older configs named delay have no runtime effect.',
+        'Do not type seconds as 5 if you mean five seconds; enter 5000.'
+      ],
+      example: '1000'
+    },
+    backoff: {
+      title: 'How to choose Backoff',
+      steps: [
+        'Backoff records how retry delays should grow.',
+        '',
+        'None keeps the same delay each time.',
+        'Linear grows steadily.',
+        'Exponential grows faster and is best for rate limits or unstable third-party APIs.',
+        '',
+        'The executor reads backoff as none, linear, or exponential. Older backoffMultiplier values have no runtime effect.'
+      ],
+      example: 'exponential'
+    }
+  },
+  return: {
+    value: {
+      title: 'How to set Return Value',
+      steps: [
+        'Return Value is the payload sent back under {{$json.returnedValue}} when Include Input is off.',
+        '',
+        'Enter JSON such as {"success":true,"ticketId":"{{$json.ticketId}}"} or map a previous value such as {{$json.approvalResult}}.',
+        'If it is blank and Include Input is off, returnedValue is null.',
+        '',
+        'Do not map {{$json.value}} after this node. The real output key is {{$json.returnedValue}}.'
+      ],
+      example: '{"success":true,"ticketId":"{{$json.ticketId}}"}'
+    },
+    includeInput: {
+      title: 'How to use Include Input',
+      steps: [
+        'Include Input returns the entire incoming object under {{$json.returnedValue}}.',
+        '',
+        'Turn it on when a sub-workflow should return everything gathered so far.',
+        'Leave it off when Return Value should define the response.',
+        '',
+        'If Include Input is on, it takes precedence over Return Value. The two are not merged.'
+      ],
+      example: 'false'
+    }
+  },
+  execute_workflow: {
+    workflowId: {
+      title: 'How to set Workflow ID',
+      steps: [
+        'Workflow ID is the internal ID of the child workflow to run.',
+        '',
+        'Open the reusable child workflow and copy its ID from the workflow URL or workflow list record.',
+        'The child must be confirmed or active and must have a trigger node, even though Execute Workflow skips that trigger at runtime.',
+        '',
+        'Map a previous value such as {{$json.escalationWorkflowId}} only when that value is controlled by your workspace settings.',
+        'If this is blank, the node returns Workflow ID is required. If the ID is wrong, it returns Sub-workflow not found.'
+      ],
+      example: '123e4567-e89b-12d3-a456-426614174000'
+    },
+    input: {
+      title: 'How to set Input Data',
+      steps: [
+        'Input Data is the JSON payload the child workflow receives after its trigger is skipped.',
+        '',
+        'Use a small object with the fields the child expects, such as {"ticketId":"{{$json.ticketId}}","priority":"{{$json.priority}}"} .',
+        'Leave it blank when the child should receive the whole current node input.',
+        '',
+        'After Execute Workflow completes, the parent workflow reads child output from {{$json.result}}.',
+        'Do not expect input and legacy inputData to merge; input wins when both are present.'
+      ],
+      example: '{"ticketId":"{{$json.ticketId}}","customerEmail":"{{$json.customerEmail}}"}'
+    },
+    inputData: {
+      title: 'How to use legacy Input Data',
+      steps: [
+        'inputData is a backend-supported fallback used by older or generated workflow JSON.',
+        '',
+        'Use the visible Input Data field for new visual workflows.',
+        'If both input and inputData are present, the runtime uses input and ignores inputData.',
+        '',
+        'Keep the child workflow contract simple so the child can map fields like {{$json.ticketId}} without extra parsing.'
+      ],
+      example: '{"ticketId":"{{$json.ticketId}}"}'
+    }
+  },
+  timeout: {
+    limit: {
+      title: 'How to set Limit',
+      steps: [
+        'Limit is the elapsed workflow time threshold in milliseconds.',
+        '',
+        'Use 30000 for 30 seconds or 60000 for one minute.',
+        'The node compares workflow elapsed time at the moment it runs; it does not pause or cancel an API call already in progress.',
+        '',
+        'Output includes {{$json.elapsedMs}}, {{$json.limitMs}}, {{$json.timedOut}}, {{$json.originalInput}}, and {{$json.__routing.branch}}.',
+        'Invalid or non-positive values return INVALID_CONFIG.'
+      ],
+      example: '30000'
+    }
+  },
   webhook: {
     method: {
       title: 'How to choose HTTP Method?',
@@ -9508,30 +10818,14 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       title: 'ClickUp API Key – Step-by-Step',
       url: 'https://app.clickup.com',
       steps: [
-        'Step 1: Open ClickUp in your browser.',
-        '• Go to 👉 https://app.clickup.com and sign in with your account.',
-        '',
-        'Step 2: Navigate to the API settings.',
-        '• Click your avatar → "Settings" (gear icon).',
-        '• Go to "Apps" → "API".',
-        '• Or open 👉 app.clickup.com/settings/apps directly.',
-        '',
-        'Step 3: Locate your personal API token.',
-        '• On the API page you will see a token that starts with "pk_".',
-        '• Click the "Copy" button to copy it to your clipboard.',
-        '',
-        'Step 4: Paste the token into this node.',
-        '• In this workflow node, paste the value into the ClickUp API Key field.',
-        '• This token authorizes all ClickUp operations in this workflow.',
-        '',
-        'Step 5: Store and protect the token.',
-        '• Never commit the token to Git or share screenshots.',
-        '• Prefer environment variables or a secret manager for long‑term storage.',
-        '',
-        'Example:',
-        'pk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+        'Step 1: Open ClickUp in your browser and sign in.',
+        'Step 2: Go to Settings -> Apps -> API, or open app.clickup.com/settings/apps.',
+        'Step 3: Copy your personal API token from ClickUp.',
+        'Step 4: Store it in CtrlChecks Connections or the credential vault as the ClickUp service node account connection.',
+        'Step 5: Use direct apiKey/apiToken/token fields only as a legacy/debug fallback when the environment explicitly requires it.',
+        'The token authorizes ClickUp read, write, comment, and delete operations; keep it out of Prompt fields and normal workflow data.'
       ],
-      example: 'pk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+      example: '{{$credentials.clickup.apiKey}}'
     },
     operation: {
       title: 'How to choose Operation?',
@@ -10545,86 +11839,273 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
   },
   // Accounting
   xero: {
-    clientId: {
-      title: 'Xero Client ID – Step-by-Step',
-      url: 'https://developer.xero.com',
-      steps: [
-        '1️⃣ Open Xero Developer Portal',
-        '   Go to 👉 https://developer.xero.com',
-        '   Sign in with your Xero account',
-        '',
-        '2️⃣ Go to My Apps',
-        '   Click "My Apps" in top menu',
-        '   Or go to: developer.xero.com/myapps',
-        '',
-        '3️⃣ Create New App',
-        '   Click "New app"',
-        '   Choose "Web app" or "Public"',
-        '   Fill in app details',
-        '',
-        '4️⃣ Get Client ID',
-        '   After creating app',
-        '   Copy the "Client ID"',
-        '',
-        '5️⃣ Store Securely',
-        '   Paste it into the Client ID field above',
-        '   You\'ll also need Client Secret',
-        '',
-        'Example:',
-        'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
-      ],
-      example: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
-    },
-    clientSecret: {
-      title: 'Xero Client Secret – Step-by-Step',
-      url: 'https://developer.xero.com',
-      steps: [
-        '1️⃣ In Xero App Settings',
-        '   After creating app',
-        '   Find "Client Secret"',
-        '',
-        '2️⃣ Copy Client Secret',
-        '   Click "Show" to reveal',
-        '   Copy the secret',
-        '',
-        '3️⃣ Store Securely',
-        '   Paste it into the Client Secret field above',
-        '   Never share publicly',
-        '',
-        'Example:',
-        'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
-      ],
-      example: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
-    },
     accessToken: {
-      title: 'Xero OAuth Access Token – Step-by-Step',
+      title: 'How to get Xero Access Token?',
       url: 'https://developer.xero.com',
       steps: [
-        '1️⃣ Complete OAuth 2.0 Flow',
-        '   Use Client ID and Client Secret',
-        '   Redirect to Xero authorization',
-        '   User grants permissions',
-        '',
-        '2️⃣ Get Authorization Code',
-        '   After user authorizes',
-        '   You\'ll receive authorization code',
-        '',
-        '3️⃣ Exchange for Access Token',
-        '   POST to: https://identity.xero.com/connect/token',
-        '   Include: grant_type, code, redirect_uri',
-        '',
-        '4️⃣ Copy Access Token',
-        '   From OAuth response',
-        '   Copy the access_token',
-        '   ⚠️ Token expires - use refresh token',
-        '',
-        '5️⃣ Store Securely',
-        '   Paste it into the Access Token field above',
+        'Complete the Xero OAuth 2.0 authorization flow for your Xero app or use a saved CtrlChecks Xero connection.',
+        'Use the current access_token value only. Do not paste the client secret, refresh token, or the word Bearer here.',
+        'Xero access tokens expire, so production workflows should refresh the token or rely on a connection that refreshes it.',
+        'Runtime sends this value as Authorization: Bearer <accessToken>.',
         '',
         'Example:',
         'eyJhbGciOiJSUzI1NiIsImtpZCI6...'
       ],
       example: 'eyJhbGciOiJSUzI1NiIsImtpZCI6...'
+    },
+    tenantId: {
+      title: 'How to get Xero Tenant ID?',
+      url: 'https://developer.xero.com/documentation/guides/oauth2/tenants',
+      steps: [
+        'After OAuth authorization, call GET https://api.xero.com/connections with the access token.',
+        'Copy the tenantId for the organisation this workflow should access.',
+        'Use that GUID in Tenant ID. Runtime sends it as the Xero-Tenant-Id header.',
+        'Do not use an invoice ID, contact ID, or organisation display name here.'
+      ],
+      example: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+    },
+    resource: {
+      title: 'How to choose Xero Resource?',
+      steps: [
+        'Choose Contacts for customers and suppliers.',
+        'Choose Invoices for bills and sales invoices.',
+        'Choose Items for product or service catalog entries.',
+        'Choose Payments for payment records.',
+        'Choose Accounts for chart-of-account records.'
+      ],
+      example: 'invoices'
+    },
+    operation: {
+      title: 'How to choose Xero Operation?',
+      steps: [
+        'Get Many lists records and can use Where, Order, Page, Modified After, Include Archived, and Unit Decimal Places.',
+        'Get By ID fetches one record and requires Record ID.',
+        'Create sends Payload to Xero. Runtime wraps one payload object under the plural Xero resource key.',
+        'Update requires Record ID and Payload.'
+      ],
+      example: 'get_many'
+    },
+    recordId: {
+      title: 'How to use Xero Record ID?',
+      steps: [
+        'Fill Record ID for Get By ID and Update only.',
+        'Use the Xero GUID field returned by Xero, such as InvoiceID, ContactID, ItemID, PaymentID, or AccountID.',
+        'Map it from a previous Xero step with an expression like {{$json.InvoiceID}}.',
+        'A human invoice number is usually not the same as the Xero record GUID.'
+      ],
+      example: '{{$json.InvoiceID}}'
+    },
+    payload: {
+      title: 'How to write Xero Payload?',
+      steps: [
+        'Use a JSON object for Create or Update.',
+        'Enter one record object only. Runtime wraps it before sending it to Xero.',
+        'Contacts commonly need Name. Invoices commonly need Type, Contact, and LineItems.',
+        'Leave Payload empty for Get Many and Get By ID.'
+      ],
+      example: '{"Name":"Acme Supplies"}'
+    },
+    where: {
+      title: 'How to use Xero Where Filter?',
+      steps: [
+        'Use Xero where syntax for Get Many list filtering.',
+        'Examples include Status=="AUTHORISED", Name!=null, or AmountDue>0.',
+        'This is not SQL. Use the field names and expression syntax accepted by Xero.',
+        'Leave empty to list records without a where filter.'
+      ],
+      example: 'Status=="AUTHORISED"'
+    },
+    order: {
+      title: 'How to use Xero Order?',
+      steps: [
+        'Use a Xero field name followed by ASC or DESC.',
+        'Examples: Date DESC, Name ASC, UpdatedDateUTC DESC.',
+        'Only use this with Get Many.',
+        'Leave empty when the default Xero ordering is acceptable.'
+      ],
+      example: 'Date DESC'
+    },
+    page: {
+      title: 'How to use Xero Page?',
+      steps: [
+        'Use 1 for the first page. Runtime sends the page query parameter only when Page is greater than 1.',
+        'Xero returns up to 100 records per page.',
+        'The node reports pagination.hasMore when the returned page has 100 records.',
+        'Increment Page in a later run or loop when you need additional records.'
+      ],
+      example: '1'
+    },
+    modifiedAfter: {
+      title: 'How to use Xero Modified After?',
+      steps: [
+        'Use an ISO timestamp when syncing only records changed after a checkpoint.',
+        'Runtime sends this as the If-Modified-Since header.',
+        'A good value looks like 2026-04-01T00:00:00Z.',
+        'Leave empty for a normal list request.'
+      ],
+      example: '2026-04-01T00:00:00Z'
+    },
+    summarizeErrors: {
+      title: 'How to use Xero Summarize Errors?',
+      steps: [
+        'Leave enabled for easier validation-error messages from Xero.',
+        'Set false only when you need detailed Xero validation behavior.',
+        'This does not retry failed requests or change network errors.',
+        'Xero HTTP errors return success: false with error details.'
+      ],
+      example: 'true'
+    },
+    includeArchived: {
+      title: 'How to use Xero Include Archived?',
+      steps: [
+        'Enable this only when audits or migrations need archived or inactive records.',
+        'Runtime sends includeArchived=true for Get Many when enabled.',
+        'Not every Xero resource supports this query option.',
+        'Leave false for normal day-to-day accounting workflows.'
+      ],
+      example: 'false'
+    },
+    unitdp: {
+      title: 'How to use Xero Unit Decimal Places?',
+      steps: [
+        'Use 2 for normal accounting precision.',
+        'Use 4 when Xero should preserve high-precision unit pricing.',
+        'Runtime sends unitdp only when the value is not 2.',
+        'This is API precision, not display formatting.'
+      ],
+      example: '2'
+    }
+  },
+  workday: {
+    baseUrl: {
+      title: 'How to use Workday Base URL?',
+      steps: [
+        'Use the Workday REST API base URL for your tenant and environment.',
+        'A typical value includes the API path and tenant, such as https://wd2-impl-services1.workday.com/ccx/api/v1/mytenant.',
+        'If Base URL is empty, runtime builds a default URL from Tenant.',
+        'Use implementation, preview, and production URLs carefully because each tenant can have different data.'
+      ],
+      example: 'https://wd2-impl-services1.workday.com/ccx/api/v1/mytenant'
+    },
+    tenant: {
+      title: 'How to use Workday Tenant?',
+      steps: [
+        'Enter the Workday tenant identifier from your Workday administrator.',
+        'Runtime uses it to build the default Base URL when Base URL is blank.',
+        'The node also echoes tenant in output for troubleshooting.',
+        'Do not use an employee ID, organization ID, or display name here.'
+      ],
+      example: 'mytenant'
+    },
+    authType: {
+      title: 'How to choose Workday Auth Type?',
+      steps: [
+        'Choose OAuth 2.0 when using a Workday API client access token.',
+        'Choose Basic Auth when your Workday admin provided integration-system username and password credentials.',
+        'Runtime does not pre-validate blank auth fields before sending the request.',
+        'Workday authorization failures return success: false with an error string.'
+      ],
+      example: 'oauth2'
+    },
+    accessToken: {
+      title: 'How to use Workday Access Token?',
+      steps: [
+        'Fill this when Auth Type is OAuth 2.0.',
+        'Use the current Workday access token only. Runtime adds the Bearer prefix.',
+        'Prefer a saved connection or secure token source for production workflows.',
+        'Blank tokens are still sent as an empty Bearer header and Workday usually rejects the call.'
+      ],
+      example: 'eyJhbGciOi...'
+    },
+    username: {
+      title: 'How to use Workday Username?',
+      steps: [
+        'Fill this when Auth Type is Basic Auth.',
+        'Use the integration system user provided by Workday administration.',
+        'Pair it with Password. Runtime builds a Basic Authorization header from username:password.',
+        'Blank usernames are not rejected before the request is sent.'
+      ],
+      example: 'svc_account@tenant'
+    },
+    password: {
+      title: 'How to use Workday Password?',
+      steps: [
+        'Fill this when Auth Type is Basic Auth.',
+        'Use the password for the Workday integration system user.',
+        'Store it in a connection or credential-filled config where possible.',
+        'Do not reuse a personal Workday login password in workflow fields.'
+      ],
+      example: 'stored in connection'
+    },
+    resource: {
+      title: 'How to choose Workday Resource?',
+      steps: [
+        'Workers reads employee or contingent-worker records.',
+        'Jobs reads job profiles and job-related data.',
+        'Organizations and Supervisory Organizations read organisation structures.',
+        'Positions reads open or filled positions. Use Raw Path for endpoints outside these options.'
+      ],
+      example: 'workers'
+    },
+    operation: {
+      title: 'How to choose Workday Operation?',
+      steps: [
+        'Get Many sends GET with limit and offset query parameters.',
+        'Get By ID sends GET to the selected resource plus Record ID.',
+        'Create sends POST with Payload.',
+        'Update sends PATCH to the selected resource plus Record ID and Payload.'
+      ],
+      example: 'get_many'
+    },
+    recordId: {
+      title: 'How to use Workday Record ID?',
+      steps: [
+        'Fill Record ID for Get By ID and Update.',
+        'Use the ID accepted by the target Workday REST path.',
+        'Map it from a previous step such as {{$json.workerId}}.',
+        'Runtime does not pre-validate it, so blank or wrong IDs become Workday API errors.'
+      ],
+      example: '{{$json.workerId}}'
+    },
+    payload: {
+      title: 'How to write Workday Payload?',
+      steps: [
+        'Use JSON required by the target Workday endpoint.',
+        'Create sends this object as a POST body.',
+        'Update sends this object as a PATCH body.',
+        'Workday validates endpoint-specific fields; this node does not validate the payload schema first.'
+      ],
+      example: '{"workerType":"Employee"}'
+    },
+    limit: {
+      title: 'How to use Workday Limit?',
+      steps: [
+        'Use Limit with Get Many only.',
+        'Runtime appends it as the limit query parameter.',
+        'Choose a size supported by the Workday endpoint and small enough for downstream processing.',
+        'The output echoes it under pagination.limit.'
+      ],
+      example: '50'
+    },
+    offset: {
+      title: 'How to use Workday Offset?',
+      steps: [
+        'Use Offset with Get Many only.',
+        'Runtime appends it as the offset query parameter.',
+        'Use 0 for the first page, then increase by the page size for later pages.',
+        'The output echoes it under pagination.offset.'
+      ],
+      example: '0'
+    },
+    rawPath: {
+      title: 'How to use Workday Raw Path?',
+      steps: [
+        'Use Raw Path only for Workday REST paths not covered by the Resource dropdown.',
+        'Enter a path such as /workers/{{$json.workerId}}/staffingInformation.',
+        'Runtime appends Raw Path to Base URL and ignores Resource for URL construction.',
+        'Do not enter a full URL here; put the host and API root in Base URL.'
+      ],
+      example: '/workers/{{$json.workerId}}/staffingInformation'
     }
   },
   // Google Contacts
@@ -10961,191 +12442,105 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
     username: {
       title: 'How to get Bitbucket Username?',
       steps: [
-        'Your username is part of your Bitbucket profile.',
-        '',
-        'Steps:',
-        '• Log in to bitbucket.org',
-        '• Click your profile picture → Personal settings',
-        '• Copy your username from the account settings',
-        '',
-        'Tip: It also appears in your profile URL: bitbucket.org/USERNAME'
+        'Use this only when authenticating with a Bitbucket App Password.',
+        'Open Bitbucket -> Personal settings -> Account settings and copy the username/profile slug.',
+        'Leave Username blank when Access Token is filled because runtime prefers Bearer accessToken.',
+        'Do not use your email address unless it is truly your Bitbucket username.'
       ],
       example: 'your-username'
     },
     appPassword: {
       title: 'How to create a Bitbucket App Password?',
       steps: [
-        'App Passwords are required for API access.',
-        '',
-        'Steps:',
-        '• Go to Personal settings → App passwords',
-        '• Click "Create app password"',
-        '• Give it a label (e.g., "Automation Access")',
-        '• Enable required permissions (Repos, PRs, Issues)',
-        '• Click Create and copy the password',
-        '',
-        'Important: You cannot view it again, so store it securely.'
+        'Use this only with Username for Basic Auth.',
+        'Go to Bitbucket -> Personal settings -> App passwords.',
+        'Create an app password with repository read/write permissions for the operations this workflow will run.',
+        'Store it in Connections or the credential vault; do not use your Atlassian login password.',
+        'Leave this blank when Access Token is filled.'
       ],
-      example: 'app-password-from-bitbucket'
+      example: '{{$credentials.bitbucket.appPassword}}'
+    },
+    accessToken: {
+      title: 'How to set Bitbucket Access Token?',
+      steps: [
+        'Use this when your Bitbucket connection provides an OAuth access token.',
+        'Runtime uses Authorization: Bearer accessToken when this field is present.',
+        'If Access Token is blank, runtime falls back to Basic Auth with Username and App Password.',
+        'Keep the token in Connections or the credential vault.'
+      ],
+      example: '{{$credentials.bitbucket.accessToken}}'
     },
     operation: {
       title: 'How to choose Operation?',
       steps: [
-        'Operation defines what action the node should perform.',
-        '',
-        'Common choices:',
-        '• Get/List Repository',
-        '• Create/Update/Merge Pull Request',
-        '• List/Get Branches and Commits',
-        '• Get Pipeline status',
-        '',
-        'Tip: Choose the action that matches your workflow step.'
+        'The current Bitbucket node supports exactly four repository operations.',
+        'read: with Repo Slug filled, reads one repository; with Repo Slug blank, lists repositories in the workspace.',
+        'create: creates a repository and requires Workspace plus Repo Slug.',
+        'update: updates repository metadata and requires Workspace plus Repo Slug.',
+        'delete: deletes one repository and requires Workspace plus Repo Slug.',
+        'Pull requests, branches, commits, and pipelines are not implemented by this Bitbucket override.'
       ],
-      example: 'create_pr'
+      example: 'create'
     },
     workspace: {
-      title: 'How to get Workspace ID?',
+      title: 'How to get Workspace?',
       steps: [
-        'Workspace ID is the first part of the Bitbucket URL.',
-        '',
-        'Example URL:',
-        'bitbucket.org/WORKSPACE/repo-name',
-        '',
-        'The WORKSPACE part is what you need.',
-        'For personal repos, it is often your username.'
+        'Workspace is the first path segment in bitbucket.org/WORKSPACE/repo-name.',
+        'Enter only the slug, not the full URL.',
+        'Runtime requires workspace for every operation unless Repo is filled as workspace/repoSlug.',
+        'For personal repositories this may match your username.'
       ],
-      example: 'my-company-workspace'
+      example: 'acme-platform'
+    },
+    repoSlug: {
+      title: 'How to get Repository Slug?',
+      steps: [
+        'Repo Slug is the repository path segment after the workspace.',
+        'For bitbucket.org/acme-platform/api-service, enter api-service.',
+        'Required for create, update, and delete.',
+        'Optional for read; blank read lists repositories in the workspace.'
+      ],
+      example: 'api-service'
     },
     repo: {
-      title: 'How to get Repository Name?',
+      title: 'How to set Repo?',
       steps: [
-        'Open the repository in Bitbucket.',
-        '',
-        'Copy the repo name from:',
-        '• The page header, or',
-        '• The URL: bitbucket.org/workspace/REPO',
-        '',
-        'Tip: Use the repository slug, not the display title.'
+        'Repo is a legacy combined value that runtime splits into workspace and repoSlug.',
+        'Use workspace/repoSlug, for example acme-platform/api-service.',
+        'Prefer separate Workspace and Repository Slug fields in new workflows.',
+        'Do not put a GitHub owner/repo value here unless that same repo exists in Bitbucket.'
       ],
-      example: 'backend-api'
-    },
-    title: {
-      title: 'How to set Pull Request Title?',
-      steps: [
-        'Title is a short summary of what your PR does.',
-        '',
-        'Example: "Add login feature"',
-        'Tip: Keep it clear and action-focused.'
-      ],
-      example: 'Add login feature'
+      example: 'acme-platform/api-service'
     },
     description: {
-      title: 'How to set Pull Request Description?',
+      title: 'How to set Description?',
       steps: [
-        'Description is a longer explanation of the changes.',
-        '',
-        'Include:',
-        '• What changed',
-        '• Why it changed',
-        '• Testing steps (if any)'
+        'Description is used only by create/update when Data JSON is blank.',
+        'Runtime sends a default payload with scm git, is_private, and description.',
+        'If Data JSON is filled, Data replaces the default payload instead of merging with Description.',
+        'Use a short repository purpose such as "Backend API for customer portal".'
       ],
-      example: 'Adds login form, validation, and API integration.'
+      example: 'Backend API for customer portal.'
     },
-    sourceBranch: {
-      title: 'How to get Source Branch?',
+    isPrivate: {
+      title: 'How to choose Private Repository?',
       steps: [
-        'Source Branch is the branch where changes are made.',
-        '',
-        'Find it in the Branches list or your PR creation screen.',
-        'Example: feature/login'
+        'This boolean is used only by create/update when Data JSON is blank.',
+        'true creates/updates a private repository in the default payload.',
+        'false requests a public repository if your workspace allows it.',
+        'Runtime defaults this value to true when it is not supplied.'
       ],
-      example: 'feature/login'
+      example: 'true'
     },
-    destinationBranch: {
-      title: 'How to get Destination Branch?',
+    data: {
+      title: 'How to set Data JSON?',
       steps: [
-        'Destination Branch is the branch you want to merge into.',
-        '',
-        'Common choices: main or master.',
-        'Use the default branch if unsure.'
+        'Data is an optional raw object payload for create/update.',
+        'Leave it blank for the default payload: scm git, is_private, and description.',
+        'Use a JSON object if you need advanced Bitbucket repository fields.',
+        'Avoid quoted JSON strings; the runtime expects object-shaped data.'
       ],
-      example: 'main'
-    },
-    prId: {
-      title: 'How to get Pull Request ID?',
-      steps: [
-        'Open the pull request in Bitbucket.',
-        '',
-        'The PR ID is the number in the URL:',
-        'bitbucket.org/workspace/repo/pull-requests/123',
-        '',
-        'The number after /pull-requests/ is the ID.'
-      ],
-      example: '42'
-    },
-    comment: {
-      title: 'How to add a PR Comment?',
-      steps: [
-        'Type the exact comment text you want to post on the PR.',
-        '',
-        'Tip: Use this for approvals, feedback, or automated updates.'
-      ],
-      example: 'Looks good to me.'
-    },
-    mergeStrategy: {
-      title: 'How to choose Merge Strategy?',
-      steps: [
-        'Merge Strategy controls how commits are combined.',
-        '',
-        'Options:',
-        '• Merge Commit – keeps all commits',
-        '• Squash – combines into one commit',
-        '• Fast Forward – no merge commit if possible',
-        '',
-        'Choose based on your team’s Git workflow.'
-      ],
-      example: 'merge_commit'
-    },
-    branchName: {
-      title: 'How to set Branch Name?',
-      steps: [
-        'Branch Name is used for branch actions (create/get/delete).',
-        '',
-        'Example: feature/login',
-        'Tip: Use the exact branch name as shown in Bitbucket.'
-      ],
-      example: 'feature/login'
-    },
-    targetBranch: {
-      title: 'What is Target Branch?',
-      steps: [
-        'Target Branch is used as the base when creating a new branch, or for listing branches.',
-        '',
-        'Example: main',
-        'Tip: Use your default branch if unsure.'
-      ],
-      example: 'main'
-    },
-    commitSha: {
-      title: 'How to get Commit SHA?',
-      steps: [
-        'Commit SHA is the unique identifier for a commit.',
-        '',
-        'Find it in the commit history list or commit details page.',
-        'It looks like a short hash: a1b2c3d4'
-      ],
-      example: 'a1b2c3d4e5'
-    },
-    pipelineUuid: {
-      title: 'How to get Pipeline UUID?',
-      steps: [
-        'Open Pipelines in your repository.',
-        'Click a pipeline run to view details.',
-        '',
-        'The UUID appears in the URL and in API responses.',
-        'Example URL: .../results/UUID'
-      ],
-      example: 'pipeline-uuid'
+      example: '{"scm":"git","is_private":true,"description":"Project repo"}'
     }
   },
   docker: {
@@ -11289,6 +12684,1028 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         'Tip: Use tokens instead of real passwords when possible.'
       ],
       example: 'registry-token'
+    }
+  },
+
+  postgresql: {
+    operation: {
+      title: 'How to choose PostgreSQL Operation?',
+      steps: [
+        'Choose Execute Query for raw SQL with $1, $2 placeholders and Parameters.',
+        'Choose Insert to write Data into Table and return inserted rows.',
+        'Choose Update to change rows in Table that match Where.',
+        'Choose Delete to remove rows in Table that match Where.',
+        'Older saved values such as select/query do not match the worker; use executeQuery, insert, update, or delete.'
+      ],
+      example: 'executeQuery'
+    },
+    query: {
+      title: 'How to write PostgreSQL Query?',
+      steps: [
+        'Write PostgreSQL SQL exactly as it should run.',
+        'Use $1, $2, and later placeholders for changing values.',
+        'Put the matching values in Parameters as a JSON array.',
+        'Use SELECT for reads and RETURNING * on writes when the next step needs changed rows.'
+      ],
+      example: 'SELECT id, email FROM customers WHERE status = $1 LIMIT 50'
+    },
+    parameters: {
+      title: 'How to set PostgreSQL Parameters?',
+      steps: [
+        'Enter a JSON array in the same order as the SQL placeholders.',
+        'The first value fills $1, the second value fills $2, and so on.',
+        'Map values from earlier steps such as {{$json.customerId}}.',
+        'The worker now accepts this documented field as the params array.'
+      ],
+      example: '["active", "{{$json.customerId}}"]'
+    },
+    where: {
+      title: 'How to set PostgreSQL Where?',
+      steps: [
+        'Use a JSON object with exact-match column filters.',
+        'Update and Delete require this filter so the worker does not change every row.',
+        'Use stable IDs from earlier steps whenever possible.',
+        'Multiple keys are combined with AND.'
+      ],
+      example: '{"id":"{{$json.customerId}}"}'
+    }
+  },
+
+  mysql: {
+    operation: {
+      title: 'How to choose MySQL Operation?',
+      steps: [
+        'Choose Execute Query for raw SQL with ? placeholders and Parameters.',
+        'Choose Insert to write Data into Table.',
+        'Choose Update to change rows in Table that match Where.',
+        'Choose Delete to remove rows in Table that match Where.',
+        'The old select/filter/limit setup was not what the worker executed.'
+      ],
+      example: 'executeQuery'
+    },
+    query: {
+      title: 'How to write MySQL Query?',
+      steps: [
+        'Write valid MySQL SQL.',
+        'Use ? placeholders for changing values.',
+        'Put the matching values in Parameters as a JSON array.',
+        'Use a small LIMIT for preview/report queries.'
+      ],
+      example: 'SELECT id, email FROM customers WHERE status = ? LIMIT 50'
+    },
+    parameters: {
+      title: 'How to set MySQL Parameters?',
+      steps: [
+        'Enter a JSON array in the same order as the ? placeholders.',
+        'The first value fills the first ?, the second value fills the second ?.',
+        'Map values from earlier steps such as {{$json.customerId}}.',
+        'Use Parameters instead of pasting customer values directly into SQL.'
+      ],
+      example: '["active", "{{$json.customerId}}"]'
+    },
+    where: {
+      title: 'How to set MySQL Where?',
+      steps: [
+        'Use a JSON object with exact-match column filters.',
+        'Update and Delete require Where so the worker does not affect too many rows.',
+        'Use stable IDs from earlier steps whenever possible.',
+        'Multiple keys are combined with AND.'
+      ],
+      example: '{"id":"{{$json.customerId}}"}'
+    }
+  },
+
+  oracle_database: {
+    operation: {
+      title: 'How to choose Oracle Operation?',
+      steps: [
+        'Choose Select to read table rows with filters, sort, and limit.',
+        'Choose Insert, Update, or Insert or Update for mapped table writes.',
+        'Choose Delete only with a reviewed Delete Command and Row Filters.',
+        'Choose Execute SQL for custom SQL or PL/SQL with bind parameters.',
+        'Execute SQL statements must not end with a semicolon.'
+      ],
+      example: 'select'
+    },
+    selectRows: {
+      title: 'How to set Oracle Row Filters?',
+      steps: [
+        'Enter a JSON array of column/operator/value objects.',
+        'Use it as WHERE conditions for Select, Update, Delete, and as match keys for Insert or Update.',
+        'Update without Row Filters is blocked by the worker.',
+        'Use bind-style mapped values such as {{$json.employeeId}}.'
+      ],
+      example: '[{"column":"EMPLOYEE_ID","operator":"=","value":"{{$json.employeeId}}"}]'
+    },
+    statement: {
+      title: 'How to write Oracle SQL / PL/SQL Statement?',
+      steps: [
+        'Use this only with Execute SQL.',
+        'Write SQL or PL/SQL without a trailing semicolon.',
+        'Use bind variables such as :id or :1 for values.',
+        'Put bind values in Bind Parameters.'
+      ],
+      example: 'SELECT * FROM HR.EMPLOYEES WHERE EMPLOYEE_ID = :id'
+    }
+  },
+
+  pinecone: {
+    index: {
+      title: 'How to set Pinecone Index?',
+      steps: [
+        'For serverless indexes, paste the full index host URL from Pinecone index details.',
+        'It usually starts with https:// and ends with pinecone.io.',
+        'Do not use the dashboard/project URL.',
+        'Use namespaces to separate tenants or environments inside one index.'
+      ],
+      example: 'https://support-kb-abcd123.svc.us-east-1-aws.pinecone.io'
+    },
+    vector: {
+      title: 'How to set Pinecone Vector?',
+      steps: [
+        'Map the embedding array from an embedding model step, such as {{$json.embedding}}.',
+        'The array length must match the Pinecone index dimension.',
+        'Use Vector for Query and Upsert.',
+        'Do not paste the original text; Pinecone expects numbers.'
+      ],
+      example: '{{$json.embedding}}'
+    },
+    id: {
+      title: 'How to set Pinecone Vector ID?',
+      steps: [
+        'Use a stable ID for each document chunk or record.',
+        'Upsert replaces the vector with the same ID, so stable IDs prevent duplicates.',
+        'Delete removes the vector with this ID.',
+        'Build it from document ID plus chunk number when indexing text.'
+      ],
+      example: 'kb-returns-policy-0003'
+    }
+  },
+
+  qdrant: {
+    operation: {
+      title: 'How to choose Qdrant Operation?',
+      steps: [
+        'Choose Query/Search to search for similar vectors; the runtime value is query.',
+        'Choose Upsert to store or replace one point.',
+        'Choose Delete to remove one point by ID.',
+        'The old search and get_collection values are not accepted by the worker.'
+      ],
+      example: 'query'
+    },
+    url: {
+      title: 'How to set Qdrant URL?',
+      steps: [
+        'Paste the Qdrant API endpoint, not the dashboard page.',
+        'For Qdrant Cloud, copy the cluster URL from the cluster overview.',
+        'For local testing, use http://localhost:6333 if the worker can reach it.',
+        'Leave off the trailing slash.'
+      ],
+      example: 'https://support-search.us-east.aws.cloud.qdrant.io'
+    },
+    vector: {
+      title: 'How to set Qdrant Vector?',
+      steps: [
+        'Map an embedding array from an embedding model step.',
+        'The array length must match the collection vector size.',
+        'Use Vector for Query/Search and Upsert.',
+        'Upsert can auto-create a missing collection using this vector length.'
+      ],
+      example: '{{$json.embedding}}'
+    },
+    id: {
+      title: 'How to set Qdrant Point ID?',
+      steps: [
+        'Use a stable numeric or UUID-style ID for the point.',
+        'Upsert stores or replaces this point.',
+        'Delete removes this point.',
+        'Do not leave it blank for Upsert because the current runtime can fall back to point 1.'
+      ],
+      example: 'kb-returns-policy-0003'
+    }
+  },
+  redis: {
+    operation: {
+      title: 'How to choose Redis Operation?',
+      steps: [
+        'Use Get, Set, Delete, Incr, HGet, HSet, LPush, RPop, or Command exactly as shown in the dropdown.',
+        'The runtime validates the operation before connecting and returns an _error when the value is not supported.',
+        'Choose Command only for Redis commands that are not covered by the specific operations.',
+        'Set, HSet, and LPush require Value; HGet and HSet require Hash and Field; Command requires Command.'
+      ],
+      example: 'get'
+    },
+    host: {
+      title: 'How to set Redis Host?',
+      steps: [
+        'Use the Redis hostname without redis:// unless your provider specifically gives only a URL-style endpoint.',
+        'Local Redis usually uses localhost with port 6379.',
+        'Managed Redis providers usually show the host, port, password, database number, and TLS requirement in the connection details.',
+        'The worker requires Host; missing Host fails before any Redis command runs.'
+      ],
+      example: 'redis-cache.example.com'
+    },
+    port: {
+      title: 'How to set Redis Port?',
+      steps: [
+        'Use 6379 for a normal Redis endpoint unless your provider gives a different port.',
+        'Use the TLS port when TLS is enabled by the provider.',
+        'The runtime accepts only numbers from 1 through 65535.',
+        'Keep Host and Port as separate fields.'
+      ],
+      example: '6379'
+    },
+    key: {
+      title: 'How to set Redis Key?',
+      steps: [
+        'Provide the exact Redis key for Get, Set, Delete, Incr, LPush, or RPop.',
+        'Use a stable prefix such as customer:{{$json.customerId}} so keys do not collide.',
+        'The runtime requires Key for these operations and returns an _error when it is blank.',
+        'Hash operations use Hash and Field instead of Key.'
+      ],
+      example: 'session:{{$json.sessionId}}'
+    },
+    command: {
+      title: 'How to set Redis Command?',
+      steps: [
+        'Use Command only when a specific operation does not exist in the dropdown.',
+        'Type the Redis command name such as EXPIRE, TTL, or ZADD.',
+        'Put command arguments in Args as a JSON array.',
+        'The runtime returns the raw command result in result.'
+      ],
+      example: 'TTL'
+    }
+  },
+  sql_server: {
+    operation: {
+      title: 'How to choose SQL Server Operation?',
+      steps: [
+        'Use Execute Query for raw T-SQL or for a generated SELECT TOP query when Table is set and Query is blank.',
+        'Use Insert, Update, Delete, or Stored Procedure for structured operations.',
+        'The worker also accepts legacy aliases query, rawSql, raw_sql, and select as Execute Query.',
+        'Unsupported values fail with an operation validation error before a query is sent.'
+      ],
+      example: 'executeQuery'
+    },
+    host: {
+      title: 'How to set SQL Server Host?',
+      steps: [
+        'Use the server hostname or IP address, without the database name.',
+        'Azure SQL usually looks like company.database.windows.net.',
+        'Keep Port in the Port field; SQL Server defaults to 1433.',
+        'Host, Database, Username, and Password are required by the runtime.'
+      ],
+      example: 'orders.database.windows.net'
+    },
+    query: {
+      title: 'How to set SQL Server Query?',
+      steps: [
+        'Use Query for Execute Query and write valid T-SQL.',
+        'Named parameters can be supplied with Params or Parameters JSON.',
+        'For Execute Query, you may leave Query blank when Table is set; the runtime generates SELECT TOP from Table and Limit.',
+        'Do not put Insert or Update row objects here; use Data JSON for those operations.'
+      ],
+      example: 'SELECT TOP 50 * FROM dbo.Orders WHERE status = @status'
+    },
+    data: {
+      title: 'How to set SQL Server Data?',
+      steps: [
+        'Use Data JSON for Insert and Update row values.',
+        'Each key must match a table column that the database user can write.',
+        'The runtime accepts Data as an object or a JSON string.',
+        'Update also needs Where JSON so the runtime can build a safe WHERE clause.'
+      ],
+      example: '{"status":"paid","updated_at":"{{$now}}"}'
+    },
+    where: {
+      title: 'How to set SQL Server Where?',
+      steps: [
+        'Use Where JSON for Update and Delete filters.',
+        'Each key becomes an equality condition joined with AND.',
+        'The runtime refuses Update and Delete when Where is missing or empty.',
+        'Filters is accepted as a backend alias, but the UI field is Where.'
+      ],
+      example: '{"id":"{{$json.orderId}}"}'
+    }
+  },
+  timescaledb: {
+    operation: {
+      title: 'How to choose TimescaleDB Operation?',
+      steps: [
+        'Use Execute Query for raw PostgreSQL SQL against TimescaleDB.',
+        'Use Insert, Update, and Delete for table writes.',
+        'Use Time Bucket, First, or Last for the runtime time-series helpers.',
+        'The old UI values select and query are not runtime operations for this node.'
+      ],
+      example: 'timeBucket'
+    },
+    query: {
+      title: 'How to set TimescaleDB Query?',
+      steps: [
+        'Use Query only with Execute Query.',
+        'Write PostgreSQL-compatible SQL that TimescaleDB can run.',
+        'Use Params JSON for ordered PostgreSQL parameters when needed.',
+        'For time-series helpers, use Table, Time Column, Interval, Bucket Column, and Value Column instead.'
+      ],
+      example: 'SELECT time, device_id, temperature FROM metrics WHERE time > now() - interval \'1 hour\''
+    },
+    table: {
+      title: 'How to set TimescaleDB Table?',
+      steps: [
+        'Use the hypertable or table name for Insert, Update, Delete, Time Bucket, First, and Last.',
+        'Include a schema prefix when the table is not on the default search path.',
+        'The runtime does not quote or discover table names for you.',
+        'Keep SQL expressions out of Table; use Query when you need custom SQL.'
+      ],
+      example: 'public.sensor_readings'
+    },
+    timeColumn: {
+      title: 'How to set TimescaleDB Time Column?',
+      steps: [
+        'Use the timestamp column that TimescaleDB should bucket or order by.',
+        'Time Bucket, First, and Last require Time Column.',
+        'The column should be indexed or be the hypertable time column for good performance.',
+        'Do not include SQL functions here; provide only the column name.'
+      ],
+      example: 'recorded_at'
+    },
+    bucketColumn: {
+      title: 'How to set TimescaleDB Bucket Column?',
+      steps: [
+        'Use Bucket Column with Time Bucket to group counts by another dimension.',
+        'Typical values are device_id, customer_id, region, or sensor_id.',
+        'The current runtime requires Bucket Column for Time Bucket.',
+        'Use Query instead if you need a pure time-only bucket query.'
+      ],
+      example: 'device_id'
+    }
+  },
+  aws_s3: {
+    operation: {
+      title: 'How to choose AWS S3 Operation?',
+      steps: [
+        'Use Get, Put, List, or Delete in the UI.',
+        'The runtime normalizes Get to download and Put to upload.',
+        'Bucket is required for every operation; Key is required for Get, Put, and Delete.',
+        'Upload data can come from Data Base64, Data, or Content.'
+      ],
+      example: 'put'
+    },
+    bucket: {
+      title: 'How to set AWS S3 Bucket?',
+      steps: [
+        'Use the bucket name only, without s3:// and without a folder path.',
+        'The AWS credentials must allow the selected operation on this bucket.',
+        'For List, Prefix controls which folder-like path is returned.',
+        'The runtime returns _error when Bucket is missing.'
+      ],
+      example: 'customer-exports-prod'
+    },
+    key: {
+      title: 'How to set AWS S3 Key?',
+      steps: [
+        'Use the full object key inside the bucket, including any folder prefixes.',
+        'Get, Put, and Delete require Key.',
+        'Use workflow expressions for dynamic filenames.',
+        'Do not start with s3://bucket/ because Bucket is already a separate field.'
+      ],
+      example: 'exports/{{$json.customerId}}/invoice.pdf'
+    },
+    dataBase64: {
+      title: 'How to set AWS S3 Data Base64?',
+      steps: [
+        'Use Data Base64 when uploading binary content that has already been encoded.',
+        'The runtime decodes this value before sending the object to S3.',
+        'For plain text or JSON uploads, use Data or Content instead.',
+        'Put fails when none of Data Base64, Data, or Content is provided.'
+      ],
+      example: '{{$json.fileBase64}}'
+    },
+    contentType: {
+      title: 'How to set AWS S3 Content Type?',
+      steps: [
+        'Use a MIME type that matches the object you upload.',
+        'Examples include application/json, text/csv, image/png, and application/pdf.',
+        'The runtime stores this as object metadata on upload.',
+        'Leave blank only when S3 can safely infer or the content type does not matter.'
+      ],
+      example: 'application/pdf'
+    }
+  },
+  dropbox: {
+    operation: {
+      title: 'How to choose Dropbox Operation?',
+      steps: [
+        'Use Read, Upload, List, or Delete in the UI.',
+        'The runtime normalizes Read to download.',
+        'Read, Upload, and Delete require Path; List can use Path as the folder to list.',
+        'Upload data can come from Data Base64, Data, or Content.'
+      ],
+      example: 'read'
+    },
+    accessToken: {
+      title: 'How to set Dropbox Access Token?',
+      steps: [
+        'Prefer a saved Dropbox connection so the worker can load the token from the credential vault.',
+        'Use Access Token only as a direct fallback for this node.',
+        'The token must have the Dropbox scopes needed for the selected file operation.',
+        'The runtime returns an access token not found error when neither source exists.'
+      ],
+      example: '{{$credentials.dropbox.accessToken}}'
+    },
+    path: {
+      title: 'How to set Dropbox Path?',
+      steps: [
+        'Use an absolute Dropbox path that starts with a slash.',
+        'Read, Upload, and Delete require Path.',
+        'For List, leave Path blank or use a folder path such as /exports.',
+        'Use expressions for dynamic filenames and keep folder names exactly as they appear in Dropbox.'
+      ],
+      example: '/exports/{{$json.fileName}}.csv'
+    },
+    dataBase64: {
+      title: 'How to set Dropbox Data Base64?',
+      steps: [
+        'Use Data Base64 when uploading binary content encoded by an earlier node.',
+        'The runtime decodes the value before sending it to Dropbox.',
+        'For plain text, use Data or Content instead.',
+        'Upload fails when none of Data Base64, Data, or Content is provided.'
+      ],
+      example: '{{$json.fileBase64}}'
+    },
+    recursive: {
+      title: 'How to set Dropbox Recursive?',
+      steps: [
+        'Enable Recursive only for List when subfolders should be included.',
+        'Large Dropbox folders can return many items, so use it intentionally.',
+        'Recursive does not affect Read, Upload, or Delete.',
+        'The runtime returns items, cursor, and hasMore for list responses.'
+      ],
+      example: 'false'
+    }
+  },
+  read_binary_file: {
+    sourceType: {
+      title: 'How to choose Read Source?',
+      steps: [
+        'Choose Workflow File Asset for files created by Write Binary File.',
+        'Choose Server Storage Path only for trusted files under the backend binary storage root.',
+        'Cloud links are not valid here; use the matching cloud connector first.',
+        'The output is always file metadata plus dataBase64 when the read succeeds.'
+      ],
+      example: 'assetId'
+    },
+    assetId: {
+      title: 'How to set Asset ID?',
+      steps: [
+        'Map the Asset ID returned by Write Binary File.',
+        'Use {{$json.assetId}} when the previous node wrote the file and Persist Metadata was enabled.',
+        'The runtime looks this ID up in workflow_file_assets.',
+        'If the ID is missing or stale, the read returns a file asset not found error.'
+      ],
+      example: '{{$json.assetId}}'
+    },
+    filePath: {
+      title: 'How to set Storage Path?',
+      steps: [
+        'Use this only for files under the backend binary storage root.',
+        'Enter a relative path such as reports/report.pdf.',
+        'Do not paste Google Drive, Dropbox, S3, OneDrive, public, or local desktop URLs.',
+        'Unsafe paths outside the storage root are rejected.'
+      ],
+      example: 'reports/report.pdf'
+    }
+  },
+  write_binary_file: {
+    dataBase64: {
+      title: 'How to set Binary Data?',
+      steps: [
+        'Map the file body from a previous node, usually {{$json.dataBase64}}.',
+        'Base64 and data URLs are best for PDFs, images, and Office files.',
+        'Plain text is accepted when you want to create a text, CSV, JSON, or HTML file.',
+        'The node returns assetId plus normalized dataBase64 for later nodes.'
+      ],
+      example: '{{$json.dataBase64}}'
+    },
+    fileName: {
+      title: 'How to set File Name?',
+      steps: [
+        'Use a file name with the correct extension.',
+        'The name helps infer MIME type and gives downstream uploads or attachments a readable name.',
+        'You can build dynamic names from earlier data.',
+        'Avoid absolute paths here; use Folder or Custom Storage Path for storage placement.'
+      ],
+      example: 'invoice-{{$json.invoiceId}}.pdf'
+    },
+    persist: {
+      title: 'How to set Persist Metadata?',
+      steps: [
+        'Keep this enabled when a later Read Binary File node should use Asset ID.',
+        'Disable only for temporary files that will be handled immediately by storageKey or filePath.',
+        'When enabled, the runtime saves workflow_file_assets metadata.',
+        'The output includes metadataPersisted and may include metadataError if the file wrote but metadata save failed.'
+      ],
+      example: 'true'
+    }
+  },
+  ftp: {
+    operation: {
+      title: 'How to choose FTP Operation?',
+      steps: [
+        'Use Get File to download, Put File to upload, List Files to inspect a folder, or Delete File to remove one file.',
+        'Generated configs may use download/upload aliases, but the visual panel uses get/put.',
+        'Remote Path is required for every operation.',
+        'Put File also needs Content, Data Base64, or File Data.'
+      ],
+      example: 'get'
+    },
+    host: {
+      title: 'How to set FTP Host?',
+      steps: [
+        'Enter only the FTP server hostname or IP address.',
+        'Do not include ftp:// or the remote folder path.',
+        'Get it from your hosting panel, FTP account settings, or partner transfer instructions.',
+        'Use SFTP instead when the server supports SSH-based transfer.'
+      ],
+      example: 'ftp.fulfillment-partner.com'
+    },
+    remotePath: {
+      title: 'How to set FTP Remote Path?',
+      steps: [
+        'Use a file path for Get, Put, and Delete.',
+        'Use a folder path for List.',
+        'Paths may be absolute, starting with /, or relative if the FTP account allows it.',
+        'Do not include the server host in this field.'
+      ],
+      example: '/incoming/orders.csv'
+    },
+    content: {
+      title: 'How to set FTP Content?',
+      steps: [
+        'Fill this only for Put File.',
+        'Use plain text for text/CSV/JSON files.',
+        'Use {{$json.dataBase64}} for PDFs, images, spreadsheets, or files downloaded earlier.',
+        'Leaving all upload body fields empty makes Put fail.'
+      ],
+      example: '{{$json.dataBase64}}'
+    }
+  },
+  sftp: {
+    operation: {
+      title: 'How to choose SFTP Operation?',
+      steps: [
+        'Use Get File to download, Put File to upload, List Files to inspect a folder, or Delete File to remove one file.',
+        'Generated configs may use download/upload aliases, but the visual panel uses get/put.',
+        'Remote Path is required for every operation.',
+        'Put File also needs Content, Data Base64, or File Data.'
+      ],
+      example: 'get'
+    },
+    host: {
+      title: 'How to set SFTP Host?',
+      steps: [
+        'Enter only the SSH/SFTP server hostname or IP address.',
+        'Do not include sftp:// or the remote folder path.',
+        'Get it from the server admin, hosting panel, or partner transfer instructions.',
+        'SFTP uses SSH, usually on port 22.'
+      ],
+      example: 'sftp.payroll-vendor.com'
+    },
+    privateKey: {
+      title: 'How to set SFTP Private Key?',
+      steps: [
+        'Use Private Key only when the SFTP account authenticates with an SSH key.',
+        'Paste the full private key including BEGIN and END lines, preferably in a saved connection.',
+        'Leave Password blank when key-only authentication is required.',
+        'Use Passphrase only when the private key itself is encrypted.'
+      ],
+      example: '-----BEGIN OPENSSH PRIVATE KEY-----'
+    },
+    remotePath: {
+      title: 'How to set SFTP Remote Path?',
+      steps: [
+        'Use a file path for Get, Put, and Delete.',
+        'Use a folder path for List.',
+        'Absolute paths start with /; some servers also allow home-relative paths.',
+        'Do not include the server host in this field.'
+      ],
+      example: '/daily/transactions.csv'
+    }
+  },
+  onedrive: {
+    operation: {
+      title: 'How to choose OneDrive Operation?',
+      steps: [
+        'Use Read to download, Upload to write, List to inspect a folder, or Delete to remove one item.',
+        'Read is normalized to download inside the runtime.',
+        'Read and Upload require Path.',
+        'Delete can use File ID or Path.'
+      ],
+      example: 'read'
+    },
+    path: {
+      title: 'How to set OneDrive Path?',
+      steps: [
+        'Use a OneDrive path under the signed-in user drive.',
+        'Include the final file name for Read and Upload.',
+        'The runtime normalizes missing leading slashes.',
+        'Do not paste a sharing URL; use a path such as /Reports/report.pdf.'
+      ],
+      example: '/Reports/month-end.xlsx'
+    },
+    fileId: {
+      title: 'How to set OneDrive File ID?',
+      steps: [
+        'Use File ID for Delete when a previous OneDrive list or upload returned an item ID.',
+        'Read and Upload use Path in the current runtime.',
+        'File ID is useful when the item path may have changed.',
+        'Leave it blank when deleting by exact Path.'
+      ],
+      example: '01ABC123DEF456'
+    },
+    content: {
+      title: 'How to set OneDrive Upload Content?',
+      steps: [
+        'Fill this only for Upload.',
+        'Use {{$json.dataBase64}} for PDFs, images, Office files, or downloaded files.',
+        'Plain text is accepted for text, CSV, JSON, and HTML files.',
+        'Upload fails when content, dataBase64, and data are all empty.'
+      ],
+      example: '{{$json.dataBase64}}'
+    }
+  },
+  ai_agent: {
+    userInput: {
+      title: 'How to set AI Agent User Input?',
+      steps: [
+        'Map the exact message or task the agent should answer, such as {{$json.message}}.',
+        'Leave it blank only when the previous node already sends message, text, input, content, query, prompt, or userInput.',
+        'Objects can be stringified by the runtime, so map the precise customer question or document text when possible.',
+        'The answer is returned as response_text, and JSON/key-value modes may also fill response_json.'
+      ],
+      example: '{{$json.message}}'
+    },
+    model: {
+      title: 'How to choose AI Agent Model?',
+      steps: [
+        'Choose the model that matches the provider key available to the workflow.',
+        'gemini models use Gemini wallet/key-pool access; claude models use Anthropic; gpt models use OpenAI.',
+        'If the matching provider key is missing, Gemini paths return _error and other provider calls may fail the node.',
+        'Changing the model does not change the System Prompt or output format.'
+      ],
+      example: 'gemini-3.5-flash'
+    },
+    systemPrompt: {
+      title: 'How to set AI Agent System Prompt?',
+      steps: [
+        'Write the role, task, boundaries, and response format the model should follow.',
+        'Include business rules such as tone, escalation policy, or required JSON keys.',
+        'Use expressions like {{$json.policy}} only for business context, never API keys or secrets.',
+        'A weak prompt can produce output that downstream nodes cannot map reliably.'
+      ],
+      example: 'Classify the support request and return JSON with category and priority.'
+    },
+    outputFormat: {
+      title: 'How to choose AI Agent Output Format?',
+      steps: [
+        'Use text for normal replies, json for structured objects, keyvalue for colon-separated lines, and markdown for formatted human-readable output.',
+        'Tell the model the same format in System Prompt; the dropdown only controls output packaging.',
+        'If JSON parsing fails, the runtime wraps the raw answer as response_json.content.',
+        'Downstream nodes usually map response_text or response_json fields.'
+      ],
+      example: 'json'
+    },
+    includeReasoning: {
+      title: 'How to use Include Reasoning?',
+      steps: [
+        'Turn this on when you want provider/model metadata for debugging or audit logs.',
+        'The runtime adds a reasoning object with steps, provider, and model.',
+        'It does not expose private chain-of-thought.',
+        'Leave it off for cleaner production output.'
+      ],
+      example: 'false'
+    }
+  },
+  ai_chat_model: {
+    prompt: {
+      title: 'How to set AI Chat Model Prompt?',
+      steps: [
+        'Enter the question or instruction Gemini should answer, or map it from a previous node such as {{$json.emailBody}}.',
+        'If the prompt is static and upstream text exists, the runtime may use the static prompt as system context and upstream text as the user message.',
+        'A blank effective prompt returns _error: AI Chat Model node: prompt is required.',
+        'Use Response Format json only when your prompt clearly asks for valid JSON.'
+      ],
+      example: 'Summarize {{$json.emailBody}} as JSON.'
+    },
+    model: {
+      title: 'How to choose AI Chat Model Model?',
+      steps: [
+        'The dropdown is visible, but the current executor hardcodes gemini-3.5-flash.',
+        'Leave it at gemini-3.5-flash for now.',
+        'Use AI Agent or a provider-specific node if you need a different model today.',
+        'The output model field reports the actual adapter model.'
+      ],
+      example: 'gemini-3.5-flash'
+    },
+    responseFormat: {
+      title: 'How to choose AI Chat Model Response Format?',
+      steps: [
+        'Choose text for normal answers or json when the next node needs structured values.',
+        'JSON mode attempts JSON.parse on the model text.',
+        'If parsing fails, response falls back to raw text instead of throwing.',
+        'Add JSON-only instructions to Prompt or System Prompt for reliable mapping.'
+      ],
+      example: 'json'
+    }
+  },
+  anthropic_claude: {
+    apiKey: {
+      title: 'How to set Anthropic API Key?',
+      steps: [
+        'Prefer a saved Anthropic connection in CtrlChecks Connections so the key stays in the credential vault.',
+        'The runtime can also use apiKey, accessToken, token, or a saved anthropic vault credential.',
+        'Use a key that has access to the selected Claude model.',
+        'Never paste the key into Prompt, Messages, or customer data.'
+      ],
+      url: 'https://console.anthropic.com/settings/keys',
+      example: '{{$credentials.anthropic.apiKey}}'
+    },
+    prompt: {
+      title: 'How to set Claude Prompt?',
+      steps: [
+        'Use Prompt for normal UI workflows and map source text with expressions such as {{$json.contractText}}.',
+        'Prompt wins over Messages when both are present.',
+        'If Prompt and Messages are both empty, the node has no useful content to send.',
+        'Successful output contains response/model/usage/finishReason and does not preserve incoming fields.'
+      ],
+      example: 'List the top risks in {{$json.contractText}}.'
+    },
+    messages: {
+      title: 'How to set Claude Messages?',
+      steps: [
+        'Use Messages only for generated or API-created configs that already have a chat-message array.',
+        'The executor joins message content into a prompt only when Prompt is blank.',
+        'Use JSON objects with content fields, or map a prepared array from upstream.',
+        'Do not fill both Prompt and Messages expecting both to be sent.'
+      ],
+      example: '[{"role":"user","content":"{{$json.question}}"}]'
+    },
+    temperature: {
+      title: 'How to use Claude Temperature?',
+      steps: [
+        'This field is visible but the current anthropic_claude executor does not pass it to the adapter.',
+        'Leave it at the default for compatibility.',
+        'Use Prompt and Model to control behavior today.',
+        'Do not rely on Temperature or Memory for deterministic Claude output until the worker changes.'
+      ],
+      example: '0.7'
+    }
+  },
+  chat_model: {
+    temperature: {
+      title: 'How to set Chat Model Temperature?',
+      steps: [
+        'Temperature is the only visible field the current chat_model executor reads.',
+        'The node returns it inside a config object with provider gemini and model gemini-3.5-flash.',
+        'It does not generate a response by itself.',
+        'Use AI Chat Model, AI Agent, or a provider-specific node when temperature must affect generated text.'
+      ],
+      example: '0.7'
+    },
+    prompt: {
+      title: 'How to use Chat Model Prompt?',
+      steps: [
+        'The Prompt field is visible but ignored by the current chat_model executor.',
+        'Do not put production instructions here expecting a model response.',
+        'Move real prompts to AI Chat Model, AI Agent, Anthropic Claude, Google Gemini, OpenAI GPT, or Cohere.',
+        'Chat Model output is config only: provider, model, temperature, and _chat_model_config.'
+      ],
+      example: 'You are a helpful assistant.'
+    }
+  },
+  cohere: {
+    apiKey: {
+      title: 'How to set Cohere API Key?',
+      steps: [
+        'Create a Cohere API key in the Cohere dashboard and store it through a secure credential mapping.',
+        'The current executor reads the apiKey field directly and sends it as a Bearer token.',
+        'If empty, output is success=false with error: Cohere apiKey is required.',
+        'Never paste the key into Prompt, Preamble, or ordinary workflow data.'
+      ],
+      url: 'https://dashboard.cohere.com',
+      example: '{{$credentials.cohere.apiKey}}'
+    },
+    prompt: {
+      title: 'How to set Cohere Prompt?',
+      steps: [
+        'Enter the user message or task, or map text from upstream with {{$json.text}}.',
+        'If Prompt is static and upstream text exists, the runtime may use upstream text as the message and Prompt as preamble.',
+        'Blank prompt with no upstream message returns success=false with error: prompt is required.',
+        'Use Preamble for standing instructions and Prompt for the actual task.'
+      ],
+      example: 'Summarize {{$json.ticketBody}}.'
+    },
+    preamble: {
+      title: 'How to set Cohere Preamble?',
+      steps: [
+        'Use Preamble for system-style instructions such as tone, format, or role.',
+        'It shapes the response but is not returned as a separate output field.',
+        'Leave it blank for a simple one-off prompt.',
+        'Do not put the API key or customer secrets in Preamble.'
+      ],
+      example: 'Be concise and factual.'
+    },
+    maxTokens: {
+      title: 'How to set Cohere Max Tokens?',
+      steps: [
+        'Enter the maximum response length Cohere should generate.',
+        'Use smaller values for labels, titles, or short summaries; larger values for longer reports.',
+        'Validation requires at least 1.',
+        'Large limits can increase cost and latency.'
+      ],
+      example: '512'
+    }
+  },
+  schedulewise: {
+    operation: {
+      title: 'ScheduleWise Operation',
+      steps: [
+        'Choose getSchedules to list appointments, createAppointment to book a slot, updateAppointment to change a slot or status, or deleteAppointment to remove a slot.',
+        'Runtime accepts only those four values.',
+        'The selected value is returned as {{$json.operation}}.',
+        'Invalid values return INVALID_OPERATION.'
+      ],
+      example: 'getSchedules'
+    },
+    credentialId: {
+      title: 'ScheduleWise Credential Reference',
+      steps: [
+        'Use this as a reference label only.',
+        'Runtime looks up the saved schedulewise credential from Connections and does not use this as the secret value.',
+        'Store API Base URL plus accessToken or apiKey in the credential vault.',
+        'Do not paste the API key or access token into this field.'
+      ],
+      example: 'prod-schedulewise'
+    },
+    dateFrom: {
+      title: 'ScheduleWise Date From',
+      steps: [
+        'Used by Get Schedules as the earliest appointment date.',
+        'Use ISO 8601 such as 2026-07-20 or map {{$json.startDate}}.',
+        'Runtime sends this as the dateFrom query parameter.',
+        'Leave blank to send no lower date filter.'
+      ],
+      example: '{{$json.startDate}}'
+    },
+    dateTo: {
+      title: 'ScheduleWise Date To',
+      steps: [
+        'Used by Get Schedules as the latest appointment date.',
+        'Use ISO 8601 such as 2026-07-21 or map {{$json.endDate}}.',
+        'Runtime sends this as the dateTo query parameter.',
+        'Make sure it is not earlier than Date From.'
+      ],
+      example: '{{$json.endDate}}'
+    },
+    patientId: {
+      title: 'ScheduleWise Patient ID',
+      steps: [
+        'Use the exact ScheduleWise patient record ID.',
+        'Get Schedules uses it as a filter; Create Appointment sends it in the body.',
+        'Map it from intake data with {{$json.patientId}}.',
+        'Use the ID, not the patient display name.'
+      ],
+      example: '{{$json.patientId}}'
+    },
+    staffId: {
+      title: 'ScheduleWise Staff ID',
+      steps: [
+        'Use the ScheduleWise staff or provider ID.',
+        'Get Schedules can filter by staff; Create and Update can assign staff.',
+        'Map it from routing logic with {{$json.staffId}}.',
+        'Use the provider ID, not the email or name unless ScheduleWise expects that.'
+      ],
+      example: '{{$json.staffId}}'
+    },
+    appointmentId: {
+      title: 'ScheduleWise Appointment ID',
+      steps: [
+        'Required for Update Appointment and Delete Appointment.',
+        'Runtime builds /appointments/{appointmentId} with this value.',
+        'Map it from Get Schedules, Create Appointment, or an incoming webhook.',
+        'Do not use patientId or staffId here.'
+      ],
+      example: '{{$json.appointmentId}}'
+    },
+    startDateTime: {
+      title: 'ScheduleWise Start Date/Time',
+      steps: [
+        'Used when creating or rescheduling an appointment.',
+        'Use an ISO timestamp with timezone.',
+        'Example: 2026-07-20T09:00:00Z.',
+        'Map it from a selected slot with {{$json.startDateTime}}.'
+      ],
+      example: '{{$json.startDateTime}}'
+    },
+    endDateTime: {
+      title: 'ScheduleWise End Date/Time',
+      steps: [
+        'Used when creating or changing appointment duration.',
+        'Use an ISO timestamp with timezone.',
+        'Example: 2026-07-20T09:30:00Z.',
+        'Keep it later than Start Date/Time.'
+      ],
+      example: '{{$json.endDateTime}}'
+    },
+    serviceType: {
+      title: 'ScheduleWise Service Type',
+      steps: [
+        'Service type describes the appointment, such as consultation or follow-up.',
+        'Create Appointment sends it in the request body.',
+        'Use the exact value your ScheduleWise setup expects.',
+        'Map it from a booking form with {{$json.serviceType}}.'
+      ],
+      example: 'consultation'
+    },
+    notes: {
+      title: 'ScheduleWise Notes',
+      steps: [
+        'Notes are optional scheduling context sent on create or update.',
+        'Map safe notes with {{$json.notes}} or type a concise message.',
+        'Avoid secrets or unnecessary sensitive details.',
+        'Blank notes are omitted or left unchanged on update.'
+      ],
+      example: 'Patient requested morning slot'
+    },
+    status: {
+      title: 'ScheduleWise Status',
+      steps: [
+        'Used only by Update Appointment.',
+        'Confirmed means booked, Pending means tentative, and Cancelled means the appointment should no longer proceed.',
+        'Runtime sends status only when this field is set.',
+        'Use Delete Appointment for removing a record instead of status-only cancellation when your process requires deletion.'
+      ],
+      example: 'confirmed'
+    },
+    limit: {
+      title: 'ScheduleWise Limit',
+      steps: [
+        'Used by Get Schedules to cap returned appointments.',
+        'Default is 50.',
+        'Use smaller limits for fast webhook flows and larger limits for reports.',
+        'Runtime sends it as the limit query parameter.'
+      ],
+      example: '50'
+    },
+    hardDelete: {
+      title: 'ScheduleWise Hard Delete',
+      steps: [
+        'Used only by Delete Appointment.',
+        'When true, runtime appends ?hardDelete=true.',
+        'Leave false for normal deletion behavior.',
+        'Use true only for admin-approved permanent removal.'
+      ],
+      example: 'false'
+    },
+    mockMode: {
+      title: 'ScheduleWise Mock Mode',
+      steps: [
+        'When true, runtime returns synthetic ScheduleWise data and does not call the live API.',
+        'Mock Mode does not require credentials.',
+        'Use it for demos and mapping tests.',
+        'Turn it off before production runs.'
+      ],
+      example: 'false'
+    },
+    timeoutSec: {
+      title: 'ScheduleWise Timeout Seconds',
+      steps: [
+        'Maximum seconds to wait for the ScheduleWise API.',
+        'Default is 30.',
+        'Timeout failures return success=false with error code TIMEOUT.',
+        'This field is seconds, not milliseconds.'
+      ],
+      example: '30'
+    },
+    retries: {
+      title: 'ScheduleWise Retries',
+      steps: [
+        'Number of extra attempts for network errors and 5xx responses.',
+        'Runtime uses exponential backoff.',
+        'Use low values for workflows that must answer quickly.',
+        'Non-5xx HTTP errors are not retried.'
+      ],
+      example: '1'
+    },
+    outputFormat: {
+      title: 'ScheduleWise Output Format',
+      steps: [
+        'JSON is the actual current behavior.',
+        'Raw is visible but runtime still parses the response as JSON.',
+        'Non-JSON responses return PARSE_ERROR.',
+        'Use {{$json.data}} for successful live responses.'
+      ],
+      example: 'json'
     }
   }
 };

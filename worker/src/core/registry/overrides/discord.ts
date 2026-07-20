@@ -19,8 +19,8 @@ export function overrideDiscord(
     operationContracts: [{
       operation: 'default',
       label: 'Send Bot Message',
-      requiredFields: ['channelId', 'message'],
-      optionalFields: [],
+      requiredFields: ['message'],
+      optionalFields: ['channelId', 'interactionToken', 'applicationId', 'replyToMessageId'],
       credentialProviders: ['discord'],
       outputFields: ['success', 'discord'],
       status: 'implemented',

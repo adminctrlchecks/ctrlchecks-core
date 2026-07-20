@@ -128,6 +128,941 @@ Common mistake to avoid: Turning this off permanently instead of configuring MET
     },
   },
 
+  instagram_trigger: {
+    default: {
+      connectionId: `What this field means: Connection points to the saved Instagram OAuth2 account that can receive DMs, comments, and mentions for the connected professional account. The visual node usually uses the selected/default Instagram connection rather than asking you to type this ID.
+Why it matters: CtrlChecks uses this connection when it registers or tests the Instagram webhook subscription and when it needs the Instagram access token.
+When to fill it: Leave it blank when the workflow should use your active Instagram connection. Use a specific connection only when your workspace has more than one Instagram account connected.
+What to enter: Select the Instagram connection in the Connections UI, or use the saved connection ID in generated workflow config.
+Where the value comes from: CtrlChecks Connections stores it after Instagram/Facebook OAuth sign-in; do not copy a Graph API access token into this field.
+How to use it later: This setup value is not emitted as {{$json.connectionId}}; downstream Instagram reply nodes use {{$json.senderId}}, {{$json.chatId}}, or {{$json.commentId}} from the trigger output.
+Accepted format: Saved connection reference such as instagram_oauth_123, not a raw OAuth token.
+Real workplace example: A social support team uses the Instagram connection owned by the community manager so it can receive DM and comment events for the brand Instagram account.
+If it is empty or wrong: Empty falls back to the active Instagram connection; a wrong ID can cause No active Instagram connection found or Selected connection is not an Instagram connection.
+Common mistake to avoid: Pasting a Graph API access token here instead of connecting Instagram in Connections.`,
+      eventTypes: `What this field means: Event Types decides which normalized Instagram events this trigger accepts.
+Why it matters: DMs, story replies, comments, mentions, and postbacks usually need different workflows, and this list controls which of those can start this one.
+When to fill it: Keep the default while testing; narrow it before production so unrelated Instagram activity does not start the workflow.
+What to enter: Comma-separated values such as message, comment, mention, message.story_reply, postback. The runtime also accepts aliases such as dm, direct_message, messages, story_reply, comments, mentions, and postbacks.
+Where the value comes from: Choose the Instagram webhook fields and business events your team wants to handle.
+How to use it later: Route with {{$json.eventType}}; message covers message.text and message.media, while message.story_reply covers story reply DMs.
+Accepted format: Comma-separated text or an array in generated config.
+Real workplace example: message, message.story_reply for an AI DM assistant; comment, mention for public comment moderation.
+If it is empty or wrong: Empty defaults to message, comment, mention, message.story_reply. Unsupported values cause matching events to be ignored with no workflow execution.
+Common mistake to avoid: Choosing postback without expecting Instagram ice-breaker/quick-reply flows, which is the only current source of postback events.`,
+      instagramBusinessAccountId: `What this field means: Instagram Business Account ID is the numeric ID of the Instagram professional account this workflow should listen to.
+Why it matters: One Meta app or OAuth account may manage several Instagram accounts, and this filter keeps the wrong account's events from starting the workflow.
+When to fill it: Fill it when your connection can access multiple Instagram accounts. Leave it blank for a single-account setup.
+What to enter: The numeric Instagram Business Account ID, not the @username, display name, or Facebook Page ID.
+Where the value comes from: Call Meta Graph API Explorer with /me/accounts and the instagram_business_account field, or read it from the saved Instagram connection.
+How to use it later: The trigger output includes {{$json.instagramBusinessAccountId}} so reply nodes can confirm which account received the event.
+Accepted format: Numeric text such as 17841400000000000.
+Real workplace example: An agency manages Instagram accounts for two clients, so each client's workflow filters to that client's Instagram Business Account ID only.
+If it is empty or wrong: Empty accepts events for any connected/subscribed Instagram account. A wrong ID causes valid events to be ignored as a different account.
+Common mistake to avoid: Pasting the Facebook Page ID or the Instagram @username instead of the numeric Instagram Business Account ID.`,
+      allowedSenderIds: `What this field means: Allowed Sender IDs limits the trigger to specific Instagram senders.
+Why it matters: It can keep a testing or VIP workflow from reacting to every DM sender or commenter.
+When to fill it: Use it for internal testing, approved partner accounts, or a controlled rollout. Leave it blank for normal public automations.
+What to enter: Comma-separated sender IDs such as 1234567890, 9876543210.
+Where the value comes from: Use senderId/chatId from a previous Instagram Trigger test run or an internal allowlist.
+How to use it later: The accepted event still outputs {{$json.senderId}} and {{$json.chatId}} for replies or audits.
+Accepted format: Comma-separated text or an array in generated config.
+Real workplace example: Before launching an Instagram DM assistant, the team allows only two employee sender IDs so they can test without responding to real customers.
+If it is empty or wrong: Empty allows every matching sender; a wrong ID silently ignores that person's events.
+Common mistake to avoid: Using a person's visible @username instead of the numeric sender ID from a webhook event.`,
+      verifyToken: `What this field means: Verify Token is the shared text Meta sends during the webhook challenge to prove you configured the callback intentionally.
+Why it matters: Meta will not activate the webhook callback unless CtrlChecks returns the challenge for the exact matching token.
+When to fill it: Fill it before verifying the callback URL in Meta for Developers.
+What to enter: A random phrase or generated secret that is unique to this workflow, such as ig-webhook-verify-2026-support.
+Where the value comes from: Create it yourself in a password manager or admin setup note, then enter the exact same value in Meta for Developers -> Webhooks.
+How to use it later: This token is only for webhook setup; it is never emitted as {{$json.verifyToken}} for downstream nodes.
+Accepted format: Plain text shared token.
+Real workplace example: The social operations admin sets ig-support-prod-verify-rotate-me while adding the CtrlChecks callback URL to the Meta app.
+If it is empty or wrong: Callback verification returns Invalid verify token, and Meta will not save the webhook URL.
+Common mistake to avoid: Confusing this with an Instagram/Facebook OAuth access token, app secret, or account password.`,
+      validateSignature: `What this field means: Validate Signature checks that Meta signed the webhook request with your app secret.
+Why it matters: A public webhook URL should reject requests that did not come through the expected Meta app.
+When to fill it: Keep it enabled for production. Disable only for a controlled local test where you cannot generate Meta signatures.
+What to enter: true/enabled for real workflows; false/disabled only for temporary debugging.
+Where the value comes from: This is a security choice made by the workflow owner or admin. The app secret itself comes from worker environment variables META_APP_SECRET, INSTAGRAM_APP_SECRET, or FACEBOOK_APP_SECRET, not from a workflow field.
+How to use it later: This setting protects whether a workflow starts; it is not output as {{$json.validateSignature}}.
+Accepted format: Boolean checkbox.
+Real workplace example: A live Instagram DM support workflow keeps validation enabled so only signed Meta webhook deliveries can create replies or tickets.
+If it is empty or wrong: Default true requires the worker app secret; if the secret is missing or mismatched, requests fail with Invalid Instagram webhook signature.
+Common mistake to avoid: Turning this off permanently instead of configuring META_APP_SECRET/INSTAGRAM_APP_SECRET/FACEBOOK_APP_SECRET correctly.`,
+    },
+  },
+
+  jira_trigger: {
+    default: {
+      connectionId: `What this field means: Connection points to the saved Jira credential (Atlassian account email + API token + site domain) CtrlChecks uses to verify your Jira account and to call the Jira API when registering webhook state.
+Why it matters: Without a working Jira connection, registration cannot confirm your account and the trigger cannot generate a webhook URL.
+When to fill it: You do not fill this in the current visual panel — it is not one of the exposed config fields, and CtrlChecks always resolves your active jira_api_key (or legacy jira) connection automatically.
+What to enter: Nothing in the panel; manage the credential itself under Connections.
+Where the value comes from: CtrlChecks Connections stores it after you save your Atlassian email, API token, and domain.
+How to use it later: This is a setup value only; it is not emitted as {{$json.connectionId}} to downstream nodes.
+Accepted format: Saved connection reference, not a raw API token.
+Real workplace example: A platform team saves one Jira connection for the account that manages the SUPPORT and DEV projects, and every Jira Trigger node in the workspace reuses it.
+If it is empty or wrong: Registration fails with No active Jira connection found. Save your Jira email + API token in Connections first.
+Common mistake to avoid: Pasting your raw Atlassian API token into a normal workflow field instead of saving it under Connections.`,
+      siteUrl: `What this field means: Jira Site URL is the Atlassian Cloud domain the webhook events belong to, such as yourcompany.atlassian.net.
+Why it matters: CtrlChecks uses it to build issue/comment links (issueUrl) in the trigger output and to confirm which site your webhook state belongs to.
+When to fill it: Leave it blank in almost every setup — CtrlChecks falls back to the domain already saved in your Jira connection. Fill it only if your workspace has connections for more than one Atlassian site.
+What to enter: The bare domain, such as yourcompany.atlassian.net, not a full https:// URL, not the site name, and not a project URL.
+Where the value comes from: Look at the address bar while logged into Jira Cloud — the part before /jira/ or /browse/.
+How to use it later: The trigger output includes {{$json.siteUrl}} and uses it to build {{$json.issueUrl}}.
+Accepted format: Plain domain text; CtrlChecks adds https:// automatically when needed.
+Real workplace example: An agency with two Atlassian sites sets Jira Site URL to client-a.atlassian.net on the client-specific workflow so registration and links stay scoped to that site.
+If it is empty or wrong: Empty falls back to your connection domain; a wrong or misspelled domain can produce broken issueUrl links or registration failures.
+Common mistake to avoid: Pasting a full issue URL such as https://yourcompany.atlassian.net/browse/PROJ-123 instead of just the domain.`,
+      projectKey: `What this field means: Project Key restricts this trigger to events from one Jira project, identified by its short key.
+Why it matters: A single Jira webhook can cover every project on the site; without this filter, every project's events would start this same workflow.
+When to fill it: Fill it whenever this workflow should react to only one project. Leave it blank to accept events from every project the underlying Jira webhook is configured to send.
+What to enter: The short project key shown before the dash in issue keys, such as PROJ or SUPPORT — not the full project name.
+Where the value comes from: Open any issue in the target project and read the prefix before the hyphen in its key, e.g. PROJ-123 means the key is PROJ.
+How to use it later: The trigger output includes {{$json.projectKey}} for logging, routing, or filtering later in the workflow.
+Accepted format: Plain project key text; CtrlChecks compares it case-insensitively.
+Real workplace example: A support team sets Project Key to SUPPORT so only customer support issues trigger the ticket-triage workflow, while internal engineering issues in the DEV project are ignored.
+If it is empty or wrong: Empty accepts every project the webhook covers; a key that does not match any incoming event's project silently ignores every event with Ignored Jira event for project.
+Common mistake to avoid: Typing the full project name (such as "Customer Support") instead of the short key (SUPPORT).`,
+      eventTypes: `What this field means: Event Types decides which Jira webhook event kinds are allowed to start this workflow.
+Why it matters: Issue creation, issue updates, issue deletion, and comment activity are usually very different workflows with different downstream actions.
+When to fill it: Keep the default while testing; narrow it before production so unrelated Jira activity does not start the workflow.
+What to enter: Comma-separated values such as jira:issue_created, jira:issue_updated, comment_created. Also accepted: jira:issue_deleted, comment_updated, comment_deleted, or any other webhookEvent value Jira sends.
+Where the value comes from: Pick the exact webhookEvent names matching the events you selected when configuring the webhook in Jira itself.
+How to use it later: Route with {{$json.eventType}}, which always equals the raw webhookEvent value Jira sent.
+Accepted format: Comma-separated text, matched case-insensitively.
+Real workplace example: jira:issue_created, comment_created for a support triage workflow that reacts to new tickets and new customer replies, but ignores routine field edits.
+If it is empty or wrong: Empty defaults to jira:issue_created, jira:issue_updated, comment_created. A value that never matches an incoming eventType silently ignores every event with Ignored Jira event type.
+Common mistake to avoid: Typing a made-up event name instead of Jira's exact webhookEvent value, or forgetting that Jira itself must also be configured to send that event type.`,
+      secretToken: `What this field means: Webhook Secret Override lets you supply your own shared secret instead of the random one CtrlChecks generates automatically.
+Why it matters: Jira Cloud webhooks carry no signature at all, so this secret (checked as a URL query parameter or an X-Jira-Webhook-Secret header) is the only thing that stops a stranger from calling your webhook URL and faking Jira events.
+When to fill it: Leave it blank for almost every setup — CtrlChecks generates and stores a secret automatically the first time you register the webhook. Fill it only when migrating an existing Automation for Jira rule that must keep reusing one known secret value.
+What to enter: A long random string from a password manager or admin note, not your Atlassian API token or account password.
+Where the value comes from: Usually CtrlChecks generates it; if you override it, use that exact same value in Jira's WebHooks admin page URL or the Automation for Jira request header.
+How to use it later: This is setup-only and is never emitted as {{$json.secretToken}} to downstream nodes.
+Accepted format: Plain secret text; the visual field uses a standard text control even though the value should be treated as secret material.
+Real workplace example: A DevOps admin migrating an existing Automation for Jira rule reuses its already-approved secret here so they do not have to update the receiving system twice.
+If it is empty or wrong: Empty lets CtrlChecks generate and manage the secret automatically; a mismatched value causes Invalid or missing Jira webhook secret and no workflow execution.
+Common mistake to avoid: Confusing this with the Jira API token used for the Connections credential — they are unrelated values.`,
+      jql: `What this field means: JQL Filter is a reminder/documentation field showing the Jira Query Language filter you may have attached to the underlying webhook inside Jira itself.
+Why it matters: Jira lets you scope a System WebHook to only fire for issues matching a JQL query; this field exists so the workflow shows that filter for reference.
+When to fill it: Only fill it to document what you already configured on the webhook inside Jira's System > WebHooks admin page — CtrlChecks never sends or enforces this value itself.
+What to enter: A valid JQL expression matching what you actually set in Jira, such as project = PROJ AND status = "In Progress".
+Where the value comes from: Copy it from the JQL filter box on the corresponding webhook entry in Jira Settings -> System -> WebHooks.
+How to use it later: This is a documentation value only; it is not emitted as {{$json.jql}} and CtrlChecks does not evaluate it.
+Accepted format: Plain JQL syntax text.
+Real workplace example: A team sets project = SUPPORT AND priority = Highest here purely so anyone editing the workflow later understands why only urgent Support tickets ever reach it.
+If it is empty or wrong: Leaving it blank has no effect on delivery — the real filtering happens only inside Jira's webhook configuration.
+Common mistake to avoid: Assuming CtrlChecks applies this filter — if you need real filtering, configure the JQL on the webhook in Jira itself, or use Project Key/Keyword Filter on this node for filtering CtrlChecks does enforce.`,
+      query: `What this field means: Keyword Filter only lets events whose normalized text contains a word or phrase start the workflow.
+Why it matters: A busy Jira site can produce a lot of noise; this filter keeps the workflow focused on urgent issues or specific keywords without needing a second webhook in Jira.
+When to fill it: Use it when the workflow should react only to a phrase such as urgent, security, or a customer name. Leave it blank to accept every event matching Event Types and Project Key.
+What to enter: A simple keyword or short phrase, not JQL syntax.
+Where the value comes from: Pick the label, customer name, module name, or severity term your team uses in issue summaries or comment bodies.
+How to use it later: The accepted event output still includes {{$json.text}} and {{$json.issueSummary}}/{{$json.commentBody}} for downstream routing.
+Accepted format: Plain text, case-insensitive contains match.
+Real workplace example: security starts only issue/comment workflows that mention security-related work.
+If it is empty or wrong: Empty accepts every event matching the other filters; a too-specific or misspelled filter causes Ignored Jira event not matching this trigger.
+Common mistake to avoid: Expecting JQL syntax such as text ~ "urgent" here — this is a simple text contains filter, not JQL.`,
+    },
+  },
+
+  linear_trigger: {
+    issue_comment_events: {
+      connectionId: `What this field means: Connection points to the saved Linear credential (Personal API Key or OAuth2) CtrlChecks uses to create and delete the Linear webhook on your behalf.
+Why it matters: Unlike Jira, Linear Trigger fully automates webhook setup by calling Linear's GraphQL webhookCreate mutation — this only works with a working, sufficiently-privileged connection.
+When to fill it: You do not fill this in the current visual panel — it is not one of the exposed config fields; CtrlChecks always resolves your active Linear connection automatically.
+What to enter: Nothing in the panel; manage the credential itself under Connections.
+Where the value comes from: CtrlChecks Connections stores it after you save a Linear Personal API Key or complete Linear OAuth2.
+How to use it later: This is a setup value only; it is not emitted as {{$json.connectionId}} to downstream nodes.
+Accepted format: Saved connection reference, not a raw API key.
+Real workplace example: An engineering team saves one Linear connection from a workspace admin account so every Linear Trigger node in the workspace can register its own webhook automatically.
+If it is empty or wrong: Registration fails with No active Linear connection found. Save a Linear Personal API Key connection first, or with a Linear API error if the credential lacks permission to create webhooks.
+Common mistake to avoid: Saving a Personal API Key from a regular member account instead of a workspace admin account — Linear restricts webhook creation to admin-level access.`,
+      teamId: `What this field means: Team ID scopes the registered webhook (and this trigger's filtering) to one specific Linear team.
+Why it matters: A Linear workspace can have many teams; without this, the webhook watches every public team and every team's issues/comments can start this workflow.
+When to fill it: Fill it when this workflow should react to only one team's activity. Leave it blank (with All Public Teams enabled) to watch every public team.
+What to enter: The team's UUID, not its short key (like ENG) and not its display name.
+Where the value comes from: Open the team in Linear, go to team Settings, and copy the team ID, or read {{$json.teamId}} from a previous test event.
+How to use it later: The trigger output includes {{$json.teamId}} and {{$json.teamKey}} for logging, routing, or filtering later in the workflow.
+Accepted format: Linear team UUID text.
+Real workplace example: A support engineering team sets Team ID to their own team's UUID so only their team's issues trigger the on-call notification workflow.
+If it is empty or wrong: Empty (with All Public Teams on) registers for every public team; a UUID that never matches silently ignores that event with Ignored Linear event for team.
+Common mistake to avoid: Typing the team key (such as ENG) instead of the full team UUID.`,
+      allPublicTeams: `What this field means: All Public Teams tells CtrlChecks whether the Linear webhook should be registered workspace-wide instead of one specific team.
+Why it matters: This decides the scope Linear actually registers the webhook for, separate from Team ID which only filters what this particular trigger accepts afterward.
+When to fill it: Leave it enabled (the default) whenever Team ID is blank.
+What to enter: Enabled (true) to register broadly across all public teams; disabled (false) together with a filled Team ID to register the webhook narrowly for that team only.
+Where the value comes from: Decide it based on whether other workflows might also want events from this same webhook.
+How to use it later: This is a setup/registration value only; it is not emitted as {{$json.allPublicTeams}} to downstream nodes.
+Accepted format: Boolean checkbox.
+Real workplace example: A platform team leaves All Public Teams enabled so one webhook can serve several workflows filtering by different Team IDs after delivery.
+If it is empty or wrong: Default true is safe and broad; disabling it without a valid Team ID still results in an all-public-teams registration.
+Common mistake to avoid: Assuming disabling this also filters your workflow's incoming events — use Team ID for per-workflow filtering.`,
+      resourceTypes: `What this field means: Resource Types decides which kinds of Linear objects the registered webhook itself is subscribed to receive changes for.
+Why it matters: Linear only sends events for the resource types you list here — without Project in this list, project changes will never reach this trigger at all.
+When to fill it: Keep the default (Issue, Comment) for most workflows. Add more types when you need projects, cycles, labels, reactions, documents, initiatives, customers, or users.
+What to enter: Comma-separated Linear resource type names such as Issue, Comment, Project, Cycle, IssueLabel, Reaction, Document, Initiative, Customer, User.
+Where the value comes from: Pick from Linear's webhook resource type list based on what kind of change should start this workflow.
+How to use it later: The eventType/entityType fields in the trigger output reflect whichever resource type actually changed.
+Accepted format: Comma-separated text, matched against Linear's exact resource type names.
+Real workplace example: Issue, Comment, Project for a workflow that triages issues, tracks comments, and reports on project status changes.
+If it is empty or wrong: Empty defaults to Issue, Comment. Listing a resource type Linear does not support simply never sends that kind of event.
+Common mistake to avoid: Assuming Event Types alone controls what data arrives — Resource Types controls the underlying webhook subscription.`,
+      eventTypes: `What this field means: Event Types filters which normalized events (after Resource Types has already let them through) are allowed to start this workflow.
+Why it matters: One Resource Type like Issue produces several different events — created, updated, removed — that usually deserve different downstream handling.
+When to fill it: Keep the default while testing; narrow it before production.
+What to enter: Comma-separated normalized values such as issue_created, issue_updated, issue_removed, comment_created, project_updated.
+Where the value comes from: Build the name as resource_action, using the resource types you configured above and create/update/remove verbs.
+How to use it later: Route with {{$json.eventType}}, which is always the exact normalized value this filter compares against.
+Accepted format: Comma-separated text, matched case-insensitively.
+Real workplace example: issue_created for a new-issue triage workflow; comment_created for a customer-reply notification workflow.
+If it is empty or wrong: Empty accepts every event allowed through by Resource Types. A value that never matches silently ignores every event with Ignored Linear event type.
+Common mistake to avoid: Listing an event type here for a resource you never added to Resource Types.`,
+      issueId: `What this field means: Issue ID restricts this trigger to events about one specific Linear issue.
+Why it matters: This turns the trigger from "any issue in this team/project" into a focused watcher on a single, already-known issue.
+When to fill it: Fill it only when you need a workflow tied to one specific issue. Leave it blank for normal team- or project-wide triage workflows.
+What to enter: Either the issue's UUID or its human identifier such as ENG-123 — both are checked.
+Where the value comes from: Copy the identifier from the issue's URL or title in Linear, or read {{$json.issueId}}/{{$json.issueIdentifier}} from a previous test event.
+How to use it later: The trigger output still includes {{$json.issueId}} and {{$json.issueIdentifier}} for confirmation or logging.
+Accepted format: Linear issue UUID or identifier text such as ENG-123.
+Real workplace example: A release manager sets Issue ID to ENG-500 to get notified in Slack every time that specific tracking issue is commented on.
+If it is empty or wrong: Empty accepts events for any issue; an ID that never matches silently ignores it with Ignored Linear event for issue.
+Common mistake to avoid: Pasting a comment URL or project ID here instead of the issue's own ID/identifier.`,
+      projectId: `What this field means: Project ID restricts this trigger to events belonging to one specific Linear project.
+Why it matters: Teams often run several projects at once; this keeps a project-specific workflow from reacting to unrelated project activity.
+When to fill it: Fill it when the workflow should only react to one Linear project's issues, comments, or project-level updates. Leave it blank to accept events from every project.
+What to enter: The project's UUID, not its display name.
+Where the value comes from: Open the project in Linear and copy its ID from the project settings or API details, or read {{$json.projectId}} from a previous test event.
+How to use it later: The trigger output includes {{$json.projectId}} and {{$json.projectName}} for logging or routing.
+Accepted format: Linear project UUID text.
+Real workplace example: A vendor integration project sets Project ID to that project's UUID so only its own issues and updates reach the integration workflow.
+If it is empty or wrong: Empty accepts every project's events; an ID that never matches silently ignores the event with Ignored Linear event for project.
+Common mistake to avoid: Typing the project's display name instead of its UUID.`,
+      actorId: `What this field means: Actor ID restricts this trigger to events caused by one specific Linear user.
+Why it matters: It lets you build a workflow around a particular person's activity.
+When to fill it: Fill it only for person-specific automations. Leave it blank for normal team-wide triggers.
+What to enter: The Linear user's UUID, not their display name or email.
+Where the value comes from: Read {{$json.userId}} from a previous test event triggered by that person, or find it via Linear's API/GraphQL explorer.
+How to use it later: The trigger output includes {{$json.userId}} and {{$json.username}} for confirmation or logging.
+Accepted format: Linear user UUID text.
+Real workplace example: A workflow watches only the support lead's issue creations so a Slack channel gets pinged specifically when they open a new escalation.
+If it is empty or wrong: Empty accepts events from any user; an ID that never matches silently ignores the event with Ignored Linear event from actor.
+Common mistake to avoid: Entering the user's email address or display name instead of their Linear user UUID.`,
+      query: `What this field means: Keyword Filter only lets events whose normalized text contains a word or phrase start the workflow.
+Why it matters: A busy Linear workspace can produce a lot of activity; this keeps the workflow focused on urgent issues or specific keywords.
+When to fill it: Use it when the workflow should react only to a phrase such as urgent, security, or a customer name. Leave it blank to accept every event matching the other filters.
+What to enter: A simple keyword or short phrase; this is a plain text contains match, not Linear's search syntax.
+Where the value comes from: Pick the label, customer name, module name, or severity term your team uses in issue titles, comment bodies, or project names.
+How to use it later: The accepted event output still includes {{$json.text}} plus the specific fields it came from.
+Accepted format: Plain text, case-insensitive contains match.
+Real workplace example: security starts only issue/comment/project workflows that mention security-related work.
+If it is empty or wrong: Empty accepts every event matching the other filters; a too-specific or misspelled filter causes Ignored Linear event not matching this trigger.
+Common mistake to avoid: Typing multiple keywords expecting OR/AND logic — only a single literal phrase is matched as a substring.`,
+    },
+  },
+
+  microsoft_teams_trigger: {
+    default: {
+      connectionId: `What this field means: Connection points to the saved Microsoft Teams Bot credential (Microsoft App ID, App Password, and optional Validation Secret) CtrlChecks uses to verify incoming Bot Framework requests and reply through the bot.
+Why it matters: Without a resolvable connection, CtrlChecks has no App ID to check the Bot Framework JWT audience against and no App Password for replies.
+When to fill it: You do not fill this in the current visual panel — it is not one of the exposed config fields; CtrlChecks always resolves your active Microsoft Teams Bot connection automatically.
+What to enter: Nothing in the panel; manage the credential itself under Connections.
+Where the value comes from: CtrlChecks Connections stores it after you save the Microsoft App ID (and optionally App Password/Validation Secret).
+How to use it later: This is a setup value only; it is not emitted as {{$json.connectionId}} to downstream nodes.
+Accepted format: Saved connection reference, not a raw App ID or secret.
+Real workplace example: An IT team saves one Microsoft Teams Bot connection for the company support bot, and every Teams Trigger node in the workspace reuses it.
+If it is empty or wrong: Empty falls back to the active Microsoft Teams Bot connection; a wrong or missing connection can cause No active Microsoft Teams Bot connection found or a failed JWT validation.
+Common mistake to avoid: Pasting the Azure app registration client secret into a normal workflow field instead of saving it under Connections.`,
+      eventTypes: `What this field means: Event Types decides which normalized Bot Framework activity kinds this trigger accepts.
+Why it matters: Channel/personal messages, conversation updates, message reactions, and invoke actions usually need very different workflows.
+When to fill it: Keep the default while testing; narrow it before production so unrelated bot activity does not start the workflow.
+What to enter: Comma-separated values such as message, conversation_update, message_reaction, invoke. Aliases such as channel_message, personal_message, dm, member_added, member_removed, reaction, task_module, and adaptive_card_action are also accepted.
+Where the value comes from: Decide which Bot Framework activity kinds your workflow should react to.
+How to use it later: Route with {{$json.eventType}}, which is always one of message, conversation_update, message_reaction, invoke, installation_update, or unknown.
+Accepted format: Comma-separated text, matched case-insensitively.
+Real workplace example: message for an AI support bot; invoke for a workflow that only reacts to adaptive card button clicks.
+If it is empty or wrong: Empty defaults to message, conversation_update, invoke. A value that never matches an incoming activity type silently ignores that event with Ignored Microsoft Teams event type.
+Common mistake to avoid: Expecting installation_update to be included by default — it must be listed explicitly.`,
+      teamIds: `What this field means: Allowed Team IDs restricts this trigger to activities from specific Microsoft Teams teams.
+Why it matters: A single bot can be installed across many teams; this keeps a team-specific workflow from reacting to every team's activity.
+When to fill it: Fill it when this workflow should only react to one or a few specific teams. Leave it blank to accept activity from any team (and personal chats, which have no team ID).
+What to enter: Comma-separated Teams team IDs such as 19:team-id@thread.tacv2.
+Where the value comes from: Read {{$json.teamId}} from a previous test activity, or check the Teams admin center/Graph API for the team's ID.
+How to use it later: The trigger output includes {{$json.teamId}} for logging or routing.
+Accepted format: Comma-separated text.
+Real workplace example: A company scopes its finance-approvals bot workflow to only the Finance team's ID.
+If it is empty or wrong: Empty allows every team (and personal chats); a team ID that never matches silently ignores it with Ignored Teams event from a team that is not allowed.
+Common mistake to avoid: Using the team's display name instead of its 19:...@thread.tacv2 style ID.`,
+      channelIds: `What this field means: Allowed Channel IDs restricts this trigger to activities from specific Teams channels.
+Why it matters: A team can have many channels; this keeps a channel-specific workflow from reacting to every channel in the team.
+When to fill it: Fill it when this workflow should only react to one or a few specific channels. Leave it blank for personal chats or broad testing.
+What to enter: Comma-separated Teams channel IDs such as 19:channel-id@thread.tacv2.
+Where the value comes from: Read {{$json.channelId}} from a previous test activity, or check the channel's details/link in Teams.
+How to use it later: The trigger output includes {{$json.channelId}} for logging or routing.
+Accepted format: Comma-separated text.
+Real workplace example: An IT operations workflow scopes to the #incidents channel ID only.
+If it is empty or wrong: Empty allows every channel and personal chat; a channel ID that never matches silently ignores the activity with Ignored Teams event from a channel that is not allowed.
+Common mistake to avoid: Confusing this with the team ID — a channel ID is specific to one channel inside a team.`,
+      allowedUserIds: `What this field means: Allowed User IDs limits the trigger to specific Teams users, identified by their Azure AD object ID or Bot Framework user ID.
+Why it matters: It can keep a testing or sensitive workflow from reacting to messages sent by anyone other than approved people.
+When to fill it: Use it for internal testing, approved reviewers, or a controlled rollout. Leave it blank for a normal bot that should respond to any user.
+What to enter: Comma-separated user IDs such as 00000000-0000-0000-0000-000000000000.
+Where the value comes from: Read {{$json.userId}} from a previous test activity sent by that person, or look up their Azure AD object ID.
+How to use it later: The accepted activity output still includes {{$json.userId}} and {{$json.username}} for replies or audits.
+Accepted format: Comma-separated text.
+Real workplace example: Before launching an HR bot company-wide, the team allows only two HR staff user IDs so they can test without responding to every employee.
+If it is empty or wrong: Empty allows every matching user; a user ID that never matches silently ignores that person's activity with Ignored Teams event from a user that is not allowed.
+Common mistake to avoid: Using the person's display name or email instead of their AAD object ID/Bot Framework user ID.`,
+      tenantId: `What this field means: Tenant ID restricts this trigger to activities coming from one specific Microsoft 365 tenant (organization).
+Why it matters: A multi-tenant bot can receive activities from many different customer organizations; this keeps a customer-specific workflow scoped to just their tenant.
+When to fill it: Fill it for a bot that serves multiple organizations and this workflow should only react to one of them. Leave it blank for a single-tenant bot or when any tenant should be accepted.
+What to enter: The Microsoft 365 tenant GUID, not the organization's display name or domain.
+Where the value comes from: Read {{$json.tenantId}} from a previous test activity from that organization, or find it in the Microsoft 365 admin center/Azure AD.
+How to use it later: The trigger output includes {{$json.tenantId}} for logging or routing.
+Accepted format: Tenant GUID text.
+Real workplace example: An ISV's multi-tenant support bot scopes one workflow to a single enterprise customer's tenant ID.
+If it is empty or wrong: Empty accepts activity from any tenant; a tenant ID that never matches silently ignores the activity with Ignored Teams event for a different tenant.
+Common mistake to avoid: Entering the organization's domain name instead of the tenant GUID.`,
+      appId: `What this field means: Microsoft App ID is the Azure Bot registration's application ID, used to check that an incoming Bot Framework JWT was issued for this specific bot.
+Why it matters: Bot Framework JWT validation checks the token's audience claim against this exact App ID; a missing or wrong value can make every real Teams request fail validation.
+When to fill it: Leave it blank in almost every setup — CtrlChecks reads the App ID from your saved Microsoft Teams Bot connection automatically. Fill it only to override the connection's value for a specific node.
+What to enter: The Azure Bot / Teams app's Application (client) ID as a GUID.
+Where the value comes from: Azure Bot Channels Registration -> Configuration -> Microsoft App ID, or the Teams app manifest's botId.
+How to use it later: This is a setup/validation value only; it is not emitted as {{$json.appId}} to downstream nodes.
+Accepted format: GUID text.
+Real workplace example: A team testing a second, staging bot registration sets Microsoft App ID here temporarily.
+If it is empty or wrong: Empty falls back to the connection's App ID; a wrong value causes every real Bot Framework request to fail JWT audience validation with Invalid Microsoft Teams/Bot Framework request.
+Common mistake to avoid: Pasting the App Password/client secret here instead of the App ID.`,
+      validationSecret: `What this field means: Validation Secret is an optional shared-secret shortcut that lets a request skip full Bot Framework JWT validation if it presents the exact matching secret in a header or query parameter.
+Why it matters: Real Microsoft Teams traffic always uses signed Bot Framework JWTs; this shortcut exists mainly for manual testing or simulated payloads where generating a real JWT is impractical.
+When to fill it: Leave it blank for production bots — rely on JWT validation instead. Fill it only for controlled local testing or a simulation harness.
+What to enter: A long random string from a password manager, not your Azure app client secret.
+Where the value comes from: Generate it yourself for testing purposes; it does not come from Microsoft.
+How to use it later: This is setup-only and is never emitted as {{$json.validationSecret}} to downstream nodes.
+Accepted format: Plain secret text; the visual field uses a standard text control even though the value should be treated as secret material.
+Real workplace example: A developer testing the webhook locally with curl sends a matching header value instead of building a real signed Bot Framework token.
+If it is empty or wrong: Empty means only real Bot Framework JWTs are accepted; a mismatched value simply falls through to JWT validation.
+Common mistake to avoid: Leaving a testing secret configured in a production workflow, which creates a second, weaker way to authenticate besides JWT validation.`,
+      validateJwt: `What this field means: Validate Bot Framework Auth checks that an incoming request is either a genuine Bot Framework JWT or presents the matching Validation Secret.
+Why it matters: A public webhook URL should reject requests that did not come from real Microsoft Teams/Bot Framework traffic.
+When to fill it: Keep it enabled for production. Disable only for a controlled local test where you cannot generate a real Bot Framework token and are not using Validation Secret either.
+What to enter: true/enabled for real workflows; false/disabled only for temporary debugging.
+Where the value comes from: This is a security choice made by the workflow owner or admin.
+How to use it later: This setting protects whether a workflow starts; it is not output as {{$json.validateJwt}}.
+Accepted format: Boolean checkbox.
+Real workplace example: A live Teams support bot keeps validation enabled so only signed Bot Framework deliveries can start a workflow.
+If it is empty or wrong: Default true requires either a valid JWT or Validation Secret; if neither is satisfiable, requests fail with Invalid Microsoft Teams/Bot Framework request.
+Common mistake to avoid: Turning this off permanently instead of correctly saving the Microsoft App ID on the connection.`,
+    },
+  },
+
+  outlook_trigger: {
+    default: {
+      connectionId: `What this field means: Connection points to the saved Microsoft OAuth2 account CtrlChecks uses to create the Microsoft Graph subscription and read the mail/calendar item when a notification arrives.
+Why it matters: CtrlChecks needs a Microsoft access token with Mail.Read and Calendars.Read to both register the Graph subscription and fetch the actual message/event content the notification refers to.
+When to fill it: You do not fill this in the current visual panel — it is not one of the exposed config fields; CtrlChecks always resolves your active Microsoft connection automatically.
+What to enter: Nothing in the panel; manage the credential itself under Connections.
+Where the value comes from: CtrlChecks Connections stores it after you complete Microsoft OAuth2 sign-in.
+How to use it later: This is a setup value only; it is not emitted as {{$json.connectionId}} to downstream nodes.
+Accepted format: Saved connection reference, not a raw access token.
+Real workplace example: A support team connects the shared support@company.com Outlook mailbox once, and every Outlook Trigger node in the workspace reuses that connection.
+If it is empty or wrong: Empty falls back to the active Microsoft connection; a wrong or missing connection can cause No active Microsoft connection found.
+Common mistake to avoid: Assuming a Microsoft connection made before this trigger existed already has the right scopes — reconnect if Mail.Read/Calendars.Read were not originally granted.`,
+      resource: `What this field means: Resource decides whether this trigger watches new email or calendar changes.
+Why it matters: Mail and Calendar are completely different Microsoft Graph subscriptions with different fields available afterward.
+When to fill it: Always set it deliberately — the default is Mail, but many workflows need Calendar instead.
+What to enter: mail to watch a mailbox folder, or calendar to watch calendar events.
+Where the value comes from: Decide based on whether the workflow should react to incoming email or to calendar changes.
+How to use it later: Check {{$json.eventType}} (message_created vs event_created/event_updated/event_deleted) to confirm which resource fired.
+Accepted format: mail or calendar (dropdown selection).
+Real workplace example: A scheduling assistant sets Resource to calendar so it reacts to new meeting invites, while a support triage workflow sets it to mail.
+If it is empty or wrong: Empty defaults to mail. Choosing the wrong resource means Mail Folder is ignored or start/end/attendees stay empty.
+Common mistake to avoid: Leaving Resource on Mail while expecting calendar invite fields such as {{$json.start}} or {{$json.attendees}} to be populated.`,
+      changeTypes: `What this field means: Change Types decides which kinds of Graph changes (created, updated, deleted) are allowed to start this workflow.
+Why it matters: Mail subscriptions here are effectively always created (new messages), while Calendar subscriptions commonly also care about updated or deleted events.
+When to fill it: Keep the default (created) for most mail and simple calendar-invite workflows. Add updated and/or deleted for calendar reschedules/cancellations.
+What to enter: Comma-separated Graph change type names: created, updated, deleted.
+Where the value comes from: Pick from Microsoft Graph's supported changeType values for the resource you are watching.
+How to use it later: Route with {{$json.eventType}}, which becomes message_created for mail, or event_created/event_updated/event_deleted for calendar.
+Accepted format: Comma-separated text.
+Real workplace example: created, updated, deleted for a meeting-room booking workflow that must know about new bookings, reschedules, and cancellations.
+If it is empty or wrong: Empty defaults to created only. Requesting an unsupported change type for the chosen resource can cause subscription creation to fail.
+Common mistake to avoid: Expecting deleted mail notifications — mail resources in this trigger only subscribe to created.`,
+      folderName: `What this field means: Mail Folder is the Outlook folder this trigger watches for new messages, used only when Resource is set to mail.
+Why it matters: Without this, most mailboxes have many folders and only new mail landing in the chosen one should start the workflow.
+When to fill it: Leave it as Inbox (the default) for normal incoming-mail workflows. Fill it with another folder's display name when watching a specific folder.
+What to enter: The exact folder display name as it appears in Outlook, such as Inbox or Support Queue — not a folder path with slashes.
+Where the value comes from: Look at the folder name in the Outlook folder list on the left side of the mailbox.
+How to use it later: This is a setup/subscription value only; it is not emitted as {{$json.folderName}} to downstream nodes.
+Accepted format: Plain folder display name text.
+Real workplace example: A billing team watches a folder named Billing Escalations instead of the default Inbox.
+If it is empty or wrong: Empty defaults to Inbox. A folder name that does not exist in the mailbox causes the Graph subscription request itself to fail.
+Common mistake to avoid: Typing a nested folder path like Inbox/Support instead of just the folder's own display name, such as Support.`,
+      query: `What this field means: Keyword Filter only lets events whose subject, sender address, or body preview contains a word or phrase start the workflow.
+Why it matters: A busy mailbox or calendar can produce a lot of notifications; this keeps the workflow focused on urgent or relevant items.
+When to fill it: Use it when the workflow should react only to a phrase such as urgent, invoice, or a customer name. Leave it blank to accept every event matching Resource and Change Types.
+What to enter: A simple keyword or short phrase, not Outlook search syntax.
+Where the value comes from: Pick the label, customer name, module name, or keyword your team uses in subjects, sender addresses, or message previews.
+How to use it later: The accepted event output still includes {{$json.subject}}, {{$json.from}}, and {{$json.snippet}} for downstream routing.
+Accepted format: Plain text, case-insensitive contains match against subject + from + snippet combined.
+Real workplace example: invoice starts only billing-related email workflows, ignoring unrelated inbox traffic.
+If it is empty or wrong: Empty accepts every event matching the other filters; a too-specific or misspelled filter silently drops matching Graph notifications with no visible error.
+Common mistake to avoid: Expecting Outlook's advanced search operators (such as from:boss@company.com) here — this is a simple text contains filter.`,
+    },
+  },
+
+  shopify_trigger: {
+    store_events: {
+      connectionId: `What this field means: Connection points to the saved Shopify Admin API credential (Store URL, Admin API access token, and App Client Secret/Webhook Signing Secret) CtrlChecks uses to create webhook subscriptions and validate deliveries.
+Why it matters: Without a resolvable connection, CtrlChecks has no Admin API token to register webhooks with and no signing secret to validate the X-Shopify-Hmac-Sha256 header on incoming deliveries.
+When to fill it: You do not fill this in the current visual panel — it is not one of the exposed config fields; CtrlChecks always resolves your active Shopify connection automatically.
+What to enter: Nothing in the panel; manage the credential itself under Connections.
+Where the value comes from: CtrlChecks Connections stores it after you save the Shopify Admin API Store URL, token, and client secret.
+How to use it later: This is a setup value only; it is not emitted as {{$json.connectionId}} to downstream nodes.
+Accepted format: Saved connection reference, not a raw Admin API token.
+Real workplace example: A merchant saves one Shopify Admin API connection for their store, and every Shopify Trigger node in the workspace reuses it.
+If it is empty or wrong: Empty falls back to the active Shopify connection; a missing or incomplete connection causes No Shopify shop domain found or No complete Shopify Trigger connection found.
+Common mistake to avoid: Saving the Admin API access token but forgetting the App Client Secret/Webhook Signing Secret — HMAC validation cannot work without it.`,
+      shopDomain: `What this field means: Shop Domain Filter restricts this trigger to webhook deliveries from one specific Shopify store.
+Why it matters: A connection can technically be reused across stores in some setups, and this filter keeps the wrong store's webhook traffic from starting the workflow.
+When to fill it: Leave it blank in almost every setup — the saved connection's Store URL is used automatically. Fill it only to override which store this specific node targets.
+What to enter: The bare myshopify.com domain, such as your-shop.myshopify.com, not a full https:// URL and not a custom storefront domain.
+Where the value comes from: Read it from the Shopify Admin URL bar, or from {{$json.shopDomain}} on a previous test event.
+How to use it later: The trigger output includes {{$json.shopDomain}} for logging or routing.
+Accepted format: Plain myshopify.com domain text.
+Real workplace example: An agency managing several client stores sets Shop Domain Filter on each workflow to keep client-a.myshopify.com traffic from ever reaching client-b's workflow.
+If it is empty or wrong: Empty uses the connection's Store URL; a mismatched domain silently ignores incoming events with Ignored Shopify shop.
+Common mistake to avoid: Pasting a custom domain instead of the underlying *.myshopify.com domain Shopify actually sends in webhook headers.`,
+      topics: `What this field means: Webhook Topics decides which Shopify Admin API webhook topics CtrlChecks actually subscribes to, and which of those are accepted afterward.
+Why it matters: This value drives both the real Shopify webhook subscription and the trigger's own filtering — a topic never listed here is never subscribed to at all.
+When to fill it: Keep the broad default while exploring; narrow it before production to only the topics this workflow actually needs.
+What to enter: Comma-separated Shopify topic names such as orders/create, orders/paid, customers/create, products/update, refunds/create, checkouts/create, app/uninstalled.
+Where the value comes from: Pick from Shopify's Admin API webhook topic list based on the store events your workflow should react to.
+How to use it later: Route with {{$json.eventType}} (underscored) or {{$json.topic}} (with slashes).
+Accepted format: Comma-separated text.
+Real workplace example: orders/create, orders/paid for an order-fulfillment workflow; customers/create for a welcome-email workflow.
+If it is empty or wrong: Empty defaults to a broad set covering orders, customers, products, refunds, checkouts, and app uninstall. A typo'd topic name causes Shopify webhook creation to fail for that topic specifically.
+Common mistake to avoid: Using underscores (orders_create) instead of the real Shopify topic format with a slash (orders/create).`,
+      financialStatus: `What this field means: Financial Status only lets order events whose payment status matches through to start the workflow.
+Why it matters: An order-related workflow usually should only run once the order is actually paid, not the moment it is merely created.
+When to fill it: Fill it whenever downstream steps depend on payment state. Leave it (Any) to accept orders regardless of payment status.
+What to enter: Choose from the dropdown: paid, pending, authorized, partially_paid, refunded, or voided.
+Where the value comes from: Match it to the Shopify order financial_status values relevant to your process.
+How to use it later: The trigger output includes {{$json.financialStatus}} for confirmation, logging, or further branching.
+Accepted format: One exact Shopify financial status value.
+Real workplace example: A fulfillment workflow sets Financial Status to paid so orders are only sent to the warehouse once payment clears.
+If it is empty or wrong: Empty (Any) accepts every financial status; a status that never matches silently ignores it with Ignored Shopify financial status.
+Common mistake to avoid: Expecting this filter to apply to non-order topics such as customers/create — it only affects order-shaped payloads.`,
+      fulfillmentStatus: `What this field means: Fulfillment Status only lets order events whose shipping/fulfillment state matches through to start the workflow.
+Why it matters: A shipping-confirmation workflow should only run once an order is actually fulfilled, not at every order update.
+When to fill it: Fill it whenever the workflow should react to a specific fulfillment stage. Leave it (Any) to accept orders regardless of fulfillment status.
+What to enter: Choose from the dropdown: fulfilled, partial, unfulfilled, or restocked.
+Where the value comes from: Match it to the Shopify order fulfillment_status values relevant to your process.
+How to use it later: The trigger output includes {{$json.fulfillmentStatus}} for confirmation, logging, or further branching.
+Accepted format: One exact Shopify fulfillment status value.
+Real workplace example: A shipping-notification workflow sets Fulfillment Status to fulfilled so customers are emailed only once their order actually ships.
+If it is empty or wrong: Empty (Any) accepts every fulfillment status; a status that never matches silently ignores the event with Ignored Shopify fulfillment status.
+Common mistake to avoid: Combining this with a topic like customers/create where there is no fulfillment_status field to match against.`,
+      customerId: `What this field means: Customer ID restricts this trigger to events belonging to one specific Shopify customer.
+Why it matters: This turns a store-wide trigger into a focused watcher on a single, already-known customer account.
+When to fill it: Fill it only when you need a workflow tied to one specific customer. Leave it blank for normal store-wide workflows.
+What to enter: The numeric Shopify customer ID, not the customer's name or email.
+Where the value comes from: Read {{$json.customerId}} from a previous test event, or find it in Shopify Admin under the customer's profile URL.
+How to use it later: The trigger output includes {{$json.customerId}}, {{$json.customerEmail}}, and {{$json.customerName}} for confirmation or logging.
+Accepted format: Numeric Shopify customer ID text.
+Real workplace example: An account manager watches only their top enterprise customer's ID so a Slack alert fires whenever that account places an order.
+If it is empty or wrong: Empty accepts events for any customer; an ID that never matches silently ignores the event with Ignored Shopify customer.
+Common mistake to avoid: Entering the customer's email address here instead of their numeric Shopify customer ID.`,
+      productId: `What this field means: Product ID restricts this trigger to events involving one specific Shopify product.
+Why it matters: This turns a store-wide trigger into a focused watcher on a single, already-known product.
+When to fill it: Fill it only when you need a workflow tied to one specific product. Leave it blank for normal store-wide workflows.
+What to enter: The numeric Shopify product ID, not the product title or handle.
+Where the value comes from: Read {{$json.productId}} from a previous test event, or find it in the product's Shopify Admin URL.
+How to use it later: The trigger output includes {{$json.productId}} and {{$json.productTitle}} for confirmation or logging.
+Accepted format: Numeric Shopify product ID text.
+Real workplace example: A merchandising team watches their best-selling product's ID so low-stock alerts can be built around its order activity.
+If it is empty or wrong: Empty accepts events for any product; an ID that never matches silently ignores the event with Ignored Shopify product.
+Common mistake to avoid: Entering the product's handle/slug instead of its numeric Shopify product ID.`,
+      minTotalPrice: `What this field means: Minimum Total Price only lets order events whose total is at or above this amount through to start the workflow.
+Why it matters: It lets a workflow focus on high-value orders, such as flagging large purchases for manual review.
+When to fill it: Fill it for a workflow that should ignore small routine orders. Leave it blank to accept orders of any size.
+What to enter: A plain number in the store's currency, without a currency symbol, such as 100 for $100.
+Where the value comes from: Decide the threshold based on your store's typical order value.
+How to use it later: The trigger output includes {{$json.totalPrice}} and {{$json.currency}} so downstream steps can double-check the amount.
+Accepted format: Plain number, no currency symbol or commas.
+Real workplace example: A fraud-review workflow sets Minimum Total Price to 500 so only orders of $500 or more are flagged for manual review.
+If it is empty or wrong: Empty accepts orders of any size; orders below the threshold are silently ignored with Ignored Shopify total.
+Common mistake to avoid: Typing a currency symbol or comma instead of a plain number.`,
+      currency: `What this field means: Currency only lets order events in one specific currency through to start the workflow.
+Why it matters: A multi-currency store can receive orders in several currencies; this keeps a currency-specific workflow scoped correctly.
+When to fill it: Fill it for a store that sells in multiple currencies and this workflow should only react to one of them. Leave it blank to accept any currency.
+What to enter: A lowercase ISO currency code such as usd, eur, or inr.
+Where the value comes from: Match it to the currencies your store actually transacts in, visible in Shopify Admin's order list.
+How to use it later: The trigger output includes {{$json.currency}} alongside {{$json.totalPrice}}.
+Accepted format: Lowercase 3-letter ISO currency code.
+Real workplace example: A store selling in both USD and EUR routes EUR orders to a different fulfillment workflow by setting Currency to eur on that workflow.
+If it is empty or wrong: Empty accepts orders in any currency; a currency that never matches silently ignores the event with Ignored Shopify currency.
+Common mistake to avoid: Using an uppercase or symbol form instead of the lowercase ISO code Shopify actually sends.`,
+      query: `What this field means: Keyword Filter only lets events whose combined order name, customer email/name, product title, object ID, or status fields contain a word or phrase start the workflow.
+Why it matters: A busy store can produce a lot of webhook traffic; this keeps a workflow focused on a specific term without needing a second set of webhook subscriptions.
+When to fill it: Use it when the workflow should react only to a phrase such as a specific product name or VIP customer email. Leave it blank to accept every event matching the other filters.
+What to enter: A simple keyword or short phrase, not Shopify search syntax.
+Where the value comes from: Pick the label, customer name, product keyword, or status term your team cares about.
+How to use it later: The accepted event output still includes {{$json.text}}, {{$json.orderName}}, {{$json.customerEmail}}, {{$json.productTitle}} for downstream routing.
+Accepted format: Plain text, case-insensitive contains match across the combined fields.
+Real workplace example: wholesale starts only order/customer workflows whose name, email, or status mentions wholesale accounts.
+If it is empty or wrong: Empty accepts every event matching the other filters; a too-specific or misspelled filter causes Ignored Shopify event not matching this trigger.
+Common mistake to avoid: Expecting Shopify's advanced search syntax here — this is a simple text contains filter.`,
+    },
+  },
+
+  slack_trigger: {
+    default: {
+      connectionId: `What this field means: Connection points to the saved Slack OAuth2 workspace connection (bot token and app Signing Secret) CtrlChecks uses to verify your Slack app and validate incoming request signatures.
+Why it matters: CtrlChecks uses this connection to confirm the bot token still works during registration and to read the Signing Secret used to validate every incoming Slack request.
+When to fill it: You do not fill this in the current visual panel — it is not one of the exposed config fields; CtrlChecks always resolves your active Slack connection automatically.
+What to enter: Nothing in the panel; manage the credential itself under Connections.
+Where the value comes from: CtrlChecks Connections stores it after you complete Slack OAuth2 sign-in.
+How to use it later: This is a setup value only; it is not emitted as {{$json.connectionId}} to downstream nodes.
+Accepted format: Saved connection reference, not a raw bot token.
+Real workplace example: A support team connects one Slack workspace, and every Slack Trigger node in the workspace reuses that connection.
+If it is empty or wrong: Empty falls back to the active Slack connection; a wrong or missing connection can cause No active Slack connection found or Selected connection is not a Slack connection.
+Common mistake to avoid: Pasting a Slack bot token into a normal workflow field instead of connecting Slack in Connections.`,
+      eventTypes: `What this field means: Event Types decides which kinds of Slack callbacks (Events API messages, slash commands, and interactivity payloads) this trigger accepts.
+Why it matters: App mentions, plain messages, slash commands, and button/modal interactions usually need very different workflows.
+When to fill it: Keep the default while testing; narrow it before production so unrelated Slack activity does not start the workflow.
+What to enter: Comma-separated values such as app_mention, message, slash_command, interaction. Aliases such as mention, dm, command, interactive, block_action, shortcut, and view_submission are also accepted.
+Where the value comes from: Decide which Slack Events API subscriptions, slash commands, and interactivity features your Slack app is configured to send.
+How to use it later: Route with {{$json.eventType}}; interaction covers all interactivity payload subtypes unless you list a specific one.
+Accepted format: Comma-separated text, matched case-insensitively.
+Real workplace example: app_mention, message for an AI Slack assistant; slash_command for a /support command workflow.
+If it is empty or wrong: Empty defaults to app_mention, message, slash_command, interaction. Unsupported values cause matching events to be ignored with no workflow execution.
+Common mistake to avoid: Subscribing to message without narrowing Allowed Channel IDs — this can make the workflow start on every message in every channel the bot is in.`,
+      channelIds: `What this field means: Allowed Channel IDs restricts this trigger to events from specific Slack channels.
+Why it matters: One Slack app callback URL can receive events from every channel the bot is in; this keeps a channel-specific workflow from reacting to unrelated channels.
+When to fill it: Use this when one Slack app callback URL receives events from several channels but this workflow should handle only some of them. Leave it blank to accept events from any channel routed to this app.
+What to enter: Comma-separated Slack channel IDs such as C0123456789, not the #channel-name.
+Where the value comes from: Right-click the channel in Slack -> View channel details -> copy the Channel ID, or read {{$json.channelId}} from a previous test event.
+How to use it later: The trigger output includes {{$json.channelId}} and {{$json.chatId}} for replies.
+Accepted format: Comma-separated text.
+Real workplace example: An IT support bot scopes to the #it-support channel ID only, so casual chatter in other channels never starts the workflow.
+If it is empty or wrong: Empty allows every channel; a channel ID that never matches silently ignores the event with Ignored Slack event from a channel that is not allowed.
+Common mistake to avoid: Typing the channel name instead of its Channel ID.`,
+      allowedUserIds: `What this field means: Allowed User IDs limits the trigger to specific Slack members.
+Why it matters: It can keep a testing or sensitive workflow from reacting to messages or commands from anyone other than approved people.
+When to fill it: Use it for internal testing, approved reviewers, or a controlled rollout. Leave it blank for a normal bot that should respond to any workspace member.
+What to enter: Comma-separated Slack user IDs such as U0123456789, not the person's display name.
+Where the value comes from: Read {{$json.userId}} from a previous test event sent by that person, or check their Slack profile's "Copy member ID" option.
+How to use it later: The accepted event output still includes {{$json.userId}} and {{$json.username}} for replies or audits.
+Accepted format: Comma-separated text.
+Real workplace example: Before launching an HR bot workspace-wide, the team allows only two HR staff user IDs so they can test without responding to everyone.
+If it is empty or wrong: Empty allows every matching user; a user ID that never matches silently ignores that person's activity with Ignored Slack event from a user that is not allowed.
+Common mistake to avoid: Using the person's display name or @handle instead of their Slack user ID.`,
+      commandFilter: `What this field means: Slash Command Filter only accepts one exact slash command when the trigger receives slash_command events.
+Why it matters: A single Slack app callback URL can serve several different slash commands; this keeps each workflow scoped to the command it actually handles.
+When to fill it: Fill it whenever the same Slack app has more than one slash command pointed at this trigger URL. Leave it blank if this trigger only ever receives one slash command.
+What to enter: The exact command text including the leading slash, such as /support.
+Where the value comes from: Match it to the command name configured in Slack app settings -> Slash Commands.
+How to use it later: The trigger output includes {{$json.command}} and {{$json.text}} for downstream use.
+Accepted format: Plain text starting with /.
+Real workplace example: /support and /feedback both point at CtrlChecks; one workflow sets Slash Command Filter to /support so only that command reaches it.
+If it is empty or wrong: Empty accepts any slash command that reaches this trigger; a value that never matches silently ignores it with Ignored Slack slash command because it did not match the configured command.
+Common mistake to avoid: Leaving off the leading slash — Slack always sends the command with the slash included.`,
+      teamId: `What this field means: Workspace Team ID restricts this trigger to events from one specific Slack workspace.
+Why it matters: If your Slack app is installed into multiple workspaces, this keeps a workspace-specific workflow from reacting to another workspace's activity.
+When to fill it: Fill it only if your Slack app is installed into more than one workspace and this workflow should only react to one of them. Leave it blank for a single-workspace app.
+What to enter: The Slack workspace/team ID, such as T0123456789, not the workspace name.
+Where the value comes from: Read {{$json.teamId}} from a previous test event, or find it in your Slack app's installed-workspace settings.
+How to use it later: The trigger output includes {{$json.teamId}} for logging or routing.
+Accepted format: Slack team ID text starting with T.
+Real workplace example: A vendor's Slack app installed into two customer workspaces scopes one workflow to Customer A's team ID only.
+If it is empty or wrong: Empty accepts events from any workspace; a team ID that never matches silently ignores the event with Ignored Slack event for a different workspace.
+Common mistake to avoid: Entering the workspace's display name instead of its team ID.`,
+      signingSecret: `What this field means: Signing Secret is a fallback place to store the Slack app's signing secret directly on this node, used only if the saved connection and worker environment variable do not already have one.
+Why it matters: CtrlChecks needs the exact Slack app signing secret to validate the X-Slack-Signature header on every incoming request.
+When to fill it: Leave it blank in almost every setup — save the signing secret on the Slack connection in Connections instead. Fill it here only as a last-resort override for one specific node.
+What to enter: The exact Signing Secret string from Slack app settings -> Basic Information -> App Credentials -> Signing Secret.
+Where the value comes from: Copy it directly from your Slack app's Basic Information page in api.slack.com/apps.
+How to use it later: This is setup-only and is never emitted as {{$json.signingSecret}} to downstream nodes.
+Accepted format: Plain secret text; the visual field uses a standard text control even though the value should be treated as secret material.
+Real workplace example: A team temporarily sets Signing Secret here while debugging a connection issue, then removes it once the Slack connection itself is fixed.
+If it is empty or wrong: Empty falls back to the connection's signing secret, then the worker's SLACK_SIGNING_SECRET environment variable; if none resolve, real Slack requests fail with Invalid Slack webhook signature.
+Common mistake to avoid: Confusing this with the Slack bot token (which starts with xoxb-) — the signing secret is a separate value from Basic Information.`,
+      validateSignature: `What this field means: Validate Slack Signature checks that Slack itself signed the incoming request using your app's signing secret, and that the request timestamp is recent.
+Why it matters: A public webhook URL should reject requests that did not come through Slack, and reject old/replayed requests.
+When to fill it: Keep it enabled for production. Disable only for a controlled local test where you cannot generate a real Slack signature.
+What to enter: true/enabled for real workflows; false/disabled only for temporary debugging.
+Where the value comes from: This is a security choice made by the workflow owner or admin. The signing secret itself comes from the Slack connection, this node's Signing Secret field, or the worker's SLACK_SIGNING_SECRET environment variable.
+How to use it later: This setting protects whether a workflow starts; it is not output as {{$json.validateSignature}}.
+Accepted format: Boolean checkbox.
+Real workplace example: A live Slack support bot keeps validation enabled so only genuine, recent Slack requests can create replies or tickets.
+If it is empty or wrong: Default true requires a resolvable signing secret and a request timestamp within about 5 minutes; if either check fails, requests fail with Invalid Slack webhook signature.
+Common mistake to avoid: Turning this off permanently instead of correctly saving the Signing Secret on the connection.`,
+    },
+  },
+
+  stripe_trigger: {
+    payment_billing_events: {
+      connectionId: `What this field means: Connection points to the saved Stripe Secret Key credential CtrlChecks uses to create the webhook endpoint on your Stripe account.
+Why it matters: CtrlChecks needs a working Stripe secret key to call Stripe's API and register a webhook endpoint that Stripe will call back to.
+When to fill it: You do not fill this in the current visual panel — it is not one of the exposed config fields; CtrlChecks always resolves your active Stripe connection automatically.
+What to enter: Nothing in the panel; manage the credential itself under Connections.
+Where the value comes from: CtrlChecks Connections stores it after you save a Stripe Secret Key.
+How to use it later: This is a setup value only; it is not emitted as {{$json.connectionId}} to downstream nodes.
+Accepted format: Saved connection reference, not a raw sk_live_/sk_test_ key.
+Real workplace example: A merchant saves one Stripe connection for their account, and every Stripe Trigger node in the workspace reuses it.
+If it is empty or wrong: Empty falls back to the active Stripe connection; a missing or invalid connection causes No active Stripe connection found.
+Common mistake to avoid: Pasting a raw Stripe secret key into a normal workflow field instead of saving it under Connections.`,
+      eventTypes: `What this field means: Event Types decides which Stripe webhook events CtrlChecks actually subscribes to when it creates the webhook endpoint, and which of those are accepted afterward.
+Why it matters: This value drives both the real Stripe webhook subscription and the trigger's own filtering.
+When to fill it: Keep the broad default while exploring; narrow it before production to only the events this workflow actually needs.
+What to enter: Comma-separated exact Stripe event names such as checkout.session.completed, payment_intent.succeeded, invoice.payment_succeeded, customer.subscription.created, charge.refunded.
+Where the value comes from: Pick from Stripe's event type list based on what your workflow should react to.
+How to use it later: Route with {{$json.eventType}}, which is always the exact Stripe event name.
+Accepted format: Comma-separated text.
+Real workplace example: checkout.session.completed, payment_intent.succeeded for an order-fulfillment workflow.
+If it is empty or wrong: Empty defaults to a broad set covering checkout, payments, invoices, subscriptions, and refunds. A misspelled event name is simply never delivered by Stripe.
+Common mistake to avoid: Guessing at an event name instead of copying the exact string from Stripe's event type reference.`,
+      connect: `What this field means: Stripe Connect Events tells CtrlChecks to register the webhook endpoint as a Connect endpoint, which receives events from every connected account under your Stripe Connect platform.
+Why it matters: A regular webhook endpoint only ever receives events for your own Stripe account; platforms managing connected accounts need this enabled to see their events at all.
+When to fill it: Enable it only if you operate a Stripe Connect platform. Leave it disabled for a normal single-account Stripe integration.
+What to enter: true/enabled for a Connect platform; false/disabled (the default) otherwise.
+Where the value comes from: Check Stripe Dashboard for Connect settings if unsure whether your account is a Connect platform.
+How to use it later: The trigger output includes {{$json.accountId}} identifying which connected account the event came from.
+Accepted format: Boolean checkbox.
+Real workplace example: A marketplace platform enables this so it can auto-generate payout notifications whenever any seller's payment succeeds.
+If it is empty or wrong: Default false registers a regular account-only webhook; enabling it without being a Connect platform has no effect.
+Common mistake to avoid: Enabling this expecting it to filter to one specific connected account — there is no per-account filter on this node.`,
+      livemode: `What this field means: Live Mode Only only lets events matching one specific mode (live or test) through to start the workflow.
+Why it matters: Stripe sends webhook events for both real (live) and sandbox (test) payments to the same endpoint; this keeps production from firing on test data.
+When to fill it: Leave it completely unset while building and testing. Set it explicitly once the workflow is ready for production.
+What to enter: Enable it to accept only live-mode events; leave untouched to accept both live and test events.
+Where the value comes from: This is a deployment decision, not something copied from Stripe.
+How to use it later: The trigger output includes {{$json.livemode}} so downstream steps can confirm which mode the event came from.
+Accepted format: Boolean checkbox.
+Real workplace example: A finance team enables Live Mode Only on the production fulfillment workflow so test payments never trigger a real shipment.
+If it is empty or wrong: Truly unset accepts both live and test events; once explicitly set it actively rejects events of the other mode.
+Common mistake to avoid: Toggling this on then off while testing — unchecking it may save as an explicit false, which then only accepts test-mode events.`,
+      customerId: `What this field means: Customer ID restricts this trigger to events belonging to one specific Stripe customer.
+Why it matters: This turns an account-wide trigger into a focused watcher on a single, already-known customer.
+When to fill it: Fill it only when you need a workflow tied to one specific customer. Leave it blank for normal account-wide workflows.
+What to enter: The Stripe customer ID, which always starts with cus_, not the customer's name or email.
+Where the value comes from: Read {{$json.customerId}} from a previous test event, or find it in Stripe Dashboard under the customer's detail page.
+How to use it later: The trigger output includes {{$json.customerId}} and {{$json.customerEmail}} for confirmation or logging.
+Accepted format: Stripe customer ID text starting with cus_.
+Real workplace example: An account manager watches only their top enterprise customer's ID so a Slack alert fires whenever that account's invoice is paid.
+If it is empty or wrong: Empty accepts events for any customer; an ID that never matches silently ignores the event with Ignored Stripe event for customer.
+Common mistake to avoid: Entering the customer's email address here instead of their Stripe customer ID.`,
+      currency: `What this field means: Currency only lets events in one specific currency through to start the workflow.
+Why it matters: A multi-currency Stripe account can process payments in several currencies; this keeps a currency-specific workflow scoped correctly.
+When to fill it: Fill it for an account that charges in multiple currencies and this workflow should only react to one of them. Leave it blank to accept any currency.
+What to enter: A lowercase ISO currency code such as usd, eur, or gbp.
+Where the value comes from: Match it to the currencies your Stripe account actually charges in.
+How to use it later: The trigger output includes {{$json.currency}} alongside {{$json.amount}}.
+Accepted format: Lowercase 3-letter ISO currency code.
+Real workplace example: A business charging in both USD and EUR routes EUR payments to a different accounting workflow.
+If it is empty or wrong: Empty accepts events in any currency; a currency that never matches silently ignores the event with Ignored Stripe event currency.
+Common mistake to avoid: Using an uppercase or symbol form instead of the lowercase ISO code Stripe actually sends.`,
+      minAmount: `What this field means: Minimum Amount only lets events whose amount is at or above this value through to start the workflow.
+Why it matters: It lets a workflow focus on high-value transactions, such as flagging large payments for manual review.
+When to fill it: Fill it for a workflow that should ignore small routine charges. Leave it blank to accept transactions of any size.
+What to enter: A plain whole number in the smallest currency unit Stripe uses — cents for usd/eur (so 1000 means $10.00).
+Where the value comes from: Decide the threshold based on your typical transaction size, remembering Stripe amounts are in the smallest unit, not whole dollars.
+How to use it later: The trigger output includes {{$json.amount}} and {{$json.currency}} so downstream steps can double-check the exact value.
+Accepted format: Plain whole number, no currency symbol, decimal point, or commas.
+Real workplace example: A fraud-review workflow sets Minimum Amount to 50000 (meaning $500.00) so only large payments are flagged.
+If it is empty or wrong: Empty accepts transactions of any size; amounts below the threshold are silently ignored with Ignored Stripe event amount.
+Common mistake to avoid: Entering a whole-dollar amount like 500 expecting it to mean $500 — Stripe amounts are in cents.`,
+      query: `What this field means: Keyword Filter only lets events whose combined text, customer email, customer ID, object ID, status, or description contain a word or phrase start the workflow.
+Why it matters: A busy Stripe account can produce a lot of webhook traffic; this keeps a workflow focused on a specific term.
+When to fill it: Use it when the workflow should react only to a phrase such as a specific description or VIP customer email. Leave it blank to accept every event matching the other filters.
+What to enter: A simple keyword or short phrase, not Stripe search syntax.
+Where the value comes from: Pick the label, customer email, description keyword, or status term your team cares about.
+How to use it later: The accepted event output still includes {{$json.text}}, {{$json.customerEmail}}, {{$json.description}}, and {{$json.status}} for downstream routing.
+Accepted format: Plain text, case-insensitive contains match across the combined fields.
+Real workplace example: enterprise starts only payment/invoice workflows whose description or customer email mentions enterprise accounts.
+If it is empty or wrong: Empty accepts every event matching the other filters; a too-specific or misspelled filter causes Ignored Stripe event not matching this trigger.
+Common mistake to avoid: Expecting Stripe's search query syntax here — this is a simple text contains filter.`,
+    },
+  },
+
+  tally_trigger: {
+    default: {
+      connectionId: `What this field means: Connection points to the saved Tally Personal Access Token CtrlChecks uses to register the webhook on your form.
+Why it matters: CtrlChecks needs a working Tally token to call the Tally API and create (or remove) the form webhook subscription.
+When to fill it: You do not fill this in the current visual panel — it is not one of the exposed config fields; CtrlChecks always resolves your active Tally connection automatically.
+What to enter: Nothing in the panel; manage the credential itself under Connections.
+Where the value comes from: CtrlChecks Connections stores it after you save a Tally Personal Access Token.
+How to use it later: This is a setup value only; it is not emitted as {{$json.connectionId}} to downstream nodes.
+Accepted format: Saved connection reference, not a raw token.
+Real workplace example: A marketing team saves one Tally connection for the account that owns all their intake forms, and every Tally Trigger node reuses it.
+If it is empty or wrong: Empty falls back to the active Tally connection; a missing or invalid connection causes No active Tally connection found.
+Common mistake to avoid: Pasting the raw Tally Personal Access Token into a normal workflow field instead of saving it under Connections.`,
+      formId: `What this field means: Form ID identifies the exact Tally form this trigger listens to.
+Why it matters: CtrlChecks uses it both to register the webhook and to confirm every incoming submission actually belongs to this form.
+When to fill it: Always required — the trigger cannot register a webhook or accept submissions without it.
+What to enter: The short form ID shown in the form's share URL, such as wA1b2C in tally.so/forms/wA1b2C.
+Where the value comes from: Open the form in Tally, look at the address bar or the Share link, and copy the ID segment after /forms/.
+How to use it later: The trigger output includes {{$json.formId}} and {{$json.formName}} for confirmation or logging.
+Accepted format: Plain Tally form ID text, no slashes or the tally.so domain.
+Real workplace example: A support team's intake form at tally.so/forms/wA1b2C sets Form ID to wA1b2C so only that form's submissions start the workflow.
+If it is empty or wrong: Leaving it blank fails validation with A Tally form ID is required; a wrong ID causes Tally API errors during registration.
+Common mistake to avoid: Pasting the full form URL instead of just the wA1b2C ID segment.`,
+      query: `What this field means: Keyword Filter only lets submissions whose combined answer text contains a word or phrase start the workflow.
+Why it matters: A high-traffic form can produce a lot of submissions; this keeps the workflow focused on a specific term without needing a second form or webhook.
+When to fill it: Use it when the workflow should react only to a phrase such as urgent or a department name. Leave it blank to accept every submission to the form.
+What to enter: A simple keyword or short phrase, not a field name or Tally filter syntax.
+Where the value comes from: Pick the label, department, priority word, or answer value your team cares about.
+How to use it later: The accepted submission output still includes the full {{$json.answers}} object for downstream routing.
+Accepted format: Plain text, case-insensitive contains match against all answers combined as text.
+Real workplace example: urgent starts only the escalation workflow when a respondent's answer mentions urgent.
+If it is empty or wrong: Empty accepts every submission to the form; a too-specific or misspelled filter causes Ignored Tally response not matching this trigger.
+Common mistake to avoid: Typing a field name expecting it to match that specific field only — this filter checks the combined text of every answer.`,
+    },
+  },
+
+  telegram_trigger: {
+    default: {
+      connectionId: `What this field means: Connection points to the saved Telegram Bot Token CtrlChecks uses to call setWebhook, deleteWebhook, and getMe on your bot.
+Why it matters: CtrlChecks needs the bot token to register (and re-register) the webhook URL with Telegram's API — without it, the trigger cannot receive any updates.
+When to fill it: You do not fill this in the current visual panel — it is not one of the exposed config fields; CtrlChecks always resolves your active Telegram connection automatically.
+What to enter: Nothing in the panel; manage the credential itself under Connections.
+Where the value comes from: CtrlChecks Connections stores it after you save a Telegram Bot Token.
+How to use it later: This is a setup value only; it is not emitted as {{$json.connectionId}} to downstream nodes.
+Accepted format: Saved connection reference, not a raw bot token.
+Real workplace example: A team saves one Telegram connection per bot they operate, such as a support bot and a sales bot.
+If it is empty or wrong: Empty falls back to the active Telegram connection; a missing connection causes No active Telegram Bot Token connection found.
+Common mistake to avoid: Pasting the raw bot token from BotFather into a normal workflow field instead of saving it under Connections.`,
+      updateTypes: `What this field means: Update Types decides which kinds of Telegram Bot API updates this trigger accepts, and is also sent to Telegram as the allowed_updates list when the webhook is registered.
+Why it matters: Telegram will only deliver the update kinds you subscribe to; message, edited_message, channel_post, and callback_query cover very different use cases.
+When to fill it: Keep message for a normal chatbot. Add callback_query when your bot uses inline keyboard buttons, or channel_post if the bot posts/monitors a channel.
+What to enter: One value from the dropdown: message, edited_message, channel_post, or callback_query.
+Where the value comes from: Decide based on what your bot actually needs to react to.
+How to use it later: The trigger output includes {{$json.updateType}} confirming which kind of update actually arrived.
+Accepted format: One of the four listed values.
+Real workplace example: message for an AI support chatbot; callback_query for a workflow that reacts to inline Approve/Reject button taps.
+If it is empty or wrong: Empty defaults to message. Choosing a type your bot never receives means the trigger simply never fires.
+Common mistake to avoid: Expecting the workflow to react to edited messages while only message is selected — edited_message must be added explicitly.`,
+      allowedChatIds: `What this field means: Allowed Chat IDs restricts this trigger to messages from specific Telegram chats.
+Why it matters: One bot can be added to many private chats, groups, and channels; this keeps a chat-specific workflow from reacting to everyone who can message the bot.
+When to fill it: Use this when one bot is installed in multiple chats but this workflow should only react to some of them. Leave it blank to accept any chat that can message the bot.
+What to enter: Comma-separated numeric Telegram chat IDs, such as 123456789 for a private chat or a negative number for a group/supergroup.
+Where the value comes from: Read {{$json.chatId}} from a previous test message, or use @userinfobot/@RawDataBot in Telegram to look up a chat's ID.
+How to use it later: The trigger output includes {{$json.chatId}}, which you also use as the reply target in a downstream Telegram action node.
+Accepted format: Comma-separated numeric IDs, including negative signs for groups.
+Real workplace example: An internal ops bot restricts itself to the team's private group chat ID.
+If it is empty or wrong: Empty allows any chat; a chat ID that never matches silently ignores the message with Ignored Telegram update from a chat that is not allowed.
+Common mistake to avoid: Typing the chat's display name or @username instead of its numeric chat ID.`,
+      commandFilter: `What this field means: Command Filter only accepts messages that start with one specific slash command.
+Why it matters: A single bot can support several commands; this keeps each workflow scoped to the command it actually handles.
+When to fill it: Fill it whenever the bot should route different commands to different workflows. Leave it blank to accept every message regardless of command.
+What to enter: The command text; the leading slash is optional — CtrlChecks adds it automatically if you omit it.
+Where the value comes from: Match it to the commands you registered with BotFather for this bot.
+How to use it later: The trigger output includes {{$json.text}}, which still contains the full message including the command.
+Accepted format: A command word, with or without a leading slash.
+Real workplace example: /support and /feedback both work with the same bot; one workflow sets Command Filter to /support.
+If it is empty or wrong: Empty accepts any message; a command that never matches silently ignores the message with Ignored Telegram message because it does not start with....
+Common mistake to avoid: Including trailing text or arguments in this field — only the command word itself should go here.`,
+      secretToken: `What this field means: Secret Token is a shared value Telegram echoes back in the X-Telegram-Bot-Api-Secret-Token header on every webhook delivery, which CtrlChecks then checks against this field.
+Why it matters: Telegram webhooks are not otherwise signed; this header check is the only way to confirm a request actually came from Telegram's servers.
+When to fill it: Set it before registering the webhook, and keep the same value for the life of the workflow.
+What to enter: A random string, ideally generated once and reused, such as a UUID or a long random token.
+Where the value comes from: Generate it yourself in a password manager or admin note — it does not come from Telegram or BotFather.
+How to use it later: This is setup-only and is never emitted as {{$json.secretToken}} to downstream nodes.
+Accepted format: Plain secret text; the visual field uses a standard text control even though the value should be treated as secret material.
+Real workplace example: A finance team sets a random Secret Token before registering the webhook so outside callers cannot inject fake Telegram updates.
+If it is empty or wrong: Empty means Telegram request validation is skipped entirely; a mismatched value causes Invalid Telegram webhook secret token on every real delivery.
+Common mistake to avoid: Changing this field after the webhook was already registered with the old value — re-register the webhook after changing it.`,
+    },
+  },
+
+  trello_trigger: {
+    card_events: {
+      connectionId: `What this field means: Connection points to the saved Trello credential (API Key, API Token, and App Secret) CtrlChecks uses to register the webhook and validate incoming deliveries.
+Why it matters: CtrlChecks needs the API key/token to call Trello's webhook API, and the App Secret to verify the X-Trello-Webhook signature — without the App Secret, registration fails outright.
+When to fill it: You do not fill this in the current visual panel — it is not one of the exposed config fields; CtrlChecks always resolves your active Trello connection automatically.
+What to enter: Nothing in the panel; manage the credential itself under Connections.
+Where the value comes from: CtrlChecks Connections stores it after you save the Trello API Key, Token, and App Secret.
+How to use it later: This is a setup value only; it is not emitted as {{$json.connectionId}} to downstream nodes.
+Accepted format: Saved connection reference, not raw API credentials.
+Real workplace example: A project management team saves one Trello connection for the account that owns their boards.
+If it is empty or wrong: Empty falls back to the active Trello connection; a missing App Secret causes Trello Trigger requires the Trello app secret for X-Trello-Webhook signature validation.
+Common mistake to avoid: Saving the API Key and Token but forgetting the App Secret.`,
+      modelId: `What this field means: Model ID is the exact Trello object (board, card, member, or organization) this trigger's webhook is registered against.
+Why it matters: Trello webhooks belong to one idModel; this decides what Trello will ever send you at all — everything else only narrows events after they already arrive.
+When to fill it: Always required — the trigger cannot register a webhook without it.
+What to enter: A Trello board ID for broad board/list/card activity (the most common choice), or a specific card or member ID for a narrower webhook.
+Where the value comes from: Open the board in Trello, add .json to the URL to find the board's ID, or read {{$json.boardId}}/{{$json.cardId}} from a previous test event.
+How to use it later: The trigger output includes {{$json.boardId}} and {{$json.cardId}} regardless of which model you watched.
+Accepted format: Trello object ID text (24-character hex string).
+Real workplace example: A support team sets Model ID to their support board's ID so all card activity can start workflows.
+If it is empty or wrong: Leaving it blank fails validation with A Trello model ID is required; a wrong ID causes Trello API errors during registration.
+Common mistake to avoid: Pasting the board's short URL name instead of its actual ID.`,
+      eventTypes: `What this field means: Event Types decides which normalized Trello activity kinds are accepted after the webhook has already delivered them, based on Model ID.
+Why it matters: A board webhook delivers every action on that board; this keeps a card-focused workflow from firing on unrelated list renames or checklist edits.
+When to fill it: Keep the default while testing; narrow it before production.
+What to enter: Comma-separated normalized values such as card_created, card_updated, card_moved, card_commented, list_activity, checklist_activity.
+Where the value comes from: Pick from the normalized event families your workflow should react to.
+How to use it later: Route with {{$json.eventType}}; card_moved is a special case of updateCard detected when list data is present.
+Accepted format: Comma-separated text, matched case-insensitively.
+Real workplace example: card_moved, card_commented for a workflow that tracks status changes and customer replies.
+If it is empty or wrong: Empty defaults to a broad set. A value that never matches an incoming action silently ignores that event with Ignored Trello event type.
+Common mistake to avoid: Expecting card_updated to exclude moves — this trigger reclassifies moves as card_moved only when list data is present.`,
+      boardId: `What this field means: Board ID restricts this trigger to events belonging to one specific Trello board.
+Why it matters: This is mainly useful when Model ID points to a member or organization spanning multiple boards.
+When to fill it: Fill it when Model ID is not already a board ID, or as an extra safety filter. Leave it blank otherwise.
+What to enter: The Trello board ID, not its name or short URL slug.
+Where the value comes from: Read {{$json.boardId}} from a previous test event, or the board's .json export.
+How to use it later: The trigger output includes {{$json.boardId}} and {{$json.boardName}} for logging or routing.
+Accepted format: Trello board ID text (24-character hex string).
+Real workplace example: A member-level webhook sets Board ID to filter down to just one of that member's several boards.
+If it is empty or wrong: Empty accepts events from any board the webhook covers; a board ID that never matches silently ignores the event with Ignored Trello event for board.
+Common mistake to avoid: Expecting this field to also register the webhook narrowly — Model ID controls the actual subscription scope.`,
+      listId: `What this field means: List ID restricts this trigger to events involving one specific Trello list.
+Why it matters: A board can have many lists; this keeps a list-specific workflow from reacting to every list on the board.
+When to fill it: Fill it when the workflow should only react to cards in, entering, or leaving one particular list. Leave it blank to accept activity from every list.
+What to enter: The Trello list ID, not its display name.
+Where the value comes from: Read {{$json.listId}}, {{$json.listBeforeId}}, or {{$json.listAfterId}} from a previous test event.
+How to use it later: For moved cards, this matches against either the before or after list.
+Accepted format: Trello list ID text (24-character hex string).
+Real workplace example: A fulfillment workflow sets List ID to the Done list's ID.
+If it is empty or wrong: Empty accepts events from any list; a list ID that never matches silently ignores the event with Ignored Trello event outside list.
+Common mistake to avoid: Typing the list's display name instead of its ID.`,
+      cardId: `What this field means: Card ID restricts this trigger to events about one specific Trello card.
+Why it matters: This turns a board-wide trigger into a focused watcher on a single, already-known card.
+When to fill it: Fill it only when you need a workflow tied to one specific card. Leave it blank for normal board-wide workflows.
+What to enter: The Trello card ID, not its name or short link.
+Where the value comes from: Read {{$json.cardId}} from a previous test event, or resolve the full ID via the card's .json export.
+How to use it later: The trigger output includes {{$json.cardId}}, {{$json.cardName}}, and {{$json.cardUrl}} for confirmation or logging.
+Accepted format: Trello card ID text (24-character hex string).
+Real workplace example: A release manager sets Card ID to a specific Release Checklist card.
+If it is empty or wrong: Empty accepts events for any card; an ID that never matches silently ignores it with Ignored Trello event for card.
+Common mistake to avoid: Pasting the card's short link instead of its full 24-character ID.`,
+      memberId: `What this field means: Member ID Filter restricts this trigger to events created by, or involving, one specific Trello member.
+Why it matters: It lets you build a workflow around one particular teammate's activity.
+When to fill it: Fill it only for person-specific automations. Leave it blank for normal team-wide triggers.
+What to enter: The Trello member ID, not their username or display name.
+Where the value comes from: Read {{$json.userId}} or {{$json.memberId}} from a previous test event, or use Trello's /1/members/{username} API.
+How to use it later: The trigger output includes {{$json.userId}}, {{$json.memberId}}, and {{$json.memberName}} for confirmation or logging.
+Accepted format: Trello member ID text (24-character hex string).
+Real workplace example: A workflow watches only the project lead's card creations.
+If it is empty or wrong: Empty accepts events from any member; an ID that never matches silently ignores the event with Ignored Trello event not involving member.
+Common mistake to avoid: Entering the member's @username instead of their Trello member ID.`,
+      query: `What this field means: Keyword Filter only lets events whose card name or comment text contains a word or phrase start the workflow.
+Why it matters: A busy board can produce a lot of activity; this keeps a workflow focused on a specific term.
+When to fill it: Use it when the workflow should react only to a phrase such as urgent or a customer name. Leave it blank to accept every event matching the other filters.
+What to enter: A simple keyword or short phrase, not Trello search syntax.
+Where the value comes from: Pick the label, customer name, or keyword your team uses in card titles or comments.
+How to use it later: The accepted event output still includes {{$json.cardName}} and {{$json.commentText}} for downstream routing.
+Accepted format: Plain text, case-insensitive contains match.
+Real workplace example: urgent starts only card/comment workflows whose card name or comment mentions urgent.
+If it is empty or wrong: Empty accepts every event matching the other filters; a too-specific or misspelled filter causes Ignored Trello event not matching this trigger.
+Common mistake to avoid: Expecting Trello's search syntax here — this is a simple text contains filter.`,
+    },
+  },
+
+  typeform_trigger: {
+    default: {
+      connectionId: `What this field means: Connection points to the saved Typeform Personal Access Token CtrlChecks uses to register the webhook on your form.
+Why it matters: CtrlChecks needs a working Typeform token to call the Typeform API and create the form webhook subscription.
+When to fill it: You do not fill this in the current visual panel — it is not one of the exposed config fields; CtrlChecks always resolves your active Typeform connection automatically.
+What to enter: Nothing in the panel; manage the credential itself under Connections.
+Where the value comes from: CtrlChecks Connections stores it after you save a Typeform Personal Access Token.
+How to use it later: This is a setup value only; it is not emitted as {{$json.connectionId}} to downstream nodes.
+Accepted format: Saved connection reference, not a raw token.
+Real workplace example: A marketing team saves one Typeform connection for the account that owns all their intake forms.
+If it is empty or wrong: Empty falls back to the active Typeform connection; a missing or invalid connection causes No active Typeform connection found.
+Common mistake to avoid: Pasting the raw Typeform Personal Access Token into a normal workflow field instead of saving it under Connections.`,
+      formId: `What this field means: Form ID identifies the exact Typeform this trigger listens to.
+Why it matters: CtrlChecks uses it both to register the webhook and to confirm every incoming response actually belongs to this form.
+When to fill it: Always required — the trigger cannot register a webhook or accept responses without it.
+What to enter: The short form ID shown in the form's share URL, such as abc123 in typeform.com/to/abc123.
+Where the value comes from: Open the form in Typeform, look at the Share link or the address bar, and copy the ID segment after /to/.
+How to use it later: The trigger output includes {{$json.formId}} for confirmation or logging.
+Accepted format: Plain Typeform form ID text, no slashes or the typeform.com domain.
+Real workplace example: A support team's intake form at typeform.com/to/abc123 sets Form ID to abc123.
+If it is empty or wrong: Leaving it blank fails validation with A Typeform form ID is required; a wrong ID causes Typeform API errors during registration.
+Common mistake to avoid: Pasting the full form URL instead of just the abc123 ID segment.`,
+      query: `What this field means: Keyword Filter only lets responses whose combined answer text contains a word or phrase start the workflow.
+Why it matters: A high-traffic form can produce a lot of responses; this keeps the workflow focused on a specific term without needing a second form or webhook.
+When to fill it: Use it when the workflow should react only to a phrase such as urgent or a department name. Leave it blank to accept every response to the form.
+What to enter: A simple keyword or short phrase, not a field name or Typeform filter syntax.
+Where the value comes from: Pick the label, department, priority word, or answer value your team cares about.
+How to use it later: The accepted response output still includes the full {{$json.answers}} object and {{$json.hidden}} for downstream routing.
+Accepted format: Plain text, case-insensitive contains match against all answers combined as text.
+Real workplace example: urgent starts only the escalation workflow when a respondent's answer mentions urgent.
+If it is empty or wrong: Empty accepts every response to the form; a too-specific or misspelled filter causes Ignored Typeform response not matching this trigger.
+Common mistake to avoid: Typing a field name expecting it to match that specific field only — this filter checks the combined text of every answer.`,
+    },
+  },
+
+  whatsapp_trigger: {
+    default: {
+      connectionId: `What this field means: Connection points to the saved WhatsApp Business API credential (permanent access token and Phone Number ID) CtrlChecks uses to subscribe the WhatsApp Business Account to webhook events.
+Why it matters: CtrlChecks uses this connection during registration to look up the Business Account ID and subscribe the app to receive events for it.
+When to fill it: You do not fill this in the current visual panel — it is not one of the exposed config fields; CtrlChecks always resolves your active WhatsApp connection automatically.
+What to enter: Nothing in the panel; manage the credential itself under Connections.
+Where the value comes from: CtrlChecks Connections stores it after you save the WhatsApp access token and Phone Number ID.
+How to use it later: This is a setup value only; it is not emitted as {{$json.connectionId}} to downstream nodes.
+Accepted format: Saved connection reference, not a raw access token.
+Real workplace example: A support team connects one WhatsApp Business number, and every WhatsApp Trigger node in the workspace reuses it.
+If it is empty or wrong: Empty falls back to the active WhatsApp connection; a missing or invalid connection can cause No active WhatsApp connection found.
+Common mistake to avoid: Pasting the raw Meta access token into a normal workflow field instead of connecting WhatsApp in Connections.`,
+      eventTypes: `What this field means: Event Types decides which normalized WhatsApp Cloud events (incoming messages vs. delivery status updates) this trigger accepts.
+Why it matters: A chatbot workflow only cares about incoming messages, while a delivery-tracking workflow only cares about status changes.
+When to fill it: Always required. Choose Incoming Messages for the vast majority of chatbot workflows.
+What to enter: One of: Incoming Messages (message), Text Messages (message.text), Media Messages (message.media), Delivery Statuses (status), Delivered (status.delivered), Read (status.read), or Failed (status.failed).
+Where the value comes from: Decide which Meta WhatsApp Cloud webhook field your workflow should react to.
+How to use it later: The trigger output includes {{$json.eventType}}, always one of message.text, message.media, status.sent, status.delivered, status.read, or status.failed.
+Accepted format: One of the seven listed dropdown values.
+Real workplace example: Incoming Messages for an AI support chatbot; Delivered for a workflow that logs message delivery confirmations.
+If it is empty or wrong: This field is required in the panel, so it cannot be left blank; the backend default is message if somehow omitted.
+Common mistake to avoid: Selecting Delivery Statuses expecting message content — status events never include {{$json.text}}, only delivery state in {{$json.status}}.`,
+      phoneNumberId: `What this field means: Phone Number ID restricts this trigger to events for one specific WhatsApp Business phone number.
+Why it matters: A Business Account can have several phone numbers; without this filter, events for every subscribed number could start this workflow.
+When to fill it: Fill it when your Meta app manages multiple WhatsApp numbers and this workflow should only react to one of them. Leave it blank to accept events for the connected account's number.
+What to enter: The numeric Phone Number ID from Meta, not the actual phone number digits.
+Where the value comes from: Meta for Developers -> WhatsApp -> API Setup shows the Phone Number ID for the number you configured.
+How to use it later: The trigger output includes {{$json.phoneNumberId}} and {{$json.displayPhoneNumber}} for confirmation or logging.
+Accepted format: Numeric ID text such as 123456789012345.
+Real workplace example: A company with separate support and sales WhatsApp numbers filters the support workflow to only the support number's Phone Number ID.
+If it is empty or wrong: Empty accepts events for the connected account's number; a wrong ID causes valid events to be ignored with Ignored WhatsApp event for a different phone number ID.
+Common mistake to avoid: Entering the actual phone number instead of Meta's numeric Phone Number ID.`,
+      allowedWaIds: `What this field means: Allowed Senders limits the trigger to specific WhatsApp senders, identified by their WhatsApp ID (a phone number without formatting).
+Why it matters: It can keep a testing or VIP workflow from reacting to every person who messages the business number.
+When to fill it: Use it for internal testing, approved partner accounts, or a controlled rollout. Leave it blank for a normal public WhatsApp automation.
+What to enter: Comma-separated WhatsApp IDs such as 15551234567 (country code plus number, no plus sign or spaces).
+Where the value comes from: Read {{$json.waId}} or {{$json.chatId}} from a previous test message.
+How to use it later: The accepted event output still outputs {{$json.waId}} and {{$json.chatId}} for replies or audits.
+Accepted format: Comma-separated numeric strings, no + or spaces.
+Real workplace example: Before launching a WhatsApp assistant, the team allows only two employee numbers so they can test without responding to real customers.
+If it is empty or wrong: Empty allows every matching sender; a WhatsApp ID that never matches silently ignores that person's events with Ignored WhatsApp event from a sender that is not allowed.
+Common mistake to avoid: Including a leading + or spaces/dashes in the phone number.`,
+      verifyToken: `What this field means: Verify Token is the shared text Meta sends during the webhook challenge to prove you configured the callback intentionally.
+Why it matters: Meta will not activate the webhook callback unless CtrlChecks returns the challenge for the exact matching token.
+When to fill it: Always required — fill it before verifying the callback URL in Meta for Developers.
+What to enter: A random phrase or generated secret unique to this workflow, such as wa-webhook-verify-2026.
+Where the value comes from: Create it yourself in a password manager or admin setup note, then enter the exact same value in Meta for Developers -> WhatsApp -> Configuration.
+How to use it later: This token is only for webhook setup; it is never emitted as {{$json.verifyToken}} to downstream nodes.
+Accepted format: Plain text shared token.
+Real workplace example: The support operations admin sets wa-support-prod-verify-rotate-me while adding the CtrlChecks callback URL to the Meta app.
+If it is empty or wrong: Callback verification returns Invalid verify token, and Meta will not save the webhook URL.
+Common mistake to avoid: Confusing this with the WhatsApp access token, app secret, or account password.`,
+      validateSignature: `What this field means: Validate Signature checks that Meta signed the webhook request with your app secret.
+Why it matters: A public webhook URL should reject requests that did not come through the expected Meta app.
+When to fill it: Keep it enabled for production. Disable only for a controlled local test where you cannot generate Meta signatures.
+What to enter: true/enabled for real workflows; false/disabled only for temporary debugging.
+Where the value comes from: This is a security choice made by the workflow owner or admin. The app secret itself comes from worker environment variables META_APP_SECRET, FACEBOOK_APP_SECRET, or WHATSAPP_APP_SECRET.
+How to use it later: This setting protects whether a workflow starts; it is not output as {{$json.validateSignature}}.
+Accepted format: Boolean checkbox.
+Real workplace example: A live WhatsApp support workflow keeps validation enabled so only signed Meta webhook deliveries can create replies or tickets.
+If it is empty or wrong: Default true requires the worker app secret; if the secret is missing or mismatched, requests fail with Invalid WhatsApp webhook signature.
+Common mistake to avoid: Turning this off permanently instead of configuring META_APP_SECRET/FACEBOOK_APP_SECRET/WHATSAPP_APP_SECRET correctly.`,
+    },
+  },
+
   github_trigger: {
     default: {
       connectionId: `What this field means: GitHub Connection points to the saved GitHub account or token that can create and remove repository webhooks. The visual panel usually uses your active GitHub connection rather than asking you to type this ID.
@@ -330,12 +1265,26 @@ Example: minutes — so if interval is 15, it runs every 15 minutes.`,
 
   interval: {
     default: {
-      interval: `What this field is: How often this workflow repeats.
-How to fill it: Type a number. Combined with the "Unit" field, this sets the full frequency.
-Example: 15 (then set unit to "minutes") runs every 15 minutes.`,
-      unit: `What this field is: The time unit for the interval.
-Options: seconds, minutes, hours.
-Example: minutes`,
+      interval: `What this field means: Interval is the number part of how often this workflow repeats, paired with the Unit dropdown below.
+Why it matters: This is the only control over how often the workflow fires automatically; too small a number on a busy workflow can waste API calls and quota, and too large a number can delay time-sensitive work.
+When to fill it: Always required — the trigger needs a positive number before it can activate.
+What to enter: A whole number, clamped in the panel to 1-59 when Unit is Minutes or 1-23 when Unit is Hours.
+Where the value comes from: Decide it based on how urgent the recurring task is, such as polling an inbox every 5 minutes or refreshing a report every 6 hours.
+How to use it later: This is a setup value only; it is not emitted as {{$json.interval}} to downstream nodes.
+Accepted format: Positive whole number, no units or text.
+Real workplace example: A support team polls a ticket queue every 5 minutes (Interval = 5, Unit = Minutes) so new tickets are triaged quickly without overloading the ticketing API.
+If it is empty or wrong: A blank or zero value is rejected by the panel input (minimum 1); values above the clamp are rounded down to 59 minutes or 23 hours.
+Common mistake to avoid: Typing a number expecting seconds-level precision — this node has no seconds unit, so use Minutes with a small number instead.`,
+      unit: `What this field means: Unit tells CtrlChecks whether the Interval number above means minutes or hours.
+Why it matters: The same number means a very different frequency depending on the unit — 5 minutes is frequent polling, 5 hours is a few times a day.
+When to fill it: Always required alongside Interval.
+What to enter: Choose Minutes for anything from every 1 to every 59 minutes, or Hours for every 1 to every 23 hours.
+Where the value comes from: Match it to how time-sensitive the recurring task is — inbox/API polling usually uses Minutes, digest or cleanup jobs usually use Hours.
+How to use it later: This is a setup value only; it is not emitted as {{$json.unit}} to downstream nodes.
+Accepted format: One of minutes or hours — there is no seconds option in this node.
+Real workplace example: A daily inventory sync uses Unit = Hours with Interval = 6 so it runs four times a day.
+If it is empty or wrong: The dropdown always has a value selected (defaults to Minutes), so this cannot be left blank in the panel.
+Common mistake to avoid: Assuming a once-a-day or specific-time schedule is possible here — for an exact daily time or weekly/monthly pattern, use the Schedule Trigger node instead of Interval.`,
     },
   },
 

@@ -268,6 +268,14 @@ export interface NodeInputField {
   /** Canonical ownership class used across planner/question/runtime phases. */
   ownership?: FieldOwnershipClass;
   /**
+   * For array-of-object structural fields, the sub-keys that define "shape" (identity/type/
+   * wiring) rather than display value. Only these keys are compared for post-freeze drift
+   * (see `core/utils/structural-drift.ts`); everything else on each item (label, placeholder,
+   * options text, defaults) may be edited freely after freeze. Omit for fields where the whole
+   * value is structural (falls back to whole-value comparison).
+   */
+  structuralShapeKeys?: string[];
+  /**
    * When `ownership` is `credential`, controls whether the Field Ownership UI may
    * be unlocked so the user can choose manual vs AI fill modes (via `unlock_<nodeId>_<field>` on attach-inputs).
    * - `locked` (default): treat as vault-like; only manual_static unless explicitly unlocked when unlockable.

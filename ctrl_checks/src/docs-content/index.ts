@@ -8,6 +8,7 @@ import { formDoc } from './nodes/form.doc';
 import { httpRequestDoc } from './nodes/http_request.doc';
 import { respondToWebhookDoc } from './nodes/respond_to_webhook.doc';
 import { postgresqlDoc } from './nodes/postgresql.doc';
+import { dbDoc } from './nodes/db.doc';
 import { supabaseDoc } from './nodes/supabase.doc';
 import { googleSheetsDoc } from './nodes/google_sheets.doc';
 import { googleSheetsTriggerDoc } from './nodes/google_sheets_trigger.doc';
@@ -93,7 +94,10 @@ import { ollamaDoc } from './nodes/ollama.doc';
 import { textSummarizerDoc } from './nodes/text_summarizer.doc';
 import { sentimentAnalyzerDoc } from './nodes/sentiment_analyzer.doc';
 import { chatModelDoc } from './nodes/chat_model.doc';
+import { cohereDoc } from './nodes/cohere.doc';
+import { huggingfaceDoc } from './nodes/huggingface.doc';
 import { memoryDoc } from './nodes/memory.doc';
+import { mistralDoc } from './nodes/mistral.doc';
 import { toolDoc } from './nodes/tool.doc';
 import { httpPostDoc } from './nodes/http_post.doc';
 import { webhookResponseDoc } from './nodes/webhook_response.doc';
@@ -168,6 +172,7 @@ import { zendeskDoc } from './nodes/zendesk.doc';
 import { netlifyDoc } from './nodes/netlify.doc';
 import { workdayDoc } from './nodes/workday.doc';
 import { pineconeDoc } from './nodes/pinecone.doc';
+import { qdrantDoc } from './nodes/qdrant.doc';
 import { langchainDoc } from './nodes/langchain.doc';
 import { lightricksDoc } from './nodes/lightricks.doc';
 
@@ -181,6 +186,7 @@ export const allNodes: NodeDoc[] = [
   httpRequestDoc,
   respondToWebhookDoc,
   postgresqlDoc,
+  dbDoc,
   supabaseDoc,
   googleSheetsDoc,
   googleSheetsTriggerDoc,
@@ -266,7 +272,10 @@ export const allNodes: NodeDoc[] = [
   textSummarizerDoc,
   sentimentAnalyzerDoc,
   chatModelDoc,
+  cohereDoc,
+  huggingfaceDoc,
   memoryDoc,
+  mistralDoc,
   toolDoc,
   httpPostDoc,
   webhookResponseDoc,
@@ -341,6 +350,7 @@ export const allNodes: NodeDoc[] = [
   netlifyDoc,
   workdayDoc,
   pineconeDoc,
+  qdrantDoc,
   langchainDoc,
   lightricksDoc,
 ];

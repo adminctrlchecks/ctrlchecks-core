@@ -1,1365 +1,514 @@
-import type { NodeDoc } from '../types';
+import type { FieldDoc, NodeDoc, OperationDoc } from '../types';
+import { richFieldHelp } from './_sharedFieldHelp';
+
+const operationValues = [
+  'create_task',
+  'update_task',
+  'get_task',
+  'delete_task',
+  'list_tasks',
+  'add_comment',
+  'update_status',
+  'get_teams',
+  'get_spaces',
+  'get_folders',
+  'get_lists',
+];
+
+const fields: FieldDoc[] = [
+  {
+    name: 'Operation',
+    internalKey: 'operation',
+    type: 'select',
+    required: true,
+    description: 'The ClickUp action the node should run.',
+    options: operationValues,
+    helpText: richFieldHelp({
+      what: 'The action selector for ClickUp. create_task creates a task, update_task changes task fields, get_task reads one task, delete_task deletes one task, list_tasks reads tasks, add_comment writes a task/list comment, update_status changes only status, get_teams finds workspaces, get_spaces finds spaces, get_folders finds folders, and get_lists finds lists.',
+      why: 'The operation controls which IDs and text fields matter and which ClickUp API route the worker calls.',
+      when: 'Choose it before filling other fields so you know whether you need a workspaceId, spaceId, folderId, listId, taskId, name, status, or commentText.',
+      enter: 'Select one value from the dropdown. Use create_task for new work from forms, list_tasks for reporting, and get_teams/get_spaces/get_folders/get_lists when discovering IDs.',
+      source: 'The choice comes from your workflow goal, not from ClickUp. Upstream AI can set it only if it uses one of the exact option values.',
+      later: 'Downstream nodes use the returned ClickUp data with expressions such as {{$json.id}}, {{$json.name}}, or {{$json._statusSkipped}}.',
+      format: `One of: ${operationValues.join(', ')}.`,
+      example: 'A support workflow chooses create_task to make an onboarding follow-up task after a customer form arrives.',
+      empty: 'Runtime raises ClickUp node is missing required "operation" config.',
+      mistake: 'Choosing get_tasks_list from older examples; the visible panel uses list_tasks, which runtime normalizes to getTasks.',
+    }),
+    defaultValue: 'create_task',
+    example: 'create_task',
+    notes: `Supported visible options: ${operationValues.join(', ')}.`,
+  },
+  {
+    name: 'Workspace ID',
+    internalKey: 'workspaceId',
+    type: 'string',
+    required: false,
+    description: 'ClickUp workspace/team ID.',
+    helpText: richFieldHelp({
+      what: 'The ClickUp workspace, also called teamId by the API, that contains the spaces, folders, lists, and tasks you want to use.',
+      why: 'get_spaces requires a workspace/team ID, and the credential resolver can also use this as the teamId when calling ClickUp.',
+      when: 'Fill it for get_spaces and whenever your workspace is not already supplied by the saved ClickUp credential.',
+      enter: 'Type the numeric workspace ID or map {{$json.workspaceId}} from a previous Get Teams step.',
+      source: 'Use the Get Teams operation, the saved ClickUp credential teamId, or the workspace URL in app.clickup.com.',
+      later: 'The value helps later discovery steps get spaces and lists that feed {{$json.spaceId}} or {{$json.listId}}.',
+      format: 'String or number-like ID, for example 90161598841. Do not enter the workspace display name.',
+      example: 'Operations maps {{$json.teamId}} from a Get Teams step before listing project spaces.',
+      empty: 'get_spaces fails with teamId is required for getSpaces unless the credential supplies teamId.',
+      mistake: 'Copying the whole ClickUp URL instead of the workspace/team ID segment.',
+    }),
+    placeholder: '90161598841',
+    example: '90161598841',
+  },
+  {
+    name: 'Space ID',
+    internalKey: 'spaceId',
+    type: 'string',
+    required: false,
+    description: 'ClickUp space ID.',
+    helpText: richFieldHelp({
+      what: 'The ID of the ClickUp Space inside a workspace.',
+      why: 'get_folders needs spaceId, and get_lists can use spaceId when the list is not inside a folder.',
+      when: 'Fill it for get_folders, for get_lists without a folderId, and for older get_tasks_space workflows.',
+      enter: 'Use a Space ID such as 90166920916 or an expression like {{$json.spaceId}}.',
+      source: 'Run get_spaces first or copy the ID from the ClickUp space settings URL.',
+      later: 'Use it to discover folders/lists, then map the returned listId into create_task or list_tasks.',
+      format: 'Plain ID string. Avoid labels like Marketing Space unless your upstream step returns that exact ID.',
+      example: 'A content team lists all folders in the Marketing space before creating campaign tasks.',
+      empty: 'get_folders fails with spaceId is required for getFolders; get_lists needs either folderId or spaceId.',
+      mistake: 'Using a folder ID in this field because both values look similar.',
+    }),
+    placeholder: '90166920916',
+    example: '90166920916',
+  },
+  {
+    name: 'Folder ID',
+    internalKey: 'folderId',
+    type: 'string',
+    required: false,
+    description: 'ClickUp folder ID used to find lists.',
+    helpText: richFieldHelp({
+      what: 'The ID of a ClickUp Folder that groups one or more lists.',
+      why: 'get_lists can retrieve lists inside a folder when folderId is provided.',
+      when: 'Fill it when the target list lives inside a folder and you are using get_lists.',
+      enter: 'Type the folder ID or map {{$json.folderId}} from get_folders.',
+      source: 'Use get_folders, ClickUp folder settings, or a previous workflow record that stored the folder ID.',
+      later: 'The lists returned from this folder usually provide {{$json.id}} values for listId in task operations.',
+      format: 'Plain ClickUp folder ID string.',
+      example: 'The implementation team maps a folder ID for Customer Onboarding before listing project lists.',
+      empty: 'get_lists can still work if spaceId is filled; with neither folderId nor spaceId it fails.',
+      mistake: 'Putting the list ID here; list IDs belong in listId.',
+    }),
+    placeholder: '901614760900',
+    example: '901614760900',
+  },
+  {
+    name: 'List ID',
+    internalKey: 'listId',
+    type: 'string',
+    required: false,
+    description: 'ClickUp list ID where tasks live.',
+    helpText: richFieldHelp({
+      what: 'The ClickUp List ID that contains tasks.',
+      why: 'create_task requires listId, list_tasks can read tasks from a list, and add_comment can comment on a list when taskId is not supplied.',
+      when: 'Fill it for create_task, list_tasks, and list-level comments.',
+      enter: 'Use a list ID such as 901614760992 or map {{$json.id}} from get_lists.',
+      source: 'Run get_lists or copy the ID from the ClickUp list URL, often near /li/LIST_ID.',
+      later: 'Returned tasks can feed downstream notifications, reports, or taskId fields in update/get/delete operations.',
+      format: 'Plain ClickUp list ID string.',
+      example: 'A lead form workflow creates every new onboarding task in listId {{$json.onboardingListId}}.',
+      empty: 'create_task fails with listId is required for createTask; list_tasks needs either listId or spaceId.',
+      mistake: 'Using the visible list name instead of the hidden ClickUp list ID.',
+    }),
+    placeholder: '901614760992',
+    example: '901614760992',
+  },
+  {
+    name: 'Task ID',
+    internalKey: 'taskId',
+    type: 'string',
+    required: false,
+    description: 'ClickUp task ID for single-task operations.',
+    helpText: richFieldHelp({
+      what: 'The unique ID of one ClickUp task.',
+      why: 'get_task, update_task, delete_task, update_status, and task comments need to know the exact task.',
+      when: 'Fill it for any operation that reads, changes, deletes, comments on, or changes status for one existing task.',
+      enter: 'Use a task ID such as 86d31vafd or map {{$json.id}} from create_task/list_tasks.',
+      source: 'ClickUp task URL, task details, create_task output, list_tasks output, or an upstream CRM record.',
+      later: 'Map it into later ClickUp steps to update status, add a comment, or delete the task.',
+      format: 'Plain task ID string, not the task name.',
+      example: 'After creating a task, the workflow stores {{$json.id}} and later maps it into taskId to add an approval comment.',
+      empty: 'Runtime fails with taskId is required for getTask/updateTask/deleteTask where those operations need it.',
+      mistake: 'Using an issue number, list ID, or human task title instead of the ClickUp task ID.',
+    }),
+    placeholder: '86d31vafd',
+    example: '86d31vafd',
+  },
+  {
+    name: 'Task Name',
+    internalKey: 'name',
+    type: 'string',
+    required: false,
+    description: 'Task title used by create/update task.',
+    helpText: richFieldHelp({
+      what: 'The task title sent as ClickUp name.',
+      why: 'create_task requires a name, and update_task can rename an existing task.',
+      when: 'Fill it for create_task and when update_task should change the title.',
+      enter: 'Type a clear task title or map {{$json.taskTitle}}, {{$json.customerName}}, or another upstream value.',
+      source: 'Form submission, CRM lead, support ticket, spreadsheet row, or a fixed title written by you.',
+      later: 'ClickUp returns the task data; downstream nodes can use {{$json.name}} or the task URL if returned by ClickUp.',
+      format: 'Plain text. Keep it short enough for a ClickUp task title.',
+      example: 'Create task title "Follow up with Acme trial signup" from {{$json.company}}.',
+      empty: 'create_task fails with name is required for createTask.',
+      mistake: 'Putting the long task instructions here instead of using Description.',
+    }),
+    placeholder: 'Follow up with customer',
+    example: 'Follow up with customer',
+  },
+  {
+    name: 'Task Description',
+    internalKey: 'description',
+    type: 'textarea',
+    required: false,
+    description: 'Longer task details.',
+    helpText: richFieldHelp({
+      what: 'The body text for the ClickUp task description.',
+      why: 'It gives assignees context that does not fit in the task title.',
+      when: 'Fill it for create_task or update_task when the task needs instructions, customer details, links, or acceptance criteria.',
+      enter: 'Type plain text/markdown or map {{$json.description}}, {{$json.ticketBody}}, or a composed expression.',
+      source: 'Support ticket body, form answer, CRM note, or a previous AI summary step.',
+      later: 'Team members read it in ClickUp; downstream nodes may use ClickUp returned task fields for notifications.',
+      format: 'Text or markdown-style text. Do not wrap it as JSON unless you want literal JSON text in the description.',
+      example: 'A bug workflow maps the incident summary and reproduction steps into the description.',
+      empty: 'The task can still be created or updated without a description if the operation allows it.',
+      mistake: 'Expecting description to create subtasks; it only writes task body text.',
+    }),
+    placeholder: 'Customer asked for onboarding help after trial signup.',
+    example: 'Customer asked for onboarding help after trial signup.',
+  },
+  {
+    name: 'Status',
+    internalKey: 'status',
+    type: 'string',
+    required: false,
+    description: 'Exact ClickUp status name.',
+    helpText: richFieldHelp({
+      what: 'The task status name to send to ClickUp.',
+      why: 'ClickUp statuses are list-specific, so the spelling must match the target list exactly.',
+      when: 'Fill it for create_task, update_task, or update_status when the task should move to a specific status.',
+      enter: 'Use values like to do, in progress, review, or complete only if that exact status exists in the list.',
+      source: 'Target ClickUp list settings, a previous task response, or an upstream status mapping table.',
+      later: 'If accepted, the returned task data reflects the new status for downstream routing.',
+      format: 'Plain status name string, case-sensitive in practice.',
+      example: 'A QA workflow maps approved tickets to status "ready for release".',
+      empty: 'Runtime omits status. If create/update fails because status is invalid, it retries without status and may return _statusSkipped.',
+      mistake: 'Typing "done" when the list uses "complete"; ClickUp rejects unknown list statuses.',
+    }),
+    placeholder: 'in progress',
+    example: 'in progress',
+  },
+  {
+    name: 'Priority',
+    internalKey: 'priority',
+    type: 'select',
+    required: false,
+    description: 'ClickUp priority value.',
+    options: ['4', '3', '2', '1'],
+    helpText: richFieldHelp({
+      what: 'The numeric ClickUp priority sent on create_task or update_task. In the visible panel 4 is Urgent, 3 is High, 2 is Normal, and 1 is Low.',
+      why: 'It helps teams sort new tasks and decide what needs attention first.',
+      when: 'Fill it when task urgency should be set by the workflow.',
+      enter: 'Choose 4, 3, 2, or 1 from the dropdown, or map an upstream numeric priority expression.',
+      source: 'Support severity, sales lead tier, incident priority, or a fixed workflow rule.',
+      later: 'ClickUp returns task data that downstream reports can use to highlight urgent work.',
+      format: 'One of 4, 3, 2, 1. The UI labels them Urgent, High, Normal, Low.',
+      example: 'A production incident form maps severity critical to priority 4.',
+      empty: 'ClickUp uses its default/no-priority behavior.',
+      mistake: 'Entering words like high when the runtime sends the numeric dropdown value.',
+    }),
+    defaultValue: '2',
+    example: '2',
+    notes: 'Options: 4 urgent, 3 high, 2 normal, 1 low.',
+  },
+  {
+    name: 'Assignees',
+    internalKey: 'assignees',
+    type: 'json',
+    required: false,
+    description: 'Array of ClickUp user IDs.',
+    helpText: richFieldHelp({
+      what: 'A JSON array of ClickUp user IDs assigned to the task.',
+      why: 'ClickUp expects user IDs, not display names or email addresses.',
+      when: 'Fill it for create_task or update_task when the workflow should assign people automatically.',
+      enter: 'Use ["183","987"] or map {{$json.assignees}} when that upstream value is already an array.',
+      source: 'ClickUp workspace members, a lookup table, a previous API response, or your own routing data.',
+      later: 'Assignees appear on the ClickUp task and can drive downstream workload notifications.',
+      format: 'JSON array. The executor only maps assignees when it receives an actual array.',
+      example: 'A regional lead form maps India leads to ["183"] and US leads to ["987"].',
+      empty: 'No assignee is sent. If it is text instead of an array, runtime does not map it as assignees.',
+      mistake: 'Typing "alice@example.com" instead of a JSON array of ClickUp user IDs.',
+    }),
+    placeholder: '["183","987"]',
+    example: '["183","987"]',
+  },
+  {
+    name: 'Due Date',
+    internalKey: 'dueDate',
+    type: 'number',
+    required: false,
+    description: 'Due date as Unix timestamp in milliseconds.',
+    helpText: richFieldHelp({
+      what: 'The task due date sent to ClickUp as due_date.',
+      why: 'ClickUp expects a millisecond Unix timestamp, so a normal date string may not be accepted as intended.',
+      when: 'Fill it when the created or updated task needs a due date.',
+      enter: 'Use a millisecond timestamp like 1735689600000 or map {{$json.dueDateMs}} from a date conversion step.',
+      source: 'Form date, SLA calculation, Date & Time node, or an upstream system that already stores millisecond timestamps.',
+      later: 'ClickUp returns the task with due date metadata that reports and reminders can use.',
+      format: 'Number in milliseconds since Unix epoch. Do not use 2026-01-31 directly here.',
+      example: 'A renewal workflow maps the contract renewal date converted to milliseconds.',
+      empty: 'No due date is sent.',
+      mistake: 'Entering seconds instead of milliseconds, which places the task date far in the past.',
+    }),
+    placeholder: '1735689600000',
+    example: '1735689600000',
+  },
+  {
+    name: 'Comment Text',
+    internalKey: 'commentText',
+    type: 'textarea',
+    required: false,
+    description: 'Comment body for add_comment.',
+    helpText: richFieldHelp({
+      what: 'The text body for a ClickUp comment.',
+      why: 'add_comment requires commentText and can comment on a taskId or listId.',
+      when: 'Fill it whenever operation is add_comment.',
+      enter: 'Type the comment or map {{$json.approvalNote}}, {{$json.summary}}, or another upstream message.',
+      source: 'Manager approval, AI summary, support ticket note, or a fixed workflow message.',
+      later: 'The comment appears in ClickUp; downstream nodes can use returned comment/task data if ClickUp includes it.',
+      format: 'Plain text or markdown-style text.',
+      example: 'A finance approval workflow adds "Approved by {{$json.managerName}}" to the task.',
+      empty: 'add_comment fails with commentText is required for createComment.',
+      mistake: 'Putting the comment in description; add_comment reads commentText.',
+    }),
+    placeholder: 'Reviewed and approved.',
+    example: 'Reviewed and approved.',
+  },
+  {
+    name: 'Include Closed Tasks',
+    internalKey: 'includeClosed',
+    type: 'boolean',
+    required: false,
+    description: 'Whether list_tasks should include closed tasks.',
+    helpText: richFieldHelp({
+      what: 'A true/false switch that maps to ClickUp include_closed for list_tasks.',
+      why: 'Reports and syncs often need either only active work or the full closed-task history.',
+      when: 'Fill it for list_tasks when closed/completed tasks should be included.',
+      enter: 'Turn it on for true or leave it off for false.',
+      source: 'Workflow design choice or an upstream boolean such as {{$json.includeClosed}}.',
+      later: 'The returned task list can include closed tasks for archive reports, dashboards, or follow-up checks.',
+      format: 'Boolean true or false.',
+      example: 'A weekly completed-work report sets includeClosed to true.',
+      empty: 'Runtime omits include_closed and ClickUp uses its default filtering.',
+      mistake: 'Expecting delete_task or get_task to use this field; it only matters for list_tasks.',
+    }),
+    defaultValue: 'false',
+    example: 'false',
+  },
+  {
+    name: 'API Key',
+    internalKey: 'apiKey',
+    type: 'password',
+    required: false,
+    description: 'Direct ClickUp API key fallback for legacy/debug execution.',
+    helpText: richFieldHelp({
+      what: 'A direct ClickUp API token fallback. Normal workflows should use a saved ClickUp connection or credential vault value.',
+      why: 'Runtime first resolves a ClickUp credential; this field is only a fallback path used by legacy or debug execution.',
+      when: 'Use only when your environment explicitly requires a direct credential fallback.',
+      enter: 'A secure credential expression such as {{$credentials.clickup.apiKey}} rather than normal business data.',
+      source: 'ClickUp settings or the CtrlChecks credential system.',
+      later: 'The token is consumed for authentication and is never returned in output data.',
+      format: 'Secret string. Keep it out of mapped customer data and logs.',
+      example: 'A private workspace maps the saved ClickUp credential to apiKey for a debug run.',
+      empty: 'Runtime tries saved ClickUp credentials; if none resolve it throws Missing ClickUp API Key.',
+      mistake: 'Treating this as a task field. It is a credential fallback, not input data for ClickUp tasks.',
+    }),
+    placeholder: '{{$credentials.clickup.apiKey}}',
+    example: '{{$credentials.clickup.apiKey}}',
+    notes: 'Credential fallback. Prefer Connections -> ClickUp.',
+  },
+  {
+    name: 'API Token',
+    internalKey: 'apiToken',
+    type: 'password',
+    required: false,
+    description: 'Alias for ClickUp API key/token in saved credentials.',
+    helpText: richFieldHelp({
+      what: 'A credential alias that the worker accepts when resolving ClickUp credentials.',
+      why: 'Older saved credential records may store the ClickUp secret as apiToken instead of apiKey.',
+      when: 'Use only for credential compatibility, not as a normal workflow data field.',
+      enter: 'A secure credential expression such as {{$credentials.clickup.apiToken}}.',
+      source: 'Saved ClickUp connection, credential vault, or ClickUp personal token settings.',
+      later: 'It is used only to authorize the API call and is not included in downstream output.',
+      format: 'Secret token string.',
+      example: 'A migrated workspace keeps apiToken in the credential record while tasks use listId/name fields.',
+      empty: 'Runtime may still authenticate with apiKey or token; with no credential value it fails.',
+      mistake: 'Mapping a customer API token from {{$json}} into this field.',
+    }),
+    placeholder: '{{$credentials.clickup.apiToken}}',
+    example: '{{$credentials.clickup.apiToken}}',
+  },
+  {
+    name: 'Token',
+    internalKey: 'token',
+    type: 'password',
+    required: false,
+    description: 'Legacy ClickUp token alias.',
+    helpText: richFieldHelp({
+      what: 'A legacy alias for the ClickUp authentication token.',
+      why: 'The credential resolver checks token in addition to apiKey and apiToken for older records.',
+      when: 'Use only when a saved credential or legacy workflow stores the ClickUp secret under token.',
+      enter: 'A secure credential expression such as {{$credentials.clickup.token}}.',
+      source: 'Credential vault or older ClickUp connection data.',
+      later: 'It authorizes the call only; downstream nodes receive ClickUp task/list/team data, not the token.',
+      format: 'Secret string.',
+      example: 'An imported workflow uses token while the visible task fields remain name/listId/status.',
+      empty: 'No issue if apiKey/apiToken exists; otherwise authentication fails.',
+      mistake: 'Confusing this credential alias with taskId or listId.',
+    }),
+    placeholder: '{{$credentials.clickup.token}}',
+    example: '{{$credentials.clickup.token}}',
+  },
+  {
+    name: 'Team ID',
+    internalKey: 'teamId',
+    type: 'string',
+    required: false,
+    description: 'Runtime alias for workspaceId.',
+    helpText: richFieldHelp({
+      what: 'The ClickUp team ID alias used by the underlying API client.',
+      why: 'Some credentials or AI-generated workflows provide teamId instead of workspaceId.',
+      when: 'Use it only when your upstream data already calls the workspace a teamId.',
+      enter: 'A ClickUp workspace/team ID or {{$json.teamId}}.',
+      source: 'Get Teams output, saved credential metadata, or a previous workflow step.',
+      later: 'It helps calls like get_spaces resolve the workspace; returned data can feed space/list discovery.',
+      format: 'Plain ID string.',
+      example: 'A shared credential stores teamId 90161598841 for all ClickUp steps in the workflow.',
+      empty: 'workspaceId can provide the same runtime value.',
+      mistake: 'Filling both workspaceId and teamId with different workspaces.',
+    }),
+    placeholder: '90161598841',
+    example: '90161598841',
+  },
+  {
+    name: 'Base URL',
+    internalKey: 'baseUrl',
+    type: 'url',
+    required: false,
+    description: 'Optional ClickUp API base URL override.',
+    helpText: richFieldHelp({
+      what: 'An optional API base URL from credential metadata.',
+      why: 'Most users should use the default ClickUp API; this exists for compatibility with the ClickUp service wrapper.',
+      when: 'Leave it empty unless an administrator gives you a specific ClickUp-compatible base URL.',
+      enter: 'A full HTTPS API base URL supplied by your platform admin.',
+      source: 'Saved credential metadata or environment-specific configuration.',
+      later: 'It only changes where the API request is sent; it is not returned in output.',
+      format: 'HTTPS URL such as https://api.clickup.com/api/v2.',
+      example: 'An enterprise test environment uses a configured baseUrl while production uses the default.',
+      empty: 'Runtime uses the default ClickUp API route.',
+      mistake: 'Entering the browser workspace URL here instead of an API base URL.',
+    }),
+    placeholder: 'https://api.clickup.com/api/v2',
+    example: 'https://api.clickup.com/api/v2',
+  },
+];
+
+const outputExample = {
+  id: '86d31vafd',
+  name: 'Follow up with Acme trial signup',
+  status: { status: 'to do' },
+  url: 'https://app.clickup.com/t/86d31vafd',
+  _statusSkipped: true,
+};
+
+const makeOperation = (name: string, value: string, description: string): OperationDoc => ({
+  name,
+  value,
+  description: `${description} Choose this operation when the workflow has the required ClickUp IDs available or has already run the discovery operations needed to find them.`,
+  fields,
+  outputExample,
+  outputDescription: 'ClickUp success returns the raw data object from the ClickUp API, such as task, list, team, space, folder, comment, id, name, status, and url fields. If create/update fails only because status is invalid and the retry succeeds, _statusSkipped and _statusNote are added. Authentication and validation failures surface as _error through the workflow wrapper.',
+  usageExample: {
+    scenario: `Use ${name} after a form, CRM event, or previous ClickUp discovery step supplies the needed IDs.`,
+    inputValues: {
+      operation: value,
+      listId: '901614760992',
+      name: 'Follow up with {{$json.company}}',
+    },
+    expectedOutput: 'Use {{$json.id}} as taskId in a later ClickUp step, or {{$json.url}} in a notification.',
+  },
+  externalDocsUrl: 'https://clickup.com/api',
+});
 
 export const clickupDoc: NodeDoc = {
-  "slug": "clickup",
-  "displayName": "ClickUp",
-  "category": "Utility",
-  "logoUrl": "/icons/nodes/clickup.svg",
-  "description": "Create, read, and manage ClickUp tasks, lists, spaces, and workspaces.",
-  "credentialType": "ClickUp API Key",
-  "credentialSetupSteps": [
-    "What this is: The ClickUp connection lets CtrlChecks access your ClickUp account safely without putting secrets in workflow fields.",
-    "Where to start: ClickUp account settings or developer settings.",
-    "How to connect: In CtrlChecks, open Connections -> Add Connection -> ClickUp, then sign in or paste the secret value requested there.",
-    "Example: the token format shown by ClickUp.",
-    "Important: Treat tokens, passwords, API keys, and client secrets like bank passwords. Store them in Connections, not in regular workflow fields.",
-    "Test it: Save the connection, run a simple ClickUp step, and confirm CtrlChecks can reach the account."
+  slug: 'clickup',
+  displayName: 'ClickUp',
+  category: 'Productivity',
+  logoUrl: '/icons/nodes/clickup.svg',
+  description: 'Creates, reads, updates, comments on, and discovers ClickUp tasks, lists, folders, spaces, and workspaces.',
+  credentialType: 'ClickUp API Key',
+  credentialSetupSteps: [
+    'Use a ClickUp API token stored in Connections, the credential system, credential vault, wallet, or key pool. Runtime also accepts apiKey, apiToken, or token aliases from the saved credential.',
+    'Create the token from ClickUp account settings or developer settings, then store it in the ClickUp service node account connection instead of ordinary workflow fields.',
+    'Give the token access to the workspace/list where the workflow must read, write, comment, or delete tasks.',
+    'A saved credential can also provide teamId/workspaceId and baseUrl metadata, which the worker uses before field fallbacks.',
+    'Connect the ClickUp node output to the next service node with an outgoing line, then map fields such as {{$json.id}}, {{$json.name}}, {{$json.url}}, or {{$json._statusSkipped}}.',
   ],
-  "credentialDocsUrl": "https://clickup.com/api",
-  "resources": [
+  credentialDocsUrl: 'https://clickup.com/api',
+  resources: [
     {
-      "name": "Operations",
-      "description": "ClickUp exposes operation choices directly.",
-      "operations": [
-        {
-          "name": "Create task",
-          "value": "create_task",
-          "description": "Create task using the ClickUp node.",
-          "fields": [
-            {
-              "name": "Workspace Id",
-              "internalKey": "workspaceId",
-              "type": "string",
-              "required": false,
-              "description": "Workspace (team) ID — find it in the workspace URL or via Get Teams",
-              "helpText": "What this field is: The Workspace ID — find it in the workspace URL or via Get Teams that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 90161598841.\nTip: Use {{$json.workspaceId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "90161598841",
-              "example": "90161598841"
-            },
-            {
-              "name": "Space Id",
-              "internalKey": "spaceId",
-              "type": "string",
-              "required": false,
-              "description": "Space ID — required for Get Spaces tasks; find via Get Spaces",
-              "helpText": "What this field is: The Space ID — required for Get Spaces tasks; find via Get Spaces that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 90166920916.\nTip: Use {{$json.spaceId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "90166920916",
-              "example": "90166920916"
-            },
-            {
-              "name": "List Id",
-              "internalKey": "listId",
-              "type": "string",
-              "required": false,
-              "description": "List ID — required for create_task and get_tasks_list; find via Get Lists",
-              "helpText": "What this field is: The List ID — required for create_task and get_tasks_list; find via Get Lists that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 901614760992.\nTip: Use {{$json.listId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "901614760992",
-              "example": "901614760992"
-            },
-            {
-              "name": "Task Id",
-              "internalKey": "taskId",
-              "type": "string",
-              "required": false,
-              "description": "Task ID — required for get_task, update_task, delete_task, add_comment, update_status",
-              "helpText": "What this field is: The Task ID — required for get_task, update_task, delete_task, add_comment, update_status that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 86d31vafd.\nTip: Use {{$json.taskId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "86d31vafd",
-              "example": "86d31vafd"
-            },
-            {
-              "name": "Task Name",
-              "internalKey": "taskName",
-              "type": "string",
-              "required": false,
-              "description": "Task name/title (required for create_task)",
-              "helpText": "What this field is: Task name/title.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Follow up with customer.\nTip: This field is used for create_task. Leave it blank when this operation does not need it.",
-              "placeholder": "Follow up with customer",
-              "example": "Follow up with customer"
-            },
-            {
-              "name": "Task Description",
-              "internalKey": "taskDescription",
-              "type": "string",
-              "required": false,
-              "description": "Task description — markdown supported (optional for create_task / update_task)",
-              "helpText": "What this field is: Task description — markdown supported.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Details:\n- Action item 1\n- Action item 2.\nTip: Use {{$json.taskDescription}} when this value comes from an earlier step.",
-              "placeholder": "Details:\n- Action item 1\n- Action item 2",
-              "example": "Details:\n- Action item 1\n- Action item 2"
-            },
-            {
-              "name": "Status",
-              "internalKey": "status",
-              "type": "string",
-              "required": false,
-              "description": "Task status (e.g. \"to do\", \"in progress\", \"complete\")",
-              "helpText": "What this field is: Task status.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: to do.\nTip: Use {{$json.status}} when this value comes from an earlier step.",
-              "placeholder": "to do",
-              "example": "to do"
-            },
-            {
-              "name": "Priority",
-              "internalKey": "priority",
-              "type": "number",
-              "required": false,
-              "description": "Task priority: 1 = urgent, 2 = high, 3 = normal, 4 = low",
-              "helpText": "What this field is: The number used for Task priority: 1 = urgent, 2 = high, 3 = normal, 4 = low.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 1.\nTip: Use {{$json.priority}} when the number comes from an earlier step.",
-              "placeholder": "1",
-              "example": "1"
-            },
-            {
-              "name": "Comment Text",
-              "internalKey": "commentText",
-              "type": "string",
-              "required": false,
-              "description": "Comment text for add_comment operation",
-              "helpText": "What this field is: Comment text for add_comment operation.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: This has been reviewed and approved..\nTip: Use {{$json.commentText}} when this value comes from an earlier step.",
-              "placeholder": "This has been reviewed and approved.",
-              "example": "This has been reviewed and approved."
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming ClickUp data with create task after a related upstream event is received",
-            "inputValues": {
-              "Workspace Id": "90161598841",
-              "Space Id": "90166920916",
-              "List Id": "901614760992",
-              "Task Id": "86d31vafd",
-              "Task Name": "Follow up with customer"
-            },
-            "expectedOutput": "ClickUp returns structured create task data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://clickup.com/api"
-        },
-        {
-          "name": "Get tasks list",
-          "value": "get_tasks_list",
-          "description": "Get tasks list using the ClickUp node.",
-          "fields": [
-            {
-              "name": "Workspace Id",
-              "internalKey": "workspaceId",
-              "type": "string",
-              "required": false,
-              "description": "Workspace (team) ID — find it in the workspace URL or via Get Teams",
-              "helpText": "What this field is: The Workspace ID — find it in the workspace URL or via Get Teams that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 90161598841.\nTip: Use {{$json.workspaceId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "90161598841",
-              "example": "90161598841"
-            },
-            {
-              "name": "Space Id",
-              "internalKey": "spaceId",
-              "type": "string",
-              "required": false,
-              "description": "Space ID — required for Get Spaces tasks; find via Get Spaces",
-              "helpText": "What this field is: The Space ID — required for Get Spaces tasks; find via Get Spaces that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 90166920916.\nTip: Use {{$json.spaceId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "90166920916",
-              "example": "90166920916"
-            },
-            {
-              "name": "List Id",
-              "internalKey": "listId",
-              "type": "string",
-              "required": false,
-              "description": "List ID — required for create_task and get_tasks_list; find via Get Lists",
-              "helpText": "What this field is: The List ID — required for create_task and get_tasks_list; find via Get Lists that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 901614760992.\nTip: Use {{$json.listId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "901614760992",
-              "example": "901614760992"
-            },
-            {
-              "name": "Task Id",
-              "internalKey": "taskId",
-              "type": "string",
-              "required": false,
-              "description": "Task ID — required for get_task, update_task, delete_task, add_comment, update_status",
-              "helpText": "What this field is: The Task ID — required for get_task, update_task, delete_task, add_comment, update_status that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 86d31vafd.\nTip: Use {{$json.taskId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "86d31vafd",
-              "example": "86d31vafd"
-            },
-            {
-              "name": "Task Name",
-              "internalKey": "taskName",
-              "type": "string",
-              "required": false,
-              "description": "Task name/title (required for create_task)",
-              "helpText": "What this field is: Task name/title.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Follow up with customer.\nTip: This field is used for create_task. Leave it blank when this operation does not need it.",
-              "placeholder": "Follow up with customer",
-              "example": "Follow up with customer"
-            },
-            {
-              "name": "Task Description",
-              "internalKey": "taskDescription",
-              "type": "string",
-              "required": false,
-              "description": "Task description — markdown supported (optional for create_task / update_task)",
-              "helpText": "What this field is: Task description — markdown supported.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Details:\n- Action item 1\n- Action item 2.\nTip: Use {{$json.taskDescription}} when this value comes from an earlier step.",
-              "placeholder": "Details:\n- Action item 1\n- Action item 2",
-              "example": "Details:\n- Action item 1\n- Action item 2"
-            },
-            {
-              "name": "Status",
-              "internalKey": "status",
-              "type": "string",
-              "required": false,
-              "description": "Task status (e.g. \"to do\", \"in progress\", \"complete\")",
-              "helpText": "What this field is: Task status.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: to do.\nTip: Use {{$json.status}} when this value comes from an earlier step.",
-              "placeholder": "to do",
-              "example": "to do"
-            },
-            {
-              "name": "Priority",
-              "internalKey": "priority",
-              "type": "number",
-              "required": false,
-              "description": "Task priority: 1 = urgent, 2 = high, 3 = normal, 4 = low",
-              "helpText": "What this field is: The number used for Task priority: 1 = urgent, 2 = high, 3 = normal, 4 = low.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 1.\nTip: Use {{$json.priority}} when the number comes from an earlier step.",
-              "placeholder": "1",
-              "example": "1"
-            },
-            {
-              "name": "Comment Text",
-              "internalKey": "commentText",
-              "type": "string",
-              "required": false,
-              "description": "Comment text for add_comment operation",
-              "helpText": "What this field is: Comment text for add_comment operation.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: This has been reviewed and approved..\nTip: Use {{$json.commentText}} when this value comes from an earlier step.",
-              "placeholder": "This has been reviewed and approved.",
-              "example": "This has been reviewed and approved."
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming ClickUp data with get tasks list after a related upstream event is received",
-            "inputValues": {
-              "Workspace Id": "90161598841",
-              "Space Id": "90166920916",
-              "List Id": "901614760992",
-              "Task Id": "86d31vafd",
-              "Task Name": "Follow up with customer"
-            },
-            "expectedOutput": "ClickUp returns structured get tasks list data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://clickup.com/api"
-        },
-        {
-          "name": "Get task",
-          "value": "get_task",
-          "description": "Get task using the ClickUp node.",
-          "fields": [
-            {
-              "name": "Workspace Id",
-              "internalKey": "workspaceId",
-              "type": "string",
-              "required": false,
-              "description": "Workspace (team) ID — find it in the workspace URL or via Get Teams",
-              "helpText": "What this field is: The Workspace ID — find it in the workspace URL or via Get Teams that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 90161598841.\nTip: Use {{$json.workspaceId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "90161598841",
-              "example": "90161598841"
-            },
-            {
-              "name": "Space Id",
-              "internalKey": "spaceId",
-              "type": "string",
-              "required": false,
-              "description": "Space ID — required for Get Spaces tasks; find via Get Spaces",
-              "helpText": "What this field is: The Space ID — required for Get Spaces tasks; find via Get Spaces that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 90166920916.\nTip: Use {{$json.spaceId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "90166920916",
-              "example": "90166920916"
-            },
-            {
-              "name": "List Id",
-              "internalKey": "listId",
-              "type": "string",
-              "required": false,
-              "description": "List ID — required for create_task and get_tasks_list; find via Get Lists",
-              "helpText": "What this field is: The List ID — required for create_task and get_tasks_list; find via Get Lists that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 901614760992.\nTip: Use {{$json.listId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "901614760992",
-              "example": "901614760992"
-            },
-            {
-              "name": "Task Id",
-              "internalKey": "taskId",
-              "type": "string",
-              "required": false,
-              "description": "Task ID — required for get_task, update_task, delete_task, add_comment, update_status",
-              "helpText": "What this field is: The Task ID — required for get_task, update_task, delete_task, add_comment, update_status that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 86d31vafd.\nTip: Use {{$json.taskId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "86d31vafd",
-              "example": "86d31vafd"
-            },
-            {
-              "name": "Task Name",
-              "internalKey": "taskName",
-              "type": "string",
-              "required": false,
-              "description": "Task name/title (required for create_task)",
-              "helpText": "What this field is: Task name/title.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Follow up with customer.\nTip: This field is used for create_task. Leave it blank when this operation does not need it.",
-              "placeholder": "Follow up with customer",
-              "example": "Follow up with customer"
-            },
-            {
-              "name": "Task Description",
-              "internalKey": "taskDescription",
-              "type": "string",
-              "required": false,
-              "description": "Task description — markdown supported (optional for create_task / update_task)",
-              "helpText": "What this field is: Task description — markdown supported.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Details:\n- Action item 1\n- Action item 2.\nTip: Use {{$json.taskDescription}} when this value comes from an earlier step.",
-              "placeholder": "Details:\n- Action item 1\n- Action item 2",
-              "example": "Details:\n- Action item 1\n- Action item 2"
-            },
-            {
-              "name": "Status",
-              "internalKey": "status",
-              "type": "string",
-              "required": false,
-              "description": "Task status (e.g. \"to do\", \"in progress\", \"complete\")",
-              "helpText": "What this field is: Task status.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: to do.\nTip: Use {{$json.status}} when this value comes from an earlier step.",
-              "placeholder": "to do",
-              "example": "to do"
-            },
-            {
-              "name": "Priority",
-              "internalKey": "priority",
-              "type": "number",
-              "required": false,
-              "description": "Task priority: 1 = urgent, 2 = high, 3 = normal, 4 = low",
-              "helpText": "What this field is: The number used for Task priority: 1 = urgent, 2 = high, 3 = normal, 4 = low.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 1.\nTip: Use {{$json.priority}} when the number comes from an earlier step.",
-              "placeholder": "1",
-              "example": "1"
-            },
-            {
-              "name": "Comment Text",
-              "internalKey": "commentText",
-              "type": "string",
-              "required": false,
-              "description": "Comment text for add_comment operation",
-              "helpText": "What this field is: Comment text for add_comment operation.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: This has been reviewed and approved..\nTip: Use {{$json.commentText}} when this value comes from an earlier step.",
-              "placeholder": "This has been reviewed and approved.",
-              "example": "This has been reviewed and approved."
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming ClickUp data with get task after a related upstream event is received",
-            "inputValues": {
-              "Workspace Id": "90161598841",
-              "Space Id": "90166920916",
-              "List Id": "901614760992",
-              "Task Id": "86d31vafd",
-              "Task Name": "Follow up with customer"
-            },
-            "expectedOutput": "ClickUp returns structured get task data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://clickup.com/api"
-        },
-        {
-          "name": "Update task",
-          "value": "update_task",
-          "description": "Update task using the ClickUp node.",
-          "fields": [
-            {
-              "name": "Workspace Id",
-              "internalKey": "workspaceId",
-              "type": "string",
-              "required": false,
-              "description": "Workspace (team) ID — find it in the workspace URL or via Get Teams",
-              "helpText": "What this field is: The Workspace ID — find it in the workspace URL or via Get Teams that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 90161598841.\nTip: Use {{$json.workspaceId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "90161598841",
-              "example": "90161598841"
-            },
-            {
-              "name": "Space Id",
-              "internalKey": "spaceId",
-              "type": "string",
-              "required": false,
-              "description": "Space ID — required for Get Spaces tasks; find via Get Spaces",
-              "helpText": "What this field is: The Space ID — required for Get Spaces tasks; find via Get Spaces that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 90166920916.\nTip: Use {{$json.spaceId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "90166920916",
-              "example": "90166920916"
-            },
-            {
-              "name": "List Id",
-              "internalKey": "listId",
-              "type": "string",
-              "required": false,
-              "description": "List ID — required for create_task and get_tasks_list; find via Get Lists",
-              "helpText": "What this field is: The List ID — required for create_task and get_tasks_list; find via Get Lists that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 901614760992.\nTip: Use {{$json.listId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "901614760992",
-              "example": "901614760992"
-            },
-            {
-              "name": "Task Id",
-              "internalKey": "taskId",
-              "type": "string",
-              "required": false,
-              "description": "Task ID — required for get_task, update_task, delete_task, add_comment, update_status",
-              "helpText": "What this field is: The Task ID — required for get_task, update_task, delete_task, add_comment, update_status that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 86d31vafd.\nTip: Use {{$json.taskId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "86d31vafd",
-              "example": "86d31vafd"
-            },
-            {
-              "name": "Task Name",
-              "internalKey": "taskName",
-              "type": "string",
-              "required": false,
-              "description": "Task name/title (required for create_task)",
-              "helpText": "What this field is: Task name/title.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Follow up with customer.\nTip: This field is used for create_task. Leave it blank when this operation does not need it.",
-              "placeholder": "Follow up with customer",
-              "example": "Follow up with customer"
-            },
-            {
-              "name": "Task Description",
-              "internalKey": "taskDescription",
-              "type": "string",
-              "required": false,
-              "description": "Task description — markdown supported (optional for create_task / update_task)",
-              "helpText": "What this field is: Task description — markdown supported.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Details:\n- Action item 1\n- Action item 2.\nTip: Use {{$json.taskDescription}} when this value comes from an earlier step.",
-              "placeholder": "Details:\n- Action item 1\n- Action item 2",
-              "example": "Details:\n- Action item 1\n- Action item 2"
-            },
-            {
-              "name": "Status",
-              "internalKey": "status",
-              "type": "string",
-              "required": false,
-              "description": "Task status (e.g. \"to do\", \"in progress\", \"complete\")",
-              "helpText": "What this field is: Task status.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: to do.\nTip: Use {{$json.status}} when this value comes from an earlier step.",
-              "placeholder": "to do",
-              "example": "to do"
-            },
-            {
-              "name": "Priority",
-              "internalKey": "priority",
-              "type": "number",
-              "required": false,
-              "description": "Task priority: 1 = urgent, 2 = high, 3 = normal, 4 = low",
-              "helpText": "What this field is: The number used for Task priority: 1 = urgent, 2 = high, 3 = normal, 4 = low.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 1.\nTip: Use {{$json.priority}} when the number comes from an earlier step.",
-              "placeholder": "1",
-              "example": "1"
-            },
-            {
-              "name": "Comment Text",
-              "internalKey": "commentText",
-              "type": "string",
-              "required": false,
-              "description": "Comment text for add_comment operation",
-              "helpText": "What this field is: Comment text for add_comment operation.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: This has been reviewed and approved..\nTip: Use {{$json.commentText}} when this value comes from an earlier step.",
-              "placeholder": "This has been reviewed and approved.",
-              "example": "This has been reviewed and approved."
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming ClickUp data with update task after a related upstream event is received",
-            "inputValues": {
-              "Workspace Id": "90161598841",
-              "Space Id": "90166920916",
-              "List Id": "901614760992",
-              "Task Id": "86d31vafd",
-              "Task Name": "Follow up with customer"
-            },
-            "expectedOutput": "ClickUp returns structured update task data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://clickup.com/api"
-        },
-        {
-          "name": "Delete task",
-          "value": "delete_task",
-          "description": "Delete task using the ClickUp node.",
-          "fields": [
-            {
-              "name": "Workspace Id",
-              "internalKey": "workspaceId",
-              "type": "string",
-              "required": false,
-              "description": "Workspace (team) ID — find it in the workspace URL or via Get Teams",
-              "helpText": "What this field is: The Workspace ID — find it in the workspace URL or via Get Teams that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 90161598841.\nTip: Use {{$json.workspaceId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "90161598841",
-              "example": "90161598841"
-            },
-            {
-              "name": "Space Id",
-              "internalKey": "spaceId",
-              "type": "string",
-              "required": false,
-              "description": "Space ID — required for Get Spaces tasks; find via Get Spaces",
-              "helpText": "What this field is: The Space ID — required for Get Spaces tasks; find via Get Spaces that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 90166920916.\nTip: Use {{$json.spaceId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "90166920916",
-              "example": "90166920916"
-            },
-            {
-              "name": "List Id",
-              "internalKey": "listId",
-              "type": "string",
-              "required": false,
-              "description": "List ID — required for create_task and get_tasks_list; find via Get Lists",
-              "helpText": "What this field is: The List ID — required for create_task and get_tasks_list; find via Get Lists that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 901614760992.\nTip: Use {{$json.listId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "901614760992",
-              "example": "901614760992"
-            },
-            {
-              "name": "Task Id",
-              "internalKey": "taskId",
-              "type": "string",
-              "required": false,
-              "description": "Task ID — required for get_task, update_task, delete_task, add_comment, update_status",
-              "helpText": "What this field is: The Task ID — required for get_task, update_task, delete_task, add_comment, update_status that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 86d31vafd.\nTip: Use {{$json.taskId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "86d31vafd",
-              "example": "86d31vafd"
-            },
-            {
-              "name": "Task Name",
-              "internalKey": "taskName",
-              "type": "string",
-              "required": false,
-              "description": "Task name/title (required for create_task)",
-              "helpText": "What this field is: Task name/title.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Follow up with customer.\nTip: This field is used for create_task. Leave it blank when this operation does not need it.",
-              "placeholder": "Follow up with customer",
-              "example": "Follow up with customer"
-            },
-            {
-              "name": "Task Description",
-              "internalKey": "taskDescription",
-              "type": "string",
-              "required": false,
-              "description": "Task description — markdown supported (optional for create_task / update_task)",
-              "helpText": "What this field is: Task description — markdown supported.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Details:\n- Action item 1\n- Action item 2.\nTip: Use {{$json.taskDescription}} when this value comes from an earlier step.",
-              "placeholder": "Details:\n- Action item 1\n- Action item 2",
-              "example": "Details:\n- Action item 1\n- Action item 2"
-            },
-            {
-              "name": "Status",
-              "internalKey": "status",
-              "type": "string",
-              "required": false,
-              "description": "Task status (e.g. \"to do\", \"in progress\", \"complete\")",
-              "helpText": "What this field is: Task status.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: to do.\nTip: Use {{$json.status}} when this value comes from an earlier step.",
-              "placeholder": "to do",
-              "example": "to do"
-            },
-            {
-              "name": "Priority",
-              "internalKey": "priority",
-              "type": "number",
-              "required": false,
-              "description": "Task priority: 1 = urgent, 2 = high, 3 = normal, 4 = low",
-              "helpText": "What this field is: The number used for Task priority: 1 = urgent, 2 = high, 3 = normal, 4 = low.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 1.\nTip: Use {{$json.priority}} when the number comes from an earlier step.",
-              "placeholder": "1",
-              "example": "1"
-            },
-            {
-              "name": "Comment Text",
-              "internalKey": "commentText",
-              "type": "string",
-              "required": false,
-              "description": "Comment text for add_comment operation",
-              "helpText": "What this field is: Comment text for add_comment operation.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: This has been reviewed and approved..\nTip: Use {{$json.commentText}} when this value comes from an earlier step.",
-              "placeholder": "This has been reviewed and approved.",
-              "example": "This has been reviewed and approved."
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming ClickUp data with delete task after a related upstream event is received",
-            "inputValues": {
-              "Workspace Id": "90161598841",
-              "Space Id": "90166920916",
-              "List Id": "901614760992",
-              "Task Id": "86d31vafd",
-              "Task Name": "Follow up with customer"
-            },
-            "expectedOutput": "ClickUp returns structured delete task data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://clickup.com/api"
-        },
-        {
-          "name": "Add comment",
-          "value": "add_comment",
-          "description": "Add comment using the ClickUp node.",
-          "fields": [
-            {
-              "name": "Workspace Id",
-              "internalKey": "workspaceId",
-              "type": "string",
-              "required": false,
-              "description": "Workspace (team) ID — find it in the workspace URL or via Get Teams",
-              "helpText": "What this field is: The Workspace ID — find it in the workspace URL or via Get Teams that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 90161598841.\nTip: Use {{$json.workspaceId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "90161598841",
-              "example": "90161598841"
-            },
-            {
-              "name": "Space Id",
-              "internalKey": "spaceId",
-              "type": "string",
-              "required": false,
-              "description": "Space ID — required for Get Spaces tasks; find via Get Spaces",
-              "helpText": "What this field is: The Space ID — required for Get Spaces tasks; find via Get Spaces that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 90166920916.\nTip: Use {{$json.spaceId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "90166920916",
-              "example": "90166920916"
-            },
-            {
-              "name": "List Id",
-              "internalKey": "listId",
-              "type": "string",
-              "required": false,
-              "description": "List ID — required for create_task and get_tasks_list; find via Get Lists",
-              "helpText": "What this field is: The List ID — required for create_task and get_tasks_list; find via Get Lists that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 901614760992.\nTip: Use {{$json.listId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "901614760992",
-              "example": "901614760992"
-            },
-            {
-              "name": "Task Id",
-              "internalKey": "taskId",
-              "type": "string",
-              "required": false,
-              "description": "Task ID — required for get_task, update_task, delete_task, add_comment, update_status",
-              "helpText": "What this field is: The Task ID — required for get_task, update_task, delete_task, add_comment, update_status that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 86d31vafd.\nTip: Use {{$json.taskId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "86d31vafd",
-              "example": "86d31vafd"
-            },
-            {
-              "name": "Task Name",
-              "internalKey": "taskName",
-              "type": "string",
-              "required": false,
-              "description": "Task name/title (required for create_task)",
-              "helpText": "What this field is: Task name/title.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Follow up with customer.\nTip: This field is used for create_task. Leave it blank when this operation does not need it.",
-              "placeholder": "Follow up with customer",
-              "example": "Follow up with customer"
-            },
-            {
-              "name": "Task Description",
-              "internalKey": "taskDescription",
-              "type": "string",
-              "required": false,
-              "description": "Task description — markdown supported (optional for create_task / update_task)",
-              "helpText": "What this field is: Task description — markdown supported.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Details:\n- Action item 1\n- Action item 2.\nTip: Use {{$json.taskDescription}} when this value comes from an earlier step.",
-              "placeholder": "Details:\n- Action item 1\n- Action item 2",
-              "example": "Details:\n- Action item 1\n- Action item 2"
-            },
-            {
-              "name": "Status",
-              "internalKey": "status",
-              "type": "string",
-              "required": false,
-              "description": "Task status (e.g. \"to do\", \"in progress\", \"complete\")",
-              "helpText": "What this field is: Task status.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: to do.\nTip: Use {{$json.status}} when this value comes from an earlier step.",
-              "placeholder": "to do",
-              "example": "to do"
-            },
-            {
-              "name": "Priority",
-              "internalKey": "priority",
-              "type": "number",
-              "required": false,
-              "description": "Task priority: 1 = urgent, 2 = high, 3 = normal, 4 = low",
-              "helpText": "What this field is: The number used for Task priority: 1 = urgent, 2 = high, 3 = normal, 4 = low.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 1.\nTip: Use {{$json.priority}} when the number comes from an earlier step.",
-              "placeholder": "1",
-              "example": "1"
-            },
-            {
-              "name": "Comment Text",
-              "internalKey": "commentText",
-              "type": "string",
-              "required": false,
-              "description": "Comment text for add_comment operation",
-              "helpText": "What this field is: Comment text for add_comment operation.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: This has been reviewed and approved..\nTip: Use {{$json.commentText}} when this value comes from an earlier step.",
-              "placeholder": "This has been reviewed and approved.",
-              "example": "This has been reviewed and approved."
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming ClickUp data with add comment after a related upstream event is received",
-            "inputValues": {
-              "Workspace Id": "90161598841",
-              "Space Id": "90166920916",
-              "List Id": "901614760992",
-              "Task Id": "86d31vafd",
-              "Task Name": "Follow up with customer"
-            },
-            "expectedOutput": "ClickUp returns structured add comment data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://clickup.com/api"
-        },
-        {
-          "name": "Update status",
-          "value": "update_status",
-          "description": "Update status using the ClickUp node.",
-          "fields": [
-            {
-              "name": "Workspace Id",
-              "internalKey": "workspaceId",
-              "type": "string",
-              "required": false,
-              "description": "Workspace (team) ID — find it in the workspace URL or via Get Teams",
-              "helpText": "What this field is: The Workspace ID — find it in the workspace URL or via Get Teams that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 90161598841.\nTip: Use {{$json.workspaceId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "90161598841",
-              "example": "90161598841"
-            },
-            {
-              "name": "Space Id",
-              "internalKey": "spaceId",
-              "type": "string",
-              "required": false,
-              "description": "Space ID — required for Get Spaces tasks; find via Get Spaces",
-              "helpText": "What this field is: The Space ID — required for Get Spaces tasks; find via Get Spaces that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 90166920916.\nTip: Use {{$json.spaceId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "90166920916",
-              "example": "90166920916"
-            },
-            {
-              "name": "List Id",
-              "internalKey": "listId",
-              "type": "string",
-              "required": false,
-              "description": "List ID — required for create_task and get_tasks_list; find via Get Lists",
-              "helpText": "What this field is: The List ID — required for create_task and get_tasks_list; find via Get Lists that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 901614760992.\nTip: Use {{$json.listId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "901614760992",
-              "example": "901614760992"
-            },
-            {
-              "name": "Task Id",
-              "internalKey": "taskId",
-              "type": "string",
-              "required": false,
-              "description": "Task ID — required for get_task, update_task, delete_task, add_comment, update_status",
-              "helpText": "What this field is: The Task ID — required for get_task, update_task, delete_task, add_comment, update_status that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 86d31vafd.\nTip: Use {{$json.taskId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "86d31vafd",
-              "example": "86d31vafd"
-            },
-            {
-              "name": "Task Name",
-              "internalKey": "taskName",
-              "type": "string",
-              "required": false,
-              "description": "Task name/title (required for create_task)",
-              "helpText": "What this field is: Task name/title.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Follow up with customer.\nTip: This field is used for create_task. Leave it blank when this operation does not need it.",
-              "placeholder": "Follow up with customer",
-              "example": "Follow up with customer"
-            },
-            {
-              "name": "Task Description",
-              "internalKey": "taskDescription",
-              "type": "string",
-              "required": false,
-              "description": "Task description — markdown supported (optional for create_task / update_task)",
-              "helpText": "What this field is: Task description — markdown supported.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Details:\n- Action item 1\n- Action item 2.\nTip: Use {{$json.taskDescription}} when this value comes from an earlier step.",
-              "placeholder": "Details:\n- Action item 1\n- Action item 2",
-              "example": "Details:\n- Action item 1\n- Action item 2"
-            },
-            {
-              "name": "Status",
-              "internalKey": "status",
-              "type": "string",
-              "required": false,
-              "description": "Task status (e.g. \"to do\", \"in progress\", \"complete\")",
-              "helpText": "What this field is: Task status.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: to do.\nTip: Use {{$json.status}} when this value comes from an earlier step.",
-              "placeholder": "to do",
-              "example": "to do"
-            },
-            {
-              "name": "Priority",
-              "internalKey": "priority",
-              "type": "number",
-              "required": false,
-              "description": "Task priority: 1 = urgent, 2 = high, 3 = normal, 4 = low",
-              "helpText": "What this field is: The number used for Task priority: 1 = urgent, 2 = high, 3 = normal, 4 = low.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 1.\nTip: Use {{$json.priority}} when the number comes from an earlier step.",
-              "placeholder": "1",
-              "example": "1"
-            },
-            {
-              "name": "Comment Text",
-              "internalKey": "commentText",
-              "type": "string",
-              "required": false,
-              "description": "Comment text for add_comment operation",
-              "helpText": "What this field is: Comment text for add_comment operation.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: This has been reviewed and approved..\nTip: Use {{$json.commentText}} when this value comes from an earlier step.",
-              "placeholder": "This has been reviewed and approved.",
-              "example": "This has been reviewed and approved."
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming ClickUp data with update status after a related upstream event is received",
-            "inputValues": {
-              "Workspace Id": "90161598841",
-              "Space Id": "90166920916",
-              "List Id": "901614760992",
-              "Task Id": "86d31vafd",
-              "Task Name": "Follow up with customer"
-            },
-            "expectedOutput": "ClickUp returns structured update status data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://clickup.com/api"
-        },
-        {
-          "name": "Get teams",
-          "value": "get_teams",
-          "description": "Get teams using the ClickUp node.",
-          "fields": [
-            {
-              "name": "Workspace Id",
-              "internalKey": "workspaceId",
-              "type": "string",
-              "required": false,
-              "description": "Workspace (team) ID — find it in the workspace URL or via Get Teams",
-              "helpText": "What this field is: The Workspace ID — find it in the workspace URL or via Get Teams that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 90161598841.\nTip: Use {{$json.workspaceId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "90161598841",
-              "example": "90161598841"
-            },
-            {
-              "name": "Space Id",
-              "internalKey": "spaceId",
-              "type": "string",
-              "required": false,
-              "description": "Space ID — required for Get Spaces tasks; find via Get Spaces",
-              "helpText": "What this field is: The Space ID — required for Get Spaces tasks; find via Get Spaces that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 90166920916.\nTip: Use {{$json.spaceId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "90166920916",
-              "example": "90166920916"
-            },
-            {
-              "name": "List Id",
-              "internalKey": "listId",
-              "type": "string",
-              "required": false,
-              "description": "List ID — required for create_task and get_tasks_list; find via Get Lists",
-              "helpText": "What this field is: The List ID — required for create_task and get_tasks_list; find via Get Lists that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 901614760992.\nTip: Use {{$json.listId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "901614760992",
-              "example": "901614760992"
-            },
-            {
-              "name": "Task Id",
-              "internalKey": "taskId",
-              "type": "string",
-              "required": false,
-              "description": "Task ID — required for get_task, update_task, delete_task, add_comment, update_status",
-              "helpText": "What this field is: The Task ID — required for get_task, update_task, delete_task, add_comment, update_status that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 86d31vafd.\nTip: Use {{$json.taskId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "86d31vafd",
-              "example": "86d31vafd"
-            },
-            {
-              "name": "Task Name",
-              "internalKey": "taskName",
-              "type": "string",
-              "required": false,
-              "description": "Task name/title (required for create_task)",
-              "helpText": "What this field is: Task name/title.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Follow up with customer.\nTip: This field is used for create_task. Leave it blank when this operation does not need it.",
-              "placeholder": "Follow up with customer",
-              "example": "Follow up with customer"
-            },
-            {
-              "name": "Task Description",
-              "internalKey": "taskDescription",
-              "type": "string",
-              "required": false,
-              "description": "Task description — markdown supported (optional for create_task / update_task)",
-              "helpText": "What this field is: Task description — markdown supported.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Details:\n- Action item 1\n- Action item 2.\nTip: Use {{$json.taskDescription}} when this value comes from an earlier step.",
-              "placeholder": "Details:\n- Action item 1\n- Action item 2",
-              "example": "Details:\n- Action item 1\n- Action item 2"
-            },
-            {
-              "name": "Status",
-              "internalKey": "status",
-              "type": "string",
-              "required": false,
-              "description": "Task status (e.g. \"to do\", \"in progress\", \"complete\")",
-              "helpText": "What this field is: Task status.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: to do.\nTip: Use {{$json.status}} when this value comes from an earlier step.",
-              "placeholder": "to do",
-              "example": "to do"
-            },
-            {
-              "name": "Priority",
-              "internalKey": "priority",
-              "type": "number",
-              "required": false,
-              "description": "Task priority: 1 = urgent, 2 = high, 3 = normal, 4 = low",
-              "helpText": "What this field is: The number used for Task priority: 1 = urgent, 2 = high, 3 = normal, 4 = low.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 1.\nTip: Use {{$json.priority}} when the number comes from an earlier step.",
-              "placeholder": "1",
-              "example": "1"
-            },
-            {
-              "name": "Comment Text",
-              "internalKey": "commentText",
-              "type": "string",
-              "required": false,
-              "description": "Comment text for add_comment operation",
-              "helpText": "What this field is: Comment text for add_comment operation.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: This has been reviewed and approved..\nTip: Use {{$json.commentText}} when this value comes from an earlier step.",
-              "placeholder": "This has been reviewed and approved.",
-              "example": "This has been reviewed and approved."
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming ClickUp data with get teams after a related upstream event is received",
-            "inputValues": {
-              "Workspace Id": "90161598841",
-              "Space Id": "90166920916",
-              "List Id": "901614760992",
-              "Task Id": "86d31vafd",
-              "Task Name": "Follow up with customer"
-            },
-            "expectedOutput": "ClickUp returns structured get teams data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://clickup.com/api"
-        },
-        {
-          "name": "Get spaces",
-          "value": "get_spaces",
-          "description": "Get spaces using the ClickUp node.",
-          "fields": [
-            {
-              "name": "Workspace Id",
-              "internalKey": "workspaceId",
-              "type": "string",
-              "required": false,
-              "description": "Workspace (team) ID — find it in the workspace URL or via Get Teams",
-              "helpText": "What this field is: The Workspace ID — find it in the workspace URL or via Get Teams that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 90161598841.\nTip: Use {{$json.workspaceId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "90161598841",
-              "example": "90161598841"
-            },
-            {
-              "name": "Space Id",
-              "internalKey": "spaceId",
-              "type": "string",
-              "required": false,
-              "description": "Space ID — required for Get Spaces tasks; find via Get Spaces",
-              "helpText": "What this field is: The Space ID — required for Get Spaces tasks; find via Get Spaces that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 90166920916.\nTip: Use {{$json.spaceId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "90166920916",
-              "example": "90166920916"
-            },
-            {
-              "name": "List Id",
-              "internalKey": "listId",
-              "type": "string",
-              "required": false,
-              "description": "List ID — required for create_task and get_tasks_list; find via Get Lists",
-              "helpText": "What this field is: The List ID — required for create_task and get_tasks_list; find via Get Lists that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 901614760992.\nTip: Use {{$json.listId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "901614760992",
-              "example": "901614760992"
-            },
-            {
-              "name": "Task Id",
-              "internalKey": "taskId",
-              "type": "string",
-              "required": false,
-              "description": "Task ID — required for get_task, update_task, delete_task, add_comment, update_status",
-              "helpText": "What this field is: The Task ID — required for get_task, update_task, delete_task, add_comment, update_status that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 86d31vafd.\nTip: Use {{$json.taskId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "86d31vafd",
-              "example": "86d31vafd"
-            },
-            {
-              "name": "Task Name",
-              "internalKey": "taskName",
-              "type": "string",
-              "required": false,
-              "description": "Task name/title (required for create_task)",
-              "helpText": "What this field is: Task name/title.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Follow up with customer.\nTip: This field is used for create_task. Leave it blank when this operation does not need it.",
-              "placeholder": "Follow up with customer",
-              "example": "Follow up with customer"
-            },
-            {
-              "name": "Task Description",
-              "internalKey": "taskDescription",
-              "type": "string",
-              "required": false,
-              "description": "Task description — markdown supported (optional for create_task / update_task)",
-              "helpText": "What this field is: Task description — markdown supported.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Details:\n- Action item 1\n- Action item 2.\nTip: Use {{$json.taskDescription}} when this value comes from an earlier step.",
-              "placeholder": "Details:\n- Action item 1\n- Action item 2",
-              "example": "Details:\n- Action item 1\n- Action item 2"
-            },
-            {
-              "name": "Status",
-              "internalKey": "status",
-              "type": "string",
-              "required": false,
-              "description": "Task status (e.g. \"to do\", \"in progress\", \"complete\")",
-              "helpText": "What this field is: Task status.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: to do.\nTip: Use {{$json.status}} when this value comes from an earlier step.",
-              "placeholder": "to do",
-              "example": "to do"
-            },
-            {
-              "name": "Priority",
-              "internalKey": "priority",
-              "type": "number",
-              "required": false,
-              "description": "Task priority: 1 = urgent, 2 = high, 3 = normal, 4 = low",
-              "helpText": "What this field is: The number used for Task priority: 1 = urgent, 2 = high, 3 = normal, 4 = low.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 1.\nTip: Use {{$json.priority}} when the number comes from an earlier step.",
-              "placeholder": "1",
-              "example": "1"
-            },
-            {
-              "name": "Comment Text",
-              "internalKey": "commentText",
-              "type": "string",
-              "required": false,
-              "description": "Comment text for add_comment operation",
-              "helpText": "What this field is: Comment text for add_comment operation.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: This has been reviewed and approved..\nTip: Use {{$json.commentText}} when this value comes from an earlier step.",
-              "placeholder": "This has been reviewed and approved.",
-              "example": "This has been reviewed and approved."
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming ClickUp data with get spaces after a related upstream event is received",
-            "inputValues": {
-              "Workspace Id": "90161598841",
-              "Space Id": "90166920916",
-              "List Id": "901614760992",
-              "Task Id": "86d31vafd",
-              "Task Name": "Follow up with customer"
-            },
-            "expectedOutput": "ClickUp returns structured get spaces data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://clickup.com/api"
-        },
-        {
-          "name": "Get folders",
-          "value": "get_folders",
-          "description": "Get folders using the ClickUp node.",
-          "fields": [
-            {
-              "name": "Workspace Id",
-              "internalKey": "workspaceId",
-              "type": "string",
-              "required": false,
-              "description": "Workspace (team) ID — find it in the workspace URL or via Get Teams",
-              "helpText": "What this field is: The Workspace ID — find it in the workspace URL or via Get Teams that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 90161598841.\nTip: Use {{$json.workspaceId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "90161598841",
-              "example": "90161598841"
-            },
-            {
-              "name": "Space Id",
-              "internalKey": "spaceId",
-              "type": "string",
-              "required": false,
-              "description": "Space ID — required for Get Spaces tasks; find via Get Spaces",
-              "helpText": "What this field is: The Space ID — required for Get Spaces tasks; find via Get Spaces that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 90166920916.\nTip: Use {{$json.spaceId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "90166920916",
-              "example": "90166920916"
-            },
-            {
-              "name": "List Id",
-              "internalKey": "listId",
-              "type": "string",
-              "required": false,
-              "description": "List ID — required for create_task and get_tasks_list; find via Get Lists",
-              "helpText": "What this field is: The List ID — required for create_task and get_tasks_list; find via Get Lists that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 901614760992.\nTip: Use {{$json.listId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "901614760992",
-              "example": "901614760992"
-            },
-            {
-              "name": "Task Id",
-              "internalKey": "taskId",
-              "type": "string",
-              "required": false,
-              "description": "Task ID — required for get_task, update_task, delete_task, add_comment, update_status",
-              "helpText": "What this field is: The Task ID — required for get_task, update_task, delete_task, add_comment, update_status that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 86d31vafd.\nTip: Use {{$json.taskId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "86d31vafd",
-              "example": "86d31vafd"
-            },
-            {
-              "name": "Task Name",
-              "internalKey": "taskName",
-              "type": "string",
-              "required": false,
-              "description": "Task name/title (required for create_task)",
-              "helpText": "What this field is: Task name/title.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Follow up with customer.\nTip: This field is used for create_task. Leave it blank when this operation does not need it.",
-              "placeholder": "Follow up with customer",
-              "example": "Follow up with customer"
-            },
-            {
-              "name": "Task Description",
-              "internalKey": "taskDescription",
-              "type": "string",
-              "required": false,
-              "description": "Task description — markdown supported (optional for create_task / update_task)",
-              "helpText": "What this field is: Task description — markdown supported.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Details:\n- Action item 1\n- Action item 2.\nTip: Use {{$json.taskDescription}} when this value comes from an earlier step.",
-              "placeholder": "Details:\n- Action item 1\n- Action item 2",
-              "example": "Details:\n- Action item 1\n- Action item 2"
-            },
-            {
-              "name": "Status",
-              "internalKey": "status",
-              "type": "string",
-              "required": false,
-              "description": "Task status (e.g. \"to do\", \"in progress\", \"complete\")",
-              "helpText": "What this field is: Task status.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: to do.\nTip: Use {{$json.status}} when this value comes from an earlier step.",
-              "placeholder": "to do",
-              "example": "to do"
-            },
-            {
-              "name": "Priority",
-              "internalKey": "priority",
-              "type": "number",
-              "required": false,
-              "description": "Task priority: 1 = urgent, 2 = high, 3 = normal, 4 = low",
-              "helpText": "What this field is: The number used for Task priority: 1 = urgent, 2 = high, 3 = normal, 4 = low.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 1.\nTip: Use {{$json.priority}} when the number comes from an earlier step.",
-              "placeholder": "1",
-              "example": "1"
-            },
-            {
-              "name": "Comment Text",
-              "internalKey": "commentText",
-              "type": "string",
-              "required": false,
-              "description": "Comment text for add_comment operation",
-              "helpText": "What this field is: Comment text for add_comment operation.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: This has been reviewed and approved..\nTip: Use {{$json.commentText}} when this value comes from an earlier step.",
-              "placeholder": "This has been reviewed and approved.",
-              "example": "This has been reviewed and approved."
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming ClickUp data with get folders after a related upstream event is received",
-            "inputValues": {
-              "Workspace Id": "90161598841",
-              "Space Id": "90166920916",
-              "List Id": "901614760992",
-              "Task Id": "86d31vafd",
-              "Task Name": "Follow up with customer"
-            },
-            "expectedOutput": "ClickUp returns structured get folders data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://clickup.com/api"
-        },
-        {
-          "name": "Get lists",
-          "value": "get_lists",
-          "description": "Get lists using the ClickUp node.",
-          "fields": [
-            {
-              "name": "Workspace Id",
-              "internalKey": "workspaceId",
-              "type": "string",
-              "required": false,
-              "description": "Workspace (team) ID — find it in the workspace URL or via Get Teams",
-              "helpText": "What this field is: The Workspace ID — find it in the workspace URL or via Get Teams that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 90161598841.\nTip: Use {{$json.workspaceId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "90161598841",
-              "example": "90161598841"
-            },
-            {
-              "name": "Space Id",
-              "internalKey": "spaceId",
-              "type": "string",
-              "required": false,
-              "description": "Space ID — required for Get Spaces tasks; find via Get Spaces",
-              "helpText": "What this field is: The Space ID — required for Get Spaces tasks; find via Get Spaces that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 90166920916.\nTip: Use {{$json.spaceId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "90166920916",
-              "example": "90166920916"
-            },
-            {
-              "name": "List Id",
-              "internalKey": "listId",
-              "type": "string",
-              "required": false,
-              "description": "List ID — required for create_task and get_tasks_list; find via Get Lists",
-              "helpText": "What this field is: The List ID — required for create_task and get_tasks_list; find via Get Lists that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 901614760992.\nTip: Use {{$json.listId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "901614760992",
-              "example": "901614760992"
-            },
-            {
-              "name": "Task Id",
-              "internalKey": "taskId",
-              "type": "string",
-              "required": false,
-              "description": "Task ID — required for get_task, update_task, delete_task, add_comment, update_status",
-              "helpText": "What this field is: The Task ID — required for get_task, update_task, delete_task, add_comment, update_status that tells ClickUp which item to use.\nWhere to find it: Open the item in ClickUp and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 86d31vafd.\nTip: Use {{$json.taskId}} when an earlier ClickUp step provides this value.",
-              "placeholder": "86d31vafd",
-              "example": "86d31vafd"
-            },
-            {
-              "name": "Task Name",
-              "internalKey": "taskName",
-              "type": "string",
-              "required": false,
-              "description": "Task name/title (required for create_task)",
-              "helpText": "What this field is: Task name/title.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Follow up with customer.\nTip: This field is used for create_task. Leave it blank when this operation does not need it.",
-              "placeholder": "Follow up with customer",
-              "example": "Follow up with customer"
-            },
-            {
-              "name": "Task Description",
-              "internalKey": "taskDescription",
-              "type": "string",
-              "required": false,
-              "description": "Task description — markdown supported (optional for create_task / update_task)",
-              "helpText": "What this field is: Task description — markdown supported.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Details:\n- Action item 1\n- Action item 2.\nTip: Use {{$json.taskDescription}} when this value comes from an earlier step.",
-              "placeholder": "Details:\n- Action item 1\n- Action item 2",
-              "example": "Details:\n- Action item 1\n- Action item 2"
-            },
-            {
-              "name": "Status",
-              "internalKey": "status",
-              "type": "string",
-              "required": false,
-              "description": "Task status (e.g. \"to do\", \"in progress\", \"complete\")",
-              "helpText": "What this field is: Task status.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: to do.\nTip: Use {{$json.status}} when this value comes from an earlier step.",
-              "placeholder": "to do",
-              "example": "to do"
-            },
-            {
-              "name": "Priority",
-              "internalKey": "priority",
-              "type": "number",
-              "required": false,
-              "description": "Task priority: 1 = urgent, 2 = high, 3 = normal, 4 = low",
-              "helpText": "What this field is: The number used for Task priority: 1 = urgent, 2 = high, 3 = normal, 4 = low.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 1.\nTip: Use {{$json.priority}} when the number comes from an earlier step.",
-              "placeholder": "1",
-              "example": "1"
-            },
-            {
-              "name": "Comment Text",
-              "internalKey": "commentText",
-              "type": "string",
-              "required": false,
-              "description": "Comment text for add_comment operation",
-              "helpText": "What this field is: Comment text for add_comment operation.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: This has been reviewed and approved..\nTip: Use {{$json.commentText}} when this value comes from an earlier step.",
-              "placeholder": "This has been reviewed and approved.",
-              "example": "This has been reviewed and approved."
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming ClickUp data with get lists after a related upstream event is received",
-            "inputValues": {
-              "Workspace Id": "90161598841",
-              "Space Id": "90166920916",
-              "List Id": "901614760992",
-              "Task Id": "86d31vafd",
-              "Task Name": "Follow up with customer"
-            },
-            "expectedOutput": "ClickUp returns structured get lists data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://clickup.com/api"
-        }
-      ]
-    }
+      name: 'Tasks and Workspace Discovery',
+      description: 'ClickUp operations cover task creation/update/read/delete, list task reads, comments, status updates, and discovery of teams, spaces, folders, and lists.',
+      operations: [
+        makeOperation('Create Task', 'create_task', 'Creates a task in listId. Requires listId and name; description, status, priority, assignees, and dueDate are optional. If status is invalid, runtime retries without status and can return _statusSkipped.'),
+        makeOperation('Update Task', 'update_task', 'Updates an existing task by taskId. It can change name, description, status, priority, assignees, and dueDate. Invalid status can trigger the same retry-without-status behavior.'),
+        makeOperation('Get Task', 'get_task', 'Retrieves one ClickUp task by taskId and returns the ClickUp task object for downstream mapping.'),
+        makeOperation('Delete Task', 'delete_task', 'Deletes one ClickUp task by taskId. Use carefully because the operation calls the ClickUp delete route.'),
+        makeOperation('List Tasks', 'list_tasks', 'Lists tasks from a listId or spaceId. includeClosed controls whether closed/completed tasks are requested.'),
+        makeOperation('Add Comment', 'add_comment', 'Adds commentText to a taskId or listId. Use it for approval notes, audit notes, or AI summaries.'),
+        makeOperation('Update Task Status', 'update_status', 'Updates a task by taskId using only the status field. The status must exist in that task list.'),
+        makeOperation('Get Teams', 'get_teams', 'Lists ClickUp workspaces/teams available to the token so you can find workspaceId/teamId values.'),
+        makeOperation('Get Spaces', 'get_spaces', 'Lists spaces for a workspace/team. Requires workspaceId/teamId from the credential or field.'),
+        makeOperation('Get Folders', 'get_folders', 'Lists folders in a space. Requires spaceId.'),
+        makeOperation('Get Lists', 'get_lists', 'Lists lists in a folderId or spaceId so you can find listId for task operations.'),
+      ],
+    },
   ],
-  "commonErrors": [
+  commonErrors: [
     {
-      "error": "Authentication failed",
-      "cause": "The saved credential, token, API key, or OAuth grant is missing, expired, or lacks the required scope.",
-      "fix": "Reconnect the service in CtrlChecks → Connections, then re-run the ClickUp node."
+      error: 'Missing ClickUp API Key',
+      cause: 'No saved ClickUp credential and no direct apiKey/apiToken/token fallback was available.',
+      fix: 'Create or reconnect the ClickUp service node account connection in Connections and verify the credential vault value.',
     },
     {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
+      error: 'name is required for createTask',
+      cause: 'create_task was selected but Task Name/name was empty or resolved to nothing.',
+      fix: 'Fill name directly or map a title such as {{$json.taskTitle}} from the previous node.',
     },
     {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
+      error: 'listId is required for createTask',
+      cause: 'The workflow tried to create a task without the target ClickUp List ID.',
+      fix: 'Run Get Lists first, copy the list ID from ClickUp, or map {{$json.listId}}.',
+    },
+    {
+      error: 'Status field was ignored because it does not exist in this list',
+      cause: 'ClickUp rejected the provided status, then runtime retried create/update without status.',
+      fix: 'Use the exact status name from the target list, or check _statusSkipped before assuming the task moved.',
+    },
+    {
+      error: 'No response from ClickUp API',
+      cause: 'The ClickUp service call did not receive a usable response, often from network, auth, or API availability issues.',
+      fix: 'Test the connection, confirm the token permissions, and retry with a simple get_teams operation.',
+    },
   ],
-  "relatedNodes": []
+  relatedNodes: ['trello', 'jira', 'slack_message'],
 };

@@ -310,10 +310,10 @@ export const ScheduleTrigger: React.FC<ScheduleTriggerProps> = ({
   const [cronError, setCronError] = useState<string | undefined>();
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const scheduleHelp = {
-    timezone: 'What this field is: The timezone used to decide when the schedule runs.\nHow to choose it: Pick the timezone where the business process should happen, not necessarily your computer timezone.\nExample: Asia/Kolkata runs at Indian local time. America/New_York runs at New York local time.',
-    dailyTime: 'What this field is: The daily time picker updates the cron expression for a simple once-per-day schedule.\nHow to fill it: Use Hour from 0 to 23 and Minute from 0 to 59.\nExample: 09:30 means 9:30 AM in the selected timezone.',
-    hour: 'What this field is: The hour of the day for the schedule.\nFormat: Use 24-hour time from 0 to 23.\nExample: 9 means 9 AM, 14 means 2 PM.',
-    minute: 'What this field is: The minute within the selected hour.\nFormat: Use a number from 0 to 59.\nExample: 30 means half past the hour.',
+    timezone: 'What this field means: Timezone tells CtrlChecks which local clock to use for the schedule.\nWhy it matters: 09:00 in New York, India, London, and Sydney are different moments.\nHow to choose it: Pick the timezone where the business process should happen. Use UTC for global system jobs, America/New_York for US East Coast workflows, Europe/London for UK workflows, and Asia/Kolkata or the India city aliases for India workflows.\nExample: Asia/Kolkata runs at Indian local time. America/New_York runs at New York local time.',
+    dailyTime: 'What this field means: The daily time picker creates a simple once-per-day cron schedule for you.\nHow to fill it: Choose Hour from 00 to 23 and Minute from 00 to 59.\nExample: 09:30 means 9:30 AM in the selected timezone.\nUse it for: Daily reports, reminders, morning checks, exports, or cleanup jobs. Use the Cron expression field for weekly, monthly, hourly, or business-day patterns.',
+    hour: 'What this field means: The hour of the day for a simple daily schedule.\nFormat: Use 24-hour time from 00 to 23.\nExamples: 09 means 9 AM, 14 means 2 PM, and 00 means midnight.\nCommon mistake: Do not type AM or PM here.',
+    minute: 'What this field means: The minute within the selected hour.\nFormat: Use a number from 00 to 59.\nExamples: 00 means exactly on the hour, 15 means quarter past, and 30 means half past.\nCommon mistake: Do not use 60 or text such as half past.',
   };
   const [isTimezoneOpen, setIsTimezoneOpen] = useState(false);
   const [isManualCronEdit, setIsManualCronEdit] = useState(false);

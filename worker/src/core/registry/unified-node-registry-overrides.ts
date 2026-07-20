@@ -41,6 +41,7 @@ import { overrideAggregate } from './overrides/aggregate';
 import { overrideHttpRequest } from './overrides/http-request';
 import { overrideSlackMessage } from './overrides/slack-message';
 import { overrideSlackWebhook } from './overrides/slack-webhook';
+import { overrideSlackTrigger } from './overrides/slack-trigger';
 import { overrideGoogleSheets } from './overrides/google-sheets';
 import { overrideAirtable } from './overrides/airtable';
 import { overrideNotion } from './overrides/notion';
@@ -52,13 +53,22 @@ import { overrideMailchimp } from './overrides/mailchimp';
 import { overrideIntercom } from './overrides/intercom';
 import { overrideEmail } from './overrides/email';
 import { overrideTelegram } from './overrides/telegram';
+import { overrideTelegramTrigger } from './overrides/telegram-trigger';
 import { overrideDiscord } from './overrides/discord';
 import { overrideDiscordWebhook } from './overrides/discord-webhook';
+import { overrideDiscordTrigger } from './overrides/discord-trigger';
 import { overrideExecuteWorkflow } from './overrides/execute-workflow';
 import { overrideJavascript } from './overrides/javascript';
 import { overrideTextSummarizer } from './overrides/text-summarizer';
 import { overrideSentimentAnalyzer } from './overrides/sentiment-analyzer';
 import { overrideMicrosoftTeams } from './overrides/microsoft-teams';
+import { overrideMicrosoftTeamsTrigger } from './overrides/microsoft-teams-trigger';
+import { overrideGmailTrigger } from './overrides/gmail-trigger';
+import { overrideGoogleCalendarTrigger } from './overrides/google-calendar-trigger';
+import { overrideGoogleSheetsTrigger } from './overrides/google-sheets-trigger';
+import { overrideGoogleDriveTrigger } from './overrides/google-drive-trigger';
+import { overrideTypeformTrigger } from './overrides/typeform-trigger';
+import { overrideTallyTrigger } from './overrides/tally-trigger';
 import { overrideWhatsappCloud } from './overrides/whatsapp-cloud';
 import { overrideTwilio } from './overrides/twilio';
 import { overrideMailgun } from './overrides/mailgun';
@@ -105,19 +115,26 @@ import { overrideYoutube } from './overrides/youtube';
 import { overrideFacebook } from './overrides/facebook';
 import { overrideLinkedin } from './overrides/linkedin';
 import { overrideShopify } from './overrides/shopify';
+import { overrideShopifyTrigger } from './overrides/shopify-trigger';
 import { overrideWoocommerce } from './overrides/woocommerce';
 import { overrideStripe } from './overrides/stripe';
+import { overrideStripeTrigger } from './overrides/stripe-trigger';
 import { overridePaypal } from './overrides/paypal';
 import { overrideGithub } from './overrides/github';
+import { overrideGithubTrigger } from './overrides/github-trigger';
 import { overrideGitlab } from './overrides/gitlab';
+import { overrideGitlabTrigger } from './overrides/gitlab-trigger';
 import { overrideBitbucket } from './overrides/bitbucket';
+import { overrideJiraTrigger } from './overrides/jira-trigger';
 import { overrideClickup } from './overrides/clickup';
 import { overrideOutlook } from './overrides/outlook';
+import { overrideOutlookTrigger } from './overrides/outlook-trigger';
 import { overrideMemory } from './overrides/memory';
 import { overrideTool } from './overrides/tool';
 import { overrideWhatsapp } from './overrides/whatsapp';
 import { overrideWhatsappTrigger } from './overrides/whatsapp-trigger';
 import { overrideInstagramTrigger } from './overrides/instagram-trigger';
+import { overrideFacebookTrigger } from './overrides/facebook-trigger';
 
 import { overrideIntuitSmes } from './overrides/intuit-smes';
 import { overrideTally } from './overrides/tally';
@@ -132,6 +149,10 @@ import { overrideScheduleWise } from './overrides/schedulewise';
 import { overrideCalendly } from './overrides/calendly';
 import { overrideChargebee } from './overrides/chargebee';
 import { overrideTypeform } from './overrides/typeform';
+import { overrideLinear } from './overrides/linear';
+import { overrideLinearTrigger } from './overrides/linear-trigger';
+import { overrideTrello } from './overrides/trello';
+import { overrideTrelloTrigger } from './overrides/trello-trigger';
 import { overrideXero } from './overrides/xero';
 import { overrideOracleDatabase } from './overrides/oracle-database';
 import { overrideContentful } from './overrides/contentful-node';
@@ -190,6 +211,7 @@ const overridesByType: Record<string, OverrideFn> = {
   http_request: overrideHttpRequest,
   slack_message: overrideSlackMessage,
   slack_webhook: overrideSlackWebhook,
+  slack_trigger: overrideSlackTrigger,
   google_sheets: overrideGoogleSheets,
   airtable: overrideAirtable,
   notion: overrideNotion,
@@ -205,14 +227,23 @@ const overridesByType: Record<string, OverrideFn> = {
   tally: overrideTally,
   email: overrideEmail,
   telegram: overrideTelegram,
+  telegram_trigger: overrideTelegramTrigger,
   discord: overrideDiscord,
   discord_webhook: overrideDiscordWebhook,
+  discord_trigger: overrideDiscordTrigger,
   execute_workflow: overrideExecuteWorkflow,
   javascript: overrideJavascript,
   text_summarizer: overrideTextSummarizer,
   sentiment_analyzer: overrideSentimentAnalyzer,
   // ✅ BATCH 3: Remaining Communication & Storage
   microsoft_teams: overrideMicrosoftTeams,
+  microsoft_teams_trigger: overrideMicrosoftTeamsTrigger,
+  gmail_trigger: overrideGmailTrigger,
+  google_calendar_trigger: overrideGoogleCalendarTrigger,
+  google_sheets_trigger: overrideGoogleSheetsTrigger,
+  google_drive_trigger: overrideGoogleDriveTrigger,
+  typeform_trigger: overrideTypeformTrigger,
+  tally_trigger: overrideTallyTrigger,
   whatsapp_cloud: overrideWhatsappCloud,
   twilio: overrideTwilio,
   mailgun: overrideMailgun,
@@ -266,18 +297,25 @@ const overridesByType: Record<string, OverrideFn> = {
   whatsapp: overrideWhatsapp,
   whatsapp_trigger: overrideWhatsappTrigger,
   instagram_trigger: overrideInstagramTrigger,
+  facebook_trigger: overrideFacebookTrigger,
   // ✅ BATCH 11: E-commerce & Payments
   shopify: overrideShopify,
+  shopify_trigger: overrideShopifyTrigger,
   woocommerce: overrideWoocommerce,
   stripe: overrideStripe,
+  stripe_trigger: overrideStripeTrigger,
   paypal: overridePaypal,
   // ✅ BATCH 12: Version Control
   github: overrideGithub,
+  github_trigger: overrideGithubTrigger,
   gitlab: overrideGitlab,
+  gitlab_trigger: overrideGitlabTrigger,
   bitbucket: overrideBitbucket,
+  jira_trigger: overrideJiraTrigger,
   // ✅ BATCH 13: Other Integrations
   clickup: overrideClickup,
   outlook: overrideOutlook,
+  outlook_trigger: overrideOutlookTrigger,
   // ✅ BATCH 14: Utilities
   date_time: overrideDateTime,
   text_formatter: overrideTextFormatter,
@@ -299,6 +337,10 @@ const overridesByType: Record<string, OverrideFn> = {
   calendly: overrideCalendly,
   chargebee: overrideChargebee,
   typeform: overrideTypeform,
+  linear: overrideLinear,
+  linear_trigger: overrideLinearTrigger,
+  trello: overrideTrello,
+  trello_trigger: overrideTrelloTrigger,
   xero: overrideXero,
   oracle_database: overrideOracleDatabase,
   // ── Tier-3: nodes needing both schema registration and execution wiring ───

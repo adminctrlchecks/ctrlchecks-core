@@ -2,139 +2,75 @@ import type { DocsSearchIndexItem } from '../search-index';
 
 export const calendlySearchIndex = [
   {
-    "type": "node",
-    "title": "Calendly",
-    "slug": "calendly",
-    "category": "Data",
-    "href": "/docs/nodes/calendly",
-    "text": "Calendly Fetch events, event types, scheduled meetings, and user info from Calendly. Use this node when a workflow needs calendly behavior with schema-driven inputs from the CtrlChecks node registry. Data"
+    type: 'node',
+    title: 'Calendly',
+    slug: 'calendly',
+    category: 'Productivity',
+    href: '/docs/nodes/calendly',
+    text: 'Calendly reads user, event type, and scheduled event data using a saved Calendly Personal Access Token connection.',
   },
   {
-    "type": "operation",
-    "title": "Calendly: Get Events",
-    "slug": "calendly",
-    "category": "Data",
-    "href": "/docs/nodes/calendly#operation-get_events",
-    "text": "Calendly Operations Get Events Get Events with the Calendly node using the configured input fields. get_events"
+    type: 'operation',
+    title: 'Calendly: Get User',
+    slug: 'calendly',
+    category: 'Productivity',
+    href: '/docs/nodes/calendly#operation-get_user',
+    text: 'Get User calls /users/me and returns user.uri for later event type and scheduled event lookups.',
   },
   {
-    "type": "field",
-    "title": "Calendly: Access Token",
-    "slug": "calendly",
-    "category": "Data",
-    "href": "/docs/nodes/calendly#operation-get_events",
-    "text": "Calendly Operations Get Events Access Token accessToken Calendly personal access token"
+    type: 'operation',
+    title: 'Calendly: Get Events',
+    slug: 'calendly',
+    category: 'Productivity',
+    href: '/docs/nodes/calendly#operation-get_events',
+    text: 'Get Events lists scheduled_events, optionally filtered by User URI, and returns data, collection, and count when Calendly sends a list.',
   },
   {
-    "type": "field",
-    "title": "Calendly: User Uri",
-    "slug": "calendly",
-    "category": "Data",
-    "href": "/docs/nodes/calendly#operation-get_events",
-    "text": "Calendly Operations Get Events User Uri userUri Calendly user URI"
+    type: 'operation',
+    title: 'Calendly: Get Event Types',
+    slug: 'calendly',
+    category: 'Productivity',
+    href: '/docs/nodes/calendly#operation-get_event_types',
+    text: 'Get Event Types requires userUri and returns booking-page event type records for a Calendly user.',
   },
   {
-    "type": "field",
-    "title": "Calendly: Event Type Uri",
-    "slug": "calendly",
-    "category": "Data",
-    "href": "/docs/nodes/calendly#operation-get_events",
-    "text": "Calendly Operations Get Events Event Type Uri eventTypeUri Calendly event type URI"
+    type: 'operation',
+    title: 'Calendly: Get Scheduled Events',
+    slug: 'calendly',
+    category: 'Productivity',
+    href: '/docs/nodes/calendly#operation-get_scheduled_events',
+    text: 'Get Scheduled Events requires userUri and can filter by eventTypeUri to find meetings for one booking type.',
   },
   {
-    "type": "operation",
-    "title": "Calendly: Get Event Types",
-    "slug": "calendly",
-    "category": "Data",
-    "href": "/docs/nodes/calendly#operation-get_event_types",
-    "text": "Calendly Operations Get Event Types Get Event Types with the Calendly node using the configured input fields. get_event_types"
+    type: 'field',
+    title: 'Calendly: Operation',
+    slug: 'calendly',
+    category: 'Productivity',
+    href: '/docs/nodes/calendly#operation-get_user',
+    text: 'Operation values are get_user, get_events, get_event_types, and get_scheduled_events.',
   },
   {
-    "type": "field",
-    "title": "Calendly: Access Token",
-    "slug": "calendly",
-    "category": "Data",
-    "href": "/docs/nodes/calendly#operation-get_event_types",
-    "text": "Calendly Operations Get Event Types Access Token accessToken Calendly personal access token"
+    type: 'field',
+    title: 'Calendly: Personal Access Token',
+    slug: 'calendly',
+    category: 'Productivity',
+    href: '/docs/nodes/calendly#operation-get_user',
+    text: 'Personal Access Token is an optional fallback; prefer storing Calendly tokens in CtrlChecks Connections.',
   },
   {
-    "type": "field",
-    "title": "Calendly: User Uri",
-    "slug": "calendly",
-    "category": "Data",
-    "href": "/docs/nodes/calendly#operation-get_event_types",
-    "text": "Calendly Operations Get Event Types User Uri userUri Calendly user URI"
+    type: 'field',
+    title: 'Calendly: User URI',
+    slug: 'calendly',
+    category: 'Productivity',
+    href: '/docs/nodes/calendly#operation-get_event_types',
+    text: 'User URI is required for get_event_types and get_scheduled_events, usually mapped from {{$json.user.uri}} after Get User.',
   },
   {
-    "type": "field",
-    "title": "Calendly: Event Type Uri",
-    "slug": "calendly",
-    "category": "Data",
-    "href": "/docs/nodes/calendly#operation-get_event_types",
-    "text": "Calendly Operations Get Event Types Event Type Uri eventTypeUri Calendly event type URI"
+    type: 'field',
+    title: 'Calendly: Event Type URI',
+    slug: 'calendly',
+    category: 'Productivity',
+    href: '/docs/nodes/calendly#operation-get_scheduled_events',
+    text: 'Event Type URI optionally filters scheduled events to one booking type, often mapped from {{$json.collection[0].uri}}.',
   },
-  {
-    "type": "operation",
-    "title": "Calendly: Get Scheduled Events",
-    "slug": "calendly",
-    "category": "Data",
-    "href": "/docs/nodes/calendly#operation-get_scheduled_events",
-    "text": "Calendly Operations Get Scheduled Events Get Scheduled Events with the Calendly node using the configured input fields. get_scheduled_events"
-  },
-  {
-    "type": "field",
-    "title": "Calendly: Access Token",
-    "slug": "calendly",
-    "category": "Data",
-    "href": "/docs/nodes/calendly#operation-get_scheduled_events",
-    "text": "Calendly Operations Get Scheduled Events Access Token accessToken Calendly personal access token"
-  },
-  {
-    "type": "field",
-    "title": "Calendly: User Uri",
-    "slug": "calendly",
-    "category": "Data",
-    "href": "/docs/nodes/calendly#operation-get_scheduled_events",
-    "text": "Calendly Operations Get Scheduled Events User Uri userUri Calendly user URI"
-  },
-  {
-    "type": "field",
-    "title": "Calendly: Event Type Uri",
-    "slug": "calendly",
-    "category": "Data",
-    "href": "/docs/nodes/calendly#operation-get_scheduled_events",
-    "text": "Calendly Operations Get Scheduled Events Event Type Uri eventTypeUri Calendly event type URI"
-  },
-  {
-    "type": "operation",
-    "title": "Calendly: Get User",
-    "slug": "calendly",
-    "category": "Data",
-    "href": "/docs/nodes/calendly#operation-get_user",
-    "text": "Calendly Operations Get User Get User with the Calendly node using the configured input fields. get_user"
-  },
-  {
-    "type": "field",
-    "title": "Calendly: Access Token",
-    "slug": "calendly",
-    "category": "Data",
-    "href": "/docs/nodes/calendly#operation-get_user",
-    "text": "Calendly Operations Get User Access Token accessToken Calendly personal access token"
-  },
-  {
-    "type": "field",
-    "title": "Calendly: User Uri",
-    "slug": "calendly",
-    "category": "Data",
-    "href": "/docs/nodes/calendly#operation-get_user",
-    "text": "Calendly Operations Get User User Uri userUri Calendly user URI"
-  },
-  {
-    "type": "field",
-    "title": "Calendly: Event Type Uri",
-    "slug": "calendly",
-    "category": "Data",
-    "href": "/docs/nodes/calendly#operation-get_user",
-    "text": "Calendly Operations Get User Event Type Uri eventTypeUri Calendly event type URI"
-  }
 ] satisfies DocsSearchIndexItem[];

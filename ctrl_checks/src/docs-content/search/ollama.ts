@@ -2,35 +2,35 @@ import type { DocsSearchIndexItem } from '../search-index';
 
 export const ollamaSearchIndex = [
   {
-    "type": "node",
-    "title": "AI Chat (Gemini)",
-    "slug": "ollama",
-    "category": "AI",
-    "href": "/docs/nodes/ollama",
-    "text": "AI Chat (Gemini) AI chat completion using Gemini 3.5 Flash (default LLM) Use this node when a workflow needs ai chat (gemini) behavior with schema-driven inputs from the CtrlChecks node registry. AI"
+    type: 'node',
+    title: 'AI Chat (Gemini)',
+    slug: 'ollama',
+    category: 'AI',
+    href: '/docs/nodes/ollama',
+    text: 'AI Chat Gemini legacy Ollama slug not local Ollama delegates to ai_chat_model Gemini 3.5 Flash response model _error preserves incoming fields',
   },
   {
-    "type": "operation",
-    "title": "AI Chat (Gemini): Configure",
-    "slug": "ollama",
-    "category": "AI",
-    "href": "/docs/nodes/ollama#operation-configure",
-    "text": "AI Chat (Gemini) Configuration Configure Configure with the AI Chat (Gemini) node using the configured input fields. configure"
+    type: 'operation',
+    title: 'AI Chat (Gemini): Execute',
+    slug: 'ollama',
+    category: 'AI',
+    href: '/docs/nodes/ollama',
+    text: 'Execute rewrites ollama to ai_chat_model provider gemini model gemini-3.5-flash prompt temperature response model _error wallet code',
   },
   {
-    "type": "field",
-    "title": "AI Chat (Gemini): Prompt",
-    "slug": "ollama",
-    "category": "AI",
-    "href": "/docs/nodes/ollama#operation-configure",
-    "text": "AI Chat (Gemini) Configuration Configure Prompt prompt Prompt text"
+    type: 'field',
+    title: 'AI Chat (Gemini): Prompt',
+    slug: 'ollama',
+    category: 'AI',
+    href: '/docs/nodes/ollama',
+    text: 'Prompt sent to delegated AI Chat Model Gemini not local server blank prompt can return AI Chat Model node prompt is required',
   },
   {
-    "type": "field",
-    "title": "AI Chat (Gemini): Temperature",
-    "slug": "ollama",
-    "category": "AI",
-    "href": "/docs/nodes/ollama#operation-configure",
-    "text": "AI Chat (Gemini) Configuration Configure Temperature temperature Creativity (0.0 - 1.0)"
-  }
+    type: 'field',
+    title: 'AI Chat (Gemini): Temperature',
+    slug: 'ollama',
+    category: 'AI',
+    href: '/docs/nodes/ollama',
+    text: 'Temperature passed through to Gemini-backed AI Chat Model',
+  },
 ] satisfies DocsSearchIndexItem[];

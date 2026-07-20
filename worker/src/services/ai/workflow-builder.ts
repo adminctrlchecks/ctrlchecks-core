@@ -4774,7 +4774,7 @@ CRITICAL INSTRUCTIONS FOR STRUCTURE GENERATION:
 **Data Processing:**
 - "JavaScript" / "code" / "transform" / "process data" → use "javascript"
 - "if" / "condition" / "check" / "filter" → use "if_else"
-- "database" / "db" / "query" → use "database_read" or "database_write" (NOT "google_sheets")
+- "database" / "db" / "query" → use concrete database nodes like "postgresql", "mysql", "mongodb", or "db" (Supabase). Do NOT use legacy "database_read" or "database_write".
 
 **AI/ML:**
 - "AI agent" / "chatbot" / "AI assistant" / "LLM" → use "ai_agent"
@@ -5468,10 +5468,10 @@ Return JSON:
           if (!hasLoopNode) {
             console.warn(`⚠️  [Loop Enforcement] LOOP node missing. Adding it between data source and create operation.`);
             
-            // Find data source node (google_sheets, database_read) and create operation node (hubspot, airtable)
+            // Find data source node and create operation node (hubspot, airtable)
             const dataSourceIndex = simplifiedStructure.steps.findIndex((s: any) => {
               const stepType = s.data?.type || s.type || s.nodeType;
-              return ['google_sheets', 'database_read'].includes(stepType);
+              return ['google_sheets', 'postgresql', 'mysql', 'mongodb', 'db'].includes(stepType);
             });
             
             const createOperationIndex = simplifiedStructure.steps.findIndex((s: any) => {
@@ -6361,7 +6361,7 @@ Return JSON:
     // If it's a simple workflow, remove unnecessary transformation nodes
     if (isSimpleNotification || isSimpleSave || isSimpleRead) {
       const transformationNodeTypes = ['set_variable', 'if_else', 'text_formatter', 'javascript', 'json_parser', 'edit_fields', 'merge_data'];
-      const actionNodeTypes = ['slack_message', 'discord', 'google_gmail', 'email', 'google_sheets', 'database_write', 'database_read', 'google_doc'];
+      const actionNodeTypes = ['slack_message', 'discord', 'google_gmail', 'email', 'google_sheets', 'postgresql', 'mysql', 'mongodb', 'db', 'google_doc'];
       
       // Find action nodes (the actual task)
       const actionNodes = steps.filter(step => 
@@ -8926,7 +8926,7 @@ Return JSON:
     // FILE & STORAGE NODES
     // ============================================
     if (typeLower.includes('read_binary_file') || typeLower.includes('read_file')) {
-      return ['content', 'data', 'file'];
+      return ['dataBase64', 'fileName', 'mimeType', 'assetId'];
     }
     if (typeLower.includes('write_binary_file') || typeLower.includes('write_file')) {
       return ['success', 'filePath', 'output'];
@@ -9729,7 +9729,7 @@ return {
       // ============================================
       // FILE & STORAGE NODES
       // ============================================
-      'read_binary_file': ['content', 'data', 'file'],
+      'read_binary_file': ['dataBase64', 'fileName', 'mimeType', 'assetId'],
       'write_binary_file': ['success', 'filePath', 'output'],
       'aws_s3': ['fileUrl', 'fileKey', 'data'],
       'dropbox': ['fileUrl', 'filePath', 'data'],
@@ -9864,8 +9864,8 @@ return {
         'webhook_response': ['statusCode', 'body'],
         
         // File/Storage
-        'read_binary_file': ['filePath'],
-        'write_binary_file': ['filePath', 'data'],
+        'read_binary_file': ['sourceType', 'assetId'],
+        'write_binary_file': ['fileName', 'dataBase64'],
         'aws_s3': ['operation', 'bucket', 'key', 'accessKeyId', 'secretAccessKey'],
         'dropbox': ['operation', 'path', 'accessToken'],
         'onedrive': ['operation', 'path', 'accessToken'],
@@ -10031,7 +10031,7 @@ return {
       'graphql': 'data',
       
       // File/Storage
-      'read_binary_file': 'content',
+      'read_binary_file': 'dataBase64',
       'write_binary_file': 'success',
       'aws_s3': 'fileUrl',
       'dropbox': 'fileUrl',
@@ -10166,8 +10166,8 @@ return {
       'webhook_response': 'statusCode',
       
       // File/Storage
-      'read_binary_file': 'filePath',
-      'write_binary_file': 'filePath',
+      'read_binary_file': 'assetId',
+      'write_binary_file': 'dataBase64',
       'aws_s3': 'bucket',
       'dropbox': 'operation',
       'onedrive': 'operation',
@@ -10486,7 +10486,7 @@ return {
         // ============================================
         // FILE & STORAGE NODES
         // ============================================
-        'read_binary_file': ['content', 'data', 'file'],
+        'read_binary_file': ['dataBase64', 'fileName', 'mimeType', 'assetId'],
         'write_binary_file': ['success', 'filePath', 'output'],
         'aws_s3': ['fileUrl', 'fileKey', 'data'],
         'dropbox': ['fileUrl', 'filePath', 'data'],
@@ -11100,7 +11100,7 @@ return {
       // CRITICAL: Validate that connections respect logical flow patterns:
       // Pattern 1: data source (read) → loop → create operation (write)
       // Pattern 2: integration (read) → data source (write)
-      const dataSourceTypes = ['google_sheets', 'google_doc', 'database_read', 'airtable', 'notion'];
+      const dataSourceTypes = ['google_sheets', 'google_doc', 'postgresql', 'mysql', 'mongodb', 'db', 'airtable', 'notion'];
       const loopType = 'loop';
       const createOperationTypes = ['hubspot', 'zoho', 'pipedrive', 'airtable', 'notion'];
       const integrationReadTypes = ['hubspot', 'zoho', 'pipedrive', 'airtable', 'notion'];
@@ -13244,7 +13244,10 @@ Identify what needs to be changed. Respond with JSON:
     const dataSourceTypes = new Set<string>([
       'google_sheets',
       'google_doc',
-      'database_read',
+      'postgresql',
+      'mysql',
+      'mongodb',
+      'db',
       'airtable',
       'notion',
       'csv',
@@ -13480,9 +13483,9 @@ Identify what needs to be changed. Respond with JSON:
         } else if (nodeDescription.includes('ai agent') || nodeDescription.includes('ai') || nodeDescription.includes('llm') || nodeDescription.includes('chat model')) {
           inferredType = 'ai_agent';
         } else if (nodeDescription.includes('database') || nodeDescription.includes('read')) {
-          inferredType = 'database_read';
+          inferredType = 'postgresql';
         } else if (nodeDescription.includes('write') || nodeDescription.includes('save')) {
-          inferredType = 'database_write';
+          inferredType = 'postgresql';
         } else if (nodeDescription.includes('form') || nodeDescription.includes('submission') || nodeType === 'form') {
           // CRITICAL FIX: form node EXISTS and should be used, not replaced
           // Check if form is actually in the library

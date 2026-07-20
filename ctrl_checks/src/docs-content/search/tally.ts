@@ -5,248 +5,104 @@ export const tallySearchIndex = [
     "type": "node",
     "title": "Tally Solutions",
     "slug": "tally",
-    "category": "Data",
+    "category": "CRM",
     "href": "/docs/nodes/tally",
-    "text": "Tally Solutions Interact with Tally ERP / TallyPrime via XML API to fetch or push accounting data Use this node when a workflow needs tally solutions behavior with schema-driven inputs from the CtrlChecks node registry. Data"
+    "text": "Tally Solutions Connect directly to Tally ERP / TallyPrime's local XML API gateway to read ledgers, vouchers, stock items, and company info, or create new accounting vouchers. CRM"
   },
   {
     "type": "operation",
-    "title": "Tally Solutions: Get Ledger",
+    "title": "Tally: Get Ledger",
     "slug": "tally",
-    "category": "Data",
+    "category": "CRM",
     "href": "/docs/nodes/tally#operation-get_ledger",
-    "text": "Tally Solutions Operations Get Ledger Get Ledger with the Tally Solutions node using the configured input fields. get_ledger"
-  },
-  {
-    "type": "field",
-    "title": "Tally Solutions: Endpoint",
-    "slug": "tally",
-    "category": "Data",
-    "href": "/docs/nodes/tally#operation-get_ledger",
-    "text": "Tally Solutions Operations Get Ledger Endpoint endpoint Tally XML API server URL"
-  },
-  {
-    "type": "field",
-    "title": "Tally Solutions: Payload",
-    "slug": "tally",
-    "category": "Data",
-    "href": "/docs/nodes/tally#operation-get_ledger",
-    "text": "Tally Solutions Operations Get Ledger Payload payload Custom XML request body (overrides the default template for the selected operation)"
-  },
-  {
-    "type": "field",
-    "title": "Tally Solutions: Company Name",
-    "slug": "tally",
-    "category": "Data",
-    "href": "/docs/nodes/tally#operation-get_ledger",
-    "text": "Tally Solutions Operations Get Ledger Company Name companyName Tally company name to scope requests"
-  },
-  {
-    "type": "field",
-    "title": "Tally Solutions: Ledger Name",
-    "slug": "tally",
-    "category": "Data",
-    "href": "/docs/nodes/tally#operation-get_ledger",
-    "text": "Tally Solutions Operations Get Ledger Ledger Name ledgerName Ledger name (required for get_ledger operation)"
-  },
-  {
-    "type": "field",
-    "title": "Tally Solutions: Voucher Id",
-    "slug": "tally",
-    "category": "Data",
-    "href": "/docs/nodes/tally#operation-get_ledger",
-    "text": "Tally Solutions Operations Get Ledger Voucher Id voucherId Voucher ID or number (required for get_voucher operation)"
+    "text": "Tally Accounting Operations Get Ledger Fetches ledger account details from Tally. Filter to one ledger with Ledger Name, or omit it to fetch every ledger. get_ledger"
   },
   {
     "type": "operation",
-    "title": "Tally Solutions: Get Voucher",
+    "title": "Tally: Get Voucher",
     "slug": "tally",
-    "category": "Data",
+    "category": "CRM",
     "href": "/docs/nodes/tally#operation-get_voucher",
-    "text": "Tally Solutions Operations Get Voucher Get Voucher with the Tally Solutions node using the configured input fields. get_voucher"
-  },
-  {
-    "type": "field",
-    "title": "Tally Solutions: Endpoint",
-    "slug": "tally",
-    "category": "Data",
-    "href": "/docs/nodes/tally#operation-get_voucher",
-    "text": "Tally Solutions Operations Get Voucher Endpoint endpoint Tally XML API server URL"
-  },
-  {
-    "type": "field",
-    "title": "Tally Solutions: Payload",
-    "slug": "tally",
-    "category": "Data",
-    "href": "/docs/nodes/tally#operation-get_voucher",
-    "text": "Tally Solutions Operations Get Voucher Payload payload Custom XML request body (overrides the default template for the selected operation)"
-  },
-  {
-    "type": "field",
-    "title": "Tally Solutions: Company Name",
-    "slug": "tally",
-    "category": "Data",
-    "href": "/docs/nodes/tally#operation-get_voucher",
-    "text": "Tally Solutions Operations Get Voucher Company Name companyName Tally company name to scope requests"
-  },
-  {
-    "type": "field",
-    "title": "Tally Solutions: Ledger Name",
-    "slug": "tally",
-    "category": "Data",
-    "href": "/docs/nodes/tally#operation-get_voucher",
-    "text": "Tally Solutions Operations Get Voucher Ledger Name ledgerName Ledger name (required for get_ledger operation)"
-  },
-  {
-    "type": "field",
-    "title": "Tally Solutions: Voucher Id",
-    "slug": "tally",
-    "category": "Data",
-    "href": "/docs/nodes/tally#operation-get_voucher",
-    "text": "Tally Solutions Operations Get Voucher Voucher Id voucherId Voucher ID or number (required for get_voucher operation)"
+    "text": "Tally Accounting Operations Get Voucher Fetches voucher (transaction) details from Tally. Filter to one voucher with Voucher ID / Number, or omit it to fetch every voucher. get_voucher"
   },
   {
     "type": "operation",
-    "title": "Tally Solutions: Create Voucher",
+    "title": "Tally: Create Voucher",
     "slug": "tally",
-    "category": "Data",
+    "category": "CRM",
     "href": "/docs/nodes/tally#operation-create_voucher",
-    "text": "Tally Solutions Operations Create Voucher Create Voucher with the Tally Solutions node using the configured input fields. create_voucher"
-  },
-  {
-    "type": "field",
-    "title": "Tally Solutions: Endpoint",
-    "slug": "tally",
-    "category": "Data",
-    "href": "/docs/nodes/tally#operation-create_voucher",
-    "text": "Tally Solutions Operations Create Voucher Endpoint endpoint Tally XML API server URL"
-  },
-  {
-    "type": "field",
-    "title": "Tally Solutions: Payload",
-    "slug": "tally",
-    "category": "Data",
-    "href": "/docs/nodes/tally#operation-create_voucher",
-    "text": "Tally Solutions Operations Create Voucher Payload payload Custom XML request body (overrides the default template for the selected operation)"
-  },
-  {
-    "type": "field",
-    "title": "Tally Solutions: Company Name",
-    "slug": "tally",
-    "category": "Data",
-    "href": "/docs/nodes/tally#operation-create_voucher",
-    "text": "Tally Solutions Operations Create Voucher Company Name companyName Tally company name to scope requests"
-  },
-  {
-    "type": "field",
-    "title": "Tally Solutions: Ledger Name",
-    "slug": "tally",
-    "category": "Data",
-    "href": "/docs/nodes/tally#operation-create_voucher",
-    "text": "Tally Solutions Operations Create Voucher Ledger Name ledgerName Ledger name (required for get_ledger operation)"
-  },
-  {
-    "type": "field",
-    "title": "Tally Solutions: Voucher Id",
-    "slug": "tally",
-    "category": "Data",
-    "href": "/docs/nodes/tally#operation-create_voucher",
-    "text": "Tally Solutions Operations Create Voucher Voucher Id voucherId Voucher ID or number (required for get_voucher operation)"
+    "text": "Tally Accounting Operations Create Voucher Creates a new accounting voucher in Tally. Requires a complete XML payload defining the entire voucher structure. create_voucher"
   },
   {
     "type": "operation",
-    "title": "Tally Solutions: Get Stock Items",
+    "title": "Tally: Get Stock Items",
     "slug": "tally",
-    "category": "Data",
+    "category": "CRM",
     "href": "/docs/nodes/tally#operation-get_stock_items",
-    "text": "Tally Solutions Operations Get Stock Items Get Stock Items with the Tally Solutions node using the configured input fields. get_stock_items"
-  },
-  {
-    "type": "field",
-    "title": "Tally Solutions: Endpoint",
-    "slug": "tally",
-    "category": "Data",
-    "href": "/docs/nodes/tally#operation-get_stock_items",
-    "text": "Tally Solutions Operations Get Stock Items Endpoint endpoint Tally XML API server URL"
-  },
-  {
-    "type": "field",
-    "title": "Tally Solutions: Payload",
-    "slug": "tally",
-    "category": "Data",
-    "href": "/docs/nodes/tally#operation-get_stock_items",
-    "text": "Tally Solutions Operations Get Stock Items Payload payload Custom XML request body (overrides the default template for the selected operation)"
-  },
-  {
-    "type": "field",
-    "title": "Tally Solutions: Company Name",
-    "slug": "tally",
-    "category": "Data",
-    "href": "/docs/nodes/tally#operation-get_stock_items",
-    "text": "Tally Solutions Operations Get Stock Items Company Name companyName Tally company name to scope requests"
-  },
-  {
-    "type": "field",
-    "title": "Tally Solutions: Ledger Name",
-    "slug": "tally",
-    "category": "Data",
-    "href": "/docs/nodes/tally#operation-get_stock_items",
-    "text": "Tally Solutions Operations Get Stock Items Ledger Name ledgerName Ledger name (required for get_ledger operation)"
-  },
-  {
-    "type": "field",
-    "title": "Tally Solutions: Voucher Id",
-    "slug": "tally",
-    "category": "Data",
-    "href": "/docs/nodes/tally#operation-get_stock_items",
-    "text": "Tally Solutions Operations Get Stock Items Voucher Id voucherId Voucher ID or number (required for get_voucher operation)"
+    "text": "Tally Accounting Operations Get Stock Items Fetches the stock item list from Tally for inventory sync and stock level checks. get_stock_items"
   },
   {
     "type": "operation",
-    "title": "Tally Solutions: Get Company Info",
+    "title": "Tally: Get Company Info",
     "slug": "tally",
-    "category": "Data",
+    "category": "CRM",
     "href": "/docs/nodes/tally#operation-get_company_info",
-    "text": "Tally Solutions Operations Get Company Info Get Company Info with the Tally Solutions node using the configured input fields. get_company_info"
+    "text": "Tally Accounting Operations Get Company Info Fetches company information from Tally, commonly used as a connectivity health check. get_company_info"
   },
   {
     "type": "field",
-    "title": "Tally Solutions: Endpoint",
+    "title": "Tally: Operation",
     "slug": "tally",
-    "category": "Data",
-    "href": "/docs/nodes/tally#operation-get_company_info",
-    "text": "Tally Solutions Operations Get Company Info Endpoint endpoint Tally XML API server URL"
+    "category": "CRM",
+    "href": "/docs/nodes/tally#operation-get_ledger",
+    "text": "Tally Accounting Operations Operation operation Chooses which Tally XML API request this node sends."
   },
   {
     "type": "field",
-    "title": "Tally Solutions: Payload",
+    "title": "Tally: Tally Server URL",
     "slug": "tally",
-    "category": "Data",
-    "href": "/docs/nodes/tally#operation-get_company_info",
-    "text": "Tally Solutions Operations Get Company Info Payload payload Custom XML request body (overrides the default template for the selected operation)"
+    "category": "CRM",
+    "href": "/docs/nodes/tally#operation-get_ledger",
+    "text": "Tally Accounting Operations Tally Server URL endpoint The local or network web address where Tally's XML API gateway is listening."
   },
   {
     "type": "field",
-    "title": "Tally Solutions: Company Name",
+    "title": "Tally: Company Name",
     "slug": "tally",
-    "category": "Data",
-    "href": "/docs/nodes/tally#operation-get_company_info",
-    "text": "Tally Solutions Operations Get Company Info Company Name companyName Tally company name to scope requests"
+    "category": "CRM",
+    "href": "/docs/nodes/tally#operation-get_ledger",
+    "text": "Tally Accounting Operations Company Name companyName Scopes the request to a specific Tally company when more than one is loaded."
   },
   {
     "type": "field",
-    "title": "Tally Solutions: Ledger Name",
+    "title": "Tally: Ledger Name",
     "slug": "tally",
-    "category": "Data",
-    "href": "/docs/nodes/tally#operation-get_company_info",
-    "text": "Tally Solutions Operations Get Company Info Ledger Name ledgerName Ledger name (required for get_ledger operation)"
+    "category": "CRM",
+    "href": "/docs/nodes/tally#operation-get_ledger",
+    "text": "Tally Accounting Operations Ledger Name ledgerName Filters Get Ledger to one specific ledger account."
   },
   {
     "type": "field",
-    "title": "Tally Solutions: Voucher Id",
+    "title": "Tally: Voucher ID / Number",
     "slug": "tally",
-    "category": "Data",
-    "href": "/docs/nodes/tally#operation-get_company_info",
-    "text": "Tally Solutions Operations Get Company Info Voucher Id voucherId Voucher ID or number (required for get_voucher operation)"
+    "category": "CRM",
+    "href": "/docs/nodes/tally#operation-get_voucher",
+    "text": "Tally Accounting Operations Voucher ID / Number voucherId Filters Get Voucher to one specific transaction."
+  },
+  {
+    "type": "field",
+    "title": "Tally: Custom XML Payload",
+    "slug": "tally",
+    "category": "CRM",
+    "href": "/docs/nodes/tally#operation-create_voucher",
+    "text": "Tally Accounting Operations Custom XML Payload payload A complete Tally XML request; required for Create Voucher, optional override for read operations."
+  },
+  {
+    "type": "connection",
+    "title": "Tally: Connection setup",
+    "slug": "tally",
+    "category": "CRM",
+    "href": "/docs/nodes/tally",
+    "text": "Tally Solutions connection setup No cloud credential — direct network connection to a local Tally ERP / TallyPrime XML gateway. Enable XML Server in Tally, confirm the port, test with Get Company Info."
   }
 ] satisfies DocsSearchIndexItem[];

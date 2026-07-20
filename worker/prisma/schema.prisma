@@ -102,3 +102,28 @@ model MemoryReference {
   @@schema("public")
   @@map("memory_references")
 }
+
+model WorkflowFileAsset {
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String?   @map("user_id") @db.Uuid
+  workflowId     String?   @map("workflow_id") @db.Uuid
+  executionId    String?   @map("execution_id") @db.Uuid
+  nodeId         String?   @map("node_id") @db.Text
+  fileName       String    @map("file_name") @db.Text
+  mimeType       String    @default("application/octet-stream") @map("mime_type") @db.Text
+  sizeBytes      BigInt    @map("size_bytes")
+  checksumSha256 String    @map("checksum_sha256") @db.Text
+  storageProvider String   @default("local") @map("storage_provider") @db.Text
+  storageKey     String    @map("storage_key") @db.Text
+  visibility     String    @default("private") @db.Text
+  expiresAt      DateTime? @map("expires_at") @db.Timestamp(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  @@index([userId, createdAt])
+  @@index([workflowId, createdAt])
+  @@index([executionId])
+  @@index([storageProvider, storageKey])
+  @@schema("public")
+  @@map("workflow_file_assets")
+}

@@ -64,6 +64,10 @@ export function validateWorkflowGraph(nodes: Node[], edges: Edge[]): ValidationR
       'webhook',
       'schedule',
       'chat_trigger',
+      'telegram_trigger',
+      'whatsapp_trigger',
+      'instagram_trigger',
+      'facebook_trigger',
       'form_trigger',
       'form',
       'workflow_trigger',
@@ -72,8 +76,22 @@ export function validateWorkflowGraph(nodes: Node[], edges: Edge[]): ValidationR
       'gmail_trigger',
       'slack_trigger',
       'discord_trigger',
+      'microsoft_teams_trigger',
+      'outlook_trigger',
+      'google_calendar_trigger',
+      'google_sheets_trigger',
+      'google_drive_trigger',
+      'typeform_trigger',
+      'tally_trigger',
+      'github_trigger',
+      'gitlab_trigger',
+      'jira_trigger',
+      'linear_trigger',
+      'trello_trigger',
+      'stripe_trigger',
+      'shopify_trigger',
     ];
-    
+
     return knownTriggerTypes.includes(type);
   });
 
@@ -274,6 +292,10 @@ function isTriggerNodeForOrder(node: OrderableNode): boolean {
     'webhook',
     'schedule',
     'chat_trigger',
+    'telegram_trigger',
+    'whatsapp_trigger',
+    'instagram_trigger',
+    'facebook_trigger',
     'form_trigger',
     'form',
     'workflow_trigger',
@@ -282,6 +304,20 @@ function isTriggerNodeForOrder(node: OrderableNode): boolean {
     'gmail_trigger',
     'slack_trigger',
     'discord_trigger',
+    'microsoft_teams_trigger',
+    'outlook_trigger',
+    'google_calendar_trigger',
+    'google_sheets_trigger',
+    'google_drive_trigger',
+    'typeform_trigger',
+    'tally_trigger',
+    'github_trigger',
+    'gitlab_trigger',
+    'jira_trigger',
+    'linear_trigger',
+    'trello_trigger',
+    'stripe_trigger',
+    'shopify_trigger',
   ];
   return knownTriggerTypes.includes(type);
 }

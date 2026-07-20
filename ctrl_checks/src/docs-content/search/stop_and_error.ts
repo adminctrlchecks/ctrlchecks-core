@@ -2,27 +2,35 @@ import type { DocsSearchIndexItem } from '../search-index';
 
 export const stopAndErrorSearchIndex = [
   {
-    "type": "node",
-    "title": "Stop And Error",
-    "slug": "stop_and_error",
-    "category": "Logic",
-    "href": "/docs/nodes/stop_and_error",
-    "text": "Stop And Error Stop workflow execution with error message Use this node when a workflow needs stop and error behavior with schema-driven inputs from the CtrlChecks node registry. Logic"
+    type: 'node',
+    title: 'Stop And Error',
+    slug: 'stop_and_error',
+    category: 'Logic',
+    href: '/docs/nodes/stop_and_error',
+    text: 'Stop And Error intentionally fails the workflow by throwing ERROR_CODE: message with no structured success output.',
   },
   {
-    "type": "operation",
-    "title": "Stop And Error: Configure",
-    "slug": "stop_and_error",
-    "category": "Logic",
-    "href": "/docs/nodes/stop_and_error#operation-configure",
-    "text": "Stop And Error Configuration Configure Configure with the Stop And Error node using the configured input fields. configure"
+    type: 'operation',
+    title: 'Stop And Error: Stop Workflow',
+    slug: 'stop_and_error',
+    category: 'Logic',
+    href: '/docs/nodes/stop_and_error#operation-default',
+    text: 'Stop Workflow throws the configured errorCode and errorMessage, stops normal downstream nodes, and records the reason in logs.',
   },
   {
-    "type": "field",
-    "title": "Stop And Error: Error Message",
-    "slug": "stop_and_error",
-    "category": "Logic",
-    "href": "/docs/nodes/stop_and_error#operation-configure",
-    "text": "Stop And Error Configuration Configure Error Message errorMessage Error message"
-  }
+    type: 'field',
+    title: 'Stop And Error: Error Message',
+    slug: 'stop_and_error',
+    category: 'Logic',
+    href: '/docs/nodes/stop_and_error#operation-default',
+    text: 'Error Message is the business reason included in the thrown workflow error; use clear validation or approval failure text.',
+  },
+  {
+    type: 'field',
+    title: 'Stop And Error: Error Code',
+    slug: 'stop_and_error',
+    category: 'Logic',
+    href: '/docs/nodes/stop_and_error#operation-default',
+    text: 'Error Code defaults to STOPPED and should use uppercase labels such as VALIDATION_FAILED or PERMISSION_DENIED.',
+  },
 ] satisfies DocsSearchIndexItem[];

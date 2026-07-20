@@ -33,4 +33,28 @@ export const whatsappTriggerSearchIndex = [
     href: '/docs/nodes/whatsapp_trigger#operation-receive_event',
     text: 'Validate X-Hub-Signature-256 with META_APP_SECRET FACEBOOK_APP_SECRET or WHATSAPP_APP_SECRET.',
   },
+  {
+    type: 'field',
+    title: 'WhatsApp Trigger fields',
+    slug: 'whatsapp_trigger',
+    category: 'Triggers',
+    href: '/docs/nodes/whatsapp_trigger#operation-receive_event',
+    text: 'Fields include connectionId, eventTypes message message.text message.media status status.delivered status.read status.failed, phoneNumberId, allowedWaIds, verifyToken, and validateSignature.',
+  },
+  {
+    type: 'field',
+    title: 'WhatsApp Trigger outputs',
+    slug: 'whatsapp_trigger',
+    category: 'Triggers',
+    href: '/docs/nodes/whatsapp_trigger#operation-receive_event',
+    text: 'Outputs eventId eventType source userId username text timestamp chatId from waId contactName profileName messageId messageType mediaId status recipientId phoneNumberId displayPhoneNumber businessAccountId raw trigger workflow_id node_id sessionId _whatsapp.',
+  },
+  {
+    type: 'field',
+    title: 'WhatsApp Trigger connection setup',
+    slug: 'whatsapp_trigger',
+    category: 'Triggers',
+    href: '/docs/nodes/whatsapp_trigger#connection-setup',
+    text: 'Connect a WhatsApp Business API permanent access token and Phone Number ID in Connections. Set the callback URL and Verify Token in Meta for Developers -> WhatsApp -> Configuration and configure META_APP_SECRET for signature validation.',
+  },
 ] satisfies DocsSearchIndexItem[];

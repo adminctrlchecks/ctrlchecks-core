@@ -1,44 +1,9 @@
 import type { DocsSearchIndexItem } from '../search-index';
 
 export const googleGeminiSearchIndex = [
-  {
-    "type": "node",
-    "title": "Gemini",
-    "slug": "google_gemini",
-    "category": "AI",
-    "href": "/docs/nodes/google_gemini",
-    "text": "Gemini Google Gemini chat completion Use this node when a workflow needs gemini behavior with schema-driven inputs from the CtrlChecks node registry. AI"
-  },
-  {
-    "type": "operation",
-    "title": "Gemini: Configure",
-    "slug": "google_gemini",
-    "category": "AI",
-    "href": "/docs/nodes/google_gemini#operation-configure",
-    "text": "Gemini Configuration Configure Configure with the Gemini node using the configured input fields. configure"
-  },
-  {
-    "type": "field",
-    "title": "Gemini: Model",
-    "slug": "google_gemini",
-    "category": "AI",
-    "href": "/docs/nodes/google_gemini#operation-configure",
-    "text": "Gemini Configuration Configure Model model Model name"
-  },
-  {
-    "type": "field",
-    "title": "Gemini: Prompt",
-    "slug": "google_gemini",
-    "category": "AI",
-    "href": "/docs/nodes/google_gemini#operation-configure",
-    "text": "Gemini Configuration Configure Prompt prompt Prompt text"
-  },
-  {
-    "type": "field",
-    "title": "Gemini: Api Key",
-    "slug": "google_gemini",
-    "category": "AI",
-    "href": "/docs/nodes/google_gemini#operation-configure",
-    "text": "Gemini Configuration Configure Api Key apiKey Gemini API key (node-level, required for this node to run)"
-  }
+  { type: 'node', title: 'Google Gemini', slug: 'google_gemini', category: 'AI', href: '/docs/nodes/google_gemini', text: 'Google Gemini response model usage finishReason Gemini credential wallet key pool prompt upstream text temperature memory ignored' },
+  { type: 'operation', title: 'Google Gemini: Generate', slug: 'google_gemini', category: 'AI', href: '/docs/nodes/google_gemini#operation-default', text: 'Generate calls Gemini adapter prompt upstream text returns response model usage finishReason no input spread' },
+  { type: 'field', title: 'Google Gemini: API Key', slug: 'google_gemini', category: 'AI', href: '/docs/nodes/google_gemini#operation-default', text: 'apiKey optional direct Gemini API key Connections credential vault wallet key pool worker key fallback' },
+  { type: 'field', title: 'Google Gemini: Prompt', slug: 'google_gemini', category: 'AI', href: '/docs/nodes/google_gemini#operation-default', text: 'prompt system context upstream text user message response output no secrets' },
+  { type: 'field', title: 'Google Gemini: Temperature and Memory', slug: 'google_gemini', category: 'AI', href: '/docs/nodes/google_gemini#operation-default', text: 'temperature memory visible legacy ignored current executor no conversation turns' },
 ] satisfies DocsSearchIndexItem[];

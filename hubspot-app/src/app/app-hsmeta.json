@@ -1,0 +1,42 @@
+{
+  "uid": "ctrlchecks_hubspot_app",
+  "type": "app",
+  "config": {
+    "description": "AI-powered workflow automation",
+    "name": "CtrlChecks",
+    "distribution": "marketplace",
+    "auth": {
+      "type": "oauth",
+      "redirectUrls": [
+        "https://worker.ctrlchecks.ai/api/credential-connections/oauth/callback",
+        "http://localhost:3001/api/credential-connections/oauth/callback"
+      ],
+      "requiredScopes": [
+        "oauth",
+        "crm.objects.contacts.read",
+        "crm.objects.contacts.write",
+        "crm.objects.companies.read",
+        "crm.objects.companies.write",
+        "crm.objects.deals.read",
+        "crm.objects.deals.write",
+        "crm.objects.owners.read",
+        "tickets"
+      ],
+      "optionalScopes": [],
+      "conditionallyRequiredScopes": []
+    },
+    "permittedUrls": {
+      "fetch": [
+        "https://api.hubapi.com"
+      ],
+      "iframe": [],
+      "img": []
+    },
+    "support": {
+      "supportEmail": "adminctrlchecks@gmail.com",
+      "documentationUrl": "https://www.ctrlchecks.ai",
+      "supportUrl": "https://www.ctrlchecks.ai",
+      "supportPhone": "+18005555555"
+    }
+  }
+}

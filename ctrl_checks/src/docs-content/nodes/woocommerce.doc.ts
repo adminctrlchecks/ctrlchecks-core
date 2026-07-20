@@ -1,461 +1,69 @@
-import type { NodeDoc } from '../types';
+import type { FieldDoc, NodeDoc, OperationDoc } from '../types';
+
+const docsUrl = 'https://woocommerce.github.io/woocommerce-rest-api-docs/';
+
+function rich(label: string, meaning: string, enter: string, wrong: string, source = 'Type the value directly or map it from a previous workflow step such as {{$json.orderId}}.'): string {
+  return (
+    `What this field is: ${label} - ${meaning}\n` +
+    `Why it matters: WooCommerce uses it to choose the store endpoint, authenticate, select the resource, identify a record, or send create/update data.\n` +
+    `When to fill it: Fill it when the selected WooCommerce action needs this value. Store URL and credentials are required for every real API call.\n` +
+    `What to enter: ${enter}\n` +
+    `Where the value comes from: ${source}\n` +
+    `How to use it later: Downstream nodes can read results with {{$json.items}}, {{$json.item}}, {{$json.deleted}}, {{$json.success}}, or {{$json._error}}.\n` +
+    `Accepted format: Store URL must include https://, IDs are numeric WooCommerce IDs as text, Per Page is a number, and Data must be a JSON object.\n` +
+    `Real workplace example: A support workflow maps {{$json.orderId}} into ID, gets the WooCommerce order, and sends {{$json.item.billing.email}} to a helpdesk step.\n` +
+    `If it is empty or wrong: ${wrong}\n` +
+    `Common mistake: Filling visible Consumer Key/Consumer Secret fields and product/order/customer ID fields without realizing the executor reads apiKey/apiSecret and the generic id field from config.`
+  );
+}
+
+const fields: FieldDoc[] = [
+  { name: 'Resource', internalKey: 'resource', type: 'select', required: true, description: 'WooCommerce resource path. Runtime supports product, order, customer, products, orders, customers, and other pluralized advanced paths.', options: ['product', 'order', 'customer', 'products', 'orders', 'customers'], defaultValue: 'product', helpText: rich('Resource', 'the WooCommerce REST resource to work with.', 'Use product, order, or customer for normal workflows; products, orders, and customers are accepted plural forms for advanced configs.', 'If omitted, runtime defaults to product. Unsupported paths produce WooCommerce API errors.') },
+  { name: 'Operation', internalKey: 'operation', type: 'select', required: true, description: 'Runtime-supported values are get, list, create, update, and delete. The current visual panel exposes get_product, list_products, create_product, update_product, get_order, list_orders, create_order, and get_customer; those are not translated by the executor today.', options: ['get', 'list', 'create', 'update', 'delete', 'get_product', 'list_products', 'create_product', 'update_product', 'get_order', 'list_orders', 'create_order', 'get_customer'], defaultValue: 'get', helpText: rich('Operation', 'the generic action to run against the selected WooCommerce resource.', 'Use get/list/create/update/delete in generated or hand-edited configs. The visible aliases get_product, list_products, create_product, update_product, get_order, list_orders, create_order, and get_customer currently fail as unsupported operation values.', 'Unsupported aliases return WooCommerce: Unsupported operation "...".') },
+  { name: 'Store URL', internalKey: 'storeUrl', type: 'url', required: false, description: 'Base URL of the WooCommerce store.', placeholder: 'https://store.example.com', helpText: rich('Store URL', 'the WordPress/WooCommerce site used to build /wp-json/wc/v3 requests.', 'Enter https://store.example.com with no trailing slash.', 'If blank, the node returns WooCommerce: storeUrl is required.') },
+  { name: 'API Key', internalKey: 'apiKey', type: 'string', required: false, description: 'WooCommerce consumer key read by the executor.', placeholder: 'ck_...', helpText: rich('API Key', 'the WooCommerce consumer key used as the Basic Auth username.', 'Prefer a saved WooCommerce connection. For a temporary test, enter the ck_... consumer key here.', 'If neither config nor credential vault supplies apiKey, the node returns WooCommerce: missing apiKey/apiSecret.', 'WooCommerce -> Settings -> Advanced -> REST API, but production keys belong in Connections/credential vault.') },
+  { name: 'API Secret', internalKey: 'apiSecret', type: 'string', required: false, description: 'WooCommerce consumer secret read by the executor.', placeholder: 'cs_...', helpText: rich('API Secret', 'the WooCommerce consumer secret used as the Basic Auth password.', 'Prefer a saved WooCommerce connection. For a temporary test, enter the cs_... consumer secret here.', 'If missing, authentication fails before the API call is made.', 'WooCommerce REST API key screen, stored in Connections/credential vault rather than normal fields whenever possible.') },
+  { name: 'Consumer Key', internalKey: 'consumerKey', type: 'string', required: false, description: 'Visible panel field that is not read directly by the current executor.', placeholder: 'ck_...', helpText: rich('Consumer Key', 'the label shown in the panel for the WooCommerce key, currently misnamed for runtime config because the executor reads apiKey, not consumerKey.', 'Use a saved WooCommerce connection or advanced apiKey config. Do not rely on consumerKey alone until the panel is aligned.', 'Filling only consumerKey has no runtime effect; the node can still return missing apiKey/apiSecret.') },
+  { name: 'Consumer Secret', internalKey: 'consumerSecret', type: 'string', required: false, description: 'Visible panel field that is not read directly by the current executor.', placeholder: 'cs_...', helpText: rich('Consumer Secret', 'the label shown in the panel for the WooCommerce secret, currently misnamed for runtime config because the executor reads apiSecret, not consumerSecret.', 'Use a saved WooCommerce connection or advanced apiSecret config. Do not rely on consumerSecret alone until the panel is aligned.', 'Filling only consumerSecret has no runtime effect; the node can still return missing apiKey/apiSecret.') },
+  { name: 'ID', internalKey: 'id', type: 'string', required: false, description: 'Generic WooCommerce record ID used by get/update/delete.', placeholder: '123', helpText: rich('ID', 'the exact product, order, customer, or resource ID the runtime reads.', 'Enter a numeric ID such as 123 or map {{$json.id}}.', 'Update/delete require id and return WooCommerce update: id is required or WooCommerce delete: id is required when blank.') },
+  { name: 'Product ID', internalKey: 'productId', type: 'string', required: false, description: 'Visible panel field not read by the current WooCommerce executor.', placeholder: '123', helpText: rich('Product ID', 'a visible product-specific field that currently does not feed the runtime id lookup.', 'Use the generic id key in advanced configs, or a saved workflow path that maps product ID to id before this node.', 'Filling productId alone does not satisfy get/update/delete; the runtime still reads id.') },
+  { name: 'Order ID', internalKey: 'orderId', type: 'string', required: false, description: 'Visible panel field not read by the current WooCommerce executor.', placeholder: '456', helpText: rich('Order ID', 'a visible order-specific field that currently does not feed the runtime id lookup.', 'Use the generic id key in advanced configs until the panel maps orderId to id.', 'Filling orderId alone does not satisfy get/update/delete; the runtime still reads id.') },
+  { name: 'Customer ID', internalKey: 'customerId', type: 'string', required: false, description: 'Visible panel field not read by the current WooCommerce executor.', placeholder: '789', helpText: rich('Customer ID', 'a visible customer-specific field that currently does not feed the runtime id lookup.', 'Use the generic id key in advanced configs until the panel maps customerId to id.', 'Filling customerId alone does not satisfy get/update/delete; the runtime still reads id.') },
+  { name: 'Data', internalKey: 'data', type: 'json', required: false, description: 'JSON payload for create and update operations.', placeholder: '{"name":"New product"}', helpText: rich('Data', 'the object sent as the WooCommerce create/update request body.', 'Enter a JSON object such as {"name":"New product","regular_price":"29.99"} or {"status":"completed"}.', 'Create/update return WooCommerce <operation>: data is required (object) when this is missing or invalid JSON.') },
+  { name: 'Per Page', internalKey: 'perPage', type: 'number', required: false, description: 'Page size for list operations.', placeholder: '50', defaultValue: '50', helpText: rich('Per Page', 'the per_page query parameter for list requests.', 'Enter a number such as 10 or 50.', 'Blank or invalid values silently default to 50. Excessive values may be capped by WooCommerce.') },
+];
+
+function op(name: string, value: string, description: string, outputExample: Record<string, unknown>, outputDescription: string, inputValues: Record<string, string>): OperationDoc {
+  return { name, value, description, fields, outputExample, outputDescription, usageExample: { scenario: `${name} in a WooCommerce workflow that receives store, order, product, or customer data from an earlier step`, inputValues, expectedOutput: 'The next node can use {{$json.item}}, {{$json.items}}, {{$json.deleted}}, {{$json.success}}, or {{$json._error}} after the WooCommerce step.' }, externalDocsUrl: docsUrl };
+}
 
 export const woocommerceDoc: NodeDoc = {
-  "slug": "woocommerce",
-  "displayName": "WooCommerce",
-  "category": "Data",
-  "logoUrl": "/icons/nodes/woocommerce.svg",
-  "description": "WooCommerce store operations",
-  "credentialType": "WooCommerce API Key",
-  "credentialSetupSteps": [
-    "What this is: The WooCommerce connection lets CtrlChecks access your WooCommerce account safely without putting secrets in workflow fields.",
-    "Where to start: WooCommerce account settings or developer settings.",
-    "How to connect: In CtrlChecks, open Connections -> Add Connection -> WooCommerce, then sign in or paste the secret value requested there.",
-    "Example: the token format shown by WooCommerce.",
-    "Important: Treat tokens, passwords, API keys, and client secrets like bank passwords. Store them in Connections, not in regular workflow fields.",
-    "Test it: Save the connection, run a simple WooCommerce step, and confirm CtrlChecks can reach the account."
+  slug: 'woocommerce',
+  displayName: 'WooCommerce',
+  category: 'Ecommerce',
+  logoUrl: '/icons/nodes/woocommerce.svg',
+  description: 'Read, list, create, update, and delete WooCommerce REST API products, orders, customers, or advanced resources. Current visual operation and credential field names are partly misaligned with the executor, so this doc distinguishes visible fields from runtime fields.',
+  credentialType: 'WooCommerce API Key',
+  credentialSetupSteps: [
+    'Create a WooCommerce API Key connection in CtrlChecks Connections so the credential system/credential vault can store the consumer key and consumer secret safely.',
+    'In WooCommerce, create REST API keys under WooCommerce -> Settings -> Advanced -> REST API, with Read or Read/Write permissions depending on the workflow.',
+    'Do not paste consumer secrets into normal workflow fields for production workflows. Prefer Connections and rotate keys if they were exposed.',
+    'The WooCommerce connection only authorizes WooCommerce calls. Downstream Email, CRM, Slack, or spreadsheet nodes still need their own connections.',
+    'After this node runs, connect its output to the next support, fulfillment, reporting, or notification step. Each downstream service node account connection is configured separately.',
   ],
-  "credentialDocsUrl": "https://woocommerce.github.io/woocommerce-rest-api-docs/#authentication",
-  "resources": [
-    {
-      "name": "Operations",
-      "description": "WooCommerce exposes operation choices directly.",
-      "operations": [
-        {
-          "name": "Get",
-          "value": "get",
-          "description": "Get using the WooCommerce node.",
-          "fields": [
-            {
-              "name": "Store Url",
-              "internalKey": "storeUrl",
-              "type": "url",
-              "required": false,
-              "description": "WooCommerce store base URL (e.g., https://example.com)",
-              "helpText": "What this field is: The web address for WooCommerce store base URL.\nHow to fill it: Paste the full URL, including https:// when it is an external service.\nExample: https://example.com.\nTip: Use {{$json.storeUrl}} when the URL comes from an earlier step.",
-              "placeholder": "https://example.com",
-              "example": "https://example.com"
-            },
-            {
-              "name": "Api Key",
-              "internalKey": "apiKey",
-              "type": "password",
-              "required": false,
-              "description": "WooCommerce consumer key (optional if stored in vault under key \"woocommerce\")",
-              "helpText": "What this field is: WooCommerce token, a secret password that lets CtrlChecks talk to WooCommerce safely.\nWhere to find it: WooCommerce account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by WooCommerce.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "ck_...",
-              "example": "ck_...",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Api Secret",
-              "internalKey": "apiSecret",
-              "type": "password",
-              "required": false,
-              "description": "WooCommerce consumer secret (optional if stored in vault under key \"woocommerce\")",
-              "helpText": "What this field is: WooCommerce token, a secret password that lets CtrlChecks talk to WooCommerce safely.\nWhere to find it: WooCommerce account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by WooCommerce.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "cs_...",
-              "example": "cs_...",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Resource",
-              "internalKey": "resource",
-              "type": "string",
-              "required": true,
-              "description": "Resource: product, order, customer",
-              "helpText": "What this field is: The WooCommerce entity type to work with.\nOptions: product, order, customer.\nExample: order to manage store orders, product for catalog items, customer for buyer accounts.\nTip: Use the resource that matches the store entity you want to manage.",
-              "placeholder": "product",
-              "example": "product",
-              "defaultValue": "product"
-            },
-            {
-              "name": "Id",
-              "internalKey": "id",
-              "type": "string",
-              "required": false,
-              "description": "Resource ID (for get/update/delete)",
-              "helpText": "What this field is: The Resource ID that tells WooCommerce which item to use.\nWhere to find it: Open the item in WooCommerce and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123.\nTip: Use {{$json.id}} when an earlier WooCommerce step provides this value.",
-              "placeholder": "123",
-              "example": "123"
-            },
-            {
-              "name": "Data",
-              "internalKey": "data",
-              "type": "json",
-              "required": true,
-              "description": "Payload for create/update",
-              "helpText": "What this field is: Structured data for Payload.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by WooCommerce.\nExample: {\"name\":\"Alice\",\"email\":\"alice@example.com\"}.\nTip: Use {{$json.data}} when an earlier step already prepared this data.",
-              "placeholder": "{\"key\":\"value\"}",
-              "example": "{\"key\":\"value\"}"
-            },
-            {
-              "name": "Per Page",
-              "internalKey": "perPage",
-              "type": "number",
-              "required": false,
-              "description": "List page size",
-              "helpText": "What this field is: The List page size that tells WooCommerce which item to use.\nWhere to find it: Open the item in WooCommerce and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 50.\nTip: Use {{$json.perPage}} when an earlier WooCommerce step provides this value.",
-              "placeholder": "50",
-              "example": "50",
-              "defaultValue": "50"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming WooCommerce data with get after a related upstream event is received",
-            "inputValues": {
-              "Store Url": "https://example.com",
-              "Api Key": "ck_...",
-              "Api Secret": "cs_...",
-              "Resource": "product",
-              "Id": "123"
-            },
-            "expectedOutput": "WooCommerce returns structured get data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://woocommerce.github.io/woocommerce-rest-api-docs/"
-        },
-        {
-          "name": "Create",
-          "value": "create",
-          "description": "Create using the WooCommerce node.",
-          "fields": [
-            {
-              "name": "Store Url",
-              "internalKey": "storeUrl",
-              "type": "url",
-              "required": false,
-              "description": "WooCommerce store base URL (e.g., https://example.com)",
-              "helpText": "What this field is: The web address for WooCommerce store base URL.\nHow to fill it: Paste the full URL, including https:// when it is an external service.\nExample: https://example.com.\nTip: Use {{$json.storeUrl}} when the URL comes from an earlier step.",
-              "placeholder": "https://example.com",
-              "example": "https://example.com"
-            },
-            {
-              "name": "Api Key",
-              "internalKey": "apiKey",
-              "type": "password",
-              "required": false,
-              "description": "WooCommerce consumer key (optional if stored in vault under key \"woocommerce\")",
-              "helpText": "What this field is: WooCommerce token, a secret password that lets CtrlChecks talk to WooCommerce safely.\nWhere to find it: WooCommerce account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by WooCommerce.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "ck_...",
-              "example": "ck_...",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Api Secret",
-              "internalKey": "apiSecret",
-              "type": "password",
-              "required": false,
-              "description": "WooCommerce consumer secret (optional if stored in vault under key \"woocommerce\")",
-              "helpText": "What this field is: WooCommerce token, a secret password that lets CtrlChecks talk to WooCommerce safely.\nWhere to find it: WooCommerce account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by WooCommerce.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "cs_...",
-              "example": "cs_...",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Resource",
-              "internalKey": "resource",
-              "type": "string",
-              "required": true,
-              "description": "Resource: product, order, customer",
-              "helpText": "What this field is: The WooCommerce entity type to work with.\nOptions: product, order, customer.\nExample: order to manage store orders, product for catalog items, customer for buyer accounts.\nTip: Use the resource that matches the store entity you want to manage.",
-              "placeholder": "product",
-              "example": "product",
-              "defaultValue": "product"
-            },
-            {
-              "name": "Id",
-              "internalKey": "id",
-              "type": "string",
-              "required": false,
-              "description": "Resource ID (for get/update/delete)",
-              "helpText": "What this field is: The Resource ID that tells WooCommerce which item to use.\nWhere to find it: Open the item in WooCommerce and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123.\nTip: Use {{$json.id}} when an earlier WooCommerce step provides this value.",
-              "placeholder": "123",
-              "example": "123"
-            },
-            {
-              "name": "Data",
-              "internalKey": "data",
-              "type": "json",
-              "required": true,
-              "description": "Payload for create/update",
-              "helpText": "What this field is: Structured data for Payload.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by WooCommerce.\nExample: {\"name\":\"Alice\",\"email\":\"alice@example.com\"}.\nTip: Use {{$json.data}} when an earlier step already prepared this data.",
-              "placeholder": "{\"key\":\"value\"}",
-              "example": "{\"key\":\"value\"}"
-            },
-            {
-              "name": "Per Page",
-              "internalKey": "perPage",
-              "type": "number",
-              "required": false,
-              "description": "List page size",
-              "helpText": "What this field is: The List page size that tells WooCommerce which item to use.\nWhere to find it: Open the item in WooCommerce and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 50.\nTip: Use {{$json.perPage}} when an earlier WooCommerce step provides this value.",
-              "placeholder": "50",
-              "example": "50",
-              "defaultValue": "50"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming WooCommerce data with create after a related upstream event is received",
-            "inputValues": {
-              "Store Url": "https://example.com",
-              "Api Key": "ck_...",
-              "Api Secret": "cs_...",
-              "Resource": "product",
-              "Id": "123"
-            },
-            "expectedOutput": "WooCommerce returns structured create data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://woocommerce.github.io/woocommerce-rest-api-docs/"
-        },
-        {
-          "name": "Update",
-          "value": "update",
-          "description": "Update using the WooCommerce node.",
-          "fields": [
-            {
-              "name": "Store Url",
-              "internalKey": "storeUrl",
-              "type": "url",
-              "required": false,
-              "description": "WooCommerce store base URL (e.g., https://example.com)",
-              "helpText": "What this field is: The web address for WooCommerce store base URL.\nHow to fill it: Paste the full URL, including https:// when it is an external service.\nExample: https://example.com.\nTip: Use {{$json.storeUrl}} when the URL comes from an earlier step.",
-              "placeholder": "https://example.com",
-              "example": "https://example.com"
-            },
-            {
-              "name": "Api Key",
-              "internalKey": "apiKey",
-              "type": "password",
-              "required": false,
-              "description": "WooCommerce consumer key (optional if stored in vault under key \"woocommerce\")",
-              "helpText": "What this field is: WooCommerce token, a secret password that lets CtrlChecks talk to WooCommerce safely.\nWhere to find it: WooCommerce account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by WooCommerce.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "ck_...",
-              "example": "ck_...",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Api Secret",
-              "internalKey": "apiSecret",
-              "type": "password",
-              "required": false,
-              "description": "WooCommerce consumer secret (optional if stored in vault under key \"woocommerce\")",
-              "helpText": "What this field is: WooCommerce token, a secret password that lets CtrlChecks talk to WooCommerce safely.\nWhere to find it: WooCommerce account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by WooCommerce.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "cs_...",
-              "example": "cs_...",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Resource",
-              "internalKey": "resource",
-              "type": "string",
-              "required": true,
-              "description": "Resource: product, order, customer",
-              "helpText": "What this field is: The WooCommerce entity type to work with.\nOptions: product, order, customer.\nExample: order to manage store orders, product for catalog items, customer for buyer accounts.\nTip: Use the resource that matches the store entity you want to manage.",
-              "placeholder": "product",
-              "example": "product",
-              "defaultValue": "product"
-            },
-            {
-              "name": "Id",
-              "internalKey": "id",
-              "type": "string",
-              "required": false,
-              "description": "Resource ID (for get/update/delete)",
-              "helpText": "What this field is: The Resource ID that tells WooCommerce which item to use.\nWhere to find it: Open the item in WooCommerce and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123.\nTip: Use {{$json.id}} when an earlier WooCommerce step provides this value.",
-              "placeholder": "123",
-              "example": "123"
-            },
-            {
-              "name": "Data",
-              "internalKey": "data",
-              "type": "json",
-              "required": true,
-              "description": "Payload for create/update",
-              "helpText": "What this field is: Structured data for Payload.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by WooCommerce.\nExample: {\"name\":\"Alice\",\"email\":\"alice@example.com\"}.\nTip: Use {{$json.data}} when an earlier step already prepared this data.",
-              "placeholder": "{\"key\":\"value\"}",
-              "example": "{\"key\":\"value\"}"
-            },
-            {
-              "name": "Per Page",
-              "internalKey": "perPage",
-              "type": "number",
-              "required": false,
-              "description": "List page size",
-              "helpText": "What this field is: The List page size that tells WooCommerce which item to use.\nWhere to find it: Open the item in WooCommerce and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 50.\nTip: Use {{$json.perPage}} when an earlier WooCommerce step provides this value.",
-              "placeholder": "50",
-              "example": "50",
-              "defaultValue": "50"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming WooCommerce data with update after a related upstream event is received",
-            "inputValues": {
-              "Store Url": "https://example.com",
-              "Api Key": "ck_...",
-              "Api Secret": "cs_...",
-              "Resource": "product",
-              "Id": "123"
-            },
-            "expectedOutput": "WooCommerce returns structured update data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://woocommerce.github.io/woocommerce-rest-api-docs/"
-        },
-        {
-          "name": "Delete",
-          "value": "delete",
-          "description": "Delete using the WooCommerce node.",
-          "fields": [
-            {
-              "name": "Store Url",
-              "internalKey": "storeUrl",
-              "type": "url",
-              "required": false,
-              "description": "WooCommerce store base URL (e.g., https://example.com)",
-              "helpText": "What this field is: The web address for WooCommerce store base URL.\nHow to fill it: Paste the full URL, including https:// when it is an external service.\nExample: https://example.com.\nTip: Use {{$json.storeUrl}} when the URL comes from an earlier step.",
-              "placeholder": "https://example.com",
-              "example": "https://example.com"
-            },
-            {
-              "name": "Api Key",
-              "internalKey": "apiKey",
-              "type": "password",
-              "required": false,
-              "description": "WooCommerce consumer key (optional if stored in vault under key \"woocommerce\")",
-              "helpText": "What this field is: WooCommerce token, a secret password that lets CtrlChecks talk to WooCommerce safely.\nWhere to find it: WooCommerce account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by WooCommerce.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "ck_...",
-              "example": "ck_...",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Api Secret",
-              "internalKey": "apiSecret",
-              "type": "password",
-              "required": false,
-              "description": "WooCommerce consumer secret (optional if stored in vault under key \"woocommerce\")",
-              "helpText": "What this field is: WooCommerce token, a secret password that lets CtrlChecks talk to WooCommerce safely.\nWhere to find it: WooCommerce account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by WooCommerce.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "cs_...",
-              "example": "cs_...",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Resource",
-              "internalKey": "resource",
-              "type": "string",
-              "required": true,
-              "description": "Resource: product, order, customer",
-              "helpText": "What this field is: The WooCommerce entity type to work with.\nOptions: product, order, customer.\nExample: order to manage store orders, product for catalog items, customer for buyer accounts.\nTip: Use the resource that matches the store entity you want to manage.",
-              "placeholder": "product",
-              "example": "product",
-              "defaultValue": "product"
-            },
-            {
-              "name": "Id",
-              "internalKey": "id",
-              "type": "string",
-              "required": false,
-              "description": "Resource ID (for get/update/delete)",
-              "helpText": "What this field is: The Resource ID that tells WooCommerce which item to use.\nWhere to find it: Open the item in WooCommerce and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123.\nTip: Use {{$json.id}} when an earlier WooCommerce step provides this value.",
-              "placeholder": "123",
-              "example": "123"
-            },
-            {
-              "name": "Data",
-              "internalKey": "data",
-              "type": "json",
-              "required": true,
-              "description": "Payload for create/update",
-              "helpText": "What this field is: Structured data for Payload.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by WooCommerce.\nExample: {\"name\":\"Alice\",\"email\":\"alice@example.com\"}.\nTip: Use {{$json.data}} when an earlier step already prepared this data.",
-              "placeholder": "{\"key\":\"value\"}",
-              "example": "{\"key\":\"value\"}"
-            },
-            {
-              "name": "Per Page",
-              "internalKey": "perPage",
-              "type": "number",
-              "required": false,
-              "description": "List page size",
-              "helpText": "What this field is: The List page size that tells WooCommerce which item to use.\nWhere to find it: Open the item in WooCommerce and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 50.\nTip: Use {{$json.perPage}} when an earlier WooCommerce step provides this value.",
-              "placeholder": "50",
-              "example": "50",
-              "defaultValue": "50"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming WooCommerce data with delete after a related upstream event is received",
-            "inputValues": {
-              "Store Url": "https://example.com",
-              "Api Key": "ck_...",
-              "Api Secret": "cs_...",
-              "Resource": "product",
-              "Id": "123"
-            },
-            "expectedOutput": "WooCommerce returns structured delete data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://woocommerce.github.io/woocommerce-rest-api-docs/"
-        }
-      ]
-    }
+  credentialDocsUrl: docsUrl,
+  resources: [{ name: 'Store Resources', description: 'WooCommerce runtime actions use generic resource plus operation values. The visual panel aliases are currently documented as unsupported rather than silently described as working.', operations: [
+    op('Get or List Resource', 'get', 'Gets one WooCommerce record when ID is present, or lists records when ID is blank. list also lists records directly with the Per Page setting.', { success: true, item: { id: 123, name: 'Blue T-Shirt', price: '29.99' } }, 'success: true when WooCommerce returns data. item: raw object for one record. items: array for list/no-ID runs. _error and _errorDetails appear on API failures.', { resource: 'product', operation: 'get', storeUrl: 'https://store.example.com', id: '{{$json.productId}}' }),
+    op('Create Resource', 'create', 'Creates a WooCommerce product, order, customer, or advanced resource using the Data JSON object as the request body, then returns WooCommerce raw response data under item.', { success: true, item: { id: 124, name: 'New product' } }, 'success: true when WooCommerce creates the record. item: raw WooCommerce response. _error and _errorDetails appear when data, credentials, permissions, or fields are invalid.', { resource: 'product', operation: 'create', storeUrl: 'https://store.example.com', data: '{"name":"New product","regular_price":"29.99"}' }),
+    op('Update Resource', 'update', 'Updates one WooCommerce record by generic ID using the Data JSON object as the PUT request body, then returns the raw updated resource under item.', { success: true, item: { id: 123, status: 'completed' } }, 'success: true when WooCommerce updates the record. item: raw WooCommerce response. _error and _errorDetails appear when ID, data, or permissions are wrong.', { resource: 'order', operation: 'update', storeUrl: 'https://store.example.com', id: '{{$json.orderId}}', data: '{"status":"completed"}' }),
+    op('Delete Resource', 'delete', 'Deletes one WooCommerce record by generic ID with force=true. WooCommerce returns the deleted item data when successful.', { success: true, deleted: true, item: { id: 123, name: 'Old product' } }, 'success: true when WooCommerce accepts the delete. deleted: true is added by CtrlChecks. item: raw deleted resource response. _error and _errorDetails appear on failure.', { resource: 'product', operation: 'delete', storeUrl: 'https://store.example.com', id: '{{$json.productId}}' }),
+  ] }],
+  commonErrors: [
+    { error: 'WooCommerce: storeUrl is required (e.g., https://example.com)', cause: 'Store URL was blank.', fix: 'Enter the full HTTPS base URL for the WooCommerce store.' },
+    { error: 'WooCommerce: missing apiKey/apiSecret. Provide in config or vault credential "woocommerce".', cause: 'No runtime apiKey/apiSecret or saved WooCommerce credential was found. The visible consumerKey/consumerSecret fields alone are not read by the executor today.', fix: 'Use Connections or map the values into apiKey and apiSecret in an advanced config until the panel is aligned.' },
+    { error: 'WooCommerce <operation>: data is required (object)', cause: 'Create or update was run without valid Data JSON.', fix: 'Provide a JSON object request body such as {"name":"New product"}.' },
+    { error: 'WooCommerce update: id is required / WooCommerce delete: id is required', cause: 'The runtime id field was blank; visible productId/orderId/customerId are not currently read.', fix: 'Map the relevant product, order, or customer ID into the generic id key.' },
+    { error: 'WooCommerce: Unsupported operation "<value>". Supported: get/list/create/update/delete', cause: 'A visible alias such as get_product or create_order was used instead of a runtime-supported generic operation.', fix: 'Use resource plus get/list/create/update/delete until the visual panel is aligned.' },
   ],
-  "commonErrors": [
-    {
-      "error": "Authentication failed",
-      "cause": "The saved credential, token, API key, or OAuth grant is missing, expired, or lacks the required scope.",
-      "fix": "Reconnect the service in CtrlChecks → Connections, then re-run the WooCommerce node."
-    },
-    {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
-    },
-    {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
-  ],
-  "relatedNodes": []
+  relatedNodes: ['shopify', 'stripe', 'paypal', 'chargebee'],
 };

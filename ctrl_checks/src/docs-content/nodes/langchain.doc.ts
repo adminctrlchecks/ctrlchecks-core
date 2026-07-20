@@ -1,205 +1,192 @@
-import type { NodeDoc } from '../types';
+import type { FieldDoc, NodeDoc } from '../types';
+
+const help = (field: string, why: string, when: string, enter: string, source: string, later: string, format: string, example: string, wrong: string, mistake: string) => `What this field is: ${field}
+Why it matters: ${why}
+When to fill it: ${when}
+What to enter: ${enter}
+Where the value comes from: ${source}
+How to use it later: ${later}
+Accepted format: ${format}
+Real workplace example: ${example}
+If it is empty or wrong: ${wrong}
+Common mistake: ${mistake}`;
+
+const fields: FieldDoc[] = [
+  {
+    name: 'Operation',
+    internalKey: 'operation',
+    type: 'select',
+    required: true,
+    description: 'Choose whether the node runs a simple provider call or OpenAI agent-style function call setup.',
+    options: ['run_chain', 'run_agent'],
+    defaultValue: 'run_chain',
+    helpText: help(
+      'The execution mode for this node.',
+      'Runtime branches on this value only for OpenAI tools: run_agent can send function tools, while run_chain sends a normal chat request.',
+      'Choose it for every LangChain node.',
+      'Use run_chain for normal prompt-to-response work. Use run_agent only when provider is OpenAI and Tools contains valid OpenAI function definitions.',
+      'Chosen in the workflow editor based on the AI task.',
+      'Output includes {{$json.operation}} so later logging or branches can see which mode ran.',
+      'One of run_chain or run_agent.',
+      'A support workflow uses run_chain to summarize a ticket; an internal assistant uses run_agent with a lookup tool definition.',
+      'Unknown values fall through the OpenAI path but still return the configured operation, which can make logs confusing.',
+      'Do not expect run_agent tools to work with Anthropic in the current executor.',
+    ),
+    example: 'run_chain',
+  },
+  {
+    name: 'Provider',
+    internalKey: 'provider',
+    type: 'select',
+    required: true,
+    description: 'Provider HTTP API to call. Current runtime supports OpenAI or Anthropic.',
+    options: ['openai', 'anthropic'],
+    defaultValue: 'openai',
+    helpText: help(
+      'The AI provider used by the current executor.',
+      'It decides which API endpoint, auth header, and hardcoded model the node uses.',
+      'Choose it before entering the API key, because the key must belong to the selected provider.',
+      'Select openai for OpenAI chat completions or anthropic for Anthropic Messages.',
+      'From the provider/account your workspace is allowed to use.',
+      'The output does not include provider separately, so keep it in workflow config or logs if downstream steps need it.',
+      'openai or anthropic.',
+      'A finance workflow uses openai for a GPT-4o-mini summary; a legal review workflow uses anthropic for Claude 3.5 Sonnet.',
+      'If the key belongs to the wrong provider, the provider returns an OpenAI API error or Anthropic API error.',
+      'Do not enter Gemini, Mistral, or Cohere here; this node does not route to those providers.',
+    ),
+    example: 'openai',
+  },
+  {
+    name: 'API Key',
+    internalKey: 'apiKey',
+    type: 'password',
+    required: true,
+    description: 'Direct OpenAI or Anthropic API key read by the current executor.',
+    helpText: help(
+      'The provider secret used in the Authorization or x-api-key header.',
+      'The current runtime reads apiKey directly; it does not auto-select a saved LangChain connection.',
+      'Fill it for every run, preferably by mapping a secure Connections or credential vault value.',
+      'Map {{$credentials.openai.apiKey}} for OpenAI or {{$credentials.anthropic.apiKey}} for Anthropic, or paste only in a secure credential-backed field.',
+      'From CtrlChecks Connections, credential vault, OpenAI API keys, or Anthropic API keys.',
+      'Never use this value downstream. Downstream nodes use {{$json.response}}, {{$json.steps}}, {{$json.success}}, and {{$json.error}}.',
+      'Secret text. OpenAI keys often start with sk-, Anthropic keys often start with sk-ant.',
+      'An operations workflow maps {{$credentials.openai.apiKey}} while generating a concise incident summary.',
+      'Wrong, missing, or expired keys return provider-specific API errors with success false.',
+      'Do not store the key in Prompt, Tools, Memory, or upstream business data.',
+    ),
+    example: '{{$credentials.openai.apiKey}}',
+  },
+  {
+    name: 'Prompt',
+    internalKey: 'prompt',
+    type: 'textarea',
+    required: true,
+    description: 'User prompt sent to OpenAI or Anthropic.',
+    helpText: help(
+      'The instruction or task sent as the user message.',
+      'The executor sends this text directly to the selected provider and returns the model response.',
+      'Fill it for every LangChain node.',
+      'Write a clear task and map previous data such as {{$json.ticketBody}}, {{$json.transcript}}, or {{$json.customerQuestion}}.',
+      'Usually from a trigger, form, chat message, document parser, CRM lookup, or transform node.',
+      'The answer is returned as {{$json.response}}.',
+      'Plain text with optional template expressions that resolve to text.',
+      'A support workflow prompts: Summarize {{$json.ticketBody}} and list the next best action.',
+      'Blank prompt may produce a provider error or empty response; the executor does not add business context automatically.',
+      'Do not send full sensitive payloads when only a short field is needed.',
+    ),
+    example: 'Summarize {{$json.ticketBody}} and list the next best action.',
+  },
+  {
+    name: 'Tools',
+    internalKey: 'tools',
+    type: 'json',
+    required: false,
+    description: 'OpenAI function tool definitions used only for operation run_agent with provider openai.',
+    defaultValue: '[]',
+    helpText: help(
+      'A JSON array of tool/function definitions for agent mode.',
+      'The current executor maps this array into OpenAI function tools only when operation is run_agent and provider is openai.',
+      'Fill it only when the workflow intentionally needs OpenAI tool calls returned in steps.',
+      'Enter an array such as [{"name":"lookup_order","description":"Find order details","parameters":{"type":"object","properties":{"orderId":{"type":"string"}}}}].',
+      'Usually designed by the workflow builder or generated by a prior configuration step.',
+      'When OpenAI returns tool calls, downstream nodes can inspect {{$json.steps}}.',
+      'Valid JSON array of function definitions. Use [] for no tools.',
+      'An internal support assistant provides a lookup_order tool and then branches on returned tool calls.',
+      'Invalid JSON can fail before execution; Anthropic ignores tools in this executor path.',
+      'Do not expect Tools to call your APIs by itself; this node only passes definitions and returns tool-call steps.',
+    ),
+    example: '[]',
+  },
+  {
+    name: 'Memory',
+    internalKey: 'memory',
+    type: 'boolean',
+    required: false,
+    description: 'Visible legacy toggle ignored by the current LangChain executor.',
+    defaultValue: 'false',
+    helpText: help(
+      'A visible memory toggle from earlier LangChain UI designs.',
+      'The current runtime does not read this value and does not attach conversation history.',
+      'Leave it off unless preserving a legacy visual config.',
+      'Turn it on only as a label; include real context directly in Prompt or from a Memory node output.',
+      'Chosen in the workflow editor, not loaded from a memory service.',
+      'No downstream output confirms memory was used because it is ignored.',
+      'Boolean true or false.',
+      'A ticket summary workflow leaves Memory off and maps {{$json.context}} into Prompt.',
+      'Turning it on has no effect on current runtime behavior.',
+      'Do not assume this node remembers previous runs or earlier messages.',
+    ),
+    example: 'false',
+  },
+];
 
 export const langchainDoc: NodeDoc = {
-  "slug": "langchain",
-  "displayName": "LangChain",
-  "category": "AI",
-  "logoUrl": "/icons/nodes/langchain.svg",
-  "description": "Orchestrate AI chains and agents using LangChain with configurable LLM providers and tools.",
-  "credentialType": "None",
-  "credentialSetupSteps": [
-    "This node does not need a saved account connection.",
-    "Open the node settings and fill the visible input fields.",
-    "Run the workflow when the required fields are complete."
+  slug: 'langchain',
+  displayName: 'LangChain',
+  category: 'AI',
+  logoUrl: '/icons/nodes/langchain.svg',
+  description: 'Call OpenAI or Anthropic through the LangChain node facade and return success, operation, response, steps, and error.',
+  credentialType: 'OpenAI or Anthropic API Key',
+  credentialSetupSteps: [
+    'Create or select the matching OpenAI or Anthropic credential in CtrlChecks Connections or credential vault, then map it into apiKey for this node.',
+    'The current executor reads the apiKey field directly; it does not auto-pick a saved LangChain account connection by provider.',
+    'Use an OpenAI key for provider openai and an Anthropic key for provider anthropic. Store provider secrets in Connections or the credential vault, not in Prompt or Tools.',
+    'Connect this node output to parser, approval, CRM, email, or logging steps. Any downstream service node account connection belongs on that downstream service node.',
   ],
-  "credentialDocsUrl": "https://docs.ctrlchecks.com",
-  "resources": [
-    {
-      "name": "Operations",
-      "description": "LangChain exposes operation choices directly.",
-      "operations": [
-        {
-          "name": "Run chain",
-          "value": "run_chain",
-          "description": "Run chain using the LangChain node.",
-          "fields": [
-            {
-              "name": "Provider",
-              "internalKey": "provider",
-              "type": "select",
-              "required": false,
-              "description": "LLM provider",
-              "helpText": "Options: Choose the provider value this LangChain step should use.\nHow to choose it: Pick the option that matches what you want this step to do.\nExample: OpenAI.\nTip: Use {{$json.provider}} only when an earlier step already provides a valid option value.",
-              "placeholder": "openai",
-              "example": "openai",
-              "defaultValue": "openai",
-              "options": [
-                "OpenAI",
-                "Anthropic / Claude"
-              ]
-            },
-            {
-              "name": "Prompt",
-              "internalKey": "prompt",
-              "type": "textarea",
-              "required": true,
-              "description": "Input prompt or task description",
-              "helpText": "What this field is: Input prompt or task description.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: Summarize {{$json.text}}.\nTip: Use {{$json.prompt}} when this value comes from an earlier step.",
-              "placeholder": "Summarize {{$json.text}}"
-            },
-            {
-              "name": "Tools",
-              "internalKey": "tools",
-              "type": "json",
-              "required": false,
-              "description": "Tool definitions for agent mode",
-              "helpText": "What this field is: Structured data for Tool definitions for agent mode.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by LangChain.\nExample: [].\nTip: Use {{$json.tools}} when an earlier step already prepared this data.",
-              "placeholder": "[]",
-              "example": "[]",
-              "defaultValue": "[]"
-            },
-            {
-              "name": "Memory",
-              "internalKey": "memory",
-              "type": "boolean",
-              "required": false,
-              "description": "Enable conversation memory",
-              "helpText": "What this field is: An on/off switch for Enable conversation memory.\nHow to fill it: Turn ON to enable this option. Turn OFF to leave it disabled.\nExample: Turn ON when this workflow should use memory; turn OFF for the default behavior.",
-              "placeholder": "false",
-              "example": "false",
-              "defaultValue": "false"
-            },
-            {
-              "name": "Api Key",
-              "internalKey": "apiKey",
-              "type": "password",
-              "required": false,
-              "description": "API key for LLM provider",
-              "helpText": "What this field is: LangChain token, a secret password that lets CtrlChecks talk to LangChain safely.\nWhere to find it: LangChain account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by LangChain.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "sk_...",
-              "notes": "Stored and displayed as a masked credential value."
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "run_chain",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming LangChain data with run chain after a related upstream event is received",
-            "inputValues": {
-              "Provider": "openai",
-              "Prompt": "",
-              "Tools": "[]",
-              "Memory": "false",
-              "Api Key": ""
-            },
-            "expectedOutput": "LangChain returns structured run chain data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
-        },
-        {
-          "name": "Run agent",
-          "value": "run_agent",
-          "description": "Run agent using the LangChain node.",
-          "fields": [
-            {
-              "name": "Provider",
-              "internalKey": "provider",
-              "type": "select",
-              "required": false,
-              "description": "LLM provider",
-              "helpText": "Options: Choose the provider value this LangChain step should use.\nHow to choose it: Pick the option that matches what you want this step to do.\nExample: OpenAI.\nTip: Use {{$json.provider}} only when an earlier step already provides a valid option value.",
-              "placeholder": "openai",
-              "example": "openai",
-              "defaultValue": "openai",
-              "options": [
-                "OpenAI",
-                "Anthropic / Claude"
-              ]
-            },
-            {
-              "name": "Prompt",
-              "internalKey": "prompt",
-              "type": "textarea",
-              "required": true,
-              "description": "Input prompt or task description",
-              "helpText": "What this field is: Input prompt or task description.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: Summarize {{$json.text}}.\nTip: Use {{$json.prompt}} when this value comes from an earlier step.",
-              "placeholder": "Summarize {{$json.text}}"
-            },
-            {
-              "name": "Tools",
-              "internalKey": "tools",
-              "type": "json",
-              "required": false,
-              "description": "Tool definitions for agent mode",
-              "helpText": "What this field is: Structured data for Tool definitions for agent mode.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by LangChain.\nExample: [].\nTip: Use {{$json.tools}} when an earlier step already prepared this data.",
-              "placeholder": "[]",
-              "example": "[]",
-              "defaultValue": "[]"
-            },
-            {
-              "name": "Memory",
-              "internalKey": "memory",
-              "type": "boolean",
-              "required": false,
-              "description": "Enable conversation memory",
-              "helpText": "What this field is: An on/off switch for Enable conversation memory.\nHow to fill it: Turn ON to enable this option. Turn OFF to leave it disabled.\nExample: Turn ON when this workflow should use memory; turn OFF for the default behavior.",
-              "placeholder": "false",
-              "example": "false",
-              "defaultValue": "false"
-            },
-            {
-              "name": "Api Key",
-              "internalKey": "apiKey",
-              "type": "password",
-              "required": false,
-              "description": "API key for LLM provider",
-              "helpText": "What this field is: LangChain token, a secret password that lets CtrlChecks talk to LangChain safely.\nWhere to find it: LangChain account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by LangChain.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "sk_...",
-              "notes": "Stored and displayed as a masked credential value."
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "run_agent",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming LangChain data with run agent after a related upstream event is received",
-            "inputValues": {
-              "Provider": "openai",
-              "Prompt": "",
-              "Tools": "[]",
-              "Memory": "false",
-              "Api Key": ""
-            },
-            "expectedOutput": "LangChain returns structured run agent data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
-        }
-      ]
-    }
+  credentialDocsUrl: 'https://docs.ctrlchecks.com',
+  resources: [{
+    name: 'Configuration',
+    description: 'LangChain currently has two visible operations. Both send one provider request; the runtime hardcodes OpenAI to gpt-4o-mini and Anthropic to claude-3-5-sonnet-20241022.',
+    operations: [
+      {
+        name: 'Run Chain',
+        value: 'run_chain',
+        description: 'Sends Prompt to the selected provider as a normal chat/messages request. OpenAI uses gpt-4o-mini; Anthropic uses claude-3-5-sonnet-20241022. Tools and Memory do not affect this operation.',
+        fields,
+        outputExample: { success: true, operation: 'run_chain', response: 'The ticket is about a duplicate billing charge. Next action: verify invoice INV-1048 and issue a refund if duplicated.', steps: [], error: null },
+        outputDescription: 'success is true on provider success and false on provider/runtime failure. operation echoes the configured operation. response contains provider text. steps is an empty array for normal chain runs. error is null on success or an object with message/status on failure. Successful output does not spread incoming fields.',
+        usageExample: { scenario: 'Summarize a support ticket before creating a CRM note', inputValues: { operation: 'run_chain', provider: 'openai', apiKey: '{{$credentials.openai.apiKey}}', prompt: 'Summarize this ticket: {{$json.ticketBody}}', tools: '[]', memory: 'false' }, expectedOutput: 'Use {{$json.response}} as the note and {{$json.error.message}} when success is false.' },
+        externalDocsUrl: 'https://docs.ctrlchecks.com',
+      },
+      {
+        name: 'Run Agent',
+        value: 'run_agent',
+        description: 'For provider openai, sends Tools as OpenAI function definitions and returns tool calls in steps when the model chooses them. For provider anthropic, this behaves like a normal prompt call because the current executor does not pass tools to Anthropic.',
+        fields,
+        outputExample: { success: true, operation: 'run_agent', response: '', steps: [{ id: 'call_123', type: 'function', function: { name: 'lookup_order', arguments: '{"orderId":"ORD-1048"}' } }], error: null },
+        outputDescription: 'success shows whether the provider call succeeded. operation echoes run_agent. response contains normal assistant text when present. steps contains OpenAI tool calls only for OpenAI run_agent. error is null on success or an object with message/status on failure. Incoming fields are not preserved on success.',
+        usageExample: { scenario: 'Ask OpenAI to choose a support lookup tool for an order question', inputValues: { operation: 'run_agent', provider: 'openai', apiKey: '{{$credentials.openai.apiKey}}', prompt: 'Use a tool if needed to answer: {{$json.customerQuestion}}', tools: '[{"name":"lookup_order","description":"Find order details","parameters":{"type":"object","properties":{"orderId":{"type":"string"}}}}]', memory: 'false' }, expectedOutput: 'Inspect {{$json.steps}} for tool calls and route them to the matching service step.' },
+        externalDocsUrl: 'https://docs.ctrlchecks.com',
+      },
+    ],
+  }],
+  commonErrors: [
+    { error: 'OpenAI API error: <message>', cause: 'Provider is openai and OpenAI rejected the apiKey, model access, prompt, or tools request.', fix: 'Check the OpenAI key, quota, account access, and JSON tool definitions. The current OpenAI model is hardcoded to gpt-4o-mini.' },
+    { error: 'Anthropic API error: <message>', cause: 'Provider is anthropic and Anthropic rejected the apiKey, account access, or prompt request.', fix: 'Check the Anthropic key and account access. The current Anthropic model is hardcoded to claude-3-5-sonnet-20241022.' },
+    { error: 'LangChain execution error', cause: 'A network, JSON, or unexpected runtime error was caught by the executor.', fix: 'Check provider status, apiKey mapping, Tools JSON, and prompt content, then rerun with a short test prompt.' },
+    { error: 'Tools only affect OpenAI run_agent', cause: 'The runtime only sends tools when operation is run_agent and provider is openai.', fix: 'Use provider openai with run_agent for tool-call steps, or remove Tools for Anthropic/chain runs.' },
+    { error: 'Memory has no effect', cause: 'The current executor does not read the memory toggle or retrieve conversation history.', fix: 'Map needed context into Prompt explicitly, for example Context: {{$json.context}}.' },
+    { error: 'Next node cannot find upstream fields', cause: 'LangChain success output does not spread incoming data.', fix: 'Preserve needed IDs before this node or merge them back after the AI response.' },
   ],
-  "commonErrors": [
-    {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
-    },
-    {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
-  ],
-  "relatedNodes": []
+  relatedNodes: ['ai_agent', 'ai_chat_model', 'openai_gpt', 'anthropic_claude', 'memory'],
 };

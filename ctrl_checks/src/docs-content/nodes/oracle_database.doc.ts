@@ -1,609 +1,276 @@
-import type { NodeDoc } from '../types';
+import type { FieldDoc, NodeDoc } from '../types';
+
+const h = (field: string, why: string, when: string, enter: string, source: string, format: string, example: string, wrong: string, mistake: string) => `What this field is: ${field}
+Why it matters: ${why}
+When to fill it: ${when}
+What to enter: ${enter}
+Where the value comes from: ${source}
+How to use it later: Map values with {{$json.fieldName}} and use Oracle output later as {{$json.rows}}, {{$json.rowsAffected}}, {{$json.meta}}, or {{$json.error.message}}.
+Accepted format: ${format}
+Real workplace example: ${example}
+If it is empty or wrong: ${wrong}
+Common mistake: ${mistake}`;
+
+const oracleFields: FieldDoc[] = [
+  {
+    name: 'Operation',
+    internalKey: 'operation',
+    type: 'select',
+    required: true,
+    description: 'Choose select, insert, update, insert_or_update, delete, or execute_sql.',
+    options: ['select', 'insert', 'update', 'insert_or_update', 'delete', 'execute_sql'],
+    helpText: h('The Oracle action to perform.', 'It decides whether the executor builds table SQL or runs your SQL/PLSQL statement.', 'Choose it before filling operation-specific fields.', 'Use select to read rows, insert to add rows, update to change rows, insert_or_update for MERGE upsert, delete for delete/truncate/drop, and execute_sql for custom SQL or PL/SQL.', 'Choose from the dropdown based on the business task.', 'One of select, insert, update, insert_or_update, delete, execute_sql.', 'select active HR.EMPLOYEES rows for a payroll audit.', 'Invalid values return Invalid Oracle operation and no SQL is run.', 'Do not use execute_sql when a safer table operation is enough.'),
+    defaultValue: 'select',
+  },
+  {
+    name: 'User',
+    internalKey: 'user',
+    type: 'string',
+    required: true,
+    description: 'Oracle database user.',
+    helpText: h('The Oracle username used to open the connection.', 'Oracle validates this user and its privileges before any SQL executes.', 'Required unless a saved Oracle connection injects it.', 'Enter the database user or use a saved Oracle connection.', 'Copy it from your DBA, Oracle Cloud wallet details, or credential vault. You can map {{$json.oracleUser}} for controlled generated configs.', 'Plain Oracle username.', 'APP_WORKFLOW for workflow-owned table writes.', 'The run returns Oracle credential "user" is required or an Oracle authentication error.', 'Do not use SYS/SYSTEM for automation workflows.'),
+    placeholder: 'APP_WORKFLOW',
+  },
+  {
+    name: 'Password',
+    internalKey: 'password',
+    type: 'password',
+    required: true,
+    description: 'Oracle database password.',
+    helpText: h('The secret password for the Oracle user.', 'The database rejects unauthenticated connections.', 'Prefer Connections; fill a direct password only as a fallback.', 'Use the password for the least-privilege Oracle user.', 'Retrieve it from a credential vault, Oracle Cloud secret, or DBA. Avoid mapping secrets from ordinary workflow data.', 'Masked secret text.', 'A saved Oracle Database connection for APP_WORKFLOW.', 'The run returns Oracle credential "password" is required or ORA authentication errors.', 'Do not paste passwords into logs, examples, or non-secret input fields.'),
+    placeholder: 'Use Connections when possible',
+    notes: 'Store Oracle passwords in Connections or a credential vault whenever possible.',
+  },
+  {
+    name: 'Connection String',
+    internalKey: 'connectionString',
+    type: 'string',
+    required: true,
+    description: 'Oracle connect string.',
+    helpText: h('The Oracle connect string passed to node-oracledb.', 'It identifies the database service or pluggable database to connect to.', 'Required unless a saved Oracle connection injects it.', 'Enter a value such as host:1521/service_name or the connect string from Oracle Cloud.', 'Copy it from Oracle Net configuration, Oracle Cloud Database Connection, TNS details, or your DBA.', 'Oracle connect string, usually host:port/service or a TNS alias supported by the runtime.', 'dbhost.company.com:1521/ORCLPDB1', 'The run returns Oracle credential "connectionString" is required or a connection/network error.', 'Do not include SQL statements in the connection string.'),
+    placeholder: 'dbhost.company.com:1521/ORCLPDB1',
+  },
+  {
+    name: 'Schema',
+    internalKey: 'schema',
+    type: 'string',
+    required: true,
+    description: 'Oracle schema for table operations.',
+    helpText: h('The Oracle schema that owns the table.', 'The executor builds qualified names like "HR"."EMPLOYEES" for table operations.', 'Required for select, insert, update, insert_or_update, and delete. Not required for execute_sql.', 'Enter the exact schema name, commonly uppercase.', 'Find it in SQL Developer, ALL_TABLES/USER_TABLES, or ask your DBA. You can map {{$json.schema}}.', 'Oracle identifier without quotes; the executor quotes it safely.', 'HR for the EMPLOYEES table.', 'The run returns "schema" is required for the selected operation.', 'Do not put schema.table in the Table field when Schema has its own field.'),
+    placeholder: 'HR',
+  },
+  {
+    name: 'Table',
+    internalKey: 'table',
+    type: 'string',
+    required: true,
+    description: 'Oracle table name for table operations.',
+    helpText: h('The table to read or change.', 'Table operations build SELECT, INSERT, UPDATE, MERGE, DELETE, TRUNCATE, or DROP SQL against this table.', 'Required for all operations except execute_sql.', 'Enter the exact table name, commonly uppercase.', 'Copy it from SQL Developer, your data model, or DBA-approved documentation. You can map {{$json.table}} for generated safe configs.', 'Oracle identifier without quotes; the executor quotes it safely.', 'EMPLOYEES for HR employee sync.', 'The run returns "table" is required or Oracle says the table/view does not exist.', 'Do not pass user-controlled table names into production workflows.'),
+    placeholder: 'EMPLOYEES',
+  },
+  {
+    name: 'Column Mapping Mode',
+    internalKey: 'mappingColumnMode',
+    type: 'select',
+    required: false,
+    description: 'Manual mappings or auto-match incoming fields.',
+    options: ['manual', 'auto'],
+    helpText: h('How Oracle write operations get column values.', 'Insert, update, and upsert need column/value mappings.', 'Use it for insert, update, and insert_or_update.', 'Choose manual to use Column Mappings. Choose auto to map every incoming input field by name.', 'Manual mappings usually come from your table design; auto comes from previous node output keys.', 'manual or auto.', 'manual with [{"column":"STATUS","value":"ACTIVE"}] for controlled updates.', 'No mappings causes No column mappings provided errors for write operations.', 'Do not use auto when the input includes non-table fields such as operation, password, or metadata.'),
+    defaultValue: 'manual',
+  },
+  {
+    name: 'Column Mappings',
+    internalKey: 'columnMappings',
+    type: 'json',
+    required: false,
+    description: 'Column/value list for insert, update, and upsert.',
+    helpText: h('A JSON array mapping Oracle columns to values.', 'Write operations use it to build INSERT, UPDATE, or MERGE binds.', 'Required for manual insert/update/upsert.', 'Enter items like {"column":"FIRST_NAME","value":"{{$json.firstName}}"}.', 'Use column names from Oracle and values from previous workflow data.', 'JSON array of objects with column and value.', '[{"column":"EMAIL","value":"{{$json.email}}"},{"column":"STATUS","value":"ACTIVE"}]', 'Empty mappings cause No column mappings provided errors.', 'Do not include key columns twice when upserting unless you know how MERGE will use them.'),
+    placeholder: '[{"column":"EMAIL","value":"{{$json.email}}"}]',
+  },
+  {
+    name: 'Row Filters',
+    internalKey: 'selectRows',
+    type: 'json',
+    required: false,
+    description: 'Conditions for select, update, delete, and upsert matching.',
+    helpText: h('A JSON array of row filter conditions.', 'It creates WHERE clauses for select/update/delete and match keys for insert_or_update.', 'Use it when you need targeted rows. It is required for update safety and upsert match keys.', 'Enter column/operator/value objects with operators such as =, !=, <, >, <=, >=, LIKE, or IN.', 'Use primary keys or business keys from previous nodes, such as {{$json.employeeId}}.', 'JSON array of {column, operator, value}.', '[{"column":"EMPLOYEE_ID","operator":"=","value":"{{$json.employeeId}}"}]', 'Update without filters is rejected; upsert without filters is rejected; select without filters returns first limited rows.', 'Do not use a broad filter for delete unless you intend to affect many rows.'),
+    placeholder: '[{"column":"STATUS","operator":"=","value":"ACTIVE"}]',
+  },
+  {
+    name: 'Combine Conditions',
+    internalKey: 'combineConditions',
+    type: 'select',
+    required: false,
+    description: 'Combine Row Filters with AND or OR.',
+    options: ['AND', 'OR'],
+    helpText: h('How multiple Row Filters are joined.', 'It changes which rows match the query or write operation.', 'Fill it when Row Filters has more than one condition.', 'Choose AND when every condition must match. Choose OR when any condition may match.', 'This comes from your business rule.', 'AND or OR.', 'AND for STATUS = ACTIVE and DEPARTMENT_ID = 20.', 'Wrong logic can return or change the wrong rows without a validation error.', 'Do not use OR for destructive deletes unless reviewed.'),
+    defaultValue: 'AND',
+  },
+  {
+    name: 'Sort',
+    internalKey: 'sort',
+    type: 'json',
+    required: false,
+    description: 'Sort settings for select.',
+    helpText: h('ORDER BY columns for select results.', 'It controls which records appear first, especially with Limit.', 'Use it for select when row order matters.', 'Enter an array like [{"column":"CREATED_AT","direction":"DESC"}].', 'Choose indexed date, ID, or priority columns from the table.', 'JSON array with column and direction ASC or DESC.', '[{"column":"CREATED_AT","direction":"DESC"}]', 'Invalid columns or directions can cause Oracle SQL errors.', 'Do not rely on database default row order for reports.'),
+    placeholder: '[{"column":"CREATED_AT","direction":"DESC"}]',
+  },
+  {
+    name: 'Return All Rows',
+    internalKey: 'returnAll',
+    type: 'boolean',
+    required: false,
+    description: 'Return all select matches instead of limiting.',
+    helpText: h('A select option that disables the FETCH FIRST limit.', 'It can greatly increase returned rows and runtime memory.', 'Use only when you truly need every matching row.', 'Set true for full exports and false for normal previews or incremental workflows.', 'This is a workflow design choice; ask the data owner before exporting large tables.', 'Boolean true or false.', 'false with Limit 50 for daily monitoring.', 'Large result sets may be slow or memory-heavy; no custom validation prevents that.', 'Do not enable it on large production tables without narrow filters.'),
+    defaultValue: 'false',
+  },
+  {
+    name: 'Limit',
+    internalKey: 'limit',
+    type: 'number',
+    required: false,
+    description: 'Maximum select rows when Return All Rows is false.',
+    helpText: h('The FETCH FIRST row limit for select.', 'It prevents huge result sets when Return All Rows is off.', 'Use it for select previews and regular bounded workflows.', 'Enter a positive integer such as 50, 100, or 1000.', 'Choose it from the size of the next step or report requirement. You can map {{$json.limit}}.', 'Positive integer.', '50 for a daily exception report.', 'The run returns "limit" must be a positive integer for zero, decimal, or negative values.', 'Do not type words such as "all"; use Return All Rows instead.'),
+    placeholder: '50',
+    defaultValue: '50',
+  },
+  {
+    name: 'Delete Command',
+    internalKey: 'deleteCommand',
+    type: 'select',
+    required: false,
+    description: 'Delete rows, truncate table, or drop table.',
+    options: ['delete', 'truncate', 'drop'],
+    helpText: h('The destructive command used by the delete operation.', 'delete can target filtered rows, truncate removes all rows, and drop removes the whole table.', 'Use it only when Operation is delete.', 'Choose delete for normal filtered cleanup, truncate for clearing a table, or drop only for approved schema removal.', 'This should come from a DBA-approved runbook, not from user input.', 'delete, truncate, or drop.', 'delete with Row Filters for expired session cleanup.', 'Invalid values return "deleteCommand" must be one of delete, truncate, drop.', 'Do not use truncate/drop in a workflow unless the business explicitly approved irreversible data loss.'),
+    defaultValue: 'delete',
+  },
+  {
+    name: 'SQL / PL/SQL Statement',
+    internalKey: 'statement',
+    type: 'textarea',
+    required: true,
+    description: 'Custom SQL or PL/SQL for execute_sql.',
+    helpText: h('The custom statement passed directly to node-oracledb.', 'execute_sql does not use Schema/Table builders; it runs this text with Bind Parameters.', 'Required for execute_sql.', 'Enter SQL or PL/SQL without a trailing semicolon, using binds such as :id or :1.', 'Write it from an approved SQL runbook or DBA review. You can map {{$json.statement}} only in controlled internal workflows.', 'Oracle SQL/PLSQL string without a final semicolon.', 'SELECT * FROM HR.EMPLOYEES WHERE EMPLOYEE_ID = :id', 'Empty statements or statements ending in semicolon are rejected before execution.', 'Do not string-interpolate values; use Bind Parameters.'),
+    placeholder: 'SELECT * FROM HR.EMPLOYEES WHERE EMPLOYEE_ID = :id',
+  },
+  {
+    name: 'Bind Parameters',
+    internalKey: 'bindParams',
+    type: 'json',
+    required: false,
+    description: 'Values for Oracle bind variables.',
+    helpText: h('Named or positional values used by execute_sql.', 'Binds keep values separate from SQL and prevent unsafe interpolation.', 'Fill it when Statement contains :name or :1 placeholders.', 'Enter {"id":"{{$json.employeeId}}"} for named binds or [100,"ACTIVE"] for positional binds.', 'Map IDs, dates, and statuses from previous nodes.', 'JSON object for named binds or JSON array for positional binds.', '{"id":"{{$json.employeeId}}"}', 'Missing bind values can produce Oracle bind errors.', 'Do not try to bind table or column names; binds are for values only.'),
+    placeholder: '{"id":"{{$json.employeeId}}"}',
+  },
+  {
+    name: 'Statement Batching',
+    internalKey: 'statementBatching',
+    type: 'select',
+    required: false,
+    description: 'How statements are grouped for multiple items.',
+    options: ['single_statement', 'independently', 'transaction'],
+    helpText: h('The intended batching mode for statements.', 'The executor records this in metadata for write helpers and uses transaction semantics where implemented.', 'Use when one workflow run handles multiple input items.', 'Choose single_statement, independently, or transaction based on rollback needs.', 'This comes from your data integrity requirement.', 'single_statement, independently, or transaction.', 'transaction for importing a batch where all rows must succeed together.', 'Unsupported assumptions can leave partial updates depending on operation path.', 'Do not assume every operation supports advanced batching identically.'),
+    defaultValue: 'single_statement',
+  },
+  {
+    name: 'Auto Commit',
+    internalKey: 'autoCommit',
+    type: 'boolean',
+    required: false,
+    description: 'Commit after write statements.',
+    helpText: h('Whether Oracle commits automatically after write operations.', 'Without a commit, changes may not persist as expected.', 'Use it for insert, update, upsert, delete, and execute_sql write statements.', 'Keep true for normal workflows; disable only for explicit transaction control.', 'Choose from your DBA transaction policy.', 'Boolean true or false.', 'true for a one-row customer status update.', 'Wrong transaction settings can leave changes uncommitted or committed sooner than expected.', 'Do not disable auto commit unless the workflow explicitly manages transactions.'),
+    defaultValue: 'true',
+  },
+  {
+    name: 'Output Columns',
+    internalKey: 'outputColumns',
+    type: 'json',
+    required: false,
+    description: 'Columns returned after insert/update/upsert.',
+    helpText: h('A JSON array of column names to return from supported write operations.', 'It lets later workflow steps use generated IDs or timestamps.', 'Use it when an insert/update/upsert needs selected output columns.', 'Enter ["ID","UPDATED_AT"] or leave empty when no returned columns are needed.', 'Pick columns from the Oracle table design.', 'JSON array of strings.', '["EMPLOYEE_ID","UPDATED_AT"] after inserting an employee sync row.', 'Invalid column names can cause Oracle errors or empty returned values.', 'Do not request sensitive columns that downstream steps do not need.'),
+    placeholder: '["ID","UPDATED_AT"]',
+  },
+  {
+    name: 'Output Numbers as String',
+    internalKey: 'outputNumbersAsString',
+    type: 'boolean',
+    required: false,
+    description: 'Return Oracle NUMBER values as strings for select.',
+    helpText: h('A select option that preserves large Oracle numbers as text.', 'JavaScript can lose precision for very large numeric IDs or financial values.', 'Use it when selected NUMBER columns may exceed safe JavaScript precision.', 'Set true for large identifiers or high-precision numbers; otherwise false.', 'Decide from the table schema and downstream precision needs.', 'Boolean true or false.', 'true for an Oracle NUMBER(38) customer identifier.', 'Large numbers may be rounded if returned as JavaScript numbers.', 'Do not convert high-precision finance identifiers to numbers unless safe.'),
+    defaultValue: 'false',
+  },
+  {
+    name: 'Fetch Array Size',
+    internalKey: 'fetchArraySize',
+    type: 'number',
+    required: false,
+    description: 'Oracle driver fetch buffer size.',
+    helpText: h('The node-oracledb fetchArraySize performance setting.', 'It affects how many rows the driver fetches per internal round trip.', 'Change it only for performance tuning on select/execute_sql reads.', 'Use the default 100 unless a DBA or performance test recommends another value.', 'Comes from performance testing, not normal business input.', 'Positive integer.', '500 for a tested export workflow with many rows.', 'Too high can use more memory; too low can be slower.', 'Do not tune this before fixing filters and limits.'),
+    placeholder: '100',
+    defaultValue: '100',
+  },
+  {
+    name: 'Prefetch Rows',
+    internalKey: 'prefetchRows',
+    type: 'number',
+    required: false,
+    description: 'Oracle driver prefetch row count.',
+    helpText: h('The number of rows the Oracle driver should prefetch.', 'It can reduce round trips for read-heavy operations.', 'Change it only when optimizing select/execute_sql performance.', 'Use the default 100 for most workflows.', 'Comes from DBA guidance or measured performance tests.', 'Positive integer.', '200 for a monthly export after testing memory use.', 'Too high can increase memory; too low can slow reads.', 'Do not use this as a substitute for a proper Limit or Row Filters.'),
+    placeholder: '100',
+    defaultValue: '100',
+  },
+];
+
+const op = (name: string, value: string, description: string, exampleInput: Record<string, string>, outputExample: Record<string, unknown>, outputDescription: string) => ({
+  name,
+  value,
+  description,
+  fields: oracleFields,
+  outputExample,
+  outputDescription,
+  usageExample: {
+    scenario: `${name} Oracle Database records as part of a finance, HR, or operations workflow after an upstream trigger supplies the row data.`,
+    inputValues: { operation: value, user: 'Use saved Oracle connection', password: 'Use saved Oracle connection', connectionString: 'dbhost.company.com:1521/ORCLPDB1', ...exampleInput },
+    expectedOutput: `Oracle returns structured results that can be used later as {{$json.rows}}, {{$json.rowsAffected}}, or {{$json.meta}}.`,
+  },
+  externalDocsUrl: 'https://node-oracledb.readthedocs.io/en/latest/',
+});
 
 export const oracleDatabaseDoc: NodeDoc = {
-  "slug": "oracle_database",
-  "displayName": "Oracle Database",
-  "category": "Data",
-  "logoUrl": "/icons/nodes/oracle_database.svg",
-  "description": "Execute SQL and perform select, insert, update, upsert, and delete operations on Oracle Database.",
-  "credentialType": "Oracle Credential",
-  "credentialSetupSteps": [
-    "What this is: The Oracle Database connection lets CtrlChecks access your Oracle Database account safely without putting secrets in workflow fields.",
-    "Where to start: Oracle Database account settings or developer settings.",
-    "How to connect: In CtrlChecks, open Connections -> Add Connection -> Oracle Database, then sign in or paste the secret value requested there.",
-    "Example: the token format shown by Oracle Database.",
-    "Important: Treat tokens, passwords, API keys, and client secrets like bank passwords. Store them in Connections, not in regular workflow fields.",
-    "Test it: Save the connection, run a simple Oracle Database step, and confirm CtrlChecks can reach the account."
+  slug: 'oracle_database',
+  displayName: 'Oracle Database',
+  category: 'Data',
+  logoUrl: '/icons/nodes/oracle_database.svg',
+  description: 'Run Oracle Database table operations and approved SQL/PLSQL from workflows, including select, insert, update, merge upsert, delete/truncate/drop, and custom execute SQL.',
+  credentialType: 'Oracle Database Connection',
+  credentialSetupSteps: [
+    'Create or choose an Oracle user with least-privilege access to the schema and tables this workflow needs.',
+    'In CtrlChecks, store user, password, connection string, and optional wallet/SSL settings in Connections or a credential vault whenever possible.',
+    'Keep Oracle passwords, wallet contents, and service secrets out of ordinary workflow input data.',
+    'Test with a small select such as SELECT 1 FROM DUAL or a limited table query before enabling write/delete operations.',
+    'Connect this node output to the next node with an outgoing line; downstream service node account connection is still required for email, Slack, CRM, or storage nodes.',
   ],
-  "credentialDocsUrl": "https://docs.oracle.com/en/database/oracle/oracle-database/19/netag/index.html",
-  "resources": [
+  credentialDocsUrl: 'https://docs.oracle.com/en/database/oracle/oracle-database/19/netag/index.html',
+  resources: [
     {
-      "name": "Operations",
-      "description": "Oracle Database exposes operation choices directly.",
-      "operations": [
-        {
-          "name": "Select",
-          "value": "select",
-          "description": "Select using the Oracle Database node.",
-          "fields": [
-            {
-              "name": "User",
-              "internalKey": "user",
-              "type": "string",
-              "required": true,
-              "description": "Oracle username",
-              "helpText": "What this field is: Oracle username.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: User value.\nTip: Use {{$json.user}} when this value comes from an earlier step.",
-              "placeholder": "Enter User"
-            },
-            {
-              "name": "Password",
-              "internalKey": "password",
-              "type": "password",
-              "required": true,
-              "description": "Oracle password",
-              "helpText": "What this field is: Oracle Database token, a secret password that lets CtrlChecks talk to Oracle Database safely.\nWhere to find it: Oracle Database account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by Oracle Database.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "Enter Password",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Connection String",
-              "internalKey": "connectionString",
-              "type": "string",
-              "required": true,
-              "description": "Oracle connection string",
-              "helpText": "What this field is: Oracle connection string.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Connection String value.\nTip: Use {{$json.connectionString}} when this value comes from an earlier step.",
-              "placeholder": "Enter Connection String"
-            },
-            {
-              "name": "Schema",
-              "internalKey": "schema",
-              "type": "string",
-              "required": false,
-              "description": "Oracle schema",
-              "helpText": "What this field is: Oracle schema.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Schema value.\nTip: Use {{$json.schema}} when this value comes from an earlier step.",
-              "placeholder": "Enter Schema"
-            },
-            {
-              "name": "Table",
-              "internalKey": "table",
-              "type": "string",
-              "required": true,
-              "description": "Table name",
-              "helpText": "What this field is: The Table name that tells Oracle Database which item to use.\nWhere to find it: Open the item in Oracle Database and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: customers.\nTip: Use {{$json.table}} when an earlier Oracle Database step provides this value.",
-              "placeholder": "customers"
-            },
-            {
-              "name": "Statement",
-              "internalKey": "statement",
-              "type": "string",
-              "required": false,
-              "description": "SQL statement for execute_sql",
-              "helpText": "What this field is: SQL statement for execute_sql.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Statement value.\nTip: Use {{$json.statement}} when this value comes from an earlier step.",
-              "placeholder": "Enter Statement"
-            },
-            {
-              "name": "Limit",
-              "internalKey": "limit",
-              "type": "number",
-              "required": false,
-              "description": "Max rows to return",
-              "helpText": "What this field is: The number used for Max rows to return.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 50.\nTip: Use {{$json.limit}} when the number comes from an earlier step.",
-              "placeholder": "50",
-              "example": "50",
-              "defaultValue": "50"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "select",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming Oracle Database data with select after a related upstream event is received",
-            "inputValues": {
-              "User": "",
-              "Password": "",
-              "Connection String": "",
-              "Schema": "",
-              "Table": ""
-            },
-            "expectedOutput": "Oracle Database returns structured select data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://node-oracledb.readthedocs.io/en/latest/"
-        },
-        {
-          "name": "Insert",
-          "value": "insert",
-          "description": "Insert using the Oracle Database node.",
-          "fields": [
-            {
-              "name": "User",
-              "internalKey": "user",
-              "type": "string",
-              "required": true,
-              "description": "Oracle username",
-              "helpText": "What this field is: Oracle username.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: User value.\nTip: Use {{$json.user}} when this value comes from an earlier step.",
-              "placeholder": "Enter User"
-            },
-            {
-              "name": "Password",
-              "internalKey": "password",
-              "type": "password",
-              "required": true,
-              "description": "Oracle password",
-              "helpText": "What this field is: Oracle Database token, a secret password that lets CtrlChecks talk to Oracle Database safely.\nWhere to find it: Oracle Database account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by Oracle Database.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "Enter Password",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Connection String",
-              "internalKey": "connectionString",
-              "type": "string",
-              "required": true,
-              "description": "Oracle connection string",
-              "helpText": "What this field is: Oracle connection string.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Connection String value.\nTip: Use {{$json.connectionString}} when this value comes from an earlier step.",
-              "placeholder": "Enter Connection String"
-            },
-            {
-              "name": "Schema",
-              "internalKey": "schema",
-              "type": "string",
-              "required": false,
-              "description": "Oracle schema",
-              "helpText": "What this field is: Oracle schema.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Schema value.\nTip: Use {{$json.schema}} when this value comes from an earlier step.",
-              "placeholder": "Enter Schema"
-            },
-            {
-              "name": "Table",
-              "internalKey": "table",
-              "type": "string",
-              "required": true,
-              "description": "Table name",
-              "helpText": "What this field is: The Table name that tells Oracle Database which item to use.\nWhere to find it: Open the item in Oracle Database and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: customers.\nTip: Use {{$json.table}} when an earlier Oracle Database step provides this value.",
-              "placeholder": "customers"
-            },
-            {
-              "name": "Statement",
-              "internalKey": "statement",
-              "type": "string",
-              "required": false,
-              "description": "SQL statement for execute_sql",
-              "helpText": "What this field is: SQL statement for execute_sql.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Statement value.\nTip: Use {{$json.statement}} when this value comes from an earlier step.",
-              "placeholder": "Enter Statement"
-            },
-            {
-              "name": "Limit",
-              "internalKey": "limit",
-              "type": "number",
-              "required": false,
-              "description": "Max rows to return",
-              "helpText": "What this field is: The number used for Max rows to return.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 50.\nTip: Use {{$json.limit}} when the number comes from an earlier step.",
-              "placeholder": "50",
-              "example": "50",
-              "defaultValue": "50"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "insert",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming Oracle Database data with insert after a related upstream event is received",
-            "inputValues": {
-              "User": "",
-              "Password": "",
-              "Connection String": "",
-              "Schema": "",
-              "Table": ""
-            },
-            "expectedOutput": "Oracle Database returns structured insert data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://node-oracledb.readthedocs.io/en/latest/"
-        },
-        {
-          "name": "Update",
-          "value": "update",
-          "description": "Update using the Oracle Database node.",
-          "fields": [
-            {
-              "name": "User",
-              "internalKey": "user",
-              "type": "string",
-              "required": true,
-              "description": "Oracle username",
-              "helpText": "What this field is: Oracle username.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: User value.\nTip: Use {{$json.user}} when this value comes from an earlier step.",
-              "placeholder": "Enter User"
-            },
-            {
-              "name": "Password",
-              "internalKey": "password",
-              "type": "password",
-              "required": true,
-              "description": "Oracle password",
-              "helpText": "What this field is: Oracle Database token, a secret password that lets CtrlChecks talk to Oracle Database safely.\nWhere to find it: Oracle Database account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by Oracle Database.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "Enter Password",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Connection String",
-              "internalKey": "connectionString",
-              "type": "string",
-              "required": true,
-              "description": "Oracle connection string",
-              "helpText": "What this field is: Oracle connection string.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Connection String value.\nTip: Use {{$json.connectionString}} when this value comes from an earlier step.",
-              "placeholder": "Enter Connection String"
-            },
-            {
-              "name": "Schema",
-              "internalKey": "schema",
-              "type": "string",
-              "required": false,
-              "description": "Oracle schema",
-              "helpText": "What this field is: Oracle schema.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Schema value.\nTip: Use {{$json.schema}} when this value comes from an earlier step.",
-              "placeholder": "Enter Schema"
-            },
-            {
-              "name": "Table",
-              "internalKey": "table",
-              "type": "string",
-              "required": true,
-              "description": "Table name",
-              "helpText": "What this field is: The Table name that tells Oracle Database which item to use.\nWhere to find it: Open the item in Oracle Database and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: customers.\nTip: Use {{$json.table}} when an earlier Oracle Database step provides this value.",
-              "placeholder": "customers"
-            },
-            {
-              "name": "Statement",
-              "internalKey": "statement",
-              "type": "string",
-              "required": false,
-              "description": "SQL statement for execute_sql",
-              "helpText": "What this field is: SQL statement for execute_sql.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Statement value.\nTip: Use {{$json.statement}} when this value comes from an earlier step.",
-              "placeholder": "Enter Statement"
-            },
-            {
-              "name": "Limit",
-              "internalKey": "limit",
-              "type": "number",
-              "required": false,
-              "description": "Max rows to return",
-              "helpText": "What this field is: The number used for Max rows to return.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 50.\nTip: Use {{$json.limit}} when the number comes from an earlier step.",
-              "placeholder": "50",
-              "example": "50",
-              "defaultValue": "50"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "update",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming Oracle Database data with update after a related upstream event is received",
-            "inputValues": {
-              "User": "",
-              "Password": "",
-              "Connection String": "",
-              "Schema": "",
-              "Table": ""
-            },
-            "expectedOutput": "Oracle Database returns structured update data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://node-oracledb.readthedocs.io/en/latest/"
-        },
-        {
-          "name": "Insert or update",
-          "value": "insert_or_update",
-          "description": "Insert or update using the Oracle Database node.",
-          "fields": [
-            {
-              "name": "User",
-              "internalKey": "user",
-              "type": "string",
-              "required": true,
-              "description": "Oracle username",
-              "helpText": "What this field is: Oracle username.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: User value.\nTip: Use {{$json.user}} when this value comes from an earlier step.",
-              "placeholder": "Enter User"
-            },
-            {
-              "name": "Password",
-              "internalKey": "password",
-              "type": "password",
-              "required": true,
-              "description": "Oracle password",
-              "helpText": "What this field is: Oracle Database token, a secret password that lets CtrlChecks talk to Oracle Database safely.\nWhere to find it: Oracle Database account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by Oracle Database.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "Enter Password",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Connection String",
-              "internalKey": "connectionString",
-              "type": "string",
-              "required": true,
-              "description": "Oracle connection string",
-              "helpText": "What this field is: Oracle connection string.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Connection String value.\nTip: Use {{$json.connectionString}} when this value comes from an earlier step.",
-              "placeholder": "Enter Connection String"
-            },
-            {
-              "name": "Schema",
-              "internalKey": "schema",
-              "type": "string",
-              "required": false,
-              "description": "Oracle schema",
-              "helpText": "What this field is: Oracle schema.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Schema value.\nTip: Use {{$json.schema}} when this value comes from an earlier step.",
-              "placeholder": "Enter Schema"
-            },
-            {
-              "name": "Table",
-              "internalKey": "table",
-              "type": "string",
-              "required": true,
-              "description": "Table name",
-              "helpText": "What this field is: The Table name that tells Oracle Database which item to use.\nWhere to find it: Open the item in Oracle Database and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: customers.\nTip: Use {{$json.table}} when an earlier Oracle Database step provides this value.",
-              "placeholder": "customers"
-            },
-            {
-              "name": "Statement",
-              "internalKey": "statement",
-              "type": "string",
-              "required": false,
-              "description": "SQL statement for execute_sql",
-              "helpText": "What this field is: SQL statement for execute_sql.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Statement value.\nTip: Use {{$json.statement}} when this value comes from an earlier step.",
-              "placeholder": "Enter Statement"
-            },
-            {
-              "name": "Limit",
-              "internalKey": "limit",
-              "type": "number",
-              "required": false,
-              "description": "Max rows to return",
-              "helpText": "What this field is: The number used for Max rows to return.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 50.\nTip: Use {{$json.limit}} when the number comes from an earlier step.",
-              "placeholder": "50",
-              "example": "50",
-              "defaultValue": "50"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "insert_or_update",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming Oracle Database data with insert or update after a related upstream event is received",
-            "inputValues": {
-              "User": "",
-              "Password": "",
-              "Connection String": "",
-              "Schema": "",
-              "Table": ""
-            },
-            "expectedOutput": "Oracle Database returns structured insert or update data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://node-oracledb.readthedocs.io/en/latest/"
-        },
-        {
-          "name": "Delete",
-          "value": "delete",
-          "description": "Delete using the Oracle Database node.",
-          "fields": [
-            {
-              "name": "User",
-              "internalKey": "user",
-              "type": "string",
-              "required": true,
-              "description": "Oracle username",
-              "helpText": "What this field is: Oracle username.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: User value.\nTip: Use {{$json.user}} when this value comes from an earlier step.",
-              "placeholder": "Enter User"
-            },
-            {
-              "name": "Password",
-              "internalKey": "password",
-              "type": "password",
-              "required": true,
-              "description": "Oracle password",
-              "helpText": "What this field is: Oracle Database token, a secret password that lets CtrlChecks talk to Oracle Database safely.\nWhere to find it: Oracle Database account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by Oracle Database.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "Enter Password",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Connection String",
-              "internalKey": "connectionString",
-              "type": "string",
-              "required": true,
-              "description": "Oracle connection string",
-              "helpText": "What this field is: Oracle connection string.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Connection String value.\nTip: Use {{$json.connectionString}} when this value comes from an earlier step.",
-              "placeholder": "Enter Connection String"
-            },
-            {
-              "name": "Schema",
-              "internalKey": "schema",
-              "type": "string",
-              "required": false,
-              "description": "Oracle schema",
-              "helpText": "What this field is: Oracle schema.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Schema value.\nTip: Use {{$json.schema}} when this value comes from an earlier step.",
-              "placeholder": "Enter Schema"
-            },
-            {
-              "name": "Table",
-              "internalKey": "table",
-              "type": "string",
-              "required": true,
-              "description": "Table name",
-              "helpText": "What this field is: The Table name that tells Oracle Database which item to use.\nWhere to find it: Open the item in Oracle Database and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: customers.\nTip: Use {{$json.table}} when an earlier Oracle Database step provides this value.",
-              "placeholder": "customers"
-            },
-            {
-              "name": "Statement",
-              "internalKey": "statement",
-              "type": "string",
-              "required": false,
-              "description": "SQL statement for execute_sql",
-              "helpText": "What this field is: SQL statement for execute_sql.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Statement value.\nTip: Use {{$json.statement}} when this value comes from an earlier step.",
-              "placeholder": "Enter Statement"
-            },
-            {
-              "name": "Limit",
-              "internalKey": "limit",
-              "type": "number",
-              "required": false,
-              "description": "Max rows to return",
-              "helpText": "What this field is: The number used for Max rows to return.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 50.\nTip: Use {{$json.limit}} when the number comes from an earlier step.",
-              "placeholder": "50",
-              "example": "50",
-              "defaultValue": "50"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "delete",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming Oracle Database data with delete after a related upstream event is received",
-            "inputValues": {
-              "User": "",
-              "Password": "",
-              "Connection String": "",
-              "Schema": "",
-              "Table": ""
-            },
-            "expectedOutput": "Oracle Database returns structured delete data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://node-oracledb.readthedocs.io/en/latest/"
-        },
-        {
-          "name": "Execute sql",
-          "value": "execute_sql",
-          "description": "Execute sql using the Oracle Database node.",
-          "fields": [
-            {
-              "name": "User",
-              "internalKey": "user",
-              "type": "string",
-              "required": true,
-              "description": "Oracle username",
-              "helpText": "What this field is: Oracle username.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: User value.\nTip: Use {{$json.user}} when this value comes from an earlier step.",
-              "placeholder": "Enter User"
-            },
-            {
-              "name": "Password",
-              "internalKey": "password",
-              "type": "password",
-              "required": true,
-              "description": "Oracle password",
-              "helpText": "What this field is: Oracle Database token, a secret password that lets CtrlChecks talk to Oracle Database safely.\nWhere to find it: Oracle Database account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by Oracle Database.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "Enter Password",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Connection String",
-              "internalKey": "connectionString",
-              "type": "string",
-              "required": true,
-              "description": "Oracle connection string",
-              "helpText": "What this field is: Oracle connection string.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Connection String value.\nTip: Use {{$json.connectionString}} when this value comes from an earlier step.",
-              "placeholder": "Enter Connection String"
-            },
-            {
-              "name": "Schema",
-              "internalKey": "schema",
-              "type": "string",
-              "required": false,
-              "description": "Oracle schema",
-              "helpText": "What this field is: Oracle schema.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Schema value.\nTip: Use {{$json.schema}} when this value comes from an earlier step.",
-              "placeholder": "Enter Schema"
-            },
-            {
-              "name": "Table",
-              "internalKey": "table",
-              "type": "string",
-              "required": true,
-              "description": "Table name",
-              "helpText": "What this field is: The Table name that tells Oracle Database which item to use.\nWhere to find it: Open the item in Oracle Database and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: customers.\nTip: Use {{$json.table}} when an earlier Oracle Database step provides this value.",
-              "placeholder": "customers"
-            },
-            {
-              "name": "Statement",
-              "internalKey": "statement",
-              "type": "string",
-              "required": false,
-              "description": "SQL statement for execute_sql",
-              "helpText": "What this field is: SQL statement for execute_sql.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Statement value.\nTip: Use {{$json.statement}} when this value comes from an earlier step.",
-              "placeholder": "Enter Statement"
-            },
-            {
-              "name": "Limit",
-              "internalKey": "limit",
-              "type": "number",
-              "required": false,
-              "description": "Max rows to return",
-              "helpText": "What this field is: The number used for Max rows to return.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 50.\nTip: Use {{$json.limit}} when the number comes from an earlier step.",
-              "placeholder": "50",
-              "example": "50",
-              "defaultValue": "50"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "execute_sql",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming Oracle Database data with execute sql after a related upstream event is received",
-            "inputValues": {
-              "User": "",
-              "Password": "",
-              "Connection String": "",
-              "Schema": "",
-              "Table": ""
-            },
-            "expectedOutput": "Oracle Database returns structured execute sql data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://node-oracledb.readthedocs.io/en/latest/"
-        }
-      ]
-    }
-  ],
-  "commonErrors": [
-    {
-      "error": "Authentication failed",
-      "cause": "The saved credential, token, API key, or OAuth grant is missing, expired, or lacks the required scope.",
-      "fix": "Reconnect the service in CtrlChecks → Connections, then re-run the Oracle Database node."
+      name: 'Operations',
+      description: 'Oracle Database runs through the node-oracledb executor and returns success, operation, schema, table, rows, rowsAffected, meta, warning, and error.',
+      operations: [
+        op('Select', 'select', 'Reads rows from a schema/table with optional Row Filters, Sort, Return All Rows, Limit, and number formatting. Use it for reports, lookups, and data sync reads.', { schema: 'HR', table: 'EMPLOYEES', selectRows: '[{"column":"STATUS","operator":"=","value":"ACTIVE"}]', limit: '50' }, { success: true, operation: 'select', schema: 'HR', table: 'EMPLOYEES', rows: [{ EMPLOYEE_ID: 101, STATUS: 'ACTIVE' }], rowsAffected: 1, meta: { returnedAll: false, limit: 50 }, warning: null, error: null }, 'success: true on successful execution. operation/schema/table identify what ran. rows contains selected rows. rowsAffected equals returned row count for select. meta includes returnedAll and limit. error is null on success.'),
+        op('Insert', 'insert', 'Adds rows to a schema/table using manual Column Mappings or auto-mapped incoming fields. Use it to save approved workflow data into Oracle.', { schema: 'HR', table: 'EMPLOYEE_AUDIT', columnMappings: '[{"column":"EMAIL","value":"{{$json.email}}"}]', outputColumns: '["ID"]' }, { success: true, operation: 'insert', schema: 'HR', table: 'EMPLOYEE_AUDIT', rows: [{ ID: '9001' }], rowsAffected: 1, meta: { statementBatching: 'single_statement' }, warning: null, error: null }, 'success: true on insert. operation echoes insert. rows contains requested Output Columns when configured. rowsAffected is the inserted count. meta includes statementBatching. error is null on success.'),
+        op('Update', 'update', 'Changes rows matching Row Filters using Column Mappings. The executor refuses update without a WHERE clause, which protects against accidental all-row updates.', { schema: 'HR', table: 'EMPLOYEES', columnMappings: '[{"column":"STATUS","value":"INACTIVE"}]', selectRows: '[{"column":"EMPLOYEE_ID","operator":"=","value":"{{$json.employeeId}}"}]' }, { success: true, operation: 'update', schema: 'HR', table: 'EMPLOYEES', rows: [], rowsAffected: 1, meta: { statementBatching: 'single_statement' }, warning: null, error: null }, 'success: true on update. operation echoes update. rows is empty unless a path returns columns. rowsAffected is the changed row count. meta includes statementBatching. error is null on success.'),
+        op('Insert or Update', 'insert_or_update', 'Runs an Oracle MERGE upsert. Row Filters identify the match key, and Column Mappings provide values to insert or update.', { schema: 'HR', table: 'EMPLOYEES', columnMappings: '[{"column":"EMPLOYEE_ID","value":"{{$json.employeeId}}"},{"column":"EMAIL","value":"{{$json.email}}"}]', selectRows: '[{"column":"EMPLOYEE_ID","operator":"=","value":"{{$json.employeeId}}"}]' }, { success: true, operation: 'insert_or_update', schema: 'HR', table: 'EMPLOYEES', rows: [], rowsAffected: 1, meta: { statementBatching: 'single_statement' }, warning: null, error: null }, 'success: true on MERGE. operation echoes insert_or_update. rows is empty in the current implementation. rowsAffected is Oracle rowsAffected. meta includes statementBatching. error is null on success.'),
+        op('Delete', 'delete', 'Deletes filtered rows, truncates a table, or drops a table depending on Delete Command. Use delete with Row Filters for normal workflows; truncate/drop are irreversible DBA-level actions.', { schema: 'HR', table: 'EMPLOYEE_AUDIT', deleteCommand: 'delete', selectRows: '[{"column":"ID","operator":"=","value":"{{$json.auditId}}"}]' }, { success: true, operation: 'delete', schema: 'HR', table: 'EMPLOYEE_AUDIT', rows: [], rowsAffected: 1, meta: { deleteCommand: 'delete' }, warning: null, error: null }, 'success: true on delete/truncate/drop. operation echoes delete. rows is empty. rowsAffected comes from Oracle when available. meta.deleteCommand echoes delete, truncate, or drop. error is null on success.'),
+        op('Execute SQL', 'execute_sql', 'Runs a custom SQL or PL/SQL statement with Bind Parameters. The executor rejects a trailing semicolon before it calls node-oracledb.', { statement: 'SELECT * FROM HR.EMPLOYEES WHERE EMPLOYEE_ID = :id', bindParams: '{"id":"{{$json.employeeId}}"}' }, { success: true, operation: 'execute_sql', schema: null, table: null, rows: [{ EMPLOYEE_ID: 101 }], rowsAffected: 0, meta: { statementType: 'SELECT' }, warning: null, error: null }, 'success: true on execution. operation echoes execute_sql. rows contains SELECT results when returned. rowsAffected reflects write statements. meta.statementType records the first SQL keyword. error is null on success.'),
+      ],
     },
-    {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
-    },
-    {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
   ],
-  "relatedNodes": []
+  commonErrors: [
+    { error: 'Oracle credential "user" is required', cause: 'No Oracle user was provided by the node or saved connection.', fix: 'Select an Oracle connection or fill User from the credential vault.' },
+    { error: '"schema" is required for operation "select"', cause: 'A table operation was selected without Schema.', fix: 'Fill Schema for select/insert/update/upsert/delete.' },
+    { error: 'SQL statement must not end with a semicolon (node-oracledb requirement)', cause: 'execute_sql Statement ends with ;.', fix: 'Remove the trailing semicolon.' },
+    { error: 'UPDATE without a WHERE clause would affect all rows. Provide selectRows to filter.', cause: 'Update had no Row Filters.', fix: 'Add a narrow Row Filters entry such as EMPLOYEE_ID = {{$json.employeeId}}.' },
+    { error: 'insert_or_update requires at least one selectRows entry to identify the match key', cause: 'Upsert had Column Mappings but no match key.', fix: 'Add Row Filters for the key columns used by MERGE.' },
+  ],
+  relatedNodes: ['postgresql', 'mysql', 'sql_server', 'timescaledb'],
 };

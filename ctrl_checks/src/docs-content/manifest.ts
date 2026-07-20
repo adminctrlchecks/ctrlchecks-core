@@ -59,15 +59,15 @@ export const nodeDocManifest = [
   {
     "slug": "respond_to_webhook",
     "displayName": "Respond to Webhook",
-    "category": "Utility",
-    "description": "Sends HTTP response back to webhook caller Use this node when a workflow needs respond to webhook behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "HTTP & API",
+    "description": "Normalize the statusCode, headers, and body intended for a webhook caller; runtime returns no sent flag.",
     "logoUrl": "/icons/nodes/respond_to_webhook.svg"
   },
   {
     "slug": "postgresql",
     "displayName": "PostgreSQL",
     "category": "Data",
-    "description": "Execute SQL queries on PostgreSQL database Use this node when a workflow needs postgresql behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Run PostgreSQL executeQuery, insert, update, and delete operations with real runtime fields for connection details, SQL parameters, table data, and row filters.",
     "logoUrl": "/icons/nodes/postgresql.svg"
   },
   {
@@ -75,6 +75,13 @@ export const nodeDocManifest = [
     "displayName": "Supabase",
     "category": "Data",
     "description": "Interact with Supabase (PostgreSQL + realtime + storage) Use this node when a workflow needs supabase behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "logoUrl": "/icons/nodes/supabase.svg"
+  },
+  {
+    "slug": "db",
+    "displayName": "Supabase",
+    "category": "Data",
+    "description": "Canonical UI Supabase node. Supports select, insert, update, delete, and rpc through the Supabase SDK; raw SQL query is not executed by this node.",
     "logoUrl": "/icons/nodes/supabase.svg"
   },
   {
@@ -122,36 +129,36 @@ export const nodeDocManifest = [
   {
     "slug": "salesforce",
     "displayName": "Salesforce",
-    "category": "Data",
-    "description": "Work with Salesforce objects (Account, Contact, Lead, Opportunity, etc.) using REST/SOQL/SOSL Use this node when a workflow needs salesforce behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "CRM",
+    "description": "Query (SOQL), search (SOSL), get, create, update, delete, upsert, or bulk-process Salesforce records across any standard or custom object.",
     "logoUrl": "/icons/nodes/salesforce.svg"
   },
   {
     "slug": "microsoft_dynamics",
     "displayName": "Microsoft Dynamics",
-    "category": "Data",
-    "description": "Manage CRM data in Microsoft Dynamics 365 (contacts, leads, accounts, opportunities, and more) via the Web API Use this node when a workflow needs microsoft dynamics behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "CRM",
+    "description": "Get, list, create, update, or delete Microsoft Dynamics 365 records, or run an advanced FetchXML query, from a workflow.",
     "logoUrl": "/icons/nodes/microsoft_dynamics.svg"
   },
   {
     "slug": "sap",
     "displayName": "SAP",
-    "category": "Data",
-    "description": "Interact with SAP systems via OData/REST APIs — read and write business objects such as sales orders, purchase orders, materials, customers, and more. Use this node when a workflow needs sap behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "CRM",
+    "description": "Read and write SAP business objects (sales orders, business partners, materials, and more) via OData v2/v4 and REST APIs, using a direct HTTP-method-based Operation field.",
     "logoUrl": "/icons/nodes/sap.svg"
   },
   {
     "slug": "clickup",
     "displayName": "ClickUp",
-    "category": "Utility",
-    "description": "Create, read, and manage ClickUp tasks, lists, spaces, and workspaces. Use this node when a workflow needs clickup behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "Productivity",
+    "description": "Create, update, read, delete, comment on, and discover ClickUp tasks, lists, folders, spaces, and workspaces with raw ClickUp API output.",
     "logoUrl": "/icons/nodes/clickup.svg"
   },
   {
     "slug": "set_variable",
     "displayName": "Set Variable",
     "category": "Data",
-    "description": "Create one or more named output values for later workflow steps.",
+    "description": "Create exactly one named output value; every other incoming field is discarded.",
     "logoUrl": "/icons/nodes/set_variable.svg"
   },
   {
@@ -221,7 +228,7 @@ export const nodeDocManifest = [
     "slug": "wait",
     "displayName": "Wait",
     "category": "Logic",
-    "description": "Pause workflow execution Use this node when a workflow needs wait behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Pause for a fixed duration, cap long waits at 5 minutes, and pass the incoming workflow data through unchanged.",
     "logoUrl": "/icons/nodes/wait.svg"
   },
   {
@@ -234,42 +241,42 @@ export const nodeDocManifest = [
   {
     "slug": "timeout",
     "displayName": "Timeout",
-    "category": "Logic",
-    "description": "Fails the workflow if execution takes longer than specified time Use this node when a workflow needs timeout behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "Flow",
+    "description": "Route a workflow path to success or timeout based on elapsed workflow time.",
     "logoUrl": "/icons/nodes/timeout.svg"
   },
   {
     "slug": "return",
     "displayName": "Return",
-    "category": "Logic",
-    "description": "Stops workflow execution and returns the specified data Use this node when a workflow needs return behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "Flow",
+    "description": "Stop the current workflow path and emit success, __return, and returnedValue.",
     "logoUrl": "/icons/nodes/return.svg"
   },
   {
     "slug": "execute_workflow",
     "displayName": "Execute Workflow",
-    "category": "Logic",
-    "description": "Executes another workflow and returns its result Use this node when a workflow needs execute workflow behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "Workflow",
+    "description": "Call a confirmed or active child workflow, pass input, and return success, result, workflowId, or error.",
     "logoUrl": "/icons/nodes/execute_workflow.svg"
   },
   {
     "slug": "try_catch",
     "displayName": "Try/Catch",
-    "category": "Logic",
-    "description": "Executes a branch and catches errors, routing to error handler Use this node when a workflow needs try/catch behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "Flow",
+    "description": "Mark try/catch routing, preserve input, and provide catch metadata for routed errors.",
     "logoUrl": "/icons/nodes/try_catch.svg"
   },
   {
     "slug": "retry",
     "displayName": "Retry",
-    "category": "Logic",
-    "description": "Retries a branch on failure up to a maximum number of attempts Use this node when a workflow needs retry behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "Flow",
+    "description": "Pass input through while attaching maxAttempts, delayBetween, and backoff retry settings.",
     "logoUrl": "/icons/nodes/retry.svg"
   },
   {
     "slug": "parallel",
     "displayName": "Parallel",
-    "category": "Logic",
+    "category": "Flow",
     "description": "Pass data through while recording the parallel orchestration mode.",
     "logoUrl": "/icons/nodes/parallel.svg"
   },
@@ -305,14 +312,14 @@ export const nodeDocManifest = [
     "slug": "ai_agent",
     "displayName": "AI Agent",
     "category": "AI",
-    "description": "AI service node for prompt-based text generation and reasoning Use this node when a workflow needs ai agent behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Run a prompt-driven AI agent that extracts user input from workflow data, calls the selected LLM provider, and returns structured response fields.",
     "logoUrl": "/icons/nodes/ai_agent.svg"
   },
   {
     "slug": "ai_chat_model",
     "displayName": "AI Chat Model",
     "category": "AI",
-    "description": "Call Gemini 3.5 Flash directly to generate a response (uses GEMINI_API_KEY) Use this node when a workflow needs ai chat model behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Call the platform Gemini chat path directly and return response plus model while preserving incoming fields.",
     "logoUrl": "/icons/nodes/ai_chat_model.svg"
   },
   {
@@ -388,15 +395,15 @@ export const nodeDocManifest = [
   {
     "slug": "hubspot",
     "displayName": "HubSpot",
-    "category": "Data",
-    "description": "HubSpot CRM operations - create, update, retrieve, or search contacts, companies, deals, tickets, and other objects Use this node when a workflow needs hubspot behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "CRM",
+    "description": "Get, list, create, update, delete, search, or bulk-create HubSpot CRM contacts, companies, deals, and tickets from a workflow.",
     "logoUrl": "/icons/nodes/hubspot.svg"
   },
   {
     "slug": "airtable",
     "displayName": "Airtable",
     "category": "Data",
-    "description": "Read, write, update, or delete records in Airtable bases and tables Use this node when a workflow needs airtable behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "List, get, create, update, upsert, and delete Airtable records. Returns records/count, id/fields, deletedRecords/count, or created/updated counts depending on operation.",
     "logoUrl": "/icons/nodes/airtable.svg"
   },
   {
@@ -437,29 +444,29 @@ export const nodeDocManifest = [
   {
     "slug": "zoho_crm",
     "displayName": "Zoho CRM",
-    "category": "Data",
-    "description": "Zoho CRM operations - work with modules, records, and related lists Use this node when a workflow needs zoho crm behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "CRM",
+    "description": "Get, create, update, delete, search, or upsert Zoho CRM records across standard and custom modules via OAuth2. Only 6 of the 9 dropdown operations are currently implemented.",
     "logoUrl": "/icons/nodes/zoho_crm.svg"
   },
   {
     "slug": "pipedrive",
     "displayName": "Pipedrive",
-    "category": "Data",
-    "description": "Pipedrive CRM operations - manage deals, persons, organizations, and activities Use this node when a workflow needs pipedrive behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "CRM",
+    "description": "Get, list, create, update, delete, or search Pipedrive deals, persons, organizations, and more.",
     "logoUrl": "/icons/nodes/pipedrive.svg"
   },
   {
     "slug": "intuit_smes",
     "displayName": "Intuit - SME'S",
-    "category": "Data",
-    "description": "Intuit SME integration for managing customer data and financial operations via Intuit APIs Use this node when a workflow needs intuit - sme's behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "CRM",
+    "description": "Mock/demo Intuit SME node for prototyping customer and invoice workflow shapes. Does not currently call the real Intuit/QuickBooks API.",
     "logoUrl": "/icons/nodes/intuit_smes.svg"
   },
   {
     "slug": "tally",
     "displayName": "Tally Solutions",
-    "category": "Data",
-    "description": "Interact with Tally ERP / TallyPrime via XML API to fetch or push accounting data Use this node when a workflow needs tally solutions behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "CRM",
+    "description": "Connect directly to Tally ERP / TallyPrime's local XML API gateway to read ledgers, vouchers, stock items, and company info, or create new accounting vouchers.",
     "logoUrl": "/icons/nodes/tally.svg"
   },
   {
@@ -557,7 +564,7 @@ export const nodeDocManifest = [
     "slug": "stop_and_error",
     "displayName": "Stop And Error",
     "category": "Logic",
-    "description": "Stop workflow execution with error message Use this node when a workflow needs stop and error behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Intentionally fail the workflow by throwing ERROR_CODE: message, with no structured success output.",
     "logoUrl": "/icons/nodes/stop_and_error.svg"
   },
   {
@@ -620,57 +627,78 @@ export const nodeDocManifest = [
     "slug": "openai_gpt",
     "displayName": "OpenAI GPT",
     "category": "AI",
-    "description": "OpenAI GPT chat completion (GPT-4, GPT-3.5) Use this node when a workflow needs openai gpt behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Calls OpenAI through the legacy LLM adapter and returns response, model, usage, and finishReason without preserving incoming fields.",
     "logoUrl": "/icons/nodes/openai_gpt.svg"
   },
   {
     "slug": "anthropic_claude",
-    "displayName": "Claude",
+    "displayName": "Anthropic Claude",
     "category": "AI",
-    "description": "Anthropic Claude chat completion Use this node when a workflow needs claude behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Call Anthropic Claude through the legacy LLM adapter and return response, model, usage, and finish reason.",
     "logoUrl": "/icons/nodes/anthropic_claude.svg"
   },
   {
     "slug": "google_gemini",
-    "displayName": "Gemini",
+    "displayName": "Google Gemini",
     "category": "AI",
-    "description": "Google Gemini chat completion Use this node when a workflow needs gemini behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Call Google Gemini through the LLM adapter and return response, model, usage, and finish reason.",
     "logoUrl": "/icons/nodes/google_gemini.svg"
   },
   {
     "slug": "ollama",
     "displayName": "AI Chat (Gemini)",
     "category": "AI",
-    "description": "AI chat completion using Gemini 3.5 Flash (default LLM) Use this node when a workflow needs ai chat (gemini) behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Legacy Ollama slug that delegates to Gemini 3.5 Flash through AI Chat Model; not a local Ollama call.",
     "logoUrl": "/icons/nodes/ollama.svg"
   },
   {
     "slug": "text_summarizer",
     "displayName": "Text Summarizer",
     "category": "AI",
-    "description": "Summarize long text into shorter versions Use this node when a workflow needs text summarizer behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Summarizes text through Gemini and returns the summary in response while preserving incoming fields.",
     "logoUrl": "/icons/nodes/text_summarizer.svg"
   },
   {
     "slug": "sentiment_analyzer",
     "displayName": "Sentiment Analyzer",
     "category": "AI",
-    "description": "Analyze sentiment and emotions in text Use this node when a workflow needs sentiment analyzer behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Analyzes sentiment through Gemini and returns parsed sentiment data inside response, not as top-level fields.",
     "logoUrl": "/icons/nodes/sentiment_analyzer.svg"
   },
   {
     "slug": "chat_model",
     "displayName": "Chat Model",
     "category": "AI",
-    "description": "Chat model connector for AI Agent node (uses Gemini 3.5 Flash by default) Use this node when a workflow needs chat model behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "UI-visible but backend-internal support node that returns static Gemini chat model configuration and does not call an AI provider.",
     "logoUrl": "/icons/nodes/chat_model.svg"
+  },
+  {
+    "slug": "cohere",
+    "displayName": "Cohere",
+    "category": "AI",
+    "description": "Send a prompt to Cohere Command chat models and return generated text plus finish reason and token counts.",
+    "logoUrl": "/icons/nodes/cohere.svg"
+  },
+  {
+    "slug": "huggingface",
+    "displayName": "Hugging Face",
+    "category": "AI",
+    "description": "Call a Hugging Face inference model and return preserved input fields plus success, model, response, output, and error.",
+    "logoUrl": "/icons/nodes/huggingface.svg"
   },
   {
     "slug": "memory",
     "displayName": "Memory",
     "category": "AI",
-    "description": "Memory storage for AI Agent context Use this node when a workflow needs memory behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Pass sessionId, context, and incoming messages forward for AI workflows; current runtime does not persist, retrieve, clear, or search memory.",
     "logoUrl": "/icons/nodes/memory.svg"
+  },
+  {
+    "slug": "mistral",
+    "displayName": "Mistral AI",
+    "category": "AI",
+    "description": "Call Mistral chat completions and return preserved input fields plus success, model, response, inputTokens, outputTokens, and error.",
+    "logoUrl": "/icons/nodes/mistral.svg"
   },
   {
     "slug": "tool",
@@ -682,22 +710,22 @@ export const nodeDocManifest = [
   {
     "slug": "http_post",
     "displayName": "HTTP POST",
-    "category": "Utility",
-    "description": "Send POST requests with JSON data Use this node when a workflow needs http post behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "HTTP & API",
+    "description": "Send workflow data to an external endpoint by rewriting to HTTP Request with method POST.",
     "logoUrl": "/icons/nodes/http_post.svg"
   },
   {
     "slug": "webhook_response",
     "displayName": "Webhook Response",
-    "category": "Utility",
-    "description": "Send response to webhook request Use this node when a workflow needs webhook response behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "HTTP & API",
+    "description": "Return the statusCode, headers, and body intended for an incoming webhook caller.",
     "logoUrl": "/icons/nodes/webhook_response.svg"
   },
   {
     "slug": "graphql",
     "displayName": "GraphQL",
-    "category": "Utility",
-    "description": "Make GraphQL requests Use this node when a workflow needs graphql behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "HTTP & API",
+    "description": "Send GraphQL queries and mutations as HTTP POST requests with variables, headers, operationName, and timeout control.",
     "logoUrl": "/icons/nodes/graphql.svg"
   },
   {
@@ -858,161 +886,161 @@ export const nodeDocManifest = [
     "slug": "mysql",
     "displayName": "MySQL",
     "category": "Data",
-    "description": "MySQL database operations Use this node when a workflow needs mysql behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Run MySQL executeQuery, insert, update, and delete operations with connection fields, SQL parameters, table data, and safe row filters.",
     "logoUrl": "/icons/nodes/mysql.svg"
   },
   {
     "slug": "mongodb",
     "displayName": "MongoDB",
     "category": "Data",
-    "description": "MongoDB database operations Use this node when a workflow needs mongodb behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Run MongoDB driver operations against collections. Supports find, inserts, updates, deletes, and aggregate with runtime outputs such as documents, insertedId, modifiedCount, and deletedCount.",
     "logoUrl": "/icons/nodes/mongodb.svg"
   },
   {
     "slug": "firebase",
     "displayName": "Firebase",
     "category": "Data",
-    "description": "Interact with Firebase Firestore and Realtime Database Use this node when a workflow needs firebase behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Run Firebase Admin SDK operations for Firestore documents/queries and Realtime Database get/set paths with service account credentials.",
     "logoUrl": "/icons/nodes/firebase.svg"
   },
   {
     "slug": "google_cloud_storage",
     "displayName": "Google Cloud Storage",
     "category": "Data",
-    "description": "Interact with Google Cloud Storage buckets (upload, download, delete, list) Use this node when a workflow needs google cloud storage behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Upload, download, delete, and list Google Cloud Storage bucket objects using service account projectId, clientEmail, and privateKey fields.",
     "logoUrl": "/icons/nodes/google_cloud_storage.svg"
   },
   {
     "slug": "redis",
     "displayName": "Redis",
     "category": "Data",
-    "description": "Redis cache operations Use this node when a workflow needs redis behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Read, write, delete, increment, and manage Redis keys, hashes, lists, TTLs, and custom commands from a workflow.",
     "logoUrl": "/icons/nodes/redis.svg"
   },
   {
     "slug": "odoo",
     "displayName": "Odoo",
-    "category": "Data",
-    "description": "Interact with Odoo ERP system (customers, invoices, products, and more) Use this node when a workflow needs odoo behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "CRM",
+    "description": "Search, read, create, update, or delete records in any Odoo model, or call a custom Odoo method, via JSON-RPC.",
     "logoUrl": "/icons/nodes/odoo.svg"
   },
   {
     "slug": "freshdesk",
     "displayName": "Freshdesk",
-    "category": "Data",
-    "description": "Freshdesk support operations Use this node when a workflow needs freshdesk behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "CRM",
+    "description": "Get, list, create, update, or delete Freshdesk tickets, contacts, and companies from a workflow.",
     "logoUrl": "/icons/nodes/freshdesk.svg"
   },
   {
     "slug": "intercom",
     "displayName": "Intercom",
-    "category": "Data",
-    "description": "Intercom messaging operations Use this node when a workflow needs intercom behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "CRM",
+    "description": "List Intercom conversations, fetch one conversation, or reply to a conversation.",
     "logoUrl": "/icons/nodes/intercom.svg"
   },
   {
     "slug": "mailchimp",
     "displayName": "Mailchimp",
-    "category": "Data",
-    "description": "Mailchimp email marketing operations Use this node when a workflow needs mailchimp behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "CRM",
+    "description": "Add or remove a Mailchimp list member, or trigger sending an existing campaign.",
     "logoUrl": "/icons/nodes/mailchimp.svg"
   },
   {
     "slug": "activecampaign",
     "displayName": "ActiveCampaign",
-    "category": "Data",
-    "description": "ActiveCampaign marketing automation Use this node when a workflow needs activecampaign behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "CRM",
+    "description": "Add, update, or delete contacts in ActiveCampaign using your account's API key.",
     "logoUrl": "/icons/nodes/activecampaign.svg"
   },
   {
     "slug": "read_binary_file",
     "displayName": "Read Binary File",
-    "category": "Data",
-    "description": "Read binary files Use this node when a workflow needs read binary file behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "File",
+    "description": "Read a managed workflow file asset or safe backend binary-storage path and return dataBase64 plus file metadata.",
     "logoUrl": "/icons/nodes/read_binary_file.svg"
   },
   {
     "slug": "write_binary_file",
     "displayName": "Write Binary File",
-    "category": "Data",
-    "description": "Write binary files Use this node when a workflow needs write binary file behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "File",
+    "description": "Create a managed workflow file asset from base64, a data URL, or plain text for later read, upload, email, or archive steps.",
     "logoUrl": "/icons/nodes/write_binary_file.svg"
   },
   {
     "slug": "aws_s3",
     "displayName": "AWS S3",
-    "category": "Data",
-    "description": "AWS S3 storage operations Use this node when a workflow needs aws s3 behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "File",
+    "description": "List, download, upload, and delete Amazon S3 objects using bucket, key, prefix, content, and IAM credentials or role-based access.",
     "logoUrl": "/icons/nodes/aws_s3.svg"
   },
   {
     "slug": "dropbox",
     "displayName": "Dropbox",
-    "category": "Data",
-    "description": "Dropbox file operations Use this node when a workflow needs dropbox behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "File",
+    "description": "List, download, upload, and delete Dropbox files using a saved Dropbox OAuth2 connection or direct legacy access token.",
     "logoUrl": "/icons/nodes/dropbox.svg"
   },
   {
     "slug": "onedrive",
     "displayName": "OneDrive",
-    "category": "Data",
-    "description": "OneDrive file operations Use this node when a workflow needs onedrive behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "File",
+    "description": "List, download, upload, and delete Microsoft OneDrive files through Microsoft Graph using path, fileId, and upload content.",
     "logoUrl": "/icons/nodes/onedrive.svg"
   },
   {
     "slug": "ftp",
     "displayName": "FTP",
-    "category": "Data",
-    "description": "FTP file operations Use this node when a workflow needs ftp behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "File",
+    "description": "Transfer files with FTP using get, put, list, and delete operations, host credentials, remote paths, and upload content.",
     "logoUrl": "/icons/nodes/ftp.svg"
   },
   {
     "slug": "sftp",
     "displayName": "SFTP",
-    "category": "Data",
-    "description": "SFTP file operations Use this node when a workflow needs sftp behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "File",
+    "description": "Transfer files securely over SSH/SFTP using get, put, list, and delete with password or private-key authentication.",
     "logoUrl": "/icons/nodes/sftp.svg"
   },
   {
     "slug": "github",
     "displayName": "GitHub",
-    "category": "Data",
-    "description": "GitHub repository operations Use this node when a workflow needs github behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "DevOps",
+    "description": "Run GitHub repository, issue, pull request, branch, commit, release, workflow, and contributor operations through the connected GitHub account.",
     "logoUrl": "/icons/nodes/github.svg"
   },
   {
     "slug": "gitlab",
     "displayName": "GitLab",
-    "category": "Data",
-    "description": "GitLab repository operations Use this node when a workflow needs gitlab behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "DevOps",
+    "description": "Read GitLab issues or create new GitLab issues through the GitLab API. Runtime supports only read/list issues and create issue for this action node.",
     "logoUrl": "/icons/nodes/gitlab.svg"
   },
   {
     "slug": "bitbucket",
     "displayName": "Bitbucket",
-    "category": "Data",
-    "description": "Bitbucket repository operations Use this node when a workflow needs bitbucket behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "DevOps",
+    "description": "Read, create, update, and delete Bitbucket repositories with app-password or OAuth authentication.",
     "logoUrl": "/icons/nodes/bitbucket.svg"
   },
   {
     "slug": "jira",
     "displayName": "Jira",
-    "category": "Data",
-    "description": "Jira issue tracking operations Use this node when a workflow needs jira behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "DevOps",
+    "description": "Create, read, update, delete, search, transition, and comment on Jira Cloud issues through a Jira API-token connection.",
     "logoUrl": "/icons/nodes/jira.svg"
   },
   {
     "slug": "jenkins",
     "displayName": "Jenkins",
-    "category": "Data",
-    "description": "Jenkins CI/CD operations Use this node when a workflow needs jenkins behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "DevOps",
+    "description": "Trigger Jenkins jobs, check build status, or stop running Jenkins builds using Jenkins API-token credentials.",
     "logoUrl": "/icons/nodes/jenkins.svg"
   },
   {
     "slug": "shopify",
     "displayName": "Shopify",
-    "category": "Data",
-    "description": "Shopify store operations Use this node when a workflow needs shopify behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "Ecommerce",
+    "description": "Read, list, create, update, and delete Shopify Admin API resources. Runtime expects generic resource plus operation values; current visual aliases are documented as unsupported.",
     "logoUrl": "/icons/nodes/shopify.svg"
   },
   {
@@ -1025,15 +1053,15 @@ export const nodeDocManifest = [
   {
     "slug": "woocommerce",
     "displayName": "WooCommerce",
-    "category": "Data",
-    "description": "WooCommerce store operations Use this node when a workflow needs woocommerce behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "Ecommerce",
+    "description": "Read, list, create, update, and delete WooCommerce REST API resources. Runtime reads apiKey/apiSecret and generic id, not the current consumerKey/orderId panel fields.",
     "logoUrl": "/icons/nodes/woocommerce.svg"
   },
   {
     "slug": "stripe",
     "displayName": "Stripe",
-    "category": "Data",
-    "description": "Stripe payment processing Use this node when a workflow needs stripe behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "Ecommerce",
+    "description": "Create Stripe PaymentIntents or charges, customers, refunds, subscriptions, invoices, and PaymentIntent lookups with runtime-accurate output shapes.",
     "logoUrl": "/icons/nodes/stripe.svg"
   },
   {
@@ -1046,36 +1074,36 @@ export const nodeDocManifest = [
   {
     "slug": "paypal",
     "displayName": "PayPal",
-    "category": "Data",
-    "description": "PayPal payment processing Use this node when a workflow needs paypal behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "Ecommerce",
+    "description": "Create PayPal Checkout orders and refund PayPal captures. Visible panel operation aliases are currently misaligned with runtime-supported charge/refund values.",
     "logoUrl": "/icons/nodes/paypal.svg"
   },
   {
     "slug": "vercel",
     "displayName": "Vercel",
-    "category": "Data",
-    "description": "Deploy projects and manage deployments on Vercel Use this node when a workflow needs vercel behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "DevOps",
+    "description": "Deploy Vercel projects or list deployments through the Vercel v13 deployments API with structured validation errors.",
     "logoUrl": "/icons/nodes/vercel.svg"
   },
   {
     "slug": "schedulewise",
     "displayName": "ScheduleWise",
-    "category": "Utility",
-    "description": "ScheduleWise appointment scheduling — retrieve, create, update, and delete appointments via the ScheduleWise REST API Use this node when a workflow needs schedulewise behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "HTTP & API",
+    "description": "Read, create, update, and delete ScheduleWise appointments through the ScheduleWise REST API with saved schedulewise credentials or mock mode.",
     "logoUrl": "/icons/nodes/schedulewise.svg"
   },
   {
     "slug": "calendly",
     "displayName": "Calendly",
-    "category": "Data",
-    "description": "Fetch events, event types, scheduled meetings, and user info from Calendly. Use this node when a workflow needs calendly behavior with schema-driven inputs from the CtrlChecks node registry.",
-    "logoUrl": "/icons/nodes/calendly.svg"
+    "category": "Productivity",
+    "description": "Read Calendly user, event type, and scheduled event data through a saved Calendly Personal Access Token connection.",
+    "logoUrl": "/integrations-logos/Calendly.svg"
   },
   {
     "slug": "chargebee",
     "displayName": "Chargebee",
-    "category": "Communication",
-    "description": "Create customers, manage subscriptions, and automate billing with Chargebee. Use this node when a workflow needs chargebee behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "Payment",
+    "description": "Create Chargebee customers, create subscriptions, retrieve customers, and cancel subscriptions. Failures return success:false with a plain error field.",
     "logoUrl": "/icons/nodes/chargebee.svg"
   },
   {
@@ -1131,49 +1159,49 @@ export const nodeDocManifest = [
     "slug": "oracle_database",
     "displayName": "Oracle Database",
     "category": "Data",
-    "description": "Execute SQL and perform select, insert, update, upsert, and delete operations on Oracle Database. Use this node when a workflow needs oracle database behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Run Oracle Database select, insert, update, MERGE upsert, delete/truncate/drop, and custom SQL or PL/SQL with bind parameters.",
     "logoUrl": "/icons/nodes/oracle_database.svg"
   },
   {
     "slug": "sql_server",
     "displayName": "SQL Server",
     "category": "Data",
-    "description": "Connect to and query Microsoft SQL Server databases. Use this node when a workflow needs sql server behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Run T-SQL, insert/update/delete rows, and execute stored procedures on Microsoft SQL Server or Azure SQL.",
     "logoUrl": "/icons/nodes/sql_server.svg"
   },
   {
     "slug": "timescaledb",
     "displayName": "TimescaleDB",
     "category": "Data",
-    "description": "Connect to and query TimescaleDB time-series databases (PostgreSQL extension). Use this node when a workflow needs timescaledb behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Run TimescaleDB/PostgreSQL SQL, table writes, deletes, and time-series helpers such as timeBucket, first, and last.",
     "logoUrl": "/icons/nodes/timescaledb.svg"
   },
   {
     "slug": "contentful",
     "displayName": "Contentful",
-    "category": "Data",
-    "description": "Create, read, update, and delete content entries on any Contentful space. Use this node when a workflow needs contentful behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "CMS",
+    "description": "Create, read, update, and delete Contentful entries through the Content Management API with success/data/error output.",
     "logoUrl": "/icons/nodes/contentful.svg"
   },
   {
     "slug": "wordpress",
     "displayName": "WordPress",
-    "category": "Transformation",
-    "description": "Create, read, update, and delete posts on a WordPress site via the WordPress REST API. Use this node when a workflow needs wordpress behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "CMS",
+    "description": "Create, list, update, and permanently delete WordPress posts through the REST API using Application Password Basic Auth.",
     "logoUrl": "/icons/nodes/wordpress.svg"
   },
   {
     "slug": "zendesk",
     "displayName": "Zendesk",
-    "category": "Data",
-    "description": "Create, read, update, and delete Zendesk support tickets and manage users. Use this node when a workflow needs zendesk behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "CRM",
+    "description": "List, fetch, create, update, and delete Zendesk support tickets, or list users, using HTTP Basic Auth against the Zendesk REST API.",
     "logoUrl": "/icons/nodes/zendesk.svg"
   },
   {
     "slug": "netlify",
     "displayName": "Netlify",
-    "category": "Data",
-    "description": "Deploy sites, manage builds, and query site/deploy data through the Netlify REST API. Use this node when a workflow needs netlify behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "category": "DevOps",
+    "description": "List Netlify sites, inspect sites and deploys, and create deploys through the Netlify REST API.",
     "logoUrl": "/icons/nodes/netlify.svg"
   },
   {
@@ -1187,14 +1215,21 @@ export const nodeDocManifest = [
     "slug": "pinecone",
     "displayName": "Pinecone",
     "category": "Data",
-    "description": "Upsert, query, and delete vectors in a Pinecone vector database index. Use this node when a workflow needs pinecone behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Query, upsert, and delete embedding vectors in a Pinecone index, returning real matches and upsert counts for semantic search workflows.",
     "logoUrl": "/icons/nodes/pinecone.svg"
+  },
+  {
+    "slug": "qdrant",
+    "displayName": "Qdrant",
+    "category": "Data",
+    "description": "Query, upsert, and delete vectors in Qdrant collections for semantic search, RAG, recommendations, and AI memory workflows.",
+    "logoUrl": "/icons/nodes/qdrant.svg"
   },
   {
     "slug": "langchain",
     "displayName": "LangChain",
     "category": "AI",
-    "description": "Orchestrate AI chains and agents using LangChain with configurable LLM providers and tools. Use this node when a workflow needs langchain behavior with schema-driven inputs from the CtrlChecks node registry.",
+    "description": "Call OpenAI or Anthropic through the LangChain node facade and return success, operation, response, steps, and error.",
     "logoUrl": "/icons/nodes/langchain.svg"
   },
   {

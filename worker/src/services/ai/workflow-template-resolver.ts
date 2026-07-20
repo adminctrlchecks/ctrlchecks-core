@@ -158,11 +158,11 @@ export class WorkflowTemplateResolver {
         id: 'form_submission',
         name: 'FORM_SUBMISSION',
         description: 'Form → Database + Notification',
-        requiredNodes: ['form', 'database_write', 'slack_message|email'],
-        structure: 'form → database_write → slack_message/email',
+        requiredNodes: ['form', 'postgresql', 'slack_message|email'],
+        structure: 'form → postgresql → slack_message/email',
         validation: {
           triggers: ['form'],
-          actions: ['database_write', 'slack_message', 'email'],
+          actions: ['postgresql', 'slack_message', 'email'],
           cronRequired: false
         },
         matcher: (intent) => {

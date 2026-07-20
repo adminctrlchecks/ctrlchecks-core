@@ -911,6 +911,7 @@ export class NodeLibrary {
       // Removed: ai_service is now a capability, not a node type
       'outlook',        // ✅ Added: outlook node
       'slack_message',  // "slack" in prompts
+      'slack_trigger',
       'telegram',
       'google_calendar',
       'linkedin',
@@ -1146,6 +1147,10 @@ export class NodeLibrary {
   findNodesByKeywords(keywords: string[]): NodeSchema[] {
     const lowerKeywords = keywords.map(k => k.toLowerCase());
     return Array.from(this.schemas.values()).filter(schema => {
+      if (schema.internalOnly) {
+        return false;
+      }
+
       return lowerKeywords.some(keyword =>
         schema.aiSelectionCriteria.keywords.some(k => k.toLowerCase().includes(keyword)) ||
         schema.description.toLowerCase().includes(keyword) ||
@@ -1167,6 +1172,7 @@ export class NodeLibrary {
     this.addSchema(this.createManualTriggerSchema());
     this.addSchema(this.createIntervalTriggerSchema());
     this.addSchema(this.createChatTriggerSchema());
+    this.addSchema(this.createTelegramTriggerSchema());
     this.addSchema(this.createFormTriggerSchema()); // CRITICAL: Add form trigger schema
     schemaCount += 6;
 
@@ -1181,10 +1187,13 @@ export class NodeLibrary {
     this.addSchema(this.createDatabaseReadSchema());
     this.addSchema(this.createDatabaseWriteSchema());
     this.addSchema(this.createGoogleSheetsSchema());
+    this.addSchema(this.createGoogleSheetsTriggerSchema());
     this.addSchema(this.createGoogleDocSchema());
     this.addSchema(this.createGoogleGmailSchema()); // ✅ Main Gmail node - handles all Gmail operations
+    this.addSchema(this.createGmailTriggerSchema());
     // ❌ REMOVED: createGmailSchema() - duplicate, use google_gmail instead
     this.addSchema(this.createOutlookSchema()); // ✅ Added: outlook node
+    this.addSchema(this.createOutlookTriggerSchema());
     this.addSchema(this.createSalesforceSchema());
     this.addSchema(this.createMicrosoftDynamicsSchema());
     this.addSchema(this.createSapSchema()); // ✅ Added: SAP ERP/CRM node
@@ -1232,6 +1241,7 @@ export class NodeLibrary {
 
     // Output Nodes
     this.addSchema(this.createSlackMessageSchema());
+    this.addSchema(this.createSlackTriggerSchema());
     this.addSchema(this.createEmailSchema());
     this.addSchema(this.createLogOutputSchema());
     this.addSchema(this.createTelegramSchema());
@@ -1253,6 +1263,7 @@ export class NodeLibrary {
     
     // Missing Communication Nodes
     this.addSchema(this.createDiscordSchema());
+    this.addSchema(this.createDiscordTriggerSchema());
     this.addSchema(this.createZoomVideoSchema());
     
     // Missing Data Nodes
@@ -1300,7 +1311,9 @@ export class NodeLibrary {
     
     // Missing Google Nodes
     this.addSchema(this.createGoogleDriveSchema());
+    this.addSchema(this.createGoogleDriveTriggerSchema());
     this.addSchema(this.createGoogleCalendarSchema());
+    this.addSchema(this.createGoogleCalendarTriggerSchema());
     this.addSchema(this.createGoogleContactsSchema());
     this.addSchema(this.createGoogleTasksSchema());
     this.addSchema(this.createGoogleBigQuerySchema());
@@ -1309,6 +1322,7 @@ export class NodeLibrary {
     this.addSchema(this.createSlackWebhookSchema());
     this.addSchema(this.createDiscordWebhookSchema());
     this.addSchema(this.createMicrosoftTeamsSchema());
+    this.addSchema(this.createMicrosoftTeamsTriggerSchema());
     this.addSchema(this.createWhatsappCloudSchema());
     this.addSchema(this.createTwilioSchema());
     this.addSchema(this.createMailgunSchema());
@@ -1322,6 +1336,7 @@ export class NodeLibrary {
     this.addSchema(this.createWhatsappSchema());
     this.addSchema(this.createWhatsappTriggerSchema());
     this.addSchema(this.createInstagramTriggerSchema());
+    this.addSchema(this.createFacebookTriggerSchema());
     
     // Missing Database Nodes
     this.addSchema(this.createMysqlSchema());
@@ -1348,13 +1363,17 @@ export class NodeLibrary {
     
     // Missing DevOps Nodes
     this.addSchema(this.createGithubSchema());
+    this.addSchema(this.createGithubTriggerSchema());
     this.addSchema(this.createGitlabSchema());
+    this.addSchema(this.createGitlabTriggerSchema());
     this.addSchema(this.createBitbucketSchema());
     this.addSchema(this.createJiraSchema());
+    this.addSchema(this.createJiraTriggerSchema());
     this.addSchema(this.createJenkinsSchema());
     
     // Missing E-commerce Nodes
     this.addSchema(this.createShopifySchema());
+    this.addSchema(this.createShopifyTriggerSchema());
     this.addSchema(this.createWooCommerceSchema());
     this.addSchema(this.createStripeSchema());
     this.addSchema(this.createPaypalSchema());
@@ -1370,6 +1389,8 @@ export class NodeLibrary {
     this.addSchema(this.createCalendlySchema());
     this.addSchema(this.createChargebeeSchema());
     this.addSchema(this.createTypeformSchema());
+    this.addSchema(this.createTypeformTriggerSchema());
+    this.addSchema(this.createTallyTriggerSchema());
     this.addSchema(this.createXeroSchema());
     this.addSchema(this.createOracleDatabaseSchema());
     this.addSchema(this.createSqlServerSchema());
@@ -1391,7 +1412,10 @@ export class NodeLibrary {
     this.addSchema(this.createHuggingFaceSchema());
     this.addSchema(this.createMistralSchema());
     this.addSchema(this.createLinearSchema());
+    this.addSchema(this.createLinearTriggerSchema());
     this.addSchema(this.createTrelloSchema());
+    this.addSchema(this.createTrelloTriggerSchema());
+    this.addSchema(this.createStripeTriggerSchema());
   }
 
   private addSchema(schema: NodeSchema): void {
@@ -1911,6 +1935,10 @@ export class NodeLibrary {
             description: 'Response headers',
             default: { 'Content-Type': 'application/json' },
           },
+          responseBody: {
+            type: 'object',
+            description: 'Visible panel alias for response body data; runtime normalizes this to body',
+          },
           body: {
             type: 'object',
             description: 'Response body data',
@@ -1946,6 +1974,12 @@ export class NodeLibrary {
         },
       ],
       validationRules: [],
+      outputType: 'object',
+      outputSchema: {
+        statusCode: { type: 'number', description: 'HTTP status code returned by the node' },
+        headers: { type: 'object', description: 'Response headers returned by the node' },
+        body: { type: 'object', description: 'Response payload returned by the node' },
+      },
     };
   }
 
@@ -2098,6 +2132,7 @@ export class NodeLibrary {
       label: 'Database Read',
       category: 'database',
       description: 'Read data from database using SQL queries',
+      internalOnly: true,
       configSchema: {
         required: ['query'],
         optional: {
@@ -2147,6 +2182,7 @@ export class NodeLibrary {
       label: 'Database Write',
       category: 'database',
       description: 'Execute SQL queries on database (INSERT, UPDATE, DELETE)',
+      internalOnly: true,
       configSchema: {
         required: ['query'],
         optional: {
@@ -2400,6 +2436,89 @@ export class NodeLibrary {
         spreadsheetId: { type: 'string', description: 'ID of the spreadsheet' },
         updatedRange: { type: 'string', description: 'A1 notation of the range affected (write/append operations)' },
         updatedRows: { type: 'number', description: 'Number of rows updated (write/append operations)' },
+      },
+    };
+  }
+
+  private createGoogleSheetsTriggerSchema(): NodeSchema {
+    return {
+      type: 'google_sheets_trigger',
+      label: 'Google Sheets Trigger',
+      category: 'triggers',
+      description: 'Start workflows when rows are added or updated in a Google Sheet. Polled every ~2 minutes since Google Sheets has no native push notification for cell changes.',
+      configSchema: {
+        required: ['spreadsheetId'],
+        optional: {
+          sheetName: {
+            type: 'string',
+            description: 'Sheet/tab name to watch. Defaults to the first sheet.',
+          },
+          hasHeaderRow: {
+            type: 'boolean',
+            description: 'Whether the first row contains column headers',
+            default: true,
+          },
+          eventTypes: {
+            type: 'array',
+            description: 'Row change types to accept',
+            default: ['row_added'],
+            examples: ['row_added', 'row_updated'],
+          },
+          query: {
+            type: 'string',
+            description: 'Optional keyword filter matched against row contents',
+          },
+        },
+      },
+      aiSelectionCriteria: {
+        whenToUse: [
+          'Start a workflow when a new row is added to a Google Sheet',
+          'React to updated rows in a spreadsheet used as a lightweight database or form log',
+        ],
+        whenNotToUse: [
+          'Reading or writing sheet data from an existing workflow (use google_sheets)',
+          'Real-time sub-minute reactions — this trigger polls every ~2 minutes',
+        ],
+        keywords: [
+          'google sheets trigger', 'new row in google sheets', 'new spreadsheet row',
+          'row added to sheet', 'spreadsheet trigger', 'sheet polling',
+        ],
+        useCases: ['Form-response-style row processing', 'Lightweight database triggers', 'Spreadsheet-driven automation'],
+        intentDescription: 'Google Sheets Trigger polls a watched spreadsheet every ~2 minutes for newly added or updated rows, since Google Sheets does not offer real-time push notifications for cell changes the way Gmail or Calendar do. It normalizes each row into $json using the header row as field names.',
+        intentCategories: ['trigger', 'google_sheets', 'google', 'spreadsheet', 'polling'],
+      },
+      commonPatterns: [
+        {
+          name: 'sheets_new_row_ai',
+          description: 'Process new spreadsheet rows with AI',
+          config: { eventTypes: ['row_added'], hasHeaderRow: true },
+        },
+      ],
+      validationRules: [],
+      capabilities: ['trigger.poll', 'google_sheets.receive', 'row.receive'],
+      providers: ['google_sheets', 'google'],
+      keywords: [
+        'google sheets trigger', 'new row in google sheets', 'new spreadsheet row', 'row added to sheet',
+      ],
+      outputType: 'object',
+      outputSchema: {
+        eventId: { type: 'string' },
+        eventType: { type: 'string' },
+        source: { type: 'string' },
+        timestamp: { type: 'string' },
+        spreadsheetId: { type: 'string' },
+        sheetName: { type: 'string' },
+        rowNumber: { type: 'number' },
+        values: { type: 'array' },
+        row: { type: 'object' },
+        raw: { type: 'object' },
+      },
+      schemaVersion: '1.0.0',
+      nodeCapability: {
+        inputType: ['object'],
+        outputType: 'object',
+        acceptsArray: false,
+        producesArray: false,
       },
     };
   }
@@ -3305,35 +3424,35 @@ export class NodeLibrary {
       type: 'timeout',
       label: 'Timeout',
       category: 'flow',
-      description: 'Fails the workflow if execution takes longer than specified time',
+      description: 'Routes the workflow to success or timeout based on elapsed workflow time',
       configSchema: {
         required: ['limit'],
         optional: {
           limit: {
             type: 'number',
-            description: 'Maximum allowed time (in milliseconds)',
+            description: 'Maximum allowed elapsed workflow time in milliseconds',
             examples: [5000, 10000, '{{$json.timeout}}'],
           },
         },
       },
       aiSelectionCriteria: {
         whenToUse: [
-          'Prevent long-running operations',
-          'Ensure external API calls respond quickly',
-          'Add SLA enforcement',
+          'Route when the workflow has already taken too long',
+          'Send timeout fallback alerts',
+          'Add elapsed-time SLA branching',
         ],
         whenNotToUse: [
-          'If you need exact timing, use Delay',
-          'For indefinite waits, not suitable',
+          'If you need to pause, use Delay',
+          'If you need to cancel a single API request in progress',
         ],
         keywords: [
           'timeout', 'timeout node', 'timeout limit', 'timeout deadline',
           'timeout abort', 'timeout max', 'timeout execution', 'timeout time',
           'execution timeout', 'operation timeout', 'timeout error', 'timeout stop'
         ],
-        useCases: ['API call timeout', 'Database query timeout', 'Step timeout'],
-        intentDescription: 'Timeout node that fails workflow execution if it takes longer than the specified time limit. Prevents long-running operations, ensures external API calls respond quickly, and enforces SLA requirements. Used for API call timeouts, database query timeouts, and step-level timeout enforcement.',
-        intentCategories: ['timeout', 'execution_control', 'sla_enforcement', 'error_prevention'],
+        useCases: ['SLA fallback branch', 'Elapsed workflow time check', 'Deadline routing'],
+        intentDescription: 'Timeout node that compares elapsed workflow time with a positive millisecond limit and routes to success or timeout. It emits elapsedMs, limitMs, timedOut, originalInput, and routing metadata; it does not pause execution or cancel an in-flight API request.',
+        intentCategories: ['timeout', 'flow_control', 'sla_routing', 'deadline_handling'],
       },
       commonPatterns: [
         {
@@ -3351,9 +3470,11 @@ export class NodeLibrary {
       ],
       outputType: 'object',
       outputSchema: {
-        success: { type: 'boolean' },
         timedOut: { type: 'boolean' },
         elapsedMs: { type: 'number' },
+        limitMs: { type: 'number' },
+        originalInput: { type: 'object' },
+        __routing: { type: 'object' },
       },
       schemaVersion: '1.0.0',
       keywords: [
@@ -3370,7 +3491,7 @@ export class NodeLibrary {
       type: 'return',
       label: 'Return',
       category: 'flow',
-      description: 'Stops workflow execution and returns the specified data',
+      description: 'Stops workflow execution and returns data under returnedValue',
       configSchema: {
         required: [],
         optional: {
@@ -3420,8 +3541,9 @@ export class NodeLibrary {
       validationRules: [],
       outputType: 'object',
       outputSchema: {
-        value: { type: 'any' },
-        input: { type: 'object' },
+        success: { type: 'boolean' },
+        __return: { type: 'boolean' },
+        returnedValue: { type: 'any' },
       },
       schemaVersion: '1.0.0',
       keywords: [
@@ -3508,7 +3630,7 @@ export class NodeLibrary {
       type: 'try_catch',
       label: 'Try/Catch',
       category: 'flow',
-      description: 'Executes a branch and catches errors, routing to error handler',
+      description: 'Marks try/catch routing, preserves input, and lets the engine route errors to catch handling',
       configSchema: {
         required: [],
         optional: {},
@@ -3529,7 +3651,7 @@ export class NodeLibrary {
           'catch block', 'try catch handle', 'try catch error handle', 'try catch block'
         ],
         useCases: ['API call error handling', 'Database operation fallback'],
-        intentDescription: 'Try/catch node that executes a branch and catches errors, routing execution to an error handler. Handles potential errors gracefully, provides fallback logic, and logs errors without stopping workflow execution. Used for API call error handling, database operation fallbacks, and graceful error recovery.',
+        intentDescription: 'Try/catch node that marks try routing, preserves input for the try branch, and gives the workflow engine metadata for catch routing when downstream work fails. Connected service nodes perform the protected work.',
         intentCategories: ['error_handling', 'exception_handling', 'error_recovery', 'fault_tolerance'],
       },
       commonPatterns: [
@@ -3542,8 +3664,9 @@ export class NodeLibrary {
       validationRules: [],
       outputType: 'object',
       outputSchema: {
-        success: { type: 'boolean' },
+        __routing: { type: 'object' },
         error: { type: 'string', optional: true },
+        errorType: { type: 'string', optional: true },
       },
       schemaVersion: '1.0.0',
       keywords: [
@@ -3560,7 +3683,7 @@ export class NodeLibrary {
       type: 'retry',
       label: 'Retry',
       category: 'flow',
-      description: 'Retries a branch on failure up to a maximum number of attempts',
+      description: 'Passes input through while attaching retry settings for orchestration',
       configSchema: {
         required: ['maxAttempts'],
         optional: {
@@ -3589,9 +3712,9 @@ export class NodeLibrary {
       },
       aiSelectionCriteria: {
         whenToUse: [
-          'Handle transient failures',
-          'Improve reliability of external calls',
-          'When operations may fail intermittently',
+          'Record retry policy for transient failures',
+          'Attach retry settings before external calls',
+          'Expose retry configuration to workflow metadata',
         ],
         whenNotToUse: [
           'If operation never succeeds on retry',
@@ -3603,7 +3726,7 @@ export class NodeLibrary {
           'retry on error', 'retry on fail', 'retry operation', 'retry execution'
         ],
         useCases: ['API retry', 'Database retry on deadlock'],
-        intentDescription: 'Retry node that retries a branch on failure up to a maximum number of attempts with configurable delays and backoff strategies. Handles transient failures, improves reliability of external calls, and manages intermittent operation failures. Used for API retries, database retries on deadlocks, and improving workflow reliability.',
+        intentDescription: 'Retry node that forwards object input while attaching attempts, maxAttempts, delayBetween, and backoff. Actual branch replay is handled by workflow orchestration; this node does not rerun the previous node by itself.',
         intentCategories: ['retry_logic', 'error_recovery', 'reliability', 'fault_tolerance'],
       },
       commonPatterns: [
@@ -3622,9 +3745,10 @@ export class NodeLibrary {
       ],
       outputType: 'object',
       outputSchema: {
-        success: { type: 'boolean' },
         attempts: { type: 'number' },
-        lastError: { type: 'string', optional: true },
+        maxAttempts: { type: 'number' },
+        delayBetween: { type: 'number' },
+        backoff: { type: 'string' },
       },
       schemaVersion: '1.0.0',
       keywords: [
@@ -3641,7 +3765,7 @@ export class NodeLibrary {
       type: 'parallel',
       label: 'Parallel',
       category: 'flow',
-      description: 'Runs multiple branches concurrently and waits for all to complete',
+      description: 'Passes data through while recording the parallel orchestration mode',
       configSchema: {
         required: [],
         optional: {
@@ -3658,9 +3782,9 @@ export class NodeLibrary {
       },
       aiSelectionCriteria: {
         whenToUse: [
-          'Perform independent tasks simultaneously',
-          'Speed up workflow by parallelizing',
-          'Fan-out/fan-in pattern',
+          'Record parallel branch orchestration mode',
+          'Mark a fan-out point in generated workflows',
+          'Pass data toward connected branch wiring',
         ],
         whenNotToUse: [
           'If branches depend on each other',
@@ -3671,8 +3795,8 @@ export class NodeLibrary {
           'parallel process', 'parallel concurrent', 'parallel simultaneous',
           'run parallel', 'execute parallel', 'parallel fork', 'parallel join'
         ],
-        useCases: ['Parallel API calls', 'Batch processing'],
-        intentDescription: 'Parallel node that runs multiple branches concurrently and waits for all to complete (or first to complete in race mode). Performs independent tasks simultaneously, speeds up workflows by parallelizing operations, and implements fan-out/fan-in patterns. Used for parallel API calls, batch processing, and concurrent task execution.',
+        useCases: ['Parallel branch marker', 'Fan-out workflow wiring'],
+        intentDescription: 'Parallel node that forwards object input, records mode as all or race, and returns an empty results placeholder. Actual branch fan-out/fan-in is handled by workflow engine wiring and connected merge nodes.',
         intentCategories: ['parallel_execution', 'concurrency', 'performance_optimization', 'fan_out_fan_in'],
       },
       commonPatterns: [
@@ -3685,7 +3809,7 @@ export class NodeLibrary {
       validationRules: [],
         outputType: 'object',
         outputSchema: {
-          success: { type: 'boolean' },
+          mode: { type: 'string' },
           results: { type: 'array' },
         },
       schemaVersion: '1.0.0',
@@ -4037,6 +4161,12 @@ export class NodeLibrary {
             type: 'string',
             description: 'Bot icon emoji override, if the Slack app allows customized bot icons',
           },
+          threadTs: {
+            type: 'string',
+            description: 'Optional Slack thread timestamp. Use {{$json.threadTs}} or {{$json.messageTs}} to reply to a trigger thread.',
+            examples: ['{{$json.threadTs}}'],
+            fillMode: { default: 'buildtime_ai_once', supportsRuntimeAI: true, supportsBuildtimeAI: true },
+          },
         },
       },
       aiSelectionCriteria: {
@@ -4070,9 +4200,110 @@ export class NodeLibrary {
         ok: { type: 'boolean', description: 'Whether the message was sent successfully' },
         channel: { type: 'string', description: 'Channel the message was sent to' },
         ts: { type: 'string', description: 'Slack message timestamp (unique message ID)' },
+        threadTs: { type: 'string', description: 'Thread timestamp used for replies, when supplied' },
         messageId: { type: 'string', description: 'Unique identifier for the sent message' },
         success: { type: 'boolean', description: 'Success flag for the send operation' },
       },
+    };
+  }
+
+  private createSlackTriggerSchema(): NodeSchema {
+    return {
+      type: 'slack_trigger',
+      label: 'Slack Trigger',
+      category: 'triggers',
+      description: 'Start a workflow when Slack sends an app mention, message, slash command, or interaction callback.',
+      configSchema: {
+        required: [],
+        optional: {
+          connectionId: {
+            type: 'string',
+            description: 'Saved Slack OAuth connection. If blank, CtrlChecks uses the default active Slack connection.',
+            examples: ['slack_oauth_123'],
+          },
+          eventTypes: {
+            type: 'array',
+            description: 'Slack events to accept from Slack webhooks.',
+            default: ['app_mention', 'message', 'slash_command', 'interaction'],
+            examples: [['app_mention', 'message'], ['slash_command'], ['interaction']],
+          },
+          channelIds: {
+            type: 'string',
+            description: 'Optional comma-separated Slack channel IDs allowed to trigger this workflow.',
+            examples: ['C0123456789,C9876543210'],
+          },
+          allowedUserIds: {
+            type: 'string',
+            description: 'Optional comma-separated Slack user IDs allowed to trigger this workflow.',
+            examples: ['U0123456789,U9876543210'],
+          },
+          commandFilter: {
+            type: 'string',
+            description: 'Optional slash command filter. Leave blank to accept any slash command routed to this URL.',
+            examples: ['/support'],
+          },
+          teamId: {
+            type: 'string',
+            description: 'Optional Slack workspace/team ID filter.',
+            examples: ['T0123456789'],
+          },
+          signingSecret: {
+            type: 'string',
+            description: 'Optional Slack app signing secret fallback. Prefer the saved Slack connection or SLACK_SIGNING_SECRET.',
+          },
+          validateSignature: {
+            type: 'boolean',
+            description: 'Validate Slack X-Slack-Signature and timestamp before starting the workflow.',
+            default: true,
+          },
+        },
+      },
+      aiSelectionCriteria: {
+        whenToUse: [
+          'Workflow should start when someone mentions the Slack app',
+          'User wants a Slack bot or support assistant',
+          'Slack slash command or interactive callback should trigger automation',
+        ],
+        whenNotToUse: [
+          'Only sending a Slack message (use Slack action node)',
+          'Incoming Discord, Telegram, or Teams messages',
+        ],
+        keywords: [
+          'slack trigger', 'slack webhook', 'slack app mention',
+          'when someone mentions me in slack', 'slack slash command',
+          'slack interaction', 'incoming slack message', 'receive slack message',
+          'slack chatbot', 'slack bot trigger',
+        ],
+        useCases: ['Slack AI assistant', 'Slack support command', 'Slack interaction routing'],
+        intentDescription: 'Slack Trigger starts a workflow from Slack Events API, slash commands, and interactivity callbacks, normalizing channelId, userId, text, threadTs, messageTs, command, responseUrl, triggerId, and raw for downstream AI Agent and Slack reply nodes.',
+        intentCategories: ['trigger', 'slack', 'webhook', 'messaging', 'chatbot', 'real_time_messaging'],
+      },
+      commonPatterns: [
+        {
+          name: 'slack_ai_thread_reply',
+          description: 'Slack Trigger -> AI Agent -> Slack Message in the same channel/thread',
+          config: {
+            eventTypes: ['app_mention', 'message'],
+            channelIds: '',
+            allowedUserIds: '',
+          },
+        },
+        {
+          name: 'slack_slash_command_router',
+          description: 'Slack Trigger -> AI Agent or router -> Slack Message',
+          config: {
+            eventTypes: ['slash_command'],
+            commandFilter: '/support',
+          },
+        },
+      ],
+      validationRules: [],
+      capabilities: ['slack.receive', 'message.receive', 'trigger.webhook', 'slack.command', 'slack.interaction'],
+      providers: ['slack'],
+      keywords: [
+        'slack', 'slack trigger', 'slack webhook', 'slack app mention',
+        'slack slash command', 'slack interaction', 'slack chatbot',
+      ],
     };
   }
 
@@ -4380,6 +4611,99 @@ export class NodeLibrary {
   // Use google_gmail node instead, which supports all Gmail operations (send, list, get, search)
   // The resolver maps 'gmail' → 'google_gmail' automatically
 
+  private createGmailTriggerSchema(): NodeSchema {
+    return {
+      type: 'gmail_trigger',
+      label: 'Gmail Trigger',
+      category: 'triggers',
+      description: 'Start workflows from new Gmail messages or label changes via Google Cloud Pub/Sub push notifications',
+      configSchema: {
+        required: ['pubsubTopic'],
+        optional: {
+          eventTypes: {
+            type: 'array',
+            description: 'Gmail history event types to accept',
+            default: ['message_added'],
+            examples: ['message_added', 'label_added', 'label_removed'],
+          },
+          labelIds: {
+            type: 'string',
+            description: 'Comma-separated Gmail label IDs to filter on',
+            examples: ['INBOX', 'IMPORTANT'],
+          },
+          query: {
+            type: 'string',
+            description: 'Optional keyword filter matched against subject, sender, and snippet',
+          },
+          validateAuth: {
+            type: 'boolean',
+            description: 'Validate Google-signed Pub/Sub push OIDC tokens or a configured shared secret',
+            default: true,
+          },
+        },
+      },
+      aiSelectionCriteria: {
+        whenToUse: [
+          'Start a workflow when a new Gmail message arrives',
+          'React to new emails in a specific Gmail label or inbox',
+          'Route incoming Gmail messages to an AI agent or downstream automation',
+        ],
+        whenNotToUse: [
+          'Sending an email from an existing workflow (use google_gmail)',
+          'Outlook or other non-Gmail mailboxes',
+        ],
+        keywords: [
+          'gmail trigger', 'new email trigger', 'new gmail message',
+          'incoming email', 'incoming gmail message', 'email received trigger',
+          'gmail watch', 'gmail pubsub',
+        ],
+        useCases: ['Inbox automation', 'Support ticket creation from email', 'Email-triggered AI replies'],
+        intentDescription: 'Gmail Trigger starts a workflow when a watched Gmail mailbox receives a new message or label change, delivered through Google Cloud Pub/Sub push notifications. It validates Google-signed push tokens, normalizes message data into $json, and lets downstream nodes reply or process the message.',
+        intentCategories: ['trigger', 'gmail', 'google', 'email', 'communication'],
+      },
+      commonPatterns: [
+        {
+          name: 'gmail_ai_triage',
+          description: 'Triage new Gmail messages with AI',
+          config: { eventTypes: ['message_added'] },
+        },
+      ],
+      validationRules: [],
+      capabilities: ['trigger.webhook', 'gmail.receive', 'message.receive'],
+      providers: ['gmail', 'google'],
+      keywords: [
+        'gmail trigger', 'new email trigger', 'new gmail message', 'incoming gmail message',
+      ],
+      outputType: 'object',
+      outputSchema: {
+        eventId: { type: 'string' },
+        eventType: { type: 'string' },
+        source: { type: 'string' },
+        userId: { type: 'string' },
+        username: { type: 'string' },
+        text: { type: 'string' },
+        timestamp: { type: 'string' },
+        emailAddress: { type: 'string' },
+        historyId: { type: 'string' },
+        messageId: { type: 'string' },
+        threadId: { type: 'string' },
+        subject: { type: 'string' },
+        from: { type: 'string' },
+        to: { type: 'string' },
+        snippet: { type: 'string' },
+        labelIds: { type: 'array' },
+        raw: { type: 'object' },
+      },
+      schemaVersion: '1.0.0',
+      nodeCapability: {
+        inputType: ['object'],
+        outputType: 'object',
+        acceptsArray: false,
+        producesArray: false,
+      },
+    };
+  }
+
   private createEmailSchema(): NodeSchema {
     return {
       type: 'email',
@@ -4632,6 +4956,99 @@ export class NodeLibrary {
     };
   }
 
+  private createOutlookTriggerSchema(): NodeSchema {
+    return {
+      type: 'outlook_trigger',
+      label: 'Outlook Trigger',
+      category: 'triggers',
+      description: 'Start workflows from new Outlook email or calendar events via Microsoft Graph change notifications',
+      configSchema: {
+        required: [],
+        optional: {
+          resource: {
+            type: 'string',
+            description: 'Which Outlook resource to watch',
+            default: 'mail',
+            examples: ['mail', 'calendar'],
+          },
+          changeTypes: {
+            type: 'array',
+            description: 'Graph change types to accept',
+            default: ['created'],
+            examples: ['created', 'updated'],
+          },
+          folderName: {
+            type: 'string',
+            description: 'Mail folder to watch (mail resource only)',
+            examples: ['Inbox'],
+          },
+          query: {
+            type: 'string',
+            description: 'Optional keyword filter matched against subject, sender, and snippet',
+          },
+        },
+      },
+      aiSelectionCriteria: {
+        whenToUse: [
+          'Start a workflow when a new Outlook email arrives',
+          'React to new Outlook calendar events or invites',
+          'Route incoming Outlook messages to an AI agent or downstream automation',
+        ],
+        whenNotToUse: [
+          'Sending an email from an existing workflow (use outlook)',
+          'Gmail or other non-Outlook mailboxes',
+        ],
+        keywords: [
+          'outlook trigger', 'new outlook email', 'new outlook message', 'incoming outlook email',
+          'outlook calendar trigger', 'new calendar invite', 'outlook subscription', 'microsoft graph webhook',
+        ],
+        useCases: ['Inbox automation', 'Calendar-triggered automation', 'Email-triggered AI replies'],
+        intentDescription: 'Outlook Trigger starts a workflow when a watched Outlook mailbox or calendar receives a new item, delivered through Microsoft Graph change notifications. It validates the Graph subscription clientState, normalizes message/event data into $json, and lets downstream nodes reply or process the item.',
+        intentCategories: ['trigger', 'outlook', 'microsoft', 'email', 'calendar', 'communication'],
+      },
+      commonPatterns: [
+        {
+          name: 'outlook_ai_triage',
+          description: 'Triage new Outlook messages with AI',
+          config: { resource: 'mail', changeTypes: ['created'] },
+        },
+      ],
+      validationRules: [],
+      capabilities: ['trigger.webhook', 'outlook.receive', 'message.receive'],
+      providers: ['outlook', 'microsoft'],
+      keywords: [
+        'outlook trigger', 'new outlook email', 'new outlook message', 'outlook calendar trigger',
+      ],
+      outputType: 'object',
+      outputSchema: {
+        eventId: { type: 'string' },
+        eventType: { type: 'string' },
+        source: { type: 'string' },
+        userId: { type: 'string' },
+        username: { type: 'string' },
+        text: { type: 'string' },
+        timestamp: { type: 'string' },
+        resourceId: { type: 'string' },
+        subject: { type: 'string' },
+        from: { type: 'string' },
+        to: { type: 'string' },
+        snippet: { type: 'string' },
+        conversationId: { type: 'string' },
+        start: { type: 'string' },
+        end: { type: 'string' },
+        attendees: { type: 'array' },
+        raw: { type: 'object' },
+      },
+      schemaVersion: '1.0.0',
+      nodeCapability: {
+        inputType: ['object'],
+        outputType: 'object',
+        acceptsArray: false,
+        producesArray: false,
+      },
+    };
+  }
+
   private createTelegramSchema(): NodeSchema {
     return {
       type: 'telegram',
@@ -4640,8 +5057,19 @@ export class NodeLibrary {
       description: 'Send messages to Telegram chats, groups, or channels using a bot connection.',
       configSchema: {
         // Only user-facing config fields that should block execution when missing
-        required: ['chatId', 'messageType'],
+        required: ['chatId'],
         optional: {
+          operation: {
+            type: 'string',
+            description: 'Telegram operation to perform',
+            default: 'send_message',
+            examples: ['send_message', 'send_photo', 'edit_message'],
+            options: [
+              { label: 'Send Message', value: 'send_message' },
+              { label: 'Send Photo', value: 'send_photo' },
+              { label: 'Edit Message', value: 'edit_message' },
+            ],
+          },
           // Bot token is credential-owned: it is resolved from the selected Telegram Bot
           // Token connection at execution time (see PROVIDER_CREDENTIAL_MAP / execute-workflow.ts
           // case 'telegram'), never declared as a normal config field here.
@@ -4660,6 +5088,12 @@ export class NodeLibrary {
             type: 'string',
             description: 'Message text (required when messageType is "text")',
             fillMode: { default: 'buildtime_ai_once', supportsRuntimeAI: true, supportsBuildtimeAI: true },
+          },
+          text: {
+            type: 'string',
+            description: 'Alias for message text. Supports {{$json.chatId}} workflows and AI Agent replies.',
+            examples: ['{{$json.reply || $json.aiResponse || $json.message || "Hello"}}'],
+            fillMode: { default: 'runtime_ai', supportsRuntimeAI: true, supportsBuildtimeAI: true },
           },
           parseMode: {
             type: 'string',
@@ -4683,6 +5117,10 @@ export class NodeLibrary {
             type: 'number',
             description: 'Message ID to reply to',
           },
+          editMessageId: {
+            type: 'number',
+            description: 'Message ID to edit when operation is edit_message',
+          },
           replyMarkup: {
             type: 'object',
             description: 'Reply markup JSON (inline keyboard, reply keyboard, etc.)',
@@ -4704,6 +5142,70 @@ export class NodeLibrary {
           },
         },
       },
+      operationContracts: [
+        {
+          operation: 'send_message',
+          label: 'Send Message',
+          requiredFields: ['chatId', 'message'],
+          optionalFields: ['operation', 'parseMode', 'disableWebPagePreview', 'replyToMessageId', 'replyMarkup', 'disableNotification', 'protectContent'],
+          forbiddenFields: ['botToken', 'apiKey', 'token'],
+          emptyValuePolicy: { chatId: 'invalid', message: 'invalid' },
+          fieldSourcePolicy: {
+            chatId: { credentialForbidden: true },
+            message: { credentialForbidden: true },
+          },
+          runtimeAiPolicy: {
+            chatId: { allowed: true, required: true },
+            message: { allowed: true, required: true },
+          },
+          credentialProviders: ['telegram'],
+          outputFields: ['success', 'operation', 'chatId', 'messageId', 'data', 'raw'],
+          legacyAliases: ['send', 'sendMessage', 'text'],
+          status: 'implemented',
+        },
+        {
+          operation: 'send_photo',
+          label: 'Send Photo',
+          requiredFields: ['chatId', 'mediaUrl'],
+          optionalFields: ['operation', 'caption', 'parseMode', 'replyToMessageId', 'replyMarkup', 'disableNotification', 'protectContent'],
+          forbiddenFields: ['botToken', 'apiKey', 'token'],
+          emptyValuePolicy: { chatId: 'invalid', mediaUrl: 'invalid' },
+          fieldSourcePolicy: {
+            chatId: { credentialForbidden: true },
+            mediaUrl: { credentialForbidden: true },
+          },
+          runtimeAiPolicy: {
+            chatId: { allowed: true, required: true },
+            mediaUrl: { allowed: true, required: true },
+          },
+          credentialProviders: ['telegram'],
+          outputFields: ['success', 'operation', 'chatId', 'messageId', 'data', 'raw'],
+          legacyAliases: ['photo', 'sendPhoto'],
+          status: 'implemented',
+        },
+        {
+          operation: 'edit_message',
+          label: 'Edit Message',
+          requiredFields: ['chatId', 'editMessageId', 'message'],
+          optionalFields: ['operation', 'parseMode', 'disableWebPagePreview', 'replyMarkup'],
+          forbiddenFields: ['botToken', 'apiKey', 'token'],
+          emptyValuePolicy: { chatId: 'invalid', editMessageId: 'invalid', message: 'invalid' },
+          fieldSourcePolicy: {
+            chatId: { credentialForbidden: true },
+            editMessageId: { credentialForbidden: true },
+            message: { credentialForbidden: true },
+          },
+          runtimeAiPolicy: {
+            chatId: { allowed: true, required: true },
+            editMessageId: { allowed: true, required: true },
+            message: { allowed: true, required: true },
+          },
+          credentialProviders: ['telegram'],
+          outputFields: ['success', 'operation', 'chatId', 'messageId', 'data', 'raw'],
+          legacyAliases: ['edit', 'editMessageText'],
+          status: 'implemented',
+        },
+      ],
       aiSelectionCriteria: {
         whenToUse: [
           'User mentions Telegram notifications',
@@ -5118,6 +5620,19 @@ export class NodeLibrary {
             default: 'gemini-3.5-flash',
             examples: ['gemini-3.5-flash', 'gemini-3.1-pro-preview', 'claude-3-5-sonnet', 'gpt-4o'],
           },
+          systemPrompt: {
+            type: 'string',
+            description: 'System instructions for the agent. If blank, runtime uses an automation-agent default or chatbot-specific default.',
+          },
+          temperature: { type: 'number', description: 'Sampling temperature passed to the model adapter', default: 0.7 },
+          maxTokens: { type: 'number', description: 'Maximum response tokens requested from the model', default: 2000 },
+          topP: { type: 'number', description: 'Legacy UI field parsed but not currently passed to the model adapter', default: 1.0 },
+          frequencyPenalty: { type: 'number', description: 'Legacy UI field parsed but not currently passed to the model adapter', default: 0.0 },
+          presencePenalty: { type: 'number', description: 'Legacy UI field parsed but not currently passed to the model adapter', default: 0.0 },
+          timeoutLimit: { type: 'number', description: 'Milliseconds before one model attempt times out', default: 30000 },
+          retryCount: { type: 'number', description: 'Number of retry attempts after a failed model call', default: 3 },
+          outputFormat: { type: 'string', description: 'Output packaging: text, json, keyvalue, or markdown', default: 'text' },
+          includeReasoning: { type: 'boolean', description: 'Include provider/model runtime metadata in reasoning', default: false },
         },
       },
       aiSelectionCriteria: {
@@ -5179,9 +5694,15 @@ export class NodeLibrary {
           },
           responseFormat: {
             type: 'string',
-            description: 'Preferred response format',
+            description: 'Preferred response format. Runtime treats json specially and otherwise returns text.',
             default: 'text',
-            examples: ['text', 'json', 'markdown'],
+            examples: ['text', 'json'],
+          },
+          model: {
+            type: 'string',
+            description: 'Visible UI selector; current runtime forces gemini-3.5-flash for this node',
+            default: 'gemini-3.5-flash',
+            examples: ['gemini-3.5-flash'],
           },
         },
       },
@@ -5565,7 +6086,7 @@ export class NodeLibrary {
             default: 'create_task',
             options: [
               { label: 'Create Task',          value: 'create_task' },
-              { label: 'Get Tasks (List)',      value: 'get_tasks_list' },
+              { label: 'List Tasks',            value: 'list_tasks' },
               { label: 'Get Task',             value: 'get_task' },
               { label: 'Update Task',          value: 'update_task' },
               { label: 'Delete Task',          value: 'delete_task' },
@@ -5592,17 +6113,22 @@ export class NodeLibrary {
             description: 'List ID — required for create_task and get_tasks_list; find via Get Lists',
             examples: ['901614760992'],
           },
+          folderId: {
+            type: 'string',
+            description: 'Folder ID used by get_lists when listing lists inside a folder',
+            examples: ['901614760900'],
+          },
           taskId: {
             type: 'string',
             description: 'Task ID — required for get_task, update_task, delete_task, add_comment, update_status',
             examples: ['86d31vafd'],
           },
-          taskName: {
+          name: {
             type: 'string',
             description: 'Task name/title (required for create_task)',
             examples: ['Follow up with customer', 'Prepare weekly report'],
           },
-          taskDescription: {
+          description: {
             type: 'string',
             description: 'Task description — markdown supported (optional for create_task / update_task)',
             examples: ['Details:\n- Action item 1\n- Action item 2'],
@@ -5621,6 +6147,41 @@ export class NodeLibrary {
             type: 'string',
             description: 'Comment text for add_comment operation',
             examples: ['This has been reviewed and approved.'],
+          },
+          assignees: {
+            type: 'array',
+            description: 'Array of ClickUp user IDs assigned to the task',
+            examples: [['183', '987']],
+          },
+          dueDate: {
+            type: 'number',
+            description: 'Due date as Unix timestamp in milliseconds',
+            examples: [1735689600000],
+          },
+          includeClosed: {
+            type: 'boolean',
+            description: 'Include closed tasks when listing tasks',
+            default: false,
+          },
+          apiKey: {
+            type: 'string',
+            description: 'ClickUp API token fallback; prefer saved Connections credentials',
+          },
+          apiToken: {
+            type: 'string',
+            description: 'ClickUp API token alias used by saved credential records',
+          },
+          token: {
+            type: 'string',
+            description: 'Legacy ClickUp token alias used by saved credential records',
+          },
+          teamId: {
+            type: 'string',
+            description: 'Runtime alias for workspaceId',
+          },
+          baseUrl: {
+            type: 'string',
+            description: 'Optional ClickUp API base URL override from credential metadata',
           },
         },
       },
@@ -5733,6 +6294,82 @@ export class NodeLibrary {
       },
       commonPatterns: [],
       validationRules: [],
+    };
+  }
+
+  private createTelegramTriggerSchema(): NodeSchema {
+    return {
+      type: 'telegram_trigger',
+      label: 'Telegram Trigger',
+      category: 'triggers',
+      description: 'Start a workflow in real time when a Telegram bot receives a message or supported update.',
+      configSchema: {
+        required: [],
+        optional: {
+          connectionId: {
+            type: 'string',
+            description: 'Saved Telegram Bot Token connection. If blank, CtrlChecks uses the default Telegram connection.',
+            examples: ['{{$connection.telegram}}'],
+          },
+          updateTypes: {
+            type: 'array',
+            description: 'Telegram update types to accept from the webhook.',
+            default: ['message'],
+            examples: [['message'], ['message', 'callback_query']],
+          },
+          allowedChatIds: {
+            type: 'string',
+            description: 'Optional comma-separated chat IDs allowed to trigger this workflow.',
+            examples: ['123456789,-1009876543210'],
+          },
+          commandFilter: {
+            type: 'string',
+            description: 'Optional command prefix such as /start or /support. Messages not starting with it are ignored.',
+            examples: ['/start', '/support'],
+          },
+          secretToken: {
+            type: 'string',
+            description: 'Optional Telegram webhook secret token. If set, incoming updates must include X-Telegram-Bot-Api-Secret-Token.',
+          },
+        },
+      },
+      aiSelectionCriteria: {
+        whenToUse: [
+          'User wants a Telegram bot to receive messages',
+          'Workflow should start when someone messages a Telegram bot',
+          'Telegram chatbot or real-time Telegram support workflow',
+        ],
+        whenNotToUse: [
+          'Only sending a Telegram message (use Telegram action node)',
+          'Slack or WhatsApp inbound messages',
+        ],
+        keywords: [
+          'telegram trigger', 'telegram bot trigger', 'when someone messages my bot',
+          'telegram incoming message', 'telegram chatbot', 'telegram webhook',
+          'receive telegram message', 'telegram real time', 'telegram bot receives'
+        ],
+        useCases: ['Telegram chatbot', 'Telegram support inbox', 'Bot command workflows'],
+        intentDescription: 'Telegram Trigger starts a workflow from Telegram Bot API webhook updates, normalizing chatId, messageId, text, user profile fields, updateType, and the raw update for downstream AI Agent and Telegram reply nodes.',
+        intentCategories: ['telegram', 'trigger', 'chatbot', 'webhook', 'real_time_messaging'],
+      },
+      commonPatterns: [
+        {
+          name: 'telegram_chatbot',
+          description: 'Telegram Trigger -> AI Agent -> Telegram Send Message',
+          config: {
+            updateTypes: ['message'],
+            allowedChatIds: '',
+            commandFilter: '',
+          },
+        },
+      ],
+      validationRules: [],
+      capabilities: ['telegram.receive', 'message.receive', 'trigger.webhook'],
+      providers: ['telegram'],
+      keywords: [
+        'telegram', 'telegram trigger', 'telegram webhook', 'telegram bot',
+        'telegram incoming message', 'telegram chatbot'
+      ],
     };
   }
 
@@ -6736,18 +7373,33 @@ export class NodeLibrary {
       category: 'output',
       description: 'Send messages to Discord channels via a Discord bot token',
       configSchema: {
-        required: ['channelId', 'message'],
+        required: ['message'],
         optional: {
           channelId: {
             type: 'string',
-            description: 'Discord channel ID where the bot should post the message',
-            examples: ['123456789012345678'],
+            description: 'Discord channel ID where the bot should post the message. Use {{$json.channelId}} after Discord Trigger.',
+            examples: ['123456789012345678', '{{$json.channelId}}'],
           },
           message: {
             type: 'string',
             description: 'Message text to send',
-            examples: ['Hello from workflow!'],
+            examples: ['Hello from workflow!', '{{$json.text}}'],
             fillMode: { default: 'buildtime_ai_once', supportsRuntimeAI: true, supportsBuildtimeAI: true },
+          },
+          interactionToken: {
+            type: 'string',
+            description: 'Discord interaction token for slash command/component follow-up replies. Use {{$json.interactionToken}} after Discord Trigger.',
+            examples: ['{{$json.interactionToken}}'],
+          },
+          applicationId: {
+            type: 'string',
+            description: 'Discord application ID for interaction follow-up replies. Use {{$json.applicationId}} after Discord Trigger.',
+            examples: ['{{$json.applicationId}}'],
+          },
+          replyToMessageId: {
+            type: 'string',
+            description: 'Optional Discord message ID to reply to when using the Bot API.',
+            examples: ['{{$json.messageId}}'],
           },
         },
       },
@@ -6770,6 +7422,123 @@ export class NodeLibrary {
         'discord', 'discord message', 'discord channel', 'discord server',
         'discord bot', 'discord api', 'discord integration'
       ],
+    };
+  }
+
+  private createDiscordTriggerSchema(): NodeSchema {
+    return {
+      type: 'discord_trigger',
+      label: 'Discord Trigger',
+      category: 'triggers',
+      description: 'Start workflows from Discord interactions, slash commands, and HTTP webhook events',
+      configSchema: {
+        required: [],
+        optional: {
+          eventTypes: {
+            type: 'array',
+            description: 'Discord event types to accept',
+            default: ['message', 'slash_command', 'interaction'],
+            examples: ['message', 'slash_command', 'interaction', 'webhook_event'],
+          },
+          guildIds: {
+            type: 'string',
+            description: 'Comma-separated Discord guild/server IDs to allow',
+            examples: ['123456789012345678'],
+          },
+          channelIds: {
+            type: 'string',
+            description: 'Comma-separated Discord channel IDs to allow',
+            examples: ['123456789012345678'],
+          },
+          allowedUserIds: {
+            type: 'string',
+            description: 'Comma-separated Discord user IDs to allow',
+            examples: ['123456789012345678'],
+          },
+          commandFilter: {
+            type: 'string',
+            description: 'Only accept a specific slash command',
+            examples: ['/support'],
+          },
+          applicationId: {
+            type: 'string',
+            description: 'Optional Discord application ID filter',
+            examples: ['123456789012345678'],
+          },
+          publicKey: {
+            type: 'string',
+            description: 'Optional Discord application public key fallback. Prefer saved connection or DISCORD_PUBLIC_KEY.',
+          },
+          validateSignature: {
+            type: 'boolean',
+            description: 'Validate Discord Ed25519 request signature',
+            default: true,
+          },
+        },
+      },
+      aiSelectionCriteria: {
+        whenToUse: [
+          'Start a workflow from a Discord slash command',
+          'Respond when a Discord interaction or component is used',
+          'Receive Discord HTTP webhook events',
+        ],
+        whenNotToUse: [
+          'Sending a Discord message from an existing workflow (use discord)',
+          'Simple incoming Discord channel webhook URL sends (use discord_webhook)',
+        ],
+        keywords: [
+          'discord trigger', 'discord event', 'discord slash command', 'discord interaction',
+          'when someone messages discord', 'discord message received', 'discord bot trigger',
+          'discord component', 'discord button', 'discord modal',
+        ],
+        useCases: ['Discord bot automations', 'Community support commands', 'Discord interaction routing'],
+        intentDescription: 'Discord Trigger starts a workflow from Discord Interactions, slash commands, and HTTP webhook events. It validates Discord Ed25519 signatures, normalizes the event into $json, and lets downstream Discord action nodes reply using channelId or interactionToken.',
+        intentCategories: ['trigger', 'discord', 'communication', 'chat_message', 'team_collaboration'],
+      },
+      commonPatterns: [
+        {
+          name: 'discord_slash_command_ai_reply',
+          description: 'Handle a Discord slash command with AI and reply through Discord',
+          config: { eventTypes: ['slash_command'], validateSignature: true },
+        },
+      ],
+      validationRules: [],
+      capabilities: ['trigger.webhook', 'discord.receive', 'discord.command', 'discord.interaction'],
+      providers: ['discord'],
+      keywords: [
+        'discord trigger', 'discord slash command', 'discord interaction',
+        'incoming discord message', 'discord webhook events',
+      ],
+      outputType: 'object',
+      outputSchema: {
+        eventId: { type: 'string' },
+        eventType: { type: 'string' },
+        source: { type: 'string' },
+        userId: { type: 'string' },
+        username: { type: 'string' },
+        text: { type: 'string' },
+        timestamp: { type: 'string' },
+        applicationId: { type: 'string' },
+        guildId: { type: 'string' },
+        channelId: { type: 'string' },
+        threadId: { type: 'string' },
+        chatId: { type: 'string' },
+        messageId: { type: 'string' },
+        command: { type: 'string' },
+        customId: { type: 'string' },
+        interactionId: { type: 'string' },
+        interactionToken: { type: 'string' },
+        responseUrl: { type: 'string' },
+        rawEventType: { type: 'string' },
+        raw: { type: 'object' },
+      },
+      schemaVersion: '1.0.0',
+      nodeCapability: {
+        inputType: ['object'],
+        outputType: 'object',
+        acceptsArray: false,
+        producesArray: false,
+      },
     };
   }
 
@@ -7582,19 +8351,37 @@ export class NodeLibrary {
       type: 'openai_gpt',
       label: 'OpenAI GPT',
       category: 'ai',
-      description: 'OpenAI GPT chat completion (GPT-4, GPT-3.5)',
+      description: 'OpenAI chat completion through the legacy LLM adapter; returns response, model, usage, and finishReason without spreading incoming fields.',
       configSchema: {
-        required: ['model', 'prompt'],
+        required: ['apiKey', 'model', 'prompt'],
         optional: {
+          apiKey: { type: 'string', description: 'OpenAI API key direct fallback; runtime first tries the selected OpenAI connection/credential resolver.', default: '' },
+          accessToken: { type: 'string', description: 'Legacy OpenAI token fallback read when apiKey is blank.', default: '' },
+          token: { type: 'string', description: 'Legacy OpenAI token fallback read when apiKey and accessToken are blank.', default: '' },
           model: {
             type: 'string',
-            description: 'Model name',
+            description: 'OpenAI model name. Defaults to gpt-4o when blank.',
             examples: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo'],
           },
           prompt: {
             type: 'string',
-            description: 'User message or prompt to send to OpenAI',
+            description: 'Prompt text. If static and upstream text exists, runtime may use it as system context. If blank, messages content is joined as fallback.',
             examples: ['Summarize {{$json.text}}'],
+          },
+          messages: {
+            type: 'array',
+            description: 'Chat messages fallback used only when prompt is blank.',
+            examples: [['{{$json.messages}}']],
+          },
+          temperature: {
+            type: 'number',
+            description: 'Visible legacy UI field; current openai_gpt executor does not pass it to the adapter.',
+            default: 0.7,
+          },
+          memory: {
+            type: 'number',
+            description: 'Visible legacy UI field; current openai_gpt executor does not read or persist memory.',
+            default: 10,
           },
         },
       },
@@ -7607,7 +8394,7 @@ export class NodeLibrary {
           'openai api', 'gpt api', 'openai completion'
         ],
         useCases: ['OpenAI chat completion'],
-        intentDescription: 'OpenAI GPT integration node that performs chat completion using OpenAI GPT models (GPT-4, GPT-3.5-turbo). Sends chat messages to OpenAI API and receives AI-generated responses. Used for OpenAI chat completion, GPT-powered text generation, and OpenAI API integration.',
+        intentDescription: 'OpenAI GPT integration node that performs chat completion using OpenAI GPT models. It resolves an OpenAI key through the connection resolver or direct fallback, sends prompt/upstream text, and returns response, model, usage, and finishReason.',
         intentCategories: ['ai_chat', 'openai', 'gpt', 'text_generation', 'llm'],
       },
       commonPatterns: [],
@@ -7636,7 +8423,7 @@ export class NodeLibrary {
       category: 'ai',
       description: 'Anthropic Claude chat completion',
       configSchema: {
-        required: ['model', 'messages', 'apiKey'],
+        required: ['model'],
         optional: {
           model: {
             type: 'string',
@@ -7645,13 +8432,28 @@ export class NodeLibrary {
           },
           apiKey: {
             type: 'string',
-            description: 'Anthropic API key (node-level, required for this node to run)',
+            description: 'Anthropic API key direct fallback; runtime can also load a saved anthropic vault credential',
             examples: ['anthropic-key-...'],
+          },
+          prompt: {
+            type: 'string',
+            description: 'Prompt text. If blank, runtime joins messages content as the prompt.',
+            examples: ['Summarize {{$json.text}}'],
           },
           messages: {
             type: 'array',
-            description: 'Chat messages',
+            description: 'Chat messages fallback used only when prompt is blank',
             examples: [['{{$json.messages}}']],
+          },
+          temperature: {
+            type: 'number',
+            description: 'Legacy UI field not currently passed to the Claude adapter call',
+            default: 0.7,
+          },
+          memory: {
+            type: 'number',
+            description: 'Legacy UI field not currently read by the anthropic_claude executor',
+            default: 10,
           },
         },
       },
@@ -7689,9 +8491,9 @@ export class NodeLibrary {
   private createGoogleGeminiSchema(): NodeSchema {
     return {
       type: 'google_gemini',
-      label: 'Gemini',
+      label: 'Google Gemini',
       category: 'ai',
-      description: 'Google Gemini chat completion',
+      description: 'Google Gemini text generation; temperature and memory are visible legacy fields ignored by the current executor.',
       configSchema: {
         required: ['prompt'],
         optional: {
@@ -7702,13 +8504,23 @@ export class NodeLibrary {
           },
           apiKey: {
             type: 'string',
-            description: 'Gemini API key (leave empty to use the server default GEMINI_API_KEY)',
+            description: 'Optional direct Gemini API key; runtime can also use Gemini connection, wallet/key pool, or server key configuration',
             examples: ['AIza...'],
           },
           prompt: {
             type: 'string',
-            description: 'Prompt text',
+            description: 'Prompt text sent to Gemini; when static and upstream text exists, runtime may use it as system context',
             examples: ['{{$json.prompt}}'],
+          },
+          temperature: {
+            type: 'number',
+            description: 'Visible legacy UI field; current google_gemini executor does not pass this to the adapter',
+            default: 0.7,
+          },
+          memory: {
+            type: 'number',
+            description: 'Visible legacy UI field; current google_gemini executor does not read or persist memory',
+            default: 10,
           },
         },
       },
@@ -7721,7 +8533,7 @@ export class NodeLibrary {
           'gemini api', 'google gemini api', 'gemini completion', 'google ai completion'
         ],
         useCases: ['Gemini chat completion'],
-        intentDescription: 'Google Gemini integration node that performs chat completion using Google Gemini models (Gemini Pro, Gemini Pro Vision). Sends prompts to Google Gemini API and receives AI-generated responses. Used for Gemini chat completion, Google AI-powered text generation, and Gemini API integration.',
+        intentDescription: 'Google Gemini integration node that calls the Gemini adapter with prompt/upstream text and returns response, model, usage, and finish reason.',
         intentCategories: ['ai_chat', 'google', 'gemini', 'text_generation', 'llm'],
       },
       commonPatterns: [],
@@ -7750,7 +8562,7 @@ export class NodeLibrary {
       type: 'ollama',
       label: 'AI Chat (Gemini)',
       category: 'ai',
-      description: 'AI chat completion using Gemini 3.5 Flash (default LLM)',
+      description: 'Legacy Ollama slug that delegates to the Gemini-backed AI Chat Model; this is not a local Ollama server call.',
       // Legacy alias of ai_chat_model — kept for existing workflows only.
       internalOnly: true,
       configSchema: {
@@ -7758,12 +8570,12 @@ export class NodeLibrary {
         optional: {
           prompt: {
             type: 'string',
-            description: 'Prompt text',
+            description: 'Prompt text passed to AI Chat Model using Gemini 3.5 Flash.',
             examples: ['{{$json.prompt}}'],
           },
           temperature: {
             type: 'number',
-            description: 'Creativity (0.0 - 1.0)',
+            description: 'Temperature passed through to the Gemini-backed AI Chat Model executor.',
             default: 0.7,
             examples: [0.2, 0.7, 1.0],
           },
@@ -7780,7 +8592,7 @@ export class NodeLibrary {
           'ollama llm', 'ai chat', 'ai model', 'llm chat'
         ],
         useCases: ['AI chat', 'Text generation'],
-        intentDescription: 'AI chat node that performs chat completion using Gemini 3.5 Flash. Uses the default GEMINI_API_KEY for all AI operations. Provides fast, cost-effective AI chat capabilities.',
+        intentDescription: 'Legacy Ollama node that performs chat completion by rewriting itself to ai_chat_model and using Gemini 3.5 Flash. It preserves incoming fields through the delegated AI Chat Model output.',
         intentCategories: ['ai_chat', 'text_generation', 'llm'],
       },
       commonPatterns: [],
@@ -7806,19 +8618,29 @@ export class NodeLibrary {
       type: 'text_summarizer',
       label: 'Text Summarizer',
       category: 'ai',
-      description: 'Summarize long text into shorter versions',
+      description: 'Summarize text by generating a Gemini prompt and delegating to AI Chat Model; output is response/model, not summary/wordCount.',
       configSchema: {
         required: ['text'],
         optional: {
           text: {
             type: 'string',
-            description: 'Text to summarize',
+            description: 'Text inserted into the generated summarization prompt. Blank text is not locally rejected.',
             examples: ['{{$json.text}}'],
           },
           maxLength: {
             type: 'number',
-            description: 'Maximum summary length',
+            description: 'Optional word-limit hint inserted into the generated prompt; not a hard truncation.',
             examples: [100, 200],
+          },
+          apiKey: {
+            type: 'string',
+            description: 'Optional direct Gemini key fallback used by the delegated AI Chat Model credential resolver.',
+            examples: ['AIza...'],
+          },
+          temperature: {
+            type: 'number',
+            description: 'Optional temperature passed through to the delegated AI Chat Model executor.',
+            default: 0.2,
           },
         },
       },
@@ -7830,7 +8652,7 @@ export class NodeLibrary {
           'text summary', 'ai summarizer', 'text summarizer node'
         ],
         useCases: ['Text summarization'],
-        intentDescription: 'Text summarizer node that summarizes long text into shorter versions. Condenses lengthy text content into concise summaries while preserving key information. Used for text summarization, content condensation, and creating brief summaries from long documents.',
+        intentDescription: 'Text summarizer node that builds a summarization prompt from text and optional maxLength, then delegates to the Gemini-backed AI Chat Model. Successful output preserves incoming fields and adds response/model.',
         intentCategories: ['ai_summarization', 'text_processing', 'content_condensation', 'nlp'],
       },
       commonPatterns: [],
@@ -7845,7 +8667,7 @@ export class NodeLibrary {
       outputSchema: {
         response: {
           type: 'string',
-          description: 'Summarized text produced by the model (primary narrative output for downstream nodes)',
+          description: 'Summarized text produced by Gemini through the delegated AI Chat Model.',
         },
       },
     };
@@ -7856,14 +8678,24 @@ export class NodeLibrary {
       type: 'sentiment_analyzer',
       label: 'Sentiment Analyzer',
       category: 'ai',
-      description: 'Analyze sentiment and emotions in text',
+      description: 'Analyze sentiment by generating a Gemini JSON prompt and delegating to AI Chat Model; sentiment fields live inside response.',
       configSchema: {
         required: ['text'],
         optional: {
           text: {
             type: 'string',
-            description: 'Text to analyze',
+            description: 'Text inserted into the generated sentiment-analysis prompt. Blank text is not locally rejected.',
             examples: ['{{$json.text}}'],
+          },
+          apiKey: {
+            type: 'string',
+            description: 'Optional direct Gemini key fallback used by the delegated AI Chat Model credential resolver.',
+            examples: ['AIza...'],
+          },
+          temperature: {
+            type: 'number',
+            description: 'Optional temperature passed through to the delegated AI Chat Model executor.',
+            default: 0.2,
           },
         },
       },
@@ -7875,11 +8707,24 @@ export class NodeLibrary {
           'sentiment analyzer node', 'sentiment analyzer type'
         ],
         useCases: ['Sentiment analysis'],
-        intentDescription: 'Sentiment analyzer node that analyzes sentiment and emotions in text. Determines whether text expresses positive, negative, or neutral sentiment, and identifies emotional tones. Used for sentiment analysis, emotion detection, and understanding text sentiment in workflows.',
+        intentDescription: 'Sentiment analyzer node that asks Gemini to return JSON with sentiment, score, and summary. Valid JSON is parsed into response; invalid JSON falls back to raw response text.',
         intentCategories: ['sentiment_analysis', 'emotion_detection', 'text_analysis', 'nlp'],
       },
       commonPatterns: [],
       validationRules: [],
+      nodeCapability: {
+        inputType: ['text', 'array'],
+        outputType: 'object',
+        acceptsArray: true,
+        producesArray: false,
+      },
+      outputType: 'object',
+      outputSchema: {
+        response: {
+          type: 'object',
+          description: 'Parsed sentiment JSON when Gemini returns valid JSON, otherwise raw response text.',
+        },
+      },
     };
   }
 
@@ -7899,6 +8744,24 @@ export class NodeLibrary {
             description: 'Creativity/temperature (0.0 - 1.0)',
             default: 0.7,
             examples: [0.2, 0.7, 1.0],
+          },
+          provider: {
+            type: 'string',
+            description: 'Legacy UI field ignored by runtime; output provider is always gemini',
+            default: 'gemini',
+          },
+          apiKey: {
+            type: 'string',
+            description: 'Legacy UI field ignored by runtime; Chat Model does not call the provider',
+          },
+          model: {
+            type: 'string',
+            description: 'Legacy UI field ignored by runtime; output model is always gemini-3.5-flash',
+            default: 'gemini-3.5-flash',
+          },
+          prompt: {
+            type: 'string',
+            description: 'Legacy UI field ignored by runtime; Chat Model returns config only',
           },
         },
       },
@@ -7924,7 +8787,7 @@ export class NodeLibrary {
       type: 'memory',
       label: 'Memory',
       category: 'ai',
-      description: 'Memory storage for AI Agent context',
+      description: 'Passthrough AI context node that returns sessionId, context, and incoming messages; it does not persist or search memory today.',
       // Support node for the removed ai_agent memory port — legacy workflows only.
       internalOnly: true,
       configSchema: {
@@ -7932,21 +8795,50 @@ export class NodeLibrary {
         optional: {
           context: {
             type: 'string',
-            description: 'Memory context',
+            description: 'Context text returned by the passthrough memory node',
             examples: ['{{$json.context}}'],
+          },
+          sessionId: {
+            type: 'string',
+            description: 'Optional session identifier returned as sessionId; defaults to mem_<node id>',
+            examples: ['customer-{{$json.customerId}}'],
+          },
+          session_id: {
+            type: 'string',
+            description: 'Legacy alias for sessionId',
+          },
+          operation: {
+            type: 'string',
+            description: 'Visible legacy UI selector ignored by the current passthrough runtime',
+            default: 'store',
+          },
+          memoryType: {
+            type: 'string',
+            description: 'Visible legacy UI selector ignored by the current passthrough runtime',
+            default: 'both',
+          },
+          ttl: {
+            type: 'number',
+            description: 'Visible legacy UI TTL ignored by the current passthrough runtime',
+            default: 3600,
+          },
+          maxMessages: {
+            type: 'number',
+            description: 'Visible legacy UI limit ignored by the current passthrough runtime',
+            default: 100,
           },
         },
       },
       aiSelectionCriteria: {
-        whenToUse: ['AI Agent needs memory', 'Context storage'],
-        whenNotToUse: ['Stateless AI'],
+        whenToUse: ['AI workflow needs sessionId/context/messages passed forward', 'Context handoff before AI step'],
+        whenNotToUse: ['Persistent memory storage', 'Redis/vector memory retrieval', 'Conversation history search'],
         keywords: [
           'memory', 'memory node', 'ai memory', 'memory store',
           'memory context', 'context memory', 'memory ai',
           'ai context', 'memory store', 'store memory', 'memory retrieval'
         ],
-        useCases: ['AI memory'],
-        intentDescription: 'Memory node that provides memory storage for AI Agent context. Stores conversation history, context, and state for AI agents, enabling context-aware AI interactions. Used for AI memory, context storage, and maintaining conversation state in AI agents.',
+        useCases: ['AI context passthrough'],
+        intentDescription: 'Memory node currently passes sessionId, context, and incoming messages forward. It does not store, retrieve, clear, search, expire, or limit memory in the current executor.',
         intentCategories: ['ai_memory', 'context_storage', 'ai_agent_support', 'state_management'],
       },
       commonPatterns: [],
@@ -8030,6 +8922,18 @@ export class NodeLibrary {
       },
       commonPatterns: [],
       validationRules: [],
+      outputType: 'object',
+      outputSchema: {
+        status: { type: 'number', description: 'HTTP response status code' },
+        statusText: { type: 'string', description: 'HTTP status message' },
+        headers: { type: 'object', description: 'Response headers' },
+        body: { type: 'object', description: 'Parsed response body or raw text' },
+        data: { type: 'object', description: 'Alias for body' },
+        url: { type: 'string', description: 'Final URL used for the request' },
+        method: { type: 'string', description: 'HTTP method, always POST for this node' },
+        responseTime: { type: 'number', description: 'Request duration in milliseconds' },
+        _error: { type: 'string', description: 'Error message returned on request failure' },
+      },
     };
   }
 
@@ -8074,6 +8978,12 @@ export class NodeLibrary {
       },
       commonPatterns: [],
       validationRules: [],
+      outputType: 'object',
+      outputSchema: {
+        statusCode: { type: 'number', description: 'HTTP status code returned by the node' },
+        headers: { type: 'object', description: 'Response headers returned by the node' },
+        body: { type: 'object', description: 'Response payload returned by the node' },
+      },
     };
   }
 
@@ -8111,6 +9021,12 @@ export class NodeLibrary {
             description: 'HTTP headers to send',
             examples: [{ 'Authorization': 'Bearer {{$credentials.apiKey}}' }],
           },
+          timeout: {
+            type: 'number',
+            description: 'Timeout in milliseconds passed to the wrapped HTTP Request runtime',
+            examples: [30000],
+            default: 30000,
+          },
         },
       },
       aiSelectionCriteria: {
@@ -8127,6 +9043,18 @@ export class NodeLibrary {
       },
       commonPatterns: [],
       validationRules: [],
+      outputType: 'object',
+      outputSchema: {
+        status: { type: 'number', description: 'HTTP response status code' },
+        statusText: { type: 'string', description: 'HTTP status message' },
+        headers: { type: 'object', description: 'Response headers' },
+        body: { type: 'object', description: 'Parsed GraphQL response body or raw response text' },
+        data: { type: 'object', description: 'Alias for body' },
+        url: { type: 'string', description: 'Final GraphQL endpoint URL used for the request' },
+        method: { type: 'string', description: 'HTTP method, always POST for this node' },
+        responseTime: { type: 'number', description: 'Request duration in milliseconds' },
+        _error: { type: 'string', description: 'Error message returned on request failure' },
+      },
     };
   }
 
@@ -8196,6 +9124,89 @@ export class NodeLibrary {
         'drive upload', 'google drive download', 'drive download',
         'google drive folder', 'drive folder', 'google drive storage'
       ],
+    };
+  }
+
+  private createGoogleDriveTriggerSchema(): NodeSchema {
+    return {
+      type: 'google_drive_trigger',
+      label: 'Google Drive Trigger',
+      category: 'triggers',
+      description: 'Start workflows when files are created, updated, or deleted in Google Drive via push notification channels',
+      configSchema: {
+        required: [],
+        optional: {
+          folderId: {
+            type: 'string',
+            description: 'Optional Google Drive folder ID to filter changes to',
+            examples: ['1a2b3c4d5e6f'],
+          },
+          eventTypes: {
+            type: 'array',
+            description: 'Drive change types to accept',
+            default: ['file_changed', 'file_deleted'],
+            examples: ['file_changed', 'file_deleted'],
+          },
+          query: {
+            type: 'string',
+            description: 'Optional keyword filter matched against the file name',
+          },
+        },
+      },
+      aiSelectionCriteria: {
+        whenToUse: [
+          'Start a workflow when a file is created or updated in Google Drive',
+          'React to new files uploaded to a specific Drive folder',
+        ],
+        whenNotToUse: [
+          'Uploading or downloading a file from an existing workflow (use google_drive)',
+          'Google Sheets row changes (use google_sheets_trigger)',
+        ],
+        keywords: [
+          'google drive trigger', 'new file in drive', 'file added to drive',
+          'drive file changed', 'drive watch', 'drive notification',
+        ],
+        useCases: ['File-upload-triggered automation', 'Folder monitoring', 'Document processing pipelines'],
+        intentDescription: 'Google Drive Trigger starts a workflow when a watched Drive (optionally scoped to a folder) has a file created, updated, or deleted, delivered through Google Drive push notification channels. It validates the channel ID/token, incrementally syncs changes using startPageToken, normalizes them into $json, and lets downstream nodes process the file.',
+        intentCategories: ['trigger', 'google_drive', 'google', 'file_storage', 'automation'],
+      },
+      commonPatterns: [
+        {
+          name: 'drive_new_file_ai',
+          description: 'Process new Drive files with AI',
+          config: { eventTypes: ['file_changed'] },
+        },
+      ],
+      validationRules: [],
+      capabilities: ['trigger.webhook', 'google_drive.receive', 'file.receive'],
+      providers: ['google_drive', 'google'],
+      keywords: [
+        'google drive trigger', 'new file in drive', 'file added to drive', 'drive file changed',
+      ],
+      outputType: 'object',
+      outputSchema: {
+        eventId: { type: 'string' },
+        eventType: { type: 'string' },
+        source: { type: 'string' },
+        userId: { type: 'string' },
+        username: { type: 'string' },
+        text: { type: 'string' },
+        timestamp: { type: 'string' },
+        fileId: { type: 'string' },
+        name: { type: 'string' },
+        mimeType: { type: 'string' },
+        parents: { type: 'array' },
+        modifiedTime: { type: 'string' },
+        webViewLink: { type: 'string' },
+        raw: { type: 'object' },
+      },
+      schemaVersion: '1.0.0',
+      nodeCapability: {
+        inputType: ['object'],
+        outputType: 'object',
+        acceptsArray: false,
+        producesArray: false,
+      },
     };
   }
 
@@ -8313,6 +9324,92 @@ export class NodeLibrary {
         'create calendar event', 'calendar create', 'google calendar create',
         'google calendar update', 'calendar update', 'google calendar sync'
       ],
+    };
+  }
+
+  private createGoogleCalendarTriggerSchema(): NodeSchema {
+    return {
+      type: 'google_calendar_trigger',
+      label: 'Google Calendar Trigger',
+      category: 'triggers',
+      description: 'Start workflows from new, updated, or cancelled Google Calendar events via push notification channels',
+      configSchema: {
+        required: [],
+        optional: {
+          calendarId: {
+            type: 'string',
+            description: 'Calendar ID to watch',
+            default: 'primary',
+            examples: ['primary'],
+          },
+          eventTypes: {
+            type: 'array',
+            description: 'Calendar change types to accept',
+            default: ['event_changed', 'event_cancelled'],
+            examples: ['event_changed', 'event_cancelled'],
+          },
+          query: {
+            type: 'string',
+            description: 'Optional keyword filter matched against the event title and description',
+          },
+        },
+      },
+      aiSelectionCriteria: {
+        whenToUse: [
+          'Start a workflow when a Google Calendar event is created, updated, or cancelled',
+          'React to new meetings or invites on a connected Google Calendar',
+        ],
+        whenNotToUse: [
+          'Creating or updating a calendar event from an existing workflow (use google_calendar)',
+          'Non-Google calendars (use outlook_trigger for Outlook calendar)',
+        ],
+        keywords: [
+          'google calendar trigger', 'new calendar event', 'calendar event trigger',
+          'google calendar watch', 'calendar notification', 'new meeting trigger',
+        ],
+        useCases: ['Meeting-triggered automation', 'Calendar-driven reminders', 'Event-based workflow kickoff'],
+        intentDescription: 'Google Calendar Trigger starts a workflow when a watched calendar receives a new, updated, or cancelled event, delivered through Google Calendar push notification channels. It validates the channel ID/token, incrementally syncs changed events, normalizes them into $json, and lets downstream nodes process or respond to the event.',
+        intentCategories: ['trigger', 'google_calendar', 'google', 'calendar', 'scheduling'],
+      },
+      commonPatterns: [
+        {
+          name: 'calendar_ai_summary',
+          description: 'Summarize new calendar events with AI',
+          config: { calendarId: 'primary', eventTypes: ['event_changed'] },
+        },
+      ],
+      validationRules: [],
+      capabilities: ['trigger.webhook', 'google_calendar.receive', 'event.receive'],
+      providers: ['google_calendar', 'google'],
+      keywords: [
+        'google calendar trigger', 'new calendar event', 'calendar event trigger', 'google calendar watch',
+      ],
+      outputType: 'object',
+      outputSchema: {
+        eventId: { type: 'string' },
+        eventType: { type: 'string' },
+        source: { type: 'string' },
+        userId: { type: 'string' },
+        username: { type: 'string' },
+        text: { type: 'string' },
+        timestamp: { type: 'string' },
+        calendarId: { type: 'string' },
+        eventIdRaw: { type: 'string' },
+        subject: { type: 'string' },
+        organizer: { type: 'string' },
+        start: { type: 'string' },
+        end: { type: 'string' },
+        attendees: { type: 'array' },
+        htmlLink: { type: 'string' },
+        raw: { type: 'object' },
+      },
+      schemaVersion: '1.0.0',
+      nodeCapability: {
+        inputType: ['object'],
+        outputType: 'object',
+        acceptsArray: false,
+        producesArray: false,
+      },
     };
   }
 
@@ -8602,17 +9699,32 @@ export class NodeLibrary {
       category: 'output',
       description: 'Send messages to Microsoft Teams',
       configSchema: {
-        required: ['webhookUrl', 'message'],
+        required: ['message'],
         optional: {
           webhookUrl: {
             type: 'string',
-            description: 'Teams webhook URL',
+            description: 'Teams incoming webhook URL. Optional when replying to a Teams Trigger through Bot Framework.',
             examples: ['https://outlook.office.com/webhook/...'],
           },
           message: {
             type: 'string',
             description: 'Message text',
             examples: ['{{$json.message}}'],
+          },
+          serviceUrl: {
+            type: 'string',
+            description: 'Bot Framework service URL from Microsoft Teams Trigger.',
+            examples: ['{{$json.serviceUrl}}'],
+          },
+          conversationId: {
+            type: 'string',
+            description: 'Teams conversation ID from Microsoft Teams Trigger.',
+            examples: ['{{$json.conversationId}}'],
+          },
+          replyToId: {
+            type: 'string',
+            description: 'Teams activity ID to reply to.',
+            examples: ['{{$json.replyToId}}'],
           },
         },
       },
@@ -8635,6 +9747,120 @@ export class NodeLibrary {
         'teams', 'microsoft teams', 'ms teams', 'teams message',
         'teams integration', 'teams api', 'teams webhook', 'teams channel'
       ],
+    };
+  }
+
+  private createMicrosoftTeamsTriggerSchema(): NodeSchema {
+    return {
+      type: 'microsoft_teams_trigger',
+      label: 'Microsoft Teams Trigger',
+      category: 'triggers',
+      description: 'Start workflows from Microsoft Teams Bot Framework activities',
+      configSchema: {
+        required: [],
+        optional: {
+          eventTypes: {
+            type: 'array',
+            description: 'Teams activity types to accept',
+            default: ['message', 'conversation_update', 'invoke'],
+            examples: ['message', 'conversation_update', 'invoke'],
+          },
+          teamIds: {
+            type: 'string',
+            description: 'Comma-separated Teams team IDs to allow',
+            examples: ['19:team-id@thread.tacv2'],
+          },
+          channelIds: {
+            type: 'string',
+            description: 'Comma-separated Teams channel IDs to allow',
+            examples: ['19:channel-id@thread.tacv2'],
+          },
+          allowedUserIds: {
+            type: 'string',
+            description: 'Comma-separated Teams/AAD user IDs to allow',
+            examples: ['00000000-0000-0000-0000-000000000000'],
+          },
+          tenantId: {
+            type: 'string',
+            description: 'Optional Microsoft tenant ID filter',
+            examples: ['00000000-0000-0000-0000-000000000000'],
+          },
+          appId: {
+            type: 'string',
+            description: 'Optional Microsoft App ID override. Prefer saved Teams Bot connection.',
+          },
+          validationSecret: {
+            type: 'string',
+            description: 'Optional shared secret for webhook simulations.',
+          },
+          validateJwt: {
+            type: 'boolean',
+            description: 'Validate Bot Framework bearer JWT or configured shared secret',
+            default: true,
+          },
+        },
+      },
+      aiSelectionCriteria: {
+        whenToUse: [
+          'Start a workflow when someone messages a Microsoft Teams bot',
+          'Handle Microsoft Teams channel or personal bot messages',
+          'Route Teams invoke activities or adaptive card submissions',
+        ],
+        whenNotToUse: [
+          'Sending a Teams notification from an existing workflow (use microsoft_teams)',
+          'Email or Outlook calendar events',
+        ],
+        keywords: [
+          'microsoft teams trigger', 'teams trigger', 'teams message received',
+          'incoming teams message', 'teams bot message', 'teams personal message',
+          'teams channel message', 'teams adaptive card action',
+        ],
+        useCases: ['Teams bot automations', 'Internal support commands', 'Teams message routing'],
+        intentDescription: 'Microsoft Teams Trigger starts a workflow from Bot Framework activities delivered by Microsoft Teams. It validates Bot Framework JWTs or a configured test secret, normalizes activity data into $json, and lets downstream Teams actions reply using serviceUrl and conversationId.',
+        intentCategories: ['trigger', 'microsoft_teams', 'communication', 'team_collaboration', 'chat_message'],
+      },
+      commonPatterns: [
+        {
+          name: 'teams_ai_reply',
+          description: 'Reply to a Microsoft Teams bot message with AI',
+          config: { eventTypes: ['message'], validateJwt: true },
+        },
+      ],
+      validationRules: [],
+      capabilities: ['trigger.webhook', 'teams.receive', 'teams.reply', 'message.receive'],
+      providers: ['microsoft_teams'],
+      keywords: [
+        'microsoft teams trigger', 'teams trigger', 'incoming teams message',
+        'teams bot trigger', 'teams bot framework',
+      ],
+      outputType: 'object',
+      outputSchema: {
+        eventId: { type: 'string' },
+        eventType: { type: 'string' },
+        source: { type: 'string' },
+        userId: { type: 'string' },
+        username: { type: 'string' },
+        text: { type: 'string' },
+        timestamp: { type: 'string' },
+        tenantId: { type: 'string' },
+        teamId: { type: 'string' },
+        channelId: { type: 'string' },
+        chatId: { type: 'string' },
+        conversationId: { type: 'string' },
+        serviceUrl: { type: 'string' },
+        activityId: { type: 'string' },
+        replyToId: { type: 'string' },
+        locale: { type: 'string' },
+        channelData: { type: 'object' },
+        raw: { type: 'object' },
+      },
+      schemaVersion: '1.0.0',
+      nodeCapability: {
+        inputType: ['object'],
+        outputType: 'object',
+        acceptsArray: false,
+        producesArray: false,
+      },
     };
   }
 
@@ -9893,12 +11119,36 @@ export class NodeLibrary {
       category: 'database',
       description: 'Redis cache operations',
       configSchema: {
-        required: ['operation', 'key'],
+        required: ['operation', 'host'],
         optional: {
           operation: {
             type: 'string',
-            description: 'Operation: get, set, delete',
-            examples: ['get', 'set', 'delete'],
+            description: 'Operation: get, set, delete, incr, hget, hset, lpush, rpop, command',
+            examples: ['get', 'set', 'delete', 'incr', 'hget', 'hset', 'lpush', 'rpop', 'command'],
+          },
+          host: {
+            type: 'string',
+            description: 'Redis server host name',
+            examples: ['redis.example.com', 'localhost'],
+          },
+          port: {
+            type: 'number',
+            description: 'Redis server port',
+            default: 6379,
+          },
+          password: {
+            type: 'string',
+            description: 'Redis password when AUTH is required',
+          },
+          db: {
+            type: 'number',
+            description: 'Redis logical database number',
+            default: 0,
+          },
+          tls: {
+            type: 'boolean',
+            description: 'Use TLS for Redis connection',
+            default: false,
           },
           key: {
             type: 'string',
@@ -9909,6 +11159,31 @@ export class NodeLibrary {
             type: 'string',
             description: 'Value (for set)',
             examples: ['{{$json.value}}'],
+          },
+          ttl: {
+            type: 'number',
+            description: 'TTL in seconds for set operation',
+            examples: [3600],
+          },
+          hash: {
+            type: 'string',
+            description: 'Redis hash key for hget/hset',
+            examples: ['user:123'],
+          },
+          field: {
+            type: 'string',
+            description: 'Hash field for hget/hset',
+            examples: ['email'],
+          },
+          command: {
+            type: 'string',
+            description: 'Custom Redis command name',
+            examples: ['EXPIRE'],
+          },
+          args: {
+            type: 'array',
+            description: 'Arguments for custom Redis command',
+            examples: [['user:123', 3600]],
           },
         },
       },
@@ -10191,27 +11466,47 @@ export class NodeLibrary {
       type: 'read_binary_file',
       label: 'Read Binary File',
       category: 'file',
-      description: 'Read binary files',
+      description: 'Read managed workflow file assets or files from the safe backend binary storage root',
       configSchema: {
-        required: ['filePath'],
+        required: [],
         optional: {
+          sourceType: {
+            type: 'string',
+            description: 'Source type: assetId or serverPath',
+            examples: ['assetId', 'serverPath'],
+          },
+          assetId: {
+            type: 'string',
+            description: 'Workflow file asset ID returned by Write Binary File',
+            examples: ['{{$json.assetId}}'],
+          },
           filePath: {
             type: 'string',
-            description: 'File path',
-            examples: ['/path/to/file.pdf'],
+            description: 'Path under the configured backend binary file root',
+            examples: ['reports/file.pdf'],
+          },
+          storageKey: {
+            type: 'string',
+            description: 'Storage key under the configured backend binary file root',
+            examples: ['{{$json.storageKey}}'],
+          },
+          maxSize: {
+            type: 'number',
+            description: 'Maximum file size to read in bytes',
+            examples: [10485760],
           },
         },
       },
       aiSelectionCriteria: {
-        whenToUse: ['Need to read binary files', 'File reading'],
-        whenNotToUse: ['Text files'],
+        whenToUse: ['Need to read a managed workflow file asset', 'Need local backend file bytes as base64'],
+        whenNotToUse: ['Google Drive links', 'public URLs', 'text files that can be fetched through HTTP or app connectors'],
         keywords: [
           'read file', 'read binary file', 'file read', 'binary file read',
           'read file node', 'file read node', 'read binary', 'binary read',
           'file read binary', 'read file binary', 'file read data', 'read file data'
         ],
         useCases: ['File reading'],
-        intentDescription: 'Read binary file node that reads binary files from the filesystem. Reads binary data from files including images, PDFs, and other binary formats. Used for file reading, binary file processing, and accessing binary file content.',
+        intentDescription: 'Read binary file node that reads managed workflow file assets or files from the safe backend binary storage root. It returns base64 data for images, PDFs, and other binary formats. Use Google Drive, HTTP Request, S3, Dropbox, or OneDrive nodes for remote cloud files.',
         intentCategories: ['file_operations', 'binary_file', 'file_reading', 'file_processing'],
       },
       commonPatterns: [],
@@ -10224,32 +11519,67 @@ export class NodeLibrary {
       type: 'write_binary_file',
       label: 'Write Binary File',
       category: 'file',
-      description: 'Write binary files',
+      description: 'Write base64 or binary content as a managed workflow file asset',
       configSchema: {
-        required: ['filePath', 'data'],
+        required: ['dataBase64'],
         optional: {
+          fileName: {
+            type: 'string',
+            description: 'File name to store',
+            examples: ['report.pdf'],
+          },
           filePath: {
             type: 'string',
-            description: 'File path',
-            examples: ['/path/to/file.pdf'],
+            description: 'Optional storage key/path under the backend binary file root',
+            examples: ['reports/report.pdf'],
+          },
+          folder: {
+            type: 'string',
+            description: 'Optional folder/namespace under the managed workflow asset area',
+            examples: ['reports'],
+          },
+          mimeType: {
+            type: 'string',
+            description: 'MIME type of the file',
+            examples: ['application/pdf'],
+          },
+          persist: {
+            type: 'boolean',
+            description: 'Whether to persist file metadata in workflow_file_assets',
+            examples: [true],
+          },
+          dataBase64: {
+            type: 'string',
+            description: 'Base64 payload, data URL, or text payload to store',
+            examples: ['{{$json.dataBase64}}'],
           },
           data: {
             type: 'string',
-            description: 'Binary data (base64)',
+            description: 'Legacy alias for dataBase64',
             examples: ['{{$json.data}}'],
+          },
+          content: {
+            type: 'string',
+            description: 'Legacy alias for dataBase64',
+            examples: ['{{$json.content}}'],
+          },
+          fileData: {
+            type: 'string',
+            description: 'Alias for dataBase64, useful after cloud download nodes',
+            examples: ['{{$json.dataBase64}}'],
           },
         },
       },
       aiSelectionCriteria: {
-        whenToUse: ['Need to write binary files', 'File writing'],
-        whenNotToUse: ['Text files'],
+        whenToUse: ['Need to save generated binary data as a workflow file asset', 'Need to stage a PDF/image before upload'],
+        whenNotToUse: ['Google Drive upload directly', 'S3 upload directly', 'Plain text that can be passed between nodes without a file'],
         keywords: [
           'write file', 'write binary file', 'file write', 'binary file write',
           'write file node', 'file write node', 'write binary', 'binary write',
           'file write binary', 'write file binary', 'file write data', 'write file data'
         ],
         useCases: ['File writing'],
-        intentDescription: 'Write binary file node that writes binary files to the filesystem. Writes binary data to files including images, PDFs, and other binary formats. Used for file writing, binary file creation, and saving binary file content.',
+        intentDescription: 'Write binary file node that stores base64, data URL, or binary-like content as a managed workflow file asset under the safe backend binary storage root. It returns assetId, storageKey, fileName, mimeType, and dataBase64 for downstream nodes.',
         intentCategories: ['file_operations', 'binary_file', 'file_writing', 'file_processing'],
       },
       commonPatterns: [],
@@ -10287,8 +11617,8 @@ export class NodeLibrary {
           },
           operation: {
             type: 'string',
-            description: 'Operation: upload, download, list',
-            examples: ['upload', 'download', 'list'],
+            description: 'Operation: get/download, put/upload, list, delete',
+            examples: ['get', 'put', 'list', 'delete', 'download', 'upload'],
           },
           bucket: {
             type: 'string',
@@ -10314,6 +11644,11 @@ export class NodeLibrary {
             type: 'string',
             description: 'Base64 payload for upload',
             examples: ['{{$json.data}}'],
+          },
+          content: {
+            type: 'string',
+            description: 'Plain text or file content for upload',
+            examples: ['Hello from CtrlChecks'],
           },
         },
       },
@@ -10354,8 +11689,8 @@ export class NodeLibrary {
         optional: {
           operation: {
             type: 'string',
-            description: 'Operation: upload, download, list',
-            examples: ['upload', 'download', 'list'],
+            description: 'Operation: read/download, upload, list, delete',
+            examples: ['read', 'upload', 'list', 'delete', 'download'],
           },
           path: {
             type: 'string',
@@ -10371,6 +11706,11 @@ export class NodeLibrary {
             type: 'string',
             description: 'Base64 payload for upload',
             examples: ['{{$json.data}}'],
+          },
+          content: {
+            type: 'string',
+            description: 'Plain text or file content for upload',
+            examples: ['Hello from CtrlChecks'],
           },
           recursive: {
             type: 'boolean',
@@ -10416,13 +11756,23 @@ export class NodeLibrary {
         optional: {
           operation: {
             type: 'string',
-            description: 'Operation: upload, download, list',
-            examples: ['upload', 'download', 'list'],
+            description: 'Operation: read, upload, list, delete. Read is normalized to download by the OneDrive runtime.',
+            examples: ['read', 'upload', 'list', 'delete'],
           },
           path: {
             type: 'string',
             description: 'File path',
             examples: ['/path/to/file.pdf'],
+          },
+          fileId: {
+            type: 'string',
+            description: 'OneDrive item ID for delete operations',
+            examples: ['01ABC123DEF456'],
+          },
+          fileName: {
+            type: 'string',
+            description: 'Legacy UI upload file name; runtime uploads to path and does not read this value directly',
+            examples: ['report.pdf'],
           },
           dataBase64: {
             type: 'string',
@@ -10433,6 +11783,11 @@ export class NodeLibrary {
             type: 'string',
             description: 'Base64 payload for upload',
             examples: ['{{$json.data}}'],
+          },
+          content: {
+            type: 'string',
+            description: 'Plain text or file content for upload',
+            examples: ['Hello from CtrlChecks'],
           },
         },
       },
@@ -10473,18 +11828,57 @@ export class NodeLibrary {
         optional: {
           operation: {
             type: 'string',
-            description: 'Operation: upload, download, list',
-            examples: ['upload', 'download', 'list'],
+            description: 'Operation: get, put, list, delete. Legacy aliases download/upload are also accepted by the registry override.',
+            examples: ['get', 'put', 'list', 'delete'],
           },
           host: {
             type: 'string',
             description: 'FTP host',
             examples: ['ftp.example.com'],
           },
+          port: {
+            type: 'number',
+            description: 'FTP port',
+            examples: [21],
+          },
+          username: {
+            type: 'string',
+            description: 'FTP username',
+            examples: ['ftpuser'],
+          },
+          password: {
+            type: 'string',
+            description: 'FTP password',
+          },
           path: {
             type: 'string',
-            description: 'File path',
+            description: 'Alias for remotePath',
             examples: ['/path/to/file.pdf'],
+          },
+          remotePath: {
+            type: 'string',
+            description: 'Remote file or directory path',
+            examples: ['/path/to/file.pdf'],
+          },
+          content: {
+            type: 'string',
+            description: 'Plain text or file content for put',
+            examples: ['Hello from CtrlChecks'],
+          },
+          dataBase64: {
+            type: 'string',
+            description: 'Base64 file content for put',
+            examples: ['{{$json.dataBase64}}'],
+          },
+          fileData: {
+            type: 'string',
+            description: 'Legacy alias for upload content',
+            examples: ['{{$json.fileData}}'],
+          },
+          secure: {
+            type: 'boolean',
+            description: 'Use explicit FTPS/TLS in the registry executor',
+            default: false,
           },
         },
       },
@@ -10523,18 +11917,60 @@ export class NodeLibrary {
         optional: {
           operation: {
             type: 'string',
-            description: 'Operation: upload, download, list',
-            examples: ['upload', 'download', 'list'],
+            description: 'Operation: get, put, list, delete. Legacy aliases download/upload are also accepted by the registry override.',
+            examples: ['get', 'put', 'list', 'delete'],
           },
           host: {
             type: 'string',
             description: 'SFTP host',
             examples: ['sftp.example.com'],
           },
+          port: {
+            type: 'number',
+            description: 'SFTP/SSH port',
+            examples: [22],
+          },
+          username: {
+            type: 'string',
+            description: 'SFTP username',
+            examples: ['sftpuser'],
+          },
+          password: {
+            type: 'string',
+            description: 'SFTP password, required unless privateKey is provided',
+          },
+          privateKey: {
+            type: 'string',
+            description: 'SSH private key, required unless password is provided',
+          },
+          passphrase: {
+            type: 'string',
+            description: 'Passphrase for encrypted SSH private keys',
+          },
           path: {
             type: 'string',
-            description: 'File path',
+            description: 'Alias for remotePath',
             examples: ['/path/to/file.pdf'],
+          },
+          remotePath: {
+            type: 'string',
+            description: 'Remote file or directory path',
+            examples: ['/path/to/file.pdf'],
+          },
+          content: {
+            type: 'string',
+            description: 'Plain text or file content for put',
+            examples: ['Hello from CtrlChecks'],
+          },
+          dataBase64: {
+            type: 'string',
+            description: 'Base64 file content for put',
+            examples: ['{{$json.dataBase64}}'],
+          },
+          fileData: {
+            type: 'string',
+            description: 'Legacy alias for upload content',
+            examples: ['{{$json.fileData}}'],
           },
         },
       },
@@ -10574,9 +12010,9 @@ export class NodeLibrary {
         optional: {
           operation: {
             type: 'string',
-            description: 'GitHub operation (legacy/dispatcher): create_issue, add_issue_comment, create_pr, trigger_workflow, list_repos, get_user, etc.',
-            examples: ['create_issue', 'add_issue_comment', 'create_pr', 'trigger_workflow', 'list_repos'],
-            default: 'create_issue',
+            description: 'GitHub operation exposed in the visual panel and dispatched by the social service layer',
+            examples: ['get_repo', 'create_issue', 'add_issue_comment', 'create_pr', 'merge_pr', 'trigger_workflow', 'list_contributors'],
+            default: 'get_repo',
           },
           owner: {
             type: 'string',
@@ -10620,6 +12056,56 @@ export class NodeLibrary {
           workflowId: {
             type: 'string',
             description: 'Workflow ID or filename (for trigger_workflow)',
+          },
+          prNumber: {
+            type: 'number',
+            description: 'Pull request number for PR read/update/merge/comment operations',
+          },
+          state: {
+            type: 'string',
+            description: 'Issue or pull request state',
+            examples: ['open', 'closed'],
+          },
+          mergeMethod: {
+            type: 'string',
+            description: 'Merge strategy for pull request merge',
+            examples: ['merge', 'squash', 'rebase'],
+          },
+          sha: {
+            type: 'string',
+            description: 'Commit SHA used by branch or commit operations',
+          },
+          commitMessage: {
+            type: 'string',
+            description: 'Commit message for create_commit',
+          },
+          filePath: {
+            type: 'string',
+            description: 'Repository-relative file path for create_commit',
+          },
+          fileContent: {
+            type: 'string',
+            description: 'File content for create_commit',
+          },
+          tagName: {
+            type: 'string',
+            description: 'Release tag name',
+          },
+          releaseName: {
+            type: 'string',
+            description: 'Release display name',
+          },
+          releaseBody: {
+            type: 'string',
+            description: 'Release notes body',
+          },
+          releaseId: {
+            type: 'number',
+            description: 'GitHub release ID',
+          },
+          commitSha: {
+            type: 'string',
+            description: 'Commit SHA used by release or commit operations',
           },
           // Credential fields (for credential discovery and injection)
           accessToken: {
@@ -10681,15 +12167,112 @@ export class NodeLibrary {
     };
   }
 
+  private createGithubTriggerSchema(): NodeSchema {
+    return {
+      type: 'github_trigger',
+      label: 'GitHub Trigger',
+      category: 'triggers',
+      description: 'Start workflows from GitHub push, issue, pull request, release, or comment events',
+      configSchema: {
+        required: ['owner', 'repo'],
+        optional: {
+          eventTypes: {
+            type: 'string',
+            description: 'Comma-separated GitHub event types to listen for (push, issues, pull_request, release, issue_comment, ...)',
+            default: 'push, issues, pull_request, release, issue_comment',
+          },
+          webhookSecret: {
+            type: 'string',
+            description: 'Optional override for the generated webhook signing secret',
+          },
+          query: {
+            type: 'string',
+            description: 'Optional keyword filter matched against the event text',
+          },
+        },
+      },
+      aiSelectionCriteria: {
+        whenToUse: [
+          'Start a workflow when code is pushed to a GitHub repository',
+          'React to new GitHub issues, pull requests, releases, or comments',
+        ],
+        whenNotToUse: [
+          'Reading or modifying existing GitHub repository data from an existing workflow (use the github action node)',
+          'Other git platforms (use gitlab_trigger for GitLab)',
+        ],
+        keywords: [
+          'github trigger', 'new github push', 'new github issue', 'new github pull request',
+          'github webhook', 'github release trigger', 'github comment trigger',
+        ],
+        useCases: ['CI/CD automation', 'Issue triage automation', 'Pull request review notifications', 'Release announcements'],
+        intentDescription: 'GitHub Trigger starts a workflow when a watched GitHub repository receives a push, issue, pull request, release, or comment event, delivered through a GitHub webhook validated with an HMAC-SHA256 signature (X-Hub-Signature-256). It normalizes the event fields into $json for downstream nodes.',
+        intentCategories: ['trigger', 'github', 'devops', 'version_control', 'ci_cd'],
+      },
+      commonPatterns: [
+        {
+          name: 'github_issue_triage',
+          description: 'Triage new GitHub issues with AI',
+          config: { eventTypes: 'issues' },
+        },
+        {
+          name: 'github_pr_review_notify',
+          description: 'Notify on new pull requests',
+          config: { eventTypes: 'pull_request' },
+        },
+      ],
+      validationRules: [],
+      capabilities: ['trigger.webhook', 'github.receive', 'git.manage'],
+      providers: ['github'],
+      keywords: [
+        'github trigger', 'new github push', 'new github issue', 'new github pull request', 'github webhook',
+      ],
+      outputType: 'object',
+      outputSchema: {
+        eventId: { type: 'string' },
+        eventType: { type: 'string' },
+        source: { type: 'string' },
+        timestamp: { type: 'string' },
+        repository: { type: 'string' },
+        action: { type: 'string' },
+        ref: { type: 'string' },
+        commits: { type: 'array' },
+        issueNumber: { type: 'number' },
+        issueTitle: { type: 'string' },
+        issueUrl: { type: 'string' },
+        prNumber: { type: 'number' },
+        prTitle: { type: 'string' },
+        prUrl: { type: 'string' },
+        merged: { type: 'boolean' },
+        releaseTag: { type: 'string' },
+        releaseName: { type: 'string' },
+        commentBody: { type: 'string' },
+        commentUrl: { type: 'string' },
+        raw: { type: 'object' },
+      },
+      schemaVersion: '1.0.0',
+      nodeCapability: {
+        inputType: ['object'],
+        outputType: 'object',
+        acceptsArray: false,
+        producesArray: false,
+      },
+    };
+  }
+
   private createGitlabSchema(): NodeSchema {
     return {
       type: 'gitlab',
       label: 'GitLab',
       category: 'devops',
-      description: 'GitLab repository operations',
+      description: 'Read GitLab issues or create new GitLab issues through the GitLab API',
       configSchema: {
         required: ['operation'],
         optional: {
+          accessToken: {
+            type: 'string',
+            description: 'GitLab PAT or OAuth access token. Runtime also checks the saved gitlab vault credential.',
+            examples: ['glpat-...'],
+          },
           baseUrl: {
             type: 'string',
             description: 'GitLab API base URL (default: https://gitlab.com/api/v4)',
@@ -10698,8 +12281,12 @@ export class NodeLibrary {
           },
           operation: {
             type: 'string',
-            description: 'Operation: create, read, update, delete',
-            examples: ['create', 'read', 'update', 'delete'],
+            description: 'Runtime-supported GitLab issue operation: read or create',
+            examples: ['read', 'create'],
+            options: [
+              { label: 'Read/List Issues', value: 'read' },
+              { label: 'Create Issue', value: 'create' },
+            ],
           },
           repo: {
             type: 'string',
@@ -10752,24 +12339,155 @@ export class NodeLibrary {
     };
   }
 
+  private createGitlabTriggerSchema(): NodeSchema {
+    return {
+      type: 'gitlab_trigger',
+      label: 'GitLab Trigger',
+      category: 'triggers',
+      description: 'Start workflows from GitLab push, issue, merge request, comment, tag push, pipeline, or release events',
+      configSchema: {
+        required: ['projectId'],
+        optional: {
+          baseUrl: {
+            type: 'string',
+            description: 'GitLab instance base URL (default: https://gitlab.com). Set to your self-hosted GitLab URL if applicable.',
+            default: 'https://gitlab.com',
+          },
+          eventTypes: {
+            type: 'string',
+            description: 'Comma-separated GitLab event types to listen for (push, issue, merge_request, note, tag_push, pipeline, release)',
+            default: 'push, issue, merge_request, note',
+          },
+          secretToken: {
+            type: 'string',
+            description: 'Optional override for the generated X-Gitlab-Token webhook secret',
+          },
+          query: {
+            type: 'string',
+            description: 'Optional keyword filter matched against the event text',
+          },
+        },
+      },
+      aiSelectionCriteria: {
+        whenToUse: [
+          'Start a workflow when code is pushed to a GitLab project',
+          'React to new GitLab issues, merge requests, comments, pipelines, or releases',
+        ],
+        whenNotToUse: [
+          'Reading or modifying existing GitLab project data from an existing workflow (use the gitlab action node)',
+          'Other git platforms (use github_trigger for GitHub)',
+        ],
+        keywords: [
+          'gitlab trigger', 'new gitlab push', 'new gitlab issue', 'new gitlab merge request',
+          'gitlab webhook', 'gitlab pipeline trigger', 'gitlab comment trigger',
+        ],
+        useCases: ['CI/CD automation', 'Issue triage automation', 'Merge request review notifications', 'Release announcements'],
+        intentDescription: 'GitLab Trigger starts a workflow when a watched GitLab project receives a push, issue, merge request, comment, tag push, pipeline, or release event, delivered through a GitLab project webhook validated with the X-Gitlab-Token shared secret header (a plain constant-time comparison, not an HMAC signature). It normalizes the event fields into $json for downstream nodes.',
+        intentCategories: ['trigger', 'gitlab', 'devops', 'version_control', 'ci_cd'],
+      },
+      commonPatterns: [
+        {
+          name: 'gitlab_issue_triage',
+          description: 'Triage new GitLab issues with AI',
+          config: { eventTypes: 'issue' },
+        },
+        {
+          name: 'gitlab_mr_review_notify',
+          description: 'Notify on new merge requests',
+          config: { eventTypes: 'merge_request' },
+        },
+      ],
+      validationRules: [],
+      capabilities: ['trigger.webhook', 'gitlab.receive', 'git.manage'],
+      providers: ['gitlab'],
+      keywords: [
+        'gitlab trigger', 'new gitlab push', 'new gitlab issue', 'new gitlab merge request', 'gitlab webhook',
+      ],
+      outputType: 'object',
+      outputSchema: {
+        eventId: { type: 'string' },
+        eventType: { type: 'string' },
+        source: { type: 'string' },
+        timestamp: { type: 'string' },
+        projectId: { type: 'string' },
+        projectName: { type: 'string' },
+        action: { type: 'string' },
+        ref: { type: 'string' },
+        commits: { type: 'array' },
+        issueIid: { type: 'number' },
+        issueTitle: { type: 'string' },
+        issueUrl: { type: 'string' },
+        mrIid: { type: 'number' },
+        mrTitle: { type: 'string' },
+        mrUrl: { type: 'string' },
+        mrState: { type: 'string' },
+        noteBody: { type: 'string' },
+        noteUrl: { type: 'string' },
+        raw: { type: 'object' },
+      },
+      schemaVersion: '1.0.0',
+      nodeCapability: {
+        inputType: ['object'],
+        outputType: 'object',
+        acceptsArray: false,
+        producesArray: false,
+      },
+    };
+  }
+
   private createBitbucketSchema(): NodeSchema {
     return {
       type: 'bitbucket',
       label: 'Bitbucket',
       category: 'devops',
-      description: 'Bitbucket repository operations',
+      description: 'Bitbucket repository read/create/update/delete operations',
       configSchema: {
         required: ['operation'],
         optional: {
           operation: {
             type: 'string',
-            description: 'Operation: create, read, update, delete',
-            examples: ['create', 'read', 'update', 'delete'],
+            description: 'Runtime-supported repository operation: read, create, update, delete',
+            examples: ['read', 'create', 'update', 'delete'],
+          },
+          workspace: {
+            type: 'string',
+            description: 'Bitbucket workspace slug',
+            examples: ['acme-platform'],
+          },
+          repoSlug: {
+            type: 'string',
+            description: 'Bitbucket repository slug',
+            examples: ['api-service'],
           },
           repo: {
             type: 'string',
-            description: 'Repository name',
-            examples: ['owner/repo'],
+            description: 'Optional combined workspace/repository value for legacy configs',
+            examples: ['acme-platform/api-service'],
+          },
+          username: {
+            type: 'string',
+            description: 'Bitbucket username for Basic Auth',
+          },
+          appPassword: {
+            type: 'string',
+            description: 'Bitbucket app password for Basic Auth',
+          },
+          accessToken: {
+            type: 'string',
+            description: 'Bitbucket OAuth access token; runtime prefers Bearer token when present',
+          },
+          description: {
+            type: 'string',
+            description: 'Repository description for default create/update payload',
+          },
+          isPrivate: {
+            type: 'boolean',
+            description: 'Default create/update repository privacy flag',
+            default: true,
+          },
+          data: {
+            type: 'object',
+            description: 'Optional raw object payload for create/update',
           },
         },
       },
@@ -10910,24 +12628,155 @@ export class NodeLibrary {
     };
   }
 
+  private createJiraTriggerSchema(): NodeSchema {
+    return {
+      type: 'jira_trigger',
+      label: 'Jira Trigger',
+      category: 'triggers',
+      description: 'Start workflows from Jira issue created/updated/deleted or comment created/updated/deleted events',
+      configSchema: {
+        required: [],
+        optional: {
+          siteUrl: {
+            type: 'string',
+            description: 'Your Atlassian site domain, e.g. yourcompany.atlassian.net',
+          },
+          projectKey: {
+            type: 'string',
+            description: 'Jira project key to scope events to (leave blank for all projects the webhook covers)',
+            examples: ['PROJ', 'DEV'],
+          },
+          eventTypes: {
+            type: 'string',
+            description: 'Comma-separated Jira webhook event types to listen for (jira:issue_created, jira:issue_updated, jira:issue_deleted, comment_created, comment_updated, comment_deleted)',
+            default: 'jira:issue_created, jira:issue_updated, comment_created',
+          },
+          secretToken: {
+            type: 'string',
+            description: 'Optional override for the generated webhook secret (sent as ?secret= or X-Jira-Webhook-Secret)',
+          },
+          jql: {
+            type: 'string',
+            description: 'Optional JQL filter — configure directly in Jira\'s WebHooks admin UI, not enforced by CtrlChecks',
+          },
+          query: {
+            type: 'string',
+            description: 'Optional keyword filter matched against the event text',
+          },
+        },
+      },
+      aiSelectionCriteria: {
+        whenToUse: [
+          'Start a workflow when a Jira issue is created, updated, or deleted',
+          'React to new comments on Jira issues',
+        ],
+        whenNotToUse: [
+          'Reading or modifying existing Jira issues from an existing workflow (use the jira action node)',
+          'Other issue trackers (use linear_trigger or trello_trigger for those platforms once available)',
+        ],
+        keywords: [
+          'jira trigger', 'new jira issue', 'jira issue created', 'jira issue updated',
+          'jira comment', 'jira webhook', 'jira automation',
+        ],
+        useCases: ['Issue triage automation', 'Comment notification routing', 'Status change automation'],
+        intentDescription: 'Jira Trigger starts a workflow when a Jira Cloud webhook (configured manually in Jira\'s System > WebHooks admin page or an Automation for Jira "Send web request" action) delivers an issue created/updated/deleted or comment created/updated/deleted event. Validation uses a per-node shared secret embedded in the webhook URL or an X-Jira-Webhook-Secret header — Jira does not sign webhook payloads with HMAC or JWT. It normalizes the event fields into $json for downstream nodes.',
+        intentCategories: ['trigger', 'jira', 'issue_tracking', 'project_management'],
+      },
+      commonPatterns: [
+        {
+          name: 'jira_issue_triage',
+          description: 'Triage new Jira issues with AI',
+          config: { eventTypes: 'jira:issue_created' },
+        },
+        {
+          name: 'jira_comment_notify',
+          description: 'Notify on new Jira comments',
+          config: { eventTypes: 'comment_created' },
+        },
+      ],
+      validationRules: [],
+      capabilities: ['trigger.webhook', 'jira.receive', 'issue.manage'],
+      providers: ['jira'],
+      keywords: [
+        'jira trigger', 'new jira issue', 'jira issue created', 'jira issue updated', 'jira comment', 'jira webhook',
+      ],
+      outputType: 'object',
+      outputSchema: {
+        eventId: { type: 'string' },
+        eventType: { type: 'string' },
+        source: { type: 'string' },
+        timestamp: { type: 'string' },
+        siteUrl: { type: 'string' },
+        cloudId: { type: 'string' },
+        issueKey: { type: 'string' },
+        issueId: { type: 'string' },
+        issueSummary: { type: 'string' },
+        issueUrl: { type: 'string' },
+        issueType: { type: 'string' },
+        issueStatus: { type: 'string' },
+        projectKey: { type: 'string' },
+        commentBody: { type: 'string' },
+        commentUrl: { type: 'string' },
+        userId: { type: 'string' },
+        username: { type: 'string' },
+        raw: { type: 'object' },
+      },
+      schemaVersion: '1.0.0',
+      nodeCapability: {
+        inputType: ['object'],
+        outputType: 'object',
+        acceptsArray: false,
+        producesArray: false,
+      },
+    };
+  }
+
   private createJenkinsSchema(): NodeSchema {
     return {
       type: 'jenkins',
       label: 'Jenkins',
       category: 'devops',
-      description: 'Jenkins CI/CD operations',
+      description: 'Trigger Jenkins jobs, check build status, or stop a running build',
       configSchema: {
         required: ['operation'],
         optional: {
           operation: {
             type: 'string',
-            description: 'Operation: build, status, cancel',
+            description: 'Runtime-supported operation: build, status, or cancel',
             examples: ['build', 'status', 'cancel'],
+            options: [
+              { label: 'Build Job', value: 'build' },
+              { label: 'Get Build Status', value: 'status' },
+              { label: 'Cancel Build', value: 'cancel' },
+            ],
+          },
+          baseUrl: {
+            type: 'string',
+            description: 'Jenkins server root URL',
+            examples: ['https://jenkins.example.com'],
+          },
+          username: {
+            type: 'string',
+            description: 'Jenkins username for Basic Auth',
+          },
+          apiToken: {
+            type: 'string',
+            description: 'Jenkins API token for Basic Auth',
           },
           jobName: {
             type: 'string',
             description: 'Jenkins job name',
             examples: ['my-job'],
+          },
+          buildNumber: {
+            type: 'string',
+            description: 'Build number for status or cancel. Status uses lastBuild when blank.',
+            examples: ['123'],
+          },
+          parameters: {
+            type: 'object',
+            description: 'Build parameters object for parameterized Jenkins jobs',
+            examples: [{ BRANCH: 'main', ENV: 'production' }],
           },
         },
       },
@@ -11058,6 +12907,96 @@ export class NodeLibrary {
         'shopify customer', 'create shopify', 'shopify create',
         'shopify update', 'update shopify', 'shopify api',
         'shopify integration', 'shopify ecommerce', 'shopify commerce'
+      ],
+    };
+  }
+
+  private createShopifyTriggerSchema(): NodeSchema {
+    return {
+      type: 'shopify_trigger',
+      label: 'Shopify Trigger',
+      category: 'triggers',
+      description: 'Start workflows from Shopify order, customer, product, refund, checkout, and app uninstall webhooks',
+      configSchema: {
+        required: [],
+        optional: {
+          shopDomain: {
+            type: 'string',
+            description: 'Optional Shopify shop domain filter. The saved connection Store URL is used when omitted.',
+            examples: ['my-store.myshopify.com'],
+          },
+          topics: {
+            type: 'string',
+            description: 'Comma-separated Shopify webhook topics to subscribe to',
+            examples: ['orders/create, orders/paid, customers/create, products/update'],
+          },
+          financialStatus: {
+            type: 'string',
+            description: 'Optional order financial status filter',
+            examples: ['paid', 'pending', 'refunded'],
+          },
+          fulfillmentStatus: {
+            type: 'string',
+            description: 'Optional order fulfillment status filter',
+            examples: ['fulfilled', 'partial', 'unfulfilled'],
+          },
+          customerId: {
+            type: 'string',
+            description: 'Optional Shopify customer ID filter',
+            examples: ['1234567890'],
+          },
+          productId: {
+            type: 'string',
+            description: 'Optional Shopify product ID filter',
+            examples: ['1234567890'],
+          },
+          minTotalPrice: {
+            type: 'number',
+            description: 'Optional minimum order total filter',
+            default: 0,
+          },
+          currency: {
+            type: 'string',
+            description: 'Optional currency filter',
+            examples: ['usd', 'inr'],
+          },
+          query: {
+            type: 'string',
+            description: 'Optional keyword filter matched against order name, customer, product, ID, and status fields',
+          },
+        },
+      },
+      aiSelectionCriteria: {
+        whenToUse: ['User wants to start a workflow from a Shopify event', 'New Shopify order, paid order, customer, product, checkout, refund, or app uninstall'],
+        whenNotToUse: ['User wants to fetch or mutate Shopify data on demand'],
+        keywords: [
+          'shopify trigger', 'shopify webhook', 'new shopify order',
+          'shopify order paid', 'shopify order created', 'shopify order cancelled',
+          'shopify customer created', 'shopify product updated', 'shopify product created',
+          'shopify refund', 'shopify checkout', 'shopify app uninstalled'
+        ],
+        useCases: ['Process new orders', 'Route paid-order notifications', 'Sync customers', 'Update records when products change'],
+        intentDescription: 'Shopify trigger node that receives signed Shopify webhooks and starts workflows with normalized order, customer, product, checkout, and refund fields.',
+        intentCategories: ['trigger', 'webhook', 'ecommerce', 'shopify', 'orders'],
+      },
+      commonPatterns: [
+        {
+          name: 'new_paid_order',
+          description: 'Run when a Shopify order is paid',
+          config: { topics: 'orders/paid', financialStatus: 'paid' },
+        },
+        {
+          name: 'new_customer',
+          description: 'Run when a customer is created',
+          config: { topics: 'customers/create' },
+        },
+      ],
+      validationRules: [],
+      capabilities: ['shopify.receive', 'trigger.webhook', 'ecommerce.read'],
+      providers: ['shopify'],
+      keywords: [
+        'shopify trigger', 'shopify webhook', 'new shopify order',
+        'shopify order paid', 'shopify customer created', 'shopify product updated'
       ],
     };
   }
@@ -11266,6 +13205,64 @@ export class NodeLibrary {
     };
   }
 
+  private createStripeTriggerSchema(): NodeSchema {
+    return {
+      type: 'stripe_trigger',
+      label: 'Stripe Trigger',
+      category: 'triggers',
+      description: 'Trigger workflows from signed Stripe webhook events for Checkout, payments, invoices, subscriptions, customers, and refunds.',
+      providers: ['stripe'],
+      capabilities: ['stripe.receive', 'trigger.webhook', 'payment.read'],
+      configSchema: {
+        required: [],
+        optional: {
+          eventTypes: {
+            type: 'string',
+            description: 'Comma-separated Stripe event types to subscribe to. Leave blank for common payment, invoice, subscription, checkout, and refund events.',
+            default: 'checkout.session.completed, payment_intent.succeeded, payment_intent.payment_failed, invoice.payment_succeeded',
+            options: [
+              { label: 'Checkout Session Completed', value: 'checkout.session.completed' },
+              { label: 'Payment Intent Succeeded', value: 'payment_intent.succeeded' },
+              { label: 'Payment Intent Failed', value: 'payment_intent.payment_failed' },
+              { label: 'Invoice Payment Succeeded', value: 'invoice.payment_succeeded' },
+              { label: 'Subscription Created', value: 'customer.subscription.created' },
+              { label: 'Subscription Updated', value: 'customer.subscription.updated' },
+              { label: 'Subscription Deleted', value: 'customer.subscription.deleted' },
+              { label: 'Charge Refunded', value: 'charge.refunded' },
+            ],
+          },
+          connect: { type: 'boolean', description: 'Receive events for connected accounts using Stripe Connect.', default: false },
+          livemode: { type: 'boolean', description: 'Optional filter for live-mode or test-mode events.', default: false },
+          customerId: { type: 'string', description: 'Optional Stripe customer ID filter.', default: '' },
+          currency: { type: 'string', description: 'Optional ISO currency filter, such as usd or eur.', default: '' },
+          minAmount: { type: 'number', description: 'Optional minimum amount in the smallest currency unit.', default: 0 },
+          query: { type: 'string', description: 'Optional keyword filter matched against customer email, object ID, description, and status.', default: '' },
+        },
+      },
+      aiSelectionCriteria: {
+        whenToUse: [
+          'User wants a workflow to start when a Stripe payment succeeds or fails',
+          'User mentions Stripe Checkout, invoices, subscriptions, refunds, or payment webhooks',
+          'User wants real-time payment automation from Stripe events',
+        ],
+        whenNotToUse: [
+          'User wants to create a payment, customer, refund, or subscription manually; use the stripe action node',
+          'User mentions Shopify order webhooks',
+        ],
+        keywords: ['stripe trigger', 'stripe webhook', 'new stripe payment', 'payment succeeded', 'checkout completed', 'invoice paid', 'subscription updated'],
+        useCases: ['Payment fulfillment', 'Invoice notifications', 'Subscription lifecycle automation', 'Refund monitoring'],
+        intentDescription: 'Real-time Stripe webhook trigger for payment and billing events.',
+        intentCategories: ['trigger', 'stripe', 'payment_processing', 'billing', 'webhook'],
+      },
+      commonPatterns: [
+        { name: 'payment_succeeded', description: 'Run when a PaymentIntent succeeds', config: { eventTypes: 'payment_intent.succeeded' } },
+        { name: 'checkout_completed', description: 'Run when a Checkout Session completes', config: { eventTypes: 'checkout.session.completed' } },
+        { name: 'invoice_paid', description: 'Run when an invoice payment succeeds', config: { eventTypes: 'invoice.payment_succeeded' } },
+      ],
+      validationRules: [],
+    };
+  }
+
   private createPaypalSchema(): NodeSchema {
     return {
       type: 'paypal',
@@ -11422,24 +13419,179 @@ export class NodeLibrary {
       type: 'whatsapp_trigger',
       label: 'WhatsApp Trigger',
       category: 'triggers',
-      description: 'Trigger workflows on WhatsApp events: message received, delivered, read, conversation created',
+      description: 'Start a workflow in real time when a WhatsApp Cloud API message or status event arrives.',
       configSchema: {
-        required: ['event'],
+        required: [],
         optional: {
-          event: { type: 'string', description: 'WhatsApp event type', examples: ['message.received', 'message.sent', 'message.delivered', 'message.read', 'conversation.created', 'conversation.handoff'], default: 'message.received' },
-          phoneNumberId: { type: 'string', description: 'WhatsApp Phone Number ID to listen on' },
+          connectionId: {
+            type: 'string',
+            description: 'Saved WhatsApp connection. If blank, CtrlChecks uses the default active WhatsApp connection.',
+            examples: ['{{$connection.whatsapp}}'],
+          },
+          eventTypes: {
+            type: 'array',
+            description: 'WhatsApp events to accept from Meta webhooks.',
+            default: ['message'],
+            examples: [['message'], ['message', 'status.delivered', 'status.read']],
+          },
+          phoneNumberId: {
+            type: 'string',
+            description: 'Optional WhatsApp Phone Number ID to listen on. Leave blank to accept events for the connected account.',
+            examples: ['123456789012345'],
+          },
+          allowedWaIds: {
+            type: 'string',
+            description: 'Optional comma-separated sender WhatsApp IDs allowed to trigger this workflow.',
+            examples: ['15551234567,15557654321'],
+          },
+          verifyToken: {
+            type: 'string',
+            description: 'Secret verify token used by Meta when validating the webhook URL.',
+          },
+          validateSignature: {
+            type: 'boolean',
+            description: 'Validate X-Hub-Signature-256 using the configured Meta app secret.',
+            default: true,
+          },
         },
       },
       aiSelectionCriteria: {
-        whenToUse: ['Trigger on WhatsApp message', 'WhatsApp webhook trigger'],
-        whenNotToUse: ['Sending WhatsApp messages (use whatsapp node)'],
-        keywords: ['whatsapp trigger', 'whatsapp webhook', 'whatsapp event', 'on whatsapp message'],
-        useCases: ['WhatsApp chatbot', 'Automated WhatsApp responses'],
-        intentDescription: 'WhatsApp trigger node that fires workflows when WhatsApp events occur such as message received, delivered, read, or conversation created.',
-        intentCategories: ['trigger', 'whatsapp', 'webhook', 'messaging'],
+        whenToUse: [
+          'Workflow should start when someone sends a WhatsApp message',
+          'User wants a WhatsApp chatbot or support inbox',
+          'Incoming WhatsApp Cloud API webhook should trigger automation',
+        ],
+        whenNotToUse: [
+          'Only sending a WhatsApp message (use WhatsApp action node)',
+          'Telegram, Instagram, or SMS inbound messages',
+        ],
+        keywords: [
+          'whatsapp trigger', 'whatsapp webhook', 'whatsapp incoming message',
+          'when someone messages my whatsapp', 'whatsapp chatbot', 'receive whatsapp message',
+          'whatsapp real time', 'whatsapp cloud trigger'
+        ],
+        useCases: ['WhatsApp chatbot', 'WhatsApp support inbox', 'Automated WhatsApp replies'],
+        intentDescription: 'WhatsApp Trigger starts a workflow from Meta WhatsApp Cloud API webhooks, normalizing chatId, from, waId, text, messageId, phoneNumberId, eventType, status, timestamp, and raw for downstream AI Agent and WhatsApp reply nodes.',
+        intentCategories: ['trigger', 'whatsapp', 'webhook', 'messaging', 'chatbot', 'real_time_messaging'],
       },
-      commonPatterns: [],
+      commonPatterns: [
+        {
+          name: 'whatsapp_ai_reply',
+          description: 'WhatsApp Trigger -> AI Agent -> WhatsApp Send Text',
+          config: {
+            eventTypes: ['message'],
+            phoneNumberId: '',
+            allowedWaIds: '',
+          },
+        },
+      ],
       validationRules: [],
+      capabilities: ['whatsapp.receive', 'message.receive', 'trigger.webhook'],
+      providers: ['whatsapp'],
+      keywords: [
+        'whatsapp', 'whatsapp trigger', 'whatsapp webhook', 'whatsapp incoming message',
+        'whatsapp chatbot', 'whatsapp cloud trigger'
+      ],
+    };
+  }
+
+  private createFacebookTriggerSchema(): NodeSchema {
+    return {
+      type: 'facebook_trigger',
+      label: 'Facebook Page/Messenger Trigger',
+      category: 'triggers',
+      description: 'Start a workflow when Facebook Page or Messenger receives a real-time message, comment, mention, postback, lead, or feed event',
+      configSchema: {
+        required: [],
+        optional: {
+          connectionId: {
+            type: 'string',
+            description: 'Optional saved Facebook connection ID. If blank, the active Facebook connection is used.',
+            examples: ['facebook_oauth_123'],
+          },
+          eventTypes: {
+            type: 'array',
+            description: 'Facebook event types to accept',
+            default: ['message', 'comment', 'mention', 'postback', 'leadgen', 'feed'],
+            examples: [['message', 'comment'], ['leadgen'], ['feed']],
+          },
+          pageId: {
+            type: 'string',
+            description: 'Optional Facebook Page ID filter',
+            examples: ['123456789012345'],
+          },
+          allowedSenderIds: {
+            type: 'string',
+            description: 'Optional comma-separated PSIDs or user IDs allowed to trigger this workflow',
+            examples: ['123456789,987654321'],
+          },
+          verifyToken: {
+            type: 'string',
+            description: 'Meta webhook verify token used during webhook challenge setup',
+            examples: ['use-a-random-shared-secret'],
+          },
+          validateSignature: {
+            type: 'boolean',
+            description: 'Validate X-Hub-Signature-256 with META_APP_SECRET or FACEBOOK_APP_SECRET',
+            default: true,
+          },
+        },
+      },
+      aiSelectionCriteria: {
+        whenToUse: [
+          'User wants to react to Facebook Messenger messages',
+          'User wants to trigger workflows from Facebook Page comments, mentions, leads, or feed changes',
+        ],
+        whenNotToUse: ['User wants to post a Facebook update without a real-time incoming event'],
+        keywords: [
+          'facebook trigger',
+          'facebook webhook',
+          'messenger trigger',
+          'facebook messenger',
+          'facebook page message',
+          'facebook page comment',
+          'facebook mention',
+          'facebook leadgen',
+          'lead ad',
+          'when someone messages my facebook page',
+          'when someone comments on my facebook page',
+        ],
+        useCases: [
+          'AI auto-reply to Facebook Page messages',
+          'Route Facebook comments to moderation or support',
+          'Process Facebook lead ad submissions',
+        ],
+        intentDescription: 'Facebook Page/Messenger real-time trigger for Messenger DMs, Page comments, mentions, postbacks, leadgen, and feed updates.',
+        intentCategories: ['trigger', 'webhook', 'facebook', 'messenger', 'social_media'],
+      },
+      commonPatterns: [
+        {
+          name: 'facebook_ai_messenger_reply',
+          description: 'Reply to a Facebook Messenger message with an AI Agent response',
+          config: { eventTypes: ['message', 'postback'], validateSignature: true },
+        },
+        {
+          name: 'facebook_comment_reply',
+          description: 'Reply to a Facebook Page comment',
+          config: { eventTypes: ['comment', 'feed'], validateSignature: true },
+        },
+        {
+          name: 'facebook_leadgen_route',
+          description: 'Route a Facebook lead ad submission to CRM or email',
+          config: { eventTypes: ['leadgen'], validateSignature: true },
+        },
+      ],
+      validationRules: [],
+      capabilities: ['facebook.receive', 'messenger.receive', 'message.receive', 'comment.receive', 'lead.receive', 'trigger.webhook'],
+      providers: ['facebook'],
+      keywords: [
+        'facebook trigger',
+        'facebook webhook',
+        'messenger trigger',
+        'facebook page message',
+        'facebook comment trigger',
+        'facebook leadgen trigger',
+      ],
     };
   }
 
@@ -11448,24 +13600,57 @@ export class NodeLibrary {
       type: 'instagram_trigger',
       label: 'Instagram Trigger',
       category: 'triggers',
-      description: 'Trigger workflows on Instagram events: new DM, comment, mention, postback',
+      description: 'Trigger workflows on real-time Instagram events: DM, comment, mention, story reply, or postback',
       configSchema: {
-        required: ['event'],
+        required: [],
         optional: {
-          event: { type: 'string', description: 'Instagram event type', examples: ['message.received', 'comment.created', 'mention.created', 'postback'], default: 'message.received' },
-          instagramBusinessAccountId: { type: 'string', description: 'Instagram Business Account ID to listen on' },
+          connectionId: { type: 'string', description: 'Optional saved Instagram connection ID' },
+          eventTypes: {
+            type: 'array',
+            description: 'Instagram event types to listen for',
+            examples: ['message', 'comment', 'mention', 'message.story_reply', 'postback'],
+            default: ['message', 'comment', 'mention', 'message.story_reply'],
+          },
+          instagramBusinessAccountId: { type: 'string', description: 'Optional Instagram Business Account ID filter' },
+          allowedSenderIds: { type: 'string', description: 'Optional comma-separated Instagram sender IDs allowed to trigger this workflow' },
+          verifyToken: { type: 'string', description: 'Meta webhook verify token' },
+          validateSignature: { type: 'boolean', description: 'Validate Meta X-Hub-Signature-256 before execution', default: true },
         },
       },
       aiSelectionCriteria: {
-        whenToUse: ['Trigger on Instagram DM', 'Instagram webhook trigger', 'Instagram comment trigger'],
+        whenToUse: ['Trigger on Instagram DM', 'Instagram webhook trigger', 'Instagram comment trigger', 'Instagram mention or story reply automation'],
         whenNotToUse: ['Posting to Instagram (use instagram node)'],
-        keywords: ['instagram trigger', 'instagram webhook', 'instagram event', 'on instagram message', 'instagram dm trigger'],
-        useCases: ['Instagram chatbot', 'Automated Instagram responses', 'Comment moderation'],
-        intentDescription: 'Instagram trigger node that fires workflows when Instagram events occur such as new DM, comment, mention, or postback.',
-        intentCategories: ['trigger', 'instagram', 'webhook', 'social_media'],
+        keywords: [
+          'instagram trigger', 'instagram webhook', 'instagram event', 'on instagram message',
+          'instagram dm trigger', 'when someone messages my instagram', 'instagram comment trigger',
+          'instagram mention trigger', 'instagram story reply'
+        ],
+        useCases: ['Instagram chatbot', 'Automated Instagram responses', 'Comment moderation', 'Story reply routing'],
+        intentDescription: 'Instagram Trigger starts a workflow from Meta Instagram webhooks, normalizing chatId, senderId, recipientId, text, commentId, mediaId, mentionId, eventType, timestamp, and raw for downstream AI Agent and Instagram reply nodes.',
+        intentCategories: ['trigger', 'instagram', 'webhook', 'social_media', 'messaging', 'chatbot'],
       },
-      commonPatterns: [],
+      commonPatterns: [
+        {
+          name: 'instagram_ai_dm_reply',
+          description: 'Instagram Trigger -> AI Agent -> Instagram Send Text',
+          config: {
+            eventTypes: ['message', 'message.story_reply'],
+            instagramBusinessAccountId: '',
+            allowedSenderIds: '',
+          },
+        },
+        {
+          name: 'instagram_comment_reply',
+          description: 'Instagram Trigger -> AI Agent -> Instagram Reply to Comment',
+          config: {
+            eventTypes: ['comment', 'mention'],
+          },
+        },
+      ],
       validationRules: [],
+      capabilities: ['instagram.receive', 'message.receive', 'comment.receive', 'trigger.webhook'],
+      providers: ['instagram'],
+      keywords: ['instagram', 'instagram trigger', 'instagram webhook', 'instagram dm', 'instagram comment', 'instagram mention'],
     };
   }
 
@@ -11968,9 +14153,9 @@ export class NodeLibrary {
       description: 'Fetch events, event types, scheduled meetings, and user info from Calendly.',
       providers: ['calendly'],
       configSchema: {
-        required: ['accessToken', 'operation'],
+        required: ['operation'],
         optional: {
-          accessToken: { type: 'string', description: 'Calendly personal access token', default: '' },
+          accessToken: { type: 'string', description: 'Optional Calendly personal access token fallback; prefer a saved Calendly connection', default: '' },
           operation: {
             type: 'string', description: 'Action to perform', default: 'get_events',
             options: [
@@ -11993,7 +14178,8 @@ export class NodeLibrary {
         intentCategories: ['scheduling', 'calendar', 'meetings', 'productivity'],
       },
       commonPatterns: [
-        { name: 'get_events', description: 'List user events', config: { operation: 'get_events', accessToken: '{{$credentials.calendly.accessToken}}' } },
+        { name: 'get_user', description: 'Get the connected Calendly user', config: { operation: 'get_user' } },
+        { name: 'get_scheduled_events', description: 'List scheduled events for a Calendly user URI', config: { operation: 'get_scheduled_events', userUri: '{{$json.user.uri}}' } },
       ],
       validationRules: [
         { field: 'operation', validator: (v: any) => ['get_events','get_event_types','get_scheduled_events','get_user'].includes(v), errorMessage: 'Invalid operation' },
@@ -12053,7 +14239,7 @@ export class NodeLibrary {
       description: 'Retrieve form responses, create forms, and fetch form definitions using Typeform.',
       providers: ['typeform'],
       configSchema: {
-        required: ['operation', 'apiKey'],
+        required: ['operation'],
         optional: {
           operation: {
             type: 'string', description: 'Typeform operation', default: 'get_responses',
@@ -12063,7 +14249,7 @@ export class NodeLibrary {
               { label: 'Get Form', value: 'get_form' },
             ],
           },
-          apiKey: { type: 'string', description: 'Typeform personal access token', default: '' },
+          apiKey: { type: 'string', description: 'Optional Typeform personal access token fallback; prefer a saved Typeform connection', default: '' },
           formId: { type: 'string', description: 'Form ID', default: '' },
           title: { type: 'string', description: 'Form title (for create_form)', default: '' },
         },
@@ -12077,11 +14263,145 @@ export class NodeLibrary {
         intentCategories: ['forms', 'survey', 'data_collection', 'productivity'],
       },
       commonPatterns: [
-        { name: 'get_responses', description: 'Get responses for a form', config: { operation: 'get_responses', apiKey: '{{$credentials.typeform.apiKey}}', formId: '{{$json.formId}}' } },
+        { name: 'get_responses', description: 'Get responses for a form', config: { operation: 'get_responses', formId: '{{$json.formId}}' } },
       ],
       validationRules: [
         { field: 'operation', validator: (v: any) => ['get_responses','create_form','get_form'].includes(v), errorMessage: 'Invalid operation' },
       ],
+    };
+  }
+
+  private createTypeformTriggerSchema(): NodeSchema {
+    return {
+      type: 'typeform_trigger',
+      label: 'Typeform Trigger',
+      category: 'triggers',
+      description: 'Start workflows from new Typeform form responses',
+      configSchema: {
+        required: ['formId'],
+        optional: {
+          query: {
+            type: 'string',
+            description: 'Optional keyword filter matched against the response answers',
+          },
+        },
+      },
+      aiSelectionCriteria: {
+        whenToUse: [
+          'Start a workflow when someone submits a Typeform',
+          'React to new survey or questionnaire responses',
+        ],
+        whenNotToUse: [
+          'Reading existing responses from an existing workflow (use typeform)',
+          'Other form providers (use tally_trigger for Tally)',
+        ],
+        keywords: [
+          'typeform trigger', 'new typeform response', 'new form response',
+          'typeform submission', 'typeform webhook',
+        ],
+        useCases: ['Lead intake automation', 'Survey response processing', 'Form-triggered AI replies'],
+        intentDescription: 'Typeform Trigger starts a workflow when a watched Typeform form receives a new response, delivered through a Typeform webhook validated with an HMAC signature. It normalizes the response answers into $json for downstream nodes.',
+        intentCategories: ['trigger', 'typeform', 'forms', 'survey', 'data_collection'],
+      },
+      commonPatterns: [
+        {
+          name: 'typeform_lead_intake',
+          description: 'Process new Typeform leads with AI',
+          config: {},
+        },
+      ],
+      validationRules: [],
+      capabilities: ['trigger.webhook', 'typeform.receive', 'form.receive'],
+      providers: ['typeform'],
+      keywords: [
+        'typeform trigger', 'new typeform response', 'new form response', 'typeform submission',
+      ],
+      outputType: 'object',
+      outputSchema: {
+        eventId: { type: 'string' },
+        eventType: { type: 'string' },
+        source: { type: 'string' },
+        timestamp: { type: 'string' },
+        formId: { type: 'string' },
+        responseId: { type: 'string' },
+        answers: { type: 'object' },
+        hidden: { type: 'object' },
+        raw: { type: 'object' },
+      },
+      schemaVersion: '1.0.0',
+      nodeCapability: {
+        inputType: ['object'],
+        outputType: 'object',
+        acceptsArray: false,
+        producesArray: false,
+      },
+    };
+  }
+
+  private createTallyTriggerSchema(): NodeSchema {
+    return {
+      type: 'tally_trigger',
+      label: 'Tally Trigger',
+      category: 'triggers',
+      description: 'Start workflows from new Tally form submissions',
+      configSchema: {
+        required: ['formId'],
+        optional: {
+          query: {
+            type: 'string',
+            description: 'Optional keyword filter matched against the submission answers',
+          },
+        },
+      },
+      aiSelectionCriteria: {
+        whenToUse: [
+          'Start a workflow when someone submits a Tally form',
+          'React to new Tally form submissions',
+        ],
+        whenNotToUse: [
+          'Reading existing responses from an existing workflow (Tally has no read/list action node yet)',
+          'Other form providers (use typeform_trigger for Typeform)',
+        ],
+        keywords: [
+          'tally trigger', 'new tally response', 'new tally submission',
+          'tally form submission', 'tally webhook',
+        ],
+        useCases: ['Lead intake automation', 'Survey response processing', 'Form-triggered AI replies'],
+        intentDescription: 'Tally Trigger starts a workflow when a watched Tally form receives a new submission, delivered through a Tally webhook validated with an HMAC signature. It normalizes the submission fields into $json for downstream nodes.',
+        intentCategories: ['trigger', 'tally', 'forms', 'survey', 'data_collection'],
+      },
+      commonPatterns: [
+        {
+          name: 'tally_lead_intake',
+          description: 'Process new Tally leads with AI',
+          config: {},
+        },
+      ],
+      validationRules: [],
+      capabilities: ['trigger.webhook', 'tally.receive', 'form.receive'],
+      providers: ['tally'],
+      keywords: [
+        'tally trigger', 'new tally response', 'new tally submission', 'tally form submission',
+      ],
+      outputType: 'object',
+      outputSchema: {
+        eventId: { type: 'string' },
+        eventType: { type: 'string' },
+        source: { type: 'string' },
+        timestamp: { type: 'string' },
+        formId: { type: 'string' },
+        formName: { type: 'string' },
+        responseId: { type: 'string' },
+        answers: { type: 'object' },
+        raw: { type: 'object' },
+      },
+      schemaVersion: '1.0.0',
+      nodeCapability: {
+        inputType: ['object'],
+        outputType: 'object',
+        acceptsArray: false,
+        producesArray: false,
+      },
     };
   }
 
@@ -12218,7 +14538,13 @@ export class NodeLibrary {
           },
           query: { type: 'string', description: 'SQL query', default: '' },
           table: { type: 'string', description: 'Table name', default: '' },
+          data: { type: 'object', description: 'Row data for insert or update', default: {} },
+          where: { type: 'object', description: 'Equality filter for update or delete', default: {} },
           procedureName: { type: 'string', description: 'Stored procedure name', default: '' },
+          params: { type: 'object', description: 'Named T-SQL parameters for query or stored procedure', default: {} },
+          parameters: { type: 'object', description: 'Alias for named T-SQL parameters', default: {} },
+          filters: { type: 'object', description: 'Alias for Where JSON', default: {} },
+          limit: { type: 'number', description: 'Maximum rows for generated table select queries', default: 100 },
         },
       },
       aiSelectionCriteria: {
@@ -12267,8 +14593,12 @@ export class NodeLibrary {
           },
           query: { type: 'string', description: 'SQL query', default: '' },
           table: { type: 'string', description: 'Table name', default: '' },
+          data: { type: 'object', description: 'Row data for insert or update', default: {} },
+          where: { type: 'object', description: 'Equality filter for update, delete, and time-series operations', default: {} },
+          params: { type: 'array', description: 'Ordered PostgreSQL parameters for executeQuery', default: [] },
           timeColumn: { type: 'string', description: 'Time column for timeBucket/first/last', default: '' },
           interval: { type: 'string', description: 'Time interval', default: '' },
+          bucketColumn: { type: 'string', description: 'Column grouped alongside time bucket counts', default: '' },
           valueColumn: { type: 'string', description: 'Value column for first/last', default: '' },
         },
       },
@@ -12445,7 +14775,6 @@ export class NodeLibrary {
             options: [
               { label: 'Sites', value: 'sites' },
               { label: 'Deploys', value: 'deploys' },
-              { label: 'Forms', value: 'forms' },
             ],
           },
           operation: {
@@ -12637,7 +14966,7 @@ export class NodeLibrary {
       description: 'Send prompts to Cohere Command models and generate AI text responses.',
       providers: ['cohere'],
       configSchema: {
-        required: ['model', 'prompt'],
+        required: ['apiKey', 'model', 'prompt'],
         optional: {
           model: {
             type: 'string', description: 'Cohere model to use', default: 'command-r-08-2024',
@@ -12649,8 +14978,8 @@ export class NodeLibrary {
             ],
           },
           prompt:      { type: 'string', description: 'User message to send', default: '' },
-          preamble:    { type: 'string', description: 'System-level persona instruction', default: '' },
-          apiKey:      { type: 'string', description: 'Cohere API key', default: '' },
+          preamble:    { type: 'string', description: 'System-level persona instruction sent to Cohere preamble', default: '' },
+          apiKey:      { type: 'string', description: 'Cohere API key read directly by the current runtime', default: '' },
           temperature: { type: 'number', description: 'Sampling temperature [0–2]', default: 0.7 },
           maxTokens:   { type: 'number', description: 'Max tokens to generate', default: 1024 },
         },
@@ -12664,10 +14993,10 @@ export class NodeLibrary {
         intentCategories: ['ai', 'llm', 'text-generation'],
       },
       commonPatterns: [
-        { name: 'generate_text', description: 'Generate a response from a prompt', config: { model: 'command', apiKey: '{{$credentials.cohere.apiKey}}', prompt: 'Summarize the following: {{$json.text}}' } },
+        { name: 'generate_text', description: 'Generate a response from a prompt', config: { model: 'command-r-08-2024', apiKey: '{{$credentials.cohere.apiKey}}', prompt: 'Summarize the following: {{$json.text}}' } },
       ],
       validationRules: [
-        { field: 'model', validator: (v: any) => ['command','command-light','command-r','command-r-plus'].includes(v), errorMessage: 'Invalid Cohere model' },
+        { field: 'model', validator: (v: any) => ['command-r7b-12-2024','command-r-08-2024','command-r-plus-08-2024','command-nightly'].includes(v), errorMessage: 'Invalid Cohere model' },
       ],
     };
   }
@@ -12680,7 +15009,7 @@ export class NodeLibrary {
       description: 'Orchestrate AI chains and agents using LangChain with configurable LLM providers and tools.',
       providers: ['openai'],
       configSchema: {
-        required: ['operation', 'prompt'],
+        required: ['operation', 'provider', 'apiKey', 'prompt'],
         optional: {
           operation: {
             type: 'string', description: 'LangChain execution mode', default: 'run_chain',
@@ -12698,8 +15027,8 @@ export class NodeLibrary {
           },
           prompt: { type: 'string', description: 'Input prompt or task description', default: '' },
           tools: { type: 'array', description: 'Tool definitions for agent mode', default: [] },
-          memory: { type: 'boolean', description: 'Enable conversation memory', default: false },
-          apiKey: { type: 'string', description: 'API key for LLM provider', default: '' },
+          memory: { type: 'boolean', description: 'Visible UI field; current executor does not read memory', default: false },
+          apiKey: { type: 'string', description: 'API key for selected OpenAI or Anthropic provider; current executor reads this field directly', default: '' },
         },
       },
       aiSelectionCriteria: {
@@ -12775,8 +15104,9 @@ export class NodeLibrary {
       description: 'Run inference against any Hugging Face model via the Inference API.',
       providers: ['huggingface'],
       configSchema: {
-        required: ['model', 'prompt'],
+        required: ['apiKey', 'model', 'prompt'],
         optional: {
+          apiKey: { type: 'string', description: 'Hugging Face API token read directly by runtime', default: '' },
           model: {
             type: 'string',
             description: 'Hugging Face model ID (hf-inference provider) — all options below are tested and working',
@@ -12790,7 +15120,9 @@ export class NodeLibrary {
             ],
           },
           prompt: { type: 'string', description: 'Input text prompt', default: '' },
+          task: { type: 'string', description: 'Visible UI hint only; current runtime does not send task separately', default: 'text-generation' },
           maxTokens: { type: 'number', description: 'Max new tokens to generate', default: 256 },
+          parameters: { type: 'object', description: 'Legacy visible JSON field ignored by the current huggingface executor', default: {} },
           temperature: { type: 'number', description: 'Sampling temperature (0–1)', default: 0.7 },
         },
       },
@@ -12818,8 +15150,9 @@ export class NodeLibrary {
       description: 'Generate text and chat completions using Mistral AI models.',
       providers: ['mistral'],
       configSchema: {
-        required: ['model', 'prompt'],
+        required: ['apiKey', 'model', 'prompt'],
         optional: {
+          apiKey: { type: 'string', description: 'Mistral API key read directly by runtime', default: '' },
           model: {
             type: 'string', description: 'Mistral model to use', default: 'mistral-small-latest',
             options: [
@@ -12861,16 +15194,18 @@ export class NodeLibrary {
         required: ['operation'],
         optional: {
           operation: {
-            type: 'string', description: 'Operation to perform', default: 'getIssues',
+            type: 'string', description: 'Operation to perform', default: 'list_issues',
             options: [
-              { label: 'Get Issues', value: 'getIssues' },
-              { label: 'Create Issue', value: 'createIssue' },
-              { label: 'Update Issue', value: 'updateIssue' },
-              { label: 'Get Teams', value: 'getTeams' },
+              { label: 'List Issues', value: 'list_issues' },
+              { label: 'Create Issue', value: 'create_issue' },
+              { label: 'Update Issue', value: 'update_issue' },
+              { label: 'Get Issue', value: 'get_issue' },
+              { label: 'Get Teams', value: 'get_teams' },
             ],
           },
+          apiKey: { type: 'string', description: 'Optional Linear personal API key fallback; prefer a saved Linear connection', default: '' },
           teamId: { type: 'string', description: 'Team ID (for issue operations)', default: '' },
-          issueId: { type: 'string', description: 'Issue ID (for update)', default: '' },
+          issueId: { type: 'string', description: 'Issue ID (for get/update)', default: '' },
           title: { type: 'string', description: 'Issue title', default: '' },
           description: { type: 'string', description: 'Issue description (markdown)', default: '' },
           stateId: { type: 'string', description: 'Workflow state ID', default: '' },
@@ -12886,7 +15221,71 @@ export class NodeLibrary {
         intentCategories: ['productivity', 'project-management', 'engineering'],
       },
       commonPatterns: [
-        { name: 'create_issue', description: 'Create a new issue in Linear', config: { operation: 'createIssue', title: '{{$json.title}}', description: '{{$json.description}}' } },
+        { name: 'get_teams', description: 'List Linear teams before creating issues', config: { operation: 'get_teams' } },
+        { name: 'create_issue', description: 'Create a new issue in Linear', config: { operation: 'create_issue', teamId: '{{$json.teamId}}', title: '{{$json.title}}', description: '{{$json.description}}' } },
+      ],
+      validationRules: [],
+    };
+  }
+
+  private createLinearTriggerSchema(): NodeSchema {
+    return {
+      type: 'linear_trigger',
+      label: 'Linear Trigger',
+      category: 'triggers',
+      description: 'Trigger workflows from signed Linear webhooks for issue, comment, project, cycle, label, reaction, document, initiative, customer, and user events.',
+      providers: ['linear'],
+      capabilities: ['linear.receive', 'trigger.webhook', 'issue.read'],
+      configSchema: {
+        required: [],
+        optional: {
+          teamId: { type: 'string', description: 'Optional Linear team UUID. Leave blank to watch all public teams.', default: '' },
+          allPublicTeams: { type: 'boolean', description: 'Watch all public teams when no team ID is provided.', default: true },
+          resourceTypes: {
+            type: 'string',
+            description: 'Comma-separated Linear resource types to subscribe to.',
+            default: 'Issue, Comment',
+            options: [
+              { label: 'Issue', value: 'Issue' },
+              { label: 'Comment', value: 'Comment' },
+              { label: 'Project', value: 'Project' },
+              { label: 'Cycle', value: 'Cycle' },
+              { label: 'Issue Label', value: 'IssueLabel' },
+              { label: 'Reaction', value: 'Reaction' },
+              { label: 'Document', value: 'Document' },
+              { label: 'Initiative', value: 'Initiative' },
+              { label: 'Customer', value: 'Customer' },
+              { label: 'User', value: 'User' },
+            ],
+          },
+          eventTypes: {
+            type: 'string',
+            description: 'Comma-separated normalized event filters such as issue_created, issue_updated, issue_removed, comment_created, project_updated.',
+            default: 'issue_created, issue_updated, comment_created',
+          },
+          issueId: { type: 'string', description: 'Optional Linear issue UUID or identifier filter.', default: '' },
+          projectId: { type: 'string', description: 'Optional Linear project UUID filter.', default: '' },
+          actorId: { type: 'string', description: 'Optional Linear actor/user UUID filter.', default: '' },
+          query: { type: 'string', description: 'Optional keyword filter matched against issue titles, comment bodies, project names, and URLs.', default: '' },
+        },
+      },
+      aiSelectionCriteria: {
+        whenToUse: [
+          'User wants a workflow to start when a Linear issue changes',
+          'User mentions Linear comments, projects, cycles, or issue tracker events',
+        ],
+        whenNotToUse: [
+          'User wants to create or update Linear issues manually; use the linear action node',
+          'User mentions Jira or Trello webhooks',
+        ],
+        keywords: ['linear trigger', 'linear webhook', 'new linear issue', 'linear issue updated', 'linear comment', 'linear project'],
+        useCases: ['Issue triage', 'Comment notifications', 'Project status automation', 'Engineering workflow handoff'],
+        intentDescription: 'Real-time Linear webhook trigger for issue tracker events.',
+        intentCategories: ['trigger', 'linear', 'issue_tracking', 'project_management'],
+      },
+      commonPatterns: [
+        { name: 'linear_issue_triage', description: 'Run when a Linear issue is created or updated', config: { resourceTypes: 'Issue', eventTypes: 'issue_created, issue_updated' } },
+        { name: 'linear_comment_notify', description: 'Run when a Linear comment is created', config: { resourceTypes: 'Comment', eventTypes: 'comment_created' } },
       ],
       validationRules: [],
     };
@@ -12903,15 +15302,22 @@ export class NodeLibrary {
         required: ['operation'],
         optional: {
           operation: {
-            type: 'string', description: 'Operation to perform', default: 'getCards',
+            type: 'string', description: 'Operation to perform', default: 'list_cards',
             options: [
-              { label: 'Get Cards', value: 'getCards' },
-              { label: 'Create Card', value: 'createCard' },
-              { label: 'Update Card', value: 'updateCard' },
-              { label: 'Get Boards', value: 'getBoards' },
-              { label: 'Get Lists', value: 'getLists' },
+              { label: 'List Cards', value: 'list_cards' },
+              { label: 'Create Card', value: 'create_card' },
+              { label: 'Update Card', value: 'update_card' },
+              { label: 'Get Card', value: 'get_card' },
+              { label: 'Delete Card', value: 'delete_card' },
+              { label: 'Move Card', value: 'move_card' },
+              { label: 'Add Label', value: 'add_label' },
+              { label: 'Add Checklist', value: 'add_checklist' },
+              { label: 'Get Boards', value: 'get_boards' },
+              { label: 'Get Lists', value: 'get_lists' },
             ],
           },
+          apiKey: { type: 'string', description: 'Optional Trello API key fallback; prefer a saved Trello connection', default: '' },
+          token: { type: 'string', description: 'Optional Trello token fallback; prefer a saved Trello connection', default: '' },
           boardId: { type: 'string', description: 'Board ID', default: '' },
           listId: { type: 'string', description: 'List ID (for card operations)', default: '' },
           cardId: { type: 'string', description: 'Card ID (for update)', default: '' },
@@ -12928,9 +15334,64 @@ export class NodeLibrary {
         intentCategories: ['productivity', 'project-management'],
       },
       commonPatterns: [
-        { name: 'create_card', description: 'Create a new Trello card', config: { operation: 'createCard', cardName: '{{$json.title}}', cardDesc: '{{$json.description}}' } },
+        { name: 'get_boards', description: 'List Trello boards before choosing a list', config: { operation: 'get_boards' } },
+        { name: 'create_card', description: 'Create a new Trello card', config: { operation: 'create_card', listId: '{{$json.listId}}', cardName: '{{$json.title}}', cardDesc: '{{$json.description}}' } },
       ],
       validationRules: [],
+    };
+  }
+
+  private createTrelloTriggerSchema(): NodeSchema {
+    return {
+      type: 'trello_trigger',
+      label: 'Trello Trigger',
+      category: 'triggers',
+      description: 'Trigger workflows from signed Trello webhook events for cards, lists, boards, comments, members, and checklists.',
+      providers: ['trello'],
+      capabilities: ['trello.receive', 'trigger.webhook'],
+      configSchema: {
+        required: ['modelId'],
+        optional: {
+          modelId: {
+            type: 'string',
+            description: 'Trello model ID to watch. Use a board ID for broad board/list/card activity.',
+            default: '',
+          },
+          eventTypes: {
+            type: 'string',
+            description: 'Comma-separated event types such as card_created, card_updated, card_moved, card_commented, list_activity, checklist_activity.',
+            default: 'card_created, card_updated, card_moved, card_commented',
+          },
+          boardId: { type: 'string', description: 'Optional board ID filter', default: '' },
+          listId: { type: 'string', description: 'Optional list ID filter', default: '' },
+          cardId: { type: 'string', description: 'Optional card ID filter', default: '' },
+          memberId: { type: 'string', description: 'Optional member ID filter', default: '' },
+          query: { type: 'string', description: 'Optional keyword filter matched against card names and comments', default: '' },
+        },
+      },
+      aiSelectionCriteria: {
+        whenToUse: [
+          'User wants to start a workflow when a Trello card is created, updated, moved, or commented on',
+          'User wants real-time Trello board, list, card, checklist, or member activity',
+          'User says when a Trello card moves to a list',
+        ],
+        whenNotToUse: ['User wants to create or update Trello cards manually; use trello action node'],
+        keywords: ['trello trigger', 'trello webhook', 'new trello card', 'trello card moved', 'trello comment', 'trello checklist'],
+        useCases: ['Route moved cards', 'Summarize comments', 'Create downstream tasks from board changes'],
+        intentDescription: 'Real-time Trello webhook trigger for board/card/list/checklist/comment events.',
+        intentCategories: ['trigger', 'project-management', 'webhook'],
+      },
+      commonPatterns: [
+        { name: 'card_moved', description: 'React when a card moves between lists', config: { eventTypes: 'card_moved' } },
+        { name: 'card_commented', description: 'React when a card receives a comment', config: { eventTypes: 'card_commented' } },
+      ],
+      validationRules: [
+        {
+          field: 'modelId',
+          validator: (value) => typeof value === 'string' && value.trim().length > 0,
+          errorMessage: 'Trello Trigger requires a modelId so CtrlChecks can register the webhook.',
+        },
+      ],
     };
   }
 

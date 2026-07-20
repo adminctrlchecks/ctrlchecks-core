@@ -4,6 +4,7 @@
 import { Request, Response } from 'express';
 import { getDbClient } from '../core/database/aws-db-client';
 import { config } from '../core/config';
+import { normalizeExecutionStatus, normalizeExecutionTrigger } from '../core/execution/execution-db-enums';
 import { verifyWebhookSignature } from '../services/webhook-signature';
 import {
   shouldUseTriggerService,
@@ -128,11 +129,14 @@ export default async function webhookTriggerHandler(req: Request, res: Response)
       .insert({
         workflow_id: workflowId,
         user_id: workflow.user_id,
-        status: 'running',
-        trigger: 'webhook',
+        status: normalizeExecutionStatus('running'),
+        trigger: normalizeExecutionTrigger('webhook'),
         input: fullInput,
         logs: [],
         started_at: startedAt,
+        metadata: {
+          originalTrigger: 'webhook',
+        },
       })
       .select()
       .single();

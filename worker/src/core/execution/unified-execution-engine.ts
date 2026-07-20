@@ -66,8 +66,22 @@ function isTriggerNodeInline(node: WorkflowNode): boolean {
     'gmail_trigger',
     'slack_trigger',
     'discord_trigger',
+    'microsoft_teams_trigger',
+    'outlook_trigger',
+    'google_calendar_trigger',
+    'google_sheets_trigger',
+    'google_drive_trigger',
+    'typeform_trigger',
+    'tally_trigger',
+    'github_trigger',
+    'gitlab_trigger',
+    'jira_trigger',
+    'linear_trigger',
+    'trello_trigger',
+    'stripe_trigger',
+    'shopify_trigger',
   ];
-  
+
   return knownTriggerTypes.includes(nodeType);
 }
 

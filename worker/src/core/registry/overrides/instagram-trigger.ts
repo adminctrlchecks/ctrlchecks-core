@@ -1,9 +1,8 @@
 /**
- * ✅ INSTAGRAM TRIGGER NODE - Registry Override
+ * Instagram Trigger node registry override.
  *
- * Trigger node for Instagram webhook events.
- * Triggers are passive — execution returns { triggered: false }.
- * Actual triggering is handled by the webhook handler.
+ * Trigger nodes are passive during normal workflow execution. Real-time starts
+ * are created by worker/src/api/instagram-trigger.ts after Meta webhook checks.
  */
 
 import type { UnifiedNodeDefinition } from '../../types/unified-node-contract';
@@ -29,62 +28,105 @@ export function overrideInstagramTrigger(
     type: 'instagram_trigger',
     label: 'Instagram Trigger',
     category: 'triggers',
-    description: 'Trigger workflows on Instagram events: new DM, comment, mention, postback',
-    icon: '📸',
+    description: 'Trigger workflows on real-time Instagram events: DM, comment, mention, story reply, or postback',
+    icon: 'Instagram',
     version: '1.0.0',
     isBranching: false,
     incomingPorts: [],
     outgoingPorts: ['default'],
     inputSchema: {
-      event: {
+      connectionId: {
         type: 'string',
-        description: 'Instagram event type to listen for',
-        required: true,
-        default: 'message.received',
-        examples: ['message.received', 'comment.created', 'mention.created', 'postback'],
+        description: 'Optional saved Instagram connection ID. If blank, the active Instagram connection is used.',
+        required: false,
+        ownership: 'credential',
+        role: 'id',
+        fillMode: manualStatic,
+      },
+      eventTypes: {
+        type: 'array',
+        description: 'Instagram event types that can start this workflow.',
+        required: false,
+        default: ['message', 'comment', 'mention', 'message.story_reply'],
+        examples: ['message', 'comment', 'mention', 'message.story_reply', 'postback'],
         ownership: 'structural',
         role: 'config',
         fillMode: structuralBuildtime,
       },
       instagramBusinessAccountId: {
         type: 'string',
-        description: 'Instagram Business Account ID to listen on (optional)',
+        description: 'Optional Instagram Business Account ID filter.',
         required: false,
         ownership: 'value',
         role: 'id',
+        fillMode: manualStatic,
+      },
+      allowedSenderIds: {
+        type: 'string',
+        description: 'Optional comma-separated Instagram sender IDs allowed to trigger this workflow.',
+        required: false,
+        ownership: 'value',
+        role: 'config',
+        fillMode: manualStatic,
+      },
+      verifyToken: {
+        type: 'string',
+        description: 'Meta webhook verify token. Must match the value entered in Meta for Developers.',
+        required: false,
+        ownership: 'value',
+        role: 'config',
+        fillMode: manualStatic,
+      },
+      validateSignature: {
+        type: 'boolean',
+        description: 'Validate Meta X-Hub-Signature-256 using the worker Meta app secret.',
+        required: false,
+        default: true,
+        ownership: 'structural',
+        role: 'config',
         fillMode: manualStatic,
       },
     },
     outputSchema: {
       default: {
         name: 'default',
-        description: 'Instagram event payload',
+        description: 'Normalized Instagram webhook event payload',
         schema: {
           type: 'object',
           properties: {
-            senderId: { type: 'string' },
-            messageId: { type: 'string' },
+            eventId: { type: 'string' },
+            eventType: { type: 'string' },
+            source: { type: 'string' },
+            userId: { type: 'string' },
+            username: { type: 'string' },
             text: { type: 'string' },
             timestamp: { type: 'string' },
+            chatId: { type: 'string' },
+            senderId: { type: 'string' },
+            recipientId: { type: 'string' },
+            instagramBusinessAccountId: { type: 'string' },
+            pageId: { type: 'string' },
+            messageId: { type: 'string' },
+            messageType: { type: 'string' },
+            commentId: { type: 'string' },
+            mediaId: { type: 'string' },
+            mentionId: { type: 'string' },
+            postbackPayload: { type: 'string' },
+            isStoryReply: { type: 'boolean' },
+            raw: { type: 'object' },
           },
         },
       },
     },
-    requiredInputs: ['event'],
+    requiredInputs: [],
     defaultConfig: () => ({
-      event: 'message.received',
+      eventTypes: ['message', 'comment', 'mention', 'message.story_reply'],
+      validateSignature: true,
     }),
-    validateConfig: (config) => {
-      const errors: string[] = [];
-      if (!config.event) errors.push('event is required');
-      return { valid: errors.length === 0, errors };
-    },
-    execute: async (_context) => {
-      // Trigger nodes are passive — they are activated by webhook events, not by execution
-      return {
-        success: true,
-        output: { triggered: false },
-      };
-    },
+    validateConfig: () => ({ valid: true, errors: [] }),
+    execute: async () => ({
+      success: true,
+      output: { triggered: false },
+    }),
   };
 }

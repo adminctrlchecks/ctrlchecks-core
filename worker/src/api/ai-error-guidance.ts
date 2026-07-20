@@ -39,6 +39,13 @@ interface ErrorGuidanceRequest {
       previousNodeLabel?: string;
       previousNodeType?: string;
     }>;
+    structuralDrifts?: Array<{
+      nodeId?: string;
+      nodeLabel?: string;
+      nodeType?: string;
+      field: string;
+      changedKeys?: string[];
+    }>;
     phase?: string;
     provider?: string;
     operation?: string;
@@ -69,10 +76,21 @@ function runtimeIssuesAsMissingInputs(
 
 function hasConcreteSetupContext(req: ErrorGuidanceRequest): boolean {
   const ctx = req.context || {};
-  return Boolean(ctx.missingInputs?.length || ctx.runtimeValidationIssues?.length);
+  return Boolean(ctx.missingInputs?.length || ctx.runtimeValidationIssues?.length || ctx.structuralDrifts?.length);
 }
 
-function deterministicGuidance(req: ErrorGuidanceRequest): ErrorGuidanceResponse {
+function humanizeField(field: string): string {
+  return field
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+export function deterministicGuidance(req: ErrorGuidanceRequest): ErrorGuidanceResponse {
   const code = (req.errorCode || '').toUpperCase();
   const ctx = req.context || {};
   const missingInputs = ctx.missingInputs?.length
@@ -124,6 +142,31 @@ function deterministicGuidance(req: ErrorGuidanceRequest): ErrorGuidanceResponse
         nodeNames.length > 0 ? `Click the ${nodeNames.join(' or ')} node on the canvas` : 'Click the node that needs attention',
         `Fill in: ${fieldList}`,
         'Save and run the workflow again',
+      ],
+      tone: 'configuration',
+    };
+  }
+
+  // Post-freeze structural drift — a node's locked shape (field key/type, branch identity, etc.)
+  // changed after the workflow was frozen. Name the exact node/field instead of a generic message.
+  if (ctx.structuralDrifts?.length) {
+    const drifts = ctx.structuralDrifts;
+    const items = drifts.map((d) => {
+      const label = d.nodeLabel || d.nodeType || 'This node';
+      const fieldLabel = humanizeField(d.field);
+      return `${label} → ${fieldLabel}`;
+    });
+    const itemList = items.join(', ');
+    const nodeNames = [...new Set(drifts.map((d) => d.nodeLabel || d.nodeType).filter(Boolean))];
+    const nodeHint = nodeNames.length > 0 ? ` Open the ${nodeNames.join(' or ')} node to review it.` : '';
+    return {
+      title: 'This structure is locked',
+      description: `${itemList} changed shape after this workflow was frozen, so it can't be saved as-is.${nodeHint}`,
+      resolution: 'Add a new field or case instead of renaming/retyping an existing one, or undo this change and save again.',
+      nextSteps: [
+        nodeNames.length > 0 ? `Open the ${nodeNames.join(' or ')} node on the canvas` : 'Open the node that changed',
+        `Undo the structural change to: ${itemList}`,
+        'Save again — editing labels, options, or other values on existing fields is always allowed',
       ],
       tone: 'configuration',
     };

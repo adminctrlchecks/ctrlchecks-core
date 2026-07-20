@@ -7,14 +7,14 @@ export const noopSearchIndex = [
     slug: 'noop',
     category: 'Logic',
     href: '/docs/nodes/noop',
-    text: 'NoOp pass data through unchanged'
+    text: 'NoOp pass-through logic node that returns the incoming workflow object unchanged with no fields, no credentials, and no extra output wrapper.',
   },
   {
     type: 'operation',
-    title: 'NoOp: Configure',
+    title: 'NoOp: Pass Through',
     slug: 'noop',
     category: 'Logic',
-    href: '/docs/nodes/noop#operation-configure',
-    text: 'NoOp Configure passthrough no fields'
-  }
+    href: '/docs/nodes/noop#operation-passthrough',
+    text: 'Pass Through preserves fields such as orderId, status, and customerEmail exactly as received for downstream {{$json.field}} mapping.',
+  },
 ] satisfies DocsSearchIndexItem[];

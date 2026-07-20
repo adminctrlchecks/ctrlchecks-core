@@ -9,7 +9,7 @@
  * 2. Backend generates workflow graph
  * 3. Backend returns graph + required inputs + required credentials
  * 4. Frontend shows unified configuration modal
- * 5. User submits inputs â†' THIS ENDPOINT
+ * 5. User submits inputs ï¿½' THIS ENDPOINT
  * 6. Backend injects inputs into nodes
  * 7. Frontend calls attach-credentials
  * 8. Auto-run workflow
@@ -19,8 +19,8 @@
  * writable through this endpoint so AI-built and user-edited fields persist (no protected-config 409).
  *
  * Field-plane aligned keys (see ctrl_checks `wizard-types.ts`):
- * - `mode_<nodeId>_<fieldName>` â†' `data.config._fillMode[fieldName]`
- * - `unlock_<nodeId>_<fieldName>` â†' `data.config._ownershipUnlock[fieldName]` (registry unlockable credential fields only)
+ * - `mode_<nodeId>_<fieldName>` ï¿½' `data.config._fillMode[fieldName]`
+ * - `unlock_<nodeId>_<fieldName>` ï¿½' `data.config._ownershipUnlock[fieldName]` (registry unlockable credential fields only)
  * - Prefixed comprehensive ids: `cred_`, `input_`, `config_`, `resource_`, `op_` + `<nodeId>_<fieldName>`
  */
 
@@ -43,6 +43,7 @@ import {
 import { executionOrderManager } from '../core/orchestration/execution-order-manager';
 import { ErrorCode, createError } from '../core/utils/error-codes';
 import { unifiedNodeRegistry } from '../core/registry/unified-node-registry';
+import { detectStructuralDrift } from '../core/utils/structural-drift';
 import {
   coerceFieldFillModeByPolicy,
   resolveEffectiveFieldFillMode,
@@ -461,7 +462,7 @@ async function runAttachInputsPipeline(req: Request, res: Response): Promise<{ s
     }
 
     // Phase check: only block phases where attaching inputs is genuinely unsafe.
-    // Blocklist approach — any unrecognised phase is allowed so new phases never silently break the UI.
+    // Blocklist approach ï¿½ any unrecognised phase is allowed so new phases never silently break the UI.
     const currentPhase = workflow.phase || workflow.status || 'draft';
     const executingPhases = new Set(['executing', 'running']);
     logger.info(`[AttachInputs] Current workflow phase: "${currentPhase}" (phase=${workflow.phase}, status=${workflow.status})`);
@@ -899,7 +900,7 @@ async function runAttachInputsPipeline(req: Request, res: Response): Promise<{ s
         for (const fieldName of Object.keys(def.inputSchema)) {
           const mode = resolveEffectiveFieldFillMode(fieldName, def.inputSchema, config as Record<string, any>);
           if (mode !== 'runtime_ai') continue;
-          // Never clear a value that was explicitly set by this request batch — the
+          // Never clear a value that was explicitly set by this request batch ï¿½ the
           // user confirmed it in the Field Ownership step and it must reach the workflow.
           if (explicitlySetInBatch.has(fieldName)) continue;
           const current = config[fieldName];
@@ -1089,7 +1090,7 @@ async function runAttachInputsPipeline(req: Request, res: Response): Promise<{ s
               }
             }
             
-            // Registry-driven alias (e.g. Slack text â†' message via inputSchema.aliasOf)
+            // Registry-driven alias (e.g. Slack text ï¿½' message via inputSchema.aliasOf)
             const aliasFieldDef = unifiedDefForNode?.inputSchema?.[fieldName];
             const aliasTarget = resolveAliasTargetFieldName(fieldName, aliasFieldDef as any);
             if (aliasTarget) {
@@ -1099,7 +1100,7 @@ async function runAttachInputsPipeline(req: Request, res: Response): Promise<{ s
                 updated = true;
                 explicitlySetInBatch.add(aliasTarget);
                 explicitlySetInBatch.add(fieldName);
-                logger.info(`[AttachInputs] Mapped alias '${fieldName}' â†' '${aliasTarget}' for node ${node.id} (${nodeType})`);
+                logger.info(`[AttachInputs] Mapped alias '${fieldName}' ï¿½' '${aliasTarget}' for node ${node.id} (${nodeType})`);
                 continue;
               }
             }
@@ -1280,7 +1281,7 @@ async function runAttachInputsPipeline(req: Request, res: Response): Promise<{ s
                 if (cur === undefined || cur === null || cur === '') {
                   (config as any)[nestedAliasTarget] = fieldValue;
                   updated = true;
-                  logger.info(`[AttachInputs] Mapped alias '${fieldName}' â†' '${nestedAliasTarget}' for node ${node.id} (${nodeType}) (nested)`);
+                  logger.info(`[AttachInputs] Mapped alias '${fieldName}' ï¿½' '${nestedAliasTarget}' for node ${node.id} (${nodeType}) (nested)`);
                   continue;
                 }
               }
@@ -1550,7 +1551,7 @@ async function runAttachInputsPipeline(req: Request, res: Response): Promise<{ s
           '',
       },
     } as any;
-    // Snapshot existing credentialId values before materialization — they must survive the pipeline
+    // Snapshot existing credentialId values before materialization ï¿½ they must survive the pipeline
     const credentialIdSnapshot = new Map<string, unknown>();
     for (const node of (structuralInput.nodes ?? [])) {
       const cid = (node as any)?.data?.config?.credentialId;
@@ -1839,8 +1840,8 @@ async function runAttachInputsPipeline(req: Request, res: Response): Promise<{ s
     }
     
     // âœ… PHASE PIPELINE: Determine the correct next phase after successful input attachment.
-    // ready_for_ownership â†' signals attach-credentials that freeze boundary is established.
-    // ready_for_execution â†' no credentials needed, workflow is ready.
+    // ready_for_ownership ï¿½' signals attach-credentials that freeze boundary is established.
+    // ready_for_execution ï¿½' no credentials needed, workflow is ready.
     let nextStatus = 'active';
     let nextPhase = 'ready_for_ownership'; // Default: structure frozen, credentials stage can start
     const readiness = await workflowLifecycleManager.validateExecutionReady(finalNormalizedGraph as any, userId);
@@ -1928,15 +1929,13 @@ async function runAttachInputsPipeline(req: Request, res: Response): Promise<{ s
       const baselineNodeById = new Map(
         (normalizedGraph.nodes || []).map((n: any) => [String(n?.id || ''), n])
       );
-      const structuralDrifts: Array<{ nodeId: string; field: string }> = [];
-      const hasChanged = (before: unknown, after: unknown): boolean => {
-        if (before === after) return false;
-        try {
-          return JSON.stringify(before) !== JSON.stringify(after);
-        } catch {
-          return true;
-        }
-      };
+      const structuralDrifts: Array<{
+        nodeId: string;
+        nodeLabel?: string;
+        nodeType?: string;
+        field: string;
+        changedKeys?: string[];
+      }> = [];
 
       for (const node of nodesToSave as any[]) {
         const nodeId = String(node?.id || '');
@@ -1947,18 +1946,12 @@ async function runAttachInputsPipeline(req: Request, res: Response): Promise<{ s
         const beforeConfig = (before as any)?.data?.config || {};
         const afterConfig = (node as any)?.data?.config || {};
         const nodeType = String((node as any)?.data?.type || (node as any)?.type || '');
+        const nodeLabel = String((node as any)?.data?.label || nodeType);
 
-        const protectedFields =
-          nodeType === 'switch'
-            ? ['cases', 'rules', 'expression']
-            : nodeType === 'form'
-              ? ['fields']
-              : [];
-
-        for (const field of protectedFields) {
-          if (hasChanged(beforeConfig?.[field], afterConfig?.[field])) {
-            structuralDrifts.push({ nodeId, field });
-          }
+        // Registry-driven: applies to every node type with `ownership: 'structural'` fields,
+        // not a hardcoded per-node-type list. See core/utils/structural-drift.ts.
+        for (const drift of detectStructuralDrift(nodeType, beforeConfig, afterConfig)) {
+          structuralDrifts.push({ nodeId, nodeLabel, nodeType, ...drift });
         }
       }
 
@@ -1966,7 +1959,7 @@ async function runAttachInputsPipeline(req: Request, res: Response): Promise<{ s
         return { statusCode: 409, body: (
           createError(
             ErrorCode.TOPOLOGY_MUTATION_BLOCKED_CONFIGURING_INPUTS,
-            'Post-freeze structural config drift detected. Switch/form structure cannot be rewritten in this phase.',
+            'Post-freeze structural config drift detected. Structure cannot be rewritten in this phase.',
             { workflowId, drifts: structuralDrifts },
             true
           )

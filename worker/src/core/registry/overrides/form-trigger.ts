@@ -70,6 +70,9 @@ export function overrideFormTrigger(
           },
           ownership: 'structural' as const,
           role: 'raw_json' as const,
+          // Renaming a field's key or changing its type breaks downstream {{$json.x}}
+          // refs; label/placeholder/options/required/defaultValue are safe to edit post-freeze.
+          structuralShapeKeys: ['key', 'name', 'type'],
         }
       : def.inputSchema.fields,
     formDescription: def.inputSchema.formDescription

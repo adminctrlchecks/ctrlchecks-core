@@ -1,4 +1,4 @@
-import { NodeUsageGuide } from './nodeTypes';
+﻿import { NodeUsageGuide } from './nodeTypes';
 
 export const NODE_USAGE_GUIDES: Record<string, NodeUsageGuide> = {
   // Trigger Nodes
@@ -6,7 +6,7 @@ export const NODE_USAGE_GUIDES: Record<string, NodeUsageGuide> = {
     overview: 'Starts your workflow when you click the "Run" button. Perfect for testing or on-demand tasks. No input required - fires once per manual execution.',
     inputs: ['None - This is a start node'],
     outputs: ['trigger', 'workflow_id', 'executed_at'],
-    example: `Connect → OpenAI GPT → Slack Message
+    example: `Connect â†’ OpenAI GPT â†’ Slack Message
 
 When you click Run, the workflow executes.
 Output: { 
@@ -131,19 +131,24 @@ Output: {
   },
 
   interval: {
-    overview: 'Runs workflow repeatedly at fixed intervals. Non-blocking and prevents duplicate executions. Supports seconds (s), minutes (m), and hours (h) units.',
-    inputs: ['None - Triggered by interval'],
-    outputs: ['trigger', 'interval', 'executed_at'],
-    example: `Interval: "10m" (every 10 minutes)
-Interval: "30s" (every 30 seconds)
-Interval: "1h" (every 1 hour)
+    overview: 'Starts the workflow automatically on a repeating timer, such as every 5 minutes or every 6 hours. No account connection needed. Recurring runs are driven by a scheduler running in an open CtrlChecks browser tab, not a separate always-on server job.',
+    inputs: ['interval', 'unit'],
+    outputs: ['executed_at', '_scheduled', '_trigger'],
+    example: `Interval = 5, Unit = Minutes (runs every 5 minutes)
+Interval = 6, Unit = Hours (runs every 6 hours)
 
 Output: {
-  trigger: "interval",
-  interval: "10m",
-  executed_at: "2024-01-15T10:30:00Z"
+  executed_at: "2026-07-19T10:05:00.000Z",
+  _scheduled: "true",
+  _trigger: "schedule"
 }`,
-    tips: ['Use format: number + unit (s/m/h)', 'Examples: 30s, 5m, 1h', 'Non-blocking execution', 'Duplicate executions are prevented', 'Deactivate when not needed'],
+    tips: [
+      'Only Minutes (1-59) and Hours (1-23) are supported â€” there is no seconds unit',
+      'Save the workflow first; the interval activates automatically right after saving',
+      'Keep a CtrlChecks browser tab open so the recurring scheduler keeps firing the workflow',
+      'Map only {{$json.executed_at}} from this trigger; any other data must come from a node placed after it',
+      'Use the Schedule Trigger node instead when you need an exact daily time or weekly/monthly pattern',
+    ],
   },
 
   workflow_trigger: {
@@ -180,73 +185,111 @@ ticketId = {{$json.ticketId}}`,
   },
   // AI Processing
   openai_gpt: {
-    overview: 'Processes text using OpenAI GPT models. Provide a system prompt and the input will be sent as the user message.',
-    inputs: ['apiKey', 'model', 'prompt', 'temperature', 'memory'],
-    outputs: ['response', 'usage', 'model'],
-    example: `System Prompt: "You are a helpful assistant that summarizes emails."
+    overview: 'Calls OpenAI through the legacy LLM adapter. Prompt is the main input; Messages is only a fallback when Prompt is blank. Temperature and Memory are visible legacy fields ignored by the current executor.',
+    inputs: ['apiKey', 'accessToken', 'token', 'model', 'prompt', 'messages', 'temperature (ignored)', 'memory (ignored)'],
+    outputs: ['response', 'model', 'usage', 'finishReason', 'success false with error on OpenAI credential failure'],
+    example: `Prompt: "Summarize {{$json.text}} in three bullets."
+Model: gpt-4o
 
-Input: { text: "Meeting tomorrow at 3pm..." }
-Output: { response: "Summary: Meeting scheduled for tomorrow afternoon", usage: { tokens: 45 } }
+Output: {
+  response: "Meeting scheduled for tomorrow afternoon.",
+  model: "gpt-4o",
+  usage: { prompt_tokens: 38, completion_tokens: 8 },
+  finishReason: "stop"
+}
 
-Connect: Webhook → OpenAI GPT → Slack`,
-    tips: ['Leave API Key empty to use Lovable AI (free)', 'Lower temperature = more focused responses', 'Use {{input.text}} in prompts for dynamic content'],
+Connect: Webhook -> OpenAI GPT -> Slack`,
+    tips: [
+      'Prefer a saved OpenAI connection or credential vault value; apiKey/accessToken/token are direct fallbacks.',
+      'Successful output does not preserve incoming fields, so keep needed IDs before this node.',
+      'Use {{$json.response}} downstream; there is no content output key.',
+      'Temperature and Memory currently have no runtime effect.',
+    ],
   },
 
   anthropic_claude: {
-    overview: 'Processes text using Anthropic Claude models. Known for nuanced understanding and detailed responses.',
-    inputs: ['text', 'any JSON data'],
-    outputs: ['response', 'usage', 'model'],
-    example: `System Prompt: "Analyze customer feedback and categorize sentiment."
+    overview: 'Calls Anthropic Claude through the legacy LLM adapter. Use Prompt for normal UI workflows; Messages is only a fallback when Prompt is blank. Temperature and Memory are visible but ignored by the current executor.',
+    inputs: ['apiKey', 'model', 'prompt', 'messages', 'temperature', 'memory'],
+    outputs: ['response', 'model', 'usage', 'finishReason', 'error'],
+    example: `Model: claude-3-5-sonnet
+Prompt: "Summarize {{$json.contractText}} and list the top risks."
 
-Input: { text: "Great product but shipping was slow" }
 Output: { 
-  response: "Mixed sentiment. Positive: product quality. Negative: shipping speed.",
-  sentiment: "mixed"
+  response: "The main risk is the 30-day termination clause.",
+  model: "claude-3-5-sonnet",
+  usage: { inputTokens: 920, outputTokens: 64 },
+  finishReason: "end_turn"
 }`,
-    tips: ['Claude excels at analysis and nuanced tasks', 'Great for longer documents', 'Sonnet offers best balance of speed/quality'],
+    tips: [
+      'Prefer a saved Anthropic connection or vault credential; direct apiKey is only a legacy fallback.',
+      'Prompt wins over Messages. Messages are joined only when Prompt is blank.',
+      'Successful output does not spread incoming fields, so preserve needed IDs before this node.',
+      'Temperature and Memory currently have no runtime effect.',
+    ],
   },
 
   google_gemini: {
-    overview: 'Processes text using Google Gemini models. Fast and efficient with strong reasoning capabilities.',
+    overview: 'Calls Google Gemini through the LLM adapter and returns response, model, usage, and finishReason. The current executor resolves Gemini credentials from connection/wallet/key-pool/direct config, and it does not preserve incoming fields on success.',
     inputs: ['apiKey', 'model', 'prompt', 'temperature', 'memory'],
-    outputs: ['response', 'usage', 'model'],
-    example: `System Prompt: "Extract key dates and action items from text."
+    outputs: ['response', 'model', 'usage', 'finishReason', 'error on credential failure'],
+    example: `Prompt: "Extract key dates and action items from {{$json.text}}."
+Model: gemini-3.5-flash
 
 Input: { text: "Call John on Friday about Q2 review" }
 Output: { 
-  response: "Date: Friday\nAction: Call John\nTopic: Q2 review"
+  response: "Date: Friday\nAction: Call John\nTopic: Q2 review",
+  model: "gemini-3.5-flash",
+  usage: { inputTokens: 42, outputTokens: 14 },
+  finishReason: "STOP"
 }`,
-    tips: ['Gemini Flash is fastest for simple tasks', 'Flash Lite for high volume, low cost', 'Pro for complex reasoning'],
+    tips: [
+      'Prefer a saved Gemini connection, wallet, key pool, or credential vault mapping; direct apiKey is only a fallback.',
+      'Temperature and Memory are visible legacy fields ignored by the current google_gemini executor.',
+      'If Prompt is static and upstream text exists, runtime can use Prompt as context and upstream text as the user message.',
+      'Successful output does not spread incoming fields, so preserve needed IDs before this node.',
+    ],
   },
 
   text_summarizer: {
-    overview: 'Automatically summarizes long text content. Choose between concise summaries, detailed overviews, or bullet points.',
-    inputs: ['text', 'content'],
-    outputs: ['summary', 'word_count'],
-    example: `Input: { text: "Long article about AI trends..." }
-Style: "bullets"
+    overview: 'Builds a summarization prompt from Text and optional Max Length, then delegates to Gemini through AI Chat Model.',
+    inputs: ['text', 'maxLength', 'apiKey', 'temperature'],
+    outputs: ['response', 'model', '_error', 'preserved incoming fields'],
+    example: `Text: {{$json.articleText}}
 Max Length: 100
 
 Output: {
-  summary: "• AI adoption growing 40% YoY\n• Focus on automation\n• Privacy concerns rising",
-  word_count: 15
+  response: "AI adoption is growing, teams are focusing on automation, and privacy concerns are increasing.",
+  model: "gemini-3.5-flash"
 }`,
-    tips: ['Use bullets for quick scanning', 'Detailed for comprehensive summaries', 'Adjust max length for your needs'],
+    tips: [
+      'The summary is in {{$json.response}}, not {{$json.summary}}.',
+      'Max Length only changes the generated prompt; it is not a hard truncation.',
+      'Blank Text is not locally rejected, so validate upstream content if empty text should stop the workflow.',
+      'Credential failures from the delegated Gemini call appear in _error.',
+    ],
   },
 
   sentiment_analyzer: {
-    overview: 'Analyzes the emotional tone of text. Returns sentiment score and classification (positive, negative, neutral).',
-    inputs: ['text'],
-    outputs: ['sentiment', 'score', 'confidence'],
+    overview: 'Builds a Gemini prompt that asks for JSON sentiment data, then delegates to AI Chat Model.',
+    inputs: ['text', 'apiKey', 'temperature'],
+    outputs: ['response.sentiment', 'response.score', 'response.summary', 'model', '_error', 'preserved incoming fields'],
     example: `Input: { text: "I love this product!" }
 Output: {
-  sentiment: "positive",
-  score: 0.95,
-  confidence: 0.92
+  response: {
+    sentiment: "positive",
+    score: 0.95,
+    summary: "Customer expresses strong satisfaction."
+  },
+  model: "gemini-3.5-flash"
 }
 
-Connect: Webhook → Sentiment → If/Else (route by sentiment)`,
-    tips: ['Score ranges from -1 (negative) to 1 (positive)', 'Use with If/Else to route messages', 'Great for customer feedback analysis'],
+Connect: Webhook -> Sentiment -> If/Else (route by response.sentiment)`,
+    tips: [
+      'Use {{$json.response.sentiment}}, not {{$json.sentiment}}.',
+      'If Gemini returns invalid JSON, response falls back to raw text.',
+      'Blank Text is not locally rejected, so validate upstream content when needed.',
+      'Credential failures from the delegated Gemini call appear in _error.',
+    ],
   },
 
   // Logic & Control
@@ -326,33 +369,36 @@ Output metadata:
   },
 
   wait: {
-    overview: 'Pauses workflow execution for a specified duration. Use for rate limiting or delays between actions.',
-    inputs: ['any (passes through)'],
-    outputs: ['input (unchanged)'],
+    overview: 'Pauses workflow execution for a fixed duration, then passes the same input object forward unchanged. Use for short rate-limit gaps or ordering delays, not for condition polling.',
+    inputs: ['duration in milliseconds', 'optional backend unit for imported configs'],
+    outputs: ['input object unchanged'],
     example: `Duration: 5000 (5 seconds)
 
-API Call → Wait (5s) → API Call
+API Call -> Wait (5s) -> API Call
 Prevents hitting rate limits.
 
 Common durations:
-• 1000ms = 1 second
-• 60000ms = 1 minute`,
-    tips: ['Use between API calls to avoid rate limits', 'Data passes through unchanged', 'Duration is in milliseconds'],
+1000ms = 1 second
+60000ms = 1 minute
+300000ms = 5 minute runtime cap`,
+    tips: ['Use between API calls to avoid rate limits', 'Data passes through unchanged', 'Duration is in milliseconds in the visible UI', 'The Wait node does not return waitedMs, resumed, or reason fields'],
   },
 
   error_handler: {
-    overview: 'Catches errors from connected nodes and provides retry logic or fallback values. Prevents workflow failures.',
-    inputs: ['any (wraps connected node)'],
-    outputs: ['result', 'error', 'attempts'],
-    example: `Max Retries: 3
-Retry Delay: 2000 (2 seconds)
-Fallback: {"status": "failed"}
+    overview: 'Inspect an incoming payload for _error, mark whether it was handled, and optionally put a configured fallback under value. Retry and backoff are handled by the execution engine, not this node.',
+    inputs: ['fallbackValue (optional)', 'incoming payload with or without _error'],
+    outputs: ['incoming fields preserved', 'handled', 'value only when _error exists and fallbackValue is configured'],
+    example: `Input: {_error: "Connection timeout", ticketId: "SUP-1042"}
+Fallback Value: {"status": "crm_unavailable"}
 
-If connected node fails:
-1. Retry up to 3 times
-2. Wait 2s between retries
-3. If still failing, return fallback`,
-    tips: ['Wrap unreliable API calls', 'Set appropriate retry delays', 'Log errors for debugging'],
+Output:
+{
+  _error: "Connection timeout",
+  ticketId: "SUP-1042",
+  handled: true,
+  value: {status: "crm_unavailable"}
+}`,
+    tips: ['Use after nodes that report failures through _error', 'Map fallback fields from {{$json.value.fieldName}}', 'Do not expect retry attempts from this node', 'If there is no _error, output has handled: false'],
   },
 
   filter: {
@@ -386,7 +432,7 @@ Other incoming fields, such as {{$json.batchId}}, stay available.`,
   merge: {
     overview: 'Rejoins multiple workflow branches and combines their data into one payload for the next step.',
     inputs: ['mode', 'multiple data inputs from different branches'],
-    outputs: ['combined payload', 'items in append mode', 'mergeMode/sourceCount metadata'],
+    outputs: ['combined payload (overwrite/deep_merge)', 'items array only, in append mode'],
     example: `Mode: overwrite
 Input 1: {ticketId: "TCK-2048", status: "approved"}
 Input 2: {assignee: "finance@example.com", status: "reviewed"}
@@ -410,6 +456,124 @@ Output: {customer: {email: "customer@example.com"}, approval: {status: "approved
     ],
   },
 
+  parallel: {
+    overview: 'Marks a point where the surrounding workflow should treat connected paths as parallel. The node passes object input forward, adds mode, and returns results as an empty placeholder; real branch wiring and later merging are handled by the workflow canvas and Merge nodes.',
+    inputs: ['mode: all for Wait for all, or race for Race (first completes)'],
+    outputs: ['incoming object fields', 'mode', 'results (empty placeholder)', 'metadata.parallelMode in registry execution'],
+    example: `Input: {orderId: "ord_1042", customerEmail: "buyer@example.com"}
+Mode: all
+
+Output:
+{
+  orderId: "ord_1042",
+  customerEmail: "buyer@example.com",
+  mode: "all",
+  results: []
+}`,
+    tips: ['Connect the outgoing lines to the actual branch nodes; Parallel does not create branches by itself', 'Use Merge when branch data must be recombined', 'Race records intent but does not cancel already-running downstream work', 'Downstream service nodes still need their own account connections'],
+  },
+
+  retry: {
+    overview: 'Attaches retry settings to the workflow data and registry metadata. The legacy node body does not rerun the previous node itself; engine-level retry orchestration and branch wiring handle actual replay.',
+    inputs: ['maxAttempts', 'delayBetween in milliseconds', 'backoff: none, linear, or exponential'],
+    outputs: ['incoming object fields', 'attempts: 0', 'maxAttempts', 'delayBetween', 'backoff', 'metadata.retryConfig'],
+    example: `Input: {ticketId: "SUP-1008"}
+Max Attempts: 3
+Delay Between: 1000
+Backoff: exponential
+
+Output:
+{
+  ticketId: "SUP-1008",
+  attempts: 0,
+  maxAttempts: 3,
+  delayBetween: 1000,
+  backoff: "exponential"
+}`,
+    tips: ['Use delayBetween, not the old delay key', 'Use backoff, not the old backoffMultiplier key', 'Enter milliseconds, so 5000 means five seconds', 'Make downstream side effects idempotent before allowing retries'],
+  },
+
+  return: {
+    overview: 'Stops the current workflow path and emits a special return payload. Runtime output is success, __return, and returnedValue; it is not returned/value from older examples.',
+    inputs: ['value (optional JSON/expression)', 'includeInput (optional checkbox; overrides value when true)'],
+    outputs: ['success', '__return', 'returnedValue'],
+    example: `Value: {"success": true, "ticketId": "{{$json.ticketId}}"}
+Include Input: false
+
+Output:
+{
+  success: true,
+  __return: true,
+  returnedValue: {
+    success: true,
+    ticketId: "SUP-1042"
+  }
+}`,
+    tips: ['Map {{$json.returnedValue}} after this node', 'Turn Include Input on only when the whole incoming object should be returned', 'If Value is blank and Include Input is off, returnedValue is null', 'No credentials are required; service nodes around it still need connections'],
+  },
+
+  execute_workflow: {
+    overview: 'Calls a reusable child workflow by workflowId, skips the child trigger node, runs the remaining child nodes inline, and returns the child final result to the parent workflow.',
+    inputs: ['workflowId: required saved child workflow ID', 'input: optional JSON payload for the child workflow', 'inputData: legacy fallback used only when input is absent'],
+    outputs: ['success', 'result', 'workflowId', 'error on lookup or child execution failure'],
+    example: `Workflow ID: {{$json.escalationWorkflowId}}
+Input:
+{
+  "ticketId": "{{$json.ticketId}}",
+  "customerEmail": "{{$json.customerEmail}}",
+  "priority": "{{$json.priority}}"
+}
+
+Output:
+{
+  success: true,
+  workflowId: "123e4567-e89b-12d3-a456-426614174000",
+  result: {
+    notificationSent: true,
+    ticketId: "SUP-1042"
+  }
+}`,
+    tips: [
+      'The child workflow must be confirmed or active and include a trigger node.',
+      'Map returned child fields from {{$json.result.fieldName}} in the parent workflow.',
+      'Use a Return node inside the child workflow when you want a clean returnedValue contract.',
+      'Execute Workflow has no third-party credentials, but service nodes inside the child still need their own account connections.',
+    ],
+  },
+
+  timeout: {
+    overview: 'Compares elapsed workflow time with the Limit field and routes to success or timeout. It does not pause execution or cancel an API call already in progress.',
+    inputs: ['limit: positive milliseconds such as 30000'],
+    outputs: ['elapsedMs', 'limitMs', 'timedOut', 'originalInput', '__routing.branch'],
+    example: `Input: {ticketId: "SUP-2001", priority: "urgent"}
+Limit: 30000
+
+Output:
+{
+  elapsedMs: 42150,
+  limitMs: 30000,
+  timedOut: true,
+  originalInput: {ticketId: "SUP-2001", priority: "urgent"},
+  __routing: {branch: "timeout"}
+}`,
+    tips: ['Use 30000 for 30 seconds; the field is milliseconds', 'Map {{$json.limitMs}}, not {{$json.limit}}', 'Connect the timeout outgoing line to a fallback path', 'Invalid Limit returns INVALID_CONFIG'],
+  },
+
+  try_catch: {
+    overview: 'Marks try/catch routing and preserves input for connected try and catch paths. The Try/Catch node itself does not call the protected service; the nodes connected to the try branch do that work.',
+    inputs: ['No visible setup fields'],
+    outputs: ['incoming object fields', '__routing.branch = try on normal execution', 'error and errorType only when catch routing receives error context'],
+    example: `Input: {ticketId: "SUP-3001", customerEmail: "buyer@example.com"}
+
+Normal output:
+{
+  ticketId: "SUP-3001",
+  customerEmail: "buyer@example.com",
+  __routing: {branch: "try"}
+}`,
+    tips: ['Connect the try outgoing line to the risky service node', 'Connect the catch outgoing line to fallback handling', 'Catch data appears only when the engine routes an error', 'Service nodes inside try/catch still need their own account connections'],
+  },
+
   noop: {
     overview: 'No operation node - passes input data through unchanged. Useful for debugging, adding breakpoints, or maintaining workflow structure without modification.',
     inputs: ['any data'],
@@ -423,20 +587,20 @@ No transformation applied - data passes through exactly as received.`,
   },
 
   stop_and_error: {
-    overview: 'Stops workflow execution and triggers an error. Useful for validation failures, business rule violations, or intentional workflow termination with custom error messages.',
-    inputs: ['any data'],
-    outputs: ['error (workflow stops)'],
+    overview: 'Stops workflow execution intentionally by throwing an error in the format ERROR_CODE: message. Useful for validation failures, business rule violations, or unsafe branches.',
+    inputs: ['errorMessage', 'errorCode'],
+    outputs: ['thrown error; no normal downstream output object'],
     example: `Error Message: "Payment validation failed"
 Error Code: "PAYMENT_INVALID"
 
 When this node executes:
 1. Workflow stops immediately
-2. Error trigger fires (if configured)
-3. Error message and code are logged
+2. The thrown error text is PAYMENT_INVALID: Payment validation failed
+3. Later normal nodes do not run and cannot read {{$json.errorMessage}}
 
 Use with If/Else to conditionally stop workflows:
-If/Else (condition fails) → Stop And Error`,
-    tips: ['Use for validation failures', 'Error code helps categorize errors', 'Triggers error handler if configured', 'Use with conditional logic for smart stopping'],
+If/Else (condition fails) -> Stop And Error`,
+    tips: ['Use for validation failures', 'Error code helps categorize errors', 'Do not paste secrets into error text because it can appear in logs', 'Use with conditional logic for smart stopping'],
   },
 
   split_in_batches: {
@@ -479,57 +643,53 @@ Output: {orderId: "ord_1042", customerEmail: "asha.rao@example.com", orderTotal:
   },
 
   function: {
-    overview: 'Execute custom JavaScript function at dataset level. Receives both input and data parameters. Useful for complex data processing across entire datasets.',
-    inputs: ['any data as "input" and "data"'],
-    outputs: ['return value'],
+    overview: 'Run custom JavaScript once against the incoming object. The sandbox exposes input, data, $json, and json, and the node returns exactly the script return value or assigned result.',
+    inputs: ['code', 'timeout', 'incoming object as input/data/$json/json'],
+    outputs: ['exact JavaScript return value', 'assigned result when no return runs first', 'original input when neither return nor result is used', '_error on code/runtime/timeout failure'],
     example: `Code:
-const processed = data.map(item => ({
-  ...item,
-  processed: true,
-  timestamp: Date.now()
-}));
-return { items: processed, count: processed.length };
+const total = Number($json.orderTotal || 0);
+return {
+  ...$json,
+  highValue: total > 5000
+};
 
-Input: {items: [{id: 1}, {id: 2}]}
+Input: {orderId: "ord_1042", orderTotal: 6400}
 Output: {
-  items: [
-    {id: 1, processed: true, timestamp: 1234567890},
-    {id: 2, processed: true, timestamp: 1234567890}
-  ],
-  count: 2
+  orderId: "ord_1042",
+  orderTotal: 6400,
+  highValue: true
 }`,
-    tips: ['Receives both "input" and "data" variables', 'Use for dataset-level operations', 'Higher timeout than JavaScript node', 'Always return a value'],
+    tips: ['Use return or assign result', 'Return {...$json, newField} to preserve incoming fields', 'Runtime caps timeout at 30000ms', 'Do not paste API keys, tokens, or passwords into code'],
   },
 
   function_item: {
-    overview: 'Execute custom JavaScript function for each item in an array. Processes items individually with access to item, index, and input context.',
-    inputs: ['array of items'],
-    outputs: ['array of processed items'],
+    overview: 'Run custom JavaScript once for each element in input.items and replace items with the mapped results. Runtime exposes item, input, data, $json, and json as the current item; it does not expose index today.',
+    inputs: ['code', 'timeout', 'input.items array'],
+    outputs: ['incoming top-level fields preserved', 'items replaced with mapped array', '_error on code/runtime failure'],
     example: `Code:
 return {
   ...item,
   doubled: item.value * 2,
-  index: index,
   processed: true
 };
 
-Input: [
-  {id: 1, value: 10},
-  {id: 2, value: 20}
-]
-Output: [
-  {id: 1, value: 10, doubled: 20, index: 0, processed: true},
-  {id: 2, value: 20, doubled: 40, index: 1, processed: true}
-]`,
-    tips: ['Receives "item", "index", and "input" variables', 'Processes each array item separately', 'Useful for item-level transformations', 'Returns array of processed items'],
+Input: {batchId: "b1", items: [{id: 1, value: 10}, {id: 2, value: 20}]}
+Output: {
+  batchId: "b1",
+  items: [
+    {id: 1, value: 10, doubled: 20, processed: true},
+    {id: 2, value: 20, doubled: 40, processed: true}
+  ]
+}`,
+    tips: ['Use item for the current row', 'Do not use index because runtime does not define it', 'If input.items is missing, the input passes through unchanged after code validation', 'Runtime caps timeout at 30000ms'],
   },
 
   execute_command: {
-    overview: 'Execute system commands or shell scripts. ⚠️ WARNING: Disabled by default for security. Enable only if you trust the command and understand the risks.',
+    overview: 'Execute system commands or shell scripts. âš ï¸ WARNING: Disabled by default for security. Enable only if you trust the command and understand the risks.',
     inputs: ['command parameters'],
     outputs: ['stdout', 'stderr', 'exitCode'],
     example: `Command: echo "Hello {{input.name}}"
-Enabled: true (⚠️ Security risk)
+Enabled: true (âš ï¸ Security risk)
 
 Input: {name: "World"}
 Output: {
@@ -538,8 +698,8 @@ Output: {
   exitCode: 0
 }
 
-⚠️ Only enable for trusted commands in secure environments.`,
-    tips: ['⚠️ Disabled by default for security', 'Only enable if you trust the command', 'Use for system operations and scripts', 'Set appropriate timeout', 'Be careful with user input'],
+âš ï¸ Only enable for trusted commands in secure environments.`,
+    tips: ['âš ï¸ Disabled by default for security', 'Only enable if you trust the command', 'Use for system operations and scripts', 'Set appropriate timeout', 'Be careful with user input'],
   },
 
   set: {
@@ -597,23 +757,23 @@ Input: [
 ]
 
 Output: {aggregate: 45, operation: "sum", field: "price"}`,
-    tips: ['Leave field empty to aggregate items directly', 'Use delimiter with Join to create readable text', 'Supports sum, avg, count, min, max, join', 'Great for analytics, reporting, and preparing text for AI'],
+    tips: ['Leave field empty to aggregate items directly', 'Use delimiter with Join to create readable text', 'Supports sum, avg, count, min, max, join', 'If input.items is missing or not an array, this node silently passes the input through unchanged with no error and no aggregate key'],
   },
 
   limit: {
-    overview: 'Limits the number of items in an array. Returns only the first N items, useful for pagination or processing subsets.',
+    overview: 'Limits the number of items in an array. Returns only the first N items, useful for pagination or processing subsets. Never raises an error - a missing array or an invalid Limit value both silently pass the input through unchanged.',
     inputs: ['limit', 'optional array expression', 'or input.items/input.array'],
-    outputs: ['items and array containing the limited values'],
+    outputs: ['items (no separate array key)'],
     example: `Limit: 5
 
 Input: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-Output: {items: [1, 2, 3, 4, 5], array: [1, 2, 3, 4, 5]}
+Output: {items: [1, 2, 3, 4, 5]}
 
 Useful for:
-• Pagination (first page)
-• Processing top N items
-• Preventing large array processing`,
-    tips: ['Returns first N items in items and array', 'Useful for pagination', 'Prevents processing large arrays', 'Combine with Sort to get top/bottom items'],
+â€¢ Pagination (first page)
+â€¢ Processing top N items
+â€¢ Preventing large array processing`,
+    tips: ['Returns first N items in items only - there is no separate array output key', 'Useful for pagination', 'Prevents processing large arrays', 'Combine with Sort to get top/bottom items', 'A missing array or invalid Limit value never errors - both silently return the input unchanged'],
   },
 
   sort: {
@@ -635,7 +795,14 @@ Output: [
   {name: "Item C", price: 20},
   {name: "Item A", price: 30}
 ]`,
-    tips: ['Leave field empty to sort items directly', 'Use "auto" type for automatic detection', 'Ascending = smallest to largest', 'Descending = largest to smallest'],
+    tips: [
+      'Leave field empty to sort items directly',
+      'Use "auto" type for automatic detection',
+      'Ascending = smallest to largest',
+      'Descending = largest to smallest',
+      'If items is missing or not an array, this node silently returns the input unchanged â€” no error is raised',
+      'An item missing the sort field is silently treated as the smallest possible value rather than flagged',
+    ],
   },
 
   item_lists: {
@@ -657,9 +824,9 @@ Output: [
   },
 
   merge_data: {
-    overview: 'Combines data from multiple input sources. Supports overwrite, append, and deep_merge modes.',
-    inputs: ['multiple data inputs'],
-    outputs: ['merged data'],
+    overview: 'Combines data from multiple connected workflow branches. Runs the exact same code as the Merge node in the Logic category â€” Merge Data is the same behavior under the Data category. Supports overwrite, append, and deep_merge modes.',
+    inputs: ['mode', 'multiple data inputs from different branches'],
+    outputs: ['combined payload (overwrite/deep_merge)', 'items array only, in append mode'],
     example: `Mode: overwrite
 Input 1: {name: "John", age: 30}
 Input 2: {email: "john@test.com"}
@@ -667,10 +834,15 @@ Input 2: {email: "john@test.com"}
 Output: {name: "John", age: 30, email: "john@test.com"}
 
 Mode: append
-Input 1: [1, 2, 3]
-Input 2: [4, 5, 6]
-Output: {items: [1, 2, 3, 4, 5, 6]}`,
-    tips: ['overwrite combines object properties with later values winning', 'append combines inputs into items', 'deep_merge recursively combines nested objects', 'Legacy concat aliases still work at runtime'],
+Input 1: {name: "John", branch: "billing"}
+Input 2: {name: "John", branch: "technical"}
+Output: {items: [{name: "John", branch: "billing"}, {name: "John", branch: "technical"}]}`,
+    tips: [
+      'overwrite (the default) combines flat object fields with later branch values winning on collision',
+      'append replaces the entire output with {{$json.items}} â€” an array of each branch\'s full output object, not a concatenation of array contents',
+      'deep_merge recursively combines nested objects, but replaces (does not merge) arrays and mismatched types at the same field',
+      'There is no error for missing branches or an unrecognized Mode value â€” this node silently falls back to unchanged passthrough instead',
+    ],
   },
 
   json_parser: {
@@ -689,14 +861,20 @@ Output: {parsed: {name: "John", email: "john@test.com", plan: "pro"}, email: "jo
   },
 
   text_formatter: {
-    overview: 'Format text using templates with variable substitution. Create dynamic messages, emails, or any text content.',
-    inputs: ['data for template variables'],
-    outputs: ['formatted_text'],
-    example: `Template: "Hello {{name}}! Your order #{{orderId}} ships on {{shipDate}}."
+    overview: 'Format text using a template with {{$json.field}} substitution. The resolved text is returned directly as the entire output â€” not wrapped in a formatted_text field.',
+    inputs: ['template'],
+    outputs: ['the resolved text directly (no wrapper field) when Template is filled in', 'data and formatted (both the whole item as JSON text) when Template is left blank'],
+    example: `Template: "Hello {{$json.name}}! Your order #{{$json.orderId}} ships on {{$json.shipDate}}."
 
 Input: {name: "John", orderId: 123, shipDate: "Jan 20"}
-Output: "Hello John! Your order #123 ships on Jan 20."`,
-    tips: ['Use {{$json.field}} expressions for substitution', 'The runtime does not read a separate values field', 'Great for email/message templates'],
+Output: "Hello John! Your order #123 ships on Jan 20." (this string IS the entire output â€” read it as {{$json}}, not {{$json.formatted_text}})`,
+    tips: [
+      'Use {{$json.field}} expressions for substitution',
+      'The runtime does not read a separate values field',
+      'The output is the raw resolved string, not an object â€” reference it downstream as {{$json}}',
+      'A Template that is a single bare {{$json.field}} expression with no surrounding text outputs the literal text "null" if that field is missing, instead of an empty string',
+      'Great for email/message templates',
+    ],
   },
 
   http_request: {
@@ -720,72 +898,75 @@ Output: {
   },
 
   graphql: {
-    overview: 'Execute GraphQL queries and mutations. Send GraphQL requests to any GraphQL API endpoint with custom queries and variables.',
-    inputs: ['url', 'query', 'variables', 'operationName (optional)', 'headers'],
-    outputs: ['data', 'errors'],
+    overview: 'Execute GraphQL queries and mutations by wrapping HTTP Request with method POST. GraphQL data is inside the HTTP response body, not returned as a separate top-level data/errors pair.',
+    inputs: ['url', 'query', 'variables', 'operationName (optional)', 'headers', 'timeout'],
+    outputs: ['status', 'statusText', 'headers', 'body', 'data', 'url', 'method', 'responseTime', '_error'],
     example: `Endpoint: https://api.example.com/graphql
 Query: 
-  query GetUser($id: ID!) {
-    user(id: $id) {
-      name
+  query GetCustomer($id: ID!) {
+    customer(id: $id) {
+      id
       email
     }
   }
-Variables: {"id": "{{input.userId}}"}
+Variables: {"id": "{{$json.customerId}}"}
 
 Output: {
-  data: {
-    user: {
-      name: "John",
-      email: "john@test.com"
-    }
-  },
-  errors: null
+  status: 200,
+  body: {data: {customer: {id: "cus_1042", email: "asha.rao@example.com"}}},
+  data: {data: {customer: {id: "cus_1042", email: "asha.rao@example.com"}}},
+  method: "POST"
 }`,
-    tips: ['Use GraphQL query syntax', 'Variables can use {{input.x}} templates', 'Check errors array for GraphQL errors', 'Supports both queries and mutations'],
+    tips: ['Use GraphQL query syntax with $variables and map values in Variables', 'Variables that cannot be parsed silently become {}', 'GraphQL errors are inside {{$json.body.errors}}', 'HTTP/network failures return {{$json._error}} from the wrapped HTTP Request runtime'],
   },
 
   respond_to_webhook: {
-    overview: 'Send HTTP response back to webhook caller. Use this at the end of webhook-triggered workflows to return data or status to the caller.',
-    inputs: ['statusCode', 'responseBody', 'headers'],
-    outputs: ['status', 'response'],
+    overview: 'Normalize the response object intended for a webhook caller. Runtime returns statusCode, headers, and body; the surrounding webhook/API layer is what actually sends that response.',
+    inputs: ['statusCode', 'responseBody', 'headers', 'body (backend alias)'],
+    outputs: ['statusCode', 'headers', 'body'],
     example: `Status Code: 200
 Headers: {"Content-Type": "application/json"}
-Body: {"status": "success", "data": "{{input}}"}
+Response Body: {"received": true, "orderId": "{{$json.orderId}}"}
 
-When webhook receives request:
-1. Process workflow
-2. Respond with this node's configuration
-3. Caller receives the response`,
-    tips: ['Use at end of webhook workflows', 'Set appropriate status codes (200, 400, 500)', 'Add headers for content type', 'Body supports template variables'],
+Output: {
+  statusCode: 200,
+  headers: {"Content-Type": "application/json"},
+  body: {received: true, orderId: "ord_1042"}
+}`,
+    tips: ['Use statusCode in the UI; responseCode is only a runtime alias', 'responseBody is normalized to {{$json.body}}', 'No sent flag is returned', 'Use at the end of webhook response-mode workflows'],
   },
 
   webhook_response: {
-    overview: 'Return a custom HTTP response to an incoming webhook. Functionally identical to Respond to Webhook — use whichever label fits your workflow.',
+    overview: 'Return a custom HTTP response object for an incoming webhook. Functionally similar to Respond to Webhook and returns only statusCode, headers, and body.',
     inputs: ['statusCode', 'body', 'headers'],
     outputs: ['statusCode', 'headers', 'body'],
     example: `Status Code: 200
 Headers: {"Content-Type": "application/json"}
-Body: {"success": true, "data": "{{input}}"}
+Body: {"success": true, "ticketId": "{{$json.ticketId}}"}
 
-When the webhook receives a request:
-1. Process the workflow
-2. Respond with this node's configuration
-3. Caller receives the response`,
-    tips: ['Use at the end of webhook workflows', 'Set appropriate status codes (200, 400, 500)', 'Add headers for content type', 'Body supports template variables'],
+Output: {
+  statusCode: 200,
+  headers: {"Content-Type": "application/json"},
+  body: {success: true, ticketId: "CASE-1042"}
+}`,
+    tips: ['Use at the end of webhook workflows', 'Set appropriate status codes such as 200, 201, 400, or 500', 'Body falls back to incoming input when blank', 'No sent flag is returned'],
   },
 
   set_variable: {
-    overview: 'Create one or more named output values for later workflow steps.',
-    inputs: ['name/value or legacy values array', 'optional keepSource'],
-    outputs: ['assigned variable fields'],
+    overview: 'Create exactly one named output value from Variable Name and Value. The Values (legacy array) and Keep Source fields are visible in the panel but are never read â€” this node\'s output always replaces the entire item with just the one new field.',
+    inputs: ['name', 'value'],
+    outputs: ['a single field, named by Variable Name'],
     example: `Variable Name: totalCount
 Value: {{$json.items.length}}
 
 Later nodes can access: {{$json.totalCount}}
 
-Useful for storing computed values to use in multiple places.`,
-    tips: ['Access output fields as {{$json.name}} in the next node', 'Use keepSource to preserve incoming fields', 'Legacy values array supports multiple assignments'],
+Every other field the item had (such as {{$json.orderId}}) is gone after this node runs.`,
+    tips: [
+      'Access the new field as {{$json.name}} in the next node',
+      'Values and Keep Source have no effect â€” this node\'s execution code never reads either field',
+      'Use the Set (Edit Fields) node instead when several fields need to be created, or when incoming fields must be preserved alongside a new one',
+    ],
   },
 
   google_sheets: {
@@ -811,7 +992,7 @@ AI Agent can then analyze, filter, or process this data.`,
       'Get Spreadsheet ID from URL: /d/SPREADSHEET_ID/edit',
       'Leave range empty to read all used cells',
       'Use key-value or text Output Format for easier AI processing',
-      'Allow Write Access has no runtime effect — write/append/update run regardless of this checkbox',
+      'Allow Write Access has no runtime effect â€” write/append/update run regardless of this checkbox',
       'Data is checked before Values when both are filled',
       'Authenticate with Google account first',
     ],
@@ -859,18 +1040,24 @@ Output: [
 
   // Output Actions
   http_post: {
-    overview: 'Send data to external APIs via HTTP POST. Perfect for webhooks, API integrations, and data sync.',
+    overview: 'Send data to external APIs via HTTP POST. This node is an alias for HTTP Request with method forced to POST.',
     inputs: ['url', 'headers', 'body'],
-    outputs: ['response', 'status'],
+    outputs: ['status', 'statusText', 'headers', 'body', 'data', 'url', 'method', 'responseTime', '_error'],
     example: `URL: https://api.example.com/webhook
 Headers: {"Content-Type": "application/json"}
-Body: {"event": "workflow_complete", "data": {{input}}}
+Body: {"event": "workflow_complete", "email": "{{$json.email}}"}
 
-Sends POST request with workflow data.`,
+Output: {
+  status: 201,
+  body: {id: "sub_1042", created: true},
+  data: {id: "sub_1042", created: true},
+  method: "POST"
+}`,
     tips: [
-      'Use {{input.x}} template variables inside the body for dynamic content',
+      'Use {{$json.field}} template variables inside the body for dynamic content',
       'Add auth headers (Bearer/API key) if needed',
       'Set Content-Type to match your body',
+      'Use HTTP Request directly when you need GET, PUT, PATCH, DELETE, query parameters, or more method control',
     ],
   },
 
@@ -931,10 +1118,10 @@ Output: {
   timestamp: "2026-07-18T09:15:00.000Z"
 }`,
     tips: [
-      'Verify the From Address (and Return Path, if used) in AWS SES for the exact AWS Region set on this node — verification is per-region',
-      'Field-validation failures (missing recipients/subject/body) return _error; actual AWS SES send failures (unverified sender, rate limiting, missing connection) return a plain error field instead — check both downstream',
+      'Verify the From Address (and Return Path, if used) in AWS SES for the exact AWS Region set on this node â€” verification is per-region',
+      'Field-validation failures (missing recipients/subject/body) return _error; actual AWS SES send failures (unverified sender, rate limiting, missing connection) return a plain error field instead â€” check both downstream',
       'Attachments are limited to specific file types (PDF, Word, Excel, common images, TXT/CSV, ZIP) and a 40MB total email size',
-      'Do not paste the Access Key ID or Secret Access Key into Recipients, Subject, Body, or any other workflow field — save them in Connections',
+      'Do not paste the Access Key ID or Secret Access Key into Recipients, Subject, Body, or any other workflow field â€” save them in Connections',
       'Connect downstream service accounts separately; the Amazon SES connection only authorizes this node\'s own email send',
     ],
   },
@@ -956,16 +1143,16 @@ Output: {
 }`,
     tips: [
       'To/CC/BCC are comma-separated strings on this node, not a JSON {"to": [...]} object like Amazon SES uses',
-      'Mailgun requires at least one of Text, HTML, or Template — leaving all three empty fails before Mailgun is contacted',
-      'There is no success: false on failure — only check {{$json._error}} downstream to detect a failed send',
+      'Mailgun requires at least one of Text, HTML, or Template â€” leaving all three empty fails before Mailgun is contacted',
+      'There is no success: false on failure â€” only check {{$json._error}} downstream to detect a failed send',
       'Sandbox domains can only send to recipients you have explicitly authorized in the Mailgun dashboard',
-      'Do not paste the Private API Key into From, To, or any other workflow field — save it in the Mailgun connection under Connections',
+      'Do not paste the Private API Key into From, To, or any other workflow field â€” save it in the Mailgun connection under Connections',
       'Connect downstream service accounts separately; the Mailgun connection only authorizes this node\'s own email send',
     ],
   },
 
   sendgrid: {
-    overview: 'Send a one-off transactional email through SendGrid\'s Mail Send API using a saved API Key connection. Only From, To, Subject, Text, and HTML are supported — this node does not implement SendGrid CC/BCC, Reply-To, attachments, categories, or Dynamic Templates.',
+    overview: 'Send a one-off transactional email through SendGrid\'s Mail Send API using a saved API Key connection. Only From, To, Subject, Text, and HTML are supported â€” this node does not implement SendGrid CC/BCC, Reply-To, attachments, categories, or Dynamic Templates.',
     inputs: ['from', 'to', 'subject (optional)', 'text and/or html (optional)'],
     outputs: ['success (on success only)', 'status', 'messageId', '_error / _errorDetails on failure'],
     example: `From: receipts@yourapp.com
@@ -980,10 +1167,10 @@ Output: {
 }`,
     tips: [
       'To is a comma-separated string on this node, not a JSON {"to": [...]} object like Amazon SES uses',
-      'Neither Text nor HTML is actually required — leaving both blank sends an email with an empty body instead of failing',
-      'There is no success: false on failure — only check {{$json._error}} downstream to detect a failed send',
+      'Neither Text nor HTML is actually required â€” leaving both blank sends an email with an empty body instead of failing',
+      'There is no success: false on failure â€” only check {{$json._error}} downstream to detect a failed send',
       'This node does not support CC, BCC, Reply-To, attachments, or SendGrid Dynamic Templates; use Mailgun or the HTTP Request node for those',
-      'Do not paste the API Key into From, To, or any other workflow field — save it in the SendGrid connection under Connections',
+      'Do not paste the API Key into From, To, or any other workflow field â€” save it in the SendGrid connection under Connections',
       'Connect downstream service accounts separately; the SendGrid connection only authorizes this node\'s own email send',
     ],
   },
@@ -1044,7 +1231,7 @@ Message: "New ticket {{$json.ticketId}} from {{$json.customerEmail}} needs revie
 Posts the message with the Discord Bot API and returns the new message object in {{$json.discord}}.`,
     tips: [
       'Create a bot at discord.com/developers/applications and save the Bot Token in Connections; do not paste it into workflow fields',
-      'Invite the bot to your server via OAuth2 → URL Generator with the bot scope and Send Messages permission',
+      'Invite the bot to your server via OAuth2 â†’ URL Generator with the bot scope and Send Messages permission',
       'Use {{$json.channelId}} from Discord Trigger to reply in the same channel, or use Interaction Token + Application ID to reply to a slash command without a bot token',
       'Reference the sent message later with {{$json.discord.id}}',
       'Connect downstream service accounts separately; the Discord Bot Token only authorizes Discord sends',
@@ -1054,7 +1241,7 @@ Posts the message with the Discord Bot API and returns the new message object in
     overview: 'Send messages to Discord channels via a selected webhook connection. Great for notifications and alerts.',
     inputs: ['message', 'username (optional)', 'avatarUrl (optional)'],
     outputs: ['success', 'sent', 'message', 'discord_webhook', '_error'],
-    example: `Message: "✅ Workflow completed successfully!"
+    example: `Message: "âœ… Workflow completed successfully!"
 Username: "Alert Bot"
 
 Sends message to Discord channel.`,
@@ -1083,7 +1270,7 @@ Creates new order record from workflow data.`,
   },
 
   log_output: {
-    overview: 'Log data for debugging and monitoring. View logs in the execution history. This is a terminal node — it cannot connect to further downstream nodes.',
+    overview: 'Log data for debugging and monitoring. View logs in the execution history. This is a terminal node â€” it cannot connect to further downstream nodes.',
     inputs: ['any data'],
     outputs: ['the resolved log message (string)'],
     example: `Message: "Processing order: {{input.orderId}}"
@@ -1093,7 +1280,7 @@ Appears in execution logs:
 [INFO] Processing order: 12345
 
 Useful for debugging workflow flow.`,
-    tips: ['Use different levels for filtering', 'This node is terminal — it does not forward data to further nodes', 'Check execution history for logs'],
+    tips: ['Use different levels for filtering', 'This node is terminal â€” it does not forward data to further nodes', 'Check execution history for logs'],
   },
 
   llm_chain: {
@@ -1123,7 +1310,7 @@ Output items: [
   {name: "John", email: "john@test.com", age: "30"},
   {name: "Jane", email: "jane@test.com", age: "25"}
 ]`,
-    tips: ['Set correct delimiter (comma, semicolon, tab, pipe)', 'Enable hasHeader for column names', 'Generate uses the same delimiter and quotes cells when needed'],
+    tips: ['Set correct delimiter (comma, semicolon, tab, pipe)', 'Enable hasHeader for column names', 'Generate uses the same delimiter and quotes cells when needed', 'Empty or missing input never raises an error on either operation - Parse silently returns empty arrays and Generate silently returns an empty string'],
   },
 
   // Backward-compatibility alias for legacy workflows saved before canonical CSV migration.
@@ -1144,26 +1331,26 @@ Output: [
   },
 
   date_time: {
-    overview: 'Manipulate dates and times with timezone support. Format dates, add/subtract time, calculate differences, convert timezones, and get current time.',
-    inputs: ['date string or timestamp'],
-    outputs: ['formatted_date', 'timestamp', 'timezone_info'],
-    example: `Operation: Format
-Date: 2024-01-15T10:30:00Z
-Timezone: America/New_York
-Format: ISO
-
-Output: "2024-01-15T05:30:00-05:00"
-
-Operation: Add
-Date: 2024-01-15T10:30:00Z
+    overview: 'Create, format, offset, compare, and inspect date/time values with IANA timezone support: now, format, add, subtract, diff, convertTimezone, getTimezoneInfo.',
+    inputs: ['operation', 'date', 'timezone', 'format', 'locale', 'customFormat', 'value', 'unit', 'endDate'],
+    outputs: ['datetime', 'timestamp', 'diff', 'diffMs', 'unit', 'timezone', 'offset', 'longName', 'isoDate', '_error'],
+    example: `Operation: add
+Date: 2026-07-12T09:00:00Z
 Value: 7
-Unit: Days
-Output: "2024-01-22T10:30:00Z"
+Unit: days
 
-Operation: Now
+Output: { datetime: "2026-07-19T09:00:00.000Z" }
+
+Operation: now
 Timezone: UTC
-Output: Current date/time in UTC`,
-    tips: ['Supports ISO 8601 date format', 'Use IANA timezone identifiers (e.g., America/New_York)', 'Leave date empty for current time', 'Custom format: YYYY-MM-DD HH:mm:ss'],
+Output: { datetime: "2026-07-12T09:00:00.000Z", timestamp: 1783855800000 }`,
+    tips: [
+      'Every operation except now reads the date field, defaulting to the current moment when left blank; an unparseable date fails immediately with a clear _error',
+      'Use real IANA timezone identifiers (America/New_York, Asia/Kolkata) - abbreviations like EST or raw offsets are not accepted',
+      'Add/Subtract support months and years as approximations (30/365 days); Diff does not support months or years at all and silently falls back to minutes for any unrecognized unit',
+      'Custom format tokens (YYYY, MM, DD, HH, mm, ss) are each replaced only once - a repeated token in the same pattern is not fully substituted',
+      'diff (endDate minus date) is negative when date is later than endDate, which is easy to misread as an error',
+    ],
   },
 
   html: {
@@ -1179,7 +1366,7 @@ Output: {
   count: 1,
   success: true
 }`,
-    tips: ['Use parse for page title, meta tags, and body HTML', 'Use extract with a CSS selector for matching element text', 'Use toText to get body text without markup'],
+    tips: ['Use parse for page title, meta tags, and body HTML', 'Use extract with a CSS selector for matching element text', 'Use toText to get body text without markup', 'A selector matching zero elements is not an error - it silently returns results: [] and count: 0, so always check count rather than assuming a match happened'],
   },
 
   math: {
@@ -1202,7 +1389,7 @@ Operation: Power
 Value 1: 2
 Value 2: 8
 Output: 256`,
-    tips: ['Supports template expressions like {{$json.x}}', 'Use comma-separated values or arrays for min, max, avg, and sum', 'Set precision for decimal operations (0-20)', 'Supports: add, subtract, multiply, divide, modulo, power, sqrt, abs, round, floor, ceil, min, max, avg, sum'],
+    tips: ['Supports template expressions like {{$json.x}}', 'Use comma-separated values or arrays for min, max, avg, and sum', 'Set precision for decimal operations (0-20)', 'Supports: add, subtract, multiply, divide, modulo, power, sqrt, abs, round, floor, ceil, min, max, avg, sum', 'Non-numeric Value 1/Value 2 and invalid Precision are silently treated as 0/10 respectively - there is no numeric validation anywhere in this node', 'Minimum/Maximum on an empty list return Infinity/-Infinity, and Average on an empty list returns NaN, rather than an error'],
   },
 
   crypto: {
@@ -1237,7 +1424,7 @@ Sends a simple text payload to the webhook channel.`,
       'Save the Incoming Webhook URL as a Connection',
       'The target channel is chosen when the webhook is created in Slack',
       'Use Slack Message for OAuth bot sending, dynamic channels, and Block Kit',
-      'This node\'s output replaces $json entirely — fields from before this node do not survive past it, so capture anything needed later first',
+      'This node\'s output replaces $json entirely â€” fields from before this node do not survive past it, so capture anything needed later first',
       'Failures set status to "failed" and add a plain error field (no underscore), unlike most nodes\' _error convention',
     ],
   },
@@ -1279,9 +1466,9 @@ Output: {
   content: "New content added at the end"
 }`,
     tips: [
-      'Get Document ID from the Google Docs URL: https://docs.google.com/document/d/DOCUMENT_ID/edit — you can paste the full Document URL, or just the DOCUMENT_ID into Document ID',
-      'Read only extracts plain text — there is no table/list structure in the output, and choosing Markdown does not convert formatting',
-      'Write deletes ALL existing content before inserting the new text — use Append to add without removing what is already there',
+      'Get Document ID from the Google Docs URL: https://docs.google.com/document/d/DOCUMENT_ID/edit â€” you can paste the full Document URL, or just the DOCUMENT_ID into Document ID',
+      'Read only extracts plain text â€” there is no table/list structure in the output, and choosing Markdown does not convert formatting',
+      'Write deletes ALL existing content before inserting the new text â€” use Append to add without removing what is already there',
       'Create makes a brand-new document and returns documentUrl to share it',
       'Always connect a Google account first via Connections',
       'For read/write/append, ensure the connected Google account has access to the target document',
@@ -1289,7 +1476,7 @@ Output: {
   },
 
   google_drive: {
-    overview: 'List, upload, or download files in Google Drive. The Delete option is shown in the dropdown but is not implemented by the runtime executor — selecting it always fails.',
+    overview: 'List, upload, or download files in Google Drive. The Delete option is shown in the dropdown but is not implemented by the runtime executor â€” selecting it always fails.',
     inputs: ['operation', 'folderId (for list/upload)', 'fileId (for download)', 'fileName and fileData (for upload)', 'mimeType (optional for upload)'],
     outputs: ['files array (list)', 'id/fileId and webViewLink (upload)', 'id/fileId and dataBase64 or content (download)'],
     example: `Operation: List Files
@@ -1316,7 +1503,7 @@ Output: {
       'File IDs are in the URL: /file/d/FILE_ID/view',
       'Upload requires base64, plain text, or a data URL for File Data',
       'Download returns dataBase64 for binary files (PDFs, images), or content for text/JSON files',
-      'Delete is not implemented — it always fails with "Unsupported Google Drive operation: delete"',
+      'Delete is not implemented â€” it always fails with "Unsupported Google Drive operation: delete"',
     ],
   },
 
@@ -1399,7 +1586,7 @@ Output: {
 }`,
     tips: [
       'Use "primary" for main calendar',
-      'Times must be ISO 8601 format (UTC) — Start Time/End Time are converted automatically',
+      'Times must be ISO 8601 format (UTC) â€” Start Time/End Time are converted automatically',
       'The new/updated event ID is returned as id, not eventId',
       'List returns events in the Time Min/Time Max window, with no date filtering by default',
     ],
@@ -1432,7 +1619,7 @@ Output: {
     tips: [
       'Connect Google OAuth in Connections; do not paste tokens into workflow fields',
       'Gmail search syntax: from:, subject:, is:unread, has:attachment',
-      'List/Search only return {id, threadId} per message — use a Get step with that id for full content',
+      'List/Search only return {id, threadId} per message â€” use a Get step with that id for full content',
       'Body is plain text only',
       'Get returns Gmail\'s raw API message; the body text is base64url-encoded inside message.payload.body.data',
       'Use search to filter messages before getting details',
@@ -1459,7 +1646,7 @@ Output: {
 }`,
     tips: [
       'Use "@default" for the default task list',
-      'Task IDs are returned at {{$json.data.id}} when creating tasks — everything is nested under data, not top-level',
+      'Task IDs are returned at {{$json.data.id}} when creating tasks â€” everything is nested under data, not top-level',
       'Due dates are selected as local calendar dates; Google Tasks stores the day, not a time of day',
       'Set Status to Completed on Update to check a task off; Google Tasks records the completion time automatically',
       'Completed tasks may be hidden from a plain listing depending on Google Tasks defaults',
@@ -1487,9 +1674,9 @@ Output: {
       'Contact ID is the resourceName field (e.g., people/c1234567890) from a previous List/Create/Update result',
       'At least one of Name, Email, or Phone is required for create and update',
       'Phone should include a country code (e.g., +1234567890)',
-      'All contact fields are nested under data — there is no top-level resourceName/names/emailAddresses',
+      'All contact fields are nested under data â€” there is no top-level resourceName/names/emailAddresses',
       'List Contacts with Contact ID empty returns every contact in data.connections; filling Contact ID fetches just that one contact instead',
-      'Max Results (pageSize) only limits how many contacts a full listing returns — it does not filter or search',
+      'Max Results (pageSize) only limits how many contacts a full listing returns â€” it does not filter or search',
     ],
   },
 
@@ -1538,7 +1725,7 @@ Output: {
   created_at: "2024-01-15T10:00:00Z"
 }`,
     tips: [
-      'Get credentials from Auth0 Dashboard → Applications',
+      'Get credentials from Auth0 Dashboard â†’ Applications',
       'User ID format: "auth0|123456" or "google-oauth2|123456"',
       'Use Management API for user operations',
       'Get token operation uses client credentials grant',
@@ -1549,26 +1736,28 @@ Output: {
   // PAYMENT & FINANCE NODES
   // ============================================
   stripe: {
-    overview: 'Stripe payment processing. Create payments, manage customers, handle subscriptions, and process refunds.',
-    inputs: ['apiKey', 'amount', 'currency', 'paymentMethodId', 'customerId'],
-    outputs: ['payment_intent', 'payment', 'customer', 'subscription', 'refund'],
-    example: `Operation: Create Payment Intent
+    overview: 'Stripe payment processing via runtime-supported operations: paymentintent/charge/payment, refund, create_customer, get_payment_intent, list_payment_intents, create_subscription, and create_invoice.',
+    inputs: ['operation', 'apiKey', 'amount', 'currency', 'paymentMethodId', 'customerId', 'paymentIntentId', 'priceId'],
+    outputs: ['success', 'paymentIntent', 'charge', 'customer', 'refund', 'items', 'stripe', 'subscription', 'invoice', '_error', '_errorDetails'],
+    example: `Operation: paymentintent
 API Key: sk_test_...
 Amount: 1000 (cents)
 Currency: usd
 
 Output: {
-  id: "pi_1234567890",
-  amount: 1000,
-  currency: "usd",
-  status: "requires_payment_method",
-  client_secret: "pi_1234567890_secret_..."
+  success: true,
+  paymentIntent: {
+    id: "pi_1234567890",
+    amount: 1000,
+    currency: "usd",
+    status: "requires_payment_method"
+  }
 }`,
     tips: [
       'Amount is in smallest currency unit (cents for USD)',
       'Use test keys (sk_test_) for development',
-      'Payment Intent is required for modern payment flows',
-      'Customer ID format: cus_...',
+      'The visible aliases create_payment, create_payment_intent, get_payment, list_payments, and create_refund are not translated by the runtime today',
+      'Metadata is not sent as Stripe metadata; create_subscription only reads it as a fallback priceId string',
     ],
   },
 
@@ -1598,29 +1787,27 @@ Output: {
   },
 
   paypal: {
-    overview: 'PayPal payment processing. Create orders, capture payments, process refunds, and manage transactions.',
-    inputs: ['clientId', 'clientSecret', 'environment', 'amount', 'currency', 'orderId'],
-    outputs: ['order', 'access_token', 'capture', 'refund'],
-    example: `Operation: Create Order
-Client ID: your-client-id
-Client Secret: your-client-secret
+    overview: 'PayPal creates Checkout orders and refunds captures. Runtime-supported values are charge/createorder/order and refund; current visual operation aliases are not translated.',
+    inputs: ['operation', 'accessToken', 'environment', 'amount', 'currency', 'description', 'paymentId', 'autoCapture'],
+    outputs: ['success', 'order', 'refund', '_error', '_errorDetails'],
+    example: `Operation: charge
 Environment: sandbox
 Amount: 10.00
 Currency: USD
 
 Output: {
-  id: "5O190127TN364715T",
-  status: "CREATED",
-  links: [{
-    href: "https://api.sandbox.paypal.com/v2/checkout/orders/5O190127TN364715T",
-    rel: "self"
-  }]
+  success: true,
+  order: {
+    id: "5O190127TN364715T",
+    status: "CREATED",
+    links: [{ rel: "approve", href: "https://www.paypal.com/checkoutnow?token=5O190127TN364715T" }]
+  }
 }`,
     tips: [
-      'Use sandbox for testing, production for live',
-      'Amount is decimal string (e.g., "10.00")',
-      'Order must be captured after creation',
-      'Access token auto-generated for API calls',
+      'Use Connections/credential vault for PayPal OAuth; clientId and clientSecret fields are visible but not read by the runtime',
+      'The node creates an order and returns approval links; it does not implement capture_order today',
+      'Refund needs paymentId as a PayPal capture ID, not an order ID',
+      'Visible values create_order, get_order, capture_order, create_refund, and get_access_token currently fail as unsupported',
     ],
   },
 
@@ -1628,54 +1815,66 @@ Output: {
   // E-COMMERCE NODES
   // ============================================
   shopify: {
-    overview: 'Shopify e-commerce operations. Manage products, orders, customers, and inventory.',
-    inputs: ['shopDomain', 'accessToken', 'productId', 'orderId', 'customerId'],
-    outputs: ['product', 'products array', 'order', 'orders array', 'customer', 'customers array'],
-    example: `Operation: Get Product
+    overview: 'Shopify Admin API operations. Runtime expects resource plus generic operation values get/list/create/update/delete; current product/order/customer operation aliases are not translated.',
+    inputs: ['resource', 'operation', 'shopDomain', 'apiKey', 'id', 'productId', 'orderId', 'customerId', 'data', 'limit'],
+    outputs: ['success', 'item', 'items', 'deleted', 'id', '_error', '_errorDetails'],
+    example: `Resource: product
+Operation: get
 Shop Domain: mystore.myshopify.com
-Access Token: shpat_...
 Product ID: 123456789
 
 Output: {
-  product: {
-    id: 123456789,
-    title: "Product Name",
-    vendor: "Vendor Name",
-    product_type: "Type",
-    variants: [...],
-    images: [...]
-  }
+  success: true,
+  item: { product: { id: 123456789, title: "Product Name" } }
 }`,
     tips: [
-      'Get access token from Shopify Admin → Settings → Apps → Develop apps',
+      'Get access token from Shopify Admin â†’ Settings â†’ Apps â†’ Develop apps',
       'Shop domain format: your-shop.myshopify.com',
-      'Product ID is numeric',
-      'Use Admin API version 2024-01 or later',
+      'Use operation get/list/create/update/delete with resource product/order/customer; aliases like get_product currently fail',
+      'Get with no ID behaves like list in the current runtime',
     ],
   },
 
   woocommerce: {
-    overview: 'WooCommerce store operations. Manage products, orders, customers, and store data.',
-    inputs: ['storeUrl', 'consumerKey', 'consumerSecret', 'productId', 'orderId', 'customerId'],
-    outputs: ['product', 'products array', 'order', 'orders array', 'customer'],
-    example: `Operation: Get Product
+    overview: 'WooCommerce REST API operations. Runtime expects resource plus generic operation values and reads apiKey/apiSecret plus generic id.',
+    inputs: ['resource', 'operation', 'storeUrl', 'apiKey', 'apiSecret', 'id', 'data', 'perPage'],
+    outputs: ['success', 'item', 'items', 'deleted', '_error', '_errorDetails'],
+    example: `Resource: product
+Operation: get
 Store URL: https://yourstore.com
-Consumer Key: ck_...
-Consumer Secret: cs_...
-Product ID: 123
+ID: 123
 
 Output: {
-  id: 123,
-  name: "Product Name",
-  sku: "PRODUCT-SKU",
-  price: "29.99",
-  stock_status: "instock"
+  success: true,
+  item: { id: 123, name: "Product Name", price: "29.99" }
 }`,
     tips: [
-      'Get API keys from WooCommerce → Settings → Advanced → REST API',
+      'Get API keys from WooCommerce â†’ Settings â†’ Advanced â†’ REST API',
       'Store URL without trailing slash',
-      'Consumer key starts with ck_, secret with cs_',
-      'Product/Order IDs are numeric',
+      'Visible consumerKey/consumerSecret and productId/orderId/customerId fields are not read directly by the executor today',
+      'Use generic id for get/update/delete until the panel is aligned',
+    ],
+  },
+
+  chargebee: {
+    overview: 'Chargebee billing operations for creating customers, creating subscriptions, retrieving customers, and cancelling subscriptions.',
+    inputs: ['operation', 'apiKey', 'site', 'customerId', 'email', 'planId', 'subscriptionId'],
+    outputs: ['success', 'operation', 'customer', 'customerId', 'subscription', 'subscriptionId', 'error'],
+    example: `Operation: create_customer
+Site: acme
+Email: buyer@example.com
+
+Output: {
+  success: true,
+  operation: "create_customer",
+  customerId: "cust_abc123",
+  customer: { id: "cust_abc123", email: "buyer@example.com" }
+}`,
+    tips: [
+      'Site is only the subdomain, such as acme for acme.chargebee.com',
+      'API key is used as the HTTP Basic Auth username; store it in Connections/credential vault when possible',
+      'Failures return success:false and a plain error field, not _error',
+      'Get Customer needs customerId even though the current panel visibility mainly highlights it for Create Subscription',
     ],
   },
 
@@ -1696,7 +1895,7 @@ Output: {
   type_id: "simple"
 }`,
     tips: [
-      'Get access token from Magento Admin → System → Integrations',
+      'Get access token from Magento Admin â†’ System â†’ Integrations',
       'Product ID is the SKU (string)',
       'Order ID is numeric',
       'Use searchCriteria for filtering list operations',
@@ -1722,7 +1921,7 @@ Output: {
   }
 }`,
     tips: [
-      'Get credentials from BigCommerce → Advanced Settings → API Accounts',
+      'Get credentials from BigCommerce â†’ Advanced Settings â†’ API Accounts',
       'Store hash is in API URL: /stores/{storeHash}/v3',
       'Product/Order IDs are numeric',
       'API uses v3 endpoint',
@@ -1772,7 +1971,7 @@ Output: {
   error: null
 }`,
     tips: [
-      'Get project token from Mixpanel → Project Settings',
+      'Get project token from Mixpanel â†’ Project Settings',
       'API secret needed for query operations',
       'Distinct ID identifies the user',
       'Properties are custom event data',
@@ -1793,7 +1992,7 @@ Output: {
   success: true
 }`,
     tips: [
-      'Get write key from Segment → Settings → API Keys',
+      'Get write key from Segment â†’ Settings â†’ API Keys',
       'User ID identifies the user across events',
       'Traits are user properties (for identify)',
       'Segment routes data to your connected destinations',
@@ -1815,7 +2014,7 @@ Output: {
   events_ingested: 1
 }`,
     tips: [
-      'Get API key from Amplitude → Settings → Projects',
+      'Get API key from Amplitude â†’ Settings â†’ Projects',
       'Secret key needed for get_event operation',
       'Event type is the event name',
       'Event properties are custom data',
@@ -1905,8 +2104,8 @@ Workflow flow:
 1. Human Approval node executes
 2. Approval emails sent to approvers
 3. Workflow pauses, waiting for approvals
-4. All approvers approve → Workflow continues with "approved" branch
-5. Any approver rejects or timeout → Workflow continues with "rejected" branch
+4. All approvers approve â†’ Workflow continues with "approved" branch
+5. Any approver rejects or timeout â†’ Workflow continues with "rejected" branch
 
 Output (approved): {
   approved: true,
@@ -1974,9 +2173,9 @@ Routes to urgent handler for immediate response.`,
 
 Execution flow:
 1. Try primary_handler
-2. If fails → Try backup_handler
-3. If fails → Try default_handler
-4. If all fail → Error
+2. If fails â†’ Try backup_handler
+3. If fails â†’ Try default_handler
+4. If all fail â†’ Error
 
 Output (primary succeeds): {
   successful_path: "primary_handler",
@@ -2013,7 +2212,7 @@ Retry sequence:
 - Attempt 3: Wait 2s (2000ms)
 - Attempt 4: Wait 4s (4000ms)
 - Attempt 5: Wait 8s (8000ms)
-- If all fail → Error
+- If all fail â†’ Error
 
 Output (success on attempt 3): {
   result: {...},
@@ -2023,7 +2222,7 @@ Output (success on attempt 3): {
 }`,
     tips: [
       'Exponential backoff prevents overwhelming services',
-      'Initial delay × multiplier^attempt = delay for each retry',
+      'Initial delay Ã— multiplier^attempt = delay for each retry',
       'Use for transient failures (network, rate limits)',
       'Increase max retries for critical operations',
       'Adjust multiplier based on service recovery time',
@@ -2040,8 +2239,8 @@ Output (success on attempt 3): {
 Execution:
 1. Start timer
 2. Execute connected node
-3. If completes within timeout → Continue
-4. If exceeds timeout → Terminate with error
+3. If completes within timeout â†’ Continue
+4. If exceeds timeout â†’ Terminate with error
 
 Output (within timeout): {
   result: {...},
@@ -2239,9 +2438,9 @@ Output: {
       'Keys not in mappings remain unchanged',
       'Useful for API field name conversion',
       'Preserves all values',
-      'Can rename nested keys with dot notation',
-      'Mappings are applied in order',
-      'Useful for data normalization',
+      'Only renames top-level keys â€” there is no dot-notation support for nested fields',
+      'A mapping whose current name is not found on the item is silently skipped, not reported as an error',
+      'If two mappings resolve to the same new name (or the new name already exists), the later rename silently overwrites the earlier value',
     ],
   },
 
@@ -2269,9 +2468,9 @@ Output: {
   }
 }`,
     tips: [
-      'Use backticks and fully qualify table names as `project.dataset.table` — Dataset ID above is not applied automatically',
+      'Use backticks and fully qualify table names as `project.dataset.table` â€” Dataset ID above is not applied automatically',
       'Standard SQL recommended (leave Use Legacy SQL off)',
-      'Results are BigQuery\'s raw {f: [{v}]} row format, not plain column-named objects — zip data.schema.fields with each row in a JavaScript node to get friendly objects',
+      'Results are BigQuery\'s raw {f: [{v}]} row format, not plain column-named objects â€” zip data.schema.fields with each row in a JavaScript node to get friendly objects',
       'Large queries may take time',
       'Authenticate with Google account first',
       'Only Project ID and SQL Query are actually required; Dataset ID is a reference-only note',
@@ -2296,7 +2495,7 @@ Output: {
   model: "gpt-4"
 }`,
     tips: [
-      'Get endpoint from Azure Portal → Your Resource → Keys and Endpoint',
+      'Get endpoint from Azure Portal â†’ Your Resource â†’ Keys and Endpoint',
       'Deployment name is the name you gave your model deployment in Azure',
       'API version defaults to latest preview',
       'Use Azure endpoints for better data residency control',
@@ -2304,66 +2503,109 @@ Output: {
     ],
   },
 
-  hugging_face: {
-    overview: 'Use Hugging Face Inference API to access thousands of open-source AI models. Supports text generation, classification, question answering, summarization, and translation tasks. Perfect for experimenting with different models or using specialized models.',
-    inputs: ['apiKey', 'model', 'task', 'parameters'],
-    outputs: ['output', 'model', 'task'],
-    example: `Model ID: gpt2
-Task: text-generation
-Parameters: {"max_length": 100, "temperature": 0.7}
-Input Text: "The future of AI is"
+  huggingface: {
+    overview: 'Calls the active Hugging Face inference router node. Runtime reads apiKey, model, prompt, maxTokens, and temperature; Task and Parameters are visible hints only and are not sent by the current executor.',
+    inputs: ['apiKey', 'model', 'prompt', 'task', 'maxTokens', 'temperature', 'parameters'],
+    outputs: ['success', 'model', 'response', 'output', 'error', 'preserved input fields'],
+    example: `Model ID: facebook/bart-large-cnn
+Prompt: "Summarize {{$json.reviewText}}."
+Max Tokens: 256
+Temperature: 0.2
 
 Output: {
-  output: "The future of AI is bright and full of possibilities...",
-  model: "gpt2",
-  task: "text-generation"
+  customerId: "C-1048",
+  success: true,
+  model: "facebook/bart-large-cnn",
+  response: "Customer reports a duplicate billing charge.",
+  output: [{ summary_text: "Customer reports a duplicate billing charge." }]
 }`,
     tips: [
-      'Find model IDs at huggingface.co/models',
-      'Task must match model capabilities',
-      'Many models available for free',
-      'Use model-specific parameters for best results',
-      'Token starts with hf_',
+      'Use a Hugging Face token that starts with hf_ and store it through Connections or the credential vault when possible.',
+      'Copy the exact model ID from huggingface.co/models.',
+      'The executor retries once without parameters only when max_new_tokens is rejected.',
+      'Task and Parameters do not currently affect the HTTP request.',
+    ],
+  },
+
+  hugging_face: {
+    overview: 'Legacy alias guide only. The active UI-visible node key is huggingface.',
+    inputs: ['See huggingface'],
+    outputs: ['See huggingface'],
+    example: 'Use the huggingface node entry for current runtime behavior.',
+    tips: ['Do not add new workflows using the hugging_face key unless a legacy importer requires it.'],
+  },
+
+  ai_chat_model: {
+    overview: 'Calls the platform Gemini chat path directly. The runtime preserves incoming fields, returns response plus model, and currently hardcodes provider gemini and model gemini-3.5-flash even though a model dropdown is visible.',
+    inputs: ['prompt', 'systemPrompt', 'model', 'responseFormat', 'temperature'],
+    outputs: ['response', 'model', '_error'],
+    example: `Prompt: "Summarize this email as JSON: {{$json.emailBody}}"
+System Prompt: "Return only JSON with summary and urgency."
+Response Format: json
+Temperature: 0.2
+
+Input: { customerId: "1048", emailBody: "I was charged twice..." }
+Output: {
+  customerId: "1048",
+  response: {
+    summary: "Customer says they were charged twice.",
+    urgency: "high"
+  },
+  model: "gemini-3.5-flash"
+}`,
+    tips: [
+      'A blank effective prompt returns _error: AI Chat Model node: prompt is required.',
+      'Response Format json uses best-effort JSON.parse; invalid JSON falls back to raw text in response.',
+      'The current executor ignores the selected model and uses gemini-3.5-flash.',
+      'Incoming fields are preserved, so IDs from previous steps remain available after this node.',
+      'Use a Gemini connection, wallet, key pool, or worker key; do not paste keys into Prompt.',
     ],
   },
 
   cohere: {
-    overview: 'Use Cohere AI models for text generation and language understanding. Cohere specializes in command models optimized for following instructions and generating high-quality text. Great for content generation, summarization, and classification tasks.',
-    inputs: ['apiKey', 'model', 'prompt', 'temperature'],
-    outputs: ['text', 'generation_id', 'model'],
-    example: `Model: command
-Prompt: "Summarize this text: [text]"
-Temperature: 0.7
+    overview: 'Calls Cohere /v1/chat with a Command model, prompt, optional preamble, temperature, and max token limit. The current runtime reads apiKey directly and returns plain success/error fields.',
+    inputs: ['apiKey', 'model', 'prompt', 'preamble', 'temperature', 'maxTokens'],
+    outputs: ['success', 'response', 'model', 'finishReason', 'inputTokens', 'outputTokens', 'error'],
+    example: `Model: command-r-08-2024
+Prompt: "Summarize this support ticket: {{$json.ticketBody}}"
+Preamble: "Be concise and factual."
+Temperature: 0.2
+Max Tokens: 512
 
 Output: {
-  text: "Summary of the provided text...",
-  generation_id: "gen_abc123",
-  model: "command"
+  success: true,
+  response: "The customer is asking for a refund because delivery was late.",
+  model: "command-r-08-2024",
+  finishReason: "COMPLETE",
+  inputTokens: 87,
+  outputTokens: 19,
+  error: null
 }`,
     tips: [
-      'Command model is best for general tasks',
-      'Command Light is faster and cheaper',
-      'Command R/R+ for complex multi-step tasks',
-      'Lower temperature for factual tasks',
-      'Get API key from dashboard.cohere.com',
+      'Get the API key from dashboard.cohere.com and store it through a secure credential mapping.',
+      'This node reports failures in error with success=false; it does not use _error.',
+      'If Prompt is static and upstream text exists, the runtime may use upstream text as the message and Prompt as preamble.',
+      'Use command-r-08-2024 for balanced work, command-r-plus-08-2024 for stronger reasoning, and command-r7b-12-2024 for faster smaller jobs.',
+      'Use maxTokens to limit cost and keep downstream payloads small.',
     ],
   },
 
   ollama: {
-    overview: 'AI chat completion using Gemini 3.5 Flash, the platform\'s default LLM. Send a prompt and get a text response back — no setup or API key required.',
+    overview: 'Legacy Ollama slug that delegates to AI Chat Model using Gemini 3.5 Flash. It is not a local Ollama server call.',
     inputs: ['prompt', 'temperature'],
-    outputs: ['response_text', 'response', 'text'],
+    outputs: ['response', 'model', '_error', 'preserved incoming fields'],
     example: `Prompt: "Explain quantum computing in simple terms"
 Temperature: 0.7
 
 Output: {
-  response_text: "Quantum computing uses quantum mechanics...",
+  response: "Quantum computing uses quantum mechanics...",
+  model: "gemini-3.5-flash"
 }`,
     tips: [
-      'Uses the platform\'s built-in Gemini 3.5 Flash model — no API key needed',
-      'Lower temperature (0.0-0.5) for factual, consistent answers',
-      'Higher temperature (0.7-1.2) for creative, varied answers',
-      'For more control (system prompt, response format), use the AI Chat Model node instead',
+      'This does not call a local Ollama model; runtime rewrites it to ai_chat_model.',
+      'A blank effective prompt can return _error: AI Chat Model node: prompt is required.',
+      'Gemini credential errors appear in _error, and wallet failures may include code.',
+      'Use {{$json.response}} downstream and keep preserved input fields normally.',
     ],
   },
 
@@ -2416,26 +2658,25 @@ Output: {
   },
 
   chat_model: {
-    overview: 'Unified interface for multiple AI chat providers (OpenAI, Anthropic, Google Gemini, Azure). Switch between providers easily or use multiple providers in the same workflow. Perfect for multi-provider strategies or cost optimization.',
-    inputs: ['provider', 'apiKey', 'model', 'prompt', 'temperature', 'endpoint', 'deploymentName'],
-    outputs: ['response', 'provider', 'model', 'usage'],
-    example: `Provider: OpenAI
-Model: gpt-4o
-System Prompt: "You are a helpful assistant..."
+    overview: 'Support/config node for legacy agent wiring. The current runtime does not call an AI provider; it returns a Gemini config object, reads only Temperature, and ignores Provider, API Key, Model, and Prompt.',
+    inputs: ['provider', 'apiKey', 'model', 'prompt', 'temperature'],
+    outputs: ['provider', 'model', 'temperature', '_chat_model_config'],
+    example: `Provider: gemini
+Model: gemini-3.5-flash
+Prompt: "You are a helpful assistant."
 Temperature: 0.7
 
 Output: {
-  response: "Hello! How can I help you?",
-  provider: "openai",
-  model: "gpt-4o",
-  usage: { tokens: 150 }
+  provider: "gemini",
+  model: "gemini-3.5-flash",
+  temperature: 0.7,
+  _chat_model_config: true
 }`,
     tips: [
-      'Switch providers easily without changing workflow logic',
-      'Each provider has different model options',
-      'Azure requires endpoint and deploymentName',
-      'Use for cost optimization across providers',
-      'Test with different providers to find best fit',
+      'Use AI Chat Model, AI Agent, or provider-specific AI nodes for real prompt responses.',
+      'Do not paste production API keys here; the current executor ignores apiKey.',
+      'Changing Model or Prompt does not change runtime behavior today.',
+      'Downstream service nodes still need their own account connections.',
     ],
   },
 
@@ -2644,28 +2885,72 @@ Output: {
   },
 
   memory: {
-    overview: 'Store, retrieve, clear, or search conversation memory for AI applications. Maintains context across multiple interactions using different memory types (short-term, long-term, or both). Perfect for chatbots, AI assistants, or multi-turn conversations.',
-    inputs: ['operation', 'memoryType', 'ttl', 'maxMessages', 'key', 'sessionId'],
-    outputs: ['memory', 'messages', 'searchResults'],
+    overview: 'Passes sessionId, context, and incoming messages forward for AI workflows. The current runtime does not store, retrieve, clear, search, expire, or limit memory; those visible controls are legacy no-ops.',
+    inputs: ['operation', 'memoryType', 'ttl', 'maxMessages', 'sessionId', 'session_id', 'context'],
+    outputs: ['sessionId', 'context', 'messages'],
     example: `Operation: store
 Memory Type: both
-TTL: 3600 seconds (1 hour)
-Max Messages: 100
-Session ID: session_123
+Session ID: ticket-{{$json.ticketId}}
+Context: {{$json.customerContext}}
 
-Stored memory for session_123 with 1 hour TTL
-
-Retrieve Operation:
 Output: {
-  memory: {...},
-  messages: [...]
+  sessionId: "ticket-1048",
+  context: "Customer has an open billing dispute for invoice INV-1048.",
+  messages: []
 }`,
     tips: [
-      'Store: save conversation memory',
-      'Retrieve: get stored memory by key/session',
-      'Clear: delete stored memory',
-      'Search: find memory by content',
-      'Short-term: session-based, Long-term: persistent',
+      'Use Session ID and Context as the real data passed to downstream AI steps.',
+      'Store, Retrieve, Clear, and Search currently behave the same.',
+      'TTL, Memory Type, and Max Messages are ignored by the current executor.',
+      'No memory or searchResults field is produced.',
+    ],
+  },
+
+  mistral: {
+    overview: 'Calls Mistral chat completions with optional systemPrompt and required prompt. It preserves incoming fields and adds success, model, response, inputTokens, and outputTokens.',
+    inputs: ['apiKey', 'model', 'systemPrompt', 'prompt', 'temperature', 'maxTokens'],
+    outputs: ['success', 'model', 'response', 'inputTokens', 'outputTokens', 'error', 'preserved input fields'],
+    example: `Model: mistral-small-latest
+System Prompt: "Return one concise sentence."
+Prompt: "Summarize {{$json.ticketBody}}."
+
+Output: {
+  ticketId: "TCK-1048",
+  success: true,
+  model: "mistral-small-latest",
+  response: "The customer is requesting a refund for a duplicate invoice charge.",
+  inputTokens: 96,
+  outputTokens: 15
+}`,
+    tips: [
+      'Store the Mistral key in Connections or credential vault and map it into apiKey.',
+      'Use low temperature for extraction or JSON-shaped output.',
+      'Failures preserve incoming fields and return success=false with error.',
+      'This node returns error, not _error.',
+    ],
+  },
+
+  langchain: {
+    overview: 'Calls OpenAI or Anthropic through the LangChain node facade. OpenAI is hardcoded to gpt-4o-mini, Anthropic to claude-3-5-sonnet-20241022; Memory is ignored.',
+    inputs: ['operation', 'provider', 'apiKey', 'prompt', 'tools', 'memory'],
+    outputs: ['success', 'operation', 'response', 'steps', 'error'],
+    example: `Operation: run_agent
+Provider: openai
+Prompt: "Use a tool if needed: {{$json.customerQuestion}}"
+Tools: [{"name":"lookup_order","description":"Find order details","parameters":{"type":"object","properties":{"orderId":{"type":"string"}}}}]
+
+Output: {
+  success: true,
+  operation: "run_agent",
+  response: "",
+  steps: [{ id: "call_123", type: "function", function: { name: "lookup_order", arguments: "{\"orderId\":\"ORD-1048\"}" } }],
+  error: null
+}`,
+    tips: [
+      'apiKey must match provider: OpenAI key for openai, Anthropic key for anthropic.',
+      'Tools affect only OpenAI run_agent; Anthropic tools are not sent by the current executor.',
+      'Successful output does not preserve incoming fields.',
+      'Memory toggle has no runtime effect, so map needed context into Prompt.',
     ],
   },
 
@@ -2673,9 +2958,9 @@ Output: {
   // DATABASE NODES
   // ============================================
   redis: {
-    overview: 'Interact with Redis key-value store for caching, session management, or fast data storage. Supports get, set, and delete operations with optional TTL (time-to-live). Perfect for caching frequently accessed data or managing sessions.',
-    inputs: ['host', 'port', 'password', 'operation', 'key', 'value', 'ttl'],
-    outputs: ['value', 'result'],
+    overview: 'Read, write, delete, increment, and manage Redis keys, hashes, lists, TTLs, and controlled custom commands. Use it for short-lived caches, session handoff, counters, and queue-like lists.',
+    inputs: ['host', 'port', 'password', 'db', 'tls', 'operation', 'key', 'value', 'ttl', 'hash', 'field', 'command', 'args'],
+    outputs: ['value', 'result', 'deleted', 'count', 'length', 'key', 'hash', 'field', '_error'],
     example: `Operation: set
 Key: "user:123:cache"
 Value: "cached_data"
@@ -2683,14 +2968,15 @@ TTL: 3600 seconds (1 hour)
 
 Get Operation:
 Output: {
+  key: "user:123:cache",
   value: "cached_data",
-  result: "success"
+  result: "OK"
 }`,
     tips: [
       'Use namespaces like "user:123" or "session:abc"',
       'TTL sets expiration time in seconds',
-      'Fast key-value operations',
-      'Perfect for caching and session storage',
+      'Hash operations need Hash Key and Hash Field',
+      'Custom Command should be limited to approved commands',
       'Get operation returns null if key not found',
     ],
   },
@@ -2773,12 +3059,12 @@ Output: {
   },
 
   timescaledb: {
-    overview: 'Query TimescaleDB (PostgreSQL extension for time-series data) using SELECT queries or raw SQL. Perfect for time-series data, metrics, IoT data, or time-based analytics. Supports hypertables and time-series functions.',
-    inputs: ['host', 'port', 'database', 'username', 'password', 'operation', 'table', 'query', 'filters', 'limit'],
-    outputs: ['rows', 'count'],
+    overview: 'Run PostgreSQL/TimescaleDB SQL, table writes, deletes, and time-series helpers such as timeBucket, first, and last. Use Execute Query for advanced time windows, joins, averages, and continuous aggregates.',
+    inputs: ['host', 'port', 'database', 'username', 'password', 'ssl', 'operation', 'query', 'params', 'table', 'data', 'where', 'timeColumn', 'interval', 'bucketColumn', 'valueColumn'],
+    outputs: ['rows', 'rowsAffected', 'inserted', 'count', '_error'],
     example: `Host: timescale.example.com
 Database: metrics_db
-Operation: query
+Operation: executeQuery
 SQL Query: SELECT time_bucket('1 hour', time) AS hour, AVG(value) FROM metrics GROUP BY hour
 
 Output: {
@@ -2790,10 +3076,11 @@ Output: {
 }`,
     tips: [
       'Uses PostgreSQL syntax plus time-series functions',
+      'The live runtime uses executeQuery, not the old select/query values',
       'Hypertables automatically partitioned by time',
       'Use time_bucket() for time-based aggregations',
-      'Perfect for metrics, IoT, and time-series data',
-      'Optimized for time-based queries',
+      'Update and Delete require Where JSON',
+      'Time Bucket currently requires Group Column',
     ],
   },
 
@@ -2801,9 +3088,9 @@ Output: {
   // STORAGE NODES
   // ============================================
   read_binary_file: {
-    overview: 'Read managed workflow file assets or files under the backend binary storage root. Use this after Write Binary File, or for server-side temporary files. For Drive/cloud links, use Google Drive, HTTP Request, S3, Dropbox, or OneDrive first.',
-    inputs: ['sourceType', 'assetId', 'filePath', 'maxSize'],
-    outputs: ['assetId', 'fileName', 'mimeType', 'dataBase64', 'sizeBytes', 'storageKey'],
+    overview: 'Read a managed workflow file asset by Asset ID, or a trusted serverPath/storageKey under the backend binary storage root. It is not a cloud-link reader.',
+    inputs: ['sourceType', 'assetId', 'filePath', 'storageKey', 'maxSize'],
+    outputs: ['success', 'assetId', 'fileName', 'mimeType', 'dataBase64', 'sizeBytes', 'checksumSha256', 'storageProvider', 'storageKey', 'filePath', '_error'],
     example: `Source Type: assetId
 Asset ID: {{$json.assetId}}
 Max Size: 10485760 (10 MB)
@@ -2817,18 +3104,18 @@ Output: {
   storageKey: "users/.../document.pdf"
 }`,
     tips: [
-      'Returns file bytes as dataBase64',
-      'Set max size to prevent memory issues',
-      'Use assetId from Write Binary File for durable workflow handoff',
-      'Server paths are restricted to the backend binary storage root',
-      'Do not paste Google Drive/share URLs here',
+      'Use assetId from Write Binary File for normal workflow handoff',
+      'Use serverPath/storageKey only for files under the backend binary root',
+      'Returns dataBase64 for downstream email, storage, OCR, or parser nodes',
+      'Set Max Size in bytes to protect worker memory',
+      'Cloud links need their own connector node first',
     ],
   },
 
   aws_s3: {
-    overview: 'Interact with AWS S3 for cloud file storage. Upload, download, list, or delete files in S3 buckets. Perfect for file backups, media storage, or cloud file management. Supports folders using object key paths.',
-    inputs: ['accessKeyId', 'secretAccessKey', 'region', 'bucket', 'operation', 'key', 'content', 'prefix'],
-    outputs: ['result', 'content', 'objects'],
+    overview: 'List, download, upload, and delete Amazon S3 objects. The UI uses get/put/list/delete; the runtime normalizes get to download and put to upload internally.',
+    inputs: ['region', 'accessKeyId', 'secretAccessKey', 'sessionToken', 'operation', 'bucket', 'key', 'prefix', 'content', 'dataBase64', 'data'],
+    outputs: ['bucket', 'key', 'items', 'count', 'dataBase64', 'sizeBytes', 'contentType', 'etag', 'uploaded', 'deleted', '_error'],
     example: `Operation: put
 Bucket: my-bucket
 Key: "folder/file.txt"
@@ -2837,82 +3124,102 @@ Region: us-east-1
 
 Get Operation:
 Output: {
-  content: "Hello from CtrlChecks!",
-  result: "success"
+  key: "folder/file.txt",
+  dataBase64: "SGVsbG8...",
+  sizeBytes: 22,
+  contentType: "text/plain"
 }`,
     tips: [
       'Use folder structure in object keys: "folder/subfolder/file.txt"',
-      'Content can be plain text or base64-encoded binary',
+      'Upload accepts dataBase64, data, or content',
       'Region must match bucket region',
       'List operation supports prefix filtering',
-      'Secure credentials - use IAM best practices',
+      'Use least-privilege IAM permissions for the selected bucket',
     ],
   },
 
   ftp: {
-    overview: 'Interact with FTP servers for file transfer. Upload, download, list, or delete files on FTP servers. Supports standard FTP (port 21) and FTPS (port 990). Perfect for legacy file transfer workflows.',
-    inputs: ['host', 'port', 'username', 'password', 'operation', 'remotePath', 'content'],
-    outputs: ['result', 'content', 'files'],
+    overview: 'Transfer files with an FTP server using get, put, list, or delete. The registry path accepts the UI field names remotePath/content and generated aliases download/upload.',
+    inputs: ['operation', 'host', 'port', 'username', 'password', 'secure', 'remotePath', 'path', 'content', 'dataBase64', 'fileData'],
+    outputs: ['success', 'output.operation', 'output.data', 'items', 'count', 'dataBase64', 'sizeBytes', 'path', 'deleted', '_error'],
     example: `Operation: get
 Host: ftp.example.com
 Port: 21
 Remote Path: /files/data.txt
 
 Output: {
-  content: "File content...",
-  result: "success"
+  success: true,
+  output: {
+    operation: "get",
+    data: {
+      path: "/files/data.txt",
+      size: 2048,
+      dataBase64: "SGVsbG8..."
+    }
+  }
 }`,
     tips: [
-      'Port 21 for standard FTP, 990 for FTPS',
-      'Use absolute paths starting with /',
-      'Content for put operation can be text or base64',
-      'List operation returns files in directory',
-      'Consider SFTP for better security',
+      'Use SFTP instead of FTP whenever the server supports it',
+      'Put requires Content, Data Base64, or File Data',
+      'Remote Path is a file path for get/put/delete and a folder for list',
+      'Secure FTP means explicit FTPS/TLS, not SFTP',
+      'Legacy execution may return flattened items/dataBase64/path/deleted fields',
     ],
   },
 
   sftp: {
-    overview: 'Interact with SFTP servers for secure file transfer over SSH. Upload, download, list, or delete files on SFTP servers. More secure than FTP. Perfect for secure file transfers to servers.',
-    inputs: ['host', 'port', 'username', 'password', 'privateKey', 'operation', 'remotePath', 'content'],
-    outputs: ['result', 'content', 'files'],
+    overview: 'Transfer files securely over SSH/SFTP using get, put, list, or delete. Authentication can use a password or an SSH private key with an optional passphrase.',
+    inputs: ['operation', 'host', 'port', 'username', 'password', 'privateKey', 'passphrase', 'remotePath', 'path', 'content', 'dataBase64', 'fileData'],
+    outputs: ['success', 'output.operation', 'output.data', 'items', 'count', 'dataBase64', 'sizeBytes', 'path', 'deleted', '_error'],
     example: `Operation: put
 Host: sftp.example.com
 Port: 22
 Remote Path: /var/www/uploads/file.txt
-Content: "Hello World"
+Content: {{$json.dataBase64}}
 
 Output: {
-  result: "success"
+  success: true,
+  output: {
+    operation: "put",
+    data: {
+      path: "/var/www/uploads/file.txt",
+      size: 2048,
+      uploaded: true
+    }
+  }
 }`,
     tips: [
       'Port 22 is standard SSH/SFTP port',
-      'Use private key for better security than password',
-      'Private key format: -----BEGIN RSA PRIVATE KEY----- ...',
-      'Supports absolute and relative paths',
-      'More secure than FTP - uses SSH protocol',
+      'Use either password or private key authentication',
+      'Private key must include the full BEGIN/END block',
+      'Put requires Content, Data Base64, or File Data',
+      'Remote Path is a file path for get/put/delete and a folder for list',
+      'SFTP is SSH-based and different from FTPS',
     ],
   },
 
   dropbox: {
-    overview: 'Interact with Dropbox cloud storage. Upload, download, list, or delete files in Dropbox. Perfect for cloud file management, backups, or syncing files with Dropbox accounts.',
-    inputs: ['accessToken', 'operation', 'path', 'content'],
-    outputs: ['result', 'content', 'files'],
+    overview: 'List, download, upload, and delete Dropbox files. The UI value read is normalized to download by the runtime; failures return _error and often _errorDetails.',
+    inputs: ['accessToken', 'operation', 'path', 'content', 'dataBase64', 'data', 'recursive'],
+    outputs: ['success', 'items', 'cursor', 'hasMore', 'dataBase64', 'sizeBytes', 'metadata', 'deleted', '_error', '_errorDetails'],
     example: `Operation: upload
 Path: /Documents/file.txt
 Content: "Hello from CtrlChecks!"
 
 List Operation:
 Output: {
-  files: [
-    {name: "file.txt", path: "/Documents/file.txt", size: 1234}
-  ]
+  success: true,
+  items: [
+    {name: "file.txt", path_display: "/Documents/file.txt", size: 1234}
+  ],
+  hasMore: false
 }`,
     tips: [
       'Paths start with / for root',
-      'Get access token from Dropbox App Console',
-      'Set required permissions (files.read, files.write)',
-      'Content for upload can be text or base64',
-      'List operation shows files in folder',
+      'Use a saved Dropbox OAuth2 connection instead of pasting tokens',
+      'Scopes needed: files.metadata.read, files.content.read, files.content.write',
+      'Upload accepts dataBase64, data, or content',
+      'Recursive list can return many files',
     ],
   },
 
@@ -2980,14 +3287,18 @@ text = {{$json.aiResponse}}`,
 
   instagram_trigger: {
     overview: 'Start a workflow in real time when Instagram receives a DM, comment, mention, story reply, or postback through Meta webhooks. Use this for workflows such as Instagram Trigger -> AI Agent -> Instagram Send Text or Reply to Comment.',
-    inputs: ['eventTypes', 'instagramBusinessAccountId', 'allowedSenderIds', 'verifyToken', 'validateSignature'],
-    outputs: ['chatId', 'senderId', 'recipientId', 'text', 'eventType', 'messageId', 'commentId', 'mediaId', 'mentionId', 'instagramBusinessAccountId', 'raw'],
+    inputs: ['connectionId', 'eventTypes', 'instagramBusinessAccountId', 'allowedSenderIds', 'verifyToken', 'validateSignature'],
+    outputs: ['eventId', 'eventType', 'source', 'userId', 'username', 'text', 'timestamp', 'chatId', 'senderId', 'recipientId', 'instagramBusinessAccountId', 'pageId', 'messageId', 'messageType', 'commentId', 'mediaId', 'mentionId', 'postbackPayload', 'isStoryReply', 'raw', 'trigger', 'workflow_id', 'node_id', 'sessionId', '_instagram'],
     example: `Incoming Instagram DM:
 {
+  eventId: "mid.$abc123",
+  eventType: "message.text",
   chatId: "1234567890",
   senderId: "1234567890",
   recipientId: "17841400000000000",
-  text: "Can you help me?"
+  instagramBusinessAccountId: "17841400000000000",
+  text: "Can you help me?",
+  sessionId: "instagram_workflow_123_1234567890"
 }
 
 Reply node:
@@ -3000,6 +3311,7 @@ text = {{$json.aiResponse}}`,
       'Use the same Verify Token in Meta for Developers -> Webhooks when verifying the callback URL',
       'Keep signature validation on in production and configure META_APP_SECRET, INSTAGRAM_APP_SECRET, or FACEBOOK_APP_SECRET on the worker',
       'Use commentId for comment reply operations and senderId for DM reply operations',
+      'Use {{$json.eventType}} to route message, message.story_reply, comment, mention, and postback events to different branches',
     ],
   },
 
@@ -3105,7 +3417,7 @@ message = "New {{$json.eventType}} by {{$json.username}}: {{$json.issueUrl}}"`,
   },
 
   whatsapp: {
-    overview: 'Send WhatsApp messages, media, locations, contact cards, approved templates, and interactive buttons/lists through the WhatsApp Business Cloud API. Connect a WhatsApp/Facebook account under Connections — credentials are resolved automatically. The visual panel exposes the Message resource; Contact, Conversation, Template, Campaign, and AI Agent resources are runtime-supported for advanced or AI-generated workflows.',
+    overview: 'Send WhatsApp messages, media, locations, contact cards, approved templates, and interactive buttons/lists through the WhatsApp Business Cloud API. Connect a WhatsApp/Facebook account under Connections â€” credentials are resolved automatically. The visual panel exposes the Message resource; Contact, Conversation, Template, Campaign, and AI Agent resources are runtime-supported for advanced or AI-generated workflows.',
     inputs: ['resource', 'operation', 'to', 'text', 'mediaType/mediaUrl', 'templateName/language', 'bodyText/buttons'],
     outputs: ['messages[0].id', 'contacts', 'success', '_error', '_errorCode', '_errorDetails'],
     example: `Operation: sendText
@@ -3118,7 +3430,7 @@ Output: {
   messages: [{ id: "wamid.xxx" }]
 }`,
     tips: [
-      'Connect a WhatsApp account under Connections — no access tokens entered on the node itself',
+      'Connect a WhatsApp account under Connections â€” no access tokens entered on the node itself',
       'Phone numbers should be in E.164 format, e.g. +12345678900',
       'First message to a new contact must use Send Template; free-form Send Text only works inside the 24-hour customer service window',
       'Use {{$json.messages[0].id}} to track delivery, and {{$json.chatId}} or {{$json.from}} from WhatsApp Trigger for replies',
@@ -3126,9 +3438,9 @@ Output: {
     ],
   },
 
-  // Deprecated alias for 'whatsapp' — kept only for workflows saved before the merge.
+  // Deprecated alias for 'whatsapp' â€” kept only for workflows saved before the merge.
   whatsapp_cloud: {
-    overview: 'Deprecated — use the WhatsApp node instead. This node only ever sends a plain WhatsApp text message and is kept only for backward compatibility with existing workflows; it delegates execution and credentials to the WhatsApp node under the hood.',
+    overview: 'Deprecated â€” use the WhatsApp node instead. This node only ever sends a plain WhatsApp text message and is kept only for backward compatibility with existing workflows; it delegates execution and credentials to the WhatsApp node under the hood.',
     inputs: ['to', 'text (labeled "Message" in the panel)', 'messageType (inert)'],
     outputs: ['success', 'data', '_error / _errorCode / _errorDetails on failure'],
     example: `To: +1234567890
@@ -3139,10 +3451,10 @@ Output: {
   data: { messaging_product: "whatsapp", contacts: [...], messages: [{ id: "wamid.xxx" }] }
 }`,
     tips: [
-      'Deprecated — replace with the WhatsApp node in new workflows; it supports media, locations, contacts, templates, and interactive messages that this node cannot reach',
-      'The Message field is stored under the key text, not message — a prior panel version used message, which the shared runtime never read, so those sends went out empty',
-      'Message Type has no effect on the send — this node always sends plain text regardless of its value',
-      'Connect a WhatsApp account under Connections — no API keys entered on the node itself',
+      'Deprecated â€” replace with the WhatsApp node in new workflows; it supports media, locations, contacts, templates, and interactive messages that this node cannot reach',
+      'The Message field is stored under the key text, not message â€” a prior panel version used message, which the shared runtime never read, so those sends went out empty',
+      'Message Type has no effect on the send â€” this node always sends plain text regardless of its value',
+      'Connect a WhatsApp account under Connections â€” no API keys entered on the node itself',
     ],
   },
 
@@ -3165,8 +3477,8 @@ Output: {
       "Connect your Twilio account from the node's connection picker (Account SID + Auth Token)",
       'Use either a From number or a Messaging Service SID, not both',
       'Set Media URL to send an MMS attachment',
-      'status is the initial queue state (queued/sent), not final delivery — this node does not poll for delivered/failed',
-      'On failure, check {{$json._errorDetails}} for the real reason — {{$json._error}} alone is just a bare status-code message, and there is no success: false to check instead',
+      'status is the initial queue state (queued/sent), not final delivery â€” this node does not poll for delivered/failed',
+      'On failure, check {{$json._errorDetails}} for the real reason â€” {{$json._error}} alone is just a bare status-code message, and there is no success: false to check instead',
       'Trial Twilio accounts can only send to Verified Caller IDs until upgraded',
       'Supports template variables',
     ],
@@ -3514,7 +3826,9 @@ Output: {
       'Extract: uses xpath to extract a specific slash path',
       'Validate: checks XML structure and syntax',
       'Default maxSize is 5242880 bytes',
-      'Use /root/item style paths for extract',
+      'Use /root/item style paths for extract â€” this is a simplified path walker, not real XPath (no wildcards, attribute selectors, or array indices)',
+      'A non-matching XPath silently returns result: null and success: false â€” no error is raised',
+      'Invalid XML during Validate is a normal successful result (valid: false), not an error',
     ],
   },
 
@@ -3611,9 +3925,9 @@ Output: {
   // CRM NODES
   // ============================================
   hubspot: {
-    overview: 'Connects to HubSpot CRM to create, update, retrieve, delete, or search contacts, companies, deals, tickets, and other objects. Perfect for automating sales, marketing, and support workflows.',
-    inputs: ['authType', 'apiKey', 'accessToken', 'resource', 'operation', 'id', 'properties', 'searchQuery', 'limit', 'after'],
-    outputs: ['result', 'records', 'paging'],
+    overview: 'Connects to HubSpot CRM to get, list, create, update, delete, search, or bulk-create contacts, companies, deals, and tickets. Only Access Token is vault-backed - Api Key and Credential Id are legacy/unused. Perfect for automating sales, marketing, and support workflows.',
+    inputs: ['operation', 'resource', 'id', 'objectId', 'properties', 'records', 'searchQuery', 'limit', 'after', 'accessToken', 'apiKey', 'credentialId'],
+    outputs: ['success', 'id', 'record', 'properties', 'results', 'total', 'paging', 'deleted', 'createdAt', 'updatedAt', '_error', '_errorCode', '_errorDetails'],
     example: `Resource: contact
 Operation: create
 Properties: {
@@ -3623,153 +3937,126 @@ Properties: {
 }
 
 Output: {
-  result: {
+  success: true,
+  id: "12345",
+  record: {
     id: "12345",
-    properties: {
-      email: "john@example.com",
-      firstname: "John",
-      lastname: "Doe"
+    properties: { email: "john@example.com", firstname: "John", lastname: "Doe" }
+  },
+  properties: { email: "john@example.com", firstname: "John", lastname: "Doe" },
+  createdAt: "2026-07-19T00:00:00Z",
+  updatedAt: "2026-07-19T00:00:00Z"
+}`,
+    tips: [
+      'Use a Private App access token (starts with pat-) or OAuth2 - both save under the same HubSpot connection and auto-fill Access Token; do not use the legacy Api Key field for new setups',
+      'Only Contact, Company, Deal, and Ticket are selectable in Resource today; other HubSpot object types (product, quote, call, etc.) are runtime-supported but not in this dropdown',
+      'Search uses HubSpot CRM search syntax (e.g. email:test@example.com), not a plain keyword search - it does not return a pagination cursor like Get Many does',
+      'Search before Create to avoid duplicate contacts',
+      'Get Many is capped at 100 records per run - use After with the previous run\'s {{$json.paging.next.after}} to fetch more',
+      'Credential Id is a reserved field the execution engine never reads - manage the connection through Connections instead',
+    ],
+  },
+  bitbucket: {
+    overview: 'Manages Bitbucket repositories through the runtime override. The visible node supports only read, create, update, and delete repository operations.',
+    inputs: ['operation', 'workspace', 'repoSlug', 'repo', 'username', 'appPassword', 'accessToken', 'description', 'isPrivate', 'data'],
+    outputs: ['success', 'output.operation', 'output.data', 'error.code', 'error.message'],
+    example: `Operation: create
+Workspace: acme-platform
+Repository Slug: customer-portal-api
+Private Repository: true
+
+Output: {
+  success: true,
+  output: {
+    operation: "create",
+    data: {
+      slug: "customer-portal-api",
+      full_name: "acme-platform/customer-portal-api"
     }
   }
 }`,
     tips: [
-      'Use Private App access tokens when possible',
-      'Choose the correct resource (contact, company, deal, ticket)',
-      'Search before create to avoid duplicates',
-      'Use pagination (after) for large datasets',
-      'Respect HubSpot API rate limits',
-    ],
-  },
-  bitbucket: {
-    overview: 'Automates Bitbucket tasks like managing repositories, branches, commits, pull requests, comments, and pipelines. Great for DevOps workflows, approvals, and repository automation.',
-    inputs: [
-      'username',
-      'appPassword',
-      'operation',
-      'workspace',
-      'repo',
-      'title',
-      'description',
-      'sourceBranch',
-      'destinationBranch',
-      'prId',
-      'comment',
-      'mergeStrategy',
-      'branchName',
-      'targetBranch',
-      'commitSha',
-      'pipelineUuid',
-    ],
-    outputs: ['result', 'records', 'paging'],
-    example: `Operation: create_pr
-Workspace: my-team
-Repository: backend-api
-Title: "Add login feature"
-Source Branch: feature/login
-Destination Branch: main
-
-Output: {
-  result: {
-    id: 42,
-    title: "Add login feature",
-    state: "OPEN"
-  }
-}`,
-    tips: [
-      'Use App Passwords, not your login password',
-      'Verify workspace and repo names from the URL',
-      'Use Search/Get before Update or Merge',
-      'Use PRs for changes instead of direct merges',
-      'Respect API rate limits for large repos',
+      'Use a Bitbucket app password with Username, or use Access Token for Bearer OAuth auth',
+      'Workspace is required unless Repo provides workspace/repoSlug',
+      'Repo Slug is required for create, update, and delete',
+      'Read lists repositories when Repo Slug is blank',
+      'Data JSON replaces the default create/update payload; otherwise runtime sends scm git, is_private, and description',
     ],
   },
 
   salesforce: {
-    overview: 'Interact with Salesforce CRM using SOQL queries, SOSL search, or CRUD operations. Supports standard objects (Account, Contact, Lead, Opportunity) and custom objects. Perfect for enterprise CRM automation, sales pipeline management, or Salesforce data integration.',
-    inputs: ['instanceUrl', 'accessToken', 'resource', 'customObject', 'operation', 'soql', 'sosl', 'id', 'fields', 'externalIdField', 'externalIdValue'],
-    outputs: ['records', 'result', 'totalSize'],
+    overview: 'Interact with Salesforce CRM using SOQL queries, SOSL search, or CRUD/upsert/bulk operations. Supports standard objects (Account, Contact, Lead, Opportunity, etc.) and custom objects. All 11 dropdown operations are real and implemented - one of the most accurately-matched CRM nodes in this product. Instance URL is not vault-backed and must be typed on every node even after connecting Salesforce.',
+    inputs: ['operation', 'resource', 'instanceUrl', 'accessToken', 'customObject', 'soql', 'sosl', 'id', 'fields', 'externalIdField', 'externalIdValue', 'records'],
+    outputs: ['operation', 'resource', 'data', '_error'],
     example: `Resource: Contact
 Operation: query
 SOQL Query: SELECT Id, Name, Email FROM Contact WHERE Email = 'john@example.com' LIMIT 10
 
 Output: {
-  records: [
-    {
-      Id: "003xx000004TmiQAAS",
-      Name: "John Doe",
-      Email: "john@example.com"
-    }
-  ],
-  totalSize: 1
+  operation: "query",
+  resource: "",
+  data: {
+    records: [
+      { Id: "003xx000004TmiQAAS", Name: "John Doe", Email: "john@example.com" }
+    ],
+    totalSize: 1
+  }
 }`,
     tips: [
-      'Instance URL: https://yourinstance.salesforce.com',
-      'Use SOQL for structured queries',
-      'Use SOSL for full-text search',
-      'Upsert uses External ID fields',
-      'Bulk operations for large data sets',
+      'Instance URL is never auto-filled from a saved connection - type it directly (e.g. https://yourinstance.my.salesforce.com) even after connecting Salesforce',
+      'Use SOQL for structured queries, SOSL for full-text search across multiple object types at once',
+      'Create returns only the new record ID (not saved field values); Update returns no body at all (data is null) - use a follow-up Get to see saved data',
+      'Upsert matches by an External ID field, not Salesforce\'s own record ID - data is populated only when a new record is created, null when an existing one is matched and updated',
+      'Bulk Create/Update/Upsert use Salesforce\'s real Composite sObject Collections API (per-record success/failure); Bulk Delete instead loops one DELETE at a time and stops entirely if any single delete fails',
     ],
   },
 
   zoho_crm: {
-    overview: 'Interact with Zoho CRM to manage leads, contacts, accounts, deals, and other CRM modules. Supports CRUD operations, search, and bulk processing. Perfect for small to medium business CRM automation or Zoho ecosystem integration.',
-    inputs: ['accessToken', 'apiDomain', 'module', 'customModule', 'operation', 'id', 'data', 'criteria', 'fields', 'page', 'perPage'],
-    outputs: ['result', 'data', 'info'],
+    overview: 'Get, create, update, delete, search, or upsert Zoho CRM records via OAuth2. Built on a shared multi-service Zoho API client - only 6 of the 9 dropdown operations (get/create/update/delete/search/upsert) are actually implemented for CRM records; Get Many, Bulk Create, and Bulk Update are visible but non-functional today.',
+    inputs: ['operation', 'accessToken', 'apiDomain', 'module', 'customModule', 'recordId', 'data', 'criteria', 'fields', 'page', 'per_page'],
+    outputs: ['success', 'data', 'service', 'resource', 'operation', '_error'],
     example: `Module: Contacts
 Operation: create
-Data: {
-  "First_Name": "John",
-  "Last_Name": "Doe",
-  "Email": "john@example.com"
-}
+Data: {"First_Name":"John","Last_Name":"Doe","Email":"john@example.com"}
 
 Output: {
-  result: {
-    id: "1234567890123456789",
-    status: "success"
-  },
-  data: {
-    First_Name: "John",
-    Last_Name: "Doe",
-    Email: "john@example.com"
-  }
+  success: true,
+  data: { data: [{ code: "SUCCESS", details: { id: "1234567890123456789" }, message: "record added successfully", status: "success" }] },
+  service: "crm",
+  resource: "record",
+  operation: "create"
 }`,
     tips: [
-      'Get access token from Zoho Developer Console',
-      'Modules: Leads, Contacts, Accounts, Deals, etc.',
-      'Use criteria for search operations',
-      'Bulk operations available for efficiency',
-      'Field names are case-sensitive',
+      'Get Many always fails with "Unknown CRM record operation: getMany" - the underlying client only recognizes the literal value "list"; use Search with broad criteria as a substitute for listing records',
+      'Bulk Create and Bulk Update are unreachable through this panel - they require a different resource value the visual panel never sets, so both fail with "Unknown CRM record operation"',
+      'API Domain has no effect on which region is called - confirmed from source, the client always uses the US Zoho data center regardless of this field\'s value',
+      'Record ID is sent to Zoho as recordId; Records Per Page is sent as per_page - both fields were renamed from their older "id"/"perPage" keys, which the runtime never read',
+      'Create/Update/Upsert only return system fields (id, created_time, modified_time) in the response, never the field values you sent - use a follow-up Get to see saved data',
     ],
   },
 
   pipedrive: {
-    overview: 'Interact with Pipedrive CRM to manage deals, persons, organizations, and activities. Supports CRUD operations and search. Perfect for sales pipeline management, deal tracking, or Pipedrive automation.',
-    inputs: ['apiToken', 'resource', 'operation', 'id', 'data', 'filter', 'limit'],
-    outputs: ['result', 'data', 'additional_data'],
-    example: `Resource: deals
-Operation: create
-Data: {
-  "title": "New Deal",
-  "value": 10000,
-  "currency": "USD",
-  "person_id": 123
-}
+    overview: 'Important: this node supports 11 real Pipedrive resources (person, organization, deal, activity, note, pipeline, stage, product, lead, file, webhook), each using its own individually-named ID and create/update fields - but the visual panel\'s generic Resource ID, Data (JSON), Search Term, and Fields inputs are never read by any of them. The real fields (like personId, dealTitle, searchTerm) must currently be set via workflow JSON or an AI-generated workflow. The "Get Many" dropdown option also never works - the real value is "list". Company Domain is fully decorative; the API client always calls the single global api.pipedrive.com address using only the API Token.',
+    inputs: ['operation', 'resource', 'apiToken', 'companyDomain', 'credentialId', 'id', 'data', 'term', 'fields', 'limit', 'start'],
+    outputs: ['success', 'data', '_error', '_errorDetails'],
+    example: `Resource: person
+Operation: get
+(real personId supplied via workflow JSON, since the generic Resource ID field is never read)
 
 Output: {
-  result: {
-    id: 12345,
-    title: "New Deal",
-    value: 10000,
-    currency: "USD"
+  success: true,
+  data: {
+    id: 1,
+    name: "Alice Chen",
+    email: [{ value: "alice@example.com", primary: true }]
   }
 }`,
     tips: [
-      'Get API token from Pipedrive Settings → Personal → API',
-      'Resources: deals, persons, organizations, activities',
-      'Filter operations for searching',
-      'Use person_id or org_id to link deals',
-      'Currency codes: USD, EUR, GBP, etc.',
+      'Get the API Token from Pipedrive Settings -> Personal Preferences -> API; save it once in Connections and reuse it on every Pipedrive node',
+      'Company Domain has zero effect - Pipedrive\'s API client always calls https://api.pipedrive.com/v1 using only the API Token',
+      'Get Many never works - set the underlying operation value to list via workflow JSON instead',
+      'Every resource uses its own ID/field names (personId, dealId, personName, dealTitle, etc.) - the generic Resource ID/Data/Search Term/Fields inputs in this panel are never read for any of them',
+      'Only Limit and Start are genuinely wired correctly for listing operations across resources that support them',
     ],
   },
 
@@ -3808,31 +4095,50 @@ Output: {
   },
 
   xero: {
-    overview: 'Interact with Xero accounting software to manage contacts, invoices, payments, and financial data. Supports CRUD operations and queries. Perfect for accounting automation, invoice management, or Xero ecosystem integration.',
-    inputs: ['accessToken', 'tenantId', 'resource', 'operation', 'recordId', 'payload', 'where'],
-    outputs: ['success', 'resource', 'operation', 'record', 'records', 'count', 'pagination'],
-    example: `Resource: Contacts
-Operation: create
-Payload: {
-  "Name": "Acme Corp",
-  "EmailAddress": "contact@acme.com"
-}
+    overview: 'Call Xero Accounting API resources for contacts, invoices, items, payments, and accounts. Runtime requires resolved accessToken and tenantId fields, then returns normalized record/records metadata.',
+    inputs: ['accessToken', 'tenantId', 'resource', 'operation', 'recordId', 'payload', 'where', 'order', 'page', 'modifiedAfter', 'summarizeErrors', 'includeArchived', 'unitdp'],
+    outputs: ['success', 'resource', 'operation', 'tenantId', 'record', 'records', 'count', 'pagination', 'meta', 'error', '_error for config/request failures'],
+    example: `Resource: Invoices
+Operation: get_many
+Where: Status=="AUTHORISED"
+Order: Date DESC
 
 Output: {
   success: true,
-  record: {
-    ContactID: "12345678-1234-1234-1234-123456789012",
-    Name: "Acme Corp",
-    EmailAddress: "contact@acme.com"
-  }
+  resource: "invoices",
+  operation: "get_many",
+  record: null,
+  records: [
+    {InvoiceID: "inv_1042", Status: "AUTHORISED", AmountDue: 250}
+  ],
+  count: 1,
+  pagination: {page: 1, pageSize: 1, hasMore: false},
+  error: null
 }`,
-    tips: [
-      'Get access token from Xero Developer Portal',
-      'Tenant ID is your organization ID',
-      'Resources: Contacts, Invoices, Payments, Items, Accounts',
-      'Use the where field for filtering (Xero WHERE clause syntax)',
-      'OAuth2 authentication required',
-    ],
+    tips: ['Use accessToken without the word Bearer; runtime adds it', 'Get tenantId from GET https://api.xero.com/connections after OAuth authorization', 'Create uses PUT and wraps one payload object under the plural Xero resource key', 'Xero HTTP errors return success: false with error details, not only _error', 'Use where and order only with get_many'],
+  },
+
+  workday: {
+    overview: 'Call Workday REST API paths for workers, jobs, organizations, supervisory organizations, and positions. rawPath can override the standard resource path for advanced endpoints.',
+    inputs: ['baseUrl', 'tenant', 'authType', 'accessToken', 'username', 'password', 'resource', 'operation', 'recordId', 'payload', 'limit', 'offset', 'rawPath'],
+    outputs: ['success', 'resource', 'operation', 'tenant', 'records', 'record', 'count', 'pagination', 'meta', 'error'],
+    example: `Base URL: https://wd2-impl-services1.workday.com/ccx/api/v1/mytenant
+Auth Type: oauth2
+Resource: workers
+Operation: get_many
+Limit: 50
+Offset: 0
+
+Output: {
+  success: true,
+  resource: "workers",
+  operation: "get_many",
+  tenant: "mytenant",
+  records: [{id: "worker_1042", descriptor: "Asha Rao"}],
+  count: 1,
+  pagination: {limit: 50, offset: 0, total: 1}
+}`,
+    tips: ['OAuth uses accessToken; Basic Auth uses username and password', 'Runtime does not pre-validate blank auth fields before sending the request', 'rawPath bypasses the resource path for URL construction', 'Use records for get_many and record for get_by_id/create/update', 'Workday API failures return success: false with error text'],
   },
 
   jwt: {
@@ -4027,32 +4333,32 @@ Output: {
   // DATABASE NODES
   // ============================================
   postgresql: {
-    overview: 'Query PostgreSQL databases using SELECT queries or raw SQL. Supports standard PostgreSQL SQL syntax, joins, subqueries, and advanced features. Perfect for relational database operations, data analysis, or PostgreSQL-specific features.',
-    inputs: ['host', 'port', 'database', 'username', 'password', 'operation', 'table', 'query', 'filters', 'limit', 'orderBy', 'ascending'],
-    outputs: ['rows', 'count'],
-    example: `Operation: query
-SQL Query: SELECT u.name, o.total FROM users u JOIN orders o ON u.id = o.user_id WHERE o.status = 'completed' LIMIT 10
+    overview: 'Run PostgreSQL executeQuery, insert, update, or delete through the real database executor. The visual panel now uses runtime operation values and Parameters maps to the executor parameter array.',
+    inputs: ['host', 'port', 'database', 'username', 'password', 'ssl', 'operation', 'query', 'parameters', 'table', 'data', 'where', 'connectionString (schema-visible but not directly read by the executor)'],
+    outputs: ['rows', 'rowsAffected', 'inserted', 'count', '_error'],
+    example: `Operation: executeQuery
+Query: SELECT id, email FROM customers WHERE status = $1 LIMIT 50
+Parameters: ["active"]
 
 Output: {
   rows: [
-    {name: "John Doe", total: 1000},
-    {name: "Jane Smith", total: 1500}
+    {id: 101, email: "alex@example.com", status: "active"}
   ],
-  count: 2
+  rowsAffected: 1
 }`,
     tips: [
-      'Supports standard PostgreSQL SQL syntax',
-      'Use Raw SQL for complex queries with JOINs',
-      'Select operation for simple queries with filters',
-      'PostgreSQL-specific features supported in Raw SQL',
-      'Use connection pooling for better performance',
+      'Use executeQuery for raw SQL with $1, $2 placeholders and Parameters as a JSON array.',
+      'Insert returns inserted/count; update and delete return rows/rowsAffected because PostgreSQL uses RETURNING *.',
+      'The backend schema still lists connectionString, but the executor validates host, username, password, database, port, and ssl.',
+      'Update and delete require Where; the executor refuses missing where clauses.',
+      'Store database passwords in Connections rather than ordinary workflow fields.',
     ],
   },
 
-  supabase: {
-    overview: 'Query Supabase (PostgreSQL-based) databases using SELECT queries or raw SQL. Supabase uses PostgreSQL, so same syntax applies. Perfect for Supabase projects, real-time applications, or PostgreSQL database operations.',
-    inputs: ['projectUrl', 'apiKey', 'operation', 'table', 'query', 'filters', 'limit', 'orderBy', 'ascending'],
-    outputs: ['rows', 'count'],
+  db: {
+    overview: 'Use the canonical Supabase node to run Supabase SDK operations. Runtime supports select, insert, update, delete, and rpc; the old Raw SQL query option is not executed by this node.',
+    inputs: ['url', 'anonKey', 'serviceRoleKey', 'schema', 'operation', 'table', 'columns', 'filters', 'filter', 'limit', 'order', 'data', 'functionName', 'params'],
+    outputs: ['rows', 'inserted', 'count', 'result', '_error'],
     example: `Operation: select
 Table: users
 Filters: {"status": "active"}
@@ -4063,47 +4369,140 @@ Output: {
     {id: 1, name: "John", status: "active"},
     {id: 2, name: "Jane", status: "active"}
   ],
-  count: 2
+  rowsAffected: 2
 }`,
     tips: [
-      'Uses PostgreSQL syntax (same as PostgreSQL node)',
-      'Get project URL and API key from Supabase dashboard',
-      'Select operation for simple queries',
-      'Raw SQL for complex queries with JOINs',
-      'Perfect for Supabase project integration',
+      'Use url plus anonKey or serviceRoleKey from Supabase project settings',
+      'Use select, insert, update, delete, or rpc; query is unsupported here',
+      'Use order as JSON, for example {"column":"created_at","ascending":false}',
+      'Insert returns inserted/count; update and delete return rows/count',
+      'Use PostgreSQL nodes if you need raw SQL text',
+    ],
+  },
+
+  supabase: {
+    overview: 'Legacy guide key for older Supabase references. The UI-visible canonical node type is db.',
+    inputs: ['See db'],
+    outputs: ['rows', 'inserted', 'count', 'result', '_error'],
+    example: `Use node type: db
+Operation: select
+Table: users
+
+Output: {
+  rows: [{id: 1, status: "active"}],
+  count: 1
+}`,
+    tips: [
+      'Prefer the db node guide for active workflows',
+      'Raw SQL query is not supported by the db runtime',
+      'Use PostgreSQL for raw SQL workflows',
     ],
   },
 
   mysql: {
-    overview: 'Query MySQL databases using SELECT queries. Currently supports simple SELECT operations with filters. Perfect for MySQL database queries, data retrieval, or MySQL-specific operations.',
-    inputs: ['host', 'port', 'database', 'username', 'password', 'table', 'filters', 'limit'],
-    outputs: ['rows', 'count'],
-    example: `Table: users
-Filters: {"status": "active"}
-Limit: 10
+    overview: 'Run MySQL executeQuery, insert, update, or delete through the real mysql2 executor. The old select-only table/filter UI was not what the runtime used.',
+    inputs: ['host', 'port', 'database', 'username', 'password', 'ssl', 'operation', 'query', 'parameters', 'table', 'data', 'where'],
+    outputs: ['rows', 'rowsAffected', 'inserted', 'count', '_error'],
+    example: `Operation: executeQuery
+Query: SELECT id, email FROM customers WHERE status = ? LIMIT 50
+Parameters: ["active"]
 
 Output: {
   rows: [
-    {id: 1, name: "John", status: "active"},
-    {id: 2, name: "Jane", status: "active"}
+    {id: 101, email: "alex@example.com", status: "active"}
   ],
-  count: 2
+  rowsAffected: 0
 }`,
     tips: [
-      'Currently supports SELECT operations only',
-      'Use filters for WHERE clause conditions',
-      'Simple query interface for quick data retrieval',
-      'Use PostgreSQL node for complex queries',
-      'Perfect for basic MySQL queries',
+      'Use executeQuery for raw SQL with ? placeholders and Parameters as a JSON array.',
+      'Insert returns inserted/count; update and delete return rowsAffected.',
+      'Update and delete require Where; the executor refuses missing where clauses.',
+      'Use least-privilege MySQL users: read-only for reports, writer only when needed.',
+      'Store database passwords in Connections rather than ordinary workflow fields.',
+    ],
+  },
+
+  oracle_database: {
+    overview: 'Run Oracle Database select, insert, update, insert_or_update, delete, or execute_sql through node-oracledb. Table operations require Schema and Table; execute_sql requires Statement and rejects a trailing semicolon.',
+    inputs: ['user', 'password', 'connectionString', 'operation', 'schema', 'table', 'columnMappings', 'selectRows', 'combineConditions', 'sort', 'returnAll', 'limit', 'deleteCommand', 'statement', 'bindParams', 'autoCommit', 'outputColumns'],
+    outputs: ['success', 'operation', 'schema', 'table', 'rows', 'rowsAffected', 'meta', 'warning', 'error'],
+    example: `Operation: select
+Schema: HR
+Table: EMPLOYEES
+Row Filters: [{"column":"STATUS","operator":"=","value":"ACTIVE"}]
+Limit: 50
+
+Output: {
+  success: true,
+  operation: "select",
+  rows: [{EMPLOYEE_ID: 101, STATUS: "ACTIVE"}],
+  rowsAffected: 1,
+  meta: {returnedAll: false, limit: 50}
+}`,
+    tips: [
+      'Use bind parameters such as :id in execute_sql; never string-interpolate values into SQL.',
+      'Do not end execute_sql statements with a semicolon; the executor rejects that before running.',
+      'Update without Row Filters is blocked to avoid accidental all-row updates.',
+      'insert_or_update uses Row Filters as MERGE match keys.',
+      'Delete Command truncate/drop is irreversible and should come from a DBA-approved runbook.',
+    ],
+  },
+
+  pinecone: {
+    overview: 'Store, query, and delete embedding vectors in a Pinecone index. Query returns matches with metadata, upsert returns upsertedCount, and delete returns a successful empty match list.',
+    inputs: ['operation', 'index', 'apiKey', 'vector', 'topK', 'id', 'metadata', 'namespace'],
+    outputs: ['success', 'operation', 'matches', 'upsertedCount', 'error'],
+    example: `Operation: query
+Index: https://support-kb-abcd123.svc.us-east-1-aws.pinecone.io
+Vector: {{$json.embedding}}
+Top K: 5
+
+Output: {
+  success: true,
+  operation: "query",
+  matches: [{id: "kb-returns-policy-0003", score: 0.92, metadata: {title: "Returns Policy"}}],
+  upsertedCount: 0
+}`,
+    tips: [
+      'Use the full index host URL for serverless Pinecone indexes.',
+      'Vector must match the index dimension exactly.',
+      'Use stable IDs for upsert so re-indexing updates the same vector instead of creating duplicates.',
+      'Store API keys in Connections or a credential vault.',
+      'Use namespaces to separate tenants, environments, or source systems.',
+    ],
+  },
+
+  qdrant: {
+    overview: 'Search, upsert, and delete embedding vectors in Qdrant collections. The UI value for Query/Search is now query, matching the runtime; the old search/get_collection values were not supported by the executor.',
+    inputs: ['operation', 'url', 'collection', 'apiKey', 'vector', 'limit', 'withPayload', 'id', 'payload'],
+    outputs: ['success', 'operation', 'matches', 'upsertedCount', 'error'],
+    example: `Operation: query
+URL: https://support-search.us-east.aws.cloud.qdrant.io
+Collection: support_articles
+Vector: {{$json.embedding}}
+Limit: 5
+
+Output: {
+  success: true,
+  operation: "query",
+  matches: [{id: "kb-returns-policy-0003", score: 0.91, payload: {title: "Returns Policy"}}],
+  upsertedCount: 0
+}`,
+    tips: [
+      'Qdrant Cloud usually requires an API key; self-hosted local Qdrant may not.',
+      'Vector length must match the collection vector size.',
+      'Upsert can auto-create a missing collection with Cosine distance when Vector is supplied.',
+      'Always set Point ID for upsert; otherwise the current runtime can fall back to point 1.',
+      'Use Include Payload when downstream AI steps need document titles, URLs, or IDs.',
     ],
   },
 
   mongodb: {
-    overview: 'Query MongoDB collections using find operations. Supports MongoDB query syntax with operators ($gt, $gte, $regex, etc.). Perfect for NoSQL database operations, document queries, or MongoDB-specific features.',
-    inputs: ['connectionString', 'database', 'collection', 'query', 'limit'],
-    outputs: ['documents', 'count'],
+    overview: 'Run MongoDB driver operations against one collection. The visible panel exposes find, insertOne, updateOne, and deleteOne; generated config can also use insertMany, updateMany, deleteMany, and aggregate.',
+    inputs: ['connectionString', 'host', 'database', 'operation', 'collection', 'filter', 'projection', 'sort', 'limit', 'skip', 'document', 'documents', 'update', 'pipeline', 'options'],
+    outputs: ['documents', 'count', 'insertedId', 'insertedCount', 'matchedCount', 'modifiedCount', 'deletedCount', 'acknowledged', '_error'],
     example: `Collection: users
-Query: {"status": "active", "age": {"$gte": 18}}
+Filter: {"status": "active", "age": {"$gte": 18}}
 Limit: 10
 
 Output: {
@@ -4114,11 +4513,94 @@ Output: {
   count: 2
 }`,
     tips: [
-      'Currently supports Find operation only',
-      'Use MongoDB query operators ($gt, $gte, $regex, etc.)',
-      'Collection names are similar to tables in SQL',
-      'Query format is JSON with MongoDB operators',
-      'Perfect for NoSQL document queries',
+      'Use Filter, not legacy Query; the runtime does not read a query field',
+      'Find and aggregate return documents/count',
+      'Insert returns insertedId or insertedIds and insertedCount',
+      'Update returns matchedCount/modifiedCount/upserted fields',
+      'Delete returns deletedCount and acknowledged',
+    ],
+  },
+
+  firebase: {
+    overview: 'Run Firebase Admin SDK operations for Firestore documents/collections and Realtime Database paths. Object data can be flattened to top-level output by the database wrapper.',
+    inputs: ['projectId', 'clientEmail', 'privateKey', 'operation', 'collection', 'documentId', 'data', 'filter', 'limit', 'databaseUrl'],
+    outputs: ['documentId', 'data', 'count', 'deleted', 'path', '_error'],
+    example: `Operation: query
+Collection: users
+Filter: {"status": "active"}
+Limit: 100
+
+Output: {
+  data: [
+    {id: "user_123", email: "john@example.com", status: "active"}
+  ],
+  count: 1
+}`,
+    tips: [
+      'Uses Firebase service account credentials, not a Firebase web API key',
+      'Firestore operations use collection; Realtime operations use collection as the path',
+      'Get/update/delete require documentId',
+      'Add/update/realtime_set require data',
+      'Realtime operations require databaseUrl',
+    ],
+  },
+
+  google_cloud_storage: {
+    overview: 'Upload, download, delete, and list objects in a Google Cloud Storage bucket using service account credentials.',
+    inputs: ['projectId', 'clientEmail', 'privateKey', 'operation', 'bucket', 'fileName', 'fileContent', 'filter'],
+    outputs: ['fileName', 'fileSize', 'data', 'deleted', 'count', '_error'],
+    example: `Operation: upload
+Bucket: company-uploads
+File Name: invoices/inv-1001.txt
+File Content: Paid invoice text
+
+Output: {
+  fileName: "invoices/inv-1001.txt",
+  fileSize: 17
+}`,
+    tips: [
+      'Uses service account projectId/clientEmail/privateKey',
+      'Upload requires fileName and fileContent',
+      'Download and delete require fileName',
+      'List uses filter as an optional object-name prefix',
+      'Download returns UTF-8 string content in data',
+    ],
+  },
+
+  airtable: {
+    overview: 'List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.',
+    inputs: ['apiKey', 'accessToken', 'baseId', 'table', 'tableId', 'resource', 'operation', 'recordId', 'recordIds', 'records', 'fields', 'matchField', 'filterByFormula', 'view', 'maxRecords', 'pageSize', 'sort', 'typecast'],
+    outputs: ['records', 'count', 'id', 'fields', 'deletedRecords', 'created', 'updated', '_error'],
+    example: `Operation: create
+Base ID: app123
+Table: Leads
+Records: [
+  {
+    "fields": {
+      "Name": "John Doe",
+      "Email": "john@example.com"
+    }
+  }
+]
+
+Output: {
+  records: [
+    {
+      id: "rec123",
+      fields: {
+        Name: "John Doe",
+        Email: "john@example.com"
+      }
+    }
+  ],
+  count: 1
+}`,
+    tips: [
+      'Use a Personal Access Token with data.records scopes or a saved Airtable connection',
+      'Base ID plus table/tableId are required for every operation',
+      'Create/update/upsert return records/count',
+      'Upsert also returns created and updated counts',
+      'Delete returns deletedRecords/count, not top-level deleted:true',
     ],
   },
 
@@ -4126,9 +4608,9 @@ Output: {
   // DEVOPS NODES
   // ============================================
   github: {
-    overview: 'Interact with GitHub API to manage repositories, issues, pull requests, branches, commits, releases, and workflows. Supports comprehensive GitHub operations. Perfect for GitHub automation, CI/CD integration, or repository management.',
-    inputs: ['token', 'owner', 'repo', 'operation', 'title', 'body', 'workflowId', 'ref'],
-    outputs: ['result', 'data', 'workflowRuns'],
+    overview: 'Interact with GitHub through the connected GitHub account/token manager to manage repositories, issues, pull requests, branches, commits, releases, workflows, and contributors.',
+    inputs: ['operation', 'owner', 'repo', 'title', 'body', 'workflowId', 'ref', 'issueNumber', 'prNumber', 'state', 'comment', 'mergeMethod', 'branchName', 'sha', 'commitMessage', 'filePath', 'fileContent', 'tagName', 'releaseName', 'releaseBody', 'releaseId', 'commitSha'],
+    outputs: ['success', 'provider', 'action', 'top-level GitHub response fields', '_error'],
     example: `Operation: create_issue
 Owner: octocat
 Repo: Hello-World
@@ -4136,45 +4618,46 @@ Title: "Bug in login"
 Body: "Login button not working"
 
 Output: {
-  result: {
-    number: 123,
-    title: "Bug in login",
-    state: "open"
-  }
+  success: true,
+  provider: "github",
+  action: "issues.create",
+  number: 123,
+  title: "Bug in login",
+  state: "open",
+  html_url: "https://github.com/octocat/Hello-World/issues/123"
 }`,
     tips: [
-      'Get token from GitHub Settings → Developer settings → Personal access tokens',
-      'Owner is username or organization name',
-      'Repo is repository name',
-      'Supports issues, PRs, branches, commits, releases, workflows',
-      'Use for GitHub automation and CI/CD integration',
+      'Connect GitHub in Connections; runtime retrieves the token from the connected account',
+      'Owner is username or organization name, Repo is only the repository slug',
+      'Successful output spreads GitHub response fields at the top level, not under data',
+      'No connected token returns _error: github node: No github token found',
+      'Use Workflow ID as the YAML filename such as deploy.yml for Actions dispatch',
     ],
   },
 
   gitlab: {
-    overview: 'Interact with GitLab API to manage projects, issues, merge requests, branches, commits, pipelines, and releases. Supports comprehensive GitLab operations. Perfect for GitLab automation, CI/CD integration, or project management.',
-    inputs: ['token', 'projectId', 'operation', 'data'],
-    outputs: ['result', 'data'],
+    overview: 'Read GitLab issues or create a new GitLab issue. This action node is issue-only today; it does not run merge request, pipeline, branch, file, or release operations.',
+    inputs: ['operation', 'accessToken', 'baseUrl', 'projectId', 'issueIid', 'title', 'descriptionText'],
+    outputs: ['success', 'items', 'issue', 'created', '_error', '_errorDetails'],
     example: `Operation: create_issue
 Project ID: 12345
-Data: {
-  "title": "Feature request",
-  "description": "Add new feature"
-}
+Title: "Feature request"
+Description Text: "Add the export button to the billing dashboard"
 
 Output: {
-  result: {
+  success: true,
+  created: {
     iid: 1,
     title: "Feature request",
     state: "opened"
   }
 }`,
     tips: [
-      'Get token from GitLab Settings → Access Tokens',
-      'Project ID is numeric identifier or path',
-      'Supports issues, MRs, branches, commits, pipelines',
-      'Use for GitLab automation and CI/CD',
-      'Works with GitLab.com and self-hosted instances',
+      'Connect GitLab in Connections or provide accessToken; runtime reads accessToken, not token',
+      'Base URL must be the API root such as https://gitlab.com/api/v4',
+      'Read lists issues when issueIid is blank and gets one issue when issueIid is filled',
+      'Create Issue requires title and reads descriptionText, not the old description field',
+      'Unsupported operation values return an _error that names create and read as the supported operations',
     ],
   },
 
@@ -4233,26 +4716,83 @@ Output: {
   },
 
   jenkins: {
-    overview: 'Connects to Jenkins to trigger jobs, monitor builds, fetch build logs, and automate CI/CD steps. Ideal for deployment pipelines and build notifications.',
-    inputs: ['baseUrl', 'username', 'token', 'jobName', 'operation', 'parameters'],
-    outputs: ['result', 'jobs', 'builds', 'buildStatus'],
-    example: `Operation: trigger_build
+    overview: 'Trigger a Jenkins job, read build status, or stop a running build. The runtime uses Jenkins Basic Auth with username and apiToken and wraps failures as JENKINS_FAILED.',
+    inputs: ['operation', 'baseUrl', 'username', 'apiToken', 'jobName', 'buildNumber', 'parameters'],
+    outputs: ['success', 'output.operation', 'output.jobName', 'output.data', 'error.code', 'error.message'],
+    example: `Operation: build
 Base URL: https://jenkins.example.com
 Job Name: my-job
 Parameters: {"BRANCH": "main"}
 
 Output: {
-  result: {
-    buildNumber: 123,
-    status: "QUEUED"
+  success: true,
+  output: {
+    operation: "build",
+    jobName: "my-job",
+    data: {
+      queued: true,
+      location: "https://jenkins.example.com/queue/item/123/"
+    }
   }
 }`,
     tips: [
-      'Use API token instead of password',
-      'Base URL must include https:// or http://',
-      'Use parameterized jobs for dynamic values',
-      'Polling is useful for long-running builds',
-      'Limit permissions to required jobs',
+      'Use apiToken; the old token field is not read by this runtime',
+      'Operation values are build, status, and cancel',
+      'Status uses lastBuild when buildNumber is blank',
+      'Cancel requires buildNumber because Jenkins needs an exact build to stop',
+      'Parameters must be a JSON object for /buildWithParameters; leave it blank for a normal /build call',
+    ],
+  },
+
+  vercel: {
+    overview: 'Deploy a Vercel project or list recent deployments through the Vercel v13 deployments API. Successful output is under data and validation failures use structured error codes.',
+    inputs: ['operation', 'projectName', 'token'],
+    outputs: ['success', 'data.deploymentId', 'data.deployments', 'data.total', 'error.code', 'error.message'],
+    example: `Operation: deploy
+Project Name: marketing-site
+
+Output: {
+  success: true,
+  data: {
+    deploymentId: "dpl_123",
+    projectName: "marketing-site",
+    url: "marketing-site.vercel.app",
+    status: "READY",
+    createdAt: "2026-07-20T10:30:00.000Z"
+  },
+  error: null
+}`,
+    tips: [
+      'Connect Vercel in Connections or provide token; runtime can read the saved vercel credential',
+      'Deploy requires projectName; list_deployments does not',
+      'Invalid operation values return INVALID_OPERATION',
+      'Missing or badly formatted tokens return MISSING_TOKEN or INVALID_TOKEN_FORMAT',
+      'The node does not preserve incoming fields on success',
+    ],
+  },
+
+  netlify: {
+    overview: 'List Netlify sites, inspect a site or deploy, create a deploy, or list deploys for a site. Forms are not returned by this executor today.',
+    inputs: ['operation', 'resource', 'accessToken', 'siteId', 'deployId', 'payload', 'limit'],
+    outputs: ['success', 'resource', 'operation', 'record', 'records', 'count', 'meta', 'error'],
+    example: `Operation: list_sites
+Access Token: nfp_...
+
+Output: {
+  success: true,
+  resource: "sites",
+  operation: "list_sites",
+  records: [
+    { id: "site_123", name: "marketing-site" }
+  ],
+  count: 1
+}`,
+    tips: [
+      'Use a Netlify personal access token in accessToken or a saved Netlify connection',
+      'Supported operations are list_sites, get_site, create_deploy, list_deploys, and get_deploy',
+      'siteId is required for get_site, create_deploy, and list_deploys',
+      'deployId is required for get_deploy',
+      'payload must be a JSON object for create_deploy',
     ],
   },
 
@@ -4301,7 +4841,7 @@ Output: {
   }
 }`,
     tips: [
-      'Get API key and App key from Datadog Settings → API Keys',
+      'Get API key and App key from Datadog Settings â†’ API Keys',
       'Supports metrics, events, logs, monitors',
       'Query metrics using Datadog query syntax',
       'Use for monitoring automation and analysis',
@@ -4328,7 +4868,7 @@ Output: {
   ]
 }`,
     tips: [
-      'Get auth token from Sentry Settings → Auth Tokens',
+      'Get auth token from Sentry Settings â†’ Auth Tokens',
       'Organization and project slug required',
       'Supports issues, events, releases management',
       'Use for error tracking automation',
@@ -4368,30 +4908,72 @@ Output: {
   },
 
   trello: {
-    overview: 'Interact with Trello API to manage boards, lists, cards, and members. Supports creating cards, moving cards, adding comments, and managing boards. Perfect for task management automation or Trello integration.',
-    inputs: ['apiKey', 'apiToken', 'boardId', 'operation', 'data'],
-    outputs: ['result', 'cards', 'boards', 'lists'],
+    overview: 'Manage Trello boards, lists, cards, labels, movement, and checklists through the Trello REST API. Prefer a saved Trello API Key and Token connection; node fields are fallbacks.',
+    inputs: ['operation', 'apiKey', 'token', 'boardId', 'listId', 'cardId', 'cardName', 'cardDesc', 'dueDate', 'idLabels', 'idMembers', 'newListId', 'checklistName'],
+    outputs: ['success', 'operation', 'data', 'card', 'cards', 'boards', 'lists', 'labels', 'count', 'error'],
     example: `Operation: create_card
-Board ID: board123
-List ID: list456
-Data: {
-  "name": "New task",
-  "desc": "Task description"
-}
+List ID: {{$json.lists[0].id}}
+Card Name: {{$json.title}}
+Card Description: {{$json.description}}
 
 Output: {
-  result: {
-    id: "card_id",
-    name: "New task",
-    idList: "list456"
-  }
+  success: true,
+  operation: "create_card",
+  card: { id: "card_id", name: "New task", idList: "list456" },
+  data: { id: "card_id", name: "New task" }
 }`,
     tips: [
-      'Get API key and token from Trello Developer API Keys',
-      'Board ID and List ID required for card operations',
-      'Supports boards, lists, cards, members',
-      'Use for task management automation',
-      'Move cards between lists, add comments, attach files',
+      'Run get_boards, then get_lists, before creating or moving cards if you do not know the IDs',
+      'create_card requires listId and cardName',
+      'cardId is required for get_card, update_card, delete_card, move_card, add_label, and add_checklist',
+      'add_label requires comma-separated label IDs, not label names',
+      'Runtime preserves incoming fields and adds normalized card/cards/boards/lists/count fields where applicable',
+    ],
+  },
+
+  linear: {
+    overview: 'Create, update, fetch, and list Linear issues and teams through the Linear GraphQL API. Prefer a saved Linear Personal API Key connection.',
+    inputs: ['operation', 'apiKey', 'teamId', 'issueId', 'title', 'description', 'stateId', 'priority'],
+    outputs: ['success', 'operation', 'data', 'issue', 'issues', 'teams', 'count', 'error'],
+    example: `Operation: create_issue
+Team ID: {{$json.teams[0].id}}
+Title: {{$json.title}}
+Description: {{$json.summary}}
+
+Output: {
+  success: true,
+  operation: "create_issue",
+  issue: { id: "issue_uuid", identifier: "ENG-124", url: "https://linear.app/acme/issue/ENG-124" }
+}`,
+    tips: [
+      'Run get_teams first if you need the team UUID for create_issue',
+      'create_issue requires teamId and title',
+      'get_issue and update_issue require issueId',
+      'priority is numeric: 0 none, 1 urgent, 2 high, 3 medium, 4 low',
+      'Runtime preserves incoming fields and adds issue/issues/teams/count depending on the operation',
+    ],
+  },
+
+  typeform: {
+    overview: 'Retrieve Typeform responses, create a basic titled form, or fetch a form definition. The runtime supports get_responses, create_form, and get_form; it does not support get_forms.',
+    inputs: ['operation', 'apiKey', 'formId', 'title'],
+    outputs: ['success', 'operation', 'data', 'items', 'totalItems', 'formId', 'error'],
+    example: `Operation: get_responses
+Form ID: {{$json.formId}}
+
+Output: {
+  success: true,
+  operation: "get_responses",
+  items: [{ response_id: "rsp_123", answers: [] }],
+  totalItems: 1,
+  formId: "abc123"
+}`,
+    tips: [
+      'Save a Typeform Personal Access Token in Connections',
+      'get_responses and get_form require formId',
+      'create_form requires title and currently sends only the title',
+      'Old get_forms workflow configs are unsupported and return success false',
+      'Runtime preserves incoming fields and adds items/totalItems/formId when Typeform returns them',
     ],
   },
 
@@ -4415,7 +4997,7 @@ Output: {
   }
 }`,
     tips: [
-      'Get API token from Todoist Settings → Integrations → Developer',
+      'Get API token from Todoist Settings â†’ Integrations â†’ Developer',
       'Project ID required for project-specific tasks',
       'Supports tasks, projects, labels, comments',
       'Use for task automation and reminders',
@@ -4424,60 +5006,48 @@ Output: {
   },
 
   notion: {
-    overview: 'Interact with Notion API to manage pages, databases, blocks, and content. Supports creating pages, querying databases, updating content, and managing workspaces. Perfect for knowledge management automation or Notion integration.',
-    inputs: ['accessToken', 'operation', 'databaseId', 'pageId', 'data'],
-    outputs: ['result', 'pages', 'databases', 'blocks'],
-    example: `Operation: create_page
-Database ID: database_id
-Data: {
-  "properties": {
-    "Name": {"title": [{"text": {"content": "New Page"}}]},
-    "Status": {"select": {"name": "Active"}}
-  }
-}
+    overview: 'Read, create, update, archive, restore, query, search, and manage Notion pages, databases, blocks, users, and comments. The runtime resolves Notion OAuth from Connections and returns raw Notion data under data.',
+    inputs: ['resource', 'operation', 'pageId', 'databaseId', 'blockId', 'userId', 'parentPageId', 'title', 'content', 'children', 'properties', 'query', 'schema', 'richText', 'parentDiscussionId', 'searchQuery', 'filter', 'sort', 'pageSize', 'returnAll', 'isInline'],
+    outputs: ['success', 'data', '_error', '_errorDetails'],
+    example: `Resource: database
+Operation: query
+Database ID: {{$json.databaseId}}
+Query: {"filter":{"property":"Status","select":{"equals":"Done"}}}
 
 Output: {
-  result: {
-    id: "page_id",
-    properties: {
-      Name: {"title": [{"text": {"content": "New Page"}}]}
-    }
-  }
+  success: true,
+  data: { object: "list", results: [{ object: "page", id: "page_id" }] }
 }`,
     tips: [
-      'Get access token from Notion → Settings & Members → Integrations',
-      'Share database/page with integration bot',
-      'Supports pages, databases, blocks management',
-      'Use for knowledge management automation',
-      'Query databases and create pages programmatically',
+      'Connect Notion in Connections and share the target page or database with the connected account/integration',
+      'Valid resource-operation pairs matter; mismatches return _error',
+      'Search uses sort, not the old sorts key',
+      'Comment get is not supported by this runtime; use comment list by pageId or blockId',
+      'Successful output is in data, often data.results for list/query/search operations',
     ],
   },
 
   clickup: {
-    overview: 'Interact with ClickUp API to manage workspaces, spaces, folders, lists, and tasks. Supports creating tasks, updating status, assigning tasks, and managing projects. Perfect for project management automation or ClickUp integration.',
-    inputs: ['apiToken', 'workspaceId', 'spaceId', 'operation', 'data'],
-    outputs: ['result', 'tasks', 'lists', 'spaces'],
+    overview: 'Interact with ClickUp tasks and workspace discovery APIs. The node creates/updates/reads/deletes tasks, lists tasks, adds comments, updates status, and discovers teams, spaces, folders, and lists.',
+    inputs: ['operation', 'workspaceId', 'spaceId', 'folderId', 'listId', 'taskId', 'name', 'description', 'status', 'priority', 'assignees', 'dueDate', 'commentText', 'includeClosed'],
+    outputs: ['raw ClickUp data', 'id', 'name', 'url', '_statusSkipped', '_statusNote', '_error'],
     example: `Operation: create_task
-List ID: list123
-Data: {
-  "name": "Complete task",
-  "assignees": ["user_id"],
-  "due_date": 1735689600000
-}
+List ID: 901614760992
+Task Name: Follow up with Acme trial signup
+Due Date: 1735689600000
 
 Output: {
-  result: {
-    id: "task_id",
-    name: "Complete task",
-    status: {"status": "to do"}
-  }
+  id: "86d31vafd",
+  name: "Follow up with Acme trial signup",
+  status: {"status": "to do"},
+  url: "https://app.clickup.com/t/86d31vafd"
 }`,
     tips: [
-      'Get API token from ClickUp Settings → Apps → API',
-      'Workspace, Space, and List IDs required',
-      'Supports tasks, lists, folders, spaces',
-      'Use for project management automation',
-      'Create, update, assign tasks programmatically',
+      'Prefer a saved ClickUp connection; runtime also recognizes apiKey/apiToken/token credential aliases',
+      'Use Get Teams, Get Spaces, Get Folders, and Get Lists to discover IDs before creating tasks',
+      'create_task requires List ID and Task Name',
+      'Status must exactly match a status in the target list; invalid status can be skipped after a retry',
+      'Assignees must be a JSON array of ClickUp user IDs',
     ],
   },
 
@@ -4503,7 +5073,7 @@ Output: {
   }
 }`,
     tips: [
-      'Get API token from Monday.com Account → Admin → API',
+      'Get API token from Monday.com Account â†’ Admin â†’ API',
       'Board ID and Group ID required',
       'Supports items, boards, groups, columns',
       'Use for project management automation',
@@ -4512,62 +5082,28 @@ Output: {
   },
 
   jira: {
-    overview: 'Interact with Jira API to manage projects, issues, workflows, and users. Supports creating issues, updating status, adding comments, and managing projects. Perfect for issue tracking automation or Jira integration.',
-    inputs: ['baseUrl', 'email', 'apiToken', 'operation', 'projectKey', 'data'],
-    outputs: ['result', 'issues', 'projects'],
+    overview: 'Create, read, update, delete, search, transition, and comment on Jira Cloud issues. The node uses a Jira API-token connection and preserves incoming fields while adding operation-specific Jira fields.',
+    inputs: ['operation', 'domain', 'projectKey', 'issueKey', 'summary', 'description', 'issueType', 'assignee', 'priority', 'labels', 'transitionId', 'commentBody', 'jql', 'maxResults'],
+    outputs: ['success', 'issueKey', 'issueId', 'issue', 'issues', 'projects', 'comment', 'updated', 'deleted', 'transitioned', '_error'],
     example: `Operation: create_issue
+Domain: acme.atlassian.net
 Project Key: PROJ
-Data: {
-  "summary": "Bug in login",
-  "description": "Login button not working",
-  "issuetype": {"name": "Bug"}
-}
+Summary: "Bug in login"
+Description: "Login button is not responding for finance users"
+Issue Type: Bug
 
 Output: {
-  result: {
-    id: "10000",
-    key: "PROJ-1",
-    summary: "Bug in login"
-  }
+  success: true,
+  issueKey: "PROJ-1",
+  issueId: "10000",
+  created: true
 }`,
     tips: [
-      'Get API token from Atlassian Account Settings → Security → API tokens',
-      'Base URL: your Jira instance URL',
-      'Project Key required for issue operations',
-      'Supports issues, projects, workflows, users',
-      'Use for issue tracking automation',
-    ],
-  },
-
-  airtable: {
-    overview: 'Interact with Airtable API to manage bases, tables, records, and fields. Supports creating records, updating fields, querying records, and managing bases. Perfect for database automation or Airtable integration.',
-    inputs: ['apiKey', 'baseId', 'tableId', 'operation', 'data', 'fields'],
-    outputs: ['result', 'records', 'tables'],
-    example: `Operation: create_record
-Base ID: app123
-Table ID: tbl456
-Data: {
-  "fields": {
-    "Name": "John Doe",
-    "Email": "john@example.com"
-  }
-}
-
-Output: {
-  result: {
-    id: "rec123",
-    fields: {
-      Name: "John Doe",
-      Email: "john@example.com"
-    }
-  }
-}`,
-    tips: [
-      'Get API key from Airtable Account → Developers → Personal access tokens',
-      'Base ID and Table ID required',
-      'Supports records, tables, fields management',
-      'Use for database automation',
-      'Query, create, update records programmatically',
+      'Domain is the Atlassian host such as acme.atlassian.net; the runtime also accepts baseUrl aliases',
+      'Email and API token usually come from the saved Jira connection',
+      'Create Issue requires projectKey and summary',
+      'Search Issues requires jql and calls the Jira Cloud /rest/api/3/search/jql endpoint',
+      'Description and comments are converted to Atlassian Document Format before sending',
     ],
   },
 
@@ -4575,132 +5111,115 @@ Output: {
   // SOCIAL MEDIA NODES
   // ============================================
   facebook: {
-    overview: 'Interact with Facebook Graph API to manage posts, pages, comments, and messages. Supports creating posts, reading feeds, managing pages, and sending messages. Perfect for social media automation or Facebook integration.',
-    inputs: ['accessToken', 'pageId', 'operation', 'data'],
-    outputs: ['result', 'posts', 'comments', 'messages'],
-    example: `Operation: create_post
-Page ID: page123
-Data: {
-  "message": "Hello from CtrlChecks!",
-  "link": "https://example.com"
-}
+    overview: 'Use a saved Facebook OAuth connection to list managed Pages, send Messenger text, and create comment replies. The broader visible Graph API options are scaffolded and return _error until handlers are implemented.',
+    inputs: ['resource', 'operation', 'pageId', 'message', 'text', 'recipientId', 'postId', 'commentId', 'replyText', 'limit'],
+    outputs: ['success', 'provider', 'action', 'pages', 'count', 'messageId', 'commentId', 'raw', '_error'],
+    example: `Resource: page
+Operation: list
+Limit: 25
 
 Output: {
-  result: {
-    id: "post_id",
-    message: "Hello from CtrlChecks!",
-    created_time: "2024-01-15T10:30:00Z"
-  }
+  success: true,
+  provider: "facebook",
+  action: "page.getAllPages",
+  pages: [{ id: "123456789012345", name: "Acme Support" }],
+  count: 1
 }`,
     tips: [
-      'Get access token from Facebook Developers → App → Tools → Graph API Explorer',
-      'Page ID required for page operations',
-      'Supports posts, pages, comments, messages',
-      'Use for social media automation',
-      'Requires appropriate Facebook App permissions',
+      'Implemented pairs today: page/list, page_message/sendTextMessage, and comment/createComment',
+      'Run page/list first to discover Page IDs from {{$json.pages}}',
+      'sendTextMessage requires pageId, recipientId, and message or text',
+      'createComment requires commentId or postId, plus reply text',
+      'createPost, media, insights, lead, event, and album operations are scaffolded and return not-yet-implemented errors',
     ],
   },
 
   twitter: {
-    overview: 'Interact with Twitter API to manage tweets, users, timelines, and direct messages. Supports creating tweets, reading timelines, managing followers, and sending DMs. Perfect for social media automation or Twitter integration.',
-    inputs: ['apiKey', 'apiSecret', 'accessToken', 'accessTokenSecret', 'operation', 'data'],
-    outputs: ['result', 'tweets', 'users'],
-    example: `Operation: create_tweet
-Data: {
-  "text": "Hello from CtrlChecks!"
-}
+    overview: 'Use a saved Twitter/X OAuth connection to publish and read tweets, search posts, manage users/lists/media/DMs, and inspect Spaces. Successful runtime output preserves object input and spreads raw X API response fields at the top level.',
+    inputs: ['resource', 'operation', 'text', 'tweetId', 'tweetIds', 'mediaIds', 'userId', 'username', 'query', 'listId', 'mediaData', 'mediaId', 'recipientId', 'spaceId', 'maxResults', 'returnAll'],
+    outputs: ['data', 'meta', 'includes', 'errors', 'id', 'media_id', 'event', '_error', '_errorDetails'],
+    example: `Resource: search
+Operation: recent
+Query: "workflow automation" -is:retweet
+Max Results: 10
 
 Output: {
-  result: {
-    id: "tweet_id",
-    text: "Hello from CtrlChecks!",
-    created_at: "2024-01-15T10:30:00Z"
-  }
+  data: [{ id: "1749876543210", text: "Workflow automation update" }],
+  meta: { result_count: 1 }
 }`,
     tips: [
-      'Get credentials from Twitter Developer Portal → App → Keys and tokens',
-      'Requires API key, secret, access token, and access token secret',
-      'Supports tweets, users, timelines, direct messages',
-      'Use for social media automation',
-      'Rate limits apply - respect Twitter API limits',
+      'Connect Twitter/X in Connections; the runtime resolves OAuth access from the credential vault',
+      'Resource and Operation must be a valid pair, such as tweet/create, user/getMe, search/recent, media/upload, directMessage/send, or space/search',
+      'Tweet IDs come from /status/<id> URLs or previous X API results',
+      'Full archive search (operation all) requires elevated X developer access',
+      'On failure the node returns _error instead of a success wrapper',
     ],
   },
 
   linkedin: {
-    overview: 'Interact with LinkedIn API to manage posts, profiles, connections, and messages. Supports creating posts, reading profiles, managing connections, and sending messages. Perfect for professional networking automation or LinkedIn integration.',
-    inputs: ['accessToken', 'operation', 'data'],
-    outputs: ['result', 'posts', 'profiles'],
-    example: `Operation: create_post
-Data: {
-  "text": "Excited to share our new feature!",
-  "visibility": "PUBLIC"
-}
+    overview: 'Use LinkedIn OAuth to get your profile, read recent posts, publish personal/company/article/media posts, delete posts, or dry-run a simulated API request before publishing.',
+    inputs: ['operation', 'text', 'articleUrl', 'mediaUrl', 'visibility', 'personUrn', 'organizationId', 'postId', 'limit', 'dryRun'],
+    outputs: ['success', 'profile', 'posts', 'postCount', 'postId', 'assetUrn', 'message', 'dryRun', 'simulatedRequest', '_error'],
+    example: `Operation: create_post_media
+Text: New demo is live
+Media URL: https://cdn.example.com/demo-card.jpg
+Visibility: PUBLIC
 
 Output: {
-  result: {
-    id: "post_id",
-    text: "Excited to share our new feature!",
-    created: {"time": 1705314600000}
-  }
+  success: true,
+  postId: "urn:li:activity:7123456789012345678",
+  assetUrn: "urn:li:digitalmediaAsset:D4D22AQFexample"
 }`,
     tips: [
-      'Get access token from LinkedIn Developer Portal → App → Auth',
-      'Requires OAuth 2.0 authentication',
-      'Supports posts, profiles, connections, messages',
-      'Use for professional networking automation',
-      'Requires appropriate LinkedIn API permissions',
+      'Connect LinkedIn in Connections; accessToken is only a legacy fallback',
+      'Get My Profile verifies OAuth and returns profile.personUrn',
+      'Create Post (Media) requires a public Media URL; text can be empty only for media posts',
+      'Company Page posts require Organization ID and page/admin permission',
+      'Dry Run returns simulatedRequest and does not publish, upload, or delete',
     ],
   },
 
   instagram: {
-    overview: 'Interact with Instagram Graph API to manage posts, stories, comments, and media. Supports creating posts, reading feeds, managing comments, and uploading media. Perfect for Instagram automation or social media integration.',
-    inputs: ['accessToken', 'pageId', 'operation', 'data'],
-    outputs: ['result', 'posts', 'comments', 'media'],
-    example: `Operation: create_post
-Page ID: page123
-Data: {
-  "image_url": "https://example.com/image.jpg",
-  "caption": "Check out our new product!"
-}
+    overview: 'Use a saved Instagram/Meta connection to read, publish, moderate comments, inspect hashtags/stories, and fetch insights for an Instagram Business Account. The current service node does not implement the old message/sendText resource.',
+    inputs: ['resource', 'operation', 'instagramBusinessAccountId', 'media_type', 'media_url', 'video_url', 'caption', 'creation_id', 'mediaId', 'commentId', 'message', 'metric', 'period', 'fields', 'limit', 'returnAll'],
+    outputs: ['id', 'data', 'paging', 'status_code', '_error', '_errorDetails'],
+    example: `Resource: media
+Operation: createAndPublish
+Media Type: IMAGE
+Media URL: https://cdn.example.com/product.jpg
+Caption: New product drop
 
 Output: {
-  result: {
-    id: "media_id",
-    permalink: "https://instagram.com/p/..."
-  }
+  id: "17900000000000000"
 }`,
     tips: [
-      'Get access token from Facebook Developers (Instagram uses Facebook Graph API)',
-      'Page ID required (Instagram Business account)',
-      'Supports posts, stories, comments, media',
-      'Use for Instagram automation',
-      'Requires Instagram Business account and appropriate permissions',
+      'Connect Instagram/Meta in Connections; accessToken is a legacy fallback',
+      'Leave Instagram Business Account ID blank only when the connected Page can auto-resolve it',
+      'Use media_url for image posts and video_url for VIDEO/REELS',
+      'Comment replies must put the reply body in Message because the runtime reads message',
+      'Valid pairs include media/createAndPublish, media/publish, comment/reply, hashtag/getRecentMedia, story/list, and insights/get',
     ],
   },
 
   youtube: {
-    overview: 'Interact with YouTube Data API to manage videos, playlists, channels, and comments. Supports uploading videos, reading playlists, managing channels, and moderating comments. Perfect for video content automation or YouTube integration.',
-    inputs: ['apiKey', 'operation', 'channelId', 'data'],
-    outputs: ['result', 'videos', 'playlists', 'channels'],
-    example: `Operation: list_videos
-Channel ID: channel123
-Max Results: 10
+    overview: 'Use a YouTube OAuth connection to list authenticated channels, get a channel, search videos, fetch video statistics, upload videos, update metadata, or delete owned videos. Execution is owned by the YouTube registry override.',
+    inputs: ['operation', 'title', 'description', 'tags', 'videoUrl', 'videoDataBase64', 'mimeType', 'privacyStatus', 'madeForKids', 'categoryId', 'videoId', 'channelId', 'query', 'maxResults'],
+    outputs: ['success', 'operation', 'items', 'pageInfo', 'channel', 'channelId', 'video', 'videoId', 'url', 'statistics', 'deleted', '_error'],
+    example: `Operation: get_video_stats
+Video ID: dQw4w9WgXcQ
 
 Output: {
-  videos: [
-    {
-      id: "video_id",
-      title: "Video Title",
-      publishedAt: "2024-01-15T10:30:00Z"
-    }
-  ]
+  success: true,
+  operation: "get_video_stats",
+  videoId: "dQw4w9WgXcQ",
+  statistics: { viewCount: "2450", likeCount: "120" }
 }`,
     tips: [
-      'Get API key from Google Cloud Console → APIs & Services → Credentials',
-      'Enable YouTube Data API v3',
-      'Channel ID required for channel-specific operations',
-      'Supports videos, playlists, channels, comments',
-      'Use for video content automation',
+      'Connect YouTube in Connections with youtube.force-ssl and youtube.upload scopes',
+      'Upload Video requires Title and either Video URL or Video Data Base64',
+      'Update Video Metadata requires Video ID and at least one of Title, Description, or Tags',
+      'Search Videos requires Query; Max Results is clamped to 1-50',
+      'Stale create_post, reply_comment, and get_comments values are rejected by the registry override',
     ],
   },
 
@@ -4723,7 +5242,7 @@ Output: {
   }
 }`,
     tips: [
-      'Get credentials from Reddit → Preferences → Apps → create app',
+      'Get credentials from Reddit â†’ Preferences â†’ Apps â†’ create app',
       'Client ID and Secret required',
       'Username and password for authentication',
       'Supports posts, comments, subreddits, messages',
@@ -4750,7 +5269,7 @@ Output: {
   }
 }`,
     tips: [
-      'Get access token from Box Developer Console → OAuth 2.0',
+      'Get access token from Box Developer Console â†’ OAuth 2.0',
       'Use OAuth 2.0 flow for authentication',
       'Supports files and folders management',
       'Use for cloud file management',
@@ -4759,33 +5278,36 @@ Output: {
   },
 
   onedrive: {
-    overview: 'Interact with Microsoft OneDrive to manage files and folders. Supports uploading, downloading, listing files, and managing folders using Microsoft Graph API. Perfect for cloud file management or Microsoft integration.',
-    inputs: ['accessToken', 'operation', 'path', 'content'],
-    outputs: ['result', 'file', 'files'],
+    overview: 'List, read, upload, and delete files in Microsoft OneDrive through Microsoft Graph. Prefer a saved Microsoft connection; Access Token is a direct legacy fallback.',
+    inputs: ['accessToken', 'operation', 'path', 'fileId', 'fileName', 'content', 'dataBase64', 'data'],
+    outputs: ['success', 'items', 'path', 'dataBase64', 'sizeBytes', 'metadata', 'deleted', '_error', '_errorDetails'],
     example: `Operation: upload
 Path: /Documents/file.txt
-Content: "Hello World"
+Content: {{$json.dataBase64}}
 
 Output: {
-  result: {
-    id: "file_id",
-    name: "file.txt",
-    size: 11
+  success: true,
+  path: "/Documents/file.txt",
+  sizeBytes: 11,
+  metadata: {
+    id: "01ABC123",
+    name: "file.txt"
   }
 }`,
     tips: [
-      'Get access token from Azure Portal → App registrations → Microsoft Graph API',
-      'Requires Files.ReadWrite permission',
-      'Supports files and folders via Microsoft Graph API',
-      'Use for cloud file management',
-      'List, upload, download files programmatically',
+      'Get access token from Azure Portal â†’ App registrations â†’ Microsoft Graph API',
+      'Read and upload require Path',
+      'Delete can use File ID or Path',
+      'Legacy File Name is not read by runtime; include the file name in Path',
+      'Upload accepts dataBase64, data, or content',
+      'Use Microsoft Graph file scopes such as Files.ReadWrite',
     ],
   },
 
   write_binary_file: {
-    overview: 'Create a managed workflow file asset from base64, a data URL, or plain text. Perfect for staging generated PDFs/images before upload, email attachment, OCR, or later workflow steps.',
-    inputs: ['fileName', 'mimeType', 'dataBase64', 'folder', 'persist'],
-    outputs: ['assetId', 'fileName', 'mimeType', 'dataBase64', 'sizeBytes', 'storageKey', 'metadataPersisted'],
+    overview: 'Create a managed workflow file asset from base64, a data URL, or plain text. Use it to stage generated PDFs/images/CSVs before read, upload, email attachment, OCR, or approval steps.',
+    inputs: ['fileName', 'mimeType', 'dataBase64', 'folder', 'filePath', 'persist', 'data', 'content', 'fileData'],
+    outputs: ['success', 'written', 'assetId', 'fileName', 'mimeType', 'dataBase64', 'sizeBytes', 'checksumSha256', 'storageProvider', 'storageKey', 'filePath', 'metadataPersisted', 'metadataError', '_error'],
     example: `File Name: report.pdf
 MIME Type: application/pdf
 Binary Data: {{$json.dataBase64}}
@@ -4799,6 +5321,7 @@ Output: {
 }`,
     tips: [
       'Use dataBase64 from download/PDF/file nodes',
+      'Legacy body aliases data, content, and fileData are accepted',
       'Data URLs like data:application/pdf;base64,... are accepted',
       'Keep Persist Metadata enabled when later nodes should read by assetId',
       'Custom paths are restricted to the backend binary storage root',
@@ -4833,85 +5356,226 @@ Output: {
   },
 
   intercom: {
-    overview: 'Interact with Intercom API to manage contacts, conversations, messages, and teams. Supports creating contacts, sending messages, managing conversations, and accessing help center. Perfect for customer support automation or Intercom integration.',
-    inputs: ['accessToken', 'resource', 'operation', 'id', 'data'],
-    outputs: ['result', 'contacts', 'conversations', 'messages'],
-    example: `Resource: contacts
-Operation: create
-Data: {
-  "email": "user@example.com",
-  "name": "John Doe"
-}
+    overview: 'List Intercom conversations, fetch one conversation, or reply to a conversation. Important: the visual Operation dropdown offers 6 values (Get/List/Create/Update/Delete/Search) but the runtime only implements List, Get, and Send - Create/Update/Delete/Search always fail, and Send (the real reply capability) is not even in the dropdown. Resource, Resource ID, and Search Query fields are all decorative and never read.',
+    inputs: ['operation', 'accessToken', 'conversationId', 'resource', 'id', 'data', 'query', 'perPage', 'startingAfter', 'message', 'adminId'],
+    outputs: ['operation', 'data', '_error', '_errorCode'],
+    example: `Operation: get
+Conversation Id: 123456789
 
 Output: {
-  result: {
-    id: "contact_id",
-    email: "user@example.com",
-    name: "John Doe"
+  operation: "get",
+  data: {
+    type: "conversation",
+    id: "123456789",
+    conversation_message: { body: "Hi, I need help with my order." }
   }
 }`,
     tips: [
-      'Get access token from Intercom → Settings → Developers → Access tokens',
-      'Resources: contacts, conversations, messages, teams',
-      'Use for customer support automation',
-      'Create contacts, send messages, manage conversations',
-      'Integrate with help center and live chat',
+      'Get the access token from developers.intercom.com -> Your App -> Configure -> Authentication, then save it once in Connections',
+      'Only List and Get work from the Operation dropdown today; Create/Update/Delete/Search always fail with "Unsupported Intercom operation"',
+      'Send (replying to a conversation) is real and required-field-validated, but is not selectable in the Operation dropdown - it can only be set via workflow JSON or an AI-generated workflow, and Message/Admin Id must currently go through the Data (JSON) field as a raw payload',
+      'Get needs the Conversation Id field filled - the "Resource ID" field looks similar but is never read',
+      'Resource and Search Query are both decorative - every operation always works against Intercom Conversations regardless of what Resource is set to',
+    ],
+  },
+
+  intuit_smes: {
+    overview: 'Important: this is a mock/demo node - it does not call the real Intuit/QuickBooks API today. Get Customers and Get Invoices always return the same two fixed demo rows; Create Customer, Update Customer, and Create Invoice only echo back the values you typed as a fabricated confirmation, without saving anything in Intuit/QuickBooks. Use this node to prototype a workflow\'s shape, not for production QuickBooks data.',
+    inputs: ['operation', 'apiKey', 'accessToken', 'customerId', 'name', 'email', 'amount'],
+    outputs: ['success', 'data', 'message', 'error'],
+    example: `Operation: createCustomer
+Customer Name: Acme Corp
+Customer Email: contact@acme.com
+
+Output: {
+  success: true,
+  data: {
+    customerId: "CUST-1752940800000",
+    name: "Acme Corp",
+    email: "contact@acme.com",
+    createdAt: "2026-07-19T00:00:00.000Z"
+  },
+  message: "Successfully created customer",
+  error: null
+}`,
+    tips: [
+      'This node never contacts the real Intuit/QuickBooks API - Api Key/Access Token are only checked for being non-empty, never validated or sent anywhere',
+      'Get Customers and Get Invoices always return the exact same two hardcoded demo rows, regardless of your account',
+      'Create Customer/Update Customer/Create Invoice only echo back what you typed as a fabricated confirmation - nothing is saved in Intuit/QuickBooks',
+      'This node performs almost no field validation (unlike other CRM nodes) - missing Customer Id/Name/Email/Amount does not raise an error, values just come back undefined',
+      'Use this node to prototype a workflow\'s shape before a real Intuit/QuickBooks integration exists',
     ],
   },
 
   mailchimp: {
-    overview: 'Interact with Mailchimp API to manage audiences, campaigns, lists, and members. Supports creating campaigns, managing subscribers, segmenting audiences, and tracking analytics. Perfect for email marketing automation or Mailchimp integration.',
-    inputs: ['apiKey', 'dataCenter', 'resource', 'operation', 'listId', 'data'],
-    outputs: ['result', 'members', 'campaigns', 'audiences'],
-    example: `Resource: audience
-Operation: add_member
-List ID: list123
-Data: {
-  "email_address": "user@example.com",
-  "status": "subscribed"
-}
+    overview: 'Important: the visual Operation dropdown (List/Get/Create/Update/Delete/Add Member/Update Member/Delete Member) is entirely non-functional - the real runtime only implements subscribe, unsubscribe, and send, none of which are selectable from that dropdown. A working run requires setting operation to subscribe/unsubscribe/send via workflow JSON or AI generation. Resource, Data Center, Member Email, Member Data, Count, and Offset are all decorative fields the engine never reads.',
+    inputs: ['operation', 'apiKey', 'listId', 'email', 'data', 'mergeFields', 'campaignId', 'serverPrefix'],
+    outputs: ['operation', 'data', '_error', '_errorCode'],
+    example: `Operation: subscribe (set via JSON - not selectable in the dropdown)
+List/Audience ID: list123
+Email: user@example.com
 
 Output: {
-  result: {
-    id: "member_id",
+  operation: "subscribe",
+  data: {
+    id: "member_hash_id",
     email_address: "user@example.com",
     status: "subscribed"
   }
 }`,
     tips: [
-      'Get API key from Mailchimp Account → Extras → API keys',
-      'Data center from API key (e.g., us1, us2, eu1)',
-      'Resources: audience, campaigns, lists, members',
-      'Use for email marketing automation',
-      'Add subscribers, create campaigns, manage lists',
+      'None of the 8 Operation dropdown values work - only subscribe/unsubscribe/send do, and none of those 3 are selectable from the dropdown today',
+      'Get the API Key from Mailchimp Account -> Extras -> API Keys; the data-center suffix on the key (e.g. -us21) is auto-detected, the visible "Data Center" field is unused',
+      'Subscribe/Unsubscribe need a real config value under the key email (not the visible "Member Email" field, which is a different unused key)',
+      'Send only triggers an already-created campaign (Campaign Id) - it cannot create a new campaign, and its response data is always null on success',
+      'Resource, Member Data, Count, and Offset are all decorative and never read by the runtime',
+    ],
+  },
+
+  microsoft_dynamics: {
+    overview: 'Get, list, create, update, or delete Microsoft Dynamics 365 records, or run an advanced FetchXML query. Unlike most CRM nodes in this product, there is no Connections/credential-vault support - Instance URL and OAuth2 Access Token must always be typed directly on the node.',
+    inputs: ['instanceUrl', 'accessToken', 'resource', 'customEntity', 'operation', 'id', 'fields', 'fetchXml', 'select', 'filter', 'top'],
+    outputs: ['success', 'data', 'count', 'id', 'entityId', 'deleted', '_error'],
+    example: `Resource: contacts
+Operation: getRecord
+Record ID (GUID): 00000000-0000-0000-0000-000000000000
+
+Output: {
+  success: true,
+  data: {
+    contactid: "00000000-0000-0000-0000-000000000000",
+    fullname: "Alice Chen",
+    emailaddress1: "alice@example.com"
+  }
+}`,
+    tips: [
+      'No Connections support today - Instance URL and OAuth2 Access Token must be typed on every node; the Azure AD token also expires (typically ~1 hour) and must be refreshed manually',
+      '6 of the 8 Operation dropdown values work (Get Records/Get Record/Create Record/Update Record/Delete Record/Search FetchXML); Associate Records and Disassociate Records are not implemented',
+      'Create Record and Update Record only return the record ID, not the field values - run a follow-up Get Record to see the saved data',
+      'Use Dynamics 365 logical field names (like firstname, emailaddress1), not the display labels shown in the Dynamics UI',
+      'Max Records ($top) is capped at 5000 by Dynamics itself; this node does not implement follow-up paging beyond that',
+    ],
+  },
+
+  odoo: {
+    overview: 'Search, read, create, update, or delete records in any Odoo model, or call a custom Odoo method, via JSON-RPC. A saved "Odoo Credentials" Connections entry exists but does not currently auto-fill this node - URL, Database, Username, and Password must always be typed directly on the node.',
+    inputs: ['url', 'db', 'username', 'password', 'operation', 'model', 'domain', 'fields', 'limit', 'offset', 'values', 'recordId', 'method', 'methodArgs', 'methodKwargs'],
+    outputs: ['success', 'operation', 'model', 'data', 'error', '_error'],
+    example: `Model: res.partner
+Operation: getRecords
+Domain Filter: [["customer_rank", ">", 0]]
+
+Output: {
+  success: true,
+  operation: "getRecords",
+  model: "res.partner",
+  data: [
+    { id: 42, name: "Acme Corp", email: "info@acme.com" }
+  ],
+  error: null
+}`,
+    tips: [
+      'This node logs in as a real Odoo user on every single run - the saved "Odoo Credentials" Connections entry exists but is not wired to auto-fill this node yet, so URL/Database/Username/Password must be typed on the node itself',
+      'Use technical field/model names (like res.partner, name, email), not the display labels shown in the Odoo UI - enable Developer Mode in Odoo to see them',
+      'Create Record and Update Record do not return the saved field values - Create returns only the new numeric ID, Update returns only true; use a follow-up Get Records to see the data',
+      'Odoo record IDs are plain integers, not GUIDs',
+      'Execute Method can call any model method (like action_confirm) for actions beyond basic create/read/update/delete',
+    ],
+  },
+
+  sap: {
+    overview: 'Read and write SAP business objects (sales orders, business partners, materials, and more) via OData v2/v4 and REST APIs. Operation is a direct HTTP method (GET/POST/PUT/PATCH/DELETE) rather than a named CRM action. Only Access Token is confirmed to auto-fill from a saved SAP connection - Basic Auth Username/Password must be typed directly on the node.',
+    inputs: ['baseUrl', 'operation', 'endpoint', 'queryParams', 'payload', 'accessToken', 'username', 'password', 'csrfToken', 'format'],
+    outputs: ['success', 'data', 'count', 'statusCode', 'deleted', '_error'],
+    example: `Operation: get
+SAP Base URL: https://your-sap-host:44300
+Endpoint Path: /sap/opu/odata/sap/API_SALES_ORDER_SRV/A_SalesOrder
+
+Output: {
+  success: true,
+  data: [
+    { SalesOrder: "0000012345", SoldToParty: "0000100001", TotalNetAmount: "15000.00" }
+  ],
+  count: 1,
+  statusCode: 200
+}`,
+    tips: [
+      'SAP Base URL is required at runtime even though the backend schema only formally requires Operation and Endpoint Path - leaving it blank fails every operation',
+      'OData v2 write services (POST/PUT/PATCH/DELETE) typically require X-CSRF-Token, but this node cannot fetch or capture that token itself - obtain it separately (e.g. with an HTTP Request node reading response headers) and paste it in manually',
+      'OData v2 list responses are automatically unwrapped from the {d: {results}} envelope, so {{$json.data}} is a plain array or object, not the raw SAP envelope',
+      'DELETE has no data or count key at all on success - only success, statusCode, and deleted',
+      'This node never returns an _errorDetails key on failure, unlike several other CRM nodes - the full error text is already inside _error',
+    ],
+  },
+
+  tally: {
+    overview: 'Connect directly to a locally-running Tally ERP / TallyPrime instance via its XML API gateway to read ledgers, vouchers, and stock items, read company info, or create new vouchers. There is no cloud credential - this is a direct network connection, and Tally must be running with its XML gateway enabled.',
+    inputs: ['operation', 'endpoint', 'companyName', 'ledgerName', 'voucherId', 'payload'],
+    outputs: ['success', 'data', 'statusCode', '_error'],
+    example: `Operation: get_ledger
+Tally Server URL: http://localhost:9000
+Ledger Name: Cash
+
+Output: {
+  success: true,
+  data: "<ENVELOPE><BODY>...ledger XML...</BODY></ENVELOPE>",
+  statusCode: 200
+}`,
+    tips: [
+      'Tally is desktop software, not a cloud service - it must be running with Enable XML Server turned on (Gateway of Tally -> F12: Configure -> Advanced Configuration) before any operation will work',
+      'The response in data is always raw XML text, never JSON - use a JavaScript node after this one to parse out specific values like a balance or an amount',
+      'Create Voucher has no default template and requires a complete custom XML payload; the other four operations build their own XML automatically and only need Custom XML Payload for advanced filtering',
+      'A 200 status code from Create Voucher does not guarantee the voucher was saved - parse data for <CREATED>1</CREATED> to confirm, since Tally can reject the voucher with a validation error inside a 200 response',
+      'Company Name, Ledger Name, and Voucher ID matching is exact and case-sensitive in Tally - there is no fuzzy matching',
+    ],
+  },
+
+  zendesk: {
+    overview: 'List, fetch, create, update, or delete Zendesk support tickets, or list users, via HTTP Basic Auth (agent email + API token) against the Zendesk REST API. Unlike most other CRM nodes in this product, failures are reported as {success: false, error: {message, status}} rather than an _error key.',
+    inputs: ['operation', 'subdomain', 'email', 'apiToken', 'ticketId', 'subject', 'description', 'status', 'priority', 'assigneeId', 'limit'],
+    outputs: ['success', 'data', 'error'],
+    example: `Operation: create_ticket
+Subject: Issue reported by {{$json.name}}
+Description: Customer reports login failure
+
+Output: {
+  success: true,
+  data: { ticket: { id: 12345, subject: "Issue reported by John Doe", status: "open", priority: "normal" } },
+  error: {}
+}`,
+    tips: [
+      'This node never returns an _error key - check {{$json.success}} and {{$json.error.message}}/{{$json.error.status}} instead, unlike most other CRM nodes in this product',
+      'Subdomain, Agent Email, and API Token all auto-fill from a saved Zendesk API Token connection - Agent Email fills via the same generic credential alias Jira also uses',
+      'Update Ticket only sends fields you actually filled in - a blank Subject, Status, Priority, or Assignee ID leaves the current value unchanged rather than clearing it',
+      'Delete Ticket returns an empty data object {} on success since Zendesk itself sends no body back for deletes - check {{$json.success}}, not {{$json.data}}, to confirm',
+      'Get Tickets and Get Users return at most one page (default 25, max 100 via Results Per Page) - use {{$json.data.next_page}} with a Loop node to fetch further pages in a large account',
     ],
   },
 
   freshdesk: {
-    overview: 'Interact with Freshdesk API to manage tickets, contacts, agents, and conversations. Supports creating tickets, updating status, managing contacts, and accessing knowledge base. Perfect for customer support automation or Freshdesk integration.',
-    inputs: ['apiKey', 'domain', 'resource', 'operation', 'id', 'data'],
-    outputs: ['result', 'tickets', 'contacts', 'agents'],
+    overview: 'Get, list, create, update, or delete Freshdesk tickets, contacts, or companies. Operation and Resource together choose the exact Freshdesk API call; the output key differs per operation (item/items/created/updated/deleted). Only the API Key is stored in Connections - Domain must always be typed on the node.',
+    inputs: ['operation', 'resource', 'domain', 'apiKey', 'id', 'data', 'subject', 'descriptionText', 'email', 'priority', 'status'],
+    outputs: ['success', 'item', 'items', 'created', 'updated', 'deleted', 'id', '_error', '_errorDetails'],
     example: `Resource: ticket
 Operation: create
-Data: {
-  "subject": "Support request",
-  "description": "Need help with login",
-  "email": "user@example.com"
-}
+Subject: Support request
+Description Text: Need help with login
+Email: user@example.com
 
 Output: {
-  result: {
+  success: true,
+  created: {
     id: 12345,
     subject: "Support request",
     status: 2
   }
 }`,
     tips: [
-      'Get API key from Freshdesk Profile → API',
-      'Domain: your Freshdesk subdomain',
-      'Resources: ticket, contact, agent, conversation',
-      'Use for customer support automation',
-      'Create tickets, update status, manage contacts',
+      'Get the API Key from Freshdesk Profile Settings; save it once in CtrlChecks Connections and reuse it on every Freshdesk node',
+      'Domain (e.g. mycompany.freshdesk.com) is never vault-backed - type the full domain, including .freshdesk.com, on every node',
+      'Resources: ticket, contact, company work fully tested; avoid time_entry (mispluralized internally and will fail)',
+      'The Search operation is present in the dropdown but not implemented yet - it always returns an "Unsupported operation" error; use List + a downstream Filter node instead',
+      'Subject/Description Text/Email/Priority/Status only apply to Create with Resource = ticket; Update always reads the Data field instead',
     ],
   },
 
@@ -4919,79 +5583,56 @@ Output: {
   // SPECIALIZED AI AGENTS & AUTOMATION NODES
   // ============================================
   ai_agent: {
-    overview: 'Autonomous intelligent agent capable of understanding user input, reasoning over context, using memory, invoking tools, validating outputs, and producing structured responses. Acts as a decision-making and execution unit inside workflows. Supports multiple execution modes (chat, task, tool-only, planning, validation, autonomous) and can connect to Chat Model (required), Memory (optional), and Tool (optional) nodes.',
+    overview: 'Runs one prompt-driven AI step. The runtime extracts userInput from this node or upstream message-like fields, infers the provider from Model, calls the LLM adapter, and packages response_text plus optional structured fields.',
     inputs: [
-      'systemPrompt (System instructions defining agent behavior)',
-      'mode (Execution mode: chat, task, tool_only, planning, validation, autonomous)',
       'userInput (User prompt or input data)',
-      'chat_model (Connected Chat Model node - required)',
-      'memory (Connected Memory node - optional)',
-      'tool (Connected Tool/Function nodes - optional)',
+      'model (gemini, claude, or gpt-style model name)',
+      'systemPrompt (System instructions defining behavior)',
       'temperature, maxTokens, topP, frequencyPenalty, presencePenalty',
-      'strictMode, creativityLevel, timeoutLimit, retryCount',
+      'timeoutLimit, retryCount',
       'outputFormat (text, json, keyvalue, markdown)',
-      'includeReasoning, errorHandlingMode, enableValidation',
+      'includeReasoning',
     ],
     outputs: [
       'response_text (Plain text response)',
       'response_json (Structured JSON response)',
       'response_markdown (Markdown formatted response)',
-      'confidence_score (Confidence level 0-1)',
-      'used_tools (Array of tools invoked)',
-      'memory_written (Whether memory was updated)',
+      'confidence_score (currently fixed at 0.8)',
+      'used_tools (currently always empty)',
+      'memory_written (currently false)',
       'error_flag (Whether an error occurred)',
       'error_message (Error details if any)',
-      'reasoning (Reasoning steps if includeReasoning enabled)',
+      'reasoning (provider/model metadata when includeReasoning is enabled)',
     ],
     example: `Configuration:
-System Prompt: "You are a customer support agent..."
-Mode: chat
-Temperature: 0.7
+Model: gemini-3.5-flash
+User Input: "{{$json.message}}"
+System Prompt: "Classify support requests and return JSON with category and priority."
+Temperature: 0.2
 Output Format: json
-Enable Memory: true
-Enable Tools: true
+Include Reasoning: true
 
-Connections:
-- Chat Model node → AI Agent (chat_model port)
-- Memory node → AI Agent (memory port)
-- Tool node → AI Agent (tool port)
-
-Input: {
-  userInput: "I need help with my order"
-}
 
 Output: {
-  response_text: "I'd be happy to help with your order...",
+  response_text: "{\\"category\\":\\"billing\\",\\"priority\\":\\"medium\\"}",
   response_json: {
-    action: "lookup_order",
-    message: "I'd be happy to help..."
+    category: "billing",
+    priority: "medium"
   },
-  confidence_score: 0.85,
-  used_tools: ["order_lookup"],
-  memory_written: true,
-  error_flag: false
+  confidence_score: 0.8,
+  used_tools: [],
+  memory_written: false,
+  error_flag: false,
+  error_message: null,
+  reasoning: { steps: 1, provider: "gemini", model: "gemini-3.5-flash" }
 }`,
     tips: [
-      'Connect Chat Model node to the top port (required)',
-      'Connect Memory node to bottom-left port for conversation history',
-      'Connect Tool/Function nodes to bottom-right port for tool execution',
-      'Use Chat Mode for conversational interactions',
-      'Use Task Mode for single task completion',
-      'Use Tool-Only Mode when you only want tool execution',
-      'Use Planning Mode to generate action plans',
-      'Use Validation Mode to validate inputs/outputs',
-      'Use Autonomous Mode for full autonomy',
-      'Set strictMode=true to prevent assumptions',
-      'Lower temperature (0.1-0.5) for factual tasks',
-      'Higher temperature (0.7-1.2) for creative tasks',
-      'Enable includeReasoning for debugging and transparency',
-      'Configure errorHandlingMode based on workflow needs',
-      'Use JSON output format for structured data',
-      'Memory connection enables multi-turn conversations',
-      'Tool connection enables function calling and API integration',
-      'Set appropriate timeoutLimit for complex tasks',
-      'Configure retryCount for resilience',
-      'Enable validation to reduce hallucinations',
+      'Provider is inferred from Model: gemini, claude, and gpt prefixes route to their provider paths.',
+      'topP, frequencyPenalty, and presencePenalty are parsed but not currently passed into the model adapter.',
+      'Tool and memory outputs are placeholders today: used_tools is [] and memory_written is false.',
+      'For json/keyvalue output, invalid JSON is wrapped as response_json.content instead of raising a parse error.',
+      'Use JSON output format for structured data.',
+      'Use timeoutLimit and retryCount for slow providers, but fix missing credentials before relying on retries.',
     ],
   },
 
@@ -5513,7 +6154,7 @@ Output: {
     inputs: [
       'transaction (id, amount, currency, merchant, location, timestamp)',
       'historicalPatterns (averageAmount, commonMerchants, commonLocations)',
-      'riskThreshold (0–1, default 0.7)',
+      'riskThreshold (0â€“1, default 0.7)',
     ],
     outputs: ['fraudulent', 'riskScore', 'indicators'],
     example: `Transaction: {
@@ -5948,31 +6589,82 @@ Output: {
   }
 }`,
     tips: [
-      'Get API key from ActiveCampaign Settings → Developer',
-      'API URL is your account URL, e.g. https://youraccount.api-us1.com',
+      'Get API URL and API Key from ActiveCampaign Settings â†’ Developer',
+      'API URL is your account URL, e.g. https://youraccount.api-us1.com â€” always entered on the node itself, even when using a saved connection',
+      'A saved Connections â†’ ActiveCampaign credential can supply API Key automatically; typing it directly into the node keeps it in plain workflow config instead',
       'Update and Delete require Contact ID',
-      'Data (JSON) overrides Email/First Name/Last Name if both are set',
+      'Data (JSON) completely replaces Email/First Name/Last Name when set, it does not merge with them',
+      'Delete returns {deleted: true, contactId} â€” not the ActiveCampaign contact object Add/Update return',
+    ],
+  },
+
+  outlook: {
+    overview: 'Send a plain-text email from the selected Microsoft Outlook account through Microsoft Graph sendMail. The node supports Send Email only and keeps incoming workflow fields on success.',
+    inputs: ['operation', 'to', 'subject', 'body', 'selected Microsoft connection'],
+    outputs: ['incoming fields preserved', 'success', '_error', '_errorDetails'],
+    example: `Operation: send_email
+To: {{$json.customerEmail}}
+Subject: Order {{$json.orderId}} received
+Body: Hi {{$json.firstName}}, we received your order.
+
+Output:
+{
+  orderId: "ORD-1042",
+  customerEmail: "buyer@example.com",
+  success: true
+}`,
+    tips: [
+      'Requires a Microsoft OAuth2 connection with Mail.Send',
+      'Use comma-separated addresses in To for multiple recipients',
+      'Body is sent as plain text, not HTML',
+      'Microsoft Graph sendMail does not return a message ID in this runtime path',
+    ],
+  },
+
+  calendly: {
+    overview: 'Read Calendly user, event type, and scheduled event data using a saved Calendly Personal Access Token connection. Operations are read-only.',
+    inputs: ['operation', 'Calendly connection or fallback accessToken', 'userUri', 'eventTypeUri'],
+    outputs: ['success', 'operation', 'data', 'collection', 'user', 'count', 'error'],
+    example: `Operation: get_user
+Access Token: saved in Connections
+
+Output:
+{
+  success: true,
+  operation: "get_user",
+  user: {uri: "https://api.calendly.com/users/AAAAAAAAAAAAAAAA"}
+}
+
+Next step User URI: {{$json.user.uri}}`,
+    tips: [
+      'Prefer Connections instead of pasting a token into the node',
+      'Run Get User first to get the User URI',
+      'Get Event Types and Get Scheduled Events require User URI',
+      'Event Type URI only filters Get Scheduled Events',
     ],
   },
 
   schedulewise: {
-    overview: 'Read and manage appointments/schedules through the ScheduleWise API — list schedules, and create, update, or delete appointments.',
-    inputs: ['operation', 'dateFrom/dateTo (Get Schedules)', 'patientId', 'staffId', 'appointmentId', 'startDateTime/endDateTime', 'serviceType', 'notes', 'status'],
+    overview: 'Read and manage appointments through the ScheduleWise REST API. Live runs require a saved ScheduleWise credential unless Mock Mode is on.',
+    inputs: ['operation', 'credentialId reference', 'dateFrom/dateTo', 'patientId', 'staffId', 'appointmentId', 'startDateTime/endDateTime', 'serviceType', 'notes', 'status', 'limit', 'hardDelete', 'mockMode', 'timeoutSec', 'retries', 'outputFormat'],
     outputs: ['success', 'operation', 'data', 'executionTimeMs', 'error'],
     example: `Operation: Get Schedules
 Date From: {{$json.startDate}}
 Date To: {{$json.endDate}}
+Mock Mode: false
 
 Output: {
   success: true,
   operation: "getSchedules",
-  data: { records: [...], count: 2 }
+  data: {schedules: [...], totalCount: 1, nextPageToken: null},
+  executionTimeMs: 41
 }`,
     tips: [
-      'Requires a saved ScheduleWise connection (Connections page → ScheduleWise, or paste an API key/access token directly)',
+      'Requires a saved ScheduleWise API Key connection in Connections unless Mock Mode is on',
       'Use Mock Mode to test the workflow without calling the real ScheduleWise API',
       'Update and Delete Appointment require Appointment ID',
       'Create Appointment requires Start/End Date-Time, Patient ID, and Staff ID',
+      'Output Format Raw is visible but not honored today; runtime always parses JSON and returns PARSE_ERROR when parsing fails',
     ],
   },
 };

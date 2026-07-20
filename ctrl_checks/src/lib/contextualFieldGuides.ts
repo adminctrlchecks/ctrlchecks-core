@@ -340,6 +340,15 @@ export function buildContextualFieldHelp(input: FieldGuideInput): string | null 
     ].join('\n');
   }
 
+  if (nodeType === 'whatsapp' && lower === 'text') {
+    return [
+      `What this field is: The text message sent through WhatsApp Cloud API.`,
+      `For AI replies: use {{$json.aiResponse}} if your AI Agent writes that field, or map the exact output field from the AI node.`,
+      `Tip: Free-form replies are allowed inside WhatsApp's customer service window. Outside that window, use an approved template.`,
+      dynamicExample(key),
+    ].join('\n');
+  }
+
   // ── Telegram ──────────────────────────────────────────────────────────────────
   if (nodeType === 'telegram') {
     if (lower === 'chatid') {
@@ -420,7 +429,144 @@ export function buildContextualFieldHelp(input: FieldGuideInput): string | null 
     }
   }
 
+  if (nodeType === 'telegram_trigger') {
+    if (lower === 'updatetypes') {
+      return [
+        `What this field is: The Telegram update type that can start the workflow.`,
+        `Use message for normal chatbot conversations.`,
+        `Use callback_query if your bot sends inline buttons and should react when users tap them.`,
+      ].join('\n');
+    }
+    if (lower === 'allowedchatids') {
+      return [
+        `What this field is: Optional list of Telegram chat IDs allowed to trigger this workflow.`,
+        `Leave it blank while testing, then add production chat IDs separated by commas.`,
+        `Tip: The trigger output includes chatId, so you can copy it from a test run.`,
+      ].join('\n');
+    }
+    if (lower === 'commandfilter') {
+      return [
+        `What this field is: Optional slash command required at the start of the Telegram message.`,
+        `Example: /support only triggers the workflow for messages that start with /support.`,
+      ].join('\n');
+    }
+    if (lower === 'secrettoken') {
+      return [
+        `What this field is: Optional webhook secret Telegram sends back in the X-Telegram-Bot-Api-Secret-Token header.`,
+        `Use a random value and re-register the webhook with the same value.`,
+      ].join('\n');
+    }
+  }
+
   // ── Discord ────────────────────────────────────────────────────────────────────
+  if (nodeType === 'whatsapp_trigger') {
+    if (lower === 'eventtypes') {
+      return [
+        `What this field is: The WhatsApp Cloud webhook event type that can start the workflow.`,
+        `Use message for normal chatbot conversations.`,
+        `Use status.delivered or status.read when the workflow should react to delivery updates.`,
+      ].join('\n');
+    }
+    if (lower === 'phonenumberid') {
+      return [
+        `What this field is: Optional Meta WhatsApp Phone Number ID filter.`,
+        `Where to find it: Meta for Developers -> WhatsApp -> API Setup -> Phone Number ID.`,
+        `Leave blank if the connected WhatsApp account has only one business number or you want to accept all numbers on that app.`,
+      ].join('\n');
+    }
+    if (lower === 'allowedwaids') {
+      return [
+        `What this field is: Optional list of WhatsApp sender IDs allowed to trigger this workflow.`,
+        `Leave blank while testing, then add production sender IDs separated by commas if you want an allowlist.`,
+        `Tip: The trigger output includes waId and chatId, so copy them from a test execution.`,
+      ].join('\n');
+    }
+    if (lower === 'verifytoken') {
+      return [
+        `What this field is: The secret Meta uses when verifying your webhook callback URL.`,
+        `Use a random value, save it here, and enter the exact same value in Meta for Developers -> WhatsApp -> Configuration.`,
+      ].join('\n');
+    }
+    if (lower === 'validatesignature') {
+      return [
+        `What this field is: Validates Meta's X-Hub-Signature-256 header before starting the workflow.`,
+        `Keep enabled in production. The worker must have META_APP_SECRET, FACEBOOK_APP_SECRET, or WHATSAPP_APP_SECRET configured.`,
+      ].join('\n');
+    }
+  }
+
+  if (nodeType === 'instagram_trigger') {
+    if (lower === 'eventtypes') {
+      return [
+        `What this field is: The Instagram webhook event types that can start this workflow.`,
+        `Use message for DMs, message.story_reply for story replies, comment for comments, mention for mentions, and postback for button payloads.`,
+        `Start broad while testing, then narrow this list for production workflows.`,
+      ].join('\n');
+    }
+    if (lower === 'instagrambusinessaccountid' || lower === 'pageid') {
+      return [
+        `What this field is: Optional Instagram Business Account ID filter.`,
+        `Where to find it: Meta Graph API Explorer -> /me/accounts -> page.instagram_business_account.id.`,
+        `Leave blank if the selected Instagram connection has only one account or you want to accept every account subscribed to the app.`,
+      ].join('\n');
+    }
+    if (lower === 'allowedsenderids') {
+      return [
+        `What this field is: Optional list of Instagram sender IDs allowed to trigger this workflow.`,
+        `Leave blank while testing, then add production sender IDs separated by commas if you want an allowlist.`,
+        `Tip: The trigger output includes senderId and chatId, so copy them from a test execution.`,
+      ].join('\n');
+    }
+    if (lower === 'verifytoken') {
+      return [
+        `What this field is: The secret Meta uses when verifying your Instagram webhook callback URL.`,
+        `Use a random value, save it here, and enter the exact same value in Meta for Developers -> Webhooks.`,
+      ].join('\n');
+    }
+    if (lower === 'validatesignature') {
+      return [
+        `What this field is: Validates Meta's X-Hub-Signature-256 header before starting the workflow.`,
+        `Keep enabled in production. The worker must have META_APP_SECRET, INSTAGRAM_APP_SECRET, or FACEBOOK_APP_SECRET configured.`,
+      ].join('\n');
+    }
+  }
+
+  if (nodeType === 'facebook_trigger') {
+    if (lower === 'eventtypes') {
+      return [
+        `What this field is: The Facebook webhook event types that can start this workflow.`,
+        `Use message for Messenger, comment for Page comments, mention for Page mentions, postback for button payloads, leadgen for lead ads, and feed for Page feed updates.`,
+        `Start broad while testing, then narrow this list for production workflows.`,
+      ].join('\n');
+    }
+    if (lower === 'pageid') {
+      return [
+        `What this field is: Optional Facebook Page ID filter.`,
+        `Where to find it: Meta Graph API Explorer -> /me/accounts or your Facebook Page settings.`,
+        `Leave blank if the selected Facebook connection has only one Page or you want to accept every Page subscribed to the app.`,
+      ].join('\n');
+    }
+    if (lower === 'allowedsenderids') {
+      return [
+        `What this field is: Optional list of Facebook PSIDs or user IDs allowed to trigger this workflow.`,
+        `Leave blank while testing, then add production sender IDs separated by commas if you want an allowlist.`,
+        `Tip: The trigger output includes senderId and chatId, so copy them from a test execution.`,
+      ].join('\n');
+    }
+    if (lower === 'verifytoken') {
+      return [
+        `What this field is: The secret Meta uses when verifying your Facebook webhook callback URL.`,
+        `Use a random value, save it here, and enter the exact same value in Meta for Developers -> Webhooks.`,
+      ].join('\n');
+    }
+    if (lower === 'validatesignature') {
+      return [
+        `What this field is: Validates Meta's X-Hub-Signature-256 header before starting the workflow.`,
+        `Keep enabled in production. The worker must have META_APP_SECRET or FACEBOOK_APP_SECRET configured.`,
+      ].join('\n');
+    }
+  }
+
   if (nodeType === 'discord' || nodeType === 'discord_webhook') {
     if (lower === 'channelid' || lower === 'channel_id') {
       return [

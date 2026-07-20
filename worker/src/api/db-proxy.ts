@@ -17,6 +17,27 @@ import { Request, Response } from 'express';
 import { queryAsService, DbUnavailableError } from '../core/database/db-pool';
 import { preparePayload } from '../core/database/column-types';
 import { subscriptionService } from '../services/subscription-service';
+import { autoRegisterTelegramWebhooksForWorkflow } from '../services/telegram/telegram-trigger-service';
+import { autoRegisterWhatsAppWebhooksForWorkflow } from '../services/whatsapp/whatsapp-trigger-service';
+import { autoRegisterInstagramWebhooksForWorkflow } from '../services/instagram/instagram-trigger-service';
+import { autoRegisterFacebookWebhooksForWorkflow } from '../services/facebook/facebook-trigger-service';
+import { autoRegisterSlackWebhooksForWorkflow } from '../services/slack/slack-trigger-service';
+import { autoRegisterDiscordWebhooksForWorkflow } from '../services/discord/discord-trigger-service';
+import { autoRegisterMicrosoftTeamsWebhooksForWorkflow } from '../services/microsoft-teams/microsoft-teams-trigger-service';
+import { autoRegisterGmailWatchesForWorkflow } from '../services/gmail/gmail-trigger-service';
+import { autoRegisterOutlookSubscriptionsForWorkflow } from '../services/outlook/outlook-trigger-service';
+import { autoRegisterGoogleCalendarWatchesForWorkflow } from '../services/google-calendar/google-calendar-trigger-service';
+import { autoRegisterGoogleSheetsPollingForWorkflow } from '../services/google-sheets/google-sheets-trigger-service';
+import { autoRegisterGoogleDriveWatchesForWorkflow } from '../services/google-drive/google-drive-trigger-service';
+import { autoRegisterTypeformWebhooksForWorkflow } from '../services/typeform/typeform-trigger-service';
+import { autoRegisterTallyWebhooksForWorkflow } from '../services/tally/tally-trigger-service';
+import { autoRegisterGithubWebhooksForWorkflow } from '../services/github/github-trigger-service';
+import { autoRegisterGitlabWebhooksForWorkflow } from '../services/gitlab/gitlab-trigger-service';
+import { autoRegisterJiraWebhooksForWorkflow } from '../services/jira/jira-trigger-service';
+import { autoRegisterLinearWebhooksForWorkflow } from '../services/linear/linear-trigger-service';
+import { autoRegisterTrelloWebhooksForWorkflow } from '../services/trello/trello-trigger-service';
+import { autoRegisterStripeWebhooksForWorkflow } from '../services/stripe/stripe-trigger-service';
+import { autoRegisterShopifyWebhooksForWorkflow } from '../services/shopify/shopify-trigger-service';
 
 function isDbUnavailable(err: any) {
   return err instanceof DbUnavailableError || err?.code === 'DB_UNAVAILABLE';
@@ -126,6 +147,256 @@ async function workflowExistsForUser(userId: string, id: unknown): Promise<boole
     [userId, id]
   );
   return rows.length > 0;
+}
+
+async function attachTelegramWebhookRegistrationStatus(userId: string, row: any) {
+  if (!row || row.status !== 'active') return row;
+
+  const nodeGroups = [
+    row?.nodes,
+    row?.graph?.nodes,
+    row?.definition?.nodes,
+    row?.definition?.graph?.nodes,
+  ];
+
+  const hasTelegramTrigger = [
+    ...nodeGroups,
+  ].some((nodes) => Array.isArray(nodes) && nodes.some((node: any) => String(node?.data?.type || node?.type || '') === 'telegram_trigger'));
+
+  const hasWhatsAppTrigger = [
+    ...nodeGroups,
+  ].some((nodes) => Array.isArray(nodes) && nodes.some((node: any) => String(node?.data?.type || node?.type || '') === 'whatsapp_trigger'));
+
+  const hasInstagramTrigger = [
+    ...nodeGroups,
+  ].some((nodes) => Array.isArray(nodes) && nodes.some((node: any) => String(node?.data?.type || node?.type || '') === 'instagram_trigger'));
+
+  const hasFacebookTrigger = [
+    ...nodeGroups,
+  ].some((nodes) => Array.isArray(nodes) && nodes.some((node: any) => String(node?.data?.type || node?.type || '') === 'facebook_trigger'));
+
+  const hasSlackTrigger = [
+    ...nodeGroups,
+  ].some((nodes) => Array.isArray(nodes) && nodes.some((node: any) => String(node?.data?.type || node?.type || '') === 'slack_trigger'));
+
+  const hasDiscordTrigger = [
+    ...nodeGroups,
+  ].some((nodes) => Array.isArray(nodes) && nodes.some((node: any) => String(node?.data?.type || node?.type || '') === 'discord_trigger'));
+
+  const hasMicrosoftTeamsTrigger = [
+    ...nodeGroups,
+  ].some((nodes) => Array.isArray(nodes) && nodes.some((node: any) => String(node?.data?.type || node?.type || '') === 'microsoft_teams_trigger'));
+
+  const hasGmailTrigger = [
+    ...nodeGroups,
+  ].some((nodes) => Array.isArray(nodes) && nodes.some((node: any) => String(node?.data?.type || node?.type || '') === 'gmail_trigger'));
+
+  const hasOutlookTrigger = [
+    ...nodeGroups,
+  ].some((nodes) => Array.isArray(nodes) && nodes.some((node: any) => String(node?.data?.type || node?.type || '') === 'outlook_trigger'));
+
+  const hasGoogleCalendarTrigger = [
+    ...nodeGroups,
+  ].some((nodes) => Array.isArray(nodes) && nodes.some((node: any) => String(node?.data?.type || node?.type || '') === 'google_calendar_trigger'));
+
+  const hasGoogleSheetsTrigger = [
+    ...nodeGroups,
+  ].some((nodes) => Array.isArray(nodes) && nodes.some((node: any) => String(node?.data?.type || node?.type || '') === 'google_sheets_trigger'));
+
+  const hasGoogleDriveTrigger = [
+    ...nodeGroups,
+  ].some((nodes) => Array.isArray(nodes) && nodes.some((node: any) => String(node?.data?.type || node?.type || '') === 'google_drive_trigger'));
+
+  const hasTypeformTrigger = [
+    ...nodeGroups,
+  ].some((nodes) => Array.isArray(nodes) && nodes.some((node: any) => String(node?.data?.type || node?.type || '') === 'typeform_trigger'));
+
+  const hasTallyTrigger = [
+    ...nodeGroups,
+  ].some((nodes) => Array.isArray(nodes) && nodes.some((node: any) => String(node?.data?.type || node?.type || '') === 'tally_trigger'));
+
+  const hasGithubTrigger = [
+    ...nodeGroups,
+  ].some((nodes) => Array.isArray(nodes) && nodes.some((node: any) => String(node?.data?.type || node?.type || '') === 'github_trigger'));
+
+  const hasGitlabTrigger = [
+    ...nodeGroups,
+  ].some((nodes) => Array.isArray(nodes) && nodes.some((node: any) => String(node?.data?.type || node?.type || '') === 'gitlab_trigger'));
+
+  const hasJiraTrigger = [
+    ...nodeGroups,
+  ].some((nodes) => Array.isArray(nodes) && nodes.some((node: any) => String(node?.data?.type || node?.type || '') === 'jira_trigger'));
+
+  const hasLinearTrigger = [
+    ...nodeGroups,
+  ].some((nodes) => Array.isArray(nodes) && nodes.some((node: any) => String(node?.data?.type || node?.type || '') === 'linear_trigger'));
+
+  const hasTrelloTrigger = [
+    ...nodeGroups,
+  ].some((nodes) => Array.isArray(nodes) && nodes.some((node: any) => String(node?.data?.type || node?.type || '') === 'trello_trigger'));
+
+  const hasStripeTrigger = [
+    ...nodeGroups,
+  ].some((nodes) => Array.isArray(nodes) && nodes.some((node: any) => String(node?.data?.type || node?.type || '') === 'stripe_trigger'));
+
+  const hasShopifyTrigger = [
+    ...nodeGroups,
+  ].some((nodes) => Array.isArray(nodes) && nodes.some((node: any) => String(node?.data?.type || node?.type || '') === 'shopify_trigger'));
+
+  if (!hasTelegramTrigger && !hasWhatsAppTrigger && !hasInstagramTrigger && !hasFacebookTrigger && !hasSlackTrigger && !hasDiscordTrigger && !hasMicrosoftTeamsTrigger && !hasGmailTrigger && !hasOutlookTrigger && !hasGoogleCalendarTrigger && !hasGoogleSheetsTrigger && !hasGoogleDriveTrigger && !hasTypeformTrigger && !hasTallyTrigger && !hasGithubTrigger && !hasGitlabTrigger && !hasJiraTrigger && !hasLinearTrigger && !hasTrelloTrigger && !hasStripeTrigger && !hasShopifyTrigger) return row;
+
+  const telegramRegistrations = hasTelegramTrigger
+    ? await autoRegisterTelegramWebhooksForWorkflow({
+        userId,
+        workflow: row,
+        force: true,
+      })
+    : undefined;
+  const whatsappRegistrations = hasWhatsAppTrigger
+    ? await autoRegisterWhatsAppWebhooksForWorkflow({
+        userId,
+        workflow: row,
+      })
+    : undefined;
+  const instagramRegistrations = hasInstagramTrigger
+    ? await autoRegisterInstagramWebhooksForWorkflow({
+        userId,
+        workflow: row,
+      })
+    : undefined;
+  const facebookRegistrations = hasFacebookTrigger
+    ? await autoRegisterFacebookWebhooksForWorkflow({
+        userId,
+        workflow: row,
+      })
+    : undefined;
+  const slackRegistrations = hasSlackTrigger
+    ? await autoRegisterSlackWebhooksForWorkflow({
+        userId,
+        workflow: row,
+      })
+    : undefined;
+  const discordRegistrations = hasDiscordTrigger
+    ? await autoRegisterDiscordWebhooksForWorkflow({
+        userId,
+        workflow: row,
+      })
+    : undefined;
+  const microsoftTeamsRegistrations = hasMicrosoftTeamsTrigger
+    ? await autoRegisterMicrosoftTeamsWebhooksForWorkflow({
+        userId,
+        workflow: row,
+      })
+    : undefined;
+  const gmailRegistrations = hasGmailTrigger
+    ? await autoRegisterGmailWatchesForWorkflow({
+        userId,
+        workflow: row,
+      })
+    : undefined;
+  const outlookRegistrations = hasOutlookTrigger
+    ? await autoRegisterOutlookSubscriptionsForWorkflow({
+        userId,
+        workflow: row,
+      })
+    : undefined;
+  const googleCalendarRegistrations = hasGoogleCalendarTrigger
+    ? await autoRegisterGoogleCalendarWatchesForWorkflow({
+        userId,
+        workflow: row,
+      })
+    : undefined;
+  const googleSheetsRegistrations = hasGoogleSheetsTrigger
+    ? await autoRegisterGoogleSheetsPollingForWorkflow({
+        userId,
+        workflow: row,
+      })
+    : undefined;
+  const googleDriveRegistrations = hasGoogleDriveTrigger
+    ? await autoRegisterGoogleDriveWatchesForWorkflow({
+        userId,
+        workflow: row,
+      })
+    : undefined;
+  const typeformRegistrations = hasTypeformTrigger
+    ? await autoRegisterTypeformWebhooksForWorkflow({
+        userId,
+        workflow: row,
+      })
+    : undefined;
+  const tallyRegistrations = hasTallyTrigger
+    ? await autoRegisterTallyWebhooksForWorkflow({
+        userId,
+        workflow: row,
+      })
+    : undefined;
+  const githubRegistrations = hasGithubTrigger
+    ? await autoRegisterGithubWebhooksForWorkflow({
+        userId,
+        workflow: row,
+      })
+    : undefined;
+  const gitlabRegistrations = hasGitlabTrigger
+    ? await autoRegisterGitlabWebhooksForWorkflow({
+        userId,
+        workflow: row,
+      })
+    : undefined;
+  const jiraRegistrations = hasJiraTrigger
+    ? await autoRegisterJiraWebhooksForWorkflow({
+        userId,
+        workflow: row,
+      })
+    : undefined;
+  const linearRegistrations = hasLinearTrigger
+    ? await autoRegisterLinearWebhooksForWorkflow({
+        userId,
+        workflow: row,
+      })
+    : undefined;
+  const trelloRegistrations = hasTrelloTrigger
+    ? await autoRegisterTrelloWebhooksForWorkflow({
+        userId,
+        workflow: row,
+      })
+    : undefined;
+  const stripeRegistrations = hasStripeTrigger
+    ? await autoRegisterStripeWebhooksForWorkflow({
+        userId,
+        workflow: row,
+      })
+    : undefined;
+  const shopifyRegistrations = hasShopifyTrigger
+    ? await autoRegisterShopifyWebhooksForWorkflow({
+        userId,
+        workflow: row,
+      })
+    : undefined;
+
+  return {
+    ...row,
+    ...(telegramRegistrations ? { telegramWebhookRegistrations: telegramRegistrations } : {}),
+    ...(whatsappRegistrations ? { whatsappWebhookRegistrations: whatsappRegistrations } : {}),
+    ...(instagramRegistrations ? { instagramWebhookRegistrations: instagramRegistrations } : {}),
+    ...(facebookRegistrations ? { facebookWebhookRegistrations: facebookRegistrations } : {}),
+    ...(slackRegistrations ? { slackWebhookRegistrations: slackRegistrations } : {}),
+    ...(discordRegistrations ? { discordWebhookRegistrations: discordRegistrations } : {}),
+    ...(microsoftTeamsRegistrations ? { microsoftTeamsWebhookRegistrations: microsoftTeamsRegistrations } : {}),
+    ...(gmailRegistrations ? { gmailWebhookRegistrations: gmailRegistrations } : {}),
+    ...(outlookRegistrations ? { outlookWebhookRegistrations: outlookRegistrations } : {}),
+    ...(googleCalendarRegistrations ? { googleCalendarWebhookRegistrations: googleCalendarRegistrations } : {}),
+    ...(googleSheetsRegistrations ? { googleSheetsPollingRegistrations: googleSheetsRegistrations } : {}),
+    ...(googleDriveRegistrations ? { googleDriveWebhookRegistrations: googleDriveRegistrations } : {}),
+    ...(typeformRegistrations ? { typeformWebhookRegistrations: typeformRegistrations } : {}),
+    ...(tallyRegistrations ? { tallyWebhookRegistrations: tallyRegistrations } : {}),
+    ...(githubRegistrations ? { githubWebhookRegistrations: githubRegistrations } : {}),
+    ...(gitlabRegistrations ? { gitlabWebhookRegistrations: gitlabRegistrations } : {}),
+    ...(jiraRegistrations ? { jiraWebhookRegistrations: jiraRegistrations } : {}),
+    ...(linearRegistrations ? { linearWebhookRegistrations: linearRegistrations } : {}),
+    ...(trelloRegistrations ? { trelloWebhookRegistrations: trelloRegistrations } : {}),
+    ...(stripeRegistrations ? { stripeWebhookRegistrations: stripeRegistrations } : {}),
+    ...(shopifyRegistrations ? { shopifyWebhookRegistrations: shopifyRegistrations } : {}),
+  };
 }
 
 export async function dbProxyGet(req: Request, res: Response) {
@@ -275,7 +546,10 @@ export async function dbProxyPost(req: Request, res: Response) {
     if (table === 'workflows') {
       await subscriptionService.incrementWorkflowCount(userId);
     }
-    res.json({ data: rows[0] || null, error: null });
+    const row = table === 'workflows'
+      ? await attachTelegramWebhookRegistrationStatus(userId, rows[0] || null)
+      : rows[0] || null;
+    res.json({ data: row, error: null });
   } catch (err: any) {
     if (isDbUnavailable(err)) return res.status(503).json({ data: null, error: { message: 'Database temporarily unavailable' } });
     res.status(500).json({ data: null, error: { message: err.message } });
@@ -329,7 +603,10 @@ export async function dbProxyUpsert(req: Request, res: Response) {
     if (isWorkflowCreate && rows[0]) {
       await subscriptionService.incrementWorkflowCount(userId);
     }
-    res.json({ data: rows[0] || null, error: null });
+    const row = table === 'workflows'
+      ? await attachTelegramWebhookRegistrationStatus(userId, rows[0] || null)
+      : rows[0] || null;
+    res.json({ data: row, error: null });
   } catch (err: any) {
     if (isDbUnavailable(err)) return res.status(503).json({ data: null, error: { message: 'Database temporarily unavailable' } });
     res.status(500).json({ data: null, error: { message: err.message } });
@@ -378,7 +655,12 @@ export async function dbProxyPut(req: Request, res: Response) {
       [...vals, ...whereVals]
     );
     if (!rows[0]) return res.status(404).json({ data: null, error: { message: 'Not found' } });
-    res.json({ data: rows.length === 1 ? rows[0] : rows, error: null });
+    const data = table === 'workflows'
+      ? (rows.length === 1
+          ? await attachTelegramWebhookRegistrationStatus(userId, rows[0])
+          : await Promise.all(rows.map((row) => attachTelegramWebhookRegistrationStatus(userId, row))))
+      : (rows.length === 1 ? rows[0] : rows);
+    res.json({ data, error: null });
   } catch (err: any) {
     if (isDbUnavailable(err)) return res.status(503).json({ data: null, error: { message: 'Database temporarily unavailable' } });
     res.status(500).json({ data: null, error: { message: err.message } });

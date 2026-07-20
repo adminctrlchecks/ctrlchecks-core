@@ -53,6 +53,7 @@ export function isTriggerNodeLite(node: WorkflowNode): boolean {
     'manual_trigger', 'webhook', 'schedule', 'chat_trigger',
     'form_trigger', 'form', 'workflow_trigger', 'error_trigger',
     'interval', 'gmail_trigger', 'slack_trigger', 'discord_trigger',
+    'microsoft_teams_trigger', 'outlook_trigger', 'google_calendar_trigger', 'google_sheets_trigger', 'google_drive_trigger', 'typeform_trigger', 'tally_trigger', 'github_trigger', 'gitlab_trigger', 'jira_trigger', 'linear_trigger', 'trello_trigger', 'stripe_trigger', 'shopify_trigger',
   ];
   return knownTriggers.includes(nodeType);
 }

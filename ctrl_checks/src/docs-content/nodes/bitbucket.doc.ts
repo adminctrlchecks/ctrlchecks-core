@@ -1,189 +1,301 @@
-import type { NodeDoc } from '../types';
+import type { FieldDoc, NodeDoc, OperationDoc } from '../types';
+import { richFieldHelp } from './_sharedFieldHelp';
+
+const operationValues = ['read', 'create', 'update', 'delete'];
+
+const fields: FieldDoc[] = [
+  {
+    name: 'Operation',
+    internalKey: 'operation',
+    type: 'select',
+    required: true,
+    description: 'The Bitbucket repository operation to run.',
+    options: operationValues,
+    helpText: richFieldHelp({
+      what: 'The action selector for the Bitbucket override. read gets one repository when repoSlug is filled or lists workspace repositories when repoSlug is blank; create creates a repository; update updates repository metadata; delete deletes a repository.',
+      why: 'Runtime accepts only read, create, update, and delete for this node.',
+      when: 'Choose it before filling workspace, repoSlug, data, description, or isPrivate.',
+      enter: 'Select read, create, update, or delete.',
+      source: 'The workflow goal, such as inventorying repos, creating a project repo, updating its description, or deleting a temporary repo.',
+      later: 'Downstream nodes read {{$json.success}}, {{$json.output.operation}}, {{$json.output.data}}, or {{$json.error.message}}.',
+      format: `One of: ${operationValues.join(', ')}.`,
+      example: 'A project kickoff workflow selects create to create a private Bitbucket repo.',
+      empty: 'Runtime defaults to read.',
+      mistake: 'Using stale values such as create_pr or list_branches; those are not supported by this override.',
+    }),
+    defaultValue: 'read',
+    example: 'read',
+    notes: `Options: ${operationValues.join(', ')}.`,
+  },
+  {
+    name: 'Workspace',
+    internalKey: 'workspace',
+    type: 'string',
+    required: true,
+    description: 'Bitbucket workspace slug.',
+    helpText: richFieldHelp({
+      what: 'The Bitbucket workspace slug that owns the repository.',
+      why: 'Every runtime path starts with /repositories/{workspace}.',
+      when: 'Fill it for every operation unless you provide repo as workspace/repoSlug.',
+      enter: 'Use the workspace slug from bitbucket.org/WORKSPACE/repo-name or map {{$json.workspace}}.',
+      source: 'Bitbucket URL, workspace settings, or a previous provisioning step.',
+      later: 'The delete output echoes workspace, and read/create/update responses identify the repository location.',
+      format: 'Slug string with no URL, for example acme-platform.',
+      example: 'A DevOps workflow creates new repos under workspace acme-platform.',
+      empty: 'Runtime returns success false with BITBUCKET_FAILED and message workspace is required.',
+      mistake: 'Using your personal username when the repository belongs to a company workspace.',
+    }),
+    placeholder: 'acme-platform',
+    example: 'acme-platform',
+  },
+  {
+    name: 'Repository Slug',
+    internalKey: 'repoSlug',
+    type: 'string',
+    required: false,
+    description: 'Bitbucket repository slug.',
+    helpText: richFieldHelp({
+      what: 'The repository slug inside the workspace.',
+      why: 'create, update, and delete require repoSlug; read uses it to decide whether to read one repo or list all repos.',
+      when: 'Fill it for create, update, delete, or read-one-repository behavior.',
+      enter: 'Use the repo slug from bitbucket.org/workspace/REPO or map {{$json.repoSlug}}.',
+      source: 'Bitbucket repository URL, project setup form, or previous repo creation output.',
+      later: 'The delete output returns repoSlug; repository responses include slug/full_name fields in output.data.',
+      format: 'Slug string such as api-service, not the display name or full URL.',
+      example: 'A setup workflow creates repoSlug customer-portal-api for a new project.',
+      empty: 'read lists workspace repositories; create/update/delete fail with repoSlug is required.',
+      mistake: 'Putting workspace/repo in repoSlug; use either workspace plus repoSlug, or repo for the combined value.',
+    }),
+    placeholder: 'api-service',
+    example: 'api-service',
+  },
+  {
+    name: 'Repo',
+    internalKey: 'repo',
+    type: 'string',
+    required: false,
+    description: 'Optional combined workspace/repository value.',
+    helpText: richFieldHelp({
+      what: 'A backward-compatible combined repository value split as workspace/repoSlug by runtime.',
+      why: 'The override reads repo when workspace or repoSlug are not filled.',
+      when: 'Use it for legacy workflows or AI-generated configs that already provide owner/repo style values.',
+      enter: 'Use workspace/repository, for example acme-platform/api-service.',
+      source: 'Bitbucket full_name field, repository URL path, or older workflow configuration.',
+      later: 'Runtime splits it before the API call; output still appears under {{$json.output.data}}.',
+      format: 'Two slug parts separated by one slash.',
+      example: 'An imported workflow maps {{$json.full_name}} into repo instead of separate workspace/repoSlug fields.',
+      empty: 'No issue when workspace is filled; otherwise workspace is required.',
+      mistake: 'Entering a GitHub owner/repo value for a repository that does not exist in Bitbucket.',
+    }),
+    placeholder: 'acme-platform/api-service',
+    example: 'acme-platform/api-service',
+  },
+  {
+    name: 'Username',
+    internalKey: 'username',
+    type: 'string',
+    required: false,
+    description: 'Bitbucket username for Basic Auth.',
+    helpText: richFieldHelp({
+      what: 'The Bitbucket username used with App Password when accessToken is not supplied.',
+      why: 'Runtime builds Basic Auth from username and appPassword unless a Bearer accessToken is present.',
+      when: 'Fill it when using Bitbucket app password authentication.',
+      enter: 'Use the Bitbucket username from your profile URL or saved credential expression.',
+      source: 'Bitbucket Personal settings, profile URL, or the service node account connection.',
+      later: 'It authenticates the call only and is not returned in output.',
+      format: 'Plain username, usually not an email address.',
+      example: 'A repository bot account uses username release-bot with a repo write app password.',
+      empty: 'If no accessToken is provided, Basic Auth is sent with missing credentials and Bitbucket rejects it.',
+      mistake: 'Using an Atlassian email address when the username slug is different.',
+    }),
+    placeholder: 'release-bot',
+    example: 'release-bot',
+  },
+  {
+    name: 'App Password',
+    internalKey: 'appPassword',
+    type: 'password',
+    required: false,
+    description: 'Bitbucket app password for Basic Auth.',
+    helpText: richFieldHelp({
+      what: 'A Bitbucket app password paired with Username for Basic Auth.',
+      why: 'It authorizes repository read/write/delete calls when accessToken is blank.',
+      when: 'Fill it for app-password authentication, preferably from Connections or the credential vault.',
+      enter: 'Use a secure credential expression such as {{$credentials.bitbucket.appPassword}}.',
+      source: 'Bitbucket Personal settings -> App passwords, with repository read/write permissions.',
+      later: 'It is consumed for authentication and is not included in {{$json.output}}.',
+      format: 'Secret app password string.',
+      example: 'A DevOps workflow uses an app password with repository read/write scope to create project repos.',
+      empty: 'If accessToken is blank, Bitbucket returns an authentication error wrapped as BITBUCKET_FAILED.',
+      mistake: 'Using your Atlassian account password; Bitbucket app passwords are separate secrets.',
+    }),
+    placeholder: '{{$credentials.bitbucket.appPassword}}',
+    example: '{{$credentials.bitbucket.appPassword}}',
+  },
+  {
+    name: 'Access Token',
+    internalKey: 'accessToken',
+    type: 'password',
+    required: false,
+    description: 'Optional Bitbucket OAuth access token.',
+    helpText: richFieldHelp({
+      what: 'A Bitbucket OAuth access token used as a Bearer token.',
+      why: 'Runtime prefers accessToken over username/appPassword when it is present.',
+      when: 'Fill it when your Bitbucket connection uses OAuth rather than app passwords.',
+      enter: 'Use a secure credential expression such as {{$credentials.bitbucket.accessToken}}.',
+      source: 'Bitbucket OAuth connection, credential vault, or Atlassian/Bitbucket integration setup.',
+      later: 'It authenticates the request only and is not returned in output data.',
+      format: 'Secret OAuth access token string.',
+      example: 'A company workspace uses OAuth for repository automation and maps the saved access token.',
+      empty: 'Runtime falls back to Basic Auth with username/appPassword.',
+      mistake: 'Filling accessToken and stale username/appPassword for different accounts, then debugging the wrong identity.',
+    }),
+    placeholder: '{{$credentials.bitbucket.accessToken}}',
+    example: '{{$credentials.bitbucket.accessToken}}',
+  },
+  {
+    name: 'Description',
+    internalKey: 'description',
+    type: 'textarea',
+    required: false,
+    description: 'Repository description used by default create/update payload.',
+    helpText: richFieldHelp({
+      what: 'The repository description sent when Data JSON is blank.',
+      why: 'For create/update, runtime sends a default object with scm git, is_private, and description if data is not provided.',
+      when: 'Fill it for create or update when you do not provide a custom data object.',
+      enter: 'Type a short repository description or map {{$json.projectDescription}}.',
+      source: 'Project request form, ticket summary, product brief, or setup spreadsheet.',
+      later: 'The repository response in {{$json.output.data}} reflects the saved metadata returned by Bitbucket.',
+      format: 'Plain text.',
+      example: 'A project kickoff form maps "Backend API for customer portal" into Description.',
+      empty: 'The default payload sends description as empty/undefined depending on runtime inputs.',
+      mistake: 'Expecting Description to override fields inside Data JSON; when data is provided, runtime sends data instead.',
+    }),
+    placeholder: 'Backend API for customer portal',
+    example: 'Backend API for customer portal',
+  },
+  {
+    name: 'Private Repository',
+    internalKey: 'isPrivate',
+    type: 'boolean',
+    required: false,
+    description: 'Default create/update privacy flag.',
+    helpText: richFieldHelp({
+      what: 'A true/false flag used as is_private in the default create/update payload.',
+      why: 'It determines whether a created repository should be private when no custom Data JSON is supplied.',
+      when: 'Fill it for create or update when using the default payload.',
+      enter: 'Use true for private repositories or false for public repositories.',
+      source: 'Project security policy, form selection, or fixed organization default.',
+      later: 'Bitbucket returns repository privacy metadata in {{$json.output.data}}.',
+      format: 'Boolean true or false.',
+      example: 'Customer implementation repos are created with isPrivate true.',
+      empty: 'Runtime defaults is_private to true in the default payload.',
+      mistake: 'Supplying Data JSON and expecting this switch to also be merged into that custom body; it is not merged.',
+    }),
+    defaultValue: 'true',
+    example: 'true',
+  },
+  {
+    name: 'Data',
+    internalKey: 'data',
+    type: 'json',
+    required: false,
+    description: 'Optional raw create/update request body.',
+    helpText: richFieldHelp({
+      what: 'A custom JSON body for create/update repository requests.',
+      why: 'When data is provided, runtime sends it instead of the default { scm: "git", is_private, description } object.',
+      when: 'Fill it only when you need advanced Bitbucket repository fields beyond description and privacy.',
+      enter: 'Use an object such as {"scm":"git","is_private":true,"description":"Project repo"} or map {{$json.bitbucketRepoData}}.',
+      source: 'Provisioning form, DevOps template, or a previous transformation step that builds the repository payload.',
+      later: 'The created/updated repository response appears in {{$json.output.data}}.',
+      format: 'JSON object. The runtime expects an object-shaped value; a JSON string may be stringified again depending on UI parsing.',
+      example: 'A platform workflow sends {"scm":"git","is_private":true,"project":{"key":"ENG"}} for engineering repos.',
+      empty: 'Runtime uses the default payload with scm git, is_private, and description.',
+      mistake: 'Providing Data JSON as a quoted string instead of an object value.',
+    }),
+    placeholder: '{"scm":"git","is_private":true,"description":"Project repo"}',
+    example: '{"scm":"git","is_private":true,"description":"Project repo"}',
+  },
+];
+
+const makeOperation = (name: string, value: string, description: string): OperationDoc => ({
+  name,
+  value,
+  description: `${description} Use this operation only for repository-level Bitbucket automation; this node does not implement pull request, branch, commit, issue, or pipeline actions.`,
+  fields,
+  outputExample: {
+    success: true,
+    output: {
+      operation: value,
+      data: value === 'delete' ? { deleted: true, workspace: 'acme-platform', repoSlug: 'api-service' } : { slug: 'api-service', full_name: 'acme-platform/api-service' },
+    },
+  },
+  outputDescription: 'success is true when the override completes. output.operation echoes read/create/update/delete. output.data contains the Bitbucket repository API response, repository list response, or delete confirmation with deleted/workspace/repoSlug. On failure, success is false and error contains code BITBUCKET_FAILED plus message.',
+  usageExample: {
+    scenario: `Run ${name} from a DevOps provisioning workflow that manages Bitbucket repositories.`,
+    inputValues: {
+      operation: value,
+      workspace: 'acme-platform',
+      repoSlug: 'api-service',
+    },
+    expectedOutput: 'Use {{$json.output.data.full_name}} after create/read/update, or {{$json.error.message}} when {{$json.success}} is false.',
+  },
+  externalDocsUrl: 'https://developer.atlassian.com/cloud/bitbucket/rest/api-group-repositories/',
+});
 
 export const bitbucketDoc: NodeDoc = {
-  "slug": "bitbucket",
-  "displayName": "Bitbucket",
-  "category": "Data",
-  "logoUrl": "/icons/nodes/bitbucket.svg",
-  "description": "Bitbucket repository operations",
-  "credentialType": "Atlassian API Key",
-  "credentialSetupSteps": [
-    "What this is: The Bitbucket connection lets CtrlChecks access your Bitbucket account safely without putting secrets in workflow fields.",
-    "Where to start: Bitbucket account settings or developer settings.",
-    "How to connect: In CtrlChecks, open Connections -> Add Connection -> Bitbucket, then sign in or paste the secret value requested there.",
-    "Example: the token format shown by Bitbucket.",
-    "Important: Treat tokens, passwords, API keys, and client secrets like bank passwords. Store them in Connections, not in regular workflow fields.",
-    "Test it: Save the connection, run a simple Bitbucket step, and confirm CtrlChecks can reach the account."
+  slug: 'bitbucket',
+  displayName: 'Bitbucket',
+  category: 'DevOps',
+  logoUrl: '/icons/nodes/bitbucket.svg',
+  description: 'Reads, creates, updates, and deletes Bitbucket repositories through the Bitbucket Cloud repositories API.',
+  credentialType: 'Bitbucket app password or OAuth access token',
+  credentialSetupSteps: [
+    'Use a Bitbucket app password with username or a Bitbucket OAuth access token stored in Connections, the credential system, or the credential vault.',
+    'For app passwords, create one in Bitbucket Personal settings -> App passwords with repository read/write permissions for the operations you plan to run.',
+    'For OAuth, store the accessToken in the Bitbucket service node account connection; runtime prefers Bearer accessToken when present.',
+    'Do not store Atlassian login passwords in normal workflow fields. The service node account connection is for repository read, create, update, and delete calls.',
+    'Connect the output to the next service node with an outgoing line, then map {{$json.output.data.full_name}}, {{$json.output.operation}}, or {{$json.error.message}}.',
   ],
-  "credentialDocsUrl": "https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/",
-  "resources": [
+  credentialDocsUrl: 'https://support.atlassian.com/bitbucket-cloud/docs/app-passwords/',
+  resources: [
     {
-      "name": "Operations",
-      "description": "Bitbucket exposes operation choices directly.",
-      "operations": [
-        {
-          "name": "Create",
-          "value": "create",
-          "description": "Create using the Bitbucket node.",
-          "fields": [
-            {
-              "name": "Repo",
-              "internalKey": "repo",
-              "type": "string",
-              "required": false,
-              "description": "Repository name",
-              "helpText": "What this field is: The Repository name that tells Bitbucket which item to use.\nWhere to find it: Open the item in Bitbucket and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: owner/repo.\nTip: Use {{$json.repo}} when an earlier Bitbucket step provides this value.",
-              "placeholder": "owner/repo",
-              "example": "owner/repo"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming Bitbucket data with create after a related upstream event is received",
-            "inputValues": {
-              "Repo": "owner/repo"
-            },
-            "expectedOutput": "Bitbucket returns structured create data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://developer.atlassian.com/cloud/bitbucket/rest/intro/"
-        },
-        {
-          "name": "Read",
-          "value": "read",
-          "description": "Read using the Bitbucket node.",
-          "fields": [
-            {
-              "name": "Repo",
-              "internalKey": "repo",
-              "type": "string",
-              "required": false,
-              "description": "Repository name",
-              "helpText": "What this field is: The Repository name that tells Bitbucket which item to use.\nWhere to find it: Open the item in Bitbucket and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: owner/repo.\nTip: Use {{$json.repo}} when an earlier Bitbucket step provides this value.",
-              "placeholder": "owner/repo",
-              "example": "owner/repo"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming Bitbucket data with read after a related upstream event is received",
-            "inputValues": {
-              "Repo": "owner/repo"
-            },
-            "expectedOutput": "Bitbucket returns structured read data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://developer.atlassian.com/cloud/bitbucket/rest/intro/"
-        },
-        {
-          "name": "Update",
-          "value": "update",
-          "description": "Update using the Bitbucket node.",
-          "fields": [
-            {
-              "name": "Repo",
-              "internalKey": "repo",
-              "type": "string",
-              "required": false,
-              "description": "Repository name",
-              "helpText": "What this field is: The Repository name that tells Bitbucket which item to use.\nWhere to find it: Open the item in Bitbucket and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: owner/repo.\nTip: Use {{$json.repo}} when an earlier Bitbucket step provides this value.",
-              "placeholder": "owner/repo",
-              "example": "owner/repo"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming Bitbucket data with update after a related upstream event is received",
-            "inputValues": {
-              "Repo": "owner/repo"
-            },
-            "expectedOutput": "Bitbucket returns structured update data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://developer.atlassian.com/cloud/bitbucket/rest/intro/"
-        },
-        {
-          "name": "Delete",
-          "value": "delete",
-          "description": "Delete using the Bitbucket node.",
-          "fields": [
-            {
-              "name": "Repo",
-              "internalKey": "repo",
-              "type": "string",
-              "required": false,
-              "description": "Repository name",
-              "helpText": "What this field is: The Repository name that tells Bitbucket which item to use.\nWhere to find it: Open the item in Bitbucket and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: owner/repo.\nTip: Use {{$json.repo}} when an earlier Bitbucket step provides this value.",
-              "placeholder": "owner/repo",
-              "example": "owner/repo"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming Bitbucket data with delete after a related upstream event is received",
-            "inputValues": {
-              "Repo": "owner/repo"
-            },
-            "expectedOutput": "Bitbucket returns structured delete data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://developer.atlassian.com/cloud/bitbucket/rest/intro/"
-        }
-      ]
-    }
+      name: 'Repositories',
+      description: 'The Bitbucket override only supports repository read/create/update/delete. It does not implement pull request, branch, commit, or issue operations in this node.',
+      operations: [
+        makeOperation('Read Repository or Workspace Repositories', 'read', 'Reads one repository when repoSlug is filled; when repoSlug is blank it lists repositories in the workspace.'),
+        makeOperation('Create Repository', 'create', 'Creates a repository at workspace/repoSlug. When Data is blank, runtime sends scm git, is_private, and description.'),
+        makeOperation('Update Repository', 'update', 'Updates repository metadata at workspace/repoSlug. Data replaces the default payload when supplied.'),
+        makeOperation('Delete Repository', 'delete', 'Deletes one repository by workspace and repoSlug, then returns a delete confirmation object.'),
+      ],
+    },
   ],
-  "commonErrors": [
+  commonErrors: [
     {
-      "error": "Authentication failed",
-      "cause": "The saved credential, token, API key, or OAuth grant is missing, expired, or lacks the required scope.",
-      "fix": "Reconnect the service in CtrlChecks → Connections, then re-run the Bitbucket node."
+      error: 'workspace is required',
+      cause: 'Neither Workspace nor the first part of Repo provided a workspace slug.',
+      fix: 'Fill workspace with the Bitbucket workspace slug or provide repo as workspace/repoSlug.',
     },
     {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
+      error: 'repoSlug is required',
+      cause: 'create, update, or delete was selected without a repository slug.',
+      fix: 'Fill Repository Slug or provide repo as workspace/repoSlug.',
     },
     {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
+      error: 'Unsupported Bitbucket operation',
+      cause: 'The node received an operation other than read, create, update, or delete.',
+      fix: 'Use the visible dropdown values and avoid stale PR/branch/commit operation names.',
+    },
+    {
+      error: 'BITBUCKET_FAILED',
+      cause: 'The override wraps workspace, repoSlug, auth, network, and API failures with this error code.',
+      fix: 'Inspect error.message, then verify credentials, permissions, workspace, repoSlug, and the Bitbucket API response.',
+    },
+    {
+      error: 'Data JSON must be an object',
+      cause: 'The UI or upstream expression supplied a string instead of an object-shaped payload for create/update.',
+      fix: 'Use a JSON object value such as {"scm":"git","is_private":true}, or leave Data blank for the default payload.',
+    },
   ],
-  "relatedNodes": []
+  relatedNodes: ['github', 'gitlab', 'jira'],
 };

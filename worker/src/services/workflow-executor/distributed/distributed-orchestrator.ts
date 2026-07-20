@@ -10,6 +10,7 @@
 import type { DbClient } from '@db/db-js';
 import type { WorkflowEdge } from '../../../core/types/ai-types';
 import { resolveWinningSwitchEdgeId } from '../../../core/execution/switch-branch-router';
+import { normalizeExecutionStatus } from '../../../core/execution/execution-db-enums';
 import { QueueClient, NodeJob } from './queue-client';
 import { StorageManager } from './storage-manager';
 
@@ -90,7 +91,7 @@ export class DistributedOrchestrator {
         .from('executions')
         .insert({
           workflow_id: workflowIdForExecution,
-          status: 'pending',
+          status: normalizeExecutionStatus('pending'),
           // Bug 1 fix: include user_id so db-proxy user-scoped queries can find this record.
           // Falls back to undefined (omitted) if no userId is available, preserving
           // backward-compatibility for any non-authenticated call paths.
@@ -152,7 +153,7 @@ export class DistributedOrchestrator {
       await this.db
         .from('executions')
         .update({
-          status: 'running',
+          status: normalizeExecutionStatus('running'),
           updated_at: new Date().toISOString(),
         })
         .eq('id', executionId);
@@ -607,7 +608,7 @@ export class DistributedOrchestrator {
       await this.db
         .from('executions')
         .update({
-          status: 'failed',
+          status: normalizeExecutionStatus('failed'),
           error_message: `Node ${nodeId} failed after ${maxRetries} retries: ${error}`,
           completed_at: new Date().toISOString(),
           last_heartbeat: new Date().toISOString(),
@@ -673,7 +674,7 @@ export class DistributedOrchestrator {
     await this.db
       .from('executions')
       .update({
-        status: 'completed',
+        status: normalizeExecutionStatus('completed'),
         output: outputRefs,
         completed_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),

@@ -350,6 +350,32 @@ export function mapWorkflowIssueToGuidance(input: WorkflowIssueInput): GuidedSta
     return buildReadinessGuidance(payload, message);
   }
 
+  if (code === 'TOPOLOGY_MUTATION_BLOCKED_CONFIGURING_INPUTS') {
+    const details = toRecord(payload.details);
+    const drifts = Array.isArray(details.drifts) ? (details.drifts as Record<string, unknown>[]) : [];
+    if (drifts.length > 0) {
+      const items = drifts.map((d) => {
+        const label = getString(d.nodeLabel) || getString(d.nodeType) || 'This node';
+        const field = humanizeKey(getString(d.field));
+        return `${label} → ${field}`;
+      });
+      const itemList = items.join(', ');
+      const nodeNames = [...new Set(drifts.map((d) => getString(d.nodeLabel) || getString(d.nodeType)).filter(Boolean))];
+      const nodeHint = nodeNames.length > 0 ? ` Open the ${nodeNames.join(' or ')} node to review it.` : '';
+      return {
+        title: 'This structure is locked',
+        description: `${itemList} changed shape after this workflow was frozen, so it can't be saved as-is.${nodeHint}`,
+        resolution: 'Add a new field or case instead of renaming/retyping an existing one, or undo this change and save again.',
+        nextSteps: [
+          nodeNames.length > 0 ? `Open the ${nodeNames.join(' or ')} node on the canvas` : 'Open the node that changed',
+          `Undo the structural change to: ${itemList}`,
+          'Save again — editing labels, options, or other values on existing fields is always allowed',
+        ],
+        tone: 'configuration',
+      };
+    }
+  }
+
   // Safety-net: if details carry concrete missing items, always show readiness guidance
   // regardless of error code — prevents fallback from masking real structured data.
   const safetyDetails = toRecord(payload.details);

@@ -1,0 +1,223 @@
+# Implementation Plan: Instagram & WhatsApp Full Nodes
+
+## Overview
+
+Implement WhatsApp and Instagram automation nodes as first-class citizens in the unified registry. The order is: shared types → token managers → executor classes → registry registration → dispatcher integration → tests.
+
+## Tasks
+
+- [x] 1. Extend shared types
+  - [x] 1.1 Extend `MetaApiError` interface and widen `SocialProvider` union in `worker/src/services/social/types.ts`
+    - Add `fbtrace_id?: string` and `userMessage: string` to `MetaApiError`
+    - Widen `SocialProvider` to include `'whatsapp' | 'instagram'`
+    - _Requirements: 14.1, 14.2, 16.1_
+
+- [x] 2. Implement webhook signature utility
+  - [x] 2.1 Create `worker/src/services/social/meta-webhook-verifier.ts`
+    - Export `verifyMetaWebhookSignature(appSecret: string, rawBody: Buffer, signatureHeader: string): boolean`
+    - Use Node.js `crypto.createHmac('sha256', appSecret)` and constant-time comparison
+    - _Requirements: 7.5, 13.6_
+  - [ ]* 2.2 Write unit tests for `meta-webhook-verifier` in `worker/src/services/social/__tests__/meta-webhook-verifier.test.ts`
+    - Test accept on valid HMAC, reject on tampered body, reject on wrong secret
+    - _Requirements: 7.5, 13.6_
+
+- [x] 3. Implement WhatsApp token manager
+  - [x] 3.1 Create `worker/src/shared/whatsapp-token-manager.ts`
+    - Export `getWhatsAppAccessToken(supabase, userIds): Promise<string | null>`
+    - Implement token retrieval from `whatsapp_oauth_tokens` table via `credential-vault.ts`
+    - Implement refresh via `fb_exchange_token` grant when token expires within 5 minutes
+    - Return `null` on refresh failure
+    - _Requirements: 15.1, 15.3, 15.4_
+
+- [x] 4. Implement Instagram token manager
+  - [x] 4.1 Create `worker/src/shared/instagram-token-manager.ts`
+    - Export `getInstagramAccessToken(supabase, userIds): Promise<string | null>`
+    - Export `getInstagramBusinessAccountId(accessToken): Promise<string>`
+    - Implement token retrieval from `instagram_oauth_tokens` table via `credential-vault.ts`
+    - Implement refresh via `fb_exchange_token` grant when token expires within 5 minutes
+    - Return `null` on refresh failure
+    - _Requirements: 15.2, 15.3, 15.4, 15.7_
+
+- [x] 5. Implement WhatsApp executor
+  - [x] 5.1 Create `worker/src/services/social/whatsapp-node.ts` with `WhatsAppNode` class skeleton
+    - Define `WhatsAppNodeParams` and `WhatsAppNodeResult` interfaces
+    - Implement constructor `(accessToken: string, supabase: any)`
+    - Implement private `callMetaApi(path, method, body?)` using `fetch` against `https://graph.facebook.com/v18.0`
+    - Implement private `parseMetaError(error): MetaApiError` mapping codes 190, 10, 200–299, 131030, 368
+    - Implement private `resolvePhoneNumberId(params)` calling `GET /me/phone_numbers` when `phoneNumberId` absent
+    - Implement private `resolveBusinessAccountId(params)` when `businessAccountId` absent
+    - _Requirements: 1.3, 15.1, 15.6, 16.1, 16.2, 16.4, 16.5, 16.6_
+  - [x] 5.2 Implement `message` resource operations in `WhatsAppNode.execute()`
+    - `sendText`: `POST /{phoneNumberId}/messages` with `type: "text"`
+    - `sendMedia`: `POST /{phoneNumberId}/messages` with image/video/audio/document/sticker type
+    - `sendLocation`: `POST /{phoneNumberId}/messages` with `type: "location"`
+    - `sendContact`: `POST /{phoneNumberId}/messages` with `type: "contacts"`
+    - `sendTemplate`: `POST /{phoneNumberId}/messages` with `type: "template"`, reject non-APPROVED templates
+    - `sendInteractiveButtons`: `POST /{phoneNumberId}/messages` with `interactive.type: "button"`
+    - `sendInteractiveList`: `POST /{phoneNumberId}/messages` with `interactive.type: "list"`
+    - `sendInteractiveCTA`: `POST /{phoneNumberId}/messages` with `interactive.type: "cta_url"`
+    - `markAsRead`: `POST /{phoneNumberId}/messages` with `status: "read"`
+    - _Requirements: 2.1–2.10_
+  - [x] 5.3 Implement `contact`, `conversation`, `template`, `campaign`, and `aiAgent` resource operations
+    - `contact`: create, update, delete, search, addLabel, removeLabel
+    - `conversation`: list, get, close, archive, markAsRead
+    - `template`: list (`GET /{waba_id}/message_templates`), get, create, delete
+    - `campaign.create`: iterate recipients, send template to each, return `{ sent, failed, total }`; reject non-APPROVED templates
+    - `campaign.list`: return campaigns with delivery stats
+    - `aiAgent`: enable, disable, getSuggestions
+    - _Requirements: 3.1–3.6, 4.1–4.5, 5.1–5.7, 6.1–6.3_
+  - [ ]* 5.4 Write unit tests for `WhatsAppNode` in `worker/src/services/social/__tests__/whatsapp-node.test.ts`
+    - One test per operation verifying endpoint, HTTP method, and payload shape using `jest.spyOn(global, 'fetch')`
+    - Test non-APPROVED template rejection (no fetch call made)
+    - Test error code mapping (190, 10, 131030)
+    - _Requirements: 2.1–2.10, 5.7, 16.5, 16.6_
+
+- [x] 6. Implement Instagram executor
+  - [x] 6.1 Create `worker/src/services/social/instagram-node.ts` with `InstagramNode` class skeleton
+    - Define `InstagramNodeParams` and `InstagramNodeResult` interfaces
+    - Implement constructor `(accessToken: string, supabase: any)`
+    - Implement private `callMetaApi(path, method, body?)` against `https://graph.facebook.com/v18.0`
+    - Implement private `parseMetaError(error): MetaApiError`
+    - Implement private `resolveIgUserId(params)` calling `getInstagramBusinessAccountId()` when absent
+    - Implement private `pollContainerStatus(containerId, maxPolls = 10)`: poll `GET /{containerId}?fields=status_code` with 5 s interval, stop at `FINISHED`/`ERROR`/`EXPIRED` or after 10 polls
+    - _Requirements: 8.3, 10.2, 10.7, 10.8, 15.2, 15.7, 16.1, 16.2_
+  - [x] 6.2 Implement `message` resource operations in `InstagramNode.execute()`
+    - `sendText`: `POST /{igUserId}/messages` with `recipient.id` and `message.text`
+    - `sendMedia`: `POST /{igUserId}/messages` with `message.attachment`
+    - `sendTemplate`: `POST /{igUserId}/messages` with generic template payload
+    - Enforce 7-day messaging window check; return descriptive error if expired
+    - _Requirements: 9.1–9.5_
+  - [x] 6.3 Implement `media` resource operations
+    - `createAndPublish` for `IMAGE`: create container then publish
+    - `createAndPublish` for `VIDEO`/`REELS`: create container, poll until `FINISHED`, then publish
+    - `createAndPublish` for `CAROUSEL_ALBUM`: create N item containers, create carousel container, publish (N+2 total API calls)
+    - Include `user_tags`, `product_tags`, `location_id` when provided
+    - Return error immediately on `ERROR`/`EXPIRED` container status without calling `media_publish`
+    - `get`: `GET /{mediaId}?fields=id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count`
+    - _Requirements: 10.1–10.8_
+  - [x] 6.4 Implement `comment`, `user`, `insights`, and `hashtag` resource operations
+    - `comment`: list, hide, unhide, delete, reply, replyDM
+    - `user.get`: `GET /{igUserId}?fields=id,username,biography,followers_count,media_count,profile_picture_url,website`
+    - `user.getMedia`: `GET /{igUserId}/media`
+    - `insights.get`: `GET /{igUserId}/insights` with `metric` and `period`
+    - `hashtag.search`: `GET /ig_hashtag_search?user_id={igUserId}&q={hashtag}`
+    - `hashtag.getRecentMedia`: `GET /{hashtagId}/recent_media?user_id={igUserId}`
+    - _Requirements: 11.1–11.6, 12.1–12.6_
+  - [ ]* 6.5 Write unit tests for `InstagramNode` in `worker/src/services/social/__tests__/instagram-node.test.ts`
+    - One test per operation verifying endpoint, HTTP method, and payload shape using `jest.spyOn(global, 'fetch')`
+    - Test carousel N+2 call count
+    - Test polling termination at 10 polls
+    - Test ERROR/EXPIRED container blocks publish
+    - _Requirements: 9.1–9.5, 10.1–10.8, 11.1–11.6, 12.1–12.6_
+
+- [x] 7. Checkpoint — Ensure all executor tests pass
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 8. Register nodes in the unified registry
+  - [x] 8.1 Add `whatsappNodeDefinition` to `worker/src/core/registry/unified-node-registry.ts`
+    - `type: 'whatsapp'`, `category: 'communication'`, `isBranching: false`
+    - `incomingPorts: ['default']`, `outgoingPorts: ['default']`
+    - Complete `inputSchema` covering all fields from the design data model
+    - `outputSchema` with `default` port shape
+    - `credentialSchema` with `provider: 'facebook'`, scopes `whatsapp_business_messaging, whatsapp_business_management`
+    - `defaultConfig()` returning valid defaults for every input field
+    - `execute()` delegating to `Social_Dispatcher` via `executeSocialNode({ provider: 'whatsapp', ...config })`
+    - _Requirements: 1.1–1.6, 17.1_
+  - [x] 8.2 Add `instagramNodeDefinition` to `worker/src/core/registry/unified-node-registry.ts`
+    - `type: 'instagram'`, `category: 'communication'`, `isBranching: false`
+    - `incomingPorts: ['default']`, `outgoingPorts: ['default']`
+    - Complete `inputSchema` covering all fields from the design data model
+    - `outputSchema` with `default` port shape
+    - `credentialSchema` with `provider: 'facebook'`, scopes `instagram_basic, instagram_content_publish, instagram_manage_messages, pages_show_list`
+    - `defaultConfig()` returning valid defaults for every input field
+    - `execute()` delegating to `Social_Dispatcher`
+    - _Requirements: 8.1–8.6, 17.1_
+  - [x] 8.3 Add `whatsappTriggerDefinition` to `worker/src/core/registry/unified-node-registry.ts`
+    - `type: 'whatsapp_trigger'`, `category: 'trigger'`, `isBranching: false`
+    - `incomingPorts: []`, `outgoingPorts: ['default']`
+    - `event` field accepting `message.received`, `message.sent`, `message.delivered`, `message.read`, `conversation.created`, `conversation.handoff`
+    - Output schema for each event type per design
+    - _Requirements: 7.1–7.4, 17.2_
+  - [x] 8.4 Add `instagramTriggerDefinition` to `worker/src/core/registry/unified-node-registry.ts`
+    - `type: 'instagram_trigger'`, `category: 'trigger'`, `isBranching: false`
+    - `incomingPorts: []`, `outgoingPorts: ['default']`
+    - `event` field accepting `message.received`, `comment.created`, `mention.created`, `postback`
+    - Output schema for each event type per design
+    - _Requirements: 13.1–13.5, 17.2_
+  - [ ]* 8.5 Write registry structural tests in `worker/src/core/registry/__tests__/whatsapp-instagram-registry.test.ts`
+    - Assert `unifiedNodeRegistry.get('whatsapp')` and `unifiedNodeRegistry.get('instagram')` return non-undefined
+    - Assert `isBranching`, `incomingPorts`, `outgoingPorts`, `category`, `credentialSchema.provider` for all four node types
+    - Assert `defaultConfig()` returns an object with every key in `inputSchema`
+    - Assert `validateWorkflow()` returns zero errors for a minimal workflow containing a `whatsapp` action node and a `whatsapp_trigger`
+    - _Requirements: 1.6, 8.6, 17.3_
+
+- [x] 9. Extend Social Dispatcher
+  - [x] 9.1 Add `whatsapp` and `instagram` cases to `executeSocialNode()` in `worker/src/services/social/social-dispatcher.ts`
+    - `case 'whatsapp'`: retrieve token via `getWhatsAppAccessToken`, return token-missing error if null, call `new WhatsAppNode(token, supabase).execute(config)`
+    - `case 'instagram'`: retrieve token via `getInstagramAccessToken`, return token-missing error if null, call `new InstagramNode(token, supabase).execute(config)`
+    - Wrap each case in try/catch; on exception return `{ success: false, error: e.message }`
+    - Do NOT use `if (node.type === ...)` — routing is driven by `config.provider` only
+    - _Requirements: 14.1–14.5_
+
+- [x] 10. Property-based tests
+  - [ ]* 10.1 Write property test for Property 1 — Registry defaultConfig completeness
+    - For `'whatsapp'` and `'instagram'`, assert `defaultConfig()` contains every key in `inputSchema`
+    - **Property 1: Registry defaultConfig completeness**
+    - **Validates: Requirements 1.2, 8.2**
+  - [ ]* 10.2 Write property test for Property 2 — WhatsApp message payload shape
+    - For arbitrary `(to, text, phoneNumberId)`, assert constructed payload has correct `type` field and all required fields
+    - **Property 2: WhatsApp message payload shape**
+    - **Validates: Requirements 2.1–2.8**
+  - [ ]* 10.3 Write property test for Property 3 — Meta API error structure preservation
+    - For arbitrary `(code, message, fbtrace_id)`, assert error object preserves all three fields and contains no access token
+    - **Property 3: Meta API error structure preservation**
+    - **Validates: Requirements 2.10, 9.4, 16.1, 16.2**
+  - [ ]* 10.4 Write property test for Property 4 — Campaign recipient coverage
+    - For arbitrary recipient list of size N, assert `sent + failed === N`
+    - **Property 4: Campaign recipient coverage**
+    - **Validates: Requirements 5.5**
+  - [ ]* 10.5 Write property test for Property 5 — Non-APPROVED template rejection
+    - For any template status that is not `'APPROVED'`, assert `sendTemplate` returns error and makes zero fetch calls
+    - **Property 5: Non-APPROVED template rejection**
+    - **Validates: Requirements 5.7**
+  - [ ]* 10.6 Write property test for Property 6 — Webhook HMAC-SHA256 verification
+    - For arbitrary `(secret, body)`, assert `verifyMetaWebhookSignature` returns true iff header equals `sha256=HMAC-SHA256(secret, body)`
+    - **Property 6: Webhook HMAC-SHA256 verification**
+    - **Validates: Requirements 7.5, 13.6**
+  - [ ]* 10.7 Write property test for Property 8 — Instagram video container polling termination
+    - For a container that never reaches FINISHED, assert exactly 10 polls then timeout error
+    - For a container that finishes on poll k ≤ 10, assert exactly k polls
+    - **Property 8: Instagram video container polling termination**
+    - **Validates: Requirements 10.2, 10.8**
+  - [ ]* 10.8 Write property test for Property 9 — Instagram carousel item count
+    - For N item URLs, assert exactly N+2 API calls (N item containers + 1 carousel + 1 publish)
+    - **Property 9: Instagram carousel item count**
+    - **Validates: Requirements 10.3**
+  - [ ]* 10.9 Write property test for Property 10 — ERROR/EXPIRED container blocks publish
+    - For any container returning ERROR or EXPIRED, assert zero calls to `media_publish`
+    - **Property 10: ERROR/EXPIRED container blocks publish**
+    - **Validates: Requirements 10.7**
+  - [ ]* 10.10 Write property test for Property 11 — Dispatcher token-missing error
+    - For any whatsapp/instagram config where token lookup returns null, assert `success: false` with reconnect message
+    - **Property 11: Dispatcher token-missing error**
+    - **Validates: Requirements 14.3**
+  - [ ]* 10.11 Write property test for Property 12 — Dispatcher exception containment
+    - For any exception thrown by executor, assert dispatcher returns `success: false` and does not propagate
+    - **Property 12: Dispatcher exception containment**
+    - **Validates: Requirements 14.5**
+  - [ ]* 10.12 Write property test for Property 13 — Validation error completeness
+    - For any config missing k ≥ 1 required fields, assert `errors.length >= k` and each missing field is named
+    - **Property 13: Validation error completeness**
+    - **Validates: Requirements 16.3**
+  - All property tests go in `worker/src/services/social/__tests__/whatsapp-instagram.property.test.ts` using **fast-check**, minimum 100 iterations per property
+
+- [x] 11. Final checkpoint — Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.
+
+## Notes
+
+- Tasks marked with `*` are optional and can be skipped for faster MVP
+- All four node types (`whatsapp`, `instagram`, `whatsapp_trigger`, `instagram_trigger`) must be registered in `unified-node-registry.ts` — no hardcoded `if (node.type === ...)` logic anywhere outside the registry
+- All edge operations go through `unifiedGraphOrchestrator` — never mutate `workflow.edges` directly
+- Access tokens and `FACEBOOK_APP_SECRET` must never appear in logs, error messages, or returned data
+- Property tests use fast-check (already present in the codebase at `worker/src/services/__tests__/credential-gate.property.test.ts`)

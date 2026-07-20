@@ -203,7 +203,7 @@ export function validateWorkflow(nodes: Node[], edges: Edge[]): WorkflowValidati
         const isTrigger = category.toLowerCase() === 'triggers' || 
                          category.toLowerCase() === 'trigger' ||
                          nodeType.includes('trigger') ||
-                         ['manual_trigger', 'webhook', 'webhook_trigger_response', 'schedule', 'chat_trigger',
+                         ['manual_trigger', 'webhook', 'webhook_trigger_response', 'schedule', 'chat_trigger', 'telegram_trigger', 'whatsapp_trigger', 'instagram_trigger', 'facebook_trigger',
                          'error_trigger', 'interval', 'workflow_trigger', 'http_trigger', 'form_trigger', 'form'].includes(nodeType);
         
         if (isTrigger) {
@@ -358,14 +358,25 @@ function resolveNodeTypeAlias(nodeType: string, validNodeTypes: Set<string>): st
         'slack_webhook': 'slack_webhook',
         'telegram': 'telegram',
         'telegram_send': 'telegram',
+        'telegram_trigger': 'telegram_trigger',
+        'telegram_webhook': 'telegram_trigger',
         'discord': 'discord',
         'discord_send': 'discord',
         'discord_webhook': 'discord_webhook',
         'teams': 'microsoft_teams',
         'ms_teams': 'microsoft_teams',
         'microsoft_teams': 'microsoft_teams',
-        'whatsapp': 'whatsapp_cloud',
+        'whatsapp': 'whatsapp',
         'whatsapp_cloud': 'whatsapp_cloud',
+        'whatsapp_trigger': 'whatsapp_trigger',
+        'instagram_trigger': 'instagram_trigger',
+        'instagram_webhook': 'instagram_trigger',
+        'instagram_dm_trigger': 'instagram_trigger',
+        'facebook_trigger': 'facebook_trigger',
+        'facebook_webhook': 'facebook_trigger',
+        'messenger_trigger': 'facebook_trigger',
+        'facebook_messenger_trigger': 'facebook_trigger',
+        'facebook_comment_trigger': 'facebook_trigger',
         'twilio': 'twilio',
         'sms': 'twilio',
 
@@ -622,7 +633,7 @@ export function validateAndFixWorkflow(
         return category.toLowerCase() === 'triggers' ||
                category.toLowerCase() === 'trigger' ||
                nodeType.includes('trigger') ||
-               ['manual_trigger', 'webhook', 'schedule', 'interval', 'form', 'chat_trigger', 'workflow_trigger'].includes(nodeType);
+               ['manual_trigger', 'webhook', 'schedule', 'interval', 'form', 'chat_trigger', 'telegram_trigger', 'whatsapp_trigger', 'instagram_trigger', 'facebook_trigger', 'workflow_trigger'].includes(nodeType);
     };
 
     let linearNodes = regeneratedNodes;
@@ -1102,7 +1113,7 @@ export function validateAndFixWorkflow(
             const category = String(n?.data?.category || '').toLowerCase();
             return category === 'triggers' || category === 'trigger' ||
                 t.includes('trigger') ||
-                ['manual_trigger', 'webhook', 'schedule', 'interval', 'form', 'chat_trigger', 'workflow_trigger', 'error_trigger'].includes(t);
+                ['manual_trigger', 'webhook', 'schedule', 'interval', 'form', 'chat_trigger', 'telegram_trigger', 'whatsapp_trigger', 'instagram_trigger', 'facebook_trigger', 'workflow_trigger', 'error_trigger'].includes(t);
         };
 
         const nodeById = new Map<string, any>(nodes.map((n: any) => [n.id, n]));

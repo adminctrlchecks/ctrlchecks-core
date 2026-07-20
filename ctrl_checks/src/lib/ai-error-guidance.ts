@@ -43,6 +43,13 @@ export interface AIGuidanceWorkflowContext {
     previousNodeLabel?: string;
     previousNodeType?: string;
   }>;
+  structuralDrifts?: Array<{
+    nodeId?: string;
+    nodeLabel?: string;
+    nodeType?: string;
+    field: string;
+    changedKeys?: string[];
+  }>;
 }
 
 /**
@@ -116,6 +123,11 @@ export async function getAIGuidance(
             workflowContext?.executionValidationIssues ||
             (Array.isArray((errorData.details as any)?.executionValidationIssues)
               ? (errorData.details as any).executionValidationIssues
+              : undefined),
+          structuralDrifts:
+            workflowContext?.structuralDrifts ||
+            (Array.isArray((errorData.details as any)?.drifts)
+              ? (errorData.details as any).drifts
               : undefined),
         },
       }),

@@ -24,7 +24,7 @@ export function overrideShopify(
         authType: 'api_key' as const,
         label: 'Shopify API Key',
       }],
-      credentialFields: ['accessToken', 'apiKey'],
+      credentialFields: ['storeUrl', 'shopDomain', 'token', 'accessToken', 'apiKey'],
     },
     execute: async (context) => {
       return await executeViaLegacyExecutor({ context, schema });

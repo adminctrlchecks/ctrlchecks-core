@@ -1,493 +1,283 @@
-import type { NodeDoc } from '../types';
+import type { FieldDoc, NodeDoc, OperationDoc } from '../types';
+import { richFieldHelp } from './_sharedFieldHelp';
+
+const operationValues = ['create_post', 'get_posts', 'update_post', 'delete_post'];
+const statusValues = ['publish', 'draft', 'pending'];
+
+const fields: FieldDoc[] = [
+  {
+    name: 'Operation',
+    internalKey: 'operation',
+    type: 'select',
+    required: true,
+    description: 'The WordPress post operation to run.',
+    options: operationValues,
+    helpText: richFieldHelp({
+      what: 'The action selector for WordPress posts. create_post creates a post, get_posts lists posts, update_post changes title/content on one post, and delete_post permanently deletes one post with force=true.',
+      why: 'The operation controls which fields matter and which WordPress REST API method is called.',
+      when: 'Choose it before filling postId, title, content, status, or limit.',
+      enter: 'Select create_post, get_posts, update_post, or delete_post.',
+      source: 'The workflow goal, such as publishing approved content, reading recent posts, correcting a draft, or removing a generated test post.',
+      later: 'Downstream nodes read {{$json.success}}, {{$json.data}}, and {{$json.error}}. Incoming fields are not preserved by this runtime case.',
+      format: `One of: ${operationValues.join(', ')}.`,
+      example: 'A content approval workflow selects create_post after a manager approves a generated article.',
+      empty: 'Runtime defaults to get_posts if operation is missing.',
+      mistake: 'Expecting update_post to update status; the current worker only sends title and content on update.',
+    }),
+    defaultValue: 'get_posts',
+    example: 'get_posts',
+    notes: `Options: ${operationValues.join(', ')}.`,
+  },
+  {
+    name: 'Site URL',
+    internalKey: 'siteUrl',
+    type: 'url',
+    required: true,
+    description: 'Base URL of the WordPress site.',
+    helpText: richFieldHelp({
+      what: 'The base address of the WordPress site.',
+      why: 'Runtime appends /wp-json/wp/v2/posts directly to this value.',
+      when: 'Fill it for every operation.',
+      enter: 'Use the site root such as https://example.com with no trailing slash.',
+      source: 'Your public WordPress site URL or the site URL provided by your hosting/admin team.',
+      later: 'The returned post data may include link fields, but siteUrl itself is not preserved in output.',
+      format: 'HTTPS URL with no trailing slash. Do not include /wp-json/wp/v2/posts yourself.',
+      example: 'A company blog workflow uses https://blog.acme.com as the Site URL.',
+      empty: 'The worker builds an invalid REST URL and returns success false with error message/status.',
+      mistake: 'Adding a trailing slash, which produces a double slash before wp-json in this runtime path.',
+    }),
+    placeholder: 'https://blog.acme.com',
+    example: 'https://blog.acme.com',
+  },
+  {
+    name: 'Username',
+    internalKey: 'username',
+    type: 'string',
+    required: true,
+    description: 'WordPress username for Application Password Basic Auth.',
+    helpText: richFieldHelp({
+      what: 'The WordPress user account name paired with the Application Password.',
+      why: 'Runtime creates a Basic Auth header from username:password.',
+      when: 'Fill it for every operation.',
+      enter: 'Use the WordPress username that owns the Application Password, or map a secure credential value.',
+      source: 'WordPress Admin -> Users -> Profile or your saved WordPress connection.',
+      later: 'It authenticates the request only and is not returned in data.',
+      format: 'Plain username, not an email unless that is truly the WordPress login username.',
+      example: 'The editorial automation uses username editor.bot for post management.',
+      empty: 'The Basic Auth header is invalid and WordPress usually returns a 401/403 error in error.status.',
+      mistake: 'Using a display name like Marketing Editor instead of the login username.',
+    }),
+    placeholder: 'editor.bot',
+    example: 'editor.bot',
+  },
+  {
+    name: 'Application Password',
+    internalKey: 'password',
+    type: 'password',
+    required: true,
+    description: 'WordPress Application Password, not the normal login password.',
+    helpText: richFieldHelp({
+      what: 'The WordPress Application Password used with Username for REST API Basic Auth.',
+      why: 'WordPress REST API automation should use Application Passwords rather than normal login passwords.',
+      when: 'Fill it for every operation, preferably from a saved WordPress service node account connection.',
+      enter: 'Use a secure credential expression such as {{$credentials.wordpress.password}}.',
+      source: 'WordPress Admin -> Users -> Profile -> Application Passwords. Store it in Connections or the credential vault.',
+      later: 'It is consumed for authentication and is never returned in {{$json.data}}.',
+      format: 'Secret Application Password string. Spaces are acceptable if WordPress displays them that way.',
+      example: 'A publishing workflow uses an application password created for the editor.bot user.',
+      empty: 'WordPress rejects the request and the node returns success false with error details.',
+      mistake: 'Using your normal WordPress login password; this node expects an Application Password.',
+    }),
+    placeholder: '{{$credentials.wordpress.password}}',
+    example: '{{$credentials.wordpress.password}}',
+  },
+  {
+    name: 'Post ID',
+    internalKey: 'postId',
+    type: 'string',
+    required: false,
+    description: 'WordPress post ID for update/delete.',
+    helpText: richFieldHelp({
+      what: 'The numeric ID of one WordPress post.',
+      why: 'update_post and delete_post call /posts/{postId}.',
+      when: 'Fill it for update_post and delete_post.',
+      enter: 'Use a post ID such as 1842 or map {{$json.data.id}} from create_post/get_posts.',
+      source: 'WordPress post editor URL, REST API response id, or a previous workflow step.',
+      later: 'A later update/delete step can reuse the same ID, but this node does not preserve the incoming value automatically.',
+      format: 'Number-like string. Do not enter the title or full URL.',
+      example: 'After creating a draft, the workflow stores {{$json.data.id}} for a later correction step.',
+      empty: 'update_post/delete_post target /posts/ with no ID and WordPress returns an API error.',
+      mistake: 'Mapping {{$json.id}} after this node; the WordPress response is under {{$json.data.id}}.',
+    }),
+    placeholder: '1842',
+    example: '1842',
+  },
+  {
+    name: 'Title',
+    internalKey: 'title',
+    type: 'string',
+    required: false,
+    description: 'Post title.',
+    helpText: richFieldHelp({
+      what: 'The title sent to WordPress for a new or updated post.',
+      why: 'create_post sends title, content, and status; update_post sends title only when it is non-empty.',
+      when: 'Fill it for create_post and when update_post should change the title.',
+      enter: 'Type a title or map {{$json.title}} from an upstream content step.',
+      source: 'Approved article draft, form submission, CMS planning sheet, or AI-generated title.',
+      later: 'The WordPress response in {{$json.data}} contains the saved title object/fields from WordPress.',
+      format: 'Plain text title.',
+      example: 'A product launch workflow maps title "July Release Notes" from a content calendar row.',
+      empty: 'create_post may create an untitled post or be rejected depending on WordPress settings; update_post simply omits title.',
+      mistake: 'Putting HTML body content in Title instead of Content.',
+    }),
+    placeholder: 'July Release Notes',
+    example: 'July Release Notes',
+  },
+  {
+    name: 'Content',
+    internalKey: 'content',
+    type: 'textarea',
+    required: false,
+    description: 'Post body content.',
+    helpText: richFieldHelp({
+      what: 'The body sent to WordPress as post content.',
+      why: 'create_post sends it on new posts, and update_post sends it only when it is non-empty.',
+      when: 'Fill it for create_post and when update_post should change the body.',
+      enter: 'Use HTML/plain text or map {{$json.articleHtml}}, {{$json.markdown}}, or an AI-generated draft.',
+      source: 'Content editor, AI draft, CMS source, form response, or previous formatting step.',
+      later: 'The saved post response appears in {{$json.data}}, including content fields returned by WordPress.',
+      format: 'Text or HTML string. Avoid wrapping it as JSON unless you want literal JSON in the post.',
+      example: 'A marketing workflow maps {{$json.finalHtml}} into Content after a review step.',
+      empty: 'create_post sends an empty content value; update_post omits content entirely.',
+      mistake: 'Expecting markdown to be converted by this node; WordPress receives the string you send.',
+    }),
+    placeholder: '<p>Post body HTML or plain text.</p>',
+    example: '<p>Post body HTML or plain text.</p>',
+  },
+  {
+    name: 'Status',
+    internalKey: 'status',
+    type: 'select',
+    required: false,
+    description: 'Post status for create_post.',
+    options: statusValues,
+    helpText: richFieldHelp({
+      what: 'The WordPress status used when creating a post. publish makes it live, draft saves it privately for editing, and pending queues it for review.',
+      why: 'It controls whether new workflow-created content appears publicly right away.',
+      when: 'Fill it for create_post. Current runtime does not send status during update_post.',
+      enter: 'Choose publish, draft, or pending.',
+      source: 'Editorial policy, approval state, or an upstream status mapping such as {{$json.publishStatus}}.',
+      later: 'The created post response in {{$json.data.status}} shows what WordPress accepted.',
+      format: `One of: ${statusValues.join(', ')}.`,
+      example: 'A first-draft automation uses draft so editors review before publishing.',
+      empty: 'Runtime defaults to publish when status is missing.',
+      mistake: 'Changing Status on update_post and expecting WordPress to update it; this worker ignores status on update.',
+    }),
+    defaultValue: 'publish',
+    example: 'draft',
+    notes: `Options: ${statusValues.join(', ')}.`,
+  },
+  {
+    name: 'Limit',
+    internalKey: 'limit',
+    type: 'number',
+    required: false,
+    description: 'Number of posts requested by get_posts.',
+    helpText: richFieldHelp({
+      what: 'The per_page value appended to the get_posts request.',
+      why: 'It controls how many posts WordPress returns in one list call.',
+      when: 'Fill it for get_posts when you need more or fewer than the default 10 posts.',
+      enter: 'A number such as 5, 10, 25, or 100.',
+      source: 'Workflow design, dashboard size, or an upstream report setting.',
+      later: 'The returned array/object in {{$json.data}} contains up to this many posts for downstream processing.',
+      format: 'Number only. WordPress may enforce its own maximum.',
+      example: 'A weekly digest workflow uses 5 to fetch only the latest posts.',
+      empty: 'Runtime uses 10.',
+      mistake: 'Expecting Limit to filter status, category, or date; this worker only sends per_page.',
+    }),
+    placeholder: '10',
+    defaultValue: '10',
+    example: '10',
+  },
+];
+
+const makeOperation = (name: string, value: string, description: string): OperationDoc => ({
+  name,
+  value,
+  description,
+  fields,
+  outputExample: {
+    success: true,
+    data: { id: 1842, status: 'draft', link: 'https://blog.acme.com/july-release-notes/' },
+    error: {},
+  },
+  outputDescription: 'success is true for a 2xx WordPress REST response. data contains the WordPress response body, such as id, status, link, title, content, or an array of posts. error is {} on success or an object with message and status on failure. This runtime case does not preserve incoming fields.',
+  usageExample: {
+    scenario: `Run ${name} as part of a CMS workflow that publishes, lists, corrects, or removes WordPress posts.`,
+    inputValues: {
+      operation: value,
+      siteUrl: 'https://blog.acme.com',
+      username: 'editor.bot',
+      password: '{{$credentials.wordpress.password}}',
+    },
+    expectedOutput: 'Use {{$json.data.id}} for later updates/deletes or {{$json.error.message}} when {{$json.success}} is false.',
+  },
+  externalDocsUrl: 'https://developer.wordpress.org/rest-api/reference/posts/',
+});
 
 export const wordpressDoc: NodeDoc = {
-  "slug": "wordpress",
-  "displayName": "WordPress",
-  "category": "Transformation",
-  "logoUrl": "/icons/nodes/wordpress.svg",
-  "description": "Create, read, update, and delete posts on a WordPress site via the WordPress REST API.",
-  "credentialType": "WordPress Credential",
-  "credentialSetupSteps": [
-    "What this is: The WordPress connection lets CtrlChecks access your WordPress account safely without putting secrets in workflow fields.",
-    "Where to start: WordPress account settings or developer settings.",
-    "How to connect: In CtrlChecks, open Connections -> Add Connection -> WordPress, then sign in or paste the secret value requested there.",
-    "Example: the token format shown by WordPress.",
-    "Important: Treat tokens, passwords, API keys, and client secrets like bank passwords. Store them in Connections, not in regular workflow fields.",
-    "Test it: Save the connection, run a simple WordPress step, and confirm CtrlChecks can reach the account."
+  slug: 'wordpress',
+  displayName: 'WordPress',
+  category: 'CMS',
+  logoUrl: '/icons/nodes/wordpress.svg',
+  description: 'Creates, lists, updates, and deletes WordPress posts through the WordPress REST API.',
+  credentialType: 'WordPress Application Password',
+  credentialSetupSteps: [
+    'Create a WordPress Application Password from WordPress Admin -> Users -> Profile -> Application Passwords and store it in Connections or the credential vault.',
+    'Use HTTPS and a WordPress user that has permission to read, create, update, or delete posts as needed.',
+    'The WordPress service node account connection supplies username/password values for Basic Auth; do not put login passwords in ordinary workflow data.',
+    'Application Password is not your login password. Revoke and recreate it from the user profile if it is exposed or no longer needed.',
+    'Connect the output to the next service node with an outgoing line, then map {{$json.data.id}}, {{$json.data.link}}, {{$json.success}}, or {{$json.error.status}}.',
   ],
-  "credentialDocsUrl": "https://make.wordpress.org/core/2020/11/05/application-passwords-integration-guide/",
-  "resources": [
+  credentialDocsUrl: 'https://make.wordpress.org/core/2020/11/05/application-passwords-integration-guide/',
+  resources: [
     {
-      "name": "Operations",
-      "description": "WordPress exposes operation choices directly.",
-      "operations": [
-        {
-          "name": "Create post",
-          "value": "create_post",
-          "description": "Create post using the WordPress node.",
-          "fields": [
-            {
-              "name": "Site Url",
-              "internalKey": "siteUrl",
-              "type": "url",
-              "required": true,
-              "description": "WordPress site base URL",
-              "helpText": "What this field is: The web address for WordPress site base URL.\nHow to fill it: Paste the full URL, including https:// when it is an external service.\nExample: https://api.example.com.\nTip: Use {{$json.siteUrl}} when the URL comes from an earlier step.",
-              "placeholder": "https://api.example.com",
-              "example": "https://api.example.com"
-            },
-            {
-              "name": "Username",
-              "internalKey": "username",
-              "type": "string",
-              "required": true,
-              "description": "WordPress username",
-              "helpText": "What this field is: WordPress username.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Username value.\nTip: Use {{$json.username}} when this value comes from an earlier step.",
-              "placeholder": "Enter Username"
-            },
-            {
-              "name": "Password",
-              "internalKey": "password",
-              "type": "password",
-              "required": true,
-              "description": "WordPress Application Password",
-              "helpText": "What this field is: WordPress token, a secret password that lets CtrlChecks talk to WordPress safely.\nWhere to find it: WordPress account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by WordPress.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "Enter Password",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Post Id",
-              "internalKey": "postId",
-              "type": "string",
-              "required": false,
-              "description": "Post ID for update/delete",
-              "helpText": "What this field is: The Post ID that tells WordPress which item to use.\nWhere to find it: Open the item in WordPress and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.postId}} when an earlier WordPress step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Title",
-              "internalKey": "title",
-              "type": "string",
-              "required": false,
-              "description": "Post title",
-              "helpText": "What this field is: Post title.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Title value.\nTip: Use {{$json.title}} when this value comes from an earlier step.",
-              "placeholder": "Enter Title"
-            },
-            {
-              "name": "Content",
-              "internalKey": "content",
-              "type": "textarea",
-              "required": false,
-              "description": "Post body",
-              "helpText": "What this field is: Post body.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: Content value.\nTip: Use {{$json.content}} when this value comes from an earlier step.",
-              "placeholder": "Enter Content"
-            },
-            {
-              "name": "Status",
-              "internalKey": "status",
-              "type": "select",
-              "required": false,
-              "description": "Post status",
-              "helpText": "What this field is: Whether to publish or save as draft.\nOptions: publish (immediately live), draft (saved but not visible), private (only visible to admins).\nExample: publish",
-              "placeholder": "publish",
-              "example": "publish",
-              "defaultValue": "publish",
-              "options": [
-                "Publish",
-                "Draft",
-                "Pending"
-              ]
-            },
-            {
-              "name": "Limit",
-              "internalKey": "limit",
-              "type": "number",
-              "required": false,
-              "description": "Max posts to return",
-              "helpText": "What this field is: The number used for Max posts to return.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 10.\nTip: Use {{$json.limit}} when the number comes from an earlier step.",
-              "placeholder": "10",
-              "example": "10",
-              "defaultValue": "10"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "create_post",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming WordPress data with create post after a related upstream event is received",
-            "inputValues": {
-              "Site Url": "https://api.example.com",
-              "Username": "",
-              "Password": "",
-              "Post Id": "abc123",
-              "Title": ""
-            },
-            "expectedOutput": "WordPress returns structured create post data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://developer.wordpress.org/rest-api/reference/"
-        },
-        {
-          "name": "Get posts",
-          "value": "get_posts",
-          "description": "Get posts using the WordPress node.",
-          "fields": [
-            {
-              "name": "Site Url",
-              "internalKey": "siteUrl",
-              "type": "url",
-              "required": true,
-              "description": "WordPress site base URL",
-              "helpText": "What this field is: The web address for WordPress site base URL.\nHow to fill it: Paste the full URL, including https:// when it is an external service.\nExample: https://api.example.com.\nTip: Use {{$json.siteUrl}} when the URL comes from an earlier step.",
-              "placeholder": "https://api.example.com",
-              "example": "https://api.example.com"
-            },
-            {
-              "name": "Username",
-              "internalKey": "username",
-              "type": "string",
-              "required": true,
-              "description": "WordPress username",
-              "helpText": "What this field is: WordPress username.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Username value.\nTip: Use {{$json.username}} when this value comes from an earlier step.",
-              "placeholder": "Enter Username"
-            },
-            {
-              "name": "Password",
-              "internalKey": "password",
-              "type": "password",
-              "required": true,
-              "description": "WordPress Application Password",
-              "helpText": "What this field is: WordPress token, a secret password that lets CtrlChecks talk to WordPress safely.\nWhere to find it: WordPress account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by WordPress.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "Enter Password",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Post Id",
-              "internalKey": "postId",
-              "type": "string",
-              "required": false,
-              "description": "Post ID for update/delete",
-              "helpText": "What this field is: The Post ID that tells WordPress which item to use.\nWhere to find it: Open the item in WordPress and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.postId}} when an earlier WordPress step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Title",
-              "internalKey": "title",
-              "type": "string",
-              "required": false,
-              "description": "Post title",
-              "helpText": "What this field is: Post title.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Title value.\nTip: Use {{$json.title}} when this value comes from an earlier step.",
-              "placeholder": "Enter Title"
-            },
-            {
-              "name": "Content",
-              "internalKey": "content",
-              "type": "textarea",
-              "required": false,
-              "description": "Post body",
-              "helpText": "What this field is: Post body.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: Content value.\nTip: Use {{$json.content}} when this value comes from an earlier step.",
-              "placeholder": "Enter Content"
-            },
-            {
-              "name": "Status",
-              "internalKey": "status",
-              "type": "select",
-              "required": false,
-              "description": "Post status",
-              "helpText": "Options: Choose the status value this WordPress step should use.\nHow to choose it: Pick the option that matches what you want this step to do.\nExample: Publish.\nTip: Use {{$json.status}} only when an earlier step already provides a valid option value.",
-              "placeholder": "publish",
-              "example": "publish",
-              "defaultValue": "publish",
-              "options": [
-                "Publish",
-                "Draft",
-                "Pending"
-              ]
-            },
-            {
-              "name": "Limit",
-              "internalKey": "limit",
-              "type": "number",
-              "required": false,
-              "description": "Max posts to return",
-              "helpText": "What this field is: The number used for Max posts to return.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 10.\nTip: Use {{$json.limit}} when the number comes from an earlier step.",
-              "placeholder": "10",
-              "example": "10",
-              "defaultValue": "10"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "get_posts",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming WordPress data with get posts after a related upstream event is received",
-            "inputValues": {
-              "Site Url": "https://api.example.com",
-              "Username": "",
-              "Password": "",
-              "Post Id": "abc123",
-              "Title": ""
-            },
-            "expectedOutput": "WordPress returns structured get posts data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://developer.wordpress.org/rest-api/reference/"
-        },
-        {
-          "name": "Update post",
-          "value": "update_post",
-          "description": "Update post using the WordPress node.",
-          "fields": [
-            {
-              "name": "Site Url",
-              "internalKey": "siteUrl",
-              "type": "url",
-              "required": true,
-              "description": "WordPress site base URL",
-              "helpText": "What this field is: The web address for WordPress site base URL.\nHow to fill it: Paste the full URL, including https:// when it is an external service.\nExample: https://api.example.com.\nTip: Use {{$json.siteUrl}} when the URL comes from an earlier step.",
-              "placeholder": "https://api.example.com",
-              "example": "https://api.example.com"
-            },
-            {
-              "name": "Username",
-              "internalKey": "username",
-              "type": "string",
-              "required": true,
-              "description": "WordPress username",
-              "helpText": "What this field is: WordPress username.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Username value.\nTip: Use {{$json.username}} when this value comes from an earlier step.",
-              "placeholder": "Enter Username"
-            },
-            {
-              "name": "Password",
-              "internalKey": "password",
-              "type": "password",
-              "required": true,
-              "description": "WordPress Application Password",
-              "helpText": "What this field is: WordPress token, a secret password that lets CtrlChecks talk to WordPress safely.\nWhere to find it: WordPress account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by WordPress.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "Enter Password",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Post Id",
-              "internalKey": "postId",
-              "type": "string",
-              "required": false,
-              "description": "Post ID for update/delete",
-              "helpText": "What this field is: The Post ID that tells WordPress which item to use.\nWhere to find it: Open the item in WordPress and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.postId}} when an earlier WordPress step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Title",
-              "internalKey": "title",
-              "type": "string",
-              "required": false,
-              "description": "Post title",
-              "helpText": "What this field is: Post title.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Title value.\nTip: Use {{$json.title}} when this value comes from an earlier step.",
-              "placeholder": "Enter Title"
-            },
-            {
-              "name": "Content",
-              "internalKey": "content",
-              "type": "textarea",
-              "required": false,
-              "description": "Post body",
-              "helpText": "What this field is: Post body.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: Content value.\nTip: Use {{$json.content}} when this value comes from an earlier step.",
-              "placeholder": "Enter Content"
-            },
-            {
-              "name": "Status",
-              "internalKey": "status",
-              "type": "select",
-              "required": false,
-              "description": "Post status",
-              "helpText": "Options: Choose the status value this WordPress step should use.\nHow to choose it: Pick the option that matches what you want this step to do.\nExample: Publish.\nTip: Use {{$json.status}} only when an earlier step already provides a valid option value.",
-              "placeholder": "publish",
-              "example": "publish",
-              "defaultValue": "publish",
-              "options": [
-                "Publish",
-                "Draft",
-                "Pending"
-              ]
-            },
-            {
-              "name": "Limit",
-              "internalKey": "limit",
-              "type": "number",
-              "required": false,
-              "description": "Max posts to return",
-              "helpText": "What this field is: The number used for Max posts to return.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 10.\nTip: Use {{$json.limit}} when the number comes from an earlier step.",
-              "placeholder": "10",
-              "example": "10",
-              "defaultValue": "10"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "update_post",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming WordPress data with update post after a related upstream event is received",
-            "inputValues": {
-              "Site Url": "https://api.example.com",
-              "Username": "",
-              "Password": "",
-              "Post Id": "abc123",
-              "Title": ""
-            },
-            "expectedOutput": "WordPress returns structured update post data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://developer.wordpress.org/rest-api/reference/"
-        },
-        {
-          "name": "Delete post",
-          "value": "delete_post",
-          "description": "Delete post using the WordPress node.",
-          "fields": [
-            {
-              "name": "Site Url",
-              "internalKey": "siteUrl",
-              "type": "url",
-              "required": true,
-              "description": "WordPress site base URL",
-              "helpText": "What this field is: The web address for WordPress site base URL.\nHow to fill it: Paste the full URL, including https:// when it is an external service.\nExample: https://api.example.com.\nTip: Use {{$json.siteUrl}} when the URL comes from an earlier step.",
-              "placeholder": "https://api.example.com",
-              "example": "https://api.example.com"
-            },
-            {
-              "name": "Username",
-              "internalKey": "username",
-              "type": "string",
-              "required": true,
-              "description": "WordPress username",
-              "helpText": "What this field is: WordPress username.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Username value.\nTip: Use {{$json.username}} when this value comes from an earlier step.",
-              "placeholder": "Enter Username"
-            },
-            {
-              "name": "Password",
-              "internalKey": "password",
-              "type": "password",
-              "required": true,
-              "description": "WordPress Application Password",
-              "helpText": "What this field is: WordPress token, a secret password that lets CtrlChecks talk to WordPress safely.\nWhere to find it: WordPress account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by WordPress.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "Enter Password",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Post Id",
-              "internalKey": "postId",
-              "type": "string",
-              "required": false,
-              "description": "Post ID for update/delete",
-              "helpText": "What this field is: The Post ID that tells WordPress which item to use.\nWhere to find it: Open the item in WordPress and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.postId}} when an earlier WordPress step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Title",
-              "internalKey": "title",
-              "type": "string",
-              "required": false,
-              "description": "Post title",
-              "helpText": "What this field is: Post title.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Title value.\nTip: Use {{$json.title}} when this value comes from an earlier step.",
-              "placeholder": "Enter Title"
-            },
-            {
-              "name": "Content",
-              "internalKey": "content",
-              "type": "textarea",
-              "required": false,
-              "description": "Post body",
-              "helpText": "What this field is: Post body.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: Content value.\nTip: Use {{$json.content}} when this value comes from an earlier step.",
-              "placeholder": "Enter Content"
-            },
-            {
-              "name": "Status",
-              "internalKey": "status",
-              "type": "select",
-              "required": false,
-              "description": "Post status",
-              "helpText": "Options: Choose the status value this WordPress step should use.\nHow to choose it: Pick the option that matches what you want this step to do.\nExample: Publish.\nTip: Use {{$json.status}} only when an earlier step already provides a valid option value.",
-              "placeholder": "publish",
-              "example": "publish",
-              "defaultValue": "publish",
-              "options": [
-                "Publish",
-                "Draft",
-                "Pending"
-              ]
-            },
-            {
-              "name": "Limit",
-              "internalKey": "limit",
-              "type": "number",
-              "required": false,
-              "description": "Max posts to return",
-              "helpText": "What this field is: The number used for Max posts to return.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 10.\nTip: Use {{$json.limit}} when the number comes from an earlier step.",
-              "placeholder": "10",
-              "example": "10",
-              "defaultValue": "10"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "delete_post",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming WordPress data with delete post after a related upstream event is received",
-            "inputValues": {
-              "Site Url": "https://api.example.com",
-              "Username": "",
-              "Password": "",
-              "Post Id": "abc123",
-              "Title": ""
-            },
-            "expectedOutput": "WordPress returns structured delete post data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://developer.wordpress.org/rest-api/reference/"
-        }
-      ]
-    }
+      name: 'Posts',
+      description: 'WordPress operations target /wp-json/wp/v2/posts. The worker appends that path to siteUrl, sends Basic Auth, and returns { success, data, error } without input passthrough.',
+      operations: [
+        makeOperation('Create Post', 'create_post', 'Creates a WordPress post by sending title, content, and status. Use status draft/pending when humans must review before publishing.'),
+        makeOperation('Get Posts', 'get_posts', 'Lists posts with per_page set from Limit, defaulting to 10. This operation does not add category, date, or status filters.'),
+        makeOperation('Update Post', 'update_post', 'Updates one post by postId. Current runtime sends only non-empty title and content; status is not sent on update even though the panel shows it.'),
+        makeOperation('Delete Post', 'delete_post', 'Deletes one post by postId using force=true, which asks WordPress to permanently delete rather than move to trash.'),
+      ],
+    },
   ],
-  "commonErrors": [
+  commonErrors: [
     {
-      "error": "Authentication failed",
-      "cause": "The saved credential, token, API key, or OAuth grant is missing, expired, or lacks the required scope.",
-      "fix": "Reconnect the service in CtrlChecks → Connections, then re-run the WordPress node."
+      error: 'Unsupported operation',
+      cause: 'Operation was not create_post, get_posts, update_post, or delete_post.',
+      fix: 'Choose one of the visible dropdown values or correct the AI-generated workflow config.',
     },
     {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
+      error: 'WordPress API error status',
+      cause: 'WordPress returned a non-2xx response, often 401/403 auth, 404 wrong site/post, or permission denied.',
+      fix: 'Check siteUrl, username, Application Password, user role, and postId, then inspect error.status and error.message.',
     },
     {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
+      error: 'Application Password is not your login password',
+      cause: 'The normal WordPress login password was used instead of an Application Password.',
+      fix: 'Generate an Application Password under the WordPress user profile and store it in the service node account connection.',
+    },
+    {
+      error: 'Site URL has a trailing slash',
+      cause: 'Runtime appends /wp-json/wp/v2/posts directly, so a trailing slash can create a double-slash path.',
+      fix: 'Use https://example.com, not https://example.com/.',
+    },
+    {
+      error: 'Update Post does not send status',
+      cause: 'The current worker body for update_post includes only title and content.',
+      fix: 'Use create_post with the desired status for new posts, or add a worker change before relying on status updates.',
+    },
   ],
-  "relatedNodes": []
+  relatedNodes: ['contentful', 'http_request', 'html'],
 };

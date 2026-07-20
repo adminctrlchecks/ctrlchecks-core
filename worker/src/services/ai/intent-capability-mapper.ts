@@ -241,7 +241,7 @@ export class IntentCapabilityMapper {
       return 'mongodb';
     }
     if (actionType.includes('database')) {
-      return 'database_read'; // Generic database
+      return 'postgresql'; // Generic SQL database
     }
     
     // Storage

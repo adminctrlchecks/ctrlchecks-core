@@ -113,7 +113,7 @@ export async function buildWorkflowGuidanceContext(nodes: WorkflowNodeLike[]): P
 
     for (const err of validation.errors) {
       const fieldSchema = inputSchema[err.field];
-      if (fieldSchema?.ownership === 'credential') continue;
+      if (fieldSchema?.ownership === 'credential' || fieldSchema?.ownership === 'structural') continue;
 
       const effectiveMode = resolveEffectiveFieldFillMode(err.field, inputSchema, config);
       if (effectiveMode === 'runtime_ai' && supportsRuntimeAI(err.field, inputSchema)) continue;

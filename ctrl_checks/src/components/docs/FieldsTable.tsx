@@ -29,12 +29,25 @@ export function FieldsTable({ fields }: { fields: FieldDoc[] }) {
               <td className="px-3 py-2">{field.required ? 'Yes' : 'No'}</td>
               <td className="px-3 py-2 text-muted-foreground">
                 {field.description}
+                {field.helpText && (
+                  <div className="mt-3 rounded-sm border border-border bg-muted/30 p-3">
+                    <div className="mb-1 text-xs font-semibold uppercase text-foreground">
+                      How to set
+                    </div>
+                    <div className="whitespace-pre-line text-xs leading-5 text-muted-foreground">
+                      {field.helpText}
+                    </div>
+                  </div>
+                )}
                 {field.type === 'password' && (
                   <div className="mt-1 text-xs">Password and token values are masked in the UI.</div>
                 )}
                 {field.options?.length ? (
                   <div className="mt-1 text-xs">Options: {field.options.join(', ')}</div>
                 ) : null}
+                {field.notes && (
+                  <div className="mt-2 text-xs">{field.notes}</div>
+                )}
               </td>
               <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{field.example || '-'}</td>
             </tr>

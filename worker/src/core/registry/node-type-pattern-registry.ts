@@ -495,6 +495,19 @@ export const EXPLICIT_NODE_TYPE_PATTERNS: NodeTypePattern[] = [
     priority: 70,
   },
   {
+    type: 'telegram_trigger',
+    pattern: /\btelegram[_\s]?trigger\b/i,
+    altPatterns: [
+      /\btelegram[_\s]?webhook\b/i,
+      /\bincoming[_\s]?telegram\b/i,
+      /\breceive[_\s]?telegram\b/i,
+      /\btelegram[_\s]?bot[_\s]?receives\b/i,
+      /\bwhen\s+someone\s+messages\s+my\s+bot\b/i,
+    ],
+    aliases: ['telegram_trigger', 'telegram_webhook'],
+    priority: 85,
+  },
+  {
     type: 'telegram',
     pattern: /\btelegram\b/i,
     altPatterns: [

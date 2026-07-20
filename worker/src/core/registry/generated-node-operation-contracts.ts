@@ -34,6 +34,7 @@ export const GENERATED_NODE_OPERATION_VALUES: Record<string, string[]> = {
   jira: ['create', 'delete', 'read', 'update'],
   langchain: ['run_agent', 'run_chain'],
   linkedin: ['get_profile', 'create_post', 'create_post_media', 'create_article', 'delete_post'],
+  linear: ['create_issue', 'get_issue', 'get_teams', 'list_issues', 'update_issue'],
   mailchimp: ['send', 'subscribe', 'unsubscribe'],
   mailgun: ['send_email'],
   math: ['abs', 'add', 'avg', 'ceil', 'divide', 'floor', 'max', 'min', 'modulo', 'multiply', 'power', 'round', 'sqrt', 'subtract', 'sum'],
@@ -60,8 +61,9 @@ export const GENERATED_NODE_OPERATION_VALUES: Record<string, string[]> = {
   stripe: ['create_customer', 'create_invoice', 'create_payment_intent', 'create_refund', 'create_subscription', 'get_payment', 'list_payments'],
   tally: ['create_voucher', 'get_company_info', 'get_ledger', 'get_stock_items', 'get_voucher'],
   timescaledb: ['delete', 'executeQuery', 'first', 'insert', 'last', 'timeBucket', 'update'],
+  trello: ['add_checklist', 'add_label', 'create_card', 'delete_card', 'get_boards', 'get_card', 'get_lists', 'list_cards', 'move_card', 'update_card'],
   twitter: ['create', 'delete', 'get', 'getMe', 'recent'],
-  typeform: ['create_form', 'get_form', 'get_responses'],
+  typeform: ['create_form', 'get_form', 'get_forms', 'get_responses'],
   vercel: ['deploy', 'list_deployments'],
   whatsapp: ['markAsRead', 'sendContact', 'sendInteractiveButtons', 'sendInteractiveCTA', 'sendInteractiveList', 'sendLocation', 'sendMedia', 'sendTemplate', 'sendText'],
   // whatsapp_cloud intentionally omitted: it's a deprecated alias for `whatsapp`

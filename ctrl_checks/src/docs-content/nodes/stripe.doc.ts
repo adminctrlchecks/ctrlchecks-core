@@ -1,462 +1,103 @@
-import type { NodeDoc } from '../types';
+import type { FieldDoc, NodeDoc, OperationDoc } from '../types';
+
+const docsUrl = 'https://docs.stripe.com/api';
+
+function rich(label: string, meaning: string, enter: string, wrong: string, source = 'Type the value directly or map it from an earlier step such as {{$json.customerId}}.'): string {
+  return (
+    `What this field is: ${label} - ${meaning}\n` +
+    `Why it matters: Stripe uses this value to choose the API action, authenticate the request, identify the customer/payment, or set the money amount.\n` +
+    `When to fill it: Fill it when the selected Stripe operation needs it; leave optional fields blank only when Stripe can complete the request without them.\n` +
+    `What to enter: ${enter}\n` +
+    `Where the value comes from: ${source}\n` +
+    `How to use it later: Downstream nodes can read Stripe results from paths such as {{$json.paymentIntent.id}}, {{$json.customer.id}}, {{$json.refund.id}}, {{$json.items}}, {{$json.subscription.id}}, {{$json.invoice.id}}, or {{$json._error}}.\n` +
+    `Accepted format: Use Stripe IDs exactly as returned by Stripe, lowercase three-letter currency codes, numeric amounts in the smallest currency unit, and valid JSON only for JSON-style fields.\n` +
+    `Real workplace example: A checkout workflow maps {{$json.amountCents}} into Amount, {{$json.customerId}} into Customer ID, and stores {{$json.paymentIntent.id}} after the node runs.\n` +
+    `If it is empty or wrong: ${wrong}\n` +
+    `Common mistake: Typing display amounts like 10.00 when Stripe expects cents, or selecting a visual operation alias that the runtime does not currently support.`
+  );
+}
+
+const fields: FieldDoc[] = [
+  {
+    name: 'Operation',
+    internalKey: 'operation',
+    type: 'select',
+    required: true,
+    description: 'Runtime-supported values include charge, payment, paymentintent, refund, create_customer, get_payment_intent, list_payment_intents, create_subscription, and create_invoice. The visual panel also exposes create_payment, create_payment_intent, get_payment, list_payments, and create_refund; those aliases are not currently recognized.',
+    options: ['charge', 'payment', 'paymentintent', 'refund', 'create_customer', 'get_payment_intent', 'list_payment_intents', 'create_subscription', 'create_invoice', 'create_payment', 'create_payment_intent', 'get_payment', 'list_payments', 'create_refund'],
+    defaultValue: 'paymentintent',
+    helpText: rich('Operation', 'the Stripe action to run.', 'Use paymentintent/charge/payment to create a PaymentIntent or legacy charge, refund for refunds, create_customer, get_payment_intent, list_payment_intents, create_subscription, or create_invoice. create_payment, create_payment_intent, get_payment, list_payments, and create_refund are visible today but fail as unsupported aliases.', 'If blank, the node returns Stripe: operation is required. Unsupported aliases return Stripe: Unsupported operation "...".'),
+  },
+  { name: 'API Key', internalKey: 'apiKey', type: 'string', required: false, description: 'Optional Stripe secret key fallback; prefer a saved Stripe connection.', placeholder: 'sk_test_...', helpText: rich('API Key', 'a Stripe secret key used only when no saved Stripe credential supplies one.', 'Usually leave blank and use Connections. For a test fallback, enter a key beginning sk_test_ or sk_live_.', 'If no saved credential and no apiKey exist, the node returns Stripe: API key not found.', 'Stripe Dashboard -> Developers -> API keys, but production keys should be stored in Connections/credential vault rather than regular workflow fields.') },
+  { name: 'Amount', internalKey: 'amount', type: 'number', required: false, description: 'Amount in the smallest currency unit.', placeholder: '1000', helpText: rich('Amount', 'the amount to charge or optionally refund, in cents/paise/minor units.', 'Enter 1000 for USD 10.00, 5000 for USD 50.00, or map {{$json.amountCents}}.', 'For charge/paymentintent, missing or non-positive Amount returns Stripe charge: amount (in cents) is required. For refund, missing Amount creates a full refund request.') },
+  { name: 'Currency', internalKey: 'currency', type: 'string', required: false, description: 'Lowercase three-letter Stripe currency code.', placeholder: 'usd', defaultValue: 'usd', helpText: rich('Currency', 'the currency for created PaymentIntents or legacy charges.', 'Enter usd, eur, gbp, inr, or another Stripe-supported lowercase currency code.', 'Unsupported or account-disabled currencies are rejected by Stripe and returned through _errorDetails.') },
+  { name: 'Description', internalKey: 'description', type: 'textarea', required: false, description: 'Optional description sent to Stripe.', placeholder: 'Order #12345', helpText: rich('Description', 'a note stored on the payment, customer, or invoice when that operation sends it.', 'Enter a short business reference such as Order {{$json.orderId}} or Renewal invoice for {{$json.company}}.', 'Blank descriptions are allowed, but incorrect references make reconciliation harder in Stripe reports.') },
+  { name: 'Source Token', internalKey: 'source', type: 'string', required: false, description: 'Legacy Charges API source token.', placeholder: 'tok_visa', helpText: rich('Source Token', 'a legacy Stripe source token used only when creating a legacy charge.', 'Use tok_visa in test mode or map a token from a secure checkout step. Payment Method ID is preferred for modern flows.', 'If blank during a charge/payment operation, the runtime creates a PaymentIntent instead of a legacy charge.') },
+  { name: 'Payment Method ID', internalKey: 'paymentMethodId', type: 'string', required: false, description: 'Stripe PaymentMethod ID for PaymentIntent creation.', placeholder: 'pm_...', helpText: rich('Payment Method ID', 'the saved or collected payment method to attach to a new PaymentIntent.', 'Enter a pm_... value from Stripe Checkout, Elements, or a previous Stripe step.', 'If wrong, Stripe returns a payment_intents failure in _errorDetails. If blank, the PaymentIntent is created without a payment method and usually requires a later confirmation step.') },
+  { name: 'Customer ID', internalKey: 'customerId', type: 'string', required: false, description: 'Stripe customer ID.', placeholder: 'cus_...', helpText: rich('Customer ID', 'the Stripe customer to associate with payments, lists, subscriptions, or invoices.', 'Enter cus_... or map {{$json.customer.id}} from a previous Create Customer step.', 'Create Subscription and Create Invoice require customerId and return specific missing-field errors when it is blank.') },
+  { name: 'Customer Email', internalKey: 'email', type: 'email', required: false, description: 'Email used when creating a Stripe customer.', placeholder: 'buyer@example.com', helpText: rich('Customer Email', 'the email address saved on a new Stripe customer.', 'Enter buyer@example.com or map {{$json.email}} from a form, order, or CRM step.', 'If blank, Stripe may still create a customer with no email; if malformed, Stripe can reject the request.') },
+  { name: 'Customer Name', internalKey: 'name', type: 'string', required: false, description: 'Name used when creating a Stripe customer.', placeholder: 'Ada Lovelace', helpText: rich('Customer Name', 'the customer display name saved in Stripe.', 'Enter a full name or map {{$json.customerName}}.', 'If blank, Stripe creates the customer without a name; downstream support workflows may have less context.') },
+  { name: 'Charge ID', internalKey: 'chargeId', type: 'string', required: false, description: 'Legacy charge ID used for refunds.', placeholder: 'ch_...', helpText: rich('Charge ID', 'the ch_... charge to refund when not using a PaymentIntent ID.', 'Enter ch_... from a Stripe charge result or dashboard.', 'Refund needs either chargeId or paymentIntentId. If both are blank, Stripe rejects the refund request.') },
+  { name: 'Payment Intent ID', internalKey: 'paymentIntentId', type: 'string', required: false, description: 'PaymentIntent ID used for get/refund operations.', placeholder: 'pi_...', helpText: rich('Payment Intent ID', 'the pi_... payment object to retrieve or refund.', 'Enter pi_... from a previous Stripe result or webhook.', 'Get Payment Intent returns Stripe get_payment: paymentIntentId is required when this is blank.') },
+  { name: 'Limit', internalKey: 'limit', type: 'number', required: false, description: 'Maximum number of PaymentIntents to list.', placeholder: '10', helpText: rich('Limit', 'how many PaymentIntent records the list operation asks Stripe to return.', 'Enter a number from 1 to 100, or map {{$json.pageSize}}.', 'Invalid values are silently clamped or defaulted by the runtime to a safe range between 1 and 100.') },
+  { name: 'Price ID', internalKey: 'priceId', type: 'string', required: false, description: 'Stripe Price ID for subscription creation.', placeholder: 'price_...', helpText: rich('Price ID', 'the recurring price to put into a new subscription.', 'Enter price_... from Stripe Product Catalog or map {{$json.priceId}}.', 'Create Subscription returns Stripe create_subscription: priceId is required if both priceId and metadata are blank.') },
+  { name: 'Metadata (JSON)', internalKey: 'metadata', type: 'json', required: false, description: 'Panel field that the runtime only uses as a fallback text value for priceId in create_subscription.', placeholder: '{"order_id":"12345"}', helpText: rich('Metadata (JSON)', 'a visible JSON field whose current runtime behavior is not real Stripe metadata; for create_subscription it is read only as a fallback Price ID string.', 'Prefer Price ID. If used as the fallback, it must resolve to a plain price_... string, not a JSON object.', 'A JSON object here is not sent as Stripe metadata by this node today; it can make create_subscription fail because no usable priceId is found.') },
+];
+
+function op(name: string, value: string, description: string, outputExample: Record<string, unknown>, outputDescription: string, inputValues: Record<string, string>): OperationDoc {
+  return {
+    name,
+    value,
+    description,
+    fields,
+    outputExample,
+    outputDescription,
+    usageExample: {
+      scenario: `${name} as part of a billing workflow that receives customer or order data from an earlier step`,
+      inputValues,
+      expectedOutput: `The next step can use {{$json.success}} plus operation-specific Stripe data such as {{$json.paymentIntent.id}}, {{$json.customer.id}}, {{$json.refund.id}}, {{$json.subscription.id}}, or {{$json.invoice.id}}.`,
+    },
+    externalDocsUrl: docsUrl,
+  };
+}
 
 export const stripeDoc: NodeDoc = {
-  "slug": "stripe",
-  "displayName": "Stripe",
-  "category": "Data",
-  "logoUrl": "/icons/nodes/stripe.svg",
-  "description": "Stripe payment processing",
-  "credentialType": "Stripe API Key",
-  "credentialSetupSteps": [
-    "What this is: The Stripe connection lets CtrlChecks access your Stripe account safely without putting secrets in workflow fields.",
-    "Where to start: Stripe Dashboard -> Developers -> API keys -> Secret key.",
-    "How to connect: In CtrlChecks, open Connections -> Add Connection -> Stripe, then sign in or paste the secret value requested there.",
-    "Example: sk_test_... for testing or sk_live_... for real payments.",
-    "Tip: Use sk_test_ keys while building and testing. Switch to sk_live_ only when you are ready for real payments.",
-    "Important: Treat tokens, passwords, API keys, and client secrets like bank passwords. Store them in Connections, not in regular workflow fields.",
-    "Test it: Save the connection, run a simple Stripe step, and confirm CtrlChecks can reach the account."
+  slug: 'stripe',
+  displayName: 'Stripe',
+  category: 'Ecommerce',
+  logoUrl: '/icons/nodes/stripe.svg',
+  description: 'Create Stripe PaymentIntents or legacy charges, create customers, refund payments, list/retrieve PaymentIntents, and create subscriptions or invoices. Several visible operation aliases are currently not accepted by the runtime and are documented plainly.',
+  credentialType: 'Stripe API Key',
+  credentialSetupSteps: [
+    'Create a Stripe Secret Key connection in CtrlChecks Connections so the credential system/credential vault can inject the key without exposing it in workflow fields.',
+    'Use sk_test_ keys while building and switch to sk_live_ only when the workflow is ready for real money.',
+    'The API key is used for charges, refunds, customers, subscriptions, invoices, and PaymentIntent reads. Downstream nodes still need their own saved connections.',
+    'After this node runs, connect its output to the next billing, fulfillment, notification, or audit step. Each downstream service node account connection is configured separately.',
+    'Never paste Stripe live secret keys into normal workflow text fields unless you are doing a short controlled test with a restricted key.',
   ],
-  "credentialDocsUrl": "https://stripe.com/docs/keys",
-  "resources": [
+  credentialDocsUrl: 'https://docs.stripe.com/keys',
+  resources: [
     {
-      "name": "Operations",
-      "description": "Stripe exposes operation choices directly.",
-      "operations": [
-        {
-          "name": "Charge",
-          "value": "charge",
-          "description": "Charge using the Stripe node.",
-          "fields": [
-            {
-              "name": "Api Key",
-              "internalKey": "apiKey",
-              "type": "password",
-              "required": false,
-              "description": "Stripe secret key (optional if stored in vault under key \"stripe\")",
-              "helpText": "What this field is: Stripe secret key, a secret password that lets CtrlChecks talk to Stripe safely.\nWhere to find it: Stripe Dashboard -> Developers -> API keys -> Secret key.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: sk_test_... for testing or sk_live_... for real payments.\nImportant: Treat this like a bank password. Use test keys while building so no real money moves.",
-              "placeholder": "sk_live_...",
-              "example": "sk_live_...",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Amount",
-              "internalKey": "amount",
-              "type": "number",
-              "required": false,
-              "description": "Payment amount (in cents)",
-              "helpText": "What this field is: The payment amount in the smallest unit of the currency, not dollars or euros directly.\nHow to fill it: For USD, EUR, GBP, INR, and most currencies, multiply the main amount by 100. For JPY, enter the yen amount as-is.\nExample: 4999 charges $49.99 USD. 2000 refunds $20.00 USD.\nTip: Use {{$json.amount}} from an order, form, or Stripe event after converting it to the smallest currency unit.",
-              "placeholder": "1000",
-              "example": "1000"
-            },
-            {
-              "name": "Currency",
-              "internalKey": "currency",
-              "type": "string",
-              "required": false,
-              "description": "Currency (default: usd)",
-              "helpText": "What this field is: The three-letter currency code for the Stripe payment.\nHow to fill it: Use lowercase letters and a currency your Stripe account supports.\nExample: usd, eur, gbp, inr, aud, cad, jpy.\nTip: The refund currency must match the original payment currency.",
-              "placeholder": "usd",
-              "example": "usd",
-              "defaultValue": "usd"
-            },
-            {
-              "name": "Description",
-              "internalKey": "description",
-              "type": "textarea",
-              "required": false,
-              "description": "Description for the charge/payment",
-              "helpText": "What this field is: Description.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: Description value.\nTip: Use {{$json.description}} when this value comes from an earlier step.",
-              "placeholder": "Enter Description"
-            },
-            {
-              "name": "Source",
-              "internalKey": "source",
-              "type": "string",
-              "required": false,
-              "description": "Legacy charge source token (for /v1/charges)",
-              "helpText": "What this field is: A legacy Stripe source token for older charge flows.\nHow to fill it: Use a token that starts with tok_ only when your workflow still uses Stripe Charges.\nExample: tok_visa for Stripe test mode.\nTip: For new payment flows, prefer Payment Method ID or PaymentIntent-based workflows.",
-              "placeholder": "tok_visa",
-              "example": "tok_visa"
-            },
-            {
-              "name": "Payment Method Id",
-              "internalKey": "paymentMethodId",
-              "type": "string",
-              "required": false,
-              "description": "Payment method ID (for PaymentIntents)",
-              "helpText": "What this field is: The Stripe Payment Method ID for the card or payment method.\nWhere to find it: It is returned by Stripe Checkout, Payment Element, or a previous Stripe step. It starts with pm_.\nExample: pm_1NabcDEF234567890.\nTip: Use {{$json.paymentMethodId}} from a Stripe webhook or checkout-session output.",
-              "placeholder": "pm_...",
-              "example": "pm_..."
-            },
-            {
-              "name": "Customer Id",
-              "internalKey": "customerId",
-              "type": "string",
-              "required": false,
-              "description": "Stripe customer ID",
-              "helpText": "What this field is: The Stripe customer ID — starts with cus_.\nWhere to find it: Stripe Dashboard → Customers → click a customer — the ID is shown at the top.\nExample: cus_XXXXXXXXXXXXXXXXXX\nTip: Use {{$json.customerId}} from a Create Customer step.",
-              "placeholder": "cus_...",
-              "example": "cus_..."
-            },
-            {
-              "name": "Email",
-              "internalKey": "email",
-              "type": "email",
-              "required": false,
-              "description": "Customer email (for createCustomer)",
-              "helpText": "What this field is: The email address that Stripe should use for email.\nHow to fill it: Type one email address, or multiple addresses separated by commas if the field supports several recipients.\nExample: alice@example.com\nDynamic example: {{$json.email}} uses the email value from an earlier node.",
-              "placeholder": "user@example.com",
-              "example": "user@example.com"
-            },
-            {
-              "name": "Name",
-              "internalKey": "name",
-              "type": "string",
-              "required": false,
-              "description": "Customer name (for createCustomer)",
-              "helpText": "What this field is: Customer name.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Name value.\nTip: This field is used for createCustomer. Leave it blank when this operation does not need it.",
-              "placeholder": "Enter Name"
-            },
-            {
-              "name": "Charge Id",
-              "internalKey": "chargeId",
-              "type": "string",
-              "required": false,
-              "description": "Charge ID (for refund)",
-              "helpText": "What this field is: The Stripe charge ID to refund or look up.\nWhere to find it: Open Stripe Dashboard -> Payments -> choose a payment. The charge ID starts with ch_.\nExample: ch_3Nf9mX2eZvKYlo2C0abc1234.\nTip: Use {{$json.id}} from a previous Charge step when it returns a charge ID.",
-              "placeholder": "ch_...",
-              "example": "ch_..."
-            },
-            {
-              "name": "Payment Intent Id",
-              "internalKey": "paymentIntentId",
-              "type": "string",
-              "required": false,
-              "description": "PaymentIntent ID (for refund)",
-              "helpText": "What this field is: The Stripe PaymentIntent ID to refund or look up.\nWhere to find it: Open the payment in Stripe Dashboard or use the payment_intent value from a Stripe webhook. It starts with pi_.\nExample: pi_3Nf9mX2eZvKYlo2C0abc1234.\nTip: Use {{$json.payment_intent}} from a checkout or payment webhook.",
-              "placeholder": "pi_...",
-              "example": "pi_..."
-            }
-          ],
-          "outputExample": {
-            "id": "ch_1abc",
-            "amount": 2000,
-            "currency": "usd",
-            "status": "succeeded"
-          },
-          "outputDescription": "id: Unique identifier returned by the service.\namount: Value returned by this operation.\ncurrency: Value returned by this operation.\nstatus: Current state of the requested action.",
-          "usageExample": {
-            "scenario": "Process incoming Stripe data with charge after a related upstream event is received",
-            "inputValues": {
-              "Api Key": "sk_live_...",
-              "Amount": "1000",
-              "Currency": "usd",
-              "Description": "",
-              "Source": "tok_visa"
-            },
-            "expectedOutput": "Stripe returns structured charge data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://docs.stripe.com/api"
-        },
-        {
-          "name": "Refund",
-          "value": "refund",
-          "description": "Refund using the Stripe node.",
-          "fields": [
-            {
-              "name": "Api Key",
-              "internalKey": "apiKey",
-              "type": "password",
-              "required": false,
-              "description": "Stripe secret key (optional if stored in vault under key \"stripe\")",
-              "helpText": "What this field is: Stripe secret key, a secret password that lets CtrlChecks talk to Stripe safely.\nWhere to find it: Stripe Dashboard -> Developers -> API keys -> Secret key.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: sk_test_... for testing or sk_live_... for real payments.\nImportant: Treat this like a bank password. Use test keys while building so no real money moves.",
-              "placeholder": "sk_live_...",
-              "example": "sk_live_...",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Amount",
-              "internalKey": "amount",
-              "type": "number",
-              "required": false,
-              "description": "Payment amount (in cents)",
-              "helpText": "What this field is: The refund amount in the smallest unit of the currency, not dollars or euros directly.\nHow to fill it: For USD, EUR, GBP, INR, and most currencies, multiply the main amount by 100. For JPY, enter the yen amount as-is.\nExample: 4999 charges $49.99 USD. 2000 refunds $20.00 USD.\nTip: Use {{$json.amount}} from an order, form, or Stripe event after converting it to the smallest currency unit.",
-              "placeholder": "1000",
-              "example": "1000"
-            },
-            {
-              "name": "Currency",
-              "internalKey": "currency",
-              "type": "string",
-              "required": false,
-              "description": "Currency (default: usd)",
-              "helpText": "What this field is: The three-letter currency code for the Stripe payment.\nHow to fill it: Use lowercase letters and a currency your Stripe account supports.\nExample: usd, eur, gbp, inr, aud, cad, jpy.\nTip: The refund currency must match the original payment currency.",
-              "placeholder": "usd",
-              "example": "usd",
-              "defaultValue": "usd"
-            },
-            {
-              "name": "Description",
-              "internalKey": "description",
-              "type": "textarea",
-              "required": false,
-              "description": "Description for the charge/payment",
-              "helpText": "What this field is: Description.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: Description value.\nTip: Use {{$json.description}} when this value comes from an earlier step.",
-              "placeholder": "Enter Description"
-            },
-            {
-              "name": "Source",
-              "internalKey": "source",
-              "type": "string",
-              "required": false,
-              "description": "Legacy charge source token (for /v1/charges)",
-              "helpText": "What this field is: A legacy Stripe source token for older charge flows.\nHow to fill it: Use a token that starts with tok_ only when your workflow still uses Stripe Charges.\nExample: tok_visa for Stripe test mode.\nTip: For new payment flows, prefer Payment Method ID or PaymentIntent-based workflows.",
-              "placeholder": "tok_visa",
-              "example": "tok_visa"
-            },
-            {
-              "name": "Payment Method Id",
-              "internalKey": "paymentMethodId",
-              "type": "string",
-              "required": false,
-              "description": "Payment method ID (for PaymentIntents)",
-              "helpText": "What this field is: The Stripe Payment Method ID for the card or payment method.\nWhere to find it: It is returned by Stripe Checkout, Payment Element, or a previous Stripe step. It starts with pm_.\nExample: pm_1NabcDEF234567890.\nTip: Use {{$json.paymentMethodId}} from a Stripe webhook or checkout-session output.",
-              "placeholder": "pm_...",
-              "example": "pm_..."
-            },
-            {
-              "name": "Customer Id",
-              "internalKey": "customerId",
-              "type": "string",
-              "required": false,
-              "description": "Stripe customer ID",
-              "helpText": "What this field is: The Stripe customer ID — starts with cus_.\nWhere to find it: Stripe Dashboard → Customers → click a customer — the ID is shown at the top.\nExample: cus_XXXXXXXXXXXXXXXXXX\nTip: Use {{$json.customerId}} from a Create Customer step.",
-              "placeholder": "cus_...",
-              "example": "cus_..."
-            },
-            {
-              "name": "Email",
-              "internalKey": "email",
-              "type": "email",
-              "required": false,
-              "description": "Customer email (for createCustomer)",
-              "helpText": "What this field is: The email address that Stripe should use for email.\nHow to fill it: Type one email address, or multiple addresses separated by commas if the field supports several recipients.\nExample: alice@example.com\nDynamic example: {{$json.email}} uses the email value from an earlier node.",
-              "placeholder": "user@example.com",
-              "example": "user@example.com"
-            },
-            {
-              "name": "Name",
-              "internalKey": "name",
-              "type": "string",
-              "required": false,
-              "description": "Customer name (for createCustomer)",
-              "helpText": "What this field is: Customer name.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Name value.\nTip: This field is used for createCustomer. Leave it blank when this operation does not need it.",
-              "placeholder": "Enter Name"
-            },
-            {
-              "name": "Charge Id",
-              "internalKey": "chargeId",
-              "type": "string",
-              "required": false,
-              "description": "Charge ID (for refund)",
-              "helpText": "What this field is: The Stripe charge ID to refund or look up.\nWhere to find it: Open Stripe Dashboard -> Payments -> choose a payment. The charge ID starts with ch_.\nExample: ch_3Nf9mX2eZvKYlo2C0abc1234.\nTip: Use {{$json.id}} from a previous Charge step when it returns a charge ID.",
-              "placeholder": "ch_...",
-              "example": "ch_..."
-            },
-            {
-              "name": "Payment Intent Id",
-              "internalKey": "paymentIntentId",
-              "type": "string",
-              "required": false,
-              "description": "PaymentIntent ID (for refund)",
-              "helpText": "What this field is: The Stripe PaymentIntent ID to refund or look up.\nWhere to find it: Open the payment in Stripe Dashboard or use the payment_intent value from a Stripe webhook. It starts with pi_.\nExample: pi_3Nf9mX2eZvKYlo2C0abc1234.\nTip: Use {{$json.payment_intent}} from a checkout or payment webhook.",
-              "placeholder": "pi_...",
-              "example": "pi_..."
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming Stripe data with refund after a related upstream event is received",
-            "inputValues": {
-              "Api Key": "sk_live_...",
-              "Amount": "1000",
-              "Currency": "usd",
-              "Description": "",
-              "Source": "tok_visa"
-            },
-            "expectedOutput": "Stripe returns structured refund data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://docs.stripe.com/api"
-        },
-        {
-          "name": "CreateCustomer",
-          "value": "createCustomer",
-          "description": "CreateCustomer using the Stripe node.",
-          "fields": [
-            {
-              "name": "Api Key",
-              "internalKey": "apiKey",
-              "type": "password",
-              "required": false,
-              "description": "Stripe secret key (optional if stored in vault under key \"stripe\")",
-              "helpText": "What this field is: Stripe secret key, a secret password that lets CtrlChecks talk to Stripe safely.\nWhere to find it: Stripe Dashboard -> Developers -> API keys -> Secret key.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: sk_test_... for testing or sk_live_... for real payments.\nImportant: Treat this like a bank password. Use test keys while building so no real money moves.",
-              "placeholder": "sk_live_...",
-              "example": "sk_live_...",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Amount",
-              "internalKey": "amount",
-              "type": "number",
-              "required": false,
-              "description": "Payment amount (in cents)",
-              "helpText": "What this field is: The payment amount in the smallest unit of the currency, not dollars or euros directly.\nHow to fill it: For USD, EUR, GBP, INR, and most currencies, multiply the main amount by 100. For JPY, enter the yen amount as-is.\nExample: 4999 charges $49.99 USD. 2000 refunds $20.00 USD.\nTip: Use {{$json.amount}} from an order, form, or Stripe event after converting it to the smallest currency unit.",
-              "placeholder": "1000",
-              "example": "1000"
-            },
-            {
-              "name": "Currency",
-              "internalKey": "currency",
-              "type": "string",
-              "required": false,
-              "description": "Currency (default: usd)",
-              "helpText": "What this field is: The three-letter currency code for the Stripe payment.\nHow to fill it: Use lowercase letters and a currency your Stripe account supports.\nExample: usd, eur, gbp, inr, aud, cad, jpy.\nTip: The refund currency must match the original payment currency.",
-              "placeholder": "usd",
-              "example": "usd",
-              "defaultValue": "usd"
-            },
-            {
-              "name": "Description",
-              "internalKey": "description",
-              "type": "textarea",
-              "required": false,
-              "description": "Description for the charge/payment",
-              "helpText": "What this field is: Description.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: Description value.\nTip: Use {{$json.description}} when this value comes from an earlier step.",
-              "placeholder": "Enter Description"
-            },
-            {
-              "name": "Source",
-              "internalKey": "source",
-              "type": "string",
-              "required": false,
-              "description": "Legacy charge source token (for /v1/charges)",
-              "helpText": "What this field is: A legacy Stripe source token for older charge flows.\nHow to fill it: Use a token that starts with tok_ only when your workflow still uses Stripe Charges.\nExample: tok_visa for Stripe test mode.\nTip: For new payment flows, prefer Payment Method ID or PaymentIntent-based workflows.",
-              "placeholder": "tok_visa",
-              "example": "tok_visa"
-            },
-            {
-              "name": "Payment Method Id",
-              "internalKey": "paymentMethodId",
-              "type": "string",
-              "required": false,
-              "description": "Payment method ID (for PaymentIntents)",
-              "helpText": "What this field is: The Stripe Payment Method ID for the card or payment method.\nWhere to find it: It is returned by Stripe Checkout, Payment Element, or a previous Stripe step. It starts with pm_.\nExample: pm_1NabcDEF234567890.\nTip: Use {{$json.paymentMethodId}} from a Stripe webhook or checkout-session output.",
-              "placeholder": "pm_...",
-              "example": "pm_..."
-            },
-            {
-              "name": "Customer Id",
-              "internalKey": "customerId",
-              "type": "string",
-              "required": false,
-              "description": "Stripe customer ID",
-              "helpText": "What this field is: The Stripe customer ID — starts with cus_.\nWhere to find it: Stripe Dashboard → Customers → click a customer — the ID is shown at the top.\nExample: cus_XXXXXXXXXXXXXXXXXX\nTip: Use {{$json.customerId}} from a Create Customer step.",
-              "placeholder": "cus_...",
-              "example": "cus_..."
-            },
-            {
-              "name": "Email",
-              "internalKey": "email",
-              "type": "email",
-              "required": false,
-              "description": "Customer email (for createCustomer)",
-              "helpText": "What this field is: The email address for Customer email.\nHow to fill it: Type one valid email address unless the field says it accepts several.\nExample: alice@example.com.\nTip: Use {{$json.email}} when an earlier form, sheet, or database row provides the email address.",
-              "placeholder": "user@example.com",
-              "example": "user@example.com"
-            },
-            {
-              "name": "Name",
-              "internalKey": "name",
-              "type": "string",
-              "required": false,
-              "description": "Customer name (for createCustomer)",
-              "helpText": "What this field is: Customer name.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Name value.\nTip: This field is used for createCustomer. Leave it blank when this operation does not need it.",
-              "placeholder": "Enter Name"
-            },
-            {
-              "name": "Charge Id",
-              "internalKey": "chargeId",
-              "type": "string",
-              "required": false,
-              "description": "Charge ID (for refund)",
-              "helpText": "What this field is: The Stripe charge ID to refund or look up.\nWhere to find it: Open Stripe Dashboard -> Payments -> choose a payment. The charge ID starts with ch_.\nExample: ch_3Nf9mX2eZvKYlo2C0abc1234.\nTip: Use {{$json.id}} from a previous Charge step when it returns a charge ID.",
-              "placeholder": "ch_...",
-              "example": "ch_..."
-            },
-            {
-              "name": "Payment Intent Id",
-              "internalKey": "paymentIntentId",
-              "type": "string",
-              "required": false,
-              "description": "PaymentIntent ID (for refund)",
-              "helpText": "What this field is: The Stripe PaymentIntent ID to refund or look up.\nWhere to find it: Open the payment in Stripe Dashboard or use the payment_intent value from a Stripe webhook. It starts with pi_.\nExample: pi_3Nf9mX2eZvKYlo2C0abc1234.\nTip: Use {{$json.payment_intent}} from a checkout or payment webhook.",
-              "placeholder": "pi_...",
-              "example": "pi_..."
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming Stripe data with create customer after a related upstream event is received",
-            "inputValues": {
-              "Api Key": "sk_live_...",
-              "Amount": "1000",
-              "Currency": "usd",
-              "Description": "",
-              "Source": "tok_visa"
-            },
-            "expectedOutput": "Stripe returns structured create customer data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://docs.stripe.com/api"
-        }
-      ]
-    }
-  ],
-  "commonErrors": [
-    {
-      "error": "Authentication failed",
-      "cause": "The saved credential, token, API key, or OAuth grant is missing, expired, or lacks the required scope.",
-      "fix": "Reconnect the service in CtrlChecks → Connections, then re-run the Stripe node."
+      name: 'Payments and Billing',
+      description: 'Stripe runtime actions are selected by Operation. The executor returns raw Stripe objects under operation-specific keys and preserves incoming item fields on both success and failure.',
+      operations: [
+        op('Create PaymentIntent or Charge', 'paymentintent', 'Creates a modern PaymentIntent when Payment Method ID is present or Source Token is blank; otherwise it falls back to Stripe legacy Charges API. The runtime accepts charge, payment, and paymentintent, but not the panel alias create_payment_intent.', { success: true, paymentIntent: { id: 'pi_123', amount: 1000, currency: 'usd', status: 'requires_payment_method' } }, 'success: true when Stripe accepted the create request. paymentIntent: raw Stripe PaymentIntent for modern flows. charge: raw Stripe charge only when the legacy Charges API path is used. _error and _errorDetails appear when Stripe rejects the request.', { operation: 'paymentintent', amount: '{{$json.amountCents}}', currency: 'usd', paymentMethodId: '{{$json.paymentMethodId}}' }),
+        op('Create Customer', 'create_customer', 'Creates a Stripe customer using optional email, name, and description fields. This is one of the visual panel values that already matches the runtime exactly.', { success: true, customer: { id: 'cus_123', email: 'buyer@example.com', name: 'Ada Lovelace' } }, 'success: true when Stripe created the customer. customer: raw Stripe customer object including id, email, name, metadata, and created fields when Stripe returns them. _error and _errorDetails appear on failure.', { operation: 'create_customer', email: '{{$json.email}}', name: '{{$json.name}}' }),
+        op('Refund', 'refund', 'Creates a Stripe refund against either a Charge ID or PaymentIntent ID. A numeric Amount creates a partial refund; a blank Amount asks Stripe to refund the full eligible amount.', { success: true, refund: { id: 're_123', status: 'succeeded', payment_intent: 'pi_123' } }, 'success: true when Stripe created the refund. refund: raw Stripe refund object including refund.id, status, amount, charge, and payment_intent. _error and _errorDetails appear on failed refund requests.', { operation: 'refund', paymentIntentId: '{{$json.paymentIntentId}}', amount: '{{$json.refundAmount}}' }),
+        op('Get PaymentIntent', 'get_payment_intent', 'Retrieves one PaymentIntent by ID with a GET request. The panel alias get_payment is visible today but not accepted by the executor; use get_payment_intent in generated or hand-edited configs.', { success: true, paymentIntent: { id: 'pi_123', status: 'succeeded', amount: 2500 } }, 'success: true when Stripe returned the record. paymentIntent: raw Stripe PaymentIntent object. _error and _errorDetails appear when the ID is missing, invalid, or not accessible.', { operation: 'get_payment_intent', paymentIntentId: '{{$json.paymentIntentId}}' }),
+        op('List PaymentIntents', 'list_payment_intents', 'Lists PaymentIntents with an optional customer filter and a runtime-clamped limit between 1 and 100. The panel alias list_payments is visible today but not accepted by the executor.', { success: true, items: [{ id: 'pi_123', status: 'succeeded' }], stripe: { has_more: false } }, 'success: true when Stripe returned the list. items: the Stripe data array, normalized to an empty array if Stripe omits data. stripe: the full raw list response including has_more and url. _error and _errorDetails appear on API failure.', { operation: 'list_payment_intents', customerId: '{{$json.customerId}}', limit: '10' }),
+        op('Create Subscription', 'create_subscription', 'Creates a subscription for one customer and one price. The executor reads priceId, or incorrectly falls back to metadata as a plain price string; it does not send actual Stripe metadata today.', { success: true, subscription: { id: 'sub_123', customer: 'cus_123', status: 'incomplete' } }, 'success: true when Stripe created the subscription. subscription: raw Stripe subscription object including subscription.id, status, customer, and items. _error and _errorDetails appear on missing customerId/priceId or Stripe API failure.', { operation: 'create_subscription', customerId: '{{$json.customerId}}', priceId: '{{$json.priceId}}' }),
+        op('Create Invoice', 'create_invoice', 'Creates a draft invoice for a Stripe customer. The node sends customer and optional description; it does not finalize, send, or pay the invoice automatically.', { success: true, invoice: { id: 'in_123', customer: 'cus_123', status: 'draft' } }, 'success: true when Stripe created the invoice. invoice: raw Stripe invoice object including invoice.id, customer, status, hosted_invoice_url, and totals when Stripe returns them. _error and _errorDetails appear on failure.', { operation: 'create_invoice', customerId: '{{$json.customerId}}', description: 'Invoice for {{$json.orderId}}' }),
+      ],
     },
-    {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
-    },
-    {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
   ],
-  "relatedNodes": []
+  commonErrors: [
+    { error: 'Stripe: API key not found. Provide apiKey or attach vault credential "stripe".', cause: 'No Stripe credential was found in Connections/credential vault and apiKey was blank.', fix: 'Connect Stripe in Connections or provide a temporary restricted test key in apiKey.' },
+    { error: 'Stripe: operation is required (paymentintent, refund, create_customer, get_payment_intent, list_payment_intents, create_subscription, create_invoice)', cause: 'Operation was empty.', fix: 'Choose or generate one of the runtime-supported operation values.' },
+    { error: 'Stripe charge: amount (in cents) is required', cause: 'A payment operation had no positive numeric Amount.', fix: 'Map a positive integer amount in cents/minor units, such as {{$json.amountCents}}.' },
+    { error: 'Stripe get_payment: paymentIntentId is required', cause: 'Get PaymentIntent was run without a PaymentIntent ID.', fix: 'Map a pi_... value from a previous Stripe step or webhook.' },
+    { error: 'Stripe create_subscription: customerId is required / Stripe create_subscription: priceId is required / Stripe create_invoice: customerId is required', cause: 'A billing operation was missing its required customer or price field.', fix: 'Create or retrieve the customer/price first, then map the returned IDs into this node.' },
+    { error: 'Stripe: Unsupported operation "<value>"', cause: 'A visual alias such as create_payment, create_payment_intent, get_payment, list_payments, or create_refund was used, but the executor does not translate those names.', fix: 'Use paymentintent, get_payment_intent, list_payment_intents, or refund until the panel aliases are fixed.' },
+  ],
+  relatedNodes: ['paypal', 'shopify', 'woocommerce', 'chargebee'],
 };

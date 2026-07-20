@@ -13,6 +13,7 @@
  */
 
 import { getDbClient } from '../core/database/aws-db-client';
+import { normalizeExecutionStatus } from '../core/execution/execution-db-enums';
 import { publishExecutionEvent } from './ws-redis-bridge';
 import type { ExecutionJob } from './execution-queue';
 
@@ -35,7 +36,7 @@ export async function runExecutionJob(job: ExecutionJob): Promise<JobRunResult> 
   try {
     await db
       .from('executions')
-      .update({ status: 'running', current_node: null })
+      .update({ status: normalizeExecutionStatus('running'), current_node: null })
       .eq('id', job.executionId);
   } catch (dbErr) {
     console.warn(`[JobRunner] Could not update execution ${job.executionId} to running:`, dbErr);
@@ -97,7 +98,7 @@ export async function runExecutionJob(job: ExecutionJob): Promise<JobRunResult> 
     await db
       .from('executions')
       .update({
-        status: finalStatus,
+        status: normalizeExecutionStatus(finalStatus),
         duration_ms: durationMs,
         error: executionError ?? null,
         current_node: null,

@@ -1,67 +1,203 @@
-import type { NodeDoc } from '../types';
+import type { FieldDoc, NodeDoc } from '../types';
+
+const help = (field: string, why: string, when: string, enter: string, source: string, later: string, format: string, example: string, wrong: string, mistake: string) => `What this field is: ${field}
+Why it matters: ${why}
+When to fill it: ${when}
+What to enter: ${enter}
+Where the value comes from: ${source}
+How to use it later: ${later}
+Accepted format: ${format}
+Real workplace example: ${example}
+If it is empty or wrong: ${wrong}
+Common mistake: ${mistake}`;
+
+const fields: FieldDoc[] = [
+  {
+    name: 'Operation',
+    internalKey: 'operation',
+    type: 'select',
+    required: true,
+    description: 'Visible legacy operation selector. Current runtime ignores Store, Retrieve, Clear, and Search.',
+    options: ['store', 'retrieve', 'clear', 'search'],
+    defaultValue: 'store',
+    helpText: help(
+      'The visible operation dropdown with store, retrieve, clear, and search options.',
+      'The panel suggests memory storage behavior, but the current executor ignores this value and always returns a passthrough memory context object.',
+      'Leave it at store unless you are preserving an old visual configuration; changing it does not change current runtime behavior.',
+      'Choose store, retrieve, clear, or search knowing each option currently produces the same passthrough behavior.',
+      'Chosen in the workflow editor, not from an external memory service.',
+      'Downstream nodes receive {{$json.sessionId}}, {{$json.context}}, and {{$json.messages}} regardless of this setting.',
+      'One of store, retrieve, clear, or search.',
+      'A chat workflow leaves Operation as store while passing context to a later AI Agent.',
+      'No Redis/vector write, read, delete, or search is performed; no operation-specific error is raised.',
+      'Do not rely on Retrieve or Search to fetch old conversation history today.',
+    ),
+    example: 'store',
+  },
+  {
+    name: 'Memory Type',
+    internalKey: 'memoryType',
+    type: 'select',
+    required: false,
+    description: 'Visible legacy storage selector ignored by the current passthrough executor.',
+    options: ['short', 'long', 'both'],
+    defaultValue: 'both',
+    helpText: help(
+      'A visible selector for short, long, or both memory styles.',
+      'The current runtime does not write Redis short-term memory or vector long-term memory from this node.',
+      'Leave it at both for compatibility unless a future worker change implements real persistence.',
+      'Choose short, long, or both only as a label for saved configs; all options behave the same today.',
+      'Chosen in the node panel, not loaded from a memory backend.',
+      'No downstream output confirms short/long/both was used because the executor ignores it.',
+      'One of short, long, or both.',
+      'A legacy assistant workflow keeps Memory Type at both while using Context as the actual data passed forward.',
+      'Changing it does not store or retrieve anything and does not raise an error.',
+      'Do not assume both creates hybrid memory; it currently does not.',
+    ),
+    example: 'both',
+  },
+  {
+    name: 'TTL',
+    internalKey: 'ttl',
+    type: 'number',
+    required: false,
+    description: 'Visible legacy Redis time-to-live value ignored by the current memory executor.',
+    defaultValue: '3600',
+    helpText: help(
+      'A time-to-live value in seconds from older short-term memory designs.',
+      'The current executor does not persist memory, so there is no stored record for TTL to expire.',
+      'Leave it at 3600 unless preserving an old config.',
+      'Enter a positive number such as 3600, knowing it is not used today.',
+      'Chosen by the workflow designer, not from Redis.',
+      'Downstream nodes do not receive ttl, and no expiry behavior is applied.',
+      'Number of seconds.',
+      'A legacy chatbot canvas leaves TTL at 3600 while passing session context forward.',
+      'Blank or invalid values do not affect the passthrough output.',
+      'Do not use TTL as a privacy or retention control in the current runtime.',
+    ),
+    example: '3600',
+  },
+  {
+    name: 'Max Messages',
+    internalKey: 'maxMessages',
+    type: 'number',
+    required: false,
+    description: 'Visible legacy retrieval limit ignored by the current memory executor.',
+    defaultValue: '100',
+    helpText: help(
+      'A visible count for how many messages a real memory retrieval operation might return.',
+      'The current runtime does not retrieve from a memory store; it returns messages already present in incoming data.',
+      'Leave it at 100 unless preserving an old config.',
+      'Enter a whole number such as 10 or 100, knowing it is not used to query history today.',
+      'Chosen in the node panel.',
+      'Downstream nodes receive {{$json.messages}} from incoming data or an empty array.',
+      'Whole number.',
+      'A workflow passes an existing {{$json.messages}} array forward and leaves Max Messages at 100.',
+      'Changing it does not trim or fetch messages in current runtime.',
+      'Do not expect this field to limit token usage; trim messages before this node if needed.',
+    ),
+    example: '100',
+  },
+  {
+    name: 'Session ID',
+    internalKey: 'sessionId',
+    type: 'string',
+    required: false,
+    description: 'Optional identifier returned as sessionId. If blank, runtime uses mem_<node id>.',
+    helpText: help(
+      'A stable ID that names the chat, customer, ticket, or process this context belongs to.',
+      'It lets downstream AI or logging steps know which conversation/context object they are handling.',
+      'Fill it when you have a customer ID, chat session ID, ticket ID, or workflow-specific correlation ID.',
+      'Type a fixed ID or map one such as customer-{{$json.customerId}} or {{$json.sessionId}}.',
+      'Usually from a Chat Trigger, CRM record, support ticket, form submission, or previous Set/Edit Fields node.',
+      'Downstream nodes read it as {{$json.sessionId}}.',
+      'Plain text or template expression that resolves to text.',
+      'A support workflow sets Session ID to ticket-{{$json.ticketId}}.',
+      'If blank, runtime returns a generated value like mem_<node id>, which may not match your business record.',
+      'Do not use a different random ID on each run when later steps need stable conversation grouping.',
+    ),
+    example: 'ticket-{{$json.ticketId}}',
+  },
+  {
+    name: 'Session ID Alias',
+    internalKey: 'session_id',
+    type: 'string',
+    required: false,
+    description: 'Backend alias for sessionId used by generated or legacy configs.',
+    helpText: help(
+      'A legacy snake_case alias for Session ID.',
+      'The executor checks sessionId first, then session_id, so generated configs can still provide this name.',
+      'Use only when an API-created workflow already emits session_id. Visual workflows should use Session ID.',
+      'Map a stable string such as {{$json.session_id}}.',
+      'Usually from old generated workflow payloads or upstream chat data.',
+      'Runtime normalizes it into the output field {{$json.sessionId}}.',
+      'Plain text or template expression resolving to text.',
+      'A legacy workflow maps {{$json.session_id}} from an older chat adapter.',
+      'If both sessionId and session_id are blank, runtime uses mem_<node id>.',
+      'Do not fill both with different values; sessionId wins.',
+    ),
+    example: '{{$json.session_id}}',
+  },
+  {
+    name: 'Context',
+    internalKey: 'context',
+    type: 'textarea',
+    required: false,
+    description: 'Context text returned by the passthrough memory node.',
+    helpText: help(
+      'The useful memory/context text you want later AI steps to see.',
+      'Because this node does not persist memory today, Context is the main data it can pass forward.',
+      'Fill it when a downstream AI step needs customer history, policy notes, or a conversation summary.',
+      'Type a short note or map a previous field such as {{$json.context}}, {{$json.summary}}, or {{$json.customerHistory}}.',
+      'Usually from a chat trigger, CRM lookup, database lookup, summarizer, or Set/Edit Fields node.',
+      'Downstream nodes read it as {{$json.context}}.',
+      'Plain text or template expression. If incoming context is an object, prepare a text summary before this node.',
+      'A support workflow sets Context to Customer has an open billing dispute for invoice INV-1048.',
+      'If blank and incoming data has no context, runtime returns context as null.',
+      'Do not assume this node creates context by itself; provide the text you want passed forward.',
+    ),
+    example: '{{$json.customerContext}}',
+  },
+];
 
 export const memoryDoc: NodeDoc = {
-  "slug": "memory",
-  "displayName": "Memory",
-  "category": "AI",
-  "logoUrl": "/icons/nodes/memory.svg",
-  "description": "Memory storage for AI Agent context",
-  "credentialType": "None",
-  "credentialSetupSteps": [
-    "This node does not need a saved account connection.",
-    "Open the node settings and fill the visible input fields.",
-    "Run the workflow when the required fields are complete."
+  slug: 'memory',
+  displayName: 'Memory',
+  category: 'AI',
+  logoUrl: '/icons/nodes/memory.svg',
+  description: 'Pass a sessionId, context, and incoming messages forward for AI workflows. Current runtime does not persist, retrieve, clear, or search memory.',
+  credentialType: 'None',
+  credentialSetupSteps: [
+    'No third-party account connection is required; the current Memory node does not call Redis, a vector database, or an external memory service.',
+    'Connect this node output to AI Agent, AI Chat Model, logging, or transform steps when they need sessionId/context/messages.',
+    'Any downstream service node account connection belongs on that downstream service node, not on Memory.',
+    'Keep sensitive customer history short and purposeful; Memory passes context forward but does not provide a secure retention policy by itself.',
   ],
-  "credentialDocsUrl": "https://docs.ctrlchecks.com",
-  "resources": [
-    {
-      "name": "Configuration",
-      "description": "Memory is configured directly with input fields.",
-      "operations": [
-        {
-          "name": "Execute",
-          "value": "default",
-          "description": "Execute using the Memory node.",
-          "fields": [
-            {
-              "name": "Context",
-              "internalKey": "context",
-              "type": "string",
-              "required": false,
-              "description": "Memory context",
-              "helpText": "What this field is: Memory context.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: {{$json.context}}.\nTip: Use {{$json.context}} when this value comes from an earlier step.",
-              "placeholder": "{{$json.context}}",
-              "example": "{{$json.context}}"
-            }
-          ],
-          "outputExample": {
-            "messages": [],
-            "context": {}
-          },
-          "outputDescription": "messages: Returned records from the service.\ncontext: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming Memory data with execute after a related upstream event is received",
-            "inputValues": {
-              "Context": "{{$json.context}}"
-            },
-            "expectedOutput": "Memory returns structured execute data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
-        }
-      ]
-    }
+  credentialDocsUrl: 'https://docs.ctrlchecks.com',
+  resources: [{
+    name: 'Configuration',
+    description: 'Memory has one current runtime behavior: return sessionId, context, and messages. The visible Store/Retrieve/Clear/Search settings are legacy UI controls and do not alter execution today.',
+    operations: [{
+      name: 'Pass Context',
+      value: 'default',
+      description: 'Returns sessionId from Session ID or session_id, context from Context or incoming context, and messages from incoming messages or an empty array. It does not store, retrieve, clear, search, expire, or limit messages.',
+      fields,
+      outputExample: { sessionId: 'ticket-1048', context: 'Customer has an open billing dispute for invoice INV-1048.', messages: [{ role: 'user', content: 'Why was I charged twice?' }] },
+      outputDescription: 'sessionId is the configured ID or mem_<node id>. context is the configured Context, incoming context, or null. messages is the incoming messages array or an empty array. No memory, searchResults, deleted, stored, ttl, or count fields are produced.',
+      usageExample: {
+        scenario: 'Pass customer context into a later AI Agent without claiming persistent memory storage',
+        inputValues: { operation: 'store', memoryType: 'both', ttl: '3600', maxMessages: '100', sessionId: 'ticket-{{$json.ticketId}}', session_id: '{{$json.session_id}}', context: '{{$json.customerContext}}' },
+        expectedOutput: 'Use {{$json.sessionId}} and {{$json.context}} in the next AI step.',
+      },
+      externalDocsUrl: 'https://docs.ctrlchecks.com',
+    }],
+  }],
+  commonErrors: [
+    { error: 'Operation does not store anything', cause: 'Store/Retrieve/Clear/Search are ignored by the current executor.', fix: 'Use Context and Session ID as passthrough fields, or implement real memory persistence in the worker.' },
+    { error: 'TTL has no effect', cause: 'The node does not write Redis short-term memory today.', fix: 'Do not rely on TTL for retention; handle retention in the actual storage service.' },
+    { error: 'Messages are empty', cause: 'Incoming data did not contain a messages array.', fix: 'Prepare messages before this node or map context text instead.' },
+    { error: 'Context is null', cause: 'Context is blank and incoming data has no context field.', fix: 'Fill Context with a mapped summary such as {{$json.customerContext}}.' },
+    { error: 'Next node cannot find memory/searchResults', cause: 'The current output does not include fabricated memory or searchResults fields.', fix: 'Map sessionId, context, or messages, or add a real storage/search node.' },
   ],
-  "commonErrors": [
-    {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
-    },
-    {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
-  ],
-  "relatedNodes": []
+  relatedNodes: ['ai_agent', 'ai_chat_model', 'google_gemini', 'langchain'],
 };

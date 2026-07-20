@@ -1,36 +1,8 @@
 import type { DocsSearchIndexItem } from '../search-index';
 
 export const writeBinaryFileSearchIndex = [
-  {
-    "type": "node",
-    "title": "Write Binary File",
-    "slug": "write_binary_file",
-    "category": "Data",
-    "href": "/docs/nodes/write_binary_file",
-    "text": "Write Binary File Write binary files Use this node when a workflow needs write binary file behavior with schema-driven inputs from the CtrlChecks node registry. Data"
-  },
-  {
-    "type": "operation",
-    "title": "Write Binary File: Configure",
-    "slug": "write_binary_file",
-    "category": "Data",
-    "href": "/docs/nodes/write_binary_file#operation-configure",
-    "text": "Write Binary File Configuration Configure Configure with the Write Binary File node using the configured input fields. configure"
-  },
-  {
-    "type": "field",
-    "title": "Write Binary File: File Path",
-    "slug": "write_binary_file",
-    "category": "Data",
-    "href": "/docs/nodes/write_binary_file#operation-configure",
-    "text": "Write Binary File Configuration Configure File Path filePath File path"
-  },
-  {
-    "type": "field",
-    "title": "Write Binary File: Data",
-    "slug": "write_binary_file",
-    "category": "Data",
-    "href": "/docs/nodes/write_binary_file#operation-configure",
-    "text": "Write Binary File Configuration Configure Data data Binary data (base64)"
-  }
+  { type: 'node', title: 'Write Binary File', slug: 'write_binary_file', category: 'File', href: '/docs/nodes/write_binary_file', text: 'Write Binary File stores base64, data URL, or plain text as a managed workflow file asset and returns assetId, dataBase64, storageKey, and metadata.' },
+  { type: 'operation', title: 'Write Binary File: Configure', slug: 'write_binary_file', category: 'File', href: '/docs/nodes/write_binary_file#operation-configure', text: 'Configure writes one safe binary file asset using fileName, mimeType, dataBase64, folder, filePath, persist, and legacy body aliases.' },
+  { type: 'field', title: 'Write Binary File: Binary Data', slug: 'write_binary_file', category: 'File', href: '/docs/nodes/write_binary_file#operation-configure', text: 'Binary Data/dataBase64 is the primary file body; data, content, and fileData are supported aliases.' },
+  { type: 'field', title: 'Write Binary File: Persist Metadata', slug: 'write_binary_file', category: 'File', href: '/docs/nodes/write_binary_file#operation-configure', text: 'Persist Metadata saves workflow_file_assets metadata so a later Read Binary File node can read by assetId.' },
 ] satisfies DocsSearchIndexItem[];

@@ -1,95 +1,152 @@
 import type { NodeDoc } from '../types';
+import { richFieldHelp } from './_sharedFieldHelp';
+
+const outputDescription = [
+  'status: HTTP response status code returned by the endpoint.',
+  'statusText: HTTP status message such as OK or Created.',
+  'headers: Response headers from the remote server.',
+  'body: Parsed response body when JSON is returned, otherwise raw response text.',
+  'data: Alias for body so later nodes can read the response payload from {{$json.data}}.',
+  'url: Final URL used for the POST request.',
+  'method: Always POST because this node rewrites to HTTP Request with method POST.',
+  'responseTime: Request duration in milliseconds.',
+  '_error: Present only when the wrapped HTTP Request fails before returning a usable response.',
+].join('\n');
 
 export const httpPostDoc: NodeDoc = {
-  "slug": "http_post",
-  "displayName": "HTTP POST",
-  "category": "Utility",
-  "logoUrl": "/icons/nodes/http_post.svg",
-  "description": "Send POST requests with JSON data",
-  "credentialType": "None",
-  "credentialSetupSteps": [
-    "This node does not need a saved account connection.",
-    "Open the node settings and fill the visible input fields.",
-    "Run the workflow when the required fields are complete."
+  slug: 'http_post',
+  displayName: 'HTTP POST',
+  category: 'HTTP & API',
+  logoUrl: '/icons/nodes/http_post.svg',
+  description: 'Send JSON or mapped workflow data to an external URL with the POST method.',
+  credentialType: 'None',
+  credentialSetupSteps: [
+    'HTTP POST does not use credentials or a saved CtrlChecks account connection by itself; it sends the URL, headers, and body you configure.',
+    'For protected endpoints, prefer secure secret references or a prior token step for Authorization headers instead of plain long-lived secrets in the workflow.',
+    'Connect the HTTP POST node output to the next node with an outgoing line; downstream service node account connection setup is still required for those later service nodes.',
+    'Run a small test request and inspect {{$json.status}}, {{$json.body}}, and {{$json._error}} before putting the workflow in production.',
   ],
-  "credentialDocsUrl": "https://docs.ctrlchecks.com",
-  "resources": [
+  credentialDocsUrl: 'https://docs.ctrlchecks.com',
+  resources: [
     {
-      "name": "Configuration",
-      "description": "HTTP POST is configured directly with input fields.",
-      "operations": [
+      name: 'POST Request',
+      description: 'Alias for HTTP Request with method forced to POST.',
+      operations: [
         {
-          "name": "Execute",
-          "value": "default",
-          "description": "Make an HTTP POST request to send data to an external endpoint.",
-          "fields": [
+          name: 'Send POST Request',
+          value: 'default',
+          description: 'Submit a request body to an external API, webhook, or internal endpoint. Use this when a workflow needs to create a record, send an event, trigger another system, or hand off data using the standard HTTP POST method.',
+          fields: [
             {
-              "name": "Url",
-              "internalKey": "url",
-              "type": "url",
-              "required": true,
-              "description": "URL to POST to",
-              "helpText": "What this field is: The web address for URL to POST to.\nHow to fill it: Paste the full URL, including https:// when it is an external service.\nExample: https://api.example.com/data.\nTip: Use {{$json.url}} when the URL comes from an earlier step.",
-              "placeholder": "https://api.example.com/data",
-              "example": "https://api.example.com/data"
+              name: 'URL',
+              internalKey: 'url',
+              type: 'url',
+              required: true,
+              description: 'Destination endpoint that receives the POST request.',
+              helpText: richFieldHelp({
+                what: 'The full web address that receives the POST request.',
+                why: 'The runtime forwards the body to this URL and returns it as {{$json.url}} for traceability.',
+                when: 'Always fill it before running the node.',
+                enter: 'Paste the complete endpoint with https:// and any path or query string required by the API.',
+                source: 'Copy it from the API documentation, webhook setup page, or map it from an earlier step as {{$json.callbackUrl}}.',
+                later: 'Use {{$json.url}} in logs or alerts to show which system was called.',
+                format: 'A full URL such as https://hooks.example.com/workflows/order-created. Expressions must resolve to a URL string.',
+                example: 'A sales workflow posts new lead details to https://crm.example.com/api/leads after a form submission.',
+                empty: 'The wrapped HTTP Request cannot send the request and returns an error.',
+                mistake: 'Leaving off https:// or using a browser page URL instead of the API endpoint URL.',
+              }),
+              placeholder: 'https://api.example.com/webhook',
+              example: 'https://api.example.com/submissions',
             },
             {
-              "name": "Body",
-              "internalKey": "body",
-              "type": "textarea",
-              "required": true,
-              "description": "POST body data",
-              "helpText": "What this field is: Structured data for POST body data.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by HTTP POST.\nExample: {{$json.data}}.\nTip: Use {{$json.body}} when an earlier step already prepared this data.",
-              "placeholder": "{{$json.data}}",
-              "example": "{{$json.data}}"
+              name: 'Headers',
+              internalKey: 'headers',
+              type: 'json',
+              required: false,
+              description: 'Optional HTTP headers sent with the POST request.',
+              helpText: richFieldHelp({
+                what: 'Key/value HTTP headers such as Content-Type, Authorization, Accept, or idempotency keys.',
+                why: 'Headers tell the receiving service how to authenticate and interpret the Body.',
+                when: 'Fill it when the API docs require JSON content type, a bearer token, API key, custom tenant ID, or idempotency header.',
+                enter: 'Enter a JSON object such as {"Content-Type":"application/json","Authorization":"Bearer {{$json.token}}"}.',
+                source: 'Use API docs for header names and use secure references or upstream token steps for sensitive values.',
+                later: 'Response headers from the server appear as {{$json.headers}} after the request finishes.',
+                format: 'JSON object with string header names and string values.',
+                example: 'A payment workflow sends {"Content-Type":"application/json","Idempotency-Key":"{{$json.orderId}}"} to avoid duplicate creates.',
+                empty: 'No custom headers are sent; many APIs still accept JSON, but protected APIs usually return 401 or 415.',
+                mistake: 'Typing Authorization: Bearer token as plain lines instead of valid JSON.',
+              }),
+              placeholder: '{"Content-Type":"application/json"}',
+              example: '{"Content-Type":"application/json"}',
             },
             {
-              "name": "Headers",
-              "internalKey": "headers",
-              "type": "json",
-              "required": false,
-              "description": "HTTP headers",
-              "helpText": "What this field is: Structured data for HTTP headers.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by HTTP POST.\nExample: {\"Content-Type\":\"application/json\"}.\nTip: Use {{$json.headers}} when an earlier step already prepared this data.",
-              "placeholder": "{\"Content-Type\":\"application/json\"}",
-              "example": "{\"Content-Type\":\"application/json\"}"
-            }
+              name: 'Body',
+              internalKey: 'body',
+              type: 'json',
+              required: true,
+              description: 'Payload sent to the external endpoint.',
+              helpText: richFieldHelp({
+                what: 'The JSON payload submitted in the POST request body.',
+                why: 'This is the data the receiving API uses to create a record, trigger work, or process an event.',
+                when: 'Fill it for every POST request; the receiving service decides which keys are required.',
+                enter: 'Enter a JSON object with fixed values and mappings such as {"email":"{{$json.email}}","orderId":"{{$json.orderId}}"}.',
+                source: 'Use fields from forms, webhooks, CRM nodes, database rows, or earlier transformation nodes.',
+                later: 'The request body is not returned by itself; use {{$json.status}}, {{$json.body}}, or {{$json.data}} to work with the response.',
+                format: 'Valid JSON object, array, string, number, or mapped expression that the endpoint accepts.',
+                example: 'A checkout workflow posts {"event":"order_paid","orderId":"{{$json.id}}","amount":{{$json.total}}} to an ERP endpoint.',
+                empty: 'A required empty body is likely rejected by the receiving API or by docs coverage before the workflow is useful.',
+                mistake: 'Using old {{input}} mappings when the workflow data should be referenced as {{$json.field}}.',
+              }),
+              placeholder: '{"event":"order_created","orderId":"{{$json.orderId}}"}',
+              example: '{"email":"asha.rao@example.com","source":"website"}',
+            },
           ],
-          "outputExample": {
-            "status": 201,
-            "body": {
-              "id": "new_item_123",
-              "created": true
-            },
-            "headers": {
-              "location": "/api/items/new_item_123"
-            }
+          outputExample: {
+            status: 201,
+            statusText: 'Created',
+            headers: { location: '/api/submissions/sub_1042' },
+            body: { id: 'sub_1042', created: true },
+            data: { id: 'sub_1042', created: true },
+            url: 'https://api.example.com/submissions',
+            method: 'POST',
+            responseTime: 92,
           },
-          "outputDescription": "status: HTTP response code. body: Response body. headers: Response headers including Location for created resources.",
-          "usageExample": {
-            "scenario": "Submit form data to an external API",
-            "inputValues": {
-              "url": "https://api.example.com/submissions",
-              "body": "{\"name\": \"{{$json.name}}\", \"email\": \"{{$json.email}}\"}",
-              "headers": "{\"Content-Type\": \"application/json\", \"Authorization\": \"Bearer {{$env.TOKEN}}\"}"
+          outputDescription,
+          usageExample: {
+            scenario: 'Submit a new web form lead to an internal API and then branch based on whether the API created the record.',
+            inputValues: {
+              url: 'https://api.example.com/submissions',
+              headers: '{"Content-Type":"application/json","Authorization":"Bearer {{$json.accessToken}}"}',
+              body: '{"name":"{{$json.name}}","email":"{{$json.email}}","source":"website"}',
             },
-            "expectedOutput": "Created resource in `{{$json.body}}`. Use `{{$json.body.id}}` to reference it."
+            expectedOutput: 'Use {{$json.status}} to confirm the API response, {{$json.body.id}} for the created record ID, and {{$json._error}} if the request failed before a response.',
           },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
-        }
-      ]
-    }
+          externalDocsUrl: 'https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods/POST',
+        },
+      ],
+    },
   ],
-  "commonErrors": [
+  commonErrors: [
     {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
+      error: 'HTTP POST rewrites to HTTP Request with method POST',
+      cause: 'The executor aliases this node to the HTTP Request runtime and forces method to POST.',
+      fix: 'Use HTTP Request directly when you need GET, PUT, PATCH, DELETE, query-string helpers, or more method control.',
     },
     {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
+      error: 'Body must be valid JSON or a valid mapped value',
+      cause: 'Most APIs expect a JSON payload and may reject malformed body data.',
+      fix: 'Validate the Body field and map values with {{$json.email}} style expressions.',
+    },
+    {
+      error: 'Protected endpoint returns 401 or 403',
+      cause: 'The Headers field is missing the token, API key, tenant header, or permission expected by the service.',
+      fix: 'Confirm the Authorization header, token scope, and account permission in the receiving API.',
+    },
+    {
+      error: 'Network or timeout failures return _error',
+      cause: 'DNS, SSL, timeout, CORS, or fetch failures are reported by the wrapped HTTP Request runtime.',
+      fix: 'Inspect {{$json._error}} and {{$json.errorDetails}}, then verify the URL, certificate, and endpoint availability.',
+    },
   ],
-  "relatedNodes": []
+  relatedNodes: ['http_request', 'graphql', 'webhook_response'],
 };

@@ -23,10 +23,12 @@ function createDownloadSink(chunks: Buffer[]): Writable {
 
 export function overrideFtp(def: UnifiedNodeDefinition, _schema: NodeSchema): UnifiedNodeDefinition {
   const manualStatic = { default: 'manual_static' as const, supportsRuntimeAI: false, supportsBuildtimeAI: false };
-  const operationOptions = ['upload', 'download', 'list'].map((value) => ({
-    label: value.charAt(0).toUpperCase() + value.slice(1),
-    value,
-  }));
+  const operationOptions = [
+    { label: 'Get File', value: 'get' },
+    { label: 'Put File', value: 'put' },
+    { label: 'List Files', value: 'list' },
+    { label: 'Delete File', value: 'delete' },
+  ];
 
   const inputSchema = {
     ...def.inputSchema,
@@ -63,6 +65,21 @@ export function overrideFtp(def: UnifiedNodeDefinition, _schema: NodeSchema): Un
       fillMode: manualStatic,
     },
     path: { ...def.inputSchema.path, required: false, role: 'id' as const },
+    remotePath: { type: 'string' as const, description: 'Remote file or directory path', required: false, role: 'id' as const },
+    content: {
+      type: 'string' as const,
+      description: 'File content for upload. Supports plain text, base64, or data URL payloads.',
+      required: false,
+      role: 'content' as const,
+      fillMode: { default: 'manual_static' as const, supportsRuntimeAI: true, supportsBuildtimeAI: true },
+    },
+    dataBase64: {
+      type: 'string' as const,
+      description: 'Base64 file content for upload.',
+      required: false,
+      role: 'content' as const,
+      fillMode: { default: 'manual_static' as const, supportsRuntimeAI: true, supportsBuildtimeAI: true },
+    },
     fileData: {
       type: 'string' as const,
       description: 'File content for upload. Supports plain text, base64, or data URL payloads.',
@@ -82,7 +99,8 @@ export function overrideFtp(def: UnifiedNodeDefinition, _schema: NodeSchema): Un
     },
     execute: async (context) => {
       const inputs = mergeContextInputs(context);
-      const operation = String(inputs.operation || 'list');
+      const rawOperation = String(inputs.operation || 'list').toLowerCase();
+      const operation = rawOperation === 'download' ? 'get' : rawOperation === 'upload' ? 'put' : rawOperation;
       const { Client } = require('basic-ftp') as any;
       const client = new Client();
 
@@ -102,24 +120,28 @@ export function overrideFtp(def: UnifiedNodeDefinition, _schema: NodeSchema): Un
           secure: Boolean(inputs.secure),
         });
 
-        const remotePath = String(inputs.path || '.');
+        const remotePath = String(inputs.remotePath || inputs.path || '.');
         let output: any;
         if (operation === 'list') {
           output = await client.list(remotePath);
-        } else if (operation === 'download') {
-          if (!inputs.path) throw new Error('path is required for download');
+        } else if (operation === 'get') {
+          if (!inputs.remotePath && !inputs.path) throw new Error('remotePath is required for get');
           const chunks: Buffer[] = [];
           await client.downloadTo(createDownloadSink(chunks), remotePath);
           const buffer = Buffer.concat(chunks);
           output = { path: remotePath, size: buffer.length, dataBase64: buffer.toString('base64') };
-        } else if (operation === 'upload') {
-          if (!inputs.path) throw new Error('path is required for upload');
-          const buffer = toBuffer(inputs.fileData);
-          if (buffer.length === 0) throw new Error('fileData is required for upload');
+        } else if (operation === 'put') {
+          if (!inputs.remotePath && !inputs.path) throw new Error('remotePath is required for put');
+          const buffer = toBuffer(inputs.dataBase64 || inputs.content || inputs.fileData);
+          if (buffer.length === 0) throw new Error('dataBase64, content, or fileData is required for put');
           await client.uploadFrom(Readable.from(buffer), remotePath);
           output = { path: remotePath, size: buffer.length, uploaded: true };
+        } else if (operation === 'delete') {
+          if (!inputs.remotePath && !inputs.path) throw new Error('remotePath is required for delete');
+          await client.remove(remotePath);
+          output = { path: remotePath, deleted: true };
         } else {
-          throw new Error(`Unsupported FTP operation: ${operation}`);
+          throw new Error(`Unsupported FTP operation: ${rawOperation}. Supported: get, put, list, delete`);
         }
         return { success: true, output: { operation, data: output } };
       } catch (error: any) {

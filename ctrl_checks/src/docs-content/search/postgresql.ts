@@ -1,44 +1,54 @@
 import type { DocsSearchIndexItem } from '../search-index';
 
+const fields = ['operation', 'connectionString', 'host', 'port', 'database', 'username', 'password', 'ssl', 'query', 'parameters', 'table', 'data', 'where'];
+
 export const postgresqlSearchIndex = [
   {
-    "type": "node",
-    "title": "PostgreSQL",
-    "slug": "postgresql",
-    "category": "Data",
-    "href": "/docs/nodes/postgresql",
-    "text": "PostgreSQL Execute SQL queries on PostgreSQL database Use this node when a workflow needs postgresql behavior with schema-driven inputs from the CtrlChecks node registry. Data"
+    type: 'node',
+    title: 'PostgreSQL',
+    slug: 'postgresql',
+    category: 'Data',
+    href: '/docs/nodes/postgresql',
+    text: 'PostgreSQL executeQuery insert update delete SQL query parameters connectionString host port database username password ssl table data where rows rowsAffected inserted count.',
   },
   {
-    "type": "operation",
-    "title": "PostgreSQL: Configure",
-    "slug": "postgresql",
-    "category": "Data",
-    "href": "/docs/nodes/postgresql#operation-configure",
-    "text": "PostgreSQL Configuration Configure Configure with the PostgreSQL node using the configured input fields. configure"
+    type: 'operation',
+    title: 'PostgreSQL: Execute Query',
+    slug: 'postgresql',
+    category: 'Data',
+    href: '/docs/nodes/postgresql#operation-executeQuery',
+    text: 'PostgreSQL Execute Query raw SQL with $1 parameters returns rows rowsAffected.',
   },
   {
-    "type": "field",
-    "title": "PostgreSQL: Query",
-    "slug": "postgresql",
-    "category": "Data",
-    "href": "/docs/nodes/postgresql#operation-configure",
-    "text": "PostgreSQL Configuration Configure Query query SQL query to execute"
+    type: 'operation',
+    title: 'PostgreSQL: Insert',
+    slug: 'postgresql',
+    category: 'Data',
+    href: '/docs/nodes/postgresql#operation-insert',
+    text: 'PostgreSQL Insert table data JSON returning inserted count.',
   },
   {
-    "type": "field",
-    "title": "PostgreSQL: Connection String",
-    "slug": "postgresql",
-    "category": "Data",
-    "href": "/docs/nodes/postgresql#operation-configure",
-    "text": "PostgreSQL Configuration Configure Connection String connectionString Database connection string (PostgreSQL). If omitted, uses DATABASE_URL from environment."
+    type: 'operation',
+    title: 'PostgreSQL: Update',
+    slug: 'postgresql',
+    category: 'Data',
+    href: '/docs/nodes/postgresql#operation-update',
+    text: 'PostgreSQL Update table data where returning rows rowsAffected.',
   },
   {
-    "type": "field",
-    "title": "PostgreSQL: Parameters",
-    "slug": "postgresql",
-    "category": "Data",
-    "href": "/docs/nodes/postgresql#operation-configure",
-    "text": "PostgreSQL Configuration Configure Parameters parameters Query parameters"
-  }
+    type: 'operation',
+    title: 'PostgreSQL: Delete',
+    slug: 'postgresql',
+    category: 'Data',
+    href: '/docs/nodes/postgresql#operation-delete',
+    text: 'PostgreSQL Delete table where returning rows rowsAffected.',
+  },
+  ...fields.map((field) => ({
+    type: 'field' as const,
+    title: `PostgreSQL: ${field}`,
+    slug: 'postgresql',
+    category: 'Data',
+    href: '/docs/nodes/postgresql',
+    text: `PostgreSQL field ${field} executeQuery insert update delete SQL table connection.`,
+  })),
 ] satisfies DocsSearchIndexItem[];

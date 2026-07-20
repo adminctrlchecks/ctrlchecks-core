@@ -2909,7 +2909,7 @@ export default function PropertiesPanel({
       case 'formFieldList':
         return (
           <FormNodeSettings
-            config={value ?? { formTitle: '', formDescription: '', fields: [], submitButtonText: 'Submit', successMessage: '', redirectUrl: '' }}
+            config={value ?? { formTitle: '', formDescription: '', fields: [], submitButtonText: 'Submit', successMessage: '', redirectUrl: '', allowMultipleSubmissions: true, requireAuthentication: false, captcha: false }}
             onConfigChange={(v) => handleConfigChange(field.key, v)}
           />
         );
@@ -3324,6 +3324,18 @@ export default function PropertiesPanel({
                           submitButtonText: (selectedNode.data.config?.submitButtonText as string) || 'Submit',
                           successMessage: (selectedNode.data.config?.successMessage as string) || 'Thank you for your submission!',
                           redirectUrl: (selectedNode.data.config?.redirectUrl as string) || '',
+                          allowMultipleSubmissions:
+                            typeof selectedNode.data.config?.allowMultipleSubmissions === 'boolean'
+                              ? selectedNode.data.config.allowMultipleSubmissions
+                              : true,
+                          requireAuthentication:
+                            typeof selectedNode.data.config?.requireAuthentication === 'boolean'
+                              ? selectedNode.data.config.requireAuthentication
+                              : false,
+                          captcha:
+                            typeof selectedNode.data.config?.captcha === 'boolean'
+                              ? selectedNode.data.config.captcha
+                              : false,
                         }}
                         onConfigChange={(newConfig) => {
                           updateNodeConfig(selectedNode.id, newConfig as any);

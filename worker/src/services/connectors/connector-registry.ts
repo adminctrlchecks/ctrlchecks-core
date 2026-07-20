@@ -64,8 +64,10 @@ export class ConnectorRegistry {
         'google.mail',
         'email.read',
         'gmail.read',
+        'gmail.receive',
+        'trigger.webhook',
       ],
-      keywords: ['gmail', 'google mail', 'google email', 'gmail them', 'send via gmail', 'email via gmail'],
+      keywords: ['gmail', 'email', 'google mail', 'google email', 'gmail them', 'send via gmail', 'email via gmail'],
       credentialContract: {
         provider: 'google',
         type: 'oauth',
@@ -76,7 +78,7 @@ export class ConnectorRegistry {
       },
       // ✅ Defensive: allow alias node type to match this connector even if canonicalization
       // hasn't run yet. Canonical type remains google_gmail.
-      nodeTypes: ['google_gmail', 'gmail'],
+      nodeTypes: ['google_gmail', 'gmail', 'gmail_trigger'],
       description: 'Send/receive emails via Gmail API using OAuth',
     });
 
@@ -91,7 +93,7 @@ export class ConnectorRegistry {
         'email.send',
         'smtp.send',
       ],
-      keywords: ['smtp', 'mail server', 'email server', 'send email', 'email notification'],
+      keywords: ['smtp', 'email', 'mail server', 'email server', 'send email', 'email notification'],
       credentialContract: {
         provider: 'smtp',
         type: 'api_key', // SMTP uses username/password (treated as api_key type)
@@ -114,19 +116,24 @@ export class ConnectorRegistry {
         'notification.send',
         'slack.send',
         'message.send',
+        'slack.receive',
+        'message.receive',
+        'trigger.webhook',
+        'slack.command',
+        'slack.interaction',
       ],
-      keywords: ['slack', 'slack bot', 'slack oauth', 'slack message', 'slack notification'],
+      keywords: ['slack', 'slack bot', 'slack oauth', 'slack message', 'slack notification', 'slack trigger', 'slack slash command'],
       credentialContract: {
         provider: 'slack',
         type: 'oauth',
-        scopes: ['chat:write'],
+        scopes: ['chat:write', 'app_mentions:read', 'channels:history', 'groups:history', 'im:history', 'mpim:history', 'commands'],
         vaultKey: 'slack',
         displayName: 'Slack OAuth2',
         required: true,
         credentialFieldName: 'accessToken',
       },
-      nodeTypes: ['slack_message'],
-      description: 'Send messages to Slack via OAuth bot connection',
+      nodeTypes: ['slack_message', 'slack_trigger'],
+      description: 'Send messages to Slack and receive Slack app events via OAuth bot connection',
     });
 
     // ============================================
@@ -213,6 +220,8 @@ export class ConnectorRegistry {
         'spreadsheet.write',
         'sheets.read',
         'sheets.write',
+        'google_sheets.receive',
+        'trigger.poll',
       ],
       keywords: ['google sheets', 'spreadsheet', 'sheets'],
       credentialContract: {
@@ -223,7 +232,7 @@ export class ConnectorRegistry {
         displayName: 'Google OAuth (Sheets)',
         required: true,
       },
-      nodeTypes: ['google_sheets'],
+      nodeTypes: ['google_sheets', 'google_sheets_trigger'],
       description: 'Read/write Google Sheets via OAuth',
     });
 
@@ -264,8 +273,12 @@ export class ConnectorRegistry {
         'notification.send',
         'discord.send',
         'message.send',
+        'discord.receive',
+        'discord.interaction',
+        'discord.command',
+        'trigger.webhook',
       ],
-      keywords: ['discord', 'discord message', 'discord bot'],
+      keywords: ['discord', 'discord message', 'discord bot', 'discord trigger', 'discord slash command', 'discord interaction'],
       credentialContract: {
         provider: 'discord',
         type: 'token',
@@ -274,8 +287,8 @@ export class ConnectorRegistry {
         required: true,
         credentialFieldName: 'botToken',
       },
-      nodeTypes: ['discord'],
-      description: 'Send messages to Discord channels via Discord Bot API',
+      nodeTypes: ['discord', 'discord_trigger'],
+      description: 'Send messages to Discord channels and receive Discord interactions/webhook events',
     });
     // Discord webhook connector (separate node type)
     this.register({
@@ -307,8 +320,10 @@ export class ConnectorRegistry {
         'notification.send',
         'telegram.send',
         'message.send',
+        'telegram.receive',
+        'message.receive',
       ],
-      keywords: ['telegram', 'telegram bot', 'telegram message'],
+      keywords: ['telegram', 'telegram bot', 'telegram message', 'telegram trigger', 'telegram chatbot'],
       credentialContract: {
         provider: 'telegram',
         type: 'token',
@@ -319,8 +334,8 @@ export class ConnectorRegistry {
         required: true,
         credentialFieldName: 'botToken',
       },
-      nodeTypes: ['telegram'],
-      description: 'Send messages to Telegram chats via Bot API',
+      nodeTypes: ['telegram', 'telegram_trigger'],
+      description: 'Send messages and receive real-time Telegram bot updates via Bot API',
     });
 
     // ============================================
@@ -425,7 +440,7 @@ export class ConnectorRegistry {
         required: true,
         credentialFieldName: 'connectionString',
       },
-      nodeTypes: ['database_read', 'database_write'],
+      nodeTypes: ['postgresql', 'mysql', 'mongodb', 'db'],
       description: 'Connect to database via connection string',
     });
 
@@ -489,6 +504,8 @@ export class ConnectorRegistry {
         'form.read',
         'form.write',
         'typeform.form',
+        'typeform.receive',
+        'trigger.webhook',
       ],
       keywords: ['typeform', 'type form', 'survey'],
       credentialContract: {
@@ -499,8 +516,58 @@ export class ConnectorRegistry {
         required: true,
         credentialFieldName: 'apiKey',
       },
-      nodeTypes: ['typeform'],
+      nodeTypes: ['typeform', 'typeform_trigger'],
       description: 'Create forms and read Typeform responses via API key',
+    });
+
+    // ============================================
+    // TALLY CONNECTOR
+    // ============================================
+    this.register({
+      id: 'tally',
+      provider: 'tally',
+      service: 'forms',
+      capabilities: [
+        'form.read',
+        'tally.receive',
+        'trigger.webhook',
+      ],
+      keywords: ['tally', 'tally.so', 'tally form'],
+      credentialContract: {
+        provider: 'tally',
+        type: 'api_key',
+        vaultKey: 'tally',
+        displayName: 'Tally Personal Access Token',
+        required: true,
+        credentialFieldName: 'token',
+      },
+      nodeTypes: ['tally_trigger'],
+      description: 'Receive Tally form submissions via a signed webhook, authenticated with a Personal Access Token',
+    });
+
+    // ============================================
+    // CALENDLY CONNECTOR
+    // ============================================
+    this.register({
+      id: 'calendly',
+      provider: 'calendly',
+      service: 'scheduling',
+      capabilities: [
+        'scheduling.read',
+        'calendar.read',
+        'calendly.events',
+      ],
+      keywords: ['calendly', 'booking', 'scheduled event', 'event type', 'meeting'],
+      credentialContract: {
+        provider: 'calendly',
+        type: 'api_key',
+        vaultKey: 'calendly',
+        displayName: 'Calendly Personal Access Token',
+        required: true,
+        credentialFieldName: 'token',
+      },
+      nodeTypes: ['calendly'],
+      description: 'Read Calendly users, event types, and scheduled events with a personal access token',
     });
 
     // ============================================
@@ -526,6 +593,60 @@ export class ConnectorRegistry {
       },
       nodeTypes: ['notion'],
       description: 'Read/write Notion pages and databases via API key',
+    });
+
+    // ============================================
+    // LINEAR CONNECTOR
+    // ============================================
+    this.register({
+      id: 'linear',
+      provider: 'linear',
+      service: 'project_management',
+      capabilities: [
+        'issue.read',
+        'issue.write',
+        'linear.issue',
+        'linear.receive',
+        'trigger.webhook',
+      ],
+      keywords: ['linear', 'issue tracker', 'issue', 'team', 'sprint', 'backlog'],
+      credentialContract: {
+        provider: 'linear',
+        type: 'api_key',
+        vaultKey: 'linear',
+        displayName: 'Linear Personal API Key',
+        required: true,
+        credentialFieldName: 'token',
+      },
+      nodeTypes: ['linear', 'linear_trigger'],
+      description: 'Create, update, list, and receive Linear issue tracker events using a personal API key',
+    });
+
+    // ============================================
+    // TRELLO CONNECTOR
+    // ============================================
+    this.register({
+      id: 'trello',
+      provider: 'trello',
+      service: 'project_management',
+      capabilities: [
+        'kanban.read',
+        'kanban.write',
+        'trello.card',
+        'trello.receive',
+        'trigger.webhook',
+      ],
+      keywords: ['trello', 'board', 'card', 'list', 'kanban'],
+      credentialContract: {
+        provider: 'trello',
+        type: 'api_key',
+        vaultKey: 'trello',
+        displayName: 'Trello API Key & Token',
+        required: true,
+        credentialFieldName: 'apiKey',
+      },
+      nodeTypes: ['trello', 'trello_trigger'],
+      description: 'Manage Trello boards, lists, and cards with API key and token authentication',
     });
 
     // ============================================
@@ -640,18 +761,21 @@ export class ConnectorRegistry {
         'social.post',
         'instagram.post',
         'instagram.media',
+        'instagram.receive',
+        'instagram.message',
+        'instagram.comment',
       ],
-      keywords: ['instagram', 'insta', 'post to instagram', 'ig'],
+      keywords: ['instagram', 'insta', 'post to instagram', 'ig', 'instagram dm', 'instagram trigger', 'instagram comment'],
       credentialContract: {
         provider: 'instagram',
         type: 'oauth',
-        scopes: ['instagram_basic', 'instagram_content_publish'],
+        scopes: ['instagram_basic', 'instagram_content_publish', 'instagram_manage_messages', 'instagram_manage_comments', 'pages_show_list', 'pages_read_engagement'],
         vaultKey: 'instagram',
         displayName: 'Instagram OAuth',
         required: true,
       },
-      nodeTypes: ['instagram'],
-      description: 'Post content to Instagram via OAuth',
+      nodeTypes: ['instagram', 'instagram_trigger'],
+      description: 'Post content, reply to messages/comments, and receive Instagram webhooks via OAuth',
     });
 
     // ============================================
@@ -694,18 +818,26 @@ export class ConnectorRegistry {
         'email.send',
         'outlook.send',
         'microsoft.mail',
+        'outlook.receive',
+        'trigger.webhook',
       ],
       keywords: ['outlook', 'microsoft outlook', 'outlook email', 'send via outlook'],
       credentialContract: {
         provider: 'microsoft',
         type: 'oauth',
-        scopes: ['offline_access', 'https://graph.microsoft.com/User.Read', 'https://graph.microsoft.com/Mail.Send'],
+        scopes: [
+          'offline_access',
+          'https://graph.microsoft.com/User.Read',
+          'https://graph.microsoft.com/Mail.Send',
+          'https://graph.microsoft.com/Mail.Read',
+          'https://graph.microsoft.com/Calendars.Read',
+        ],
         vaultKey: 'microsoft',
         displayName: 'Microsoft OAuth (Outlook)',
         required: true,
       },
-      nodeTypes: ['outlook'],
-      description: 'Send emails via Microsoft Graph using Microsoft OAuth',
+      nodeTypes: ['outlook', 'outlook_trigger'],
+      description: 'Send and receive email via Microsoft Graph using Microsoft OAuth',
     });
 
     // ============================================
@@ -719,18 +851,25 @@ export class ConnectorRegistry {
         'social.post',
         'facebook.post',
         'facebook.page',
+        'facebook.receive',
+        'messenger.receive',
+        'message.receive',
+        'comment.receive',
+        'lead.receive',
+        'messenger.send',
+        'message.send',
       ],
-      keywords: ['facebook', 'fb', 'post to facebook'],
+      keywords: ['facebook', 'fb', 'post to facebook', 'facebook trigger', 'messenger trigger', 'facebook page message', 'lead ad'],
       credentialContract: {
         provider: 'facebook',
         type: 'oauth',
-        scopes: ['pages_manage_posts', 'pages_read_engagement'],
+        scopes: ['pages_show_list', 'pages_read_engagement', 'pages_manage_metadata', 'pages_manage_posts', 'pages_manage_engagement', 'pages_messaging', 'leads_retrieval'],
         vaultKey: 'facebook',
         displayName: 'Facebook OAuth',
         required: true,
       },
-      nodeTypes: ['facebook'],
-      description: 'Post content to Facebook pages via OAuth',
+      nodeTypes: ['facebook', 'facebook_trigger'],
+      description: 'Post content, reply to Messenger/Page comments, and receive real-time Facebook Page webhooks via OAuth',
     });
 
     // ============================================
@@ -743,7 +882,9 @@ export class ConnectorRegistry {
       capabilities: [
         'notification.send',
         'whatsapp.send',
+        'whatsapp.receive',
         'message.send',
+        'message.receive',
       ],
       keywords: ['whatsapp', 'whats app'],
       credentialContract: {
@@ -754,8 +895,8 @@ export class ConnectorRegistry {
         required: true,
         credentialFieldName: 'accessToken',
       },
-      nodeTypes: ['whatsapp_cloud'],
-      description: 'Send messages via WhatsApp Cloud API',
+      nodeTypes: ['whatsapp', 'whatsapp_cloud', 'whatsapp_trigger'],
+      description: 'Send messages and receive real-time WhatsApp Cloud API webhooks',
     });
 
     // ============================================
@@ -769,6 +910,8 @@ export class ConnectorRegistry {
         'git.manage',
         'github.repo',
         'github.issues',
+        'trigger.webhook',
+        'github.receive',
       ],
       keywords: ['github', 'git hub'],
       credentialContract: {
@@ -779,8 +922,8 @@ export class ConnectorRegistry {
         displayName: 'GitHub OAuth',
         required: true,
       },
-      nodeTypes: ['github'],
-      description: 'GitHub repository operations via OAuth',
+      nodeTypes: ['github', 'github_trigger'],
+      description: 'GitHub repository operations and real-time webhook events via OAuth or Personal Access Token',
     });
 
     // ============================================
@@ -795,6 +938,8 @@ export class ConnectorRegistry {
         'calendar.write',
         'calendar.event',
         'google.calendar',
+        'google_calendar.receive',
+        'trigger.webhook',
       ],
       keywords: ['google calendar', 'calendar', 'google cal'],
       credentialContract: {
@@ -805,7 +950,7 @@ export class ConnectorRegistry {
         displayName: 'Google OAuth (Calendar)',
         required: true,
       },
-      nodeTypes: ['google_calendar'],
+      nodeTypes: ['google_calendar', 'google_calendar_trigger'],
       description: 'Read/write Google Calendar events via OAuth',
     });
 
@@ -822,6 +967,8 @@ export class ConnectorRegistry {
         'drive.read',
         'drive.write',
         'google.drive',
+        'google_drive.receive',
+        'trigger.webhook',
       ],
       keywords: ['google drive', 'drive', 'google file'],
       credentialContract: {
@@ -832,7 +979,7 @@ export class ConnectorRegistry {
         displayName: 'Google OAuth (Drive)',
         required: true,
       },
-      nodeTypes: ['google_drive'],
+      nodeTypes: ['google_drive', 'google_drive_trigger'],
       description: 'Read/write Google Drive files via OAuth',
     });
 
@@ -1052,6 +1199,8 @@ export class ConnectorRegistry {
         'payment.process',
         'stripe.charge',
         'stripe.subscription',
+        'stripe.receive',
+        'trigger.webhook',
       ],
       keywords: ['stripe', 'payment', 'credit card', 'charge'],
       credentialContract: {
@@ -1062,7 +1211,7 @@ export class ConnectorRegistry {
         required: true,
         credentialFieldName: 'apiKey',
       },
-      nodeTypes: ['stripe'],
+      nodeTypes: ['stripe', 'stripe_trigger'],
       description: 'Process payments via Stripe API',
     });
 
@@ -1078,6 +1227,8 @@ export class ConnectorRegistry {
         'ecommerce.write',
         'shopify.order',
         'shopify.product',
+        'shopify.receive',
+        'trigger.webhook',
       ],
       keywords: ['shopify', 'shop ify', 'ecommerce'],
       credentialContract: {
@@ -1088,7 +1239,7 @@ export class ConnectorRegistry {
         required: true,
         credentialFieldName: 'apiKey',
       },
-      nodeTypes: ['shopify'],
+      nodeTypes: ['shopify', 'shopify_trigger'],
       description: 'Interact with Shopify store via API key',
     });
 
@@ -1191,6 +1342,30 @@ export class ConnectorRegistry {
       nodeTypes: ['microsoft_teams'],
       description: 'Send messages to Microsoft Teams via webhook',
     });
+    this.register({
+      id: 'microsoft_teams_bot',
+      provider: 'microsoft_teams',
+      service: 'teams',
+      capabilities: [
+        'teams.receive',
+        'teams.send',
+        'teams.reply',
+        'message.receive',
+        'message.send',
+        'trigger.webhook',
+      ],
+      keywords: ['microsoft teams trigger', 'teams trigger', 'teams bot', 'teams message received', 'teams personal message'],
+      credentialContract: {
+        provider: 'microsoft_teams',
+        type: 'api_key',
+        vaultKey: 'microsoft_teams_bot',
+        displayName: 'Microsoft Teams Bot',
+        required: true,
+        credentialFieldName: 'appId',
+      },
+      nodeTypes: ['microsoft_teams_trigger', 'microsoft_teams'],
+      description: 'Receive Microsoft Teams Bot Framework activities and reply to Teams conversations',
+    });
 
     // ============================================
     // GITLAB CONNECTOR
@@ -1203,6 +1378,8 @@ export class ConnectorRegistry {
         'git.manage',
         'gitlab.repo',
         'gitlab.issues',
+        'trigger.webhook',
+        'gitlab.receive',
       ],
       keywords: ['gitlab', 'git lab'],
       credentialContract: {
@@ -1213,8 +1390,8 @@ export class ConnectorRegistry {
         displayName: 'GitLab OAuth',
         required: true,
       },
-      nodeTypes: ['gitlab'],
-      description: 'GitLab repository operations via OAuth',
+      nodeTypes: ['gitlab', 'gitlab_trigger'],
+      description: 'GitLab repository operations via OAuth, plus real-time push/issue/merge request/comment/pipeline/release triggers via project webhooks',
     });
 
     // ============================================
@@ -1253,6 +1430,8 @@ export class ConnectorRegistry {
         'project.manage',
         'jira.issue',
         'jira.project',
+        'trigger.webhook',
+        'jira.receive',
       ],
       keywords: ['jira'],
       credentialContract: {
@@ -1263,8 +1442,8 @@ export class ConnectorRegistry {
         required: true,
         credentialFieldName: 'apiToken',
       },
-      nodeTypes: ['jira'],
-      description: 'Interact with Jira via API token',
+      nodeTypes: ['jira', 'jira_trigger'],
+      description: 'Interact with Jira via API token, and trigger workflows on Jira issue/comment webhook events (manual webhook setup — see Jira Trigger docs)',
     });
 
     // ============================================

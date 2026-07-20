@@ -1,520 +1,174 @@
-import type { NodeDoc } from '../types';
+import type { FieldDoc, NodeDoc } from '../types';
+import { richFieldHelp } from './_sharedFieldHelp';
+
+const mk = (name: string, internalKey: string, type: FieldDoc['type'], required: boolean, description: string, example: string, extra: Partial<FieldDoc> = {}): FieldDoc => ({
+  name,
+  internalKey,
+  type,
+  required,
+  description,
+  helpText: richFieldHelp({
+    what: description,
+    why: `Netlify needs ${name} to authenticate, choose the endpoint, or identify the site/deploy record.`,
+    when: required ? `Fill ${name} for every Netlify operation.` : `Fill ${name} only when the selected operation uses it.`,
+    enter: example,
+    source: `Copy it from Netlify, save it in Connections, or map it from an earlier step such as {{$json.${internalKey}}}.`,
+    later: `Later nodes can use Netlify output such as {{$json.record}}, {{$json.records}}, {{$json.count}}, {{$json.resource}}, and {{$json.operation}}.`,
+    format: type === 'json' ? 'Valid JSON object.' : type === 'number' ? 'Number without words.' : 'Plain text.',
+    example,
+    empty: required ? `${name} is required for reliable Netlify calls.` : `${name} can be empty for operations that do not use it; Netlify may return an API error if the endpoint needs it.`,
+    mistake: `Do not paste a full dashboard URL when this field expects only an ID, token, JSON object, or number.`,
+  }),
+  placeholder: example,
+  example,
+  ...extra,
+});
+
+const operationField: FieldDoc = {
+  name: 'Operation',
+  internalKey: 'operation',
+  type: 'select',
+  required: true,
+  description: 'Choose the Netlify REST operation to run.',
+  helpText: richFieldHelp({
+    what: 'The Netlify API action this node performs.',
+    why: 'Runtime routes by operation, not by resource. The resource value is echoed in output but does not decide the endpoint.',
+    when: 'Fill it for every Netlify node run.',
+    enter: 'Choose List Sites, Get Site, Create Deploy, List Deploys, or Get Deploy.',
+    source: 'This comes from the operation dropdown in the node panel.',
+    later: 'The chosen value is returned as {{$json.operation}} for logging or branching.',
+    format: 'Dropdown value list_sites, get_site, create_deploy, list_deploys, or get_deploy.',
+    example: 'Choose Create Deploy after a GitHub release is approved.',
+    empty: 'If empty, runtime defaults to list_sites.',
+    mistake: 'Do not choose a Forms resource expecting form submissions; this executor currently has no form-submission operation.',
+  }),
+  options: ['List Sites', 'Get Site', 'Create Deploy', 'List Deploys', 'Get Deploy'],
+  defaultValue: 'list_sites',
+};
+
+const resourceField: FieldDoc = {
+  name: 'Resource',
+  internalKey: 'resource',
+  type: 'select',
+  required: true,
+  description: 'Label for the Netlify resource area. Runtime currently supports site/deploy endpoints and echoes this value in output.',
+  helpText: richFieldHelp({
+    what: 'The Netlify resource label shown in the node panel.',
+    why: 'It helps users group site and deploy work, and runtime echoes it as {{$json.resource}}.',
+    when: 'Fill it for every operation, keeping it aligned with the selected operation.',
+    enter: 'Choose Sites for list/get site, or Deploys for create/list/get deploy.',
+    source: 'This comes from the dropdown in the node panel.',
+    later: 'Use {{$json.resource}} in logs to show whether the step was site or deploy related.',
+    format: 'Dropdown value sites or deploys.',
+    example: 'Choose Deploys when creating a deploy for a production site.',
+    empty: 'If empty, runtime defaults to sites.',
+    mistake: 'Do not rely on Resource alone; Operation is what actually chooses the Netlify endpoint.',
+  }),
+  options: ['Sites', 'Deploys'],
+  defaultValue: 'sites',
+};
+
+const accessTokenField = mk('Access Token', 'accessToken', 'password', true, 'Netlify personal access token sent as Authorization: Bearer <token>.', '{{$credentials.netlify.accessToken}}', { notes: 'Prefer Connections so the token is stored in the credential vault.' });
+const siteIdField = mk('Site ID', 'siteId', 'string', false, 'Netlify site ID required for get_site, create_deploy, and list_deploys.', 'a1b2c3d4-5678-90ab-cdef-111111111111');
+const deployIdField = mk('Deploy ID', 'deployId', 'string', false, 'Netlify deploy ID required for get_deploy.', '65a1234567890abcdef12345');
+const payloadField = mk('Payload', 'payload', 'json', false, 'JSON request body sent only for create_deploy.', '{"branch":"main"}');
+const limitField = mk('Limit', 'limit', 'number', false, 'Maximum records returned by list operations. Runtime sends it as per_page.', '25', { defaultValue: '25' });
+
+const commonFields = [operationField, resourceField, accessTokenField, siteIdField, deployIdField, payloadField, limitField];
+
+const operation = (
+  name: string,
+  value: string,
+  description: string,
+  outputExample: Record<string, unknown>,
+  outputDescription: string,
+  inputValues: Record<string, string>,
+) => ({
+  name,
+  value,
+  description,
+  fields: commonFields,
+  outputExample,
+  outputDescription,
+  usageExample: {
+    scenario: `${name} in Netlify for a deployment automation where site or deploy data is needed by a later workflow step.`,
+    inputValues: { operation: value, accessToken: '{{$credentials.netlify.accessToken}}', ...inputValues },
+    expectedOutput: 'Use {{$json.records}}, {{$json.record}}, or {{$json.count}} in the next workflow step.',
+  },
+  externalDocsUrl: 'https://docs.netlify.com/api/get-started/',
+});
 
 export const netlifyDoc: NodeDoc = {
-  "slug": "netlify",
-  "displayName": "Netlify",
-  "category": "Data",
-  "logoUrl": "/icons/nodes/netlify.svg",
-  "description": "Deploy sites, manage builds, and query site/deploy data through the Netlify REST API.",
-  "credentialType": "Netlify API Key",
-  "credentialSetupSteps": [
-    "What this is: The Netlify connection lets CtrlChecks access your Netlify account safely without putting secrets in workflow fields.",
-    "Where to start: Netlify -> User settings -> Applications -> Personal access tokens.",
-    "How to connect: In CtrlChecks, open Connections -> Add Connection -> Netlify, then sign in or paste the secret value requested there.",
-    "Example: nfp_... or the token Netlify shows.",
-    "Important: Treat tokens, passwords, API keys, and client secrets like bank passwords. Store them in Connections, not in regular workflow fields.",
-    "Test it: Save the connection, run a simple Netlify step, and confirm CtrlChecks can reach the account."
+  slug: 'netlify',
+  displayName: 'Netlify',
+  category: 'DevOps',
+  logoUrl: '/icons/nodes/netlify.svg',
+  description: 'List Netlify sites, inspect sites/deploys, and create deploys through the Netlify REST API.',
+  credentialType: 'Netlify API Key',
+  credentialSetupSteps: [
+    'What this is: A Netlify personal access token lets CtrlChecks call the Netlify API for sites and deploys.',
+    'Where to start: In Netlify, open User Settings -> Applications -> Personal access tokens.',
+    'Permissions: Use a token from an account that can read the target sites and create deploys where needed.',
+    'How to connect: In CtrlChecks, open Connections -> Add Connection -> Netlify and save the accessToken in the credential vault.',
+    'Test it: Run List Sites with a low limit and confirm Netlify returns records from api.netlify.com/api/v1.',
+    'Workflow wiring: Connect the output of this Netlify node to the next step through the outgoing line, then configure that next service node with its own account connection.',
+    'Important: Service nodes after Netlify still need their own account connection; a Netlify token cannot send email, chat, or issue-tracker updates.',
   ],
-  "credentialDocsUrl": "https://docs.netlify.com/api/get-started/",
-  "resources": [
+  credentialDocsUrl: 'https://docs.netlify.com/api/get-started/#authentication',
+  resources: [
     {
-      "name": "Operations",
-      "description": "Netlify exposes operation choices directly.",
-      "operations": [
-        {
-          "name": "List sites",
-          "value": "list_sites",
-          "description": "List sites using the Netlify node.",
-          "fields": [
-            {
-              "name": "Access Token",
-              "internalKey": "accessToken",
-              "type": "string",
-              "required": false,
-              "description": "Netlify Personal Access Token",
-              "helpText": "What this field is: Netlify personal access token, a secret password that lets CtrlChecks talk to Netlify safely.\nWhere to find it: Netlify -> User settings -> Applications -> Personal access tokens.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: nfp_... or the token Netlify shows.\nImportant: Treat this like a bank password. Use a token from an account that can access the site.",
-              "placeholder": "token_..."
-            },
-            {
-              "name": "Resource",
-              "internalKey": "resource",
-              "type": "select",
-              "required": true,
-              "description": "Netlify resource",
-              "helpText": "What this field is: The Netlify entity type to work with.\nOptions: Sites, Deploys, Forms.\nExample: Sites to list or query sites, Deploys to trigger or monitor deployments.\nTip: The resource determines which Netlify API endpoint is called.",
-              "placeholder": "sites",
-              "example": "sites",
-              "defaultValue": "sites",
-              "options": [
-                "Sites",
-                "Deploys",
-                "Forms"
-              ]
-            },
-            {
-              "name": "Site Id",
-              "internalKey": "siteId",
-              "type": "string",
-              "required": false,
-              "description": "Site ID",
-              "helpText": "What this field is: The Site ID that tells Netlify which item to use.\nWhere to find it: Open the item in Netlify and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.siteId}} when an earlier Netlify step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Deploy Id",
-              "internalKey": "deployId",
-              "type": "string",
-              "required": false,
-              "description": "Deploy ID",
-              "helpText": "What this field is: The Deploy ID that tells Netlify which item to use.\nWhere to find it: Open the item in Netlify and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.deployId}} when an earlier Netlify step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Payload",
-              "internalKey": "payload",
-              "type": "json",
-              "required": false,
-              "description": "Request body for create_deploy",
-              "helpText": "What this field is: Structured data for Request body for create_deploy.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Netlify.\nExample: {}.\nTip: Use {{$json.payload}} when an earlier step already prepared this data.",
-              "placeholder": "{}",
-              "example": "{}",
-              "defaultValue": "{}"
-            },
-            {
-              "name": "Limit",
-              "internalKey": "limit",
-              "type": "number",
-              "required": false,
-              "description": "Max records to return",
-              "helpText": "What this field is: The number used for Max records to return.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 25.\nTip: Use {{$json.limit}} when the number comes from an earlier step.",
-              "placeholder": "25",
-              "example": "25",
-              "defaultValue": "25"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "list_sites",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming Netlify data with list sites after a related upstream event is received",
-            "inputValues": {
-              "Access Token": "",
-              "Resource": "sites",
-              "Site Id": "abc123",
-              "Deploy Id": "abc123",
-              "Payload": "{}"
-            },
-            "expectedOutput": "Netlify returns structured list sites data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://docs.netlify.com/api/get-started/"
-        },
-        {
-          "name": "Get site",
-          "value": "get_site",
-          "description": "Get site using the Netlify node.",
-          "fields": [
-            {
-              "name": "Access Token",
-              "internalKey": "accessToken",
-              "type": "string",
-              "required": false,
-              "description": "Netlify Personal Access Token",
-              "helpText": "What this field is: Netlify personal access token, a secret password that lets CtrlChecks talk to Netlify safely.\nWhere to find it: Netlify -> User settings -> Applications -> Personal access tokens.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: nfp_... or the token Netlify shows.\nImportant: Treat this like a bank password. Use a token from an account that can access the site.",
-              "placeholder": "token_..."
-            },
-            {
-              "name": "Resource",
-              "internalKey": "resource",
-              "type": "select",
-              "required": true,
-              "description": "Netlify resource",
-              "helpText": "What this field is: The Netlify entity type to work with.\nOptions: Sites, Deploys, Forms.\nExample: Sites to list or query sites, Deploys to trigger or monitor deployments.\nTip: The resource determines which Netlify API endpoint is called.",
-              "placeholder": "sites",
-              "example": "sites",
-              "defaultValue": "sites",
-              "options": [
-                "Sites",
-                "Deploys",
-                "Forms"
-              ]
-            },
-            {
-              "name": "Site Id",
-              "internalKey": "siteId",
-              "type": "string",
-              "required": false,
-              "description": "Site ID",
-              "helpText": "What this field is: The Site ID that tells Netlify which item to use.\nWhere to find it: Open the item in Netlify and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.siteId}} when an earlier Netlify step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Deploy Id",
-              "internalKey": "deployId",
-              "type": "string",
-              "required": false,
-              "description": "Deploy ID",
-              "helpText": "What this field is: The Deploy ID that tells Netlify which item to use.\nWhere to find it: Open the item in Netlify and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.deployId}} when an earlier Netlify step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Payload",
-              "internalKey": "payload",
-              "type": "json",
-              "required": false,
-              "description": "Request body for create_deploy",
-              "helpText": "What this field is: Structured data for Request body for create_deploy.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Netlify.\nExample: {}.\nTip: Use {{$json.payload}} when an earlier step already prepared this data.",
-              "placeholder": "{}",
-              "example": "{}",
-              "defaultValue": "{}"
-            },
-            {
-              "name": "Limit",
-              "internalKey": "limit",
-              "type": "number",
-              "required": false,
-              "description": "Max records to return",
-              "helpText": "What this field is: The number used for Max records to return.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 25.\nTip: Use {{$json.limit}} when the number comes from an earlier step.",
-              "placeholder": "25",
-              "example": "25",
-              "defaultValue": "25"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "get_site",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming Netlify data with get site after a related upstream event is received",
-            "inputValues": {
-              "Access Token": "",
-              "Resource": "sites",
-              "Site Id": "abc123",
-              "Deploy Id": "abc123",
-              "Payload": "{}"
-            },
-            "expectedOutput": "Netlify returns structured get site data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://docs.netlify.com/api/get-started/"
-        },
-        {
-          "name": "Create deploy",
-          "value": "create_deploy",
-          "description": "Create deploy using the Netlify node.",
-          "fields": [
-            {
-              "name": "Access Token",
-              "internalKey": "accessToken",
-              "type": "string",
-              "required": false,
-              "description": "Netlify Personal Access Token",
-              "helpText": "What this field is: Netlify personal access token, a secret password that lets CtrlChecks talk to Netlify safely.\nWhere to find it: Netlify -> User settings -> Applications -> Personal access tokens.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: nfp_... or the token Netlify shows.\nImportant: Treat this like a bank password. Use a token from an account that can access the site.",
-              "placeholder": "token_..."
-            },
-            {
-              "name": "Resource",
-              "internalKey": "resource",
-              "type": "select",
-              "required": true,
-              "description": "Netlify resource",
-              "helpText": "What this field is: The Netlify entity type to work with.\nOptions: Sites, Deploys, Forms.\nExample: Sites to list or query sites, Deploys to trigger or monitor deployments.\nTip: The resource determines which Netlify API endpoint is called.",
-              "placeholder": "sites",
-              "example": "sites",
-              "defaultValue": "sites",
-              "options": [
-                "Sites",
-                "Deploys",
-                "Forms"
-              ]
-            },
-            {
-              "name": "Site Id",
-              "internalKey": "siteId",
-              "type": "string",
-              "required": false,
-              "description": "Site ID",
-              "helpText": "What this field is: The Site ID that tells Netlify which item to use.\nWhere to find it: Open the item in Netlify and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.siteId}} when an earlier Netlify step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Deploy Id",
-              "internalKey": "deployId",
-              "type": "string",
-              "required": false,
-              "description": "Deploy ID",
-              "helpText": "What this field is: The Deploy ID that tells Netlify which item to use.\nWhere to find it: Open the item in Netlify and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.deployId}} when an earlier Netlify step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Payload",
-              "internalKey": "payload",
-              "type": "json",
-              "required": false,
-              "description": "Request body for create_deploy",
-              "helpText": "What this field is: Structured data for Request body for create_deploy.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Netlify.\nExample: {}.\nTip: Use {{$json.payload}} when an earlier step already prepared this data.",
-              "placeholder": "{}",
-              "example": "{}",
-              "defaultValue": "{}"
-            },
-            {
-              "name": "Limit",
-              "internalKey": "limit",
-              "type": "number",
-              "required": false,
-              "description": "Max records to return",
-              "helpText": "What this field is: The number used for Max records to return.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 25.\nTip: Use {{$json.limit}} when the number comes from an earlier step.",
-              "placeholder": "25",
-              "example": "25",
-              "defaultValue": "25"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "create_deploy",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming Netlify data with create deploy after a related upstream event is received",
-            "inputValues": {
-              "Access Token": "",
-              "Resource": "sites",
-              "Site Id": "abc123",
-              "Deploy Id": "abc123",
-              "Payload": "{}"
-            },
-            "expectedOutput": "Netlify returns structured create deploy data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://docs.netlify.com/api/get-started/"
-        },
-        {
-          "name": "List deploys",
-          "value": "list_deploys",
-          "description": "List deploys using the Netlify node.",
-          "fields": [
-            {
-              "name": "Access Token",
-              "internalKey": "accessToken",
-              "type": "string",
-              "required": false,
-              "description": "Netlify Personal Access Token",
-              "helpText": "What this field is: Netlify personal access token, a secret password that lets CtrlChecks talk to Netlify safely.\nWhere to find it: Netlify -> User settings -> Applications -> Personal access tokens.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: nfp_... or the token Netlify shows.\nImportant: Treat this like a bank password. Use a token from an account that can access the site.",
-              "placeholder": "token_..."
-            },
-            {
-              "name": "Resource",
-              "internalKey": "resource",
-              "type": "select",
-              "required": true,
-              "description": "Netlify resource",
-              "helpText": "What this field is: The Netlify entity type to work with.\nOptions: Sites, Deploys, Forms.\nExample: Sites to list or query sites, Deploys to trigger or monitor deployments.\nTip: The resource determines which Netlify API endpoint is called.",
-              "placeholder": "sites",
-              "example": "sites",
-              "defaultValue": "sites",
-              "options": [
-                "Sites",
-                "Deploys",
-                "Forms"
-              ]
-            },
-            {
-              "name": "Site Id",
-              "internalKey": "siteId",
-              "type": "string",
-              "required": false,
-              "description": "Site ID",
-              "helpText": "What this field is: The Site ID that tells Netlify which item to use.\nWhere to find it: Open the item in Netlify and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.siteId}} when an earlier Netlify step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Deploy Id",
-              "internalKey": "deployId",
-              "type": "string",
-              "required": false,
-              "description": "Deploy ID",
-              "helpText": "What this field is: The Deploy ID that tells Netlify which item to use.\nWhere to find it: Open the item in Netlify and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.deployId}} when an earlier Netlify step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Payload",
-              "internalKey": "payload",
-              "type": "json",
-              "required": false,
-              "description": "Request body for create_deploy",
-              "helpText": "What this field is: Structured data for Request body for create_deploy.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Netlify.\nExample: {}.\nTip: Use {{$json.payload}} when an earlier step already prepared this data.",
-              "placeholder": "{}",
-              "example": "{}",
-              "defaultValue": "{}"
-            },
-            {
-              "name": "Limit",
-              "internalKey": "limit",
-              "type": "number",
-              "required": false,
-              "description": "Max records to return",
-              "helpText": "What this field is: The number used for Max records to return.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 25.\nTip: Use {{$json.limit}} when the number comes from an earlier step.",
-              "placeholder": "25",
-              "example": "25",
-              "defaultValue": "25"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "list_deploys",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming Netlify data with list deploys after a related upstream event is received",
-            "inputValues": {
-              "Access Token": "",
-              "Resource": "sites",
-              "Site Id": "abc123",
-              "Deploy Id": "abc123",
-              "Payload": "{}"
-            },
-            "expectedOutput": "Netlify returns structured list deploys data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://docs.netlify.com/api/get-started/"
-        },
-        {
-          "name": "Get deploy",
-          "value": "get_deploy",
-          "description": "Get deploy using the Netlify node.",
-          "fields": [
-            {
-              "name": "Access Token",
-              "internalKey": "accessToken",
-              "type": "string",
-              "required": false,
-              "description": "Netlify Personal Access Token",
-              "helpText": "What this field is: Netlify personal access token, a secret password that lets CtrlChecks talk to Netlify safely.\nWhere to find it: Netlify -> User settings -> Applications -> Personal access tokens.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: nfp_... or the token Netlify shows.\nImportant: Treat this like a bank password. Use a token from an account that can access the site.",
-              "placeholder": "token_..."
-            },
-            {
-              "name": "Resource",
-              "internalKey": "resource",
-              "type": "select",
-              "required": true,
-              "description": "Netlify resource",
-              "helpText": "What this field is: The Netlify entity type to work with.\nOptions: Sites, Deploys, Forms.\nExample: Sites to list or query sites, Deploys to trigger or monitor deployments.\nTip: The resource determines which Netlify API endpoint is called.",
-              "placeholder": "sites",
-              "example": "sites",
-              "defaultValue": "sites",
-              "options": [
-                "Sites",
-                "Deploys",
-                "Forms"
-              ]
-            },
-            {
-              "name": "Site Id",
-              "internalKey": "siteId",
-              "type": "string",
-              "required": false,
-              "description": "Site ID",
-              "helpText": "What this field is: The Site ID that tells Netlify which item to use.\nWhere to find it: Open the item in Netlify and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.siteId}} when an earlier Netlify step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Deploy Id",
-              "internalKey": "deployId",
-              "type": "string",
-              "required": false,
-              "description": "Deploy ID",
-              "helpText": "What this field is: The Deploy ID that tells Netlify which item to use.\nWhere to find it: Open the item in Netlify and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.deployId}} when an earlier Netlify step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Payload",
-              "internalKey": "payload",
-              "type": "json",
-              "required": false,
-              "description": "Request body for create_deploy",
-              "helpText": "What this field is: Structured data for Request body for create_deploy.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Netlify.\nExample: {}.\nTip: Use {{$json.payload}} when an earlier step already prepared this data.",
-              "placeholder": "{}",
-              "example": "{}",
-              "defaultValue": "{}"
-            },
-            {
-              "name": "Limit",
-              "internalKey": "limit",
-              "type": "number",
-              "required": false,
-              "description": "Max records to return",
-              "helpText": "What this field is: The number used for Max records to return.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 25.\nTip: Use {{$json.limit}} when the number comes from an earlier step.",
-              "placeholder": "25",
-              "example": "25",
-              "defaultValue": "25"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "get_deploy",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming Netlify data with get deploy after a related upstream event is received",
-            "inputValues": {
-              "Access Token": "",
-              "Resource": "sites",
-              "Site Id": "abc123",
-              "Deploy Id": "abc123",
-              "Payload": "{}"
-            },
-            "expectedOutput": "Netlify returns structured get deploy data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://docs.netlify.com/api/get-started/"
-        }
-      ]
-    }
-  ],
-  "commonErrors": [
-    {
-      "error": "Authentication failed",
-      "cause": "The saved credential, token, API key, or OAuth grant is missing, expired, or lacks the required scope.",
-      "fix": "Reconnect the service in CtrlChecks → Connections, then re-run the Netlify node."
+      name: 'Sites And Deploys',
+      description: 'Legacy executor operations backed by https://api.netlify.com/api/v1.',
+      operations: [
+        operation(
+          'List Sites',
+          'list_sites',
+          'List Sites calls GET /sites with per_page from Limit and returns an array in records plus count. Site ID and Deploy ID are ignored for this operation.',
+          { success: true, resource: 'sites', operation: 'list_sites', records: [{ id: 'site_123', name: 'marketing-site' }], count: 1, meta: {} },
+          'success: true when Netlify returns sites. resource and operation echo config. records contains the site array. count is the number returned. record is undefined for arrays. error appears as a plain string on failure.',
+          { resource: 'sites', limit: '25' },
+        ),
+        operation(
+          'Get Site',
+          'get_site',
+          'Get Site calls GET /sites/{siteId} and returns one site object in record. Runtime does not locally validate Site ID before calling Netlify.',
+          { success: true, resource: 'sites', operation: 'get_site', record: { id: 'site_123', name: 'marketing-site', url: 'https://example.netlify.app' }, records: [], count: 1, meta: {} },
+          'success: true when Netlify returns a site. resource and operation echo config. record contains the site object. records is empty and count is 1. error appears as a plain string on failure.',
+          { resource: 'sites', siteId: 'site_123' },
+        ),
+        operation(
+          'Create Deploy',
+          'create_deploy',
+          'Create Deploy calls POST /sites/{siteId}/deploys with Payload as the JSON body. Use it for branch deploy triggers or deploy objects supported by Netlify.',
+          { success: true, resource: 'deploys', operation: 'create_deploy', record: { id: 'deploy_123', state: 'new', deploy_url: 'https://deploy-preview.netlify.app' }, records: [], count: 1, meta: {} },
+          'success: true when Netlify creates the deploy. resource and operation echo config. record contains the deploy object. records is empty and count is 1. error appears as a plain string on failure.',
+          { resource: 'deploys', siteId: 'site_123', payload: '{"branch":"main"}' },
+        ),
+        operation(
+          'List Deploys',
+          'list_deploys',
+          'List Deploys calls GET /sites/{siteId}/deploys with Limit as per_page and returns deploy objects in records.',
+          { success: true, resource: 'deploys', operation: 'list_deploys', records: [{ id: 'deploy_123', state: 'ready' }], count: 1, meta: {} },
+          'success: true when Netlify returns deploys. resource and operation echo config. records contains deploys, count is returned length, and record is undefined for arrays. error appears as a plain string on failure.',
+          { resource: 'deploys', siteId: 'site_123', limit: '10' },
+        ),
+        operation(
+          'Get Deploy',
+          'get_deploy',
+          'Get Deploy calls GET /deploys/{deployId} and returns one deploy object in record. Site ID is not used by the actual endpoint.',
+          { success: true, resource: 'deploys', operation: 'get_deploy', record: { id: 'deploy_123', state: 'ready', deploy_url: 'https://example.netlify.app' }, records: [], count: 1, meta: {} },
+          'success: true when Netlify returns a deploy. resource and operation echo config. record contains the deploy object. records is empty and count is 1. error appears as a plain string on failure.',
+          { resource: 'deploys', deployId: 'deploy_123' },
+        ),
+      ],
     },
-    {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
-    },
-    {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
   ],
-  "relatedNodes": []
+  commonErrors: [
+    { error: 'Unsupported operation: <operation>', cause: 'Operation is not one of list_sites, get_site, create_deploy, list_deploys, or get_deploy.', fix: 'Choose a supported operation from the dropdown.' },
+    { error: 'Netlify API error <status>: <response text>', cause: 'Netlify rejected the request because the token, Site ID, Deploy ID, payload, or permissions were wrong.', fix: 'Check the token, ID fields, and Netlify account access, then retry.' },
+    { error: 'Netlify error', cause: 'The request failed before Netlify returned a normal API response.', fix: 'Verify network access to api.netlify.com and confirm the token is available.' },
+    { error: 'Missing Access Token', cause: 'The runtime sends Authorization: Bearer <accessToken>; an empty token causes authentication failure at Netlify.', fix: 'Save a Netlify connection in Connections or map the access token into accessToken.' },
+    { error: 'Forms resource does not return forms today', cause: 'The legacy executor routes by operation only and has no form-submission endpoint.', fix: 'Use the supported site/deploy operations or add a new forms operation in worker code later.' },
+  ],
+  relatedNodes: ['vercel', 'github', 'gitlab', 'jenkins'],
 };

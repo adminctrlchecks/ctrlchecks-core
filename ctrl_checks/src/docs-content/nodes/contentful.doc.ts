@@ -1,478 +1,238 @@
-import type { NodeDoc } from '../types';
+import type { FieldDoc, NodeDoc, OperationDoc } from '../types';
+import { richFieldHelp } from './_sharedFieldHelp';
+
+const operationValues = ['get_entries', 'get_entry', 'create_entry', 'update_entry', 'delete_entry'];
+
+const fields: FieldDoc[] = [
+  {
+    name: 'Operation',
+    internalKey: 'operation',
+    type: 'select',
+    required: true,
+    description: 'The Contentful entry operation to run.',
+    options: operationValues,
+    helpText: richFieldHelp({
+      what: 'The action selector for Contentful entries. get_entries lists entries, get_entry reads one entry, create_entry creates an entry, update_entry updates one entry after reading its current version, and delete_entry deletes one entry after reading its current version.',
+      why: 'The operation determines whether spaceId, accessToken, contentType, entryId, and fields are used for a read or write request.',
+      when: 'Choose it before filling entry fields so you know whether this step is listing, reading one item, creating, updating, or deleting.',
+      enter: 'Select get_entries, get_entry, create_entry, update_entry, or delete_entry.',
+      source: 'The choice comes from the workflow purpose, such as syncing CMS content after approval or loading entries for a report.',
+      later: 'Downstream nodes read {{$json.success}}, {{$json.data}}, or {{$json.error}} because this node returns a wrapper object.',
+      format: `One of: ${operationValues.join(', ')}.`,
+      example: 'A publishing workflow chooses create_entry after an editor approves a blog draft.',
+      empty: 'Runtime defaults to get_entries if operation is missing.',
+      mistake: 'Using delivery API wording; this node calls the Content Management API on api.contentful.com.',
+    }),
+    defaultValue: 'get_entries',
+    example: 'get_entries',
+    notes: `Options: ${operationValues.join(', ')}.`,
+  },
+  {
+    name: 'Space ID',
+    internalKey: 'spaceId',
+    type: 'string',
+    required: true,
+    description: 'Contentful space identifier.',
+    helpText: richFieldHelp({
+      what: 'The ID of the Contentful space that contains the entries.',
+      why: 'The worker builds the API URL with /spaces/{spaceId}/environments/{environment}/entries.',
+      when: 'Fill it for every operation.',
+      enter: 'Use a space ID such as abc123xyz or map {{$json.spaceId}} from an upstream configuration step.',
+      source: 'Contentful Settings -> API keys, Settings -> General settings, or your team documentation.',
+      later: 'It is not returned separately; the returned data contains Contentful sys metadata for entries.',
+      format: 'Short alphanumeric Contentful space ID, not a full URL or space name.',
+      example: 'A marketing automation uses spaceId abcd1234efgh for the production CMS space.',
+      empty: 'Runtime still builds a URL with an empty space segment, and the API returns an error in error.message/status.',
+      mistake: 'Copying a Contentful organization ID instead of the space ID.',
+    }),
+    placeholder: 'abc123xyz',
+    example: 'abc123xyz',
+  },
+  {
+    name: 'Access Token',
+    internalKey: 'accessToken',
+    type: 'password',
+    required: true,
+    description: 'Contentful Content Management API personal access token.',
+    helpText: richFieldHelp({
+      what: 'The Contentful CMA Personal Access Token used as a Bearer token.',
+      why: 'All reads and writes in this node call the Content Management API and require an authorized CMA token.',
+      when: 'Fill it for every operation or provide it through the Contentful service node account connection.',
+      enter: 'Use a secure credential expression such as {{$credentials.contentful.accessToken}}.',
+      source: 'Contentful -> Settings -> CMA tokens. The token must be authorized for the organization/space.',
+      later: 'The token is consumed for authentication and is never returned in {{$json.data}}.',
+      format: 'Secret token string such as a CFPAT value. Do not use Content Delivery or Preview tokens.',
+      example: 'A CMS workflow stores the authorized CFPAT token in the credential vault and maps it into this field.',
+      empty: 'The API call returns an authentication error object with success false, data {}, and error status/message.',
+      mistake: 'Creating the token but forgetting to click Authorize on the CMA token row, causing OrganizationAccessGrantRequired.',
+    }),
+    placeholder: '{{$credentials.contentful.accessToken}}',
+    example: '{{$credentials.contentful.accessToken}}',
+  },
+  {
+    name: 'Environment',
+    internalKey: 'environment',
+    type: 'string',
+    required: false,
+    description: 'Contentful environment name.',
+    helpText: richFieldHelp({
+      what: 'The Contentful environment segment used in the API URL.',
+      why: 'It decides whether the node reads/writes master, staging, preview, or another environment.',
+      when: 'Fill it when the workflow should target something other than master.',
+      enter: 'Type master, staging, production, preview, or map {{$json.environment}}.',
+      source: 'Contentful space environments list or your release process documentation.',
+      later: 'Returned entries come from that environment; downstream nodes should not assume they came from master if you changed it.',
+      format: 'Environment ID string. Runtime defaults to master.',
+      example: 'A QA workflow updates entries in staging before a human publishes to production.',
+      empty: 'Runtime uses master.',
+      mistake: 'Entering the environment display label if the actual environment ID is different.',
+    }),
+    placeholder: 'master',
+    defaultValue: 'master',
+    example: 'master',
+  },
+  {
+    name: 'Content Type',
+    internalKey: 'contentType',
+    type: 'string',
+    required: false,
+    description: 'Contentful content type ID.',
+    helpText: richFieldHelp({
+      what: 'The Contentful content type ID, such as blogPost or productPage.',
+      why: 'create_entry sends it as X-Contentful-Content-Type, and get_entries can use it as a content_type filter.',
+      when: 'Fill it for create_entry and when get_entries should list only one content type.',
+      enter: 'Type the content type ID or map {{$json.contentType}} from an upstream CMS mapping.',
+      source: 'Contentful Content model page, API identifier in the content type settings, or team documentation.',
+      later: 'The created entry data includes sys.contentType metadata that later steps can inspect.',
+      format: 'Content type ID string, not the display name if they differ.',
+      example: 'A blog intake workflow uses contentType blogPost for approved article drafts.',
+      empty: 'create_entry may fail because Contentful needs X-Contentful-Content-Type; get_entries simply lists all entries.',
+      mistake: 'Using "Blog Post" display text instead of the ID blogPost.',
+    }),
+    placeholder: 'blogPost',
+    example: 'blogPost',
+  },
+  {
+    name: 'Entry ID',
+    internalKey: 'entryId',
+    type: 'string',
+    required: false,
+    description: 'Contentful entry ID.',
+    helpText: richFieldHelp({
+      what: 'The ID of one Contentful entry.',
+      why: 'get_entry, update_entry, and delete_entry need the exact entry path /entries/{entryId}.',
+      when: 'Fill it for reading, updating, or deleting one existing entry.',
+      enter: 'Use an entry ID or map {{$json.sys.id}} from an earlier Contentful get/list result.',
+      source: 'Entry details, API response sys.id, or a previous workflow step that stored the entry ID.',
+      later: 'It lets later steps update/delete the same entry after a review or approval.',
+      format: 'Entry ID string. Do not enter the entry title.',
+      example: 'A translation workflow maps {{$json.sys.id}} into entryId before updating localized fields.',
+      empty: 'The request targets an empty /entries/ path or the version lookup fails before update/delete.',
+      mistake: 'Mapping {{$json.id}} when Contentful returned the real ID inside {{$json.sys.id}}.',
+    }),
+    placeholder: '{{$json.sys.id}}',
+    example: '{{$json.sys.id}}',
+  },
+  {
+    name: 'Fields',
+    internalKey: 'fields',
+    type: 'textarea',
+    required: false,
+    description: 'JSON payload for entry fields.',
+    helpText: richFieldHelp({
+      what: 'The JSON text used to create or update entry fields.',
+      why: 'Runtime parses this field. If the parsed object already contains fields, it sends it as-is; otherwise it wraps the object as { fields: parsed }.',
+      when: 'Fill it for create_entry and update_entry.',
+      enter: 'Use locale-keyed Contentful fields like {"title":{"en-US":"Launch post"}} or map {{$json.contentfulFields}}.',
+      source: 'Form data, CMS draft generator, translation system, or an earlier transformation step.',
+      later: 'The response in {{$json.data}} contains Contentful sys/version details and the fields Contentful accepted.',
+      format: 'Valid JSON object text. Field IDs must match the content type model, and values should usually be locale-keyed objects.',
+      example: 'A content pipeline sends {"title":{"en-US":"July launch"},"slug":{"en-US":"july-launch"}}.',
+      empty: 'create/update parse fails with Invalid JSON in fields because an empty string is not valid JSON.',
+      mistake: 'Typing JavaScript-style keys without quotes, which is not valid JSON.',
+    }),
+    placeholder: '{"title":{"en-US":"July launch"}}',
+    example: '{"title":{"en-US":"July launch"}}',
+  },
+];
+
+const makeOperation = (name: string, value: string, description: string): OperationDoc => ({
+  name,
+  value,
+  description: `${description} Use it only after confirming the space, environment, entry/content type requirements, and CMA token permissions for the target Contentful space.`,
+  fields,
+  outputExample: {
+    success: true,
+    data: { sys: { id: 'entry123', version: 4 }, fields: { title: { 'en-US': 'July launch' } } },
+    error: {},
+  },
+  outputDescription: 'success is true when Contentful returns a 2xx response. data contains the Contentful response body, usually sys and fields for entries. error is {} on success or an object with message and status on failure. This node does not preserve incoming fields.',
+  usageExample: {
+    scenario: `Run ${name} from a publishing workflow that manages Contentful entries after editorial approval.`,
+    inputValues: {
+      operation: value,
+      spaceId: 'abc123xyz',
+      accessToken: '{{$credentials.contentful.accessToken}}',
+    },
+    expectedOutput: 'Use {{$json.data.sys.id}} for a later update/delete step or {{$json.error.message}} when success is false.',
+  },
+  externalDocsUrl: 'https://www.contentful.com/developers/docs/references/content-management-api/',
+});
 
 export const contentfulDoc: NodeDoc = {
-  "slug": "contentful",
-  "displayName": "Contentful",
-  "category": "Data",
-  "logoUrl": "/icons/nodes/contentful.svg",
-  "description": "Create, read, update, and delete content entries on any Contentful space.",
-  "credentialType": "Contentful CMA Personal Access Token",
-  "credentialSetupSteps": [
-    "What this is: The Contentful connection lets CtrlChecks access your Contentful account safely without putting secrets in workflow fields.",
-    "Where to start: Contentful -> Settings -> CMA tokens.",
-    "Create a personal access token and copy the CFPAT value immediately.",
-    "Important: In the CMA tokens list, click Authorize on the token row and grant access to the organization/space you want CtrlChecks to use.",
-    "How to connect: In CtrlChecks, open Connections -> Add Connection -> Contentful, then paste the authorized CFPAT token.",
-    "Do not use Content Delivery API or Content Preview API tokens for this node.",
-    "Troubleshooting: OrganizationAccessGrantRequired means the token is valid but has not been authorized for that organization/space.",
-    "Important: Treat tokens, passwords, API keys, and client secrets like bank passwords. Store them in Connections, not in regular workflow fields.",
-    "Test it: Save the connection, run a simple Contentful step, and confirm CtrlChecks can reach the account."
+  slug: 'contentful',
+  displayName: 'Contentful',
+  category: 'CMS',
+  logoUrl: '/icons/nodes/contentful.svg',
+  description: 'Creates, reads, updates, and deletes Contentful entries through the Content Management API.',
+  credentialType: 'Contentful CMA Personal Access Token',
+  credentialSetupSteps: [
+    'Create a Contentful CMA Personal Access Token in Contentful -> Settings -> CMA tokens and store it in Connections or the credential vault.',
+    'Click Authorize on the CMA token row and grant access to the organization/space, otherwise Contentful can return OrganizationAccessGrantRequired.',
+    'Use the Contentful service node account connection for read, write, update, and delete actions instead of ordinary workflow fields.',
+    'Do not use Content Delivery API or Content Preview API tokens for this node; it calls api.contentful.com Content Management API routes.',
+    'Connect the output to the next service node with an outgoing line, then map {{$json.data.sys.id}}, {{$json.data.fields}}, or {{$json.error.message}}.',
   ],
-  "credentialDocsUrl": "https://www.contentful.com/developers/docs/references/authentication/",
-  "resources": [
+  credentialDocsUrl: 'https://www.contentful.com/developers/docs/references/authentication/',
+  resources: [
     {
-      "name": "Operations",
-      "description": "Contentful exposes operation choices directly.",
-      "operations": [
-        {
-          "name": "Get entries",
-          "value": "get_entries",
-          "description": "Get entries using the Contentful node.",
-          "fields": [
-            {
-              "name": "Space Id",
-              "internalKey": "spaceId",
-              "type": "string",
-              "required": true,
-              "description": "Contentful space ID",
-              "helpText": "What this field is: Your Contentful space ID — identifies your content workspace.\nWhere to find it: Contentful Dashboard → Settings → General Settings → Space ID.\nExample: abcd1234efgh",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Access Token",
-              "internalKey": "accessToken",
-              "type": "string",
-              "required": true,
-              "description": "Contentful CMA personal access token",
-              "helpText": "What this field is: Contentful access token, a secret password that lets CtrlChecks talk to Contentful safely.\nWhere to find it: Contentful -> Settings -> API keys.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: a Delivery token for reading or a Management token for writing.\nImportant: Treat this like a bank password. Use the token type that matches the operation.",
-              "placeholder": "token_..."
-            },
-            {
-              "name": "Environment",
-              "internalKey": "environment",
-              "type": "string",
-              "required": false,
-              "description": "Contentful environment",
-              "helpText": "What this field is: Contentful environment.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: master.\nTip: Use {{$json.environment}} when this value comes from an earlier step.",
-              "placeholder": "master",
-              "example": "master",
-              "defaultValue": "master"
-            },
-            {
-              "name": "Content Type",
-              "internalKey": "contentType",
-              "type": "textarea",
-              "required": false,
-              "description": "Content type ID",
-              "helpText": "What this field is: Content type ID.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: Content Type value.\nTip: Use {{$json.contentType}} when this value comes from an earlier step.",
-              "placeholder": "Enter Content Type"
-            },
-            {
-              "name": "Entry Id",
-              "internalKey": "entryId",
-              "type": "string",
-              "required": false,
-              "description": "Entry ID",
-              "helpText": "What this field is: The Entry ID that tells Contentful which item to use.\nWhere to find it: Open the item in Contentful and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.entryId}} when an earlier Contentful step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Fields",
-              "internalKey": "fields",
-              "type": "string",
-              "required": false,
-              "description": "JSON string of entry fields",
-              "helpText": "What this field is: Structured data for structured data in { } brackets string of entry fields.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Contentful.\nExample: {\"name\":\"Alice\",\"email\":\"alice@example.com\"}.\nTip: Use {{$json.fields}} when an earlier step already prepared this data.",
-              "placeholder": "Enter Fields"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "get_entries",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming Contentful data with get entries after a related upstream event is received",
-            "inputValues": {
-              "Space Id": "abc123",
-              "Access Token": "",
-              "Environment": "master",
-              "Content Type": "",
-              "Entry Id": "abc123"
-            },
-            "expectedOutput": "Contentful returns structured get entries data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://www.contentful.com/developers/docs/references/content-management-api/"
-        },
-        {
-          "name": "Get entry",
-          "value": "get_entry",
-          "description": "Get entry using the Contentful node.",
-          "fields": [
-            {
-              "name": "Space Id",
-              "internalKey": "spaceId",
-              "type": "string",
-              "required": true,
-              "description": "Contentful space ID",
-              "helpText": "What this field is: Your Contentful space ID — identifies your content workspace.\nWhere to find it: Contentful Dashboard → Settings → General Settings → Space ID.\nExample: abcd1234efgh",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Access Token",
-              "internalKey": "accessToken",
-              "type": "string",
-              "required": true,
-              "description": "Contentful CMA personal access token",
-              "helpText": "What this field is: Contentful access token, a secret password that lets CtrlChecks talk to Contentful safely.\nWhere to find it: Contentful -> Settings -> API keys.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: a Delivery token for reading or a Management token for writing.\nImportant: Treat this like a bank password. Use the token type that matches the operation.",
-              "placeholder": "token_..."
-            },
-            {
-              "name": "Environment",
-              "internalKey": "environment",
-              "type": "string",
-              "required": false,
-              "description": "Contentful environment",
-              "helpText": "What this field is: Contentful environment.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: master.\nTip: Use {{$json.environment}} when this value comes from an earlier step.",
-              "placeholder": "master",
-              "example": "master",
-              "defaultValue": "master"
-            },
-            {
-              "name": "Content Type",
-              "internalKey": "contentType",
-              "type": "textarea",
-              "required": false,
-              "description": "Content type ID",
-              "helpText": "What this field is: Content type ID.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: Content Type value.\nTip: Use {{$json.contentType}} when this value comes from an earlier step.",
-              "placeholder": "Enter Content Type"
-            },
-            {
-              "name": "Entry Id",
-              "internalKey": "entryId",
-              "type": "string",
-              "required": false,
-              "description": "Entry ID",
-              "helpText": "What this field is: The Entry ID that tells Contentful which item to use.\nWhere to find it: Open the item in Contentful and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.entryId}} when an earlier Contentful step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Fields",
-              "internalKey": "fields",
-              "type": "string",
-              "required": false,
-              "description": "JSON string of entry fields",
-              "helpText": "What this field is: Structured data for structured data in { } brackets string of entry fields.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Contentful.\nExample: {\"name\":\"Alice\",\"email\":\"alice@example.com\"}.\nTip: Use {{$json.fields}} when an earlier step already prepared this data.",
-              "placeholder": "Enter Fields"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "get_entry",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming Contentful data with get entry after a related upstream event is received",
-            "inputValues": {
-              "Space Id": "abc123",
-              "Access Token": "",
-              "Environment": "master",
-              "Content Type": "",
-              "Entry Id": "abc123"
-            },
-            "expectedOutput": "Contentful returns structured get entry data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://www.contentful.com/developers/docs/references/content-management-api/"
-        },
-        {
-          "name": "Create entry",
-          "value": "create_entry",
-          "description": "Create entry using the Contentful node.",
-          "fields": [
-            {
-              "name": "Space Id",
-              "internalKey": "spaceId",
-              "type": "string",
-              "required": true,
-              "description": "Contentful space ID",
-              "helpText": "What this field is: Your Contentful space ID — identifies your content workspace.\nWhere to find it: Contentful Dashboard → Settings → General Settings → Space ID.\nExample: abcd1234efgh",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Access Token",
-              "internalKey": "accessToken",
-              "type": "string",
-              "required": true,
-              "description": "Contentful CMA personal access token",
-              "helpText": "What this field is: Contentful access token, a secret password that lets CtrlChecks talk to Contentful safely.\nWhere to find it: Contentful -> Settings -> API keys.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: a Delivery token for reading or a Management token for writing.\nImportant: Treat this like a bank password. Use the token type that matches the operation.",
-              "placeholder": "token_..."
-            },
-            {
-              "name": "Environment",
-              "internalKey": "environment",
-              "type": "string",
-              "required": false,
-              "description": "Contentful environment",
-              "helpText": "What this field is: Contentful environment.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: master.\nTip: Use {{$json.environment}} when this value comes from an earlier step.",
-              "placeholder": "master",
-              "example": "master",
-              "defaultValue": "master"
-            },
-            {
-              "name": "Content Type",
-              "internalKey": "contentType",
-              "type": "textarea",
-              "required": false,
-              "description": "Content type ID",
-              "helpText": "What this field is: Content type ID.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: Content Type value.\nTip: Use {{$json.contentType}} when this value comes from an earlier step.",
-              "placeholder": "Enter Content Type"
-            },
-            {
-              "name": "Entry Id",
-              "internalKey": "entryId",
-              "type": "string",
-              "required": false,
-              "description": "Entry ID",
-              "helpText": "What this field is: The Entry ID that tells Contentful which item to use.\nWhere to find it: Open the item in Contentful and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.entryId}} when an earlier Contentful step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Fields",
-              "internalKey": "fields",
-              "type": "string",
-              "required": false,
-              "description": "JSON string of entry fields",
-              "helpText": "What this field is: Structured data for structured data in { } brackets string of entry fields.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Contentful.\nExample: {\"name\":\"Alice\",\"email\":\"alice@example.com\"}.\nTip: Use {{$json.fields}} when an earlier step already prepared this data.",
-              "placeholder": "Enter Fields"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "create_entry",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming Contentful data with create entry after a related upstream event is received",
-            "inputValues": {
-              "Space Id": "abc123",
-              "Access Token": "",
-              "Environment": "master",
-              "Content Type": "",
-              "Entry Id": "abc123"
-            },
-            "expectedOutput": "Contentful returns structured create entry data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://www.contentful.com/developers/docs/references/content-management-api/"
-        },
-        {
-          "name": "Update entry",
-          "value": "update_entry",
-          "description": "Update entry using the Contentful node.",
-          "fields": [
-            {
-              "name": "Space Id",
-              "internalKey": "spaceId",
-              "type": "string",
-              "required": true,
-              "description": "Contentful space ID",
-              "helpText": "What this field is: Your Contentful space ID — identifies your content workspace.\nWhere to find it: Contentful Dashboard → Settings → General Settings → Space ID.\nExample: abcd1234efgh",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Access Token",
-              "internalKey": "accessToken",
-              "type": "string",
-              "required": true,
-              "description": "Contentful CMA personal access token",
-              "helpText": "What this field is: Contentful access token, a secret password that lets CtrlChecks talk to Contentful safely.\nWhere to find it: Contentful -> Settings -> API keys.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: a Delivery token for reading or a Management token for writing.\nImportant: Treat this like a bank password. Use the token type that matches the operation.",
-              "placeholder": "token_..."
-            },
-            {
-              "name": "Environment",
-              "internalKey": "environment",
-              "type": "string",
-              "required": false,
-              "description": "Contentful environment",
-              "helpText": "What this field is: Contentful environment.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: master.\nTip: Use {{$json.environment}} when this value comes from an earlier step.",
-              "placeholder": "master",
-              "example": "master",
-              "defaultValue": "master"
-            },
-            {
-              "name": "Content Type",
-              "internalKey": "contentType",
-              "type": "textarea",
-              "required": false,
-              "description": "Content type ID",
-              "helpText": "What this field is: Content type ID.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: Content Type value.\nTip: Use {{$json.contentType}} when this value comes from an earlier step.",
-              "placeholder": "Enter Content Type"
-            },
-            {
-              "name": "Entry Id",
-              "internalKey": "entryId",
-              "type": "string",
-              "required": false,
-              "description": "Entry ID",
-              "helpText": "What this field is: The Entry ID that tells Contentful which item to use.\nWhere to find it: Open the item in Contentful and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.entryId}} when an earlier Contentful step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Fields",
-              "internalKey": "fields",
-              "type": "string",
-              "required": false,
-              "description": "JSON string of entry fields",
-              "helpText": "What this field is: Structured data for structured data in { } brackets string of entry fields.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Contentful.\nExample: {\"name\":\"Alice\",\"email\":\"alice@example.com\"}.\nTip: Use {{$json.fields}} when an earlier step already prepared this data.",
-              "placeholder": "Enter Fields"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "update_entry",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming Contentful data with update entry after a related upstream event is received",
-            "inputValues": {
-              "Space Id": "abc123",
-              "Access Token": "",
-              "Environment": "master",
-              "Content Type": "",
-              "Entry Id": "abc123"
-            },
-            "expectedOutput": "Contentful returns structured update entry data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://www.contentful.com/developers/docs/references/content-management-api/"
-        },
-        {
-          "name": "Delete entry",
-          "value": "delete_entry",
-          "description": "Delete entry using the Contentful node.",
-          "fields": [
-            {
-              "name": "Space Id",
-              "internalKey": "spaceId",
-              "type": "string",
-              "required": true,
-              "description": "Contentful space ID",
-              "helpText": "What this field is: Your Contentful space ID — identifies your content workspace.\nWhere to find it: Contentful Dashboard → Settings → General Settings → Space ID.\nExample: abcd1234efgh",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Access Token",
-              "internalKey": "accessToken",
-              "type": "string",
-              "required": true,
-              "description": "Contentful CMA personal access token",
-              "helpText": "What this field is: Contentful access token, a secret password that lets CtrlChecks talk to Contentful safely.\nWhere to find it: Contentful -> Settings -> API keys.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: a Delivery token for reading or a Management token for writing.\nImportant: Treat this like a bank password. Use the token type that matches the operation.",
-              "placeholder": "token_..."
-            },
-            {
-              "name": "Environment",
-              "internalKey": "environment",
-              "type": "string",
-              "required": false,
-              "description": "Contentful environment",
-              "helpText": "What this field is: Contentful environment.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: master.\nTip: Use {{$json.environment}} when this value comes from an earlier step.",
-              "placeholder": "master",
-              "example": "master",
-              "defaultValue": "master"
-            },
-            {
-              "name": "Content Type",
-              "internalKey": "contentType",
-              "type": "textarea",
-              "required": false,
-              "description": "Content type ID",
-              "helpText": "What this field is: Content type ID.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: Content Type value.\nTip: Use {{$json.contentType}} when this value comes from an earlier step.",
-              "placeholder": "Enter Content Type"
-            },
-            {
-              "name": "Entry Id",
-              "internalKey": "entryId",
-              "type": "string",
-              "required": false,
-              "description": "Entry ID",
-              "helpText": "What this field is: The Entry ID that tells Contentful which item to use.\nWhere to find it: Open the item in Contentful and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.entryId}} when an earlier Contentful step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Fields",
-              "internalKey": "fields",
-              "type": "string",
-              "required": false,
-              "description": "JSON string of entry fields",
-              "helpText": "What this field is: Structured data for structured data in { } brackets string of entry fields.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Contentful.\nExample: {\"name\":\"Alice\",\"email\":\"alice@example.com\"}.\nTip: Use {{$json.fields}} when an earlier step already prepared this data.",
-              "placeholder": "Enter Fields"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "delete_entry",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming Contentful data with delete entry after a related upstream event is received",
-            "inputValues": {
-              "Space Id": "abc123",
-              "Access Token": "",
-              "Environment": "master",
-              "Content Type": "",
-              "Entry Id": "abc123"
-            },
-            "expectedOutput": "Contentful returns structured delete entry data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://www.contentful.com/developers/docs/references/content-management-api/"
-        }
-      ]
-    }
+      name: 'Entries',
+      description: 'Contentful entry operations target one space and environment. Create/update parse the Fields JSON; update/delete first load the current entry version because the API requires X-Contentful-Version.',
+      operations: [
+        makeOperation('Get Entries', 'get_entries', 'Lists entries in a space/environment. When contentType is filled, runtime adds a content_type query filter; otherwise it lists entries without that filter.'),
+        makeOperation('Get Entry', 'get_entry', 'Reads one entry by entryId from the selected space and environment.'),
+        makeOperation('Create Entry', 'create_entry', 'Creates an entry using contentType and Fields JSON. Runtime wraps parsed fields in a Contentful fields object unless you already provided one.'),
+        makeOperation('Update Entry', 'update_entry', 'Loads the current entry version, parses Fields JSON, and updates one entry by entryId with X-Contentful-Version.'),
+        makeOperation('Delete Entry', 'delete_entry', 'Loads the current entry version and deletes one entry by entryId.'),
+      ],
+    },
   ],
-  "commonErrors": [
+  commonErrors: [
     {
-      "error": "Authentication failed",
-      "cause": "The saved credential, token, API key, or OAuth grant is missing, expired, or lacks the required scope.",
-      "fix": "Reconnect the service in CtrlChecks → Connections, then re-run the Contentful node."
+      error: 'Invalid JSON in fields',
+      cause: 'Fields was empty or not valid JSON for create_entry/update_entry.',
+      fix: 'Enter valid JSON such as {"title":{"en-US":"Launch post"}} or map a prepared JSON object string.',
     },
     {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
+      error: 'Unable to load current Contentful entry version before update',
+      cause: 'The worker could not read the entry version before sending the update request.',
+      fix: 'Check entryId, spaceId, environment, and token permission before retrying update_entry.',
     },
     {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
+      error: 'Unable to load current Contentful entry version before delete',
+      cause: 'The worker could not read the entry version before delete_entry.',
+      fix: 'Verify the entry still exists and the CMA token can read/delete entries in that space.',
+    },
+    {
+      error: 'Unsupported operation: <operation>',
+      cause: 'Operation was not one of get_entries, get_entry, create_entry, update_entry, or delete_entry.',
+      fix: 'Use one of the visible dropdown values or correct the AI-generated workflow config.',
+    },
+    {
+      error: 'OrganizationAccessGrantRequired',
+      cause: 'The CMA token exists but has not been authorized for the target Contentful organization/space.',
+      fix: 'Open the CMA tokens list in Contentful, click Authorize for the token, and re-run the node.',
+    },
   ],
-  "relatedNodes": []
+  relatedNodes: ['wordpress', 'http_request', 'json_parser'],
 };

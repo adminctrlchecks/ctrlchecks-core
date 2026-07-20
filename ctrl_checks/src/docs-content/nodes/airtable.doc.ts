@@ -1,395 +1,91 @@
-import type { NodeDoc } from '../types';
+import type { FieldDoc, NodeDoc, OperationDoc } from '../types';
+
+const docsUrl = 'https://airtable.com/developers/web/api/introduction';
+
+function rich(label: string, meaning: string, enter: string, wrong: string, later: string, source = 'Type a fixed value from Airtable, store credentials in Connections/credential vault, or map a value from an earlier step such as {{$json.recordId}}.'): string {
+  return (
+    `What this field is: ${label} - ${meaning}\n` +
+    `Why it matters: Airtable uses these values to choose the base, table, records, and API behavior. A wrong value can read the wrong table or update the wrong record.\n` +
+    `When to fill it: Fill it when the selected Airtable operation needs this value; Base ID, Table Name/ID, and Operation are needed for every call.\n` +
+    `What to enter: ${enter}\n` +
+    `Where the value comes from: ${source}\n` +
+    `How to use it later: ${later}\n` +
+    `Accepted format: API keys usually start with pat, Base IDs start with app, record IDs start with rec, JSON fields must be valid objects or arrays, and operation must be one of list, get, create, update, upsert, or delete.\n` +
+    `Real workplace example: A lead form maps {{$json.email}} and {{$json.name}} into Records, creates a row in the Leads table, then maps {{$json.records[0].id}} into a later update step.\n` +
+    `If it is empty or wrong: ${wrong}\n` +
+    `Common mistake: Using a visible table label or field name that does not exactly match Airtable, or expecting the Table resource option to unlock table-management APIs.`
+  );
+}
+
+const fields: FieldDoc[] = [
+  { name: 'Airtable API Key', internalKey: 'apiKey', type: 'string', required: false, description: 'Personal Access Token used when a saved Airtable connection is not injected.', placeholder: 'pat...', helpText: rich('Airtable API Key', 'the Personal Access Token used for Airtable API calls.', 'Prefer a saved Airtable API Key connection. If this field is used directly, enter a pat... token with data.records:read and/or data.records:write for the target base.', 'If no token is available from this field, accessToken/token aliases, or the credential vault, the node returns Airtable node: Select an active Airtable connection or provide a Personal Access Token.', 'Do not use this secret later; downstream nodes use {{$json.records}}, {{$json.id}}, {{$json.fields}}, or {{$json._error}}.', 'Airtable Developer Hub -> Personal access tokens, or the Airtable connection in CtrlChecks.') },
+  { name: 'Access Token', internalKey: 'accessToken', type: 'string', required: false, description: 'Runtime alias for API Key.', placeholder: 'pat...', helpText: rich('Access Token', 'an alternate field name the runtime accepts for the Airtable token.', 'Use this only when an upstream credential injector provides accessToken instead of apiKey.', 'If blank, the runtime tries apiKey, token, then the saved Airtable credential vault entry.', 'Downstream nodes should never map this token; map {{$json.records}} or specific field values instead.') },
+  { name: 'Credential ID', internalKey: 'credentialId', type: 'string', required: false, description: 'Stored credential reference from backend schema metadata.', placeholder: 'cred_123', helpText: rich('Credential ID', 'a backend schema credential reference for stored Airtable credentials.', 'Normally leave this blank and select the Airtable connection in the UI. Use a credential reference only in generated/internal workflows that understand it.', 'The current executor does not read credentialId directly; it retrieves the Airtable credential by node/workflow context instead.', 'Use output records later, not the credential ID.') },
+  { name: 'Base ID', internalKey: 'baseId', type: 'string', required: true, description: 'Airtable base ID, resolved before every operation.', placeholder: 'appXXXXXXXXXXXXXX', helpText: rich('Base ID', 'the Airtable base/database to operate on.', 'Enter the base ID starting with app, such as appXXXXXXXXXXXXXX.', 'Blank returns Airtable node: Base ID is required. A wrong ID usually returns an Airtable API error in _error/_errorDetails.', 'The output does not repeat Base ID; keep it in node config and use {{$json.records}} for data.', 'Open Airtable API docs for the base or copy it from the URL/API documentation.') },
+  { name: 'Table Name/ID', internalKey: 'table', type: 'string', required: true, description: 'Frontend table field. Runtime reads table first, then tableId.', placeholder: 'Leads', helpText: rich('Table Name/ID', 'the Airtable table name or table ID used by the visual panel.', 'Enter the exact table name, such as Leads, or a table ID if your setup uses IDs.', 'Blank returns Airtable node: Table ID or table name is required. A misspelled table returns an Airtable API error.', 'The next node reads returned data with {{$json.records[0].fields.Email}} or {{$json.fields.Email}} depending on operation.') },
+  { name: 'Table ID', internalKey: 'tableId', type: 'string', required: true, description: 'Backend alias for Table Name/ID. Runtime reads it if table is blank.', placeholder: 'tblXXXXXXXXXXXXXX', helpText: rich('Table ID', 'the backend schema alias for the Airtable table.', 'Use tableId when generated workflows provide a table ID instead of the visual table field.', 'If both table and tableId are blank, the node returns Airtable node: Table ID or table name is required.', 'Downstream paths are the same regardless of whether table or tableId selected the table.') },
+  { name: 'Resource', internalKey: 'resource', type: 'select', required: true, description: 'Visual resource selector. The runtime reads it but only record operations are implemented.', options: ['Record', 'Table'], defaultValue: 'Record', helpText: rich('Resource', 'a visual grouping control for Airtable records.', 'Choose Record. The Table option exists in the panel, but the executor does not implement table-management operations.', 'Choosing Table does not change runtime behavior; unsupported operation values still return Airtable node: Unsupported operation.', 'Downstream nodes receive record outputs such as {{$json.records}} or {{$json.deletedRecords}}, not table metadata.') },
+  { name: 'Operation', internalKey: 'operation', type: 'select', required: true, description: 'Airtable operation to run.', options: ['list', 'get', 'create', 'update', 'upsert', 'delete', 'read'], defaultValue: 'list', helpText: rich('Operation', 'the Airtable API action. read is normalized to list.', 'Choose list/read to fetch records, get for one record, create to add records, update to change records by ID, upsert to update-or-create by Match Field, or delete to remove records.', 'Unsupported values return Airtable node: Unsupported operation: <value>. Missing operation defaults to list.', 'Use operation-specific outputs such as {{$json.records}}, {{$json.id}}, {{$json.deletedRecords}}, {{$json.created}}, and {{$json.updated}}.') },
+  { name: 'Record ID', internalKey: 'recordId', type: 'string', required: false, description: 'Single Airtable record ID for get, update fallback, or delete fallback.', placeholder: 'recXXXXXXXXXXXXXX', helpText: rich('Record ID', 'the Airtable row to get, update, or delete.', 'Enter rec... from a previous Airtable output, for example {{$json.records[0].id}} or {{$json.recordId}}.', 'Get without it returns Airtable node: recordId is required for get operation. Update records without IDs returns All records must have an id field. Delete with no usable ID can call Airtable with an invalid ID.', 'Map returned IDs into later update/delete steps with {{$json.records[0].id}} or {{$json.id}}.') },
+  { name: 'Record IDs', internalKey: 'recordIds', type: 'json', required: false, description: 'One or more Airtable record IDs for delete.', placeholder: '["rec123", "rec456"]', helpText: rich('Record IDs', 'the delete-operation list of records to remove.', 'Enter a JSON array of rec... IDs, a single JSON string, or map {{$json.recordIds}} from an earlier step.', 'Invalid recordIds format returns Airtable node: Invalid recordIds format. Empty arrays return At least one record ID is required for delete operation.', 'Deleted records are returned in {{$json.deletedRecords}} with {{$json.count}}.') },
+  { name: 'Records', internalKey: 'records', type: 'json', required: false, description: 'Records payload for create, update, and upsert.', placeholder: '[{"fields":{"Email":"buyer@example.com"}}]', helpText: rich('Records', 'the record data sent to Airtable create/update/upsert.', 'Enter an array of {fields:{...}} objects, plain field objects, or map {{$json.records}} from a preparation step.', 'Invalid JSON returns Airtable node: Invalid records format. Empty create/update/upsert payloads return At least one record is required.', 'Created/updated records come back in {{$json.records}} with {{$json.count}}.') },
+  { name: 'Fields', internalKey: 'fields', type: 'json', required: false, description: 'Dual-purpose runtime field: create/update/upsert payload fallback, or list/get projection array.', placeholder: '["Name", "Email"]', helpText: rich('Fields', 'either a field projection for list/get or a fallback data payload for create/update/upsert when Records is blank.', 'For list/get, enter ["Name","Email"]. For create/update/upsert, prefer Records, or enter an object such as {"Name":"{{$json.name}}"} when using this backend alias.', 'Invalid projection JSON for list/get is silently ignored. Invalid create/update JSON returns Invalid records format.', 'Projected list/get output still appears in {{$json.records}} or the top-level get result.') },
+  { name: 'Match Field', internalKey: 'matchField', type: 'string', required: false, description: 'Airtable field name used to match existing records for upsert.', placeholder: 'Email', helpText: rich('Match Field', 'the Airtable column used to decide update versus create in upsert.', 'Enter an exact Airtable field name such as Email, SKU, or External ID.', 'Upsert without it returns Airtable node: matchField is required for upsert operation. If no records have that field value, the node returns No records have a value for match field.', 'Use {{$json.created}} and {{$json.updated}} after upsert to see what happened.') },
+  { name: 'Filter Formula', internalKey: 'filterByFormula', type: 'string', required: false, description: 'Airtable formula used to filter list results.', placeholder: '{Status} = "Active"', helpText: rich('Filter Formula', 'an Airtable formula passed to select().', 'Enter Airtable formula syntax such as {Status} = "Active" or map {{$json.airtableFormula}}.', 'Bad formula syntax returns an Airtable API error in _error/_errorDetails. Blank means no formula filter.', 'Filtered results appear in {{$json.records}} with {{$json.count}}.') },
+  { name: 'View Name', internalKey: 'view', type: 'string', required: false, description: 'Optional Airtable view used by list.', placeholder: 'Grid view', helpText: rich('View Name', 'the Airtable view whose filters/sorts should be applied during list.', 'Enter the exact view name, such as Grid view or Active Leads.', 'Wrong view names are rejected by Airtable. Blank lists from the table without a view filter.', 'The returned records are still read from {{$json.records}}.') },
+  { name: 'Max Records', internalKey: 'maxRecords', type: 'number', required: false, description: 'Maximum records to collect for list. 0 means no explicit max.', placeholder: '100', helpText: rich('Max Records', 'the maximum number of Airtable records collected across pages.', 'Enter a whole number such as 100, or 0 to collect every page Airtable returns.', 'Non-numeric values become 0, which means no max limit. Very high values can create large workflow payloads.', 'Use {{$json.count}} to see how many records were returned.') },
+  { name: 'Page Size', internalKey: 'pageSize', type: 'number', required: false, description: 'Airtable page size for list, clamped to 1-100.', placeholder: '100', helpText: rich('Page Size', 'the per-page fetch size passed to Airtable select().', 'Enter 1 through 100. The runtime clamps lower and higher values into that range.', 'Invalid values fall back to 100; this does not limit total records unless Max Records is also set.', 'Downstream nodes only see the final collected {{$json.records}}, not page boundaries.') },
+  { name: 'Sort', internalKey: 'sort', type: 'json', required: false, description: 'Optional Airtable sort array for list.', placeholder: '[{"field":"Name","direction":"asc"}]', helpText: rich('Sort', 'the list-operation sort configuration.', 'Enter an array such as [{"field":"Created","direction":"desc"}]. Direction defaults to asc unless it is desc.', 'Invalid JSON or invalid shape is silently ignored; the node still runs without sorting.', 'Sorted records appear in {{$json.records}}.') },
+  { name: 'Typecast', internalKey: 'typecast', type: 'boolean', required: false, description: 'Whether Airtable may convert values to field types for create/update/upsert.', defaultValue: 'false', helpText: rich('Typecast', 'the Airtable API typecast option for write operations.', 'Use true only when you want Airtable to create/select choices or coerce values where the API allows it.', 'Wrong typecast choice can cause Airtable validation errors or unexpected option creation depending on field type.', 'Successful write outputs still appear in {{$json.records}}, {{$json.created}}, or {{$json.updated}}.') },
+];
+
+function op(name: string, value: string, description: string, outputExample: Record<string, unknown>, outputDescription: string, inputValues: Record<string, string>): OperationDoc {
+  return {
+    name,
+    value,
+    description,
+    fields,
+    outputExample,
+    outputDescription,
+    usageExample: {
+      scenario: `${name} in an Airtable workflow that syncs leads, orders, or fulfilment records with another service`,
+      inputValues: { operation: value, apiKey: '{{$credentials.airtable.apiKey}}', baseId: 'appXXXXXXXXXXXXXX', table: 'Leads', tableId: 'Leads', ...inputValues },
+      expectedOutput: 'Downstream nodes can use {{$json.records}}, {{$json.count}}, {{$json.id}}, {{$json.fields}}, {{$json.deletedRecords}}, {{$json.created}}, {{$json.updated}}, or {{$json._error}} depending on the operation.',
+    },
+    externalDocsUrl: docsUrl,
+  };
+}
 
 export const airtableDoc: NodeDoc = {
-  "slug": "airtable",
-  "displayName": "Airtable",
-  "category": "Data",
-  "logoUrl": "/icons/nodes/airtable.svg",
-  "description": "Read, write, update, or delete records in Airtable bases and tables",
-  "credentialType": "Airtable API Key",
-  "credentialSetupSteps": [
-    "What this is: The Airtable connection lets CtrlChecks access your Airtable account safely without putting secrets in workflow fields.",
-    "Where to start: Airtable -> Developer hub -> Personal access tokens.",
-    "How to connect: In CtrlChecks, open Connections -> Add Connection -> Airtable, then sign in or paste the secret value requested there.",
-    "Example: pat....",
-    "Important: Treat tokens, passwords, API keys, and client secrets like bank passwords. Store them in Connections, not in regular workflow fields.",
-    "Test it: Save the connection, run a simple Airtable step, and confirm CtrlChecks can reach the account."
+  slug: 'airtable',
+  displayName: 'Airtable',
+  category: 'Database',
+  logoUrl: '/icons/nodes/airtable.svg',
+  description: 'List, get, create, update, upsert, and delete Airtable records. The runtime reads table or tableId, supports apiKey/accessToken/token or the Airtable credential vault, and returns operation-specific record arrays or objects.',
+  credentialType: 'Airtable API Key',
+  credentialSetupSteps: [
+    'Create an Airtable Personal Access Token in Airtable Developer Hub with data.records:read for read operations and data.records:write for write/delete operations.',
+    'Store the token in CtrlChecks Connections/credential vault where possible instead of normal workflow fields. The runtime can also retrieve a saved Airtable credential for this node.',
+    'Limit the token to the exact bases this workflow needs, then copy the Base ID starting with app and the table name or table ID.',
+    'Test list with Max Records set low before enabling create, update, upsert, or delete operations.',
+    'After this node runs, connect its output to the next CRM, email, Slack, database, or reporting step. Each downstream service node account connection is configured separately.',
   ],
-  "credentialDocsUrl": "https://airtable.com/developers/web/api/introduction",
-  "resources": [
-    {
-      "name": "Operations",
-      "description": "Airtable exposes operation choices directly.",
-      "operations": [
-        {
-          "name": "Read",
-          "value": "read",
-          "description": "Read using the Airtable node.",
-          "fields": [
-            {
-              "name": "Api Key",
-              "internalKey": "apiKey",
-              "type": "password",
-              "required": false,
-              "description": "Airtable API key (required for authentication)",
-              "helpText": "What this field is: Airtable personal access token, a secret password that lets CtrlChecks talk to Airtable safely.\nWhere to find it: Airtable -> Developer hub -> Personal access tokens.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: pat....\nImportant: Treat this like a bank password. Grant access only to the bases this workflow needs.",
-              "placeholder": "patXXXXXXXXXXXXXX",
-              "example": "patXXXXXXXXXXXXXX",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Access Token",
-              "internalKey": "accessToken",
-              "type": "string",
-              "required": false,
-              "description": "Airtable OAuth access token (alternative to API key)",
-              "helpText": "What this field is: Airtable personal access token, a secret password that lets CtrlChecks talk to Airtable safely.\nWhere to find it: Airtable -> Developer hub -> Personal access tokens.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: pat....\nImportant: Treat this like a bank password. Grant access only to the bases this workflow needs.",
-              "placeholder": "your-oauth-access-token",
-              "example": "your-oauth-access-token"
-            },
-            {
-              "name": "Base Id",
-              "internalKey": "baseId",
-              "type": "string",
-              "required": true,
-              "description": "Airtable base ID",
-              "helpText": "What this field is: The unique ID of your Airtable Base (your Airtable workspace/database).\nWhere to find it: Open your base in Airtable → click the Help (?) menu → API documentation. The Base ID is shown at the top of the page and in the URL. It always starts with \"app\".\nExample: appXXXXXXXXXXXXXX",
-              "placeholder": "appXXXXXXXXXXXXXX",
-              "example": "appXXXXXXXXXXXXXX"
-            },
-            {
-              "name": "Table Id",
-              "internalKey": "tableId",
-              "type": "string",
-              "required": true,
-              "description": "Airtable table ID or name",
-              "helpText": "What this field is: The Airtable table ID or name that tells Airtable which item to use.\nWhere to find it: Open the item in Airtable and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: tblXXXXXXXXXXXXXX.\nTip: Use {{$json.tableId}} when an earlier Airtable step provides this value.",
-              "placeholder": "tblXXXXXXXXXXXXXX",
-              "example": "tblXXXXXXXXXXXXXX"
-            },
-            {
-              "name": "Record Id",
-              "internalKey": "recordId",
-              "type": "string",
-              "required": false,
-              "description": "Record ID (required for update/delete)",
-              "helpText": "What this field is: The Record ID that tells Airtable which item to use.\nWhere to find it: Open the item in Airtable and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: recXXXXXXXXXXXXXX.\nTip: Use {{$json.recordId}} when an earlier Airtable step provides this value.",
-              "placeholder": "recXXXXXXXXXXXXXX",
-              "example": "recXXXXXXXXXXXXXX"
-            },
-            {
-              "name": "Fields",
-              "internalKey": "fields",
-              "type": "json",
-              "required": false,
-              "description": "Field values for create/update",
-              "helpText": "What this field is: Structured data for Field values.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Airtable.\nExample: {\"Name\":\"John Doe\",\"Email\":\"test@example.com\"}.\nTip: Use {{$json.fields}} when an earlier step already prepared this data.",
-              "placeholder": "{\"Name\":\"John Doe\",\"Email\":\"test@example.com\"}",
-              "example": "{\"Name\":\"John Doe\",\"Email\":\"test@example.com\"}"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming Airtable data with read after a related upstream event is received",
-            "inputValues": {
-              "Api Key": "patXXXXXXXXXXXXXX",
-              "Access Token": "your-oauth-access-token",
-              "Base Id": "appXXXXXXXXXXXXXX",
-              "Table Id": "tblXXXXXXXXXXXXXX",
-              "Record Id": "recXXXXXXXXXXXXXX"
-            },
-            "expectedOutput": "Airtable returns structured read data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://airtable.com/developers/web/api/introduction"
-        },
-        {
-          "name": "Create",
-          "value": "create",
-          "description": "Create a new record in an Airtable table.",
-          "fields": [
-            {
-              "name": "Api Key",
-              "internalKey": "apiKey",
-              "type": "password",
-              "required": false,
-              "description": "Airtable API key (required for authentication)",
-              "helpText": "What this field is: Airtable personal access token, a secret password that lets CtrlChecks talk to Airtable safely.\nWhere to find it: Airtable -> Developer hub -> Personal access tokens.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: pat....\nImportant: Treat this like a bank password. Grant access only to the bases this workflow needs.",
-              "placeholder": "patXXXXXXXXXXXXXX",
-              "example": "patXXXXXXXXXXXXXX",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Access Token",
-              "internalKey": "accessToken",
-              "type": "string",
-              "required": false,
-              "description": "Airtable OAuth access token (alternative to API key)",
-              "helpText": "What this field is: Airtable personal access token, a secret password that lets CtrlChecks talk to Airtable safely.\nWhere to find it: Airtable -> Developer hub -> Personal access tokens.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: pat....\nImportant: Treat this like a bank password. Grant access only to the bases this workflow needs.",
-              "placeholder": "your-oauth-access-token",
-              "example": "your-oauth-access-token"
-            },
-            {
-              "name": "Base Id",
-              "internalKey": "baseId",
-              "type": "string",
-              "required": true,
-              "description": "Airtable base ID",
-              "helpText": "What this field is: The unique ID of your Airtable Base (your Airtable workspace/database).\nWhere to find it: Open your base in Airtable → click the Help (?) menu → API documentation. The Base ID is shown at the top of the page and in the URL. It always starts with \"app\".\nExample: appXXXXXXXXXXXXXX",
-              "placeholder": "appXXXXXXXXXXXXXX",
-              "example": "appXXXXXXXXXXXXXX"
-            },
-            {
-              "name": "Table Id",
-              "internalKey": "tableId",
-              "type": "string",
-              "required": true,
-              "description": "Airtable table ID or name",
-              "helpText": "What this field is: The Airtable table ID or name that tells Airtable which item to use.\nWhere to find it: Open the item in Airtable and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: tblXXXXXXXXXXXXXX.\nTip: Use {{$json.tableId}} when an earlier Airtable step provides this value.",
-              "placeholder": "tblXXXXXXXXXXXXXX",
-              "example": "tblXXXXXXXXXXXXXX"
-            },
-            {
-              "name": "Record Id",
-              "internalKey": "recordId",
-              "type": "string",
-              "required": false,
-              "description": "Record ID (required for update/delete)",
-              "helpText": "What this field is: The Record ID that tells Airtable which item to use.\nWhere to find it: Open the item in Airtable and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: recXXXXXXXXXXXXXX.\nTip: Use {{$json.recordId}} when an earlier Airtable step provides this value.",
-              "placeholder": "recXXXXXXXXXXXXXX",
-              "example": "recXXXXXXXXXXXXXX"
-            },
-            {
-              "name": "Fields",
-              "internalKey": "fields",
-              "type": "json",
-              "required": false,
-              "description": "Field values for create/update",
-              "helpText": "What this field is: Structured data for Field values.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Airtable.\nExample: {\"Name\":\"John Doe\",\"Email\":\"test@example.com\"}.\nTip: Use {{$json.fields}} when an earlier step already prepared this data.",
-              "placeholder": "{\"Name\":\"John Doe\",\"Email\":\"test@example.com\"}",
-              "example": "{\"Name\":\"John Doe\",\"Email\":\"test@example.com\"}"
-            }
-          ],
-          "outputExample": {
-            "id": "recNewXyz456",
-            "fields": {
-              "Name": "Bob",
-              "Email": "bob@example.com",
-              "Status": "New"
-            },
-            "createdTime": "2025-01-15T10:00:00Z"
-          },
-          "outputDescription": "id: The new Airtable record ID. fields: The data saved for this record. createdTime: When the record was created.",
-          "usageExample": {
-            "scenario": "Add a new lead to Airtable when a website form is submitted",
-            "inputValues": {
-              "baseId": "{{$env.AIRTABLE_BASE_ID}}",
-              "tableId": "Leads",
-              "fields": "{\"Name\": \"{{$json.name}}\", \"Email\": \"{{$json.email}}\", \"Source\": \"Website Form\", \"Date\": \"{{$now}}\"}"
-            },
-            "expectedOutput": "Record is created. `{{$json.id}}` is the Airtable record ID for future updates."
-          },
-          "externalDocsUrl": "https://airtable.com/developers/web/api/introduction"
-        },
-        {
-          "name": "Update",
-          "value": "update",
-          "description": "Update an existing Airtable record by its record ID.",
-          "fields": [
-            {
-              "name": "Api Key",
-              "internalKey": "apiKey",
-              "type": "password",
-              "required": false,
-              "description": "Airtable API key (required for authentication)",
-              "helpText": "What this field is: Airtable personal access token, a secret password that lets CtrlChecks talk to Airtable safely.\nWhere to find it: Airtable -> Developer hub -> Personal access tokens.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: pat....\nImportant: Treat this like a bank password. Grant access only to the bases this workflow needs.",
-              "placeholder": "patXXXXXXXXXXXXXX",
-              "example": "patXXXXXXXXXXXXXX",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Access Token",
-              "internalKey": "accessToken",
-              "type": "string",
-              "required": false,
-              "description": "Airtable OAuth access token (alternative to API key)",
-              "helpText": "What this field is: Airtable personal access token, a secret password that lets CtrlChecks talk to Airtable safely.\nWhere to find it: Airtable -> Developer hub -> Personal access tokens.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: pat....\nImportant: Treat this like a bank password. Grant access only to the bases this workflow needs.",
-              "placeholder": "your-oauth-access-token",
-              "example": "your-oauth-access-token"
-            },
-            {
-              "name": "Base Id",
-              "internalKey": "baseId",
-              "type": "string",
-              "required": true,
-              "description": "Airtable base ID",
-              "helpText": "What this field is: The unique ID of your Airtable Base (your Airtable workspace/database).\nWhere to find it: Open your base in Airtable → click the Help (?) menu → API documentation. The Base ID is shown at the top of the page and in the URL. It always starts with \"app\".\nExample: appXXXXXXXXXXXXXX",
-              "placeholder": "appXXXXXXXXXXXXXX",
-              "example": "appXXXXXXXXXXXXXX"
-            },
-            {
-              "name": "Table Id",
-              "internalKey": "tableId",
-              "type": "string",
-              "required": true,
-              "description": "Airtable table ID or name",
-              "helpText": "What this field is: The Airtable table ID or name that tells Airtable which item to use.\nWhere to find it: Open the item in Airtable and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: tblXXXXXXXXXXXXXX.\nTip: Use {{$json.tableId}} when an earlier Airtable step provides this value.",
-              "placeholder": "tblXXXXXXXXXXXXXX",
-              "example": "tblXXXXXXXXXXXXXX"
-            },
-            {
-              "name": "Record Id",
-              "internalKey": "recordId",
-              "type": "string",
-              "required": false,
-              "description": "Record ID (required for update/delete)",
-              "helpText": "What this field is: The Record ID that tells Airtable which item to use.\nWhere to find it: Open the item in Airtable and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: recXXXXXXXXXXXXXX.\nTip: Use {{$json.recordId}} when an earlier Airtable step provides this value.",
-              "placeholder": "recXXXXXXXXXXXXXX",
-              "example": "recXXXXXXXXXXXXXX"
-            },
-            {
-              "name": "Fields",
-              "internalKey": "fields",
-              "type": "json",
-              "required": false,
-              "description": "Field values for create/update",
-              "helpText": "What this field is: Structured data for Field values.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Airtable.\nExample: {\"Name\":\"John Doe\",\"Email\":\"test@example.com\"}.\nTip: Use {{$json.fields}} when an earlier step already prepared this data.",
-              "placeholder": "{\"Name\":\"John Doe\",\"Email\":\"test@example.com\"}",
-              "example": "{\"Name\":\"John Doe\",\"Email\":\"test@example.com\"}"
-            }
-          ],
-          "outputExample": {
-            "id": "recAbc123",
-            "fields": {
-              "Name": "Alice",
-              "Status": "Converted",
-              "Close Date": "2025-01-15"
-            }
-          },
-          "outputDescription": "id: The updated record ID. fields: All field values after the update.",
-          "usageExample": {
-            "scenario": "Mark an Airtable lead as Converted when a CRM deal is closed",
-            "inputValues": {
-              "baseId": "{{$env.AIRTABLE_BASE_ID}}",
-              "tableId": "Leads",
-              "recordId": "{{$json.recordId}}",
-              "fields": "{\"Status\": \"Converted\", \"Close Date\": \"{{$now}}\"}"
-            },
-            "expectedOutput": "Record is updated with new field values."
-          },
-          "externalDocsUrl": "https://airtable.com/developers/web/api/introduction"
-        },
-        {
-          "name": "Delete",
-          "value": "delete",
-          "description": "Delete a record from an Airtable table by its record ID.",
-          "fields": [
-            {
-              "name": "Api Key",
-              "internalKey": "apiKey",
-              "type": "password",
-              "required": false,
-              "description": "Airtable API key (required for authentication)",
-              "helpText": "What this field is: Airtable personal access token, a secret password that lets CtrlChecks talk to Airtable safely.\nWhere to find it: Airtable -> Developer hub -> Personal access tokens.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: pat....\nImportant: Treat this like a bank password. Grant access only to the bases this workflow needs.",
-              "placeholder": "patXXXXXXXXXXXXXX",
-              "example": "patXXXXXXXXXXXXXX",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Access Token",
-              "internalKey": "accessToken",
-              "type": "string",
-              "required": false,
-              "description": "Airtable OAuth access token (alternative to API key)",
-              "helpText": "What this field is: Airtable personal access token, a secret password that lets CtrlChecks talk to Airtable safely.\nWhere to find it: Airtable -> Developer hub -> Personal access tokens.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: pat....\nImportant: Treat this like a bank password. Grant access only to the bases this workflow needs.",
-              "placeholder": "your-oauth-access-token",
-              "example": "your-oauth-access-token"
-            },
-            {
-              "name": "Base Id",
-              "internalKey": "baseId",
-              "type": "string",
-              "required": true,
-              "description": "Airtable base ID",
-              "helpText": "What this field is: The unique ID of your Airtable Base (your Airtable workspace/database).\nWhere to find it: Open your base in Airtable → click the Help (?) menu → API documentation. The Base ID is shown at the top of the page and in the URL. It always starts with \"app\".\nExample: appXXXXXXXXXXXXXX",
-              "placeholder": "appXXXXXXXXXXXXXX",
-              "example": "appXXXXXXXXXXXXXX"
-            },
-            {
-              "name": "Table Id",
-              "internalKey": "tableId",
-              "type": "string",
-              "required": true,
-              "description": "Airtable table ID or name",
-              "helpText": "What this field is: The Airtable table ID or name that tells Airtable which item to use.\nWhere to find it: Open the item in Airtable and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: tblXXXXXXXXXXXXXX.\nTip: Use {{$json.tableId}} when an earlier Airtable step provides this value.",
-              "placeholder": "tblXXXXXXXXXXXXXX",
-              "example": "tblXXXXXXXXXXXXXX"
-            },
-            {
-              "name": "Record Id",
-              "internalKey": "recordId",
-              "type": "string",
-              "required": false,
-              "description": "Record ID (required for update/delete)",
-              "helpText": "What this field is: The Record ID that tells Airtable which item to use.\nWhere to find it: Open the item in Airtable and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: recXXXXXXXXXXXXXX.\nTip: Use {{$json.recordId}} when an earlier Airtable step provides this value.",
-              "placeholder": "recXXXXXXXXXXXXXX",
-              "example": "recXXXXXXXXXXXXXX"
-            },
-            {
-              "name": "Fields",
-              "internalKey": "fields",
-              "type": "json",
-              "required": false,
-              "description": "Field values for create/update",
-              "helpText": "What this field is: Structured data for Field values.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Airtable.\nExample: {\"Name\":\"John Doe\",\"Email\":\"test@example.com\"}.\nTip: Use {{$json.fields}} when an earlier step already prepared this data.",
-              "placeholder": "{\"Name\":\"John Doe\",\"Email\":\"test@example.com\"}",
-              "example": "{\"Name\":\"John Doe\",\"Email\":\"test@example.com\"}"
-            }
-          ],
-          "outputExample": {
-            "deleted": true,
-            "id": "recAbc123"
-          },
-          "outputDescription": "deleted: true if the record was successfully removed. id: The ID of the deleted record.",
-          "usageExample": {
-            "scenario": "Remove a cancelled subscription record from Airtable",
-            "inputValues": {
-              "baseId": "{{$env.AIRTABLE_BASE_ID}}",
-              "tableId": "Subscriptions",
-              "recordId": "{{$json.recordId}}"
-            },
-            "expectedOutput": "`deleted: true` confirms the record was removed."
-          },
-          "externalDocsUrl": "https://airtable.com/developers/web/api/introduction"
-        }
-      ]
-    }
+  credentialDocsUrl: 'https://airtable.com/developers/web/api/authentication',
+  resources: [{ name: 'Records', description: 'Airtable record operations against one base and table.', operations: [
+    op('List Records', 'list', 'Fetches records from one Airtable table, optionally filtered by formula, view, projection fields, sort, page size, and max record count. The alias read is normalized to this same operation.', { records: [{ id: 'recA1', createdTime: '2026-07-19T09:00:00.000Z', fields: { Email: 'buyer@example.com', Status: 'Active' } }], count: 1 }, 'records: Array of Airtable records with id, createdTime, and fields. count: number of records collected. _error/_errorDetails: present on Airtable API or credential failures.', { filterByFormula: '{Status} = "Active"', maxRecords: '100', pageSize: '100', fields: '["Email","Status"]', sort: '[{"field":"Email","direction":"asc"}]', view: 'Grid view' }),
+    op('Get Record', 'get', 'Fetches one Airtable record by recordId. The current implementation parses the Fields projection but the Airtable SDK find call does not use the getOptions object, so projection fields do not actually limit the returned record.', { id: 'recA1', createdTime: '2026-07-19T09:00:00.000Z', fields: { Email: 'buyer@example.com', Status: 'Active' } }, 'id: Airtable record ID. createdTime: record creation timestamp. fields: returned Airtable field values. _error/_errorDetails: present on missing ID or API failure.', { recordId: '{{$json.records[0].id}}', fields: '["Email","Status"]' }),
+    op('Create Records', 'create', 'Creates one or more records. Records may be an array of {fields:{...}} objects, an array of plain field objects, a single object, or a JSON string resolving to one of those shapes.', { records: [{ id: 'recNew', createdTime: '2026-07-19T09:05:00.000Z', fields: { Email: 'new@example.com', Status: 'New' } }], count: 1 }, 'records: created Airtable records. count: number created. _error/_errorDetails: present on invalid payload, missing credential/base/table, or Airtable validation failure.', { records: '[{"fields":{"Email":"{{$json.email}}","Status":"New"}}]', fields: '{"Email":"{{$json.email}}"}', typecast: 'false' }),
+    op('Update Records', 'update', 'Updates one or more records. Every resolved record must provide id or recordId, or the node uses the Record ID field as fallback.', { records: [{ id: 'recA1', createdTime: '2026-07-19T09:00:00.000Z', fields: { Status: 'Converted' } }], count: 1 }, 'records: updated Airtable records. count: number updated. _error/_errorDetails: present when payload is invalid, a record ID is missing, or Airtable rejects the update.', { recordId: '{{$json.recordId}}', records: '[{"id":"{{$json.recordId}}","fields":{"Status":"Converted"}}]', fields: '{"Status":"Converted"}', typecast: 'false' }),
+    op('Upsert Records', 'upsert', 'Looks up existing records by Match Field, updates matches, and creates non-matches. Records without a match-field value are skipped rather than returned as an error.', { records: [{ id: 'recA1', createdTime: '2026-07-19T09:00:00.000Z', fields: { Email: 'buyer@example.com', Status: 'Active' } }], count: 1, created: 0, updated: 1 }, 'records: records created or updated. count: total changed. created: number created. updated: number updated. _error/_errorDetails: present on missing matchField, invalid records, or Airtable API failure.', { matchField: 'Email', records: '[{"fields":{"Email":"{{$json.email}}","Status":"Active"}}]', fields: '{"Email":"{{$json.email}}"}', typecast: 'false' }),
+    op('Delete Records', 'delete', 'Deletes one or more records by recordIds, or by Record ID when recordIds is not provided. The result contains deletedRecords, not deleted:true at the top level.', { deletedRecords: [{ id: 'recA1', createdTime: '2026-07-19T09:00:00.000Z', fields: {} }], count: 1 }, 'deletedRecords: deleted Airtable record objects returned by the SDK. count: number deleted. _error/_errorDetails: present on invalid IDs, missing credential/base/table, or Airtable API failure.', { recordId: '{{$json.recordId}}', recordIds: '["{{$json.recordId}}"]' }),
+  ] }],
+  commonErrors: [
+    { error: 'Airtable node: Select an active Airtable connection or provide a Personal Access Token.', cause: 'No apiKey/accessToken/token field was set and no saved Airtable credential was found for this node.', fix: 'Save an Airtable API Key connection or provide a pat... token with the required scopes.' },
+    { error: 'Airtable node: Base ID is required', cause: 'baseId resolved to an empty value.', fix: 'Copy the app... Base ID from Airtable API docs and enter it in Base ID.' },
+    { error: 'Airtable node: Table ID or table name is required', cause: 'Both table and tableId were blank.', fix: 'Enter the exact Airtable table name or table ID.' },
+    { error: 'Airtable node: recordId is required for get operation', cause: 'Get Record was selected without a Record ID.', fix: 'Map {{$json.records[0].id}} from a previous list/create/upsert step or copy the rec... ID from Airtable.' },
+    { error: 'Airtable node: Invalid records format: <message>', cause: 'Records or Fields for a write operation could not be parsed into an object/array.', fix: 'Use valid JSON with exact Airtable field names, preferably an array of {fields:{...}} objects.' },
+    { error: 'Airtable node: Unsupported operation: <operation>', cause: 'Operation was not list/read, get, create, update, upsert, or delete.', fix: 'Choose one of the supported operation values; the Table resource option does not add table-management operations.' },
   ],
-  "commonErrors": [
-    {
-      "error": "Authentication failed",
-      "cause": "The saved credential, token, API key, or OAuth grant is missing, expired, or lacks the required scope.",
-      "fix": "Reconnect the service in CtrlChecks → Connections, then re-run the Airtable node."
-    },
-    {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
-    },
-    {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
-  ],
-  "relatedNodes": []
+  relatedNodes: ['db', 'google_sheets', 'notion', 'postgresql'],
 };

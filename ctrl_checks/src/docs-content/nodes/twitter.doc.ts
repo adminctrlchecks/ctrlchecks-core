@@ -1,417 +1,341 @@
-import type { NodeDoc } from '../types';
+import type { FieldDoc, NodeDoc, OperationDoc } from '../types';
+
+const help = (
+  label: string,
+  why: string,
+  when: string,
+  enter: string,
+  source: string,
+  format: string,
+  example: string,
+  wrong: string,
+  mistake: string,
+) => `What this field means: ${label}
+Why it matters: ${why}
+When to fill it: ${when}
+What to enter: ${enter}
+Where the value comes from: ${source}
+How to use it later: Downstream steps can use the API response and any preserved incoming fields with {{$json.fieldName}}; for example, use {{$json.data.id}}, {{$json.tweetId}}, or {{$json.originalInput}} when present.
+Accepted format: ${format}
+Real workplace example: ${example}
+If it is empty or wrong: ${wrong}
+Common mistake to avoid: ${mistake}`;
+
+const fields: FieldDoc[] = [
+  {
+    name: 'Resource',
+    internalKey: 'resource',
+    type: 'select',
+    required: true,
+    description: 'Which Twitter/X object family this node acts on.',
+    options: ['tweet', 'user', 'timeline', 'search', 'list', 'media', 'directMessage', 'space'],
+    defaultValue: 'tweet',
+    helpText: help('Resource chooses the Twitter/X object family: tweet, user, timeline, search, list, media, directMessage, or space.', 'The operation value is interpreted inside the selected resource, so create means a tweet action under tweet but a list action under list.', 'Always choose it before choosing Operation.', 'Choose tweet for posting or reacting, user for profiles and follows, timeline for feeds, search for query results, list for curated lists, media for upload/alt text, directMessage for DM events, or space for Twitter Spaces metadata.', 'Choose from the workflow goal or map {{$json.resource}} only when an upstream step deliberately chooses a supported resource.', 'One of: tweet, user, timeline, search, list, media, directMessage, space.', 'A marketing workflow uses resource=tweet and operation=create to post a campaign update.', 'Unsupported resources return _error with Unknown resource.', 'Do not leave the default tweet resource selected when you intend to search or manage lists.'),
+  },
+  {
+    name: 'Operation',
+    internalKey: 'operation',
+    type: 'select',
+    required: true,
+    description: 'The Twitter/X action to run for the selected resource.',
+    options: ['create', 'get', 'lookup', 'delete', 'like', 'unlike', 'retweet', 'unretweet', 'quoteTweet', 'reply', 'hideReply', 'bookmark', 'removeBookmark', 'getBookmarks', 'getMe', 'follow', 'unfollow', 'getFollowers', 'getFollowing', 'block', 'unblock', 'mute', 'unmute', 'userTimeline', 'homeTimeline', 'mentions', 'recent', 'tweetCounts', 'all', 'update', 'addMember', 'removeMember', 'getMembers', 'getTweets', 'upload', 'metadata', 'send', 'list', 'search', 'getParticipants'],
+    defaultValue: 'create',
+    helpText: help('Operation chooses the exact Twitter/X API call, such as create, get, recent, upload, send, or getMe.', 'The runtime validates operations per resource and returns Unknown operation when the pair does not exist.', 'Fill it after Resource so the operation belongs to that resource.', 'Use create/reply/quoteTweet for tweet publishing, recent/tweetCounts/all for search, upload/metadata for media, send/get/delete for DMs, and get/list/search for Spaces.', 'Choose from the dropdown or map {{$json.operation}} only when an upstream step supplies a valid value for the selected resource.', 'A supported operation string; values are case-sensitive for camelCase operations like quoteTweet and getFollowers.', 'A social listening workflow uses resource=search and operation=recent to collect recent posts mentioning a brand.', 'A mismatched pair such as resource=search and operation=create returns _error instead of calling X.', 'Do not assume duplicate labels such as Get mean the same backend call across every resource.'),
+    notes: 'Dropdown options covered: create, get, lookup, delete, like, unlike, retweet, unretweet, quoteTweet, reply, hideReply, bookmark, removeBookmark, getBookmarks, getMe, follow, unfollow, getFollowers, getFollowing, block, unblock, mute, unmute, userTimeline, homeTimeline, mentions, recent, tweetCounts, all, update, addMember, removeMember, getMembers, getTweets, upload, metadata, send, list, search, and getParticipants.',
+  },
+  {
+    name: 'Tweet Text',
+    internalKey: 'text',
+    type: 'textarea',
+    required: false,
+    description: 'Text body for tweets, replies, quotes, and direct messages.',
+    placeholder: '{{$json.socialCopy}}',
+    helpText: help('Tweet Text is the message body sent to X or to a direct-message recipient.', 'Create, reply, quoteTweet, and directMessage send require text before the API call can be made.', 'Fill it for tweet create, reply, quoteTweet, and DM send operations.', 'Type a fixed post or map an approved message such as {{$json.socialCopy}}, {{$json.replyText}}, or {{$json.aiResponse}}.', 'Usually comes from a content approval step, AI draft, support reply, or campaign record.', 'Plain text; keep public tweets within X posting limits and avoid secrets.', 'A product workflow posts "New release notes are live: {{$json.releaseUrl}}" after a launch checklist passes.', 'Blank text causes _error for operations that require it, or sends nothing where optional.', 'Do not map raw customer text directly to a public tweet without a moderation or approval step.'),
+  },
+  {
+    name: 'Tweet ID',
+    internalKey: 'tweetId',
+    type: 'string',
+    required: false,
+    description: 'Identifier of an existing tweet.',
+    placeholder: '1749876543210',
+    helpText: help('Tweet ID identifies the tweet to read, delete, like, reply to, bookmark, retweet, or hide as a reply.', 'Most tweet interaction operations cannot know which tweet to act on without this ID.', 'Fill it for get, delete, like, unlike, retweet, unretweet, reply, hideReply, bookmark, and removeBookmark.', 'Paste the numeric ID from a tweet URL or map {{$json.data.id}} from a prior Twitter/X node.', 'Open the tweet URL and copy the value after /status/, or use a previous lookup/search result.', 'Numeric tweet ID string, no full URL unless a prior parsing step extracts the ID.', 'A support workflow replies to {{$json.tweetId}} when a complaint tweet is detected.', 'Missing IDs return _error saying tweetId is required.', 'Do not paste the whole tweet URL into a field that expects only the ID.'),
+  },
+  {
+    name: 'Tweet IDs (JSON Array)',
+    internalKey: 'tweetIds',
+    type: 'json',
+    required: false,
+    description: 'Multiple tweet IDs for lookup.',
+    placeholder: '["1749876543210", "1749876543222"]',
+    helpText: help('Tweet IDs is a JSON array of tweet ID strings used by lookup.', 'Batch lookup needs a list so the API can return several tweets in one call.', 'Fill it when resource=tweet and operation=lookup.', 'Enter a JSON array such as ["1749876543210"] or map {{$json.tweetIds}} from a previous aggregation step.', 'Comes from search results, a CSV import, or a manual campaign list.', 'Valid JSON array of strings.', 'A reporting workflow looks up 25 campaign tweets before calculating engagement.', 'Invalid JSON or an empty list returns _error saying tweetIds array is required.', 'Do not type comma-separated IDs without brackets; that is not JSON.'),
+  },
+  {
+    name: 'Media IDs (JSON Array)',
+    internalKey: 'mediaIds',
+    type: 'json',
+    required: false,
+    description: 'Uploaded media IDs to attach to a tweet.',
+    placeholder: '["1790000000000000000"]',
+    helpText: help('Media IDs are the IDs returned after uploading images or videos to X.', 'Tweet create, reply, and quoteTweet can attach these IDs to publish media with the text.', 'Fill it only when the tweet should include already-uploaded media.', 'Enter a JSON array of media ID strings, or map {{$json.mediaIds}} from a prior media upload step.', 'Use the output of resource=media, operation=upload, or an upstream asset-management step.', 'Valid JSON array of media ID strings.', 'A launch workflow uploads a product image, then attaches its media ID to the announcement tweet.', 'Bad JSON is ignored as null, so the tweet may publish without media.', 'Do not paste public image URLs here; use Media Data upload first.'),
+  },
+  {
+    name: 'Quote Tweet ID',
+    internalKey: 'quoteTweetId',
+    type: 'string',
+    required: false,
+    description: 'Tweet ID to quote.',
+    placeholder: '1749876543210',
+    helpText: help('Quote Tweet ID identifies the tweet your new tweet will quote.', 'quoteTweet requires both new text and the ID of the tweet being quoted.', 'Fill it for resource=tweet and operation=quoteTweet.', 'Paste the numeric tweet ID or map {{$json.tweetId}} from a prior search/listening step.', 'Copy it from the quoted tweet URL after /status/.', 'Numeric tweet ID string.', 'A partner-marketing workflow quotes a partner announcement and adds approved commentary.', 'Blank quoteTweetId returns _error with text and quoteTweetId required.', 'Do not use the ID of your new post; this must be the existing tweet being quoted.'),
+  },
+  {
+    name: 'User ID',
+    internalKey: 'userId',
+    type: 'string',
+    required: false,
+    description: 'Twitter/X user ID.',
+    placeholder: '2244994945',
+    helpText: help('User ID identifies a Twitter/X account by its numeric platform ID.', 'User, timeline, list-member, and Spaces operations need it to know which account to read or modify.', 'Fill it for user lookup, followers/following, timeline, mentions, list membership, and Spaces creator lookup when required.', 'Paste the numeric user ID or map {{$json.data.author_id}}, {{$json.userId}}, or a prior Get User result.', 'Get it from X API responses, a user lookup by username, or an internal CRM/social-profile record.', 'Numeric user ID string.', 'A community workflow checks followers for a known customer account before opening a CRM task.', 'Missing userId returns _error on operations that require it.', 'Do not confuse a username like ctrlchecks with a numeric user ID.'),
+  },
+  {
+    name: 'User IDs (JSON Array)',
+    internalKey: 'userIds',
+    type: 'json',
+    required: false,
+    description: 'Multiple user IDs for lookup or Spaces creators.',
+    placeholder: '["2244994945"]',
+    helpText: help('User IDs is a JSON array of Twitter/X numeric user IDs.', 'Lookup and Spaces list operations use arrays to fetch multiple accounts or creator Spaces.', 'Fill it for user lookup by IDs or resource=space operation=list.', 'Enter ["2244994945"] or map {{$json.userIds}} from a previous aggregation step.', 'Comes from prior user searches, CRM records, or saved creator lists.', 'Valid JSON array of strings.', 'An events workflow checks Spaces created by several executives before notifying the social team.', 'Invalid or empty arrays return _error for operations that require them.', 'Do not mix usernames and IDs in this field; use Usernames for usernames.'),
+  },
+  {
+    name: 'Username',
+    internalKey: 'username',
+    type: 'string',
+    required: false,
+    description: 'Twitter/X handle without @.',
+    placeholder: 'ctrlchecks',
+    helpText: help('Username is the public X handle used as an alternative to User ID for some lookups.', 'It lets the node find a profile when you do not know the numeric user ID yet.', 'Fill it for user get when User ID is not available.', 'Enter the handle without @, or map {{$json.username}} from a form or CRM profile.', 'Copy it from the X profile URL or stored social profile data.', 'Letters, numbers, and underscores; omit @.', 'A lead-enrichment workflow gets profile details for {{$json.twitterHandle}}.', 'If both userId and username are blank, user get returns _error.', 'Do not include https://x.com/ or @ in this field.'),
+  },
+  {
+    name: 'Usernames (JSON Array)',
+    internalKey: 'usernames',
+    type: 'json',
+    required: false,
+    description: 'Multiple usernames for lookup.',
+    placeholder: '["ctrlchecks", "x"]',
+    helpText: help('Usernames is a JSON array of X handles without @ symbols.', 'It supports batch profile lookup when you have handles rather than numeric IDs.', 'Fill it for resource=user and operation=lookup when userIds are not available.', 'Enter ["ctrlchecks"] or map {{$json.usernames}} from an upstream list.', 'Comes from CRM social fields, forms, CSV uploads, or search output.', 'Valid JSON array of handle strings without @.', 'A sales workflow enriches a list of speaker handles before an event campaign.', 'Invalid or empty arrays return _error when no userIds are supplied.', 'Do not provide a comma-separated text list without JSON brackets.'),
+  },
+  {
+    name: 'Target User ID',
+    internalKey: 'targetUserId',
+    type: 'string',
+    required: false,
+    description: 'Account ID to follow, unfollow, block, unblock, mute, or unmute.',
+    placeholder: '2244994945',
+    helpText: help('Target User ID is the account the authenticated user will act on.', 'Follow, unfollow, block, unblock, mute, and unmute need a target account distinct from the authenticated account.', 'Fill it for those user-management operations.', 'Paste a numeric user ID or map {{$json.targetUserId}} from a moderation or CRM step.', 'Get it from user lookup, mentions, followers, or an internal account list.', 'Numeric user ID string.', 'A moderation workflow mutes accounts flagged by a trust-and-safety review.', 'Blank targetUserId returns _error for these operations.', 'Do not use the authenticated user ID unless you intentionally want a self-targeting operation, which usually fails.'),
+  },
+  {
+    name: 'Search Query',
+    internalKey: 'query',
+    type: 'string',
+    required: false,
+    description: 'X search query or Space search phrase.',
+    placeholder: '"workflow automation" -is:retweet',
+    helpText: help('Search Query is the keyword or X search syntax sent to search endpoints.', 'Search and Spaces search cannot run without a query.', 'Fill it for resource=search operations and resource=space operation=search.', 'Enter keywords, operators, hashtags, or map {{$json.searchQuery}} from a campaign record.', 'Comes from a saved monitoring rule, user form, or business keyword list.', 'Plain text using X search syntax; date filters use Start Time and End Time fields.', 'A brand-monitoring workflow searches "ctrlchecks OR ctrl checks" every hour.', 'Blank query returns _error for search operations.', 'Do not put JSON into this field; it expects a normal query string.'),
+  },
+  {
+    name: 'List ID',
+    internalKey: 'listId',
+    type: 'string',
+    required: false,
+    description: 'Twitter/X List identifier.',
+    placeholder: '1510000000000000000',
+    helpText: help('List ID identifies the Twitter/X List to get, update, delete, or manage members for.', 'List operations cannot target the right curated list without this ID.', 'Fill it for list get, update, delete, addMember, removeMember, getMembers, and getTweets.', 'Paste a list ID or map {{$json.listId}} from a previous create/list step.', 'Get it from an earlier List create response or the X API list details.', 'Numeric list ID string.', 'A social team adds industry analysts to a private monitoring list after CRM qualification.', 'Missing listId returns _error for list operations that need it.', 'Do not use the list name where the API expects the list ID.'),
+  },
+  {
+    name: 'List Name',
+    internalKey: 'name',
+    type: 'string',
+    required: false,
+    description: 'Name for a Twitter/X List.',
+    placeholder: 'Industry analysts',
+    helpText: help('List Name is the visible name for creating or renaming a Twitter/X List.', 'Create and update list operations use it to label the list for humans.', 'Fill it for list create and when renaming during list update.', 'Type a short name or map {{$json.listName}} from a CRM segment.', 'Comes from a team naming convention, campaign segment, or saved list plan.', 'Plain text name accepted by X Lists.', 'A marketing operations workflow creates a list named "Launch reviewers Q3".', 'Blank name returns _error for list create.', 'Do not use a long description as the name; put that in Description.'),
+  },
+  {
+    name: 'Media Data',
+    internalKey: 'mediaData',
+    type: 'string',
+    required: false,
+    description: 'Public media URL or base64 bytes for upload.',
+    placeholder: 'https://cdn.example.com/social-card.jpg',
+    helpText: help('Media Data is the image or video content the media upload operation sends to X.', 'Upload needs actual bytes; the runtime downloads a URL or decodes base64 before calling the media API.', 'Fill it for resource=media and operation=upload.', 'Paste a public HTTPS URL or map base64 content such as {{$json.dataBase64}} from a file step.', 'Comes from a CDN, asset manager, Read Binary File node, or generated image service.', 'Public http/https URL or base64 string.', 'A product-launch workflow uploads the final social card before posting the announcement tweet.', 'Blank mediaData returns _error for upload.', 'Do not paste an HTML page URL; use a direct file URL or base64 content.'),
+  },
+  {
+    name: 'Media ID',
+    internalKey: 'mediaId',
+    type: 'string',
+    required: false,
+    description: 'Uploaded media ID or DM media attachment ID.',
+    placeholder: '1790000000000000000',
+    helpText: help('Media ID identifies uploaded media for metadata, get, or direct-message attachment operations.', 'The metadata operation needs it to attach alt text to the right uploaded asset.', 'Fill it for media get, media metadata, or optional DM media attachment.', 'Map {{$json.mediaId}} from a media upload step or paste a known media ID.', 'Comes from resource=media upload or X media management output.', 'Media ID string returned by X.', 'An accessibility workflow uploads an image and then immediately writes alt text to its media ID.', 'Blank mediaId returns _error for media operations that need it.', 'Do not use a tweet ID here; media IDs are different objects.'),
+  },
+  {
+    name: 'Alt Text',
+    internalKey: 'altText',
+    type: 'textarea',
+    required: false,
+    description: 'Accessible description for uploaded media.',
+    placeholder: 'Screenshot of the dashboard showing a green success chart.',
+    helpText: help('Alt Text is the accessibility description saved on uploaded media.', 'It helps screen-reader users understand images and is required by the metadata operation.', 'Fill it for resource=media and operation=metadata.', 'Write a concise description of the meaningful visual content, or map {{$json.altText}} from an asset record.', 'Comes from content operations, accessibility review, or generated asset metadata.', 'Plain text description.', 'A social publishing workflow adds "Photo of the packed launch event audience" to an event image.', 'Blank altText returns _error for metadata.', 'Do not repeat "image of" for every asset; describe the useful content.'),
+  },
+  {
+    name: 'Recipient User ID',
+    internalKey: 'recipientId',
+    type: 'string',
+    required: false,
+    description: 'User ID that receives a direct message.',
+    placeholder: '2244994945',
+    helpText: help('Recipient User ID is the Twitter/X account that receives a DM.', 'The send direct-message operation needs both recipientId and text.', 'Fill it for resource=directMessage and operation=send.', 'Paste a numeric user ID or map {{$json.senderId}} from an incoming DM trigger workflow.', 'Comes from a prior DM event, user lookup, or approved customer profile.', 'Numeric user ID string.', 'A support workflow replies by DM to the user who opened a ticket through X.', 'Blank recipientId returns _error for DM send.', 'Do not use a username here unless a previous step converts it to user ID.'),
+  },
+  {
+    name: 'DM Event ID',
+    internalKey: 'dmEventId',
+    type: 'string',
+    required: false,
+    description: 'Direct-message event ID to delete.',
+    placeholder: 'dm_event_123',
+    helpText: help('DM Event ID identifies a specific direct-message event.', 'Delete DM needs the exact event rather than just a conversation or user.', 'Fill it for resource=directMessage and operation=delete.', 'Map {{$json.dmEventId}} from a previous DM list/get result.', 'Comes from direct-message API event output.', 'DM event ID string.', 'A cleanup workflow deletes a test DM event created during QA.', 'Blank dmEventId returns _error for DM delete.', 'Do not use recipientId as the DM event ID.'),
+  },
+  {
+    name: 'Space ID',
+    internalKey: 'spaceId',
+    type: 'string',
+    required: false,
+    description: 'Twitter/X Space identifier.',
+    placeholder: '1DXxyRYNejbKM',
+    helpText: help('Space ID identifies a Twitter/X Space.', 'Space get needs this ID to retrieve live or scheduled Space details.', 'Fill it for resource=space and operation=get.', 'Paste the Space ID or map {{$json.spaceId}} from a Space search/list result.', 'Comes from X Space URLs or API results.', 'Space ID string such as 1DXxyRYNejbKM.', 'An events workflow checks a scheduled executive Space before sending an internal reminder.', 'Blank spaceId returns _error for Space get.', 'Do not use a tweet ID in the Space ID field.'),
+  },
+  {
+    name: 'Max Results',
+    internalKey: 'maxResults',
+    type: 'number',
+    required: false,
+    description: 'Maximum records to request.',
+    placeholder: '10',
+    defaultValue: '10',
+    helpText: help('Max Results limits how many records the API should return for supported list/search/timeline calls.', 'It controls response size, speed, and API quota usage.', 'Fill it for searches, timelines, bookmarks, followers, list members, DMs, and Spaces search when you need a specific page size.', 'Enter a number such as 10, 25, 50, or 100 depending on the operation limit.', 'Choose it from dashboard needs, reporting volume, or an upstream setting such as {{$json.pageSize}}.', 'Whole number; runtime clamps many operations to provider maximums.', 'A monitoring workflow retrieves only 20 recent posts to keep Slack summaries readable.', 'Invalid values fall back to defaults or provider clamps.', 'Do not set Return All and expect Max Results to stay as a hard total limit.'),
+  },
+  {
+    name: 'Return All',
+    internalKey: 'returnAll',
+    type: 'boolean',
+    required: false,
+    description: 'Whether to request all available pages for supported operations.',
+    defaultValue: 'false',
+    helpText: help('Return All asks the runtime to collect additional pages for supported list/search/timeline calls.', 'It changes quota use and response size, so it should be deliberate.', 'Turn it on only when the workflow really needs every available item for the current operation.', 'Use true or false, or map {{$json.returnAll}} from a controlled settings record.', 'Comes from the reporting requirement, not from X itself.', 'Boolean true or false.', 'A weekly analytics workflow turns Return All on for list members, while hourly alerts keep it off.', 'Large result sets can be slower and may hit API limits.', 'Do not enable it on frequent workflows without considering quota and downstream payload size.'),
+  },
+  {
+    name: 'Access Token',
+    internalKey: 'accessToken',
+    type: 'string',
+    required: false,
+    description: 'Legacy direct Twitter/X token fallback; the saved OAuth connection is preferred.',
+    helpText: help('Access Token is a legacy fallback for direct Twitter/X authentication.', 'The normal runtime path resolves the OAuth token from Connections, and direct tokens can become stale or bypass the account selected in the UI.', 'Leave it blank for new visual workflows unless you are migrating an older generated workflow.', 'Prefer a saved Twitter/X OAuth2 connection; if used, enter the OAuth access token from X.', 'Comes from X OAuth but should normally live in the CtrlChecks credential vault.', 'Secret token string; never expose it in examples or shared workflow data.', 'A migration workflow temporarily carries accessToken while the account is moved into Connections.', 'Missing accessToken is fine when the saved connection exists; an expired token returns auth errors.', 'Do not use this field for usernames, API keys, bearer labels, or credential IDs.'),
+  },
+  {
+    name: 'Credential ID',
+    internalKey: 'credentialId',
+    type: 'string',
+    required: false,
+    description: 'Legacy saved-credential reference for generated workflows.',
+    helpText: help('Credential ID is a compatibility reference to a saved Twitter/X credential.', 'Generated or migrated workflows may include it as metadata, but the usual UI path uses the connected Twitter/X account for the workflow owner or current user.', 'Leave it blank unless a trusted setup step explicitly provides a saved credential reference.', 'Use the account connection selector when available; if this field is used, map an internal credential identifier, not a provider token.', 'Comes from CtrlChecks credential records.', 'Internal credential ID string, not an X access token.', 'A workspace migration keeps credentialId for old runs while new workflows rely on Connections.', 'A wrong credentialId can fail lookup or use the wrong account.', 'Do not place OAuth access tokens in credentialId.'),
+  },
+];
+
+const outputDescription = 'success: not always added by Twitter/X; many successful calls spread the raw X client result at top level. data: the common X API payload for tweets, users, search results, timelines, spaces, or lists. errors/meta/includes may appear exactly as X returns them. media_id, id, event, or deleted markers can appear for media, list, DM, and delete operations. _error: returned on missing credentials, missing required fields, unsupported resource-operation pairs, permission errors, or API failures.';
+
+function operation(name: string, value: string, description: string, inputValues: Record<string, string>): OperationDoc {
+  return {
+    name,
+    value,
+    description,
+    fields,
+    outputExample: {
+      data: { id: '1749876543210', text: 'Campaign update is live.' },
+      meta: { result_count: 1 },
+      _error: undefined,
+    },
+    outputDescription,
+    usageExample: {
+      scenario: `${name} is used when a social, support, marketing, or reporting workflow needs this Twitter/X action after upstream data has already been prepared.`,
+      inputValues,
+      expectedOutput: 'The next node reads Twitter/X values such as {{$json.data.id}}, {{$json.meta.result_count}}, or {{$json._error}} depending on the selected action.',
+    },
+    externalDocsUrl: 'https://developer.x.com/en/docs/x-api',
+  };
+}
+
+const inputValues = {
+  resource: 'tweet',
+  operation: 'create',
+  text: '{{$json.socialCopy}}',
+  tweetId: '{{$json.tweetId}}',
+  tweetIds: '["1749876543210"]',
+  mediaIds: '["1790000000000000000"]',
+  quoteTweetId: '{{$json.quoteTweetId}}',
+  userId: '{{$json.userId}}',
+  userIds: '["2244994945"]',
+  username: 'ctrlchecks',
+  usernames: '["ctrlchecks"]',
+  targetUserId: '{{$json.targetUserId}}',
+  query: '"workflow automation" -is:retweet',
+  listId: '{{$json.listId}}',
+  name: 'Industry analysts',
+  mediaData: '{{$json.mediaUrl}}',
+  mediaId: '{{$json.mediaId}}',
+  altText: '{{$json.altText}}',
+  recipientId: '{{$json.senderId}}',
+  dmEventId: '{{$json.dmEventId}}',
+  spaceId: '{{$json.spaceId}}',
+  maxResults: '10',
+  returnAll: 'false',
+  accessToken: '',
+  credentialId: '',
+};
 
 export const twitterDoc: NodeDoc = {
-  "slug": "twitter",
-  "displayName": "Twitter/X",
-  "category": "Communication",
-  "logoUrl": "/icons/nodes/twitter.svg",
-  "description": "Post tweets, manage Twitter account",
-  "credentialType": "Twitter API Key",
-  "credentialSetupSteps": [
-    "What this is: The Twitter/X connection lets CtrlChecks access your Twitter/X account safely without putting secrets in workflow fields.",
-    "Where to start: developer.x.com -> Project and App -> Keys and tokens.",
-    "How to connect: In CtrlChecks, open Connections -> Add Connection -> Twitter/X, then sign in or paste the secret value requested there.",
-    "Example: the account access token shown by X.",
-    "Important: Treat tokens, passwords, API keys, and client secrets like bank passwords. Store them in Connections, not in regular workflow fields.",
-    "Test it: Save the connection, run a simple Twitter/X step, and confirm CtrlChecks can reach the account."
+  slug: 'twitter',
+  displayName: 'Twitter/X',
+  category: 'Social',
+  logoUrl: '/icons/nodes/twitter.svg',
+  description: 'Use the authenticated Twitter/X connection to publish tweets, search posts, read users and timelines, manage lists, upload media, send DMs, and inspect Spaces.',
+  credentialType: 'Twitter/X OAuth2 connection',
+  credentialSetupSteps: [
+    'Create or connect a Twitter/X OAuth2 account in Connections so CtrlChecks can retrieve an OAuth access token from the credential vault at runtime.',
+    'The connected account must have the X permissions required for the operation, such as tweet read/write, users read, follows, list access, offline access, and direct-message permissions when sending or reading DMs.',
+    'Twitter/X developer access is managed at developer.x.com; test by running a Get Me operation before publishing or deleting content.',
+    'Store provider secrets in Connections, not in workflow input fields. accessToken and credentialId are backend compatibility fields, not the preferred visual-panel path.',
+    'After configuration, connect the output with an outgoing line; any downstream service node still needs its own account connection.',
   ],
-  "credentialDocsUrl": "https://developer.twitter.com/en/docs/twitter-api/getting-started/getting-access-to-the-twitter-api",
-  "resources": [
+  credentialDocsUrl: 'https://developer.x.com/en/docs/authentication/oauth-2-0',
+  resources: [
     {
-      "name": "Operations",
-      "description": "Twitter/X exposes operation choices directly.",
-      "operations": [
-        {
-          "name": "Create",
-          "value": "create",
-          "description": "Create using the Twitter/X node.",
-          "fields": [
-            {
-              "name": "Resource",
-              "internalKey": "resource",
-              "type": "string",
-              "required": true,
-              "description": "Twitter resource",
-              "helpText": "What this field is: The Twitter/X resource type to work with.\nOptions: tweet (post/read tweets), user (profile info), search (search tweets).\nExample: tweet to post a new tweet, user to look up a profile.",
-              "placeholder": "tweet",
-              "example": "tweet",
-              "defaultValue": "tweet"
-            },
-            {
-              "name": "Text",
-              "internalKey": "text",
-              "type": "textarea",
-              "required": true,
-              "description": "Tweet text (max 280 characters)",
-              "helpText": "What this field is: Tweet text.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: {{$json.tweet}}.\nTip: Use {{$json.text}} when this value comes from an earlier step.",
-              "placeholder": "{{$json.tweet}}",
-              "example": "{{$json.tweet}}"
-            },
-            {
-              "name": "Tweet Id",
-              "internalKey": "tweetId",
-              "type": "string",
-              "required": false,
-              "description": "Tweet ID (for get/delete/like/etc.)",
-              "helpText": "What this field is: The Tweet ID that tells Twitter/X which item to use.\nWhere to find it: Open the item in Twitter/X and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.tweetId}} when an earlier Twitter/X step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Query",
-              "internalKey": "query",
-              "type": "textarea",
-              "required": true,
-              "description": "Search query (for search operations)",
-              "helpText": "What this field is: Structured data for Search query.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Twitter/X.\nExample: status = active.\nTip: Use {{$json.query}} when an earlier step already prepared this data.",
-              "placeholder": "status = active"
-            },
-            {
-              "name": "Access Token",
-              "internalKey": "accessToken",
-              "type": "string",
-              "required": false,
-              "description": "OAuth2 Access Token for Twitter (if using OAuth authentication)",
-              "helpText": "What this field is: X access token, a secret password that lets CtrlChecks talk to Twitter/X safely.\nWhere to find it: developer.x.com -> Project and App -> Keys and tokens.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the account access token shown by X.\nImportant: Treat this like a bank password. Use account sign-in tokens for user actions.",
-              "placeholder": "your-twitter-oauth-token",
-              "example": "your-twitter-oauth-token"
-            }
-          ],
-          "outputExample": {
-            "text": "Tweet published successfully.",
-            "length": 29
-          },
-          "outputDescription": "text: Value returned by this operation.\nlength: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming Twitter/X data with create after a related upstream event is received",
-            "inputValues": {
-              "Resource": "tweet",
-              "Text": "{{$json.tweet}}",
-              "Tweet Id": "abc123",
-              "Query": "",
-              "Access Token": "your-twitter-oauth-token"
-            },
-            "expectedOutput": "Twitter/X returns structured create data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://developer.x.com/en/docs/x-api"
-        },
-        {
-          "name": "Delete",
-          "value": "delete",
-          "description": "Delete using the Twitter/X node.",
-          "fields": [
-            {
-              "name": "Resource",
-              "internalKey": "resource",
-              "type": "string",
-              "required": true,
-              "description": "Twitter resource",
-              "helpText": "What this field is: The Twitter/X resource type to work with.\nOptions: tweet (post/read tweets), user (profile info), search (search tweets).\nExample: tweet to post a new tweet, user to look up a profile.",
-              "placeholder": "tweet",
-              "example": "tweet",
-              "defaultValue": "tweet"
-            },
-            {
-              "name": "Text",
-              "internalKey": "text",
-              "type": "textarea",
-              "required": true,
-              "description": "Tweet text (max 280 characters)",
-              "helpText": "What this field is: Tweet text.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: {{$json.tweet}}.\nTip: Use {{$json.text}} when this value comes from an earlier step.",
-              "placeholder": "{{$json.tweet}}",
-              "example": "{{$json.tweet}}"
-            },
-            {
-              "name": "Tweet Id",
-              "internalKey": "tweetId",
-              "type": "string",
-              "required": false,
-              "description": "Tweet ID (for get/delete/like/etc.)",
-              "helpText": "What this field is: The Tweet ID that tells Twitter/X which item to use.\nWhere to find it: Open the item in Twitter/X and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.tweetId}} when an earlier Twitter/X step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Query",
-              "internalKey": "query",
-              "type": "textarea",
-              "required": true,
-              "description": "Search query (for search operations)",
-              "helpText": "What this field is: Structured data for Search query.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Twitter/X.\nExample: status = active.\nTip: Use {{$json.query}} when an earlier step already prepared this data.",
-              "placeholder": "status = active"
-            },
-            {
-              "name": "Access Token",
-              "internalKey": "accessToken",
-              "type": "string",
-              "required": false,
-              "description": "OAuth2 Access Token for Twitter (if using OAuth authentication)",
-              "helpText": "What this field is: X access token, a secret password that lets CtrlChecks talk to Twitter/X safely.\nWhere to find it: developer.x.com -> Project and App -> Keys and tokens.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the account access token shown by X.\nImportant: Treat this like a bank password. Use account sign-in tokens for user actions.",
-              "placeholder": "your-twitter-oauth-token",
-              "example": "your-twitter-oauth-token"
-            }
-          ],
-          "outputExample": {
-            "text": "Tweet deleted successfully.",
-            "length": 27
-          },
-          "outputDescription": "text: Value returned by this operation.\nlength: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming Twitter/X data with delete after a related upstream event is received",
-            "inputValues": {
-              "Resource": "tweet",
-              "Text": "{{$json.tweet}}",
-              "Tweet Id": "abc123",
-              "Query": "",
-              "Access Token": "your-twitter-oauth-token"
-            },
-            "expectedOutput": "Twitter/X returns structured delete data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://developer.x.com/en/docs/x-api"
-        },
-        {
-          "name": "Get",
-          "value": "get",
-          "description": "Fetch a specific tweet by its ID.",
-          "fields": [
-            {
-              "name": "Resource",
-              "internalKey": "resource",
-              "type": "string",
-              "required": true,
-              "description": "Twitter resource",
-              "helpText": "What this field is: The Twitter/X resource type to work with.\nOptions: tweet (post/read tweets), user (profile info), search (search tweets).\nExample: tweet to post a new tweet, user to look up a profile.",
-              "placeholder": "tweet",
-              "example": "tweet",
-              "defaultValue": "tweet"
-            },
-            {
-              "name": "Text",
-              "internalKey": "text",
-              "type": "textarea",
-              "required": true,
-              "description": "Tweet text (max 280 characters)",
-              "helpText": "What this field is: Tweet text.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: {{$json.tweet}}.\nTip: Use {{$json.text}} when this value comes from an earlier step.",
-              "placeholder": "{{$json.tweet}}",
-              "example": "{{$json.tweet}}"
-            },
-            {
-              "name": "Tweet Id",
-              "internalKey": "tweetId",
-              "type": "string",
-              "required": false,
-              "description": "Tweet ID (for get/delete/like/etc.)",
-              "helpText": "What this field is: The Tweet ID that tells Twitter/X which item to use.\nWhere to find it: Open the item in Twitter/X and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.tweetId}} when an earlier Twitter/X step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Query",
-              "internalKey": "query",
-              "type": "textarea",
-              "required": true,
-              "description": "Search query (for search operations)",
-              "helpText": "What this field is: Structured data for Search query.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Twitter/X.\nExample: status = active.\nTip: Use {{$json.query}} when an earlier step already prepared this data.",
-              "placeholder": "status = active"
-            },
-            {
-              "name": "Access Token",
-              "internalKey": "accessToken",
-              "type": "string",
-              "required": false,
-              "description": "OAuth2 Access Token for Twitter (if using OAuth authentication)",
-              "helpText": "What this field is: X access token, a secret password that lets CtrlChecks talk to Twitter/X safely.\nWhere to find it: developer.x.com -> Project and App -> Keys and tokens.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the account access token shown by X.\nImportant: Treat this like a bank password. Use account sign-in tokens for user actions.",
-              "placeholder": "your-twitter-oauth-token",
-              "example": "your-twitter-oauth-token"
-            }
-          ],
-          "outputExample": {
-            "data": {
-              "id": "1749876543210",
-              "text": "Hello world!",
-              "public_metrics": {
-                "retweet_count": 5,
-                "like_count": 42
-              }
-            }
-          },
-          "outputDescription": "data.id: The tweet ID. data.text: Tweet text. data.public_metrics: Engagement counts (likes, retweets, replies).",
-          "usageExample": {
-            "scenario": "Fetch engagement metrics for a specific tweet to track campaign performance",
-            "inputValues": {
-              "tweetId": "{{$json.tweetId}}"
-            },
-            "expectedOutput": "Returns the tweet with `{{$json.data.public_metrics.like_count}}` likes and `{{$json.data.public_metrics.retweet_count}}` retweets."
-          },
-          "externalDocsUrl": "https://developer.x.com/en/docs/x-api"
-        },
-        {
-          "name": "GetMe",
-          "value": "getMe",
-          "description": "GetMe using the Twitter/X node.",
-          "fields": [
-            {
-              "name": "Resource",
-              "internalKey": "resource",
-              "type": "string",
-              "required": true,
-              "description": "Twitter resource",
-              "helpText": "What this field is: The Twitter/X resource type to work with.\nOptions: tweet (post/read tweets), user (profile info), search (search tweets).\nExample: tweet to post a new tweet, user to look up a profile.",
-              "placeholder": "tweet",
-              "example": "tweet",
-              "defaultValue": "tweet"
-            },
-            {
-              "name": "Text",
-              "internalKey": "text",
-              "type": "textarea",
-              "required": true,
-              "description": "Tweet text (max 280 characters)",
-              "helpText": "What this field is: Tweet text.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: {{$json.tweet}}.\nTip: Use {{$json.text}} when this value comes from an earlier step.",
-              "placeholder": "{{$json.tweet}}",
-              "example": "{{$json.tweet}}"
-            },
-            {
-              "name": "Tweet Id",
-              "internalKey": "tweetId",
-              "type": "string",
-              "required": false,
-              "description": "Tweet ID (for get/delete/like/etc.)",
-              "helpText": "What this field is: The Tweet ID that tells Twitter/X which item to use.\nWhere to find it: Open the item in Twitter/X and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.tweetId}} when an earlier Twitter/X step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Query",
-              "internalKey": "query",
-              "type": "textarea",
-              "required": true,
-              "description": "Search query (for search operations)",
-              "helpText": "What this field is: Structured data for Search query.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Twitter/X.\nExample: status = active.\nTip: Use {{$json.query}} when an earlier step already prepared this data.",
-              "placeholder": "status = active"
-            },
-            {
-              "name": "Access Token",
-              "internalKey": "accessToken",
-              "type": "string",
-              "required": false,
-              "description": "OAuth2 Access Token for Twitter (if using OAuth authentication)",
-              "helpText": "What this field is: X access token, a secret password that lets CtrlChecks talk to Twitter/X safely.\nWhere to find it: developer.x.com -> Project and App -> Keys and tokens.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the account access token shown by X.\nImportant: Treat this like a bank password. Use account sign-in tokens for user actions.",
-              "placeholder": "your-twitter-oauth-token",
-              "example": "your-twitter-oauth-token"
-            }
-          ],
-          "outputExample": {
-            "text": "Authenticated account: @ctrlchecks",
-            "length": 34
-          },
-          "outputDescription": "text: Value returned by this operation.\nlength: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming Twitter/X data with get me after a related upstream event is received",
-            "inputValues": {
-              "Resource": "tweet",
-              "Text": "{{$json.tweet}}",
-              "Tweet Id": "abc123",
-              "Query": "",
-              "Access Token": "your-twitter-oauth-token"
-            },
-            "expectedOutput": "Twitter/X returns structured get me data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://developer.x.com/en/docs/x-api"
-        },
-        {
-          "name": "Recent",
-          "value": "recent",
-          "description": "Recent using the Twitter/X node.",
-          "fields": [
-            {
-              "name": "Resource",
-              "internalKey": "resource",
-              "type": "string",
-              "required": true,
-              "description": "Twitter resource",
-              "helpText": "What this field is: The Twitter/X resource type to work with.\nOptions: tweet (post/read tweets), user (profile info), search (search tweets).\nExample: tweet to post a new tweet, user to look up a profile.",
-              "placeholder": "tweet",
-              "example": "tweet",
-              "defaultValue": "tweet"
-            },
-            {
-              "name": "Text",
-              "internalKey": "text",
-              "type": "textarea",
-              "required": true,
-              "description": "Tweet text (max 280 characters)",
-              "helpText": "What this field is: Tweet text.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: {{$json.tweet}}.\nTip: Use {{$json.text}} when this value comes from an earlier step.",
-              "placeholder": "{{$json.tweet}}",
-              "example": "{{$json.tweet}}"
-            },
-            {
-              "name": "Tweet Id",
-              "internalKey": "tweetId",
-              "type": "string",
-              "required": false,
-              "description": "Tweet ID (for get/delete/like/etc.)",
-              "helpText": "What this field is: The Tweet ID that tells Twitter/X which item to use.\nWhere to find it: Open the item in Twitter/X and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.tweetId}} when an earlier Twitter/X step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Query",
-              "internalKey": "query",
-              "type": "textarea",
-              "required": true,
-              "description": "Search query (for search operations)",
-              "helpText": "What this field is: Structured data for Search query.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Twitter/X.\nExample: status = active.\nTip: Use {{$json.query}} when an earlier step already prepared this data.",
-              "placeholder": "status = active"
-            },
-            {
-              "name": "Access Token",
-              "internalKey": "accessToken",
-              "type": "string",
-              "required": false,
-              "description": "OAuth2 Access Token for Twitter (if using OAuth authentication)",
-              "helpText": "What this field is: X access token, a secret password that lets CtrlChecks talk to Twitter/X safely.\nWhere to find it: developer.x.com -> Project and App -> Keys and tokens.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the account access token shown by X.\nImportant: Treat this like a bank password. Use account sign-in tokens for user actions.",
-              "placeholder": "your-twitter-oauth-token",
-              "example": "your-twitter-oauth-token"
-            }
-          ],
-          "outputExample": {
-            "text": "Latest tweet: Product update is now live.",
-            "length": 41
-          },
-          "outputDescription": "text: Value returned by this operation.\nlength: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming Twitter/X data with recent after a related upstream event is received",
-            "inputValues": {
-              "Resource": "tweet",
-              "Text": "{{$json.tweet}}",
-              "Tweet Id": "abc123",
-              "Query": "",
-              "Access Token": "your-twitter-oauth-token"
-            },
-            "expectedOutput": "Twitter/X returns structured recent data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://developer.x.com/en/docs/x-api"
-        }
-      ]
-    }
-  ],
-  "commonErrors": [
-    {
-      "error": "Authentication failed",
-      "cause": "The saved credential, token, API key, or OAuth grant is missing, expired, or lacks the required scope.",
-      "fix": "Reconnect the service in CtrlChecks → Connections, then re-run the Twitter/X node."
+      name: 'Twitter/X API',
+      description: 'Resource and Operation together choose the X API action. Successful results preserve object input and spread the raw API result at the top level.',
+      operations: [
+        operation('Tweet actions', 'tweet', 'Covers tweet create, get, lookup, delete, like, unlike, retweet, unretweet, quoteTweet, reply, hideReply, bookmark, removeBookmark, and getBookmarks. Use it for publishing and engaging with specific tweets.', inputValues),
+        operation('User and timeline actions', 'user_timeline', 'Covers user get, lookup, getMe, follow, unfollow, followers/following, block/mute actions, and timeline reads. Use it when the workflow needs account or feed data.', { ...inputValues, resource: 'user', operation: 'getMe' }),
+        operation('Search, list, media, DM, and Space actions', 'advanced', 'Covers recent/all search, tweet counts, list management, media upload/metadata, direct messages, and Space details. Use it for monitoring, curation, asset publishing, and support workflows.', { ...inputValues, resource: 'search', operation: 'recent' }),
+      ],
     },
-    {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
-    },
-    {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
   ],
-  "relatedNodes": []
+  commonErrors: [
+    { error: 'Twitter node: OAuth connection required', cause: 'The workflow owner or current user does not have a connected Twitter/X OAuth account.', fix: 'Reconnect Twitter/X in Connections and verify the account with a Get Me operation.' },
+    { error: 'Twitter node: text is required for create operation', cause: 'A tweet, reply, quote, or DM send operation was configured without text.', fix: 'Fill Tweet Text or map {{$json.socialCopy}} from a previous content step.' },
+    { error: 'Twitter node: tweetId is required for get/delete/like/reply operations', cause: 'The operation targets an existing tweet but no Tweet ID was supplied.', fix: 'Map the tweet ID from a search result or copy the numeric ID from the tweet URL.' },
+    { error: 'Twitter node: query is required for search operations', cause: 'A search or Space search was configured without a query.', fix: 'Enter a keyword query or map {{$json.query}} from a saved monitoring rule.' },
+    { error: 'Twitter node: Unknown operation "<operation>" for resource "<resource>"', cause: 'The selected operation does not belong to the selected resource.', fix: 'Change Resource and Operation to a valid pair, such as search + recent or tweet + create.' },
+    { error: 'Twitter node: Full archive search requires Academic Research or Enterprise API access', cause: 'operation=all calls full archive search, which normal accounts may not have permission to use.', fix: 'Use recent search or upgrade the X developer access level.' },
+    { error: 'Permission error or access token expired', cause: 'X returned an authorization, scope, rate-limit, or token error.', fix: 'Reconnect the account, grant the required scopes, and retry after rate limits reset.' },
+  ],
+  relatedNodes: ['instagram', 'linkedin', 'facebook', 'telegram'],
 };

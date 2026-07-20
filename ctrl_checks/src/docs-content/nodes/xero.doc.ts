@@ -1,541 +1,384 @@
 import type { NodeDoc } from '../types';
+import { richFieldHelp } from './_sharedFieldHelp';
+
+const xeroOutputDescription = [
+  'success: true when Xero returns a successful HTTP response, false on Xero API errors.',
+  'resource: The normalized resource value used for the request.',
+  'operation: The normalized operation value used for the request.',
+  'tenantId: The tenant ID sent in the Xero-Tenant-Id header.',
+  'record: The first returned record for get_by_id and update, otherwise null.',
+  'records: The returned record array for get_many and create, otherwise an empty array for single-record operations.',
+  'count: Number of records in the normalized Xero response array.',
+  'pagination: Page metadata with page, pageSize, and hasMore based on whether Xero returned 100 records.',
+  'meta: Runtime metadata including the endpoint URL and x-rate-limit-remaining header when present.',
+  'error: null on success; on Xero HTTP errors it contains message, code, and details.',
+  '_error: Present only for missing required config, unsupported resource or operation, or unexpected request failures.',
+].join('\n');
 
 export const xeroDoc: NodeDoc = {
-  "slug": "xero",
-  "displayName": "Xero",
-  "category": "Utility",
-  "logoUrl": "/icons/nodes/xero.svg",
-  "description": "Create, fetch, update, and search Xero accounting records (contacts, invoices, items, payments, accounts).",
-  "credentialType": "Xero Credential",
-  "credentialSetupSteps": [
-    "What this is: The Xero connection lets CtrlChecks access your Xero account safely without putting secrets in workflow fields.",
-    "Where to start: Xero developer app connection or CtrlChecks Connections.",
-    "How to connect: In CtrlChecks, open Connections -> Add Connection -> Xero, then sign in or paste the secret value requested there.",
-    "Example: the access token returned after Xero sign-in.",
-    "Important: Treat tokens, passwords, API keys, and client secrets like bank passwords. Store them in Connections, not in regular workflow fields.",
-    "Test it: Save the connection, run a simple Xero step, and confirm CtrlChecks can reach the account."
+  slug: 'xero',
+  displayName: 'Xero',
+  category: 'HTTP & API',
+  logoUrl: '/icons/nodes/xero.svg',
+  description: 'Call the Xero Accounting API for contacts, invoices, items, payments, and accounts.',
+  credentialType: 'Xero OAuth2',
+  credentialSetupSteps: [
+    'Create or connect a Xero OAuth2 connection in CtrlChecks Connections when possible; Xero tokens expire and usually need refresh-token handling.',
+    'The current executor reads resolved node config fields, so accessToken and tenantId must be available to the node at runtime through the visible fields or credential-filled config.',
+    'Find tenantId by authorizing Xero and calling GET https://api.xero.com/connections for the selected organisation.',
+    'Connect the Xero node output to the next step with an outgoing line; downstream service node account connection setup is still required for later service nodes.',
   ],
-  "credentialDocsUrl": "https://developer.xero.com/documentation/getting-started-guide",
-  "resources": [
+  credentialDocsUrl: 'https://developer.xero.com/documentation/guides/oauth2/overview',
+  resources: [
     {
-      "name": "Operations",
-      "description": "Xero exposes operation choices directly.",
-      "operations": [
+      name: 'Accounting API',
+      description: 'Uses https://api.xero.com/api.xro/2.0 and normalizes Xero responses into record, records, count, pagination, meta, and error fields.',
+      operations: [
         {
-          "name": "Get many",
-          "value": "get_many",
-          "description": "Get many using the Xero node.",
-          "fields": [
+          name: 'Run Xero Operation',
+          value: 'default',
+          description: 'Run get_many, get_by_id, create, or update against a supported Xero Accounting API resource. The node sends Bearer authentication plus the Xero-Tenant-Id header and returns normalized response metadata.',
+          fields: [
             {
-              "name": "Access Token",
-              "internalKey": "accessToken",
-              "type": "string",
-              "required": true,
-              "description": "Xero OAuth 2.0 access token",
-              "helpText": "What this field is: Xero access token, a secret password that lets CtrlChecks talk to Xero safely.\nWhere to find it: Xero developer app connection or CtrlChecks Connections.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the access token returned after Xero sign-in.\nImportant: Treat this like a bank password. Xero tokens expire; reconnect the Connection when needed.",
-              "placeholder": "token_..."
+              name: 'Access Token',
+              internalKey: 'accessToken',
+              type: 'string',
+              required: true,
+              description: 'Xero OAuth 2.0 access token sent as the Bearer token.',
+              helpText: richFieldHelp({
+                what: 'The OAuth 2.0 access token used in the Authorization header for Xero Accounting API calls.',
+                why: 'Xero rejects every protected Accounting API request without a valid Bearer token.',
+                when: 'Always fill it or select a connection that resolves this value before the node runs.',
+                enter: 'Provide a current Xero access token, ideally from a saved Xero connection or token refresh step rather than a hand-pasted long-lived value.',
+                source: 'Create a Xero developer app, complete OAuth consent, and exchange the authorization code for access and refresh tokens.',
+                later: 'The token itself is not returned; use {{$json.success}}, {{$json.error}}, and Xero response records downstream.',
+                format: 'Plain access token string. Do not include the word Bearer because runtime adds Bearer automatically.',
+                example: 'An accounting sync uses a refreshed Xero token to fetch authorised invoices each morning.',
+                empty: 'Runtime returns _error with "Xero node: accessToken is required" and does not call Xero.',
+                mistake: 'Using a client secret or refresh token here instead of a current access token.',
+              }),
+              placeholder: 'Xero OAuth 2.0 access token',
+              example: 'eyJhbGciOiJSUzI1NiIsImtpZCI6...',
             },
             {
-              "name": "Tenant Id",
-              "internalKey": "tenantId",
-              "type": "string",
-              "required": true,
-              "description": "Xero tenant ID",
-              "helpText": "What this field is: The Xero tenant ID that tells Xero which item to use.\nWhere to find it: Open the item in Xero and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.tenantId}} when an earlier Xero step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
+              name: 'Tenant ID',
+              internalKey: 'tenantId',
+              type: 'string',
+              required: true,
+              description: 'Xero organisation tenant ID sent in the Xero-Tenant-Id header.',
+              helpText: richFieldHelp({
+                what: 'The Xero tenant ID for the organisation this API call should access.',
+                why: 'A Xero login can authorize more than one organisation, and Xero requires this header to choose the target tenant.',
+                when: 'Always fill it for every operation.',
+                enter: 'Paste the tenantId GUID returned by GET https://api.xero.com/connections after OAuth authorization.',
+                source: 'Read it from the Xero connections endpoint, a saved Xero connection, or a previous setup step as {{$json.tenantId}}.',
+                later: 'The node echoes it as {{$json.tenantId}} so later logs can confirm which organisation was called.',
+                format: 'GUID string such as xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.',
+                example: 'A finance workflow routes Australian and New Zealand company files by choosing the correct Xero tenantId.',
+                empty: 'Runtime returns _error with "Xero node: tenantId is required" and does not call Xero.',
+                mistake: 'Using an invoice ID, contact ID, or company name instead of the tenant ID from Xero connections.',
+              }),
+              placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+              example: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
             },
             {
-              "name": "Resource",
-              "internalKey": "resource",
-              "type": "select",
-              "required": true,
-              "description": "Xero resource",
-              "helpText": "What this field is: The Xero accounting entity type to query or manage.\nOptions: Contacts (customers/suppliers), Invoices (bills/sales), Items (products), Payments, Accounts (chart of accounts).\nExample: invoices to fetch unpaid invoices, contacts to look up a customer.\nTip: The resource determines which Xero API endpoint is called.",
-              "placeholder": "invoices",
-              "example": "invoices",
-              "defaultValue": "invoices",
-              "options": [
-                "Contacts",
-                "Invoices",
-                "Items",
-                "Payments",
-                "Accounts"
-              ]
+              name: 'Resource',
+              internalKey: 'resource',
+              type: 'select',
+              required: true,
+              description: 'Xero Accounting API resource to target.',
+              helpText: richFieldHelp({
+                what: 'The Xero endpoint family for this operation.',
+                why: 'Runtime maps contacts to /Contacts, invoices to /Invoices, items to /Items, payments to /Payments, and accounts to /Accounts.',
+                when: 'Choose it before selecting IDs, filters, or payload shapes because each resource expects different field names.',
+                enter: 'Select Contacts, Invoices, Items, Payments, or Accounts.',
+                source: 'Choose from the workflow object you need to read or change, or map a valid value such as {{$json.xeroResource}}.',
+                later: 'The normalized value is echoed as {{$json.resource}} for logs and branches.',
+                format: 'One of contacts, invoices, items, payments, accounts.',
+                example: 'A receivables workflow selects invoices to find unpaid invoices, then sends reminders for overdue records.',
+                empty: 'The default invoices value is used by the UI and backend schema.',
+                mistake: 'Choosing Payments and sending an invoice payload shape; payload fields must match the selected Xero resource.',
+              }),
+              options: ['Contacts', 'Invoices', 'Items', 'Payments', 'Accounts'],
+              placeholder: 'invoices',
+              example: 'invoices',
+              defaultValue: 'invoices',
             },
             {
-              "name": "Record Id",
-              "internalKey": "recordId",
-              "type": "string",
-              "required": false,
-              "description": "Record ID for get_by_id or update",
-              "helpText": "What this field is: The Record ID for get_by_id or update that tells Xero which item to use.\nWhere to find it: Open the item in Xero and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.recordId}} when an earlier Xero step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
+              name: 'Operation',
+              internalKey: 'operation',
+              type: 'select',
+              required: true,
+              description: 'Xero action to perform.',
+              helpText: richFieldHelp({
+                what: 'The action the node performs against the selected Xero resource.',
+                why: 'Runtime changes HTTP method, URL path, required fields, and response normalization based on this value.',
+                when: 'Choose get_many for lists, get_by_id for one record, create to add a record, and update to change an existing record.',
+                enter: 'Select Get Many, Get By ID, Create, or Update.',
+                source: 'Use the workflow task: list records, fetch one ID, create a new accounting object, or update an existing one.',
+                later: 'The normalized value is echoed as {{$json.operation}} so later nodes can branch on what was attempted.',
+                format: 'One of get_many, get_by_id, create, update.',
+                example: 'A nightly sync uses get_many with where, while a form-submission workflow uses create for a new contact.',
+                empty: 'The default get_many value is used by the UI and backend schema.',
+                mistake: 'Choosing update without providing Record ID, which runtime rejects before calling Xero.',
+              }),
+              options: ['Get Many', 'Get By ID', 'Create', 'Update'],
+              placeholder: 'get_many',
+              example: 'get_many',
+              defaultValue: 'get_many',
             },
             {
-              "name": "Payload",
-              "internalKey": "payload",
-              "type": "json",
-              "required": false,
-              "description": "Request body for create/update",
-              "helpText": "What this field is: Structured data for Request body.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Xero.\nExample: {}.\nTip: Use {{$json.payload}} when an earlier step already prepared this data.",
-              "placeholder": "{}",
-              "example": "{}",
-              "defaultValue": "{}"
+              name: 'Record ID',
+              internalKey: 'recordId',
+              type: 'string',
+              required: false,
+              description: 'Xero record GUID required for get_by_id and update.',
+              helpText: richFieldHelp({
+                what: 'The ID appended to the selected Xero resource path for single-record operations.',
+                why: 'Runtime requires it for get_by_id and update so it can build /Invoices/{id}, /Contacts/{id}, or the matching resource URL.',
+                when: 'Fill it for get_by_id and update. Leave it empty for get_many and create.',
+                enter: 'Map the correct Xero GUID, such as {{$json.InvoiceID}}, {{$json.ContactID}}, or {{$json.ItemID}}.',
+                source: 'Use the ID returned by a previous Xero list/create step, imported accounting data, or a database lookup.',
+                later: 'The record itself is returned as {{$json.record}} for single-record operations when Xero responds successfully.',
+                format: 'GUID string accepted by the selected Xero endpoint.',
+                example: 'An invoice adjustment workflow maps {{$json.InvoiceID}} into Record ID before updating line details.',
+                empty: 'Runtime returns _error for get_by_id or update and does not call Xero.',
+                mistake: 'Using a human invoice number instead of the Xero GUID field such as InvoiceID.',
+              }),
+              placeholder: '{{$json.InvoiceID}}',
+              example: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
             },
             {
-              "name": "Where",
-              "internalKey": "where",
-              "type": "string",
-              "required": false,
-              "description": "Xero WHERE filter",
-              "helpText": "What this field is: Xero WHERE filter.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Where value.\nTip: Use {{$json.where}} when this value comes from an earlier step.",
-              "placeholder": "Enter Where"
+              name: 'Payload (JSON)',
+              internalKey: 'payload',
+              type: 'json',
+              required: false,
+              description: 'JSON body used for create and update operations.',
+              helpText: richFieldHelp({
+                what: 'The record object wrapped and sent to Xero for create or update.',
+                why: 'Runtime wraps this object under a plural resource key such as {"Invoices":[payload]} before sending it.',
+                when: 'Fill it for create and update. Leave it empty for get_many and get_by_id.',
+                enter: 'Enter a JSON object with field names required by the selected Xero resource, such as Name for contacts or Type, Contact, and LineItems for invoices.',
+                source: 'Build it from form fields, CRM records, database rows, or a previous Function step as {{$json.xeroPayload}}.',
+                later: 'Successful create responses are normalized into {{$json.records}}, while update responses put the first returned record in {{$json.record}}.',
+                format: 'JSON object. Runtime currently requires an object value before template parsing can help.',
+                example: 'A sales workflow creates a Xero contact with {"Name":"Acme Supplies","EmailAddress":"ap@acme.example"}.',
+                empty: 'Runtime returns _error for create or update and does not call Xero.',
+                mistake: 'Pasting the whole {"Invoices":[...]} envelope; enter the single payload object and let runtime wrap it.',
+              }),
+              placeholder: '{"Name":"Acme Supplies"}',
+              example: '{"Name":"Acme Supplies"}',
+              defaultValue: '{}',
             },
             {
-              "name": "Order",
-              "internalKey": "order",
-              "type": "string",
-              "required": false,
-              "description": "Sort order",
-              "helpText": "What this field is: Sort order.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Order value.\nTip: Use {{$json.order}} when this value comes from an earlier step.",
-              "placeholder": "Enter Order"
+              name: 'Where Filter',
+              internalKey: 'where',
+              type: 'string',
+              required: false,
+              description: 'Xero WHERE filter for get_many.',
+              helpText: richFieldHelp({
+                what: 'A Xero OData-style where expression added to get_many query parameters.',
+                why: 'It narrows list results at Xero before the workflow processes them.',
+                when: 'Fill it for get_many when you only need records matching status, name, date, balance, or another supported field.',
+                enter: 'Type a valid Xero where expression such as Status=="AUTHORISED" or AmountDue>0.',
+                source: 'Use filters from the Xero Accounting API docs, a workflow setting, or a mapped expression like {{$json.xeroWhere}}.',
+                later: 'Filtered records arrive in {{$json.records}}, with {{$json.count}} showing how many were returned on that page.',
+                format: 'Xero where syntax as a plain string.',
+                example: 'An invoice reminder workflow uses Status=="AUTHORISED"&&AmountDue>0 to fetch open invoices.',
+                empty: 'Runtime sends no where parameter and Xero returns the default list page.',
+                mistake: 'Using SQL WHERE syntax or single equals instead of Xero expression syntax.',
+              }),
+              placeholder: 'Status=="AUTHORISED"',
+              example: 'Status=="AUTHORISED"',
             },
             {
-              "name": "Page",
-              "internalKey": "page",
-              "type": "number",
-              "required": false,
-              "description": "Page number",
-              "helpText": "What this field is: The Page number that tells Xero which item to use.\nWhere to find it: Open the item in Xero and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 1.\nTip: Use {{$json.page}} when an earlier Xero step provides this value.",
-              "placeholder": "1",
-              "example": "1",
-              "defaultValue": "1"
+              name: 'Order',
+              internalKey: 'order',
+              type: 'string',
+              required: false,
+              description: 'Sort order for get_many results.',
+              helpText: richFieldHelp({
+                what: 'The Xero order query parameter for list operations.',
+                why: 'It controls which records appear first when Xero returns a page of up to 100 records.',
+                when: 'Fill it for get_many when downstream steps depend on newest, oldest, alphabetical, or amount ordering.',
+                enter: 'Type a field and direction such as Date DESC, Name ASC, or UpdatedDateUTC DESC.',
+                source: 'Choose field names supported by the selected Xero resource or map a prepared value from {{$json.xeroOrder}}.',
+                later: 'The sorted page arrives in {{$json.records}} and pagination metadata arrives in {{$json.pagination}}.',
+                format: 'Plain text field order accepted by Xero.',
+                example: 'A collections workflow uses DueDate ASC so the oldest unpaid invoices are processed first.',
+                empty: 'Runtime sends no order parameter and Xero uses its default ordering.',
+                mistake: 'Sorting on a display label instead of the exact Xero API field name.',
+              }),
+              placeholder: 'Date DESC',
+              example: 'Date DESC',
             },
             {
-              "name": "Modified After",
-              "internalKey": "modifiedAfter",
-              "type": "string",
-              "required": false,
-              "description": "ISO date — only records modified after",
-              "helpText": "What this field is: The date or time value for ISO date — only records modified after.\nHow to fill it: Use a clear date such as 2026-06-01, or a full date and time with timezone when the service needs exact timing.\nExample: 2026-06-01T09:00:00+05:30.\nTip: Use {{$json.modifiedAfter}} when an earlier calendar, form, or database step provides the date.",
-              "placeholder": "Enter Modified After"
-            }
+              name: 'Page',
+              internalKey: 'page',
+              type: 'number',
+              required: false,
+              description: 'Page number for get_many results.',
+              helpText: richFieldHelp({
+                what: 'The Xero page query parameter for paginated list requests.',
+                why: 'Xero returns up to 100 records per page, and runtime reports hasMore when a page contains 100 records.',
+                when: 'Fill it for get_many when you need a page after the first one.',
+                enter: 'Type 1 for the first page, 2 for the second page, and so on.',
+                source: 'Use a loop, scheduler state, or previous output such as {{$json.nextPage}} for incremental pagination.',
+                later: 'The node reports {{$json.pagination.page}}, pageSize, and hasMore so the workflow can decide whether to request another page.',
+                format: 'Positive number. Runtime only sends page when it is greater than 1.',
+                example: 'A monthly sync stores the last requested page and resumes with page 3 after processing two full pages.',
+                empty: 'Runtime uses 1 in output metadata and sends no page parameter.',
+                mistake: 'Expecting page size control here; Xero determines the page size and this node only reports returned count.',
+              }),
+              placeholder: '1',
+              example: '1',
+              defaultValue: '1',
+            },
+            {
+              name: 'Modified After (ISO 8601)',
+              internalKey: 'modifiedAfter',
+              type: 'string',
+              required: false,
+              description: 'If-Modified-Since timestamp sent for get_many.',
+              helpText: richFieldHelp({
+                what: 'An ISO-like timestamp sent as the If-Modified-Since request header.',
+                why: 'It helps incremental sync workflows ask Xero only for records modified after a known checkpoint.',
+                when: 'Fill it for get_many syncs that run repeatedly and only need recently changed records.',
+                enter: 'Use a timestamp such as 2026-04-01T00:00:00Z.',
+                source: 'Use the last successful sync time from a database, scheduler state, or previous step as {{$json.lastSyncAt}}.',
+                later: 'Matching records arrive in {{$json.records}}, and the workflow can store the new checkpoint after success.',
+                format: 'Date-time string acceptable to Xero in the If-Modified-Since header.',
+                example: 'A daily accounting sync sends yesterday midnight UTC to pick up changed contacts and invoices.',
+                empty: 'Runtime sends no If-Modified-Since header and Xero returns the normal list page.',
+                mistake: 'Putting this value in the where filter instead of using the dedicated Modified After field.',
+              }),
+              placeholder: '2026-04-01T00:00:00Z',
+              example: '2026-04-01T00:00:00Z',
+            },
+            {
+              name: 'Summarize Errors',
+              internalKey: 'summarizeErrors',
+              type: 'boolean',
+              required: false,
+              description: 'Request summarized validation errors from Xero.',
+              helpText: richFieldHelp({
+                what: 'A boolean that enables Xero summarized validation errors for supported requests.',
+                why: 'Summaries make validation failures easier to display and troubleshoot when create or update sends many line items.',
+                when: 'Leave it enabled unless you specifically need detailed per-line error behavior from Xero.',
+                enter: 'Use true to request summarized errors, or false to omit the summarizeErrors option.',
+                source: 'Choose from your error handling preference or map a boolean setting from {{$json.summarizeXeroErrors}}.',
+                later: 'On Xero HTTP errors, validation details appear under {{$json.error.details}} when Xero returns them.',
+                format: 'Boolean true or false.',
+                example: 'An invoice import keeps this true so accountants see one combined validation summary per failed invoice.',
+                empty: 'Runtime treats it as true because only explicit false disables it.',
+                mistake: 'Expecting this field to change network errors; it only affects Xero validation error formatting.',
+              }),
+              placeholder: 'true',
+              example: 'true',
+              defaultValue: 'true',
+            },
+            {
+              name: 'Include Archived',
+              internalKey: 'includeArchived',
+              type: 'boolean',
+              required: false,
+              description: 'Include archived records in supported get_many results.',
+              helpText: richFieldHelp({
+                what: 'A boolean query option for including archived or inactive records where Xero supports it.',
+                why: 'Archived contacts or accounts are normally excluded from operational workflows but may be needed for audits.',
+                when: 'Enable it for reconciliation, migration, or audit workflows that must see inactive records.',
+                enter: 'Use true to send includeArchived=true, or false for normal active-record behavior.',
+                source: 'Choose from the workflow purpose or map a boolean setting from {{$json.includeArchived}}.',
+                later: 'Archived records appear in {{$json.records}} together with normal records when Xero supports the parameter.',
+                format: 'Boolean true or false.',
+                example: 'A year-end audit workflow enables Include Archived while exporting historical contacts.',
+                empty: 'Runtime sends no includeArchived parameter and uses normal Xero behavior.',
+                mistake: 'Assuming every resource honors this flag; support depends on the Xero endpoint.',
+              }),
+              placeholder: 'false',
+              example: 'false',
+              defaultValue: 'false',
+            },
+            {
+              name: 'Unit Decimal Places',
+              internalKey: 'unitdp',
+              type: 'number',
+              required: false,
+              description: 'Unit amount decimal places sent when not equal to 2.',
+              helpText: richFieldHelp({
+                what: 'The unitdp option controlling decimal precision for unit amounts.',
+                why: 'Xero commonly uses 2 decimal places, while some pricing workflows need 4 decimal places for precise unit amounts.',
+                when: 'Leave 2 for normal accounting and use 4 when the Xero resource needs high-precision unit pricing.',
+                enter: 'Type 2 or 4. Runtime sends unitdp only when the value is not 2.',
+                source: 'Choose from accounting policy, product pricing requirements, or a mapped setting like {{$json.unitdp}}.',
+                later: 'Precision affects how Xero interprets amounts in create/update and list responses in {{$json.records}}.',
+                format: 'Number, usually 2 or 4.',
+                example: 'A wholesale pricing workflow uses 4 so fractional unit prices are preserved on invoice lines.',
+                empty: 'Runtime uses the default 2 and does not send the query parameter.',
+                mistake: 'Using this as a currency formatter; it affects Xero API precision, not display formatting.',
+              }),
+              placeholder: '2',
+              example: '2',
+              defaultValue: '2',
+            },
           ],
-          "outputExample": {
-            "success": true,
-            "operation": "get_many",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
+          outputExample: {
+            success: true,
+            resource: 'invoices',
+            operation: 'get_many',
+            tenantId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+            record: null,
+            records: [{ InvoiceID: 'inv_1042', Status: 'AUTHORISED', AmountDue: 250 }],
+            count: 1,
+            pagination: { page: 1, pageSize: 1, hasMore: false },
+            meta: { endpoint: 'https://api.xero.com/api.xro/2.0/Invoices', rateLimitRemaining: -1 },
+            error: null,
           },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming Xero data with get many after a related upstream event is received",
-            "inputValues": {
-              "Access Token": "",
-              "Tenant Id": "abc123",
-              "Resource": "invoices",
-              "Record Id": "abc123",
-              "Payload": "{}"
+          outputDescription: xeroOutputDescription,
+          usageExample: {
+            scenario: 'Fetch authorised invoices from Xero before sending unpaid invoices to a reminder workflow.',
+            inputValues: {
+              accessToken: '{{$json.xeroAccessToken}}',
+              tenantId: '{{$json.xeroTenantId}}',
+              resource: 'invoices',
+              operation: 'get_many',
+              where: 'Status=="AUTHORISED"',
+              order: 'Date DESC',
+              page: '1',
             },
-            "expectedOutput": "Xero returns structured get many data that downstream nodes can reference with {{$json.fieldName}}."
+            expectedOutput: 'The next node can iterate {{$json.records}}, check {{$json.count}}, and inspect {{$json.error.message}} when success is false.',
           },
-          "externalDocsUrl": "https://developer.xero.com/documentation/api/accounting/overview"
+          externalDocsUrl: 'https://developer.xero.com/documentation/api/accounting/overview',
         },
-        {
-          "name": "Get by id",
-          "value": "get_by_id",
-          "description": "Get by id using the Xero node.",
-          "fields": [
-            {
-              "name": "Access Token",
-              "internalKey": "accessToken",
-              "type": "string",
-              "required": true,
-              "description": "Xero OAuth 2.0 access token",
-              "helpText": "What this field is: Xero access token, a secret password that lets CtrlChecks talk to Xero safely.\nWhere to find it: Xero developer app connection or CtrlChecks Connections.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the access token returned after Xero sign-in.\nImportant: Treat this like a bank password. Xero tokens expire; reconnect the Connection when needed.",
-              "placeholder": "token_..."
-            },
-            {
-              "name": "Tenant Id",
-              "internalKey": "tenantId",
-              "type": "string",
-              "required": true,
-              "description": "Xero tenant ID",
-              "helpText": "What this field is: The Xero tenant ID that tells Xero which item to use.\nWhere to find it: Open the item in Xero and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.tenantId}} when an earlier Xero step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Resource",
-              "internalKey": "resource",
-              "type": "select",
-              "required": true,
-              "description": "Xero resource",
-              "helpText": "What this field is: The Xero accounting entity type to query or manage.\nOptions: Contacts (customers/suppliers), Invoices (bills/sales), Items (products), Payments, Accounts (chart of accounts).\nExample: invoices to fetch unpaid invoices, contacts to look up a customer.\nTip: The resource determines which Xero API endpoint is called.",
-              "placeholder": "invoices",
-              "example": "invoices",
-              "defaultValue": "invoices",
-              "options": [
-                "Contacts",
-                "Invoices",
-                "Items",
-                "Payments",
-                "Accounts"
-              ]
-            },
-            {
-              "name": "Record Id",
-              "internalKey": "recordId",
-              "type": "string",
-              "required": false,
-              "description": "Record ID for get_by_id or update",
-              "helpText": "What this field is: The Record ID for get_by_id or update that tells Xero which item to use.\nWhere to find it: Open the item in Xero and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.recordId}} when an earlier Xero step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Payload",
-              "internalKey": "payload",
-              "type": "json",
-              "required": false,
-              "description": "Request body for create/update",
-              "helpText": "What this field is: Structured data for Request body.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Xero.\nExample: {}.\nTip: Use {{$json.payload}} when an earlier step already prepared this data.",
-              "placeholder": "{}",
-              "example": "{}",
-              "defaultValue": "{}"
-            },
-            {
-              "name": "Where",
-              "internalKey": "where",
-              "type": "string",
-              "required": false,
-              "description": "Xero WHERE filter",
-              "helpText": "What this field is: Xero WHERE filter.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Where value.\nTip: Use {{$json.where}} when this value comes from an earlier step.",
-              "placeholder": "Enter Where"
-            },
-            {
-              "name": "Order",
-              "internalKey": "order",
-              "type": "string",
-              "required": false,
-              "description": "Sort order",
-              "helpText": "What this field is: Sort order.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Order value.\nTip: Use {{$json.order}} when this value comes from an earlier step.",
-              "placeholder": "Enter Order"
-            },
-            {
-              "name": "Page",
-              "internalKey": "page",
-              "type": "number",
-              "required": false,
-              "description": "Page number",
-              "helpText": "What this field is: The Page number that tells Xero which item to use.\nWhere to find it: Open the item in Xero and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 1.\nTip: Use {{$json.page}} when an earlier Xero step provides this value.",
-              "placeholder": "1",
-              "example": "1",
-              "defaultValue": "1"
-            },
-            {
-              "name": "Modified After",
-              "internalKey": "modifiedAfter",
-              "type": "string",
-              "required": false,
-              "description": "ISO date — only records modified after",
-              "helpText": "What this field is: The date or time value for ISO date — only records modified after.\nHow to fill it: Use a clear date such as 2026-06-01, or a full date and time with timezone when the service needs exact timing.\nExample: 2026-06-01T09:00:00+05:30.\nTip: Use {{$json.modifiedAfter}} when an earlier calendar, form, or database step provides the date.",
-              "placeholder": "Enter Modified After"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "get_by_id",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming Xero data with get by id after a related upstream event is received",
-            "inputValues": {
-              "Access Token": "",
-              "Tenant Id": "abc123",
-              "Resource": "invoices",
-              "Record Id": "abc123",
-              "Payload": "{}"
-            },
-            "expectedOutput": "Xero returns structured get by id data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://developer.xero.com/documentation/api/accounting/overview"
-        },
-        {
-          "name": "Create",
-          "value": "create",
-          "description": "Create using the Xero node.",
-          "fields": [
-            {
-              "name": "Access Token",
-              "internalKey": "accessToken",
-              "type": "string",
-              "required": true,
-              "description": "Xero OAuth 2.0 access token",
-              "helpText": "What this field is: Xero access token, a secret password that lets CtrlChecks talk to Xero safely.\nWhere to find it: Xero developer app connection or CtrlChecks Connections.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the access token returned after Xero sign-in.\nImportant: Treat this like a bank password. Xero tokens expire; reconnect the Connection when needed.",
-              "placeholder": "token_..."
-            },
-            {
-              "name": "Tenant Id",
-              "internalKey": "tenantId",
-              "type": "string",
-              "required": true,
-              "description": "Xero tenant ID",
-              "helpText": "What this field is: The Xero tenant ID that tells Xero which item to use.\nWhere to find it: Open the item in Xero and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.tenantId}} when an earlier Xero step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Resource",
-              "internalKey": "resource",
-              "type": "select",
-              "required": true,
-              "description": "Xero resource",
-              "helpText": "What this field is: The Xero accounting entity type to query or manage.\nOptions: Contacts (customers/suppliers), Invoices (bills/sales), Items (products), Payments, Accounts (chart of accounts).\nExample: invoices to fetch unpaid invoices, contacts to look up a customer.\nTip: The resource determines which Xero API endpoint is called.",
-              "placeholder": "invoices",
-              "example": "invoices",
-              "defaultValue": "invoices",
-              "options": [
-                "Contacts",
-                "Invoices",
-                "Items",
-                "Payments",
-                "Accounts"
-              ]
-            },
-            {
-              "name": "Record Id",
-              "internalKey": "recordId",
-              "type": "string",
-              "required": false,
-              "description": "Record ID for get_by_id or update",
-              "helpText": "What this field is: The Record ID for get_by_id or update that tells Xero which item to use.\nWhere to find it: Open the item in Xero and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.recordId}} when an earlier Xero step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Payload",
-              "internalKey": "payload",
-              "type": "json",
-              "required": false,
-              "description": "Request body for create/update",
-              "helpText": "What this field is: Structured data for Request body.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Xero.\nExample: {}.\nTip: Use {{$json.payload}} when an earlier step already prepared this data.",
-              "placeholder": "{}",
-              "example": "{}",
-              "defaultValue": "{}"
-            },
-            {
-              "name": "Where",
-              "internalKey": "where",
-              "type": "string",
-              "required": false,
-              "description": "Xero WHERE filter",
-              "helpText": "What this field is: Xero WHERE filter.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Where value.\nTip: Use {{$json.where}} when this value comes from an earlier step.",
-              "placeholder": "Enter Where"
-            },
-            {
-              "name": "Order",
-              "internalKey": "order",
-              "type": "string",
-              "required": false,
-              "description": "Sort order",
-              "helpText": "What this field is: Sort order.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Order value.\nTip: Use {{$json.order}} when this value comes from an earlier step.",
-              "placeholder": "Enter Order"
-            },
-            {
-              "name": "Page",
-              "internalKey": "page",
-              "type": "number",
-              "required": false,
-              "description": "Page number",
-              "helpText": "What this field is: The Page number that tells Xero which item to use.\nWhere to find it: Open the item in Xero and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 1.\nTip: Use {{$json.page}} when an earlier Xero step provides this value.",
-              "placeholder": "1",
-              "example": "1",
-              "defaultValue": "1"
-            },
-            {
-              "name": "Modified After",
-              "internalKey": "modifiedAfter",
-              "type": "string",
-              "required": false,
-              "description": "ISO date — only records modified after",
-              "helpText": "What this field is: The date or time value for ISO date — only records modified after.\nHow to fill it: Use a clear date such as 2026-06-01, or a full date and time with timezone when the service needs exact timing.\nExample: 2026-06-01T09:00:00+05:30.\nTip: Use {{$json.modifiedAfter}} when an earlier calendar, form, or database step provides the date.",
-              "placeholder": "Enter Modified After"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "create",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming Xero data with create after a related upstream event is received",
-            "inputValues": {
-              "Access Token": "",
-              "Tenant Id": "abc123",
-              "Resource": "invoices",
-              "Record Id": "abc123",
-              "Payload": "{}"
-            },
-            "expectedOutput": "Xero returns structured create data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://developer.xero.com/documentation/api/accounting/overview"
-        },
-        {
-          "name": "Update",
-          "value": "update",
-          "description": "Update using the Xero node.",
-          "fields": [
-            {
-              "name": "Access Token",
-              "internalKey": "accessToken",
-              "type": "string",
-              "required": true,
-              "description": "Xero OAuth 2.0 access token",
-              "helpText": "What this field is: Xero access token, a secret password that lets CtrlChecks talk to Xero safely.\nWhere to find it: Xero developer app connection or CtrlChecks Connections.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the access token returned after Xero sign-in.\nImportant: Treat this like a bank password. Xero tokens expire; reconnect the Connection when needed.",
-              "placeholder": "token_..."
-            },
-            {
-              "name": "Tenant Id",
-              "internalKey": "tenantId",
-              "type": "string",
-              "required": true,
-              "description": "Xero tenant ID",
-              "helpText": "What this field is: The Xero tenant ID that tells Xero which item to use.\nWhere to find it: Open the item in Xero and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.tenantId}} when an earlier Xero step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Resource",
-              "internalKey": "resource",
-              "type": "select",
-              "required": true,
-              "description": "Xero resource",
-              "helpText": "What this field is: The Xero accounting entity type to query or manage.\nOptions: Contacts (customers/suppliers), Invoices (bills/sales), Items (products), Payments, Accounts (chart of accounts).\nExample: invoices to fetch unpaid invoices, contacts to look up a customer.\nTip: The resource determines which Xero API endpoint is called.",
-              "placeholder": "invoices",
-              "example": "invoices",
-              "defaultValue": "invoices",
-              "options": [
-                "Contacts",
-                "Invoices",
-                "Items",
-                "Payments",
-                "Accounts"
-              ]
-            },
-            {
-              "name": "Record Id",
-              "internalKey": "recordId",
-              "type": "string",
-              "required": false,
-              "description": "Record ID for get_by_id or update",
-              "helpText": "What this field is: The Record ID for get_by_id or update that tells Xero which item to use.\nWhere to find it: Open the item in Xero and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.recordId}} when an earlier Xero step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Payload",
-              "internalKey": "payload",
-              "type": "json",
-              "required": false,
-              "description": "Request body for create/update",
-              "helpText": "What this field is: Structured data for Request body.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Xero.\nExample: {}.\nTip: Use {{$json.payload}} when an earlier step already prepared this data.",
-              "placeholder": "{}",
-              "example": "{}",
-              "defaultValue": "{}"
-            },
-            {
-              "name": "Where",
-              "internalKey": "where",
-              "type": "string",
-              "required": false,
-              "description": "Xero WHERE filter",
-              "helpText": "What this field is: Xero WHERE filter.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Where value.\nTip: Use {{$json.where}} when this value comes from an earlier step.",
-              "placeholder": "Enter Where"
-            },
-            {
-              "name": "Order",
-              "internalKey": "order",
-              "type": "string",
-              "required": false,
-              "description": "Sort order",
-              "helpText": "What this field is: Sort order.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Order value.\nTip: Use {{$json.order}} when this value comes from an earlier step.",
-              "placeholder": "Enter Order"
-            },
-            {
-              "name": "Page",
-              "internalKey": "page",
-              "type": "number",
-              "required": false,
-              "description": "Page number",
-              "helpText": "What this field is: The Page number that tells Xero which item to use.\nWhere to find it: Open the item in Xero and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 1.\nTip: Use {{$json.page}} when an earlier Xero step provides this value.",
-              "placeholder": "1",
-              "example": "1",
-              "defaultValue": "1"
-            },
-            {
-              "name": "Modified After",
-              "internalKey": "modifiedAfter",
-              "type": "string",
-              "required": false,
-              "description": "ISO date — only records modified after",
-              "helpText": "What this field is: The date or time value for ISO date — only records modified after.\nHow to fill it: Use a clear date such as 2026-06-01, or a full date and time with timezone when the service needs exact timing.\nExample: 2026-06-01T09:00:00+05:30.\nTip: Use {{$json.modifiedAfter}} when an earlier calendar, form, or database step provides the date.",
-              "placeholder": "Enter Modified After"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "update",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming Xero data with update after a related upstream event is received",
-            "inputValues": {
-              "Access Token": "",
-              "Tenant Id": "abc123",
-              "Resource": "invoices",
-              "Record Id": "abc123",
-              "Payload": "{}"
-            },
-            "expectedOutput": "Xero returns structured update data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://developer.xero.com/documentation/api/accounting/overview"
-        }
-      ]
-    }
+      ],
+    },
   ],
-  "commonErrors": [
+  commonErrors: [
     {
-      "error": "Authentication failed",
-      "cause": "The saved credential, token, API key, or OAuth grant is missing, expired, or lacks the required scope.",
-      "fix": "Reconnect the service in CtrlChecks → Connections, then re-run the Xero node."
+      error: 'Xero node: accessToken is required',
+      cause: 'The node ran without a resolved OAuth access token.',
+      fix: 'Reconnect Xero or map a current access token into the Access Token field before running.',
     },
     {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
+      error: 'Xero node: tenantId is required',
+      cause: 'The Xero organisation tenant ID was blank.',
+      fix: 'Call https://api.xero.com/connections after OAuth authorization and map the correct tenantId.',
     },
     {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
+      error: 'Xero node: recordId is required for get_by_id',
+      cause: 'The Get By ID operation needs a Xero GUID appended to the resource path.',
+      fix: 'Map the correct InvoiceID, ContactID, ItemID, PaymentID, or AccountID into Record ID.',
+    },
+    {
+      error: 'Xero node: payload is required for create',
+      cause: 'Create and update require a JSON object payload, and runtime rejects blank or non-object values.',
+      fix: 'Provide one record object with the field names expected by the selected Xero resource.',
+    },
+    {
+      error: 'Xero HTTP errors return success false instead of _error',
+      cause: 'When Xero responds with a non-2xx HTTP status, runtime returns success: false, error details, record: null, and records: [].',
+      fix: 'Branch on {{$json.success}} and read {{$json.error.message}} instead of only checking {{$json._error}}.',
+    },
   ],
-  "relatedNodes": []
+  relatedNodes: ['http_request', 'quickbooks', 'stripe', 'paypal'],
 };

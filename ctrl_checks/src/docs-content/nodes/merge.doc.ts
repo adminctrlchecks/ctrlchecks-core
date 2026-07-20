@@ -58,10 +58,8 @@ Common mistake: Using overwrite after two branches both output status. Rename fi
               status: 'approved',
               reviewer: 'finance@example.com',
             },
-            mergeMode: 'deep_merge',
-            sourceCount: 2,
           },
-          outputDescription: 'The output is one combined object. In overwrite mode, object fields are combined and later branch values win when keys collide. In append mode, branch outputs are collected into items. In deep_merge mode, nested object fields are recursively combined. Backend inventory exposes output, data, and result-compatible outputs, and runtime metadata can include mergeMode and sourceCount.',
+          outputDescription: 'The output is one combined object with no extra wrapper keys — there is no mergeMode or sourceCount field added anywhere. In overwrite mode (the default, and also what happens if Mode is left blank or set to an unrecognized value), the workflow engine has already combined every incoming branch into one flat object before this node runs, and later branch values win when keys collide. In append mode, this node looks up its own incoming connections and returns only {{$json.items}}, an array holding each branch\'s full output object — no other top-level fields survive in append mode. In deep_merge mode, nested object fields are recursively combined across every incoming branch, but arrays and non-object values at the same key are replaced by the later branch\'s value rather than merged.',
           usageExample: {
             scenario: 'Rejoin an approval branch and a customer-enrichment branch before sending one summary email.',
             inputValues: {

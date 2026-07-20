@@ -45,7 +45,6 @@ describe('credential-scope-registry', () => {
       provider: 'google',
       requiredScopes: expect.arrayContaining([
         'https://www.googleapis.com/auth/gmail.send',
-        'https://www.googleapis.com/auth/gmail.readonly',
       ]),
     });
 

@@ -8,6 +8,7 @@ import { getDbClient } from '../../core/database/aws-db-client';
 import { getExecutionStateManager } from './execution-state-manager';
 import { VisualizationService } from './visualization-service';
 import { WorkflowOrchestrator } from './workflow-orchestrator';
+import { normalizeExecutionStatus, normalizeExecutionTrigger } from '../../core/execution/execution-db-enums';
 
 interface WorkflowNode {
   id: string;
@@ -115,7 +116,7 @@ export async function enhancedExecuteWorkflow(
 
       await db
         .from('executions')
-        .update({ status: 'running' })
+        .update({ status: normalizeExecutionStatus('running') })
         .eq('id', executionId);
     } else {
       // Create new execution
@@ -125,8 +126,8 @@ export async function enhancedExecuteWorkflow(
         .insert({
           workflow_id: workflowId,
           user_id: workflow.user_id,
-          status: 'running',
-          trigger: 'manual',
+          status: normalizeExecutionStatus('running'),
+          trigger: normalizeExecutionTrigger('manual'),
           input,
           logs: [],
           started_at: startedAt,
@@ -180,7 +181,7 @@ export async function enhancedExecuteWorkflow(
     await db
       .from('executions')
       .update({
-        status: result.status,
+        status: normalizeExecutionStatus(result.status),
         output: result.output,
         logs: result.logs,
         finished_at: finishedAt,
@@ -220,7 +221,7 @@ export async function enhancedExecuteWorkflow(
       const { error: updateError } = await db
         .from('executions')
         .update({
-          status: 'failed',
+          status: normalizeExecutionStatus('failed'),
           error: errorMessage,
           finished_at: new Date().toISOString(),
         })

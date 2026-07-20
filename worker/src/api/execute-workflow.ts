@@ -33,6 +33,7 @@ import { evaluateCondition, Condition } from '../core/execution/typed-condition-
 import { normalizeNodeOutput as normalizeNodeOutputContract } from '../core/execution/node-output-contract';
 import { normalizeLegacyWrappedNodeOutput } from '../core/execution/legacy-node-output-normalize';
 import { executeLogOutputWithCache } from '../core/execution/nodes/log-output-executor';
+import { readBinaryFileAsset, writeBinaryFileAsset } from '../services/files/binary-file-service';
 import { resolveTypedValue, resolveWithSchema } from '../core/execution/typed-value-resolver';
 import { evaluateSwitchRoutingExpression } from '../core/utils/switch-expression-eval';
 import { getNestedValue } from '../core/utils/object-utils';
@@ -52,6 +53,8 @@ import { connectionService } from '../credentials-system/connection-service';
 import { stripSystemKeys, stripRoutingMeta } from '../core/execution/system-key-filter';
 import { geminiWalletService } from '../services/ai/gemini-wallet-service';
 import { logger } from '../core/logger';
+import { normalizeExecutionStatus, normalizeExecutionTrigger } from '../core/execution/execution-db-enums';
+import { collectInternalExecutionHeaders, getInternalExecutionSource } from '../core/execution/internal-execution-auth';
 
 const EXECUTION_RUNTIME_MARKER = 'runtime-marker-2026-03-20-v1';
 const configuredResumePreflightTimeoutMs = Number(process.env.EXECUTION_RESUME_PREFLIGHT_TIMEOUT_MS || 15000);
@@ -3027,6 +3030,21 @@ export async function executeNodeLegacy(
       break;
     }
 
+    case 'telegram_trigger': {
+      result = {
+        chatId: inputObj.chatId ?? null,
+        messageId: inputObj.messageId ?? null,
+        text: inputObj.text ?? '',
+        username: inputObj.username ?? '',
+        firstName: inputObj.firstName ?? '',
+        lastName: inputObj.lastName ?? '',
+        userId: inputObj.userId ?? null,
+        updateType: inputObj.updateType ?? 'unknown',
+        raw: inputObj.raw ?? inputObj,
+      };
+      break;
+    }
+
     case 'webhook':
     case 'webhook_trigger_response': {
       // ✅ OPTIMIZED: Webhook trigger - return clean output with just the payload
@@ -3695,7 +3713,7 @@ export async function executeNodeLegacy(
           return category.toLowerCase() === 'triggers' || 
                  category.toLowerCase() === 'trigger' ||
                  nodeType.includes('trigger') ||
-                 ['manual_trigger', 'webhook', 'schedule', 'interval', 'form', 'chat_trigger', 'workflow_trigger'].includes(nodeType);
+                 ['manual_trigger', 'webhook', 'schedule', 'interval', 'form', 'chat_trigger', 'telegram_trigger', 'workflow_trigger'].includes(nodeType);
         });
 
         if (!triggerNode) {
@@ -4139,25 +4157,19 @@ export async function executeNodeLegacy(
       // ✅ Read Binary File node
       // Config: { filePath: string }
       // Output: { filePath, dataBase64, sizeBytes }
-      const filePath = getStringProperty(config, 'filePath', '');
-      if (!filePath) {
-        return { ...inputObj, _error: 'read_binary_file: filePath is required' };
-      }
-
       try {
-        const fs = await import('fs/promises');
-        const buf = await fs.readFile(filePath);
-        return {
-          ...inputObj,
-          filePath,
-          dataBase64: Buffer.from(buf).toString('base64'),
-          sizeBytes: buf.length,
-        };
+        const result = await readBinaryFileAsset(config, {
+          db,
+          workflowId,
+          userId,
+          currentUserId,
+          nodeId: node.id,
+        });
+        return { ...inputObj, ...result };
       } catch (e) {
         return {
           ...inputObj,
-          _error: `read_binary_file: failed to read "${filePath}": ${e instanceof Error ? e.message : String(e)}`,
-          filePath,
+          _error: `read_binary_file: ${e instanceof Error ? e.message : String(e)}`,
         };
       }
     }
@@ -4165,30 +4177,19 @@ export async function executeNodeLegacy(
     case 'write_binary_file': {
       // ✅ Write Binary File node
       // Config: { filePath: string, data: base64 string }
-      const filePath = getStringProperty(config, 'filePath', '');
-      const data = getStringProperty(config, 'data', '');
-      if (!filePath) {
-        return { ...inputObj, _error: 'write_binary_file: filePath is required' };
-      }
-      if (!data) {
-        return { ...inputObj, _error: 'write_binary_file: data (base64) is required', filePath };
-      }
-
       try {
-        const fs = await import('fs/promises');
-        const buf = Buffer.from(data, 'base64');
-        await fs.writeFile(filePath, buf);
-        return {
-          ...inputObj,
-          filePath,
-          sizeBytes: buf.length,
-          written: true,
-        };
+        const result = await writeBinaryFileAsset(config, {
+          db,
+          workflowId,
+          userId,
+          currentUserId,
+          nodeId: node.id,
+        });
+        return { ...inputObj, ...result, written: true };
       } catch (e) {
         return {
           ...inputObj,
-          _error: `write_binary_file: failed to write "${filePath}": ${e instanceof Error ? e.message : String(e)}`,
-          filePath,
+          _error: `write_binary_file: ${e instanceof Error ? e.message : String(e)}`,
         };
       }
     }
@@ -5208,26 +5209,46 @@ export async function executeNodeLegacy(
       // ✅ Shopify Admin API (minimal): list/get/create/update/delete for products/orders/customers
       const resource = (getStringProperty(config, 'resource', 'product') || 'product').toLowerCase();
       const operation = (getStringProperty(config, 'operation', 'get') || 'get').toLowerCase();
-      const shopDomain = getStringProperty(config, 'shopDomain', '').trim();
+      let shopDomain = getStringProperty(config, 'shopDomain', '').trim();
       const execContext = createTypedContext();
 
       let token = (getStringProperty(config, 'apiKey', '') || getStringProperty(config, 'accessToken', '') || '').trim();
-      if (!token) {
+      if (!token || !shopDomain) {
         try {
           const { retrieveCredential } = await import('../core/utils/credential-retriever');
           const userIdsToTry: string[] = [];
           if (userId) userIdsToTry.push(userId);
           if (currentUserId && currentUserId !== userId) userIdsToTry.push(currentUserId);
           for (const uid of userIdsToTry) {
-            const found = await retrieveCredential({ userId: uid, workflowId, nodeId: node.id, nodeType: type }, 'shopify');
-            if (found) { token = found; break; }
+            for (const credentialKey of ['shopify_api_key', 'shopify']) {
+              const found = await retrieveCredential({ userId: uid, workflowId, nodeId: node.id, nodeType: type }, credentialKey);
+              if (!found) continue;
+              const trimmed = found.trim();
+              if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+                try {
+                  const parsed = JSON.parse(trimmed) as any;
+                  shopDomain = shopDomain || String(parsed.storeUrl || parsed.shopDomain || parsed.shop || parsed.domain || '').trim();
+                  token = token || String(parsed.token || parsed.apiKey || parsed.accessToken || parsed.access_token || parsed.value || '').trim();
+                } catch {
+                  token = token || trimmed;
+                }
+              } else {
+                token = token || trimmed;
+              }
+              if (shopDomain && token) break;
+            }
+            if (shopDomain && token) break;
           }
         } catch {
           // ignore
         }
       }
 
-      if (!shopDomain) return { ...inputObj, _error: 'Shopify: shopDomain is required (e.g., my-store.myshopify.com)' };
+      shopDomain = shopDomain.replace(/^https?:\/\//i, '').replace(/\/admin.*$/i, '').replace(/\/+$/g, '');
+      if (shopDomain && !shopDomain.includes('.')) shopDomain = `${shopDomain}.myshopify.com`;
+      token = token.replace(/^Bearer\s+/i, '').trim();
+
+      if (!shopDomain) return { ...inputObj, _error: 'Shopify: shopDomain is required (e.g., my-store.myshopify.com or saved in the Shopify connection)' };
       if (!token) return { ...inputObj, _error: 'Shopify: access token not found. Provide apiKey or vault credential "shopify".' };
 
       const base = `https://${shopDomain}/admin/api/2024-04`;
@@ -6987,6 +7008,20 @@ export async function executeNodeLegacy(
       // ✅ OPTIMIZED: Form trigger - return only the data object (form field values)
       // This matches the Form node implementation - return clean form data
       return inputObj.data || {};
+    }
+
+    case 'telegram_trigger': {
+      return {
+        chatId: inputObj.chatId ?? null,
+        messageId: inputObj.messageId ?? null,
+        text: inputObj.text ?? '',
+        username: inputObj.username ?? '',
+        firstName: inputObj.firstName ?? '',
+        lastName: inputObj.lastName ?? '',
+        userId: inputObj.userId ?? null,
+        updateType: inputObj.updateType ?? 'unknown',
+        raw: inputObj.raw ?? inputObj,
+      };
     }
 
     case 'workflow_trigger': {
@@ -13146,6 +13181,7 @@ export async function executeNodeLegacy(
       const username = getStringProperty(config, 'username', 'CtrlChecks Bot');
       const iconEmoji = getStringProperty(config, 'iconEmoji', ':zap:');
       const message = getStringProperty(config, 'message', '') || getStringProperty(config, 'text', '');
+      const threadTs = getStringProperty(config, 'threadTs', '') || getStringProperty(config, 'thread_ts', '');
       const blocksJson = getStringProperty(config, 'blocks', '[]');
 
       if (!webhookUrl) {
@@ -13193,6 +13229,9 @@ export async function executeNodeLegacy(
       const resolvedIconEmoji = typeof resolveWithSchema(iconEmoji, execContext, 'string') === 'string'
         ? resolveWithSchema(iconEmoji, execContext, 'string') as string
         : String(resolveTypedValue(iconEmoji, execContext));
+      const resolvedThreadTs = threadTs ? (typeof resolveWithSchema(threadTs, execContext, 'string') === 'string'
+        ? resolveWithSchema(threadTs, execContext, 'string') as string
+        : String(resolveTypedValue(threadTs, execContext))) : '';
 
       // Parse blocks if provided - preserve structure
       let blocks: any[] = [];
@@ -13234,6 +13273,9 @@ export async function executeNodeLegacy(
         if (blocks.length > 0) {
           payload.blocks = blocks;
         }
+        if (resolvedThreadTs) {
+          payload.thread_ts = resolvedThreadTs;
+        }
 
         if (botToken && !webhookUrl) {
           if (!resolvedChannel) {
@@ -13270,6 +13312,7 @@ export async function executeNodeLegacy(
             ok: true,
             channel: slackResult?.channel || resolvedChannel,
             ts: slackResult?.ts,
+            threadTs: resolvedThreadTs || slackResult?.message?.thread_ts,
             message: resolvedMessage || 'Message sent successfully',
           };
         }
@@ -13538,6 +13581,9 @@ export async function executeNodeLegacy(
       // Discord bot node: Bot Token credential + channelId.
       const channelId = getStringProperty(config, 'channelId', '');
       const message = getStringProperty(config, 'message', '');
+      const interactionToken = getStringProperty(config, 'interactionToken', '') || getStringProperty(config, 'token', '');
+      const applicationId = getStringProperty(config, 'applicationId', '');
+      const replyToMessageId = getStringProperty(config, 'replyToMessageId', '') || getStringProperty(config, 'messageId', '');
       if (!message) {
         return { ...inputObj, _error: 'Discord: message is required' };
       }
@@ -13551,6 +13597,39 @@ export async function executeNodeLegacy(
       const resolvedMessage = typeof resolveWithSchema(message, execContext, 'string') === 'string'
         ? (resolveWithSchema(message, execContext, 'string') as string)
         : String(resolveTypedValue(message, execContext));
+      const resolvedInteractionToken = interactionToken
+        ? (typeof resolveWithSchema(interactionToken, execContext, 'string') === 'string'
+            ? (resolveWithSchema(interactionToken, execContext, 'string') as string)
+            : String(resolveTypedValue(interactionToken, execContext)))
+        : String((inputObj as any).interactionToken || '');
+      const resolvedApplicationId = applicationId
+        ? (typeof resolveWithSchema(applicationId, execContext, 'string') === 'string'
+            ? (resolveWithSchema(applicationId, execContext, 'string') as string)
+            : String(resolveTypedValue(applicationId, execContext)))
+        : String((inputObj as any).applicationId || '');
+      const resolvedReplyToMessageId = replyToMessageId
+        ? (typeof resolveWithSchema(replyToMessageId, execContext, 'string') === 'string'
+            ? (resolveWithSchema(replyToMessageId, execContext, 'string') as string)
+            : String(resolveTypedValue(replyToMessageId, execContext)))
+        : String((inputObj as any).messageId || '');
+
+      if (resolvedInteractionToken && resolvedApplicationId) {
+        try {
+          const resp = await fetch(`https://discord.com/api/v10/webhooks/${encodeURIComponent(resolvedApplicationId)}/${encodeURIComponent(resolvedInteractionToken)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: resolvedMessage }),
+          });
+          const data = await resp.json().catch(() => null);
+          if (!resp.ok) {
+            return { ...inputObj, _error: `Discord interaction reply failed (${resp.status})`, _errorDetails: data };
+          }
+          return { ...inputObj, success: true, discord: data, interactionReply: true };
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          return { ...inputObj, _error: `Discord interaction reply error: ${msg}` };
+        }
+      }
 
       // Bot token: strip "Bot " prefix if already present (prevents double-prefix 401)
       let rawBotToken = getStringProperty(config, 'botToken', '') || getStringProperty(config, 'token', '');
@@ -13579,7 +13658,10 @@ export async function executeNodeLegacy(
               'Authorization': `Bot ${botToken}`,
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ content: resolvedMessage }),
+            body: JSON.stringify({
+              content: resolvedMessage,
+              ...(resolvedReplyToMessageId ? { message_reference: { message_id: resolvedReplyToMessageId } } : {}),
+            }),
           });
           const data = await resp.json().catch(() => null);
           if (!resp.ok) {
@@ -13758,6 +13840,11 @@ export async function executeNodeLegacy(
       // Microsoft Teams - send message via incoming webhook URL (recommended)
       let webhookUrl = getStringProperty(config, 'webhookUrl', '') || getStringProperty(config, 'webhook_url', '');
       const message = getStringProperty(config, 'message', '');
+      const serviceUrl = getStringProperty(config, 'serviceUrl', '');
+      const conversationId = getStringProperty(config, 'conversationId', '');
+      const replyToId = getStringProperty(config, 'replyToId', '') || getStringProperty(config, 'activityId', '');
+      let appId = getStringProperty(config, 'appId', '') || getStringProperty(config, 'clientId', '');
+      let appPassword = getStringProperty(config, 'appPassword', '') || getStringProperty(config, 'clientSecret', '');
 
       if (!webhookUrl) {
         const stored = await retrieveDashboardCredential({
@@ -13772,8 +13859,22 @@ export async function executeNodeLegacy(
         webhookUrl = parsed.webhookUrl || parsed.url || parsed.value || stored || '';
       }
 
-      if (!webhookUrl || !message) {
-        return { ...inputObj, _error: 'Teams: webhookUrl and message are required' };
+      if (!appId || !appPassword) {
+        const stored = await retrieveDashboardCredential({
+          userId,
+          currentUserId,
+          workflowId,
+          nodeId: node.id,
+          nodeType: type,
+          key: 'microsoft_teams_bot',
+        });
+        const parsed = parseCredentialValue(stored);
+        appId = appId || parsed.appId || parsed.clientId || parsed.microsoftAppId || '';
+        appPassword = appPassword || parsed.appPassword || parsed.clientSecret || parsed.microsoftAppPassword || parsed.secret || '';
+      }
+
+      if (!message) {
+        return { ...inputObj, _error: 'Teams: message is required' };
       }
 
       const execContext = createTypedContext();
@@ -13783,6 +13884,70 @@ export async function executeNodeLegacy(
       const resolvedMessage = typeof resolveWithSchema(message, execContext, 'string') === 'string'
         ? (resolveWithSchema(message, execContext, 'string') as string)
         : String(resolveTypedValue(message, execContext));
+      const resolvedServiceUrl = serviceUrl
+        ? (typeof resolveWithSchema(serviceUrl, execContext, 'string') === 'string'
+            ? (resolveWithSchema(serviceUrl, execContext, 'string') as string)
+            : String(resolveTypedValue(serviceUrl, execContext)))
+        : String((inputObj as any).serviceUrl || '');
+      const resolvedConversationId = conversationId
+        ? (typeof resolveWithSchema(conversationId, execContext, 'string') === 'string'
+            ? (resolveWithSchema(conversationId, execContext, 'string') as string)
+            : String(resolveTypedValue(conversationId, execContext)))
+        : String((inputObj as any).conversationId || '');
+      const resolvedReplyToId = replyToId
+        ? (typeof resolveWithSchema(replyToId, execContext, 'string') === 'string'
+            ? (resolveWithSchema(replyToId, execContext, 'string') as string)
+            : String(resolveTypedValue(replyToId, execContext)))
+        : String((inputObj as any).replyToId || (inputObj as any).activityId || '');
+
+      if (resolvedServiceUrl && resolvedConversationId && appId && appPassword) {
+        try {
+          const tokenResp = await fetch('https://login.microsoftonline.com/botframework.com/oauth2/v2.0/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              grant_type: 'client_credentials',
+              client_id: appId,
+              client_secret: appPassword,
+              scope: 'https://api.botframework.com/.default',
+            }).toString(),
+          });
+          const tokenData: any = await tokenResp.json().catch(() => null);
+          if (!tokenResp.ok || !tokenData?.access_token) {
+            return { ...inputObj, _error: `Teams bot token failed (${tokenResp.status})`, _errorDetails: tokenData };
+          }
+          const base = resolvedServiceUrl.replace(/\/+$/, '');
+          if (!/^https:\/\/[^/]+/i.test(base)) {
+            return { ...inputObj, _error: 'Teams: serviceUrl must be an HTTPS Bot Framework service URL.' };
+          }
+          const replyPath = resolvedReplyToId
+            ? `/v3/conversations/${encodeURIComponent(resolvedConversationId)}/activities/${encodeURIComponent(resolvedReplyToId)}`
+            : `/v3/conversations/${encodeURIComponent(resolvedConversationId)}/activities`;
+          const resp = await fetch(`${base}${replyPath}`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${tokenData.access_token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              type: 'message',
+              text: resolvedMessage,
+            }),
+          });
+          const data = await resp.json().catch(async () => ({ text: await resp.text().catch(() => '') }));
+          if (!resp.ok) {
+            return { ...inputObj, _error: `Teams bot reply failed (${resp.status})`, _errorDetails: data };
+          }
+          return { ...inputObj, success: true, teams: data, botReply: true };
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          return { ...inputObj, _error: `Teams bot reply error: ${msg}` };
+        }
+      }
+
+      if (!webhookUrl) {
+        return { ...inputObj, _error: 'Teams: provide webhookUrl, or use serviceUrl/conversationId plus a Microsoft Teams Bot connection for trigger replies.' };
+      }
 
       try {
         const resp = await fetch(resolvedWebhookUrl, {
@@ -16102,9 +16267,24 @@ export async function executeNodeLegacy(
 
     case 'telegram': {
       // Telegram node - send messages via Telegram Bot API
+      const rawOperation = getStringProperty(config, 'operation', '');
       const messageType = getStringProperty(config, 'messageType', 'text').toLowerCase();
-      const chatId = getStringProperty(config, 'chatId', '');
-      const message = getStringProperty(config, 'message', '');
+      const operation = (rawOperation || (
+        messageType === 'photo' ? 'send_photo'
+        : messageType === 'edit' ? 'edit_message'
+        : 'send_message'
+      )).toLowerCase();
+      const chatId =
+        getStringProperty(config, 'chatId', '') ||
+        getStringProperty(inputObj, 'chatId', '');
+      const message =
+        getStringProperty(config, 'text', '') ||
+        getStringProperty(config, 'message', '') ||
+        getStringProperty(inputObj, 'reply', '') ||
+        getStringProperty(inputObj, 'aiResponse', '') ||
+        getStringProperty(inputObj, 'response', '') ||
+        getStringProperty(inputObj, 'message', '') ||
+        getStringProperty(inputObj, 'text', '');
       const rawParseMode = getStringProperty(config, 'parseMode', 'HTML');
       const parseMode = rawParseMode.toLowerCase() === 'none' ? undefined : rawParseMode;
       const disableWebPagePreview = !!(config as any).disableWebPagePreview;
@@ -16112,6 +16292,7 @@ export async function executeNodeLegacy(
       const caption = getStringProperty(config, 'caption', '');
       const replyToMessageId = (config as any).replyToMessageId;
       const replyMarkup = (config as any).replyMarkup;
+      const editMessageId = (config as any).messageId || (config as any).editMessageId;
       const disableNotification = !!(config as any).disableNotification;
       const protectContent = !!(config as any).protectContent;
       const allowSendingWithoutReply = !!(config as any).allowSendingWithoutReply;
@@ -16122,7 +16303,15 @@ export async function executeNodeLegacy(
         if (allowSendingWithoutReply) optionalPayloadFields.allow_sending_without_reply = true;
       }
       if (replyMarkup !== undefined && replyMarkup !== null && replyMarkup !== '') {
-        optionalPayloadFields.reply_markup = replyMarkup;
+        if (typeof replyMarkup === 'string') {
+          try {
+            optionalPayloadFields.reply_markup = JSON.parse(replyMarkup);
+          } catch {
+            optionalPayloadFields.reply_markup = replyMarkup;
+          }
+        } else {
+          optionalPayloadFields.reply_markup = replyMarkup;
+        }
       }
       if (disableNotification) optionalPayloadFields.disable_notification = true;
       if (protectContent) optionalPayloadFields.protect_content = true;
@@ -16154,6 +16343,26 @@ export async function executeNodeLegacy(
       let botToken = getStringProperty(config, 'botToken', '') || getStringProperty(config, 'apiKey', '') || getStringProperty(config, 'token', '');
       if (!botToken) {
         try {
+          const connectionId = getConnectionRefForProvider(node, config, 'telegram');
+          if (connectionId) {
+            const { resolveTelegramBotToken } = await import('../services/telegram/telegram-trigger-service');
+            const userIdsToTry: string[] = [];
+            if (userId) userIdsToTry.push(userId);
+            if (currentUserId && currentUserId !== userId) userIdsToTry.push(currentUserId);
+            for (const uid of userIdsToTry) {
+              const resolved = await resolveTelegramBotToken({ userId: uid, connectionId });
+              if (resolved.token) {
+                botToken = resolved.token;
+                break;
+              }
+            }
+          }
+        } catch (e) {
+          // Fall back to legacy credential lookup below.
+        }
+      }
+      if (!botToken) {
+        try {
           const { retrieveCredential } = await import('../core/utils/credential-retriever');
           const userIdsToTry: string[] = [];
           if (userId) userIdsToTry.push(userId);
@@ -16175,9 +16384,54 @@ export async function executeNodeLegacy(
       }
 
       const baseUrl = `https://api.telegram.org/bot${botToken}`;
+      const normalizeTelegramResult = (data: any, op: string, fallbackChatId: string) => {
+        const resultPayload = data?.result ?? data;
+        const resultChatId = resultPayload?.chat?.id ?? fallbackChatId;
+        const resultMessageId = resultPayload?.message_id ?? editMessageId ?? null;
+        return {
+          ...inputObj,
+          success: true,
+          operation: op,
+          chatId: resultChatId !== undefined && resultChatId !== null ? String(resultChatId) : fallbackChatId,
+          messageId: resultMessageId,
+          data: resultPayload,
+          raw: data,
+          telegram: data,
+        };
+      };
 
       try {
-        if (messageType === 'text') {
+        if (operation === 'edit_message' || operation === 'edit_message_text' || operation === 'edit') {
+          if (!editMessageId) return { ...inputObj, _error: 'Telegram: messageId is required for Edit Message' };
+          if (!resolvedMessage) return { ...inputObj, _error: 'Telegram: text is required for Edit Message' };
+          const resp = await fetch(`${baseUrl}/editMessageText`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: resolvedChatId,
+              message_id: editMessageId,
+              text: resolvedMessage,
+              ...(parseMode ? { parse_mode: parseMode } : {}),
+              disable_web_page_preview: disableWebPagePreview,
+              ...(optionalPayloadFields.reply_markup ? { reply_markup: optionalPayloadFields.reply_markup } : {}),
+            }),
+          });
+          const data = await resp.json().catch(() => null);
+          if (!resp.ok) {
+            return { ...inputObj, _error: `Telegram editMessageText failed (${resp.status})`, _errorDetails: data };
+          }
+          return normalizeTelegramResult(data, 'editMessage', resolvedChatId);
+        }
+
+        const effectiveMessageType =
+          operation === 'send_photo' || operation === 'photo' ? 'photo'
+          : operation === 'send_video' || operation === 'video' ? 'video'
+          : operation === 'send_document' || operation === 'document' ? 'document'
+          : operation === 'send_audio' || operation === 'audio' ? 'audio'
+          : operation === 'send_animation' || operation === 'animation' ? 'animation'
+          : messageType;
+
+        if (operation === 'send_message' || operation === 'send' || operation === 'text' || effectiveMessageType === 'text') {
           if (!resolvedMessage) return { ...inputObj, _error: 'Telegram: message is required for text messages' };
           const resp = await fetch(`${baseUrl}/sendMessage`, {
             method: 'POST',
@@ -16194,24 +16448,24 @@ export async function executeNodeLegacy(
           if (!resp.ok) {
             return { ...inputObj, _error: `Telegram sendMessage failed (${resp.status})`, _errorDetails: data };
           }
-          return { ...inputObj, success: true, telegram: data };
+          return normalizeTelegramResult(data, 'sendMessage', resolvedChatId);
         }
 
         // Media support (photo/video/document/audio/animation) via URL
         if (!resolvedMediaUrl) {
-          return { ...inputObj, _error: `Telegram: mediaUrl is required for messageType "${messageType}"` };
+          return { ...inputObj, _error: `Telegram: mediaUrl is required for operation "${operation}"` };
         }
 
         const endpoint =
-          messageType === 'photo' ? 'sendPhoto'
-          : messageType === 'video' ? 'sendVideo'
-          : messageType === 'document' ? 'sendDocument'
-          : messageType === 'audio' ? 'sendAudio'
-          : messageType === 'animation' ? 'sendAnimation'
+          effectiveMessageType === 'photo' ? 'sendPhoto'
+          : effectiveMessageType === 'video' ? 'sendVideo'
+          : effectiveMessageType === 'document' ? 'sendDocument'
+          : effectiveMessageType === 'audio' ? 'sendAudio'
+          : effectiveMessageType === 'animation' ? 'sendAnimation'
           : null;
 
         if (!endpoint) {
-          return { ...inputObj, _error: `Telegram: Unsupported messageType "${messageType}" (supported: text, photo, video, document, audio, animation)` };
+          return { ...inputObj, _error: `Telegram: Unsupported operation "${operation}" (supported: send_message, send_photo, edit_message)` };
         }
 
         const payload: any = {
@@ -16220,7 +16474,7 @@ export async function executeNodeLegacy(
           ...(parseMode ? { parse_mode: parseMode } : {}),
           ...optionalPayloadFields,
         };
-        payload[messageType] = resolvedMediaUrl;
+        payload[effectiveMessageType] = resolvedMediaUrl;
 
         const resp = await fetch(`${baseUrl}/${endpoint}`, {
           method: 'POST',
@@ -16231,7 +16485,7 @@ export async function executeNodeLegacy(
         if (!resp.ok) {
           return { ...inputObj, _error: `Telegram ${endpoint} failed (${resp.status})`, _errorDetails: data };
         }
-        return { ...inputObj, success: true, telegram: data };
+        return normalizeTelegramResult(data, endpoint, resolvedChatId);
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         return { ...inputObj, _error: `Telegram error: ${msg}` };
@@ -16326,25 +16580,28 @@ export async function executeNodeLegacy(
     // Typeform REST API node
     case 'typeform': {
       const operation = getStringProperty(config, 'operation', 'get_responses');
-      let apiKey = getStringProperty(config, 'apiKey', '');
+      let apiKey = (
+        getStringProperty(config, 'apiKey', '') ||
+        getStringProperty(config, 'token', '') ||
+        getStringProperty(config, 'accessToken', '')
+      ).trim();
       const formId = getStringProperty(config, 'formId', '');
       const title = getStringProperty(config, 'title', '');
 
       if (!apiKey) {
-        const stored = await retrieveDashboardCredential({
+        const credential = await retrieveRuntimeCredentialObject({
           userId,
           currentUserId,
           workflowId,
           nodeId: node.id,
           nodeType: type,
-          key: 'typeform',
+          keys: ['typeform', 'typeform_token'],
         });
-        const parsed = parseCredentialValue(stored);
-        apiKey = parsed.apiKey || parsed.accessToken || parsed.token || parsed.value || stored || '';
+        apiKey = pickCredentialValue(credential, ['token', 'apiKey', 'accessToken']) || '';
       }
 
       if (!apiKey.trim()) {
-        return { success: false, error: 'apiKey is required' };
+        return { ...inputObj, success: false, error: 'Typeform connection required. Save a Typeform Personal Access Token in Connections or provide apiKey/token on the node.' };
       }
 
       const headers: Record<string, string> = {
@@ -16357,37 +16614,68 @@ export async function executeNodeLegacy(
       let body: string | undefined;
 
       if (operation === 'get_responses') {
-        if (!formId.trim()) return { success: false, error: 'formId is required for this operation' };
+        if (!formId.trim()) return { ...inputObj, success: false, error: 'formId is required for get_responses. Copy it from the Typeform form URL.' };
         url = `https://api.typeform.com/forms/${formId}/responses`;
       } else if (operation === 'create_form') {
-        if (!title.trim()) return { success: false, error: 'title is required for create_form' };
+        if (!title.trim()) return { ...inputObj, success: false, error: 'title is required for create_form.' };
         url = 'https://api.typeform.com/forms';
         method = 'POST';
         body = JSON.stringify({ title });
       } else if (operation === 'get_form') {
-        if (!formId.trim()) return { success: false, error: 'formId is required for this operation' };
+        if (!formId.trim()) return { ...inputObj, success: false, error: 'formId is required for get_form. Copy it from the Typeform form URL.' };
         url = `https://api.typeform.com/forms/${formId}`;
       } else {
-        return { success: false, error: `Unknown operation: ${operation}` };
+        return { ...inputObj, success: false, error: `Unsupported Typeform operation "${operation}". Choose get_responses, create_form, or get_form.` };
       }
 
       const response = await fetch(url, { method, headers, body });
-      if (!response.ok) {
-        const errBody = await response.text();
-        return { success: false, error: `HTTP ${response.status}: ${errBody}` };
+      const responseText = await response.text();
+      let data: any = {};
+      try {
+        data = responseText ? JSON.parse(responseText) : {};
+      } catch {
+        data = { raw: responseText };
       }
-      return await response.json();
+      if (!response.ok) {
+        return { ...inputObj, success: false, operation, error: `Typeform API error ${response.status}: ${data?.description || data?.message || responseText || response.statusText}` };
+      }
+      return {
+        ...inputObj,
+        success: true,
+        operation,
+        data,
+        items: Array.isArray(data?.items) ? data.items : undefined,
+        totalItems: typeof data?.total_items === 'number' ? data.total_items : undefined,
+        formId: data?.id || formId || undefined,
+      };
     }
 
     // Calendly scheduling API node
     case 'calendly': {
       try {
         const operation = getStringProperty(config, 'operation', 'get_events');
-        const accessToken = getStringProperty(config, 'accessToken', '');
+        let accessToken = (
+          getStringProperty(config, 'accessToken', '') ||
+          getStringProperty(config, 'token', '') ||
+          getStringProperty(config, 'apiKey', '')
+        ).trim();
         const userUri = getStringProperty(config, 'userUri', '');
+        const eventTypeUri = getStringProperty(config, 'eventTypeUri', '');
 
-        if (!accessToken.trim()) {
-          return { success: false, error: 'accessToken is required' };
+        if (!accessToken) {
+          const credential = await retrieveRuntimeCredentialObject({
+            userId,
+            currentUserId,
+            workflowId,
+            nodeId: node.id,
+            nodeType: type,
+            keys: ['calendly', 'calendly_api'],
+          });
+          accessToken = pickCredentialValue(credential, ['token', 'accessToken', 'apiKey']) || '';
+        }
+
+        if (!accessToken) {
+          return { ...inputObj, success: false, error: 'Calendly connection required. Save a Calendly Personal Access Token in Connections or provide accessToken/token on the node.' };
         }
 
         const baseUrl = 'https://api.calendly.com';
@@ -16403,28 +16691,44 @@ export async function executeNodeLegacy(
             url = `${baseUrl}/users/me`;
             break;
           case 'get_events':
-            url = `${baseUrl}/scheduled_events`;
+            url = userUri.trim()
+              ? `${baseUrl}/scheduled_events?user=${encodeURIComponent(userUri)}`
+              : `${baseUrl}/scheduled_events`;
             break;
           case 'get_event_types':
-            if (!userUri.trim()) return { success: false, error: 'userUri is required for get_event_types' };
+            if (!userUri.trim()) return { ...inputObj, success: false, operation, error: 'userUri is required for get_event_types. Run get_user first and use {{$json.user.uri}} or {{$json.data.resource.uri}}.' };
             url = `${baseUrl}/event_types?user=${encodeURIComponent(userUri)}`;
             break;
           case 'get_scheduled_events':
-            if (!userUri.trim()) return { success: false, error: 'userUri is required for get_scheduled_events' };
-            url = `${baseUrl}/scheduled_events?user=${encodeURIComponent(userUri)}`;
+            if (!userUri.trim()) return { ...inputObj, success: false, operation, error: 'userUri is required for get_scheduled_events. Run get_user first and use {{$json.user.uri}} or {{$json.data.resource.uri}}.' };
+            url = `${baseUrl}/scheduled_events?user=${encodeURIComponent(userUri)}${eventTypeUri ? `&event_type=${encodeURIComponent(eventTypeUri)}` : ''}`;
             break;
           default:
-            return { success: false, error: `Unknown operation: ${operation}` };
+            return { ...inputObj, success: false, error: `Unsupported Calendly operation "${operation}". Choose get_user, get_events, get_event_types, or get_scheduled_events.` };
         }
 
         const response = await fetch(url, { method: 'GET', headers });
-        if (!response.ok) {
-          const errBody = await response.text();
-          return { success: false, error: `HTTP ${response.status}: ${errBody}` };
+        const responseText = await response.text();
+        let data: any = {};
+        try {
+          data = responseText ? JSON.parse(responseText) : {};
+        } catch {
+          data = { raw: responseText };
         }
-        return { success: true, data: await response.json() };
+        if (!response.ok) {
+          return { ...inputObj, success: false, operation, error: `Calendly API error ${response.status}: ${data?.message || data?.title || responseText || response.statusText}` };
+        }
+        return {
+          ...inputObj,
+          success: true,
+          operation,
+          data,
+          collection: data?.collection,
+          user: data?.resource || undefined,
+          count: Array.isArray(data?.collection) ? data.collection.length : undefined,
+        };
       } catch (error: any) {
-        return { success: false, error: error.message };
+        return { ...inputObj, success: false, error: error.message || 'Calendly operation failed' };
       }
     }
 
@@ -17781,8 +18085,25 @@ export async function executeNodeLegacy(
 
     case 'linear': {
       try {
-        const apiKey = getStringProperty(config, 'apiKey', '') || getStringProperty(config, 'token', '');
-        const operation = getStringProperty(config, 'operation', 'getIssues');
+        let apiKey = (
+          getStringProperty(config, 'apiKey', '') ||
+          getStringProperty(config, 'token', '') ||
+          getStringProperty(config, 'accessToken', '')
+        ).trim();
+        const rawOperation = getStringProperty(config, 'operation', 'list_issues');
+        const operationAliases: Record<string, string> = {
+          getTeams: 'get_teams',
+          get_teams: 'get_teams',
+          createIssue: 'create_issue',
+          create_issue: 'create_issue',
+          updateIssue: 'update_issue',
+          update_issue: 'update_issue',
+          getIssue: 'get_issue',
+          get_issue: 'get_issue',
+          getIssues: 'list_issues',
+          list_issues: 'list_issues',
+        };
+        const operation = operationAliases[rawOperation] || operationAliases[rawOperation.trim()] || rawOperation;
         const teamId = getStringProperty(config, 'teamId', '');
         const issueId = getStringProperty(config, 'issueId', '');
         const title = getStringProperty(config, 'title', '');
@@ -17790,27 +18111,61 @@ export async function executeNodeLegacy(
         const stateId = getStringProperty(config, 'stateId', '');
         const priority = Number((config as any).priority ?? 0);
 
-        if (!apiKey) return { ...inputObj, success: false, error: 'Linear API key is required' };
+        if (!apiKey) {
+          const credential = await retrieveRuntimeCredentialObject({
+            userId,
+            currentUserId,
+            workflowId,
+            nodeId: node.id,
+            nodeType: type,
+            keys: ['linear', 'linear_api_key', 'linear_oauth2'],
+          });
+          apiKey = pickCredentialValue(credential, ['token', 'apiKey', 'accessToken']) || '';
+        }
 
-        const linearHeaders = { 'Authorization': apiKey, 'Content-Type': 'application/json' };
+        if (!apiKey) {
+          return { ...inputObj, success: false, error: 'Linear connection required. Save a Linear Personal API Key in Connections or provide apiKey/token on the node.' };
+        }
+        if (operation === 'create_issue' && (!teamId || !title)) {
+          return { ...inputObj, success: false, operation, error: 'Linear create_issue requires teamId and title. Run get_teams first if you need a team ID.' };
+        }
+        if ((operation === 'update_issue' || operation === 'get_issue') && !issueId) {
+          return { ...inputObj, success: false, operation, error: `Linear ${operation} requires issueId.` };
+        }
+
+        const linearHeaders = {
+          'Authorization': apiKey.startsWith('lin_api_') || apiKey.startsWith('Bearer ') ? apiKey : `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        };
 
         let linearQuery = '';
         let linearVariables: Record<string, unknown> = {};
 
-        if (operation === 'getTeams') {
+        if (operation === 'get_teams') {
           linearQuery = '{ teams { nodes { id name key } } }';
-        } else if (operation === 'createIssue') {
-          linearQuery = 'mutation CreateIssue($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { id title url } } }';
-          linearVariables = { input: { title, description, teamId, stateId: stateId || undefined, priority } };
-        } else if (operation === 'updateIssue') {
-          linearQuery = 'mutation UpdateIssue($id: String!, $input: IssueUpdateInput!) { issueUpdate(id: $id, input: $input) { success issue { id title url state { name } } } }';
-          linearVariables = { id: issueId, input: { title: title || undefined, description: description || undefined, stateId: stateId || undefined, priority: priority || undefined } };
+        } else if (operation === 'get_issue') {
+          linearQuery = 'query GetIssue($id: String!) { issue(id: $id) { id identifier title description url priority state { id name } team { id name key } assignee { id name email } } }';
+          linearVariables = { id: issueId };
+        } else if (operation === 'create_issue') {
+          linearQuery = 'mutation CreateIssue($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { id identifier title url priority state { id name } team { id name key } } } }';
+          linearVariables = { input: { title, description: description || undefined, teamId, stateId: stateId || undefined, priority: Number.isFinite(priority) ? priority : undefined } };
+        } else if (operation === 'update_issue') {
+          linearQuery = 'mutation UpdateIssue($id: String!, $input: IssueUpdateInput!) { issueUpdate(id: $id, input: $input) { success issue { id identifier title url priority state { id name } team { id name key } } } }';
+          const input: Record<string, unknown> = {};
+          if (title) input.title = title;
+          if (description) input.description = description;
+          if (stateId) input.stateId = stateId;
+          if (Number.isFinite(priority)) input.priority = priority;
+          linearVariables = { id: issueId, input };
+        } else if (operation === 'list_issues') {
+          if (teamId) {
+            linearQuery = 'query ListIssues($teamId: String!) { issues(filter: { team: { id: { eq: $teamId } } }, first: 50) { nodes { id identifier title state { id name } priority url team { id name key } assignee { id name email } } } }';
+            linearVariables = { teamId };
+          } else {
+            linearQuery = '{ viewer { assignedIssues(first: 50) { nodes { id identifier title state { id name } priority url team { id name key } assignee { id name email } } } } }';
+          }
         } else {
-          // getIssues (default)
-          linearQuery = teamId
-            ? '{ issues(filter: { team: { id: { eq: $teamId } } }) { nodes { id title state { name } priority url } } }'
-            : '{ viewer { assignedIssues { nodes { id title state { name } priority url } } } }';
-          if (teamId) linearVariables = { teamId };
+          return { ...inputObj, success: false, error: `Unsupported Linear operation "${rawOperation}". Choose create_issue, update_issue, get_issue, list_issues, or get_teams.` };
         }
 
         const linearResp = await fetch('https://api.linear.app/graphql', {
@@ -17829,7 +18184,19 @@ export async function executeNodeLegacy(
           return { ...inputObj, success: false, error: linearData.errors.map((e: any) => e.message).join('; ') };
         }
 
-        return { ...inputObj, success: true, operation, data: linearData?.data };
+        const data = linearData?.data || {};
+        const issues = data?.issues?.nodes || data?.viewer?.assignedIssues?.nodes;
+        const issue = data?.issue || data?.issueCreate?.issue || data?.issueUpdate?.issue;
+        return {
+          ...inputObj,
+          success: true,
+          operation,
+          data,
+          issue,
+          issues,
+          teams: data?.teams?.nodes,
+          count: Array.isArray(issues) ? issues.length : Array.isArray(data?.teams?.nodes) ? data.teams.nodes.length : undefined,
+        };
       } catch (err: any) {
         return { ...inputObj, success: false, error: err?.message || 'Linear error' };
       }
@@ -17837,16 +18204,59 @@ export async function executeNodeLegacy(
 
     case 'trello': {
       try {
-        const apiKey = getStringProperty(config, 'apiKey', '');
-        const token = getStringProperty(config, 'token', '');
-        const operation = getStringProperty(config, 'operation', 'getCards');
+        let apiKey = getStringProperty(config, 'apiKey', '').trim();
+        let token = getStringProperty(config, 'token', '').trim();
+        const rawOperation = getStringProperty(config, 'operation', 'list_cards');
+        const operationAliases: Record<string, string> = {
+          getBoards: 'get_boards',
+          get_boards: 'get_boards',
+          getLists: 'get_lists',
+          get_lists: 'get_lists',
+          getCards: 'list_cards',
+          list_cards: 'list_cards',
+          createCard: 'create_card',
+          create_card: 'create_card',
+          updateCard: 'update_card',
+          update_card: 'update_card',
+          getCard: 'get_card',
+          get_card: 'get_card',
+          deleteCard: 'delete_card',
+          delete_card: 'delete_card',
+          moveCard: 'move_card',
+          move_card: 'move_card',
+          addLabel: 'add_label',
+          add_label: 'add_label',
+          addChecklist: 'add_checklist',
+          add_checklist: 'add_checklist',
+        };
+        const operation = operationAliases[rawOperation] || operationAliases[rawOperation.trim()] || rawOperation;
         const boardId = getStringProperty(config, 'boardId', '');
         const listId = getStringProperty(config, 'listId', '');
         const cardId = getStringProperty(config, 'cardId', '');
-        const cardName = getStringProperty(config, 'cardName', '');
-        const cardDesc = getStringProperty(config, 'cardDesc', '');
+        const cardName = getStringProperty(config, 'cardName', '') || getStringProperty(config, 'name', '');
+        const cardDesc = getStringProperty(config, 'cardDesc', '') || getStringProperty(config, 'desc', '');
+        const dueDate = getStringProperty(config, 'dueDate', '');
+        const idLabels = getStringProperty(config, 'idLabels', '');
+        const idMembers = getStringProperty(config, 'idMembers', '');
+        const newListId = getStringProperty(config, 'newListId', '');
+        const checklistName = getStringProperty(config, 'checklistName', 'Checklist');
 
-        if (!apiKey || !token) return { ...inputObj, success: false, error: 'Trello API key and token are required' };
+        if (!apiKey || !token) {
+          const credential = await retrieveRuntimeCredentialObject({
+            userId,
+            currentUserId,
+            workflowId,
+            nodeId: node.id,
+            nodeType: type,
+            keys: ['trello', 'trello_api_key'],
+          });
+          apiKey = apiKey || pickCredentialValue(credential, ['apiKey', 'key']) || '';
+          token = token || pickCredentialValue(credential, ['token', 'apiToken', 'accessToken']) || '';
+        }
+
+        if (!apiKey || !token) {
+          return { ...inputObj, success: false, error: 'Trello connection required. Save a Trello API Key & Token in Connections or provide apiKey and token on the node.' };
+        }
 
         const trelloBase = 'https://api.trello.com/1';
         const trelloAuth = `key=${encodeURIComponent(apiKey)}&token=${encodeURIComponent(token)}`;
@@ -17856,29 +18266,77 @@ export async function executeNodeLegacy(
         let trelloMethod = 'GET';
         let trelloBody: string | undefined;
 
-        if (operation === 'getBoards') {
+        if (operation === 'get_boards') {
           trelloUrl = `${trelloBase}/members/me/boards?${trelloAuth}&fields=id,name,url`;
-        } else if (operation === 'getLists') {
-          if (!boardId) return { ...inputObj, success: false, error: 'boardId is required for getLists' };
+        } else if (operation === 'get_lists') {
+          if (!boardId) return { ...inputObj, success: false, operation, error: 'boardId is required for get_lists.' };
           trelloUrl = `${trelloBase}/boards/${encodeURIComponent(boardId)}/lists?${trelloAuth}`;
-        } else if (operation === 'getCards') {
+        } else if (operation === 'list_cards') {
           const target = listId || boardId;
-          if (!target) return { ...inputObj, success: false, error: 'boardId or listId is required for getCards' };
+          if (!target) return { ...inputObj, success: false, operation, error: 'boardId or listId is required for list_cards.' };
           trelloUrl = listId
             ? `${trelloBase}/lists/${encodeURIComponent(listId)}/cards?${trelloAuth}`
             : `${trelloBase}/boards/${encodeURIComponent(boardId)}/cards?${trelloAuth}`;
-        } else if (operation === 'createCard') {
-          if (!listId) return { ...inputObj, success: false, error: 'listId is required for createCard' };
+        } else if (operation === 'get_card') {
+          if (!cardId) return { ...inputObj, success: false, operation, error: 'cardId is required for get_card.' };
+          trelloUrl = `${trelloBase}/cards/${encodeURIComponent(cardId)}?${trelloAuth}`;
+        } else if (operation === 'create_card') {
+          if (!listId || !cardName) return { ...inputObj, success: false, operation, error: 'listId and cardName are required for create_card.' };
           trelloUrl = `${trelloBase}/cards?${trelloAuth}`;
           trelloMethod = 'POST';
-          trelloBody = JSON.stringify({ name: cardName, desc: cardDesc, idList: listId });
-        } else if (operation === 'updateCard') {
-          if (!cardId) return { ...inputObj, success: false, error: 'cardId is required for updateCard' };
+          trelloBody = JSON.stringify({
+            name: cardName,
+            desc: cardDesc || undefined,
+            idList: listId,
+            due: dueDate || undefined,
+            idLabels: idLabels || undefined,
+            idMembers: idMembers || undefined,
+          });
+        } else if (operation === 'update_card') {
+          if (!cardId) return { ...inputObj, success: false, operation, error: 'cardId is required for update_card.' };
           trelloUrl = `${trelloBase}/cards/${encodeURIComponent(cardId)}?${trelloAuth}`;
           trelloMethod = 'PUT';
-          trelloBody = JSON.stringify({ name: cardName || undefined, desc: cardDesc || undefined, idList: listId || undefined });
+          trelloBody = JSON.stringify({
+            name: cardName || undefined,
+            desc: cardDesc || undefined,
+            idList: listId || newListId || undefined,
+            due: dueDate || undefined,
+            idLabels: idLabels || undefined,
+            idMembers: idMembers || undefined,
+          });
+        } else if (operation === 'move_card') {
+          if (!cardId || !newListId) return { ...inputObj, success: false, operation, error: 'cardId and newListId are required for move_card.' };
+          trelloUrl = `${trelloBase}/cards/${encodeURIComponent(cardId)}?${trelloAuth}`;
+          trelloMethod = 'PUT';
+          trelloBody = JSON.stringify({ idList: newListId });
+        } else if (operation === 'delete_card') {
+          if (!cardId) return { ...inputObj, success: false, operation, error: 'cardId is required for delete_card.' };
+          trelloUrl = `${trelloBase}/cards/${encodeURIComponent(cardId)}?${trelloAuth}`;
+          trelloMethod = 'DELETE';
+        } else if (operation === 'add_checklist') {
+          if (!cardId) return { ...inputObj, success: false, operation, error: 'cardId is required for add_checklist.' };
+          trelloUrl = `${trelloBase}/checklists?${trelloAuth}`;
+          trelloMethod = 'POST';
+          trelloBody = JSON.stringify({ idCard: cardId, name: checklistName || 'Checklist' });
+        } else if (operation === 'add_label') {
+          if (!cardId || !idLabels) return { ...inputObj, success: false, operation, error: 'cardId and idLabels are required for add_label.' };
+          const labels = idLabels.split(',').map((value) => value.trim()).filter(Boolean);
+          const labelResults = [];
+          for (const labelId of labels) {
+            const labelResp = await fetch(`${trelloBase}/cards/${encodeURIComponent(cardId)}/idLabels?${trelloAuth}&value=${encodeURIComponent(labelId)}`, { method: 'POST', headers: trelloHeaders });
+            const labelText = await labelResp.text();
+            if (!labelResp.ok) {
+              return { ...inputObj, success: false, operation, error: `Trello API error ${labelResp.status}: ${labelText || labelResp.statusText}` };
+            }
+            try {
+              labelResults.push(labelText ? JSON.parse(labelText) : { id: labelId });
+            } catch {
+              labelResults.push({ id: labelId, raw: labelText });
+            }
+          }
+          return { ...inputObj, success: true, operation, data: labelResults, cardId, labels: labelResults };
         } else {
-          return { ...inputObj, success: false, error: `Unsupported Trello operation: ${operation}` };
+          return { ...inputObj, success: false, error: `Unsupported Trello operation "${rawOperation}". Choose create_card, update_card, get_card, delete_card, list_cards, move_card, add_label, add_checklist, get_boards, or get_lists.` };
         }
 
         const trelloResp = await fetch(trelloUrl, { method: trelloMethod, headers: trelloHeaders, body: trelloBody });
@@ -17888,8 +18346,24 @@ export async function executeNodeLegacy(
           return { ...inputObj, success: false, error: `Trello API error ${trelloResp.status}: ${errText}` };
         }
 
-        const trelloData: any = await trelloResp.json();
-        return { ...inputObj, success: true, operation, data: trelloData };
+        const text = await trelloResp.text();
+        let trelloData: any = {};
+        try {
+          trelloData = text ? JSON.parse(text) : {};
+        } catch {
+          trelloData = { raw: text };
+        }
+        return {
+          ...inputObj,
+          success: true,
+          operation,
+          data: trelloData,
+          cards: Array.isArray(trelloData) && ['list_cards'].includes(operation) ? trelloData : undefined,
+          boards: Array.isArray(trelloData) && operation === 'get_boards' ? trelloData : undefined,
+          lists: Array.isArray(trelloData) && operation === 'get_lists' ? trelloData : undefined,
+          card: !Array.isArray(trelloData) && String(operation).includes('card') ? trelloData : undefined,
+          count: Array.isArray(trelloData) ? trelloData.length : undefined,
+        };
       } catch (err: any) {
         return { ...inputObj, success: false, error: err?.message || 'Trello error' };
       }
@@ -18125,13 +18599,17 @@ export default async function executeWorkflowHandler(req: Request, res: Response
             id: executionId,
             workflow_id: workflowId,
             user_id: userId ?? null,
-            status: 'queued',
-            trigger: 'manual',
+            status: normalizeExecutionStatus('queued'),
+            trigger: normalizeExecutionTrigger('manual'),
             input,
             logs: [],
             started_at: nowIso,
             last_heartbeat: nowIso,
             timeout_seconds: 3600,
+            metadata: {
+              originalStatus: 'queued',
+              originalTrigger: 'manual',
+            },
           });
       } catch (dbErr: any) {
         // Unique violation (23505) means the execution already exists — safe to ignore.
@@ -18150,6 +18628,7 @@ export default async function executeWorkflowHandler(req: Request, res: Response
             'x-internal-chat-execution': req.headers['x-internal-chat-execution'],
             'x-internal-webhook-execution': req.headers['x-internal-webhook-execution'],
             'x-internal-trigger-execution': req.headers['x-internal-trigger-execution'],
+            ...collectInternalExecutionHeaders(req.headers),
           },
           authToken,
         },
@@ -18177,13 +18656,8 @@ export default async function executeWorkflowHandler(req: Request, res: Response
   // Require authenticated user for external workflow execution.
   // Do NOT require global Google OAuth here; provider credentials are validated per node at runtime.
   // Bypass for internal trigger executions (form-trigger, chat-trigger, webhook - server-to-server).
-  const isInternalFormExecution = req.headers['x-internal-form-execution'] === 'true';
-  const isInternalChatExecution = req.headers['x-internal-chat-execution'] === 'true';
-  const isInternalWebhookExecution = req.headers['x-internal-webhook-execution'] === 'true';
-  const isInternalEngineExecution = req.headers['x-internal-engine-execution'] === 'true';
-  const isInternalTriggerExecution = req.headers['x-internal-trigger-execution'] === 'true';
-  const isInternalApprovalExecution = req.headers['x-internal-approval-execution'] === 'true';
-  const isInternalExecution = isInternalFormExecution || isInternalChatExecution || isInternalWebhookExecution || isInternalEngineExecution || isInternalTriggerExecution || isInternalApprovalExecution;
+  const internalExecutionSource = getInternalExecutionSource(req.headers);
+  const isInternalExecution = Boolean(internalExecutionSource && providedExecutionId);
 
   let authenticatedUserId: string | undefined;
   if (!isInternalExecution) {
@@ -18194,11 +18668,7 @@ export default async function executeWorkflowHandler(req: Request, res: Response
       return res.status(401).json(authError);
     }
   } else {
-    const triggerType = isInternalFormExecution ? 'form-trigger' :
-                       isInternalChatExecution ? 'chat-trigger' :
-                       isInternalWebhookExecution ? 'webhook' :
-                       isInternalTriggerExecution ? 'trigger-service' : 'unknown';
-    logger.info(`[Execute Workflow] Bypassing Google OAuth for internal ${triggerType} execution`);
+    logger.info(`[Execute Workflow] Bypassing Google OAuth for internal ${internalExecutionSource} execution`);
   }
 
   // ✅ CRITICAL: Import workflow cloner for immutable execution
@@ -18428,7 +18898,7 @@ export default async function executeWorkflowHandler(req: Request, res: Response
           return category.toLowerCase() === 'triggers' || 
                  category.toLowerCase() === 'trigger' ||
                  nodeType.includes('trigger') ||
-                 ['manual_trigger', 'webhook', 'schedule', 'interval', 'form', 'chat_trigger', 'form_trigger'].includes(nodeType);
+                 ['manual_trigger', 'webhook', 'schedule', 'interval', 'form', 'chat_trigger', 'telegram_trigger', 'form_trigger'].includes(nodeType);
         })()
       ).length - linearizedGraph.nodes.filter(n => 
         (() => {
@@ -18437,7 +18907,7 @@ export default async function executeWorkflowHandler(req: Request, res: Response
           return category.toLowerCase() === 'triggers' || 
                  category.toLowerCase() === 'trigger' ||
                  nodeType.includes('trigger') ||
-                 ['manual_trigger', 'webhook', 'schedule', 'interval', 'form', 'chat_trigger', 'form_trigger'].includes(nodeType);
+                 ['manual_trigger', 'webhook', 'schedule', 'interval', 'form', 'chat_trigger', 'telegram_trigger', 'form_trigger'].includes(nodeType);
         })()
       ).length;
       
@@ -18519,7 +18989,7 @@ export default async function executeWorkflowHandler(req: Request, res: Response
       return category.toLowerCase() === 'triggers' || 
              category.toLowerCase() === 'trigger' ||
              nodeType.includes('trigger') ||
-             ['manual_trigger', 'webhook', 'schedule', 'interval', 'form', 'chat_trigger', 'workflow_trigger'].includes(nodeType);
+             ['manual_trigger', 'webhook', 'schedule', 'interval', 'form', 'chat_trigger', 'telegram_trigger', 'workflow_trigger'].includes(nodeType);
     });
     logger.info(`[ExecuteWorkflow] 🔍 Validation input: ${nodes.length} nodes, ${triggersBeforeValidation.length} trigger(s)`, {
       triggerIds: triggersBeforeValidation.map(t => t.id),
@@ -18807,7 +19277,7 @@ export default async function executeWorkflowHandler(req: Request, res: Response
       return category.toLowerCase() === 'triggers' || 
              category.toLowerCase() === 'trigger' ||
              nodeType.includes('trigger') ||
-             ['manual_trigger', 'webhook', 'schedule', 'interval', 'form', 'chat_trigger', 'workflow_trigger'].includes(nodeType);
+             ['manual_trigger', 'webhook', 'schedule', 'interval', 'form', 'chat_trigger', 'telegram_trigger', 'workflow_trigger'].includes(nodeType);
     });
     
     if (nodes.length === 0) {
@@ -18937,7 +19407,7 @@ export default async function executeWorkflowHandler(req: Request, res: Response
         await db
           .from('executions')
           .update({
-            status: 'running',
+            status: normalizeExecutionStatus('running'),
             last_heartbeat: new Date().toISOString(),
           })
           .eq('id', executionId);
@@ -18958,13 +19428,16 @@ export default async function executeWorkflowHandler(req: Request, res: Response
         .insert({
           workflow_id: workflowId,
           user_id: workflow.user_id,
-          status: 'running',
-          trigger: 'manual',
+          status: normalizeExecutionStatus('running'),
+          trigger: normalizeExecutionTrigger('manual'),
           input,
           logs: [],
           started_at: startedAt,
           last_heartbeat: startedAt,
           timeout_seconds: 3600, // 1 hour default
+          metadata: {
+            originalTrigger: 'manual',
+          },
         })
         .select()
         .single();
@@ -19493,6 +19966,7 @@ export default async function executeWorkflowHandler(req: Request, res: Response
                            nodeType === 'form' || 
                            nodeType === 'form_trigger' || 
                            nodeType === 'chat_trigger' || 
+                           nodeType === 'telegram_trigger' ||
                            nodeType === 'workflow_trigger' || 
                            nodeType === 'error_trigger';
       
@@ -19860,8 +20334,8 @@ export default async function executeWorkflowHandler(req: Request, res: Response
           // Update execution status to "waiting" for form submission
           if (executionId) {
             const updateData = {
-              status: 'waiting',
-              trigger: 'form',
+              status: normalizeExecutionStatus('waiting'),
+              trigger: normalizeExecutionTrigger('form'),
               waiting_for_node_id: node.id,
             };
             
@@ -20007,8 +20481,8 @@ export default async function executeWorkflowHandler(req: Request, res: Response
 
               if (executionId) {
                 await db.from('executions').update({
-                  status: 'waiting',
-                  trigger: 'approval',
+                  status: normalizeExecutionStatus('waiting'),
+                  trigger: normalizeExecutionTrigger('approval', 'manual'),
                   waiting_for_node_id: node.id,
                 }).eq('id', executionId);
 

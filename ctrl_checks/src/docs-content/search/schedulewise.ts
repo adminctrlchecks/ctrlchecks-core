@@ -1,164 +1,17 @@
 import type { DocsSearchIndexItem } from '../search-index';
 
 export const schedulewiseSearchIndex = [
-  {
-    "type": "node",
-    "title": "ScheduleWise",
-    "slug": "schedulewise",
-    "category": "Triggers",
-    "href": "/docs/nodes/schedulewise",
-    "text": "ScheduleWise ScheduleWise appointment scheduling — retrieve, create, update, and delete appointments via the ScheduleWise REST API Use this node when a workflow needs schedulewise behavior with schema-driven inputs from the CtrlChecks node registry. Triggers"
-  },
-  {
-    "type": "operation",
-    "title": "ScheduleWise: Configure",
-    "slug": "schedulewise",
-    "category": "Triggers",
-    "href": "/docs/nodes/schedulewise#operation-configure",
-    "text": "ScheduleWise Configuration Configure Configure with the ScheduleWise node using the configured input fields. configure"
-  },
-  {
-    "type": "field",
-    "title": "ScheduleWise: Operation",
-    "slug": "schedulewise",
-    "category": "Triggers",
-    "href": "/docs/nodes/schedulewise#operation-configure",
-    "text": "ScheduleWise Configuration Configure Operation operation operation field"
-  },
-  {
-    "type": "field",
-    "title": "ScheduleWise: Credential Id",
-    "slug": "schedulewise",
-    "category": "Triggers",
-    "href": "/docs/nodes/schedulewise#operation-configure",
-    "text": "ScheduleWise Configuration Configure Credential Id credentialId Credential ID reference to stored ScheduleWise credentials"
-  },
-  {
-    "type": "field",
-    "title": "ScheduleWise: Date From",
-    "slug": "schedulewise",
-    "category": "Triggers",
-    "href": "/docs/nodes/schedulewise#operation-configure",
-    "text": "ScheduleWise Configuration Configure Date From dateFrom Start date filter for getSchedules (ISO 8601, e.g. \"2024-01-01\"). Supports {{ }} expressions."
-  },
-  {
-    "type": "field",
-    "title": "ScheduleWise: Date To",
-    "slug": "schedulewise",
-    "category": "Triggers",
-    "href": "/docs/nodes/schedulewise#operation-configure",
-    "text": "ScheduleWise Configuration Configure Date To dateTo End date filter for getSchedules (ISO 8601). Supports {{ }} expressions."
-  },
-  {
-    "type": "field",
-    "title": "ScheduleWise: Patient Id",
-    "slug": "schedulewise",
-    "category": "Triggers",
-    "href": "/docs/nodes/schedulewise#operation-configure",
-    "text": "ScheduleWise Configuration Configure Patient Id patientId Patient identifier. Supports {{ }} expressions."
-  },
-  {
-    "type": "field",
-    "title": "ScheduleWise: Staff Id",
-    "slug": "schedulewise",
-    "category": "Triggers",
-    "href": "/docs/nodes/schedulewise#operation-configure",
-    "text": "ScheduleWise Configuration Configure Staff Id staffId Staff member identifier. Supports {{ }} expressions."
-  },
-  {
-    "type": "field",
-    "title": "ScheduleWise: Appointment Id",
-    "slug": "schedulewise",
-    "category": "Triggers",
-    "href": "/docs/nodes/schedulewise#operation-configure",
-    "text": "ScheduleWise Configuration Configure Appointment Id appointmentId Appointment identifier (required for updateAppointment and deleteAppointment). Supports {{ }} expressions."
-  },
-  {
-    "type": "field",
-    "title": "ScheduleWise: Start Date Time",
-    "slug": "schedulewise",
-    "category": "Triggers",
-    "href": "/docs/nodes/schedulewise#operation-configure",
-    "text": "ScheduleWise Configuration Configure Start Date Time startDateTime Appointment start date/time (ISO 8601). Supports {{ }} expressions."
-  },
-  {
-    "type": "field",
-    "title": "ScheduleWise: End Date Time",
-    "slug": "schedulewise",
-    "category": "Triggers",
-    "href": "/docs/nodes/schedulewise#operation-configure",
-    "text": "ScheduleWise Configuration Configure End Date Time endDateTime Appointment end date/time (ISO 8601). Supports {{ }} expressions."
-  },
-  {
-    "type": "field",
-    "title": "ScheduleWise: Service Type",
-    "slug": "schedulewise",
-    "category": "Triggers",
-    "href": "/docs/nodes/schedulewise#operation-configure",
-    "text": "ScheduleWise Configuration Configure Service Type serviceType Type of service for the appointment. Supports {{ }} expressions."
-  },
-  {
-    "type": "field",
-    "title": "ScheduleWise: Notes",
-    "slug": "schedulewise",
-    "category": "Triggers",
-    "href": "/docs/nodes/schedulewise#operation-configure",
-    "text": "ScheduleWise Configuration Configure Notes notes Additional notes for the appointment. Supports {{ }} expressions."
-  },
-  {
-    "type": "field",
-    "title": "ScheduleWise: Status",
-    "slug": "schedulewise",
-    "category": "Triggers",
-    "href": "/docs/nodes/schedulewise#operation-configure",
-    "text": "ScheduleWise Configuration Configure Status status Appointment status (for updateAppointment). Supports {{ }} expressions."
-  },
-  {
-    "type": "field",
-    "title": "ScheduleWise: Limit",
-    "slug": "schedulewise",
-    "category": "Triggers",
-    "href": "/docs/nodes/schedulewise#operation-configure",
-    "text": "ScheduleWise Configuration Configure Limit limit Maximum number of results to return for getSchedules."
-  },
-  {
-    "type": "field",
-    "title": "ScheduleWise: Hard Delete",
-    "slug": "schedulewise",
-    "category": "Triggers",
-    "href": "/docs/nodes/schedulewise#operation-configure",
-    "text": "ScheduleWise Configuration Configure Hard Delete hardDelete When true, permanently deletes the appointment (appends ?hardDelete=true). Default is soft delete."
-  },
-  {
-    "type": "field",
-    "title": "ScheduleWise: Timeout Sec",
-    "slug": "schedulewise",
-    "category": "Triggers",
-    "href": "/docs/nodes/schedulewise#operation-configure",
-    "text": "ScheduleWise Configuration Configure Timeout Sec timeoutSec HTTP request timeout in seconds. Default: 30."
-  },
-  {
-    "type": "field",
-    "title": "ScheduleWise: Retries",
-    "slug": "schedulewise",
-    "category": "Triggers",
-    "href": "/docs/nodes/schedulewise#operation-configure",
-    "text": "ScheduleWise Configuration Configure Retries retries Number of retry attempts on 5xx or network errors (exponential backoff). Default: 0."
-  },
-  {
-    "type": "field",
-    "title": "ScheduleWise: Output Format",
-    "slug": "schedulewise",
-    "category": "Triggers",
-    "href": "/docs/nodes/schedulewise#operation-configure",
-    "text": "ScheduleWise Configuration Configure Output Format outputFormat Output format: \"json\" (default) or \"raw\" (unparsed response body)."
-  },
-  {
-    "type": "field",
-    "title": "ScheduleWise: Mock Mode",
-    "slug": "schedulewise",
-    "category": "Triggers",
-    "href": "/docs/nodes/schedulewise#operation-configure",
-    "text": "ScheduleWise Configuration Configure Mock Mode mockMode When true, returns synthetic data without calling the ScheduleWise API. Useful for testing."
-  }
+  { type: 'node', title: 'ScheduleWise', slug: 'schedulewise', category: 'HTTP & API', href: '/docs/nodes/schedulewise', text: 'ScheduleWise manages appointments through getSchedules createAppointment updateAppointment deleteAppointment. Uses saved schedulewise credential unless mockMode is true. Output success operation data executionTimeMs error.' },
+  { type: 'operation', title: 'ScheduleWise: Get Schedules', slug: 'schedulewise', category: 'HTTP & API', href: '/docs/nodes/schedulewise#operation-getschedules', text: 'Get Schedules sends GET /appointments with dateFrom dateTo patientId staffId and limit filters.' },
+  { type: 'operation', title: 'ScheduleWise: Create Appointment', slug: 'schedulewise', category: 'HTTP & API', href: '/docs/nodes/schedulewise#operation-createappointment', text: 'Create Appointment sends patientId staffId startDateTime endDateTime serviceType and notes to /appointments.' },
+  { type: 'operation', title: 'ScheduleWise: Update Appointment', slug: 'schedulewise', category: 'HTTP & API', href: '/docs/nodes/schedulewise#operation-updateappointment', text: 'Update Appointment uses appointmentId and sends changed startDateTime endDateTime staffId status or notes.' },
+  { type: 'operation', title: 'ScheduleWise: Delete Appointment', slug: 'schedulewise', category: 'HTTP & API', href: '/docs/nodes/schedulewise#operation-deleteappointment', text: 'Delete Appointment deletes /appointments/{appointmentId}; hardDelete adds ?hardDelete=true.' },
+  { type: 'field', title: 'ScheduleWise: Operation', slug: 'schedulewise', category: 'HTTP & API', href: '/docs/nodes/schedulewise#operation-getschedules', text: 'operation must be getSchedules createAppointment updateAppointment or deleteAppointment. INVALID_OPERATION is returned for unsupported values.' },
+  { type: 'field', title: 'ScheduleWise: Credential', slug: 'schedulewise', category: 'HTTP & API', href: '/docs/nodes/schedulewise#operation-getschedules', text: 'credentialId is metadata only. Runtime uses saved schedulewise credentials from Connections with apiUrl accessToken or apiKey.' },
+  { type: 'field', title: 'ScheduleWise: Date Range', slug: 'schedulewise', category: 'HTTP & API', href: '/docs/nodes/schedulewise#operation-getschedules', text: 'dateFrom and dateTo are ISO filters for Get Schedules and can map {{$json.startDate}} and {{$json.endDate}}.' },
+  { type: 'field', title: 'ScheduleWise: Patient and Staff', slug: 'schedulewise', category: 'HTTP & API', href: '/docs/nodes/schedulewise#operation-createappointment', text: 'patientId and staffId are ScheduleWise IDs used for filters creates and updates.' },
+  { type: 'field', title: 'ScheduleWise: Appointment ID', slug: 'schedulewise', category: 'HTTP & API', href: '/docs/nodes/schedulewise#operation-updateappointment', text: 'appointmentId is required for Update Appointment and Delete Appointment.' },
+  { type: 'field', title: 'ScheduleWise: Start End Service Notes Status', slug: 'schedulewise', category: 'HTTP & API', href: '/docs/nodes/schedulewise#operation-createappointment', text: 'startDateTime endDateTime serviceType notes and status shape create and update appointment bodies.' },
+  { type: 'field', title: 'ScheduleWise: Limit Hard Delete Mock Mode', slug: 'schedulewise', category: 'HTTP & API', href: '/docs/nodes/schedulewise#operation-getschedules', text: 'limit caps Get Schedules. hardDelete requests permanent delete. mockMode returns synthetic data without credentials or API calls.' },
+  { type: 'field', title: 'ScheduleWise: Timeout Retries Output Format', slug: 'schedulewise', category: 'HTTP & API', href: '/docs/nodes/schedulewise#operation-getschedules', text: 'timeoutSec is seconds, retries handles network and 5xx retry attempts, outputFormat Raw is visible but not honored because runtime parses JSON.' },
 ] satisfies DocsSearchIndexItem[];

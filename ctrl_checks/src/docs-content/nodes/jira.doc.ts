@@ -1,1306 +1,204 @@
-import type { NodeDoc } from '../types';
+import type { FieldDoc, NodeDoc } from '../types';
+import { richFieldHelp } from './_sharedFieldHelp';
+
+const field = (name: string, internalKey: string, type: FieldDoc['type'], required: boolean, description: string, example: string, extra: Partial<FieldDoc> = {}): FieldDoc => ({
+  name,
+  internalKey,
+  type,
+  required,
+  description,
+  helpText: richFieldHelp({
+    what: description,
+    why: `Jira needs ${name} so the selected issue, project, search, transition, or comment request is sent to the right place.`,
+    when: required ? `Fill ${name} for the operations that require it before running the node.` : `Fill ${name} only when the selected Jira operation uses it.`,
+    enter: example,
+    source: `Type a fixed value, copy it from Jira, or map it from an earlier step such as {{$json.${internalKey}}}.`,
+    later: `Use the Jira output in later steps with expressions such as {{$json.issueKey}}, {{$json.issue}}, {{$json.issues}}, {{$json.projects}}, or {{$json.commentId}} depending on the operation.`,
+    format: type === 'json' ? 'Valid JSON in the format shown by the placeholder.' : 'Plain text unless the field label says number or JSON.',
+    example,
+    empty: required ? `${name} being empty causes a Jira validation _error before or after the API request.` : `${name} can be empty when the selected operation does not use it; Jira may reject it if that operation expects the value.`,
+    mistake: `Do not paste a full Jira page URL unless this field specifically asks for one; most fields need the key, ID, domain, or text only.`,
+  }),
+  placeholder: example,
+  example,
+  ...extra,
+});
+
+const operationField: FieldDoc = {
+  name: 'Operation',
+  internalKey: 'operation',
+  type: 'select',
+  required: true,
+  description: 'Choose which Jira issue or project action to run.',
+  helpText: richFieldHelp({
+    what: 'The Jira action this node performs.',
+    why: 'Runtime normalizes create_issue, get_issue, update_issue, delete_issue, search_issues, add_comment, transition_issue, and get_projects into the matching Jira REST API calls.',
+    when: 'Fill it for every Jira node run.',
+    enter: 'Choose Create Issue, Update Issue, Get Issue, Delete Issue, Search Issues, Transition Issue, Add Comment, or Get Projects.',
+    source: 'This value comes from the dropdown in the node panel.',
+    later: 'Later steps can branch on {{$json.success}} and use operation-specific fields like {{$json.issue}}, {{$json.issueKey}}, {{$json.issues}}, {{$json.comment}}, or {{$json.projects}}.',
+    format: 'Dropdown value such as create_issue or search_issues.',
+    example: 'Choose Add Comment when a support approval note should be written back to the Jira issue.',
+    empty: 'If empty, runtime falls back toward create behavior and may require Project Key and Summary.',
+    mistake: 'Do not use Get Transitions; this node can perform a transition but does not list valid transition IDs.',
+  }),
+  options: ['Create Issue', 'Update Issue', 'Get Issue', 'Delete Issue', 'Search Issues', 'Transition Issue', 'Add Comment', 'Get Projects'],
+  defaultValue: 'create_issue',
+};
+
+const domainField = field('Jira Domain', 'domain', 'string', true, 'Atlassian site domain used to build the Jira REST API base URL.', 'yourcompany.atlassian.net');
+const projectKeyField = field('Project Key', 'projectKey', 'string', false, 'Jira project key required when creating an issue.', 'PROJ');
+const issueKeyField = field('Issue Key', 'issueKey', 'string', false, 'Human-readable Jira issue key required for get, update, delete, transition, and comment operations.', 'PROJ-123');
+const summaryField = field('Issue Summary', 'summary', 'string', false, 'Short title for a new or updated Jira issue.', 'Payment webhook fails for annual renewals');
+const descriptionField = field('Issue Description', 'description', 'textarea', false, 'Plain-text issue body; runtime converts it to Atlassian Document Format automatically.', 'Customer impact, steps to reproduce, and useful links.');
+const issueTypeField = field('Issue Type', 'issueType', 'string', false, 'Jira issue type name used when creating an issue. Runtime defaults to Task.', 'Bug', { defaultValue: 'Task' });
+const assigneeField = field('Assignee Account ID', 'assignee', 'string', false, 'Jira Cloud accountId to assign during Create Issue.', '557058:abcd-1234');
+const priorityField: FieldDoc = {
+  ...field('Priority', 'priority', 'select', false, 'Jira priority name sent on create or update.', 'High', { defaultValue: 'Medium' }),
+  options: ['Highest', 'High', 'Medium', 'Low', 'Lowest'],
+  notes: 'Options: Highest for severe blockers, High for urgent work, Medium for normal priority, Low for minor work, and Lowest for backlog or low-risk updates.',
+};
+const labelsField = field('Labels', 'labels', 'json', false, 'JSON array of Jira label names attached during Create Issue.', '["bug","customer-impact"]');
+const transitionIdField = field('Transition ID', 'transitionId', 'string', false, 'Jira workflow transition ID required for Transition Issue.', '31');
+const commentBodyField = field('Comment Body', 'commentBody', 'textarea', false, 'Comment text required for Add Comment; runtime converts it to Atlassian Document Format.', 'Reviewed by support; customer confirmed the workaround.');
+const jqlField = field('JQL Query', 'jql', 'string', false, 'Jira Query Language string required for Search Issues.', 'project = PROJ AND status = "In Progress"');
+const maxResultsField = field('Max Results', 'maxResults', 'number', false, 'Maximum issues returned by Search Issues. Runtime defaults to 50.', '50', { defaultValue: '50' });
+
+const commonFields = [
+  operationField,
+  domainField,
+  projectKeyField,
+  issueKeyField,
+  summaryField,
+  descriptionField,
+  issueTypeField,
+  assigneeField,
+  priorityField,
+  labelsField,
+  transitionIdField,
+  commentBodyField,
+  jqlField,
+  maxResultsField,
+];
+
+const op = (
+  name: string,
+  value: string,
+  description: string,
+  outputExample: Record<string, unknown>,
+  outputDescription: string,
+  inputValues: Record<string, string>,
+): NodeDoc['resources'][number]['operations'][number] => ({
+  name,
+  value,
+  description,
+  fields: commonFields,
+  outputExample,
+  outputDescription,
+  usageExample: {
+    scenario: `${name} in Jira as part of a workplace automation where issue data must move cleanly into later workflow steps.`,
+    inputValues: { operation: value, domain: 'acme.atlassian.net', ...inputValues },
+    expectedOutput: `Use {{$json.success}} and operation-specific Jira fields from this output in the next workflow step.`,
+  },
+  externalDocsUrl: 'https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/',
+});
 
 export const jiraDoc: NodeDoc = {
-  "slug": "jira",
-  "displayName": "Jira",
-  "category": "Data",
-  "logoUrl": "/icons/nodes/jira.svg",
-  "description": "Jira issue tracking operations",
-  "credentialType": "Atlassian API Key",
-  "credentialSetupSteps": [
-    "What this is: The Jira connection lets CtrlChecks access your Jira account safely without putting secrets in workflow fields.",
-    "Where to start: Jira account settings or developer settings.",
-    "How to connect: In CtrlChecks, open Connections -> Add Connection -> Jira, then sign in or paste the secret value requested there.",
-    "Example: the token format shown by Jira.",
-    "Important: Treat tokens, passwords, API keys, and client secrets like bank passwords. Store them in Connections, not in regular workflow fields.",
-    "Test it: Save the connection, run a simple Jira step, and confirm CtrlChecks can reach the account."
+  slug: 'jira',
+  displayName: 'Jira',
+  category: 'DevOps',
+  logoUrl: '/icons/nodes/jira.svg',
+  description: 'Create, read, update, delete, search, transition, and comment on Jira Cloud issues using a Jira API-token connection.',
+  credentialType: 'Jira API Token',
+  credentialSetupSteps: [
+    'What this is: The Jira connection stores your Atlassian email, Jira API Token, and domain in the CtrlChecks credential vault.',
+    'Where to start: Create an API token at id.atlassian.com/manage-profile/security/api-tokens.',
+    'Permissions: The Atlassian account must be able to browse projects, create issues, edit issues, transition issues, and add comments for the projects this workflow touches.',
+    'How to connect: In CtrlChecks, open Connections -> Add Connection -> Jira and save Email Address, API Token, and Domain.',
+    'Test it: The connection should be able to call rest/api/3/myself on your Jira site.',
+    'Important: The action node uses Basic Auth from the saved connection. Service node outputs can feed downstream nodes, but those downstream nodes still need their own service node account connection.',
   ],
-  "credentialDocsUrl": "https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/",
-  "resources": [
+  credentialDocsUrl: 'https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/',
+  resources: [
     {
-      "name": "Operations",
-      "description": "Jira exposes operation choices directly.",
-      "operations": [
-        {
-          "name": "Create issue",
-          "value": "create_issue",
-          "description": "Create a new Jira issue.",
-          "fields": [
-            {
-              "name": "Domain",
-              "internalKey": "domain",
-              "type": "string",
-              "required": false,
-              "description": "Atlassian domain (without https://)",
-              "helpText": "What this field is: The Atlassian domain that tells Jira which item to use.\nWhere to find it: Open the item in Jira and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: yourcompany.atlassian.net.\nTip: Use {{$json.domain}} when an earlier Jira step provides this value.",
-              "placeholder": "yourcompany.atlassian.net",
-              "example": "yourcompany.atlassian.net"
-            },
-            {
-              "name": "Project Key",
-              "internalKey": "projectKey",
-              "type": "string",
-              "required": false,
-              "description": "Project key — required for create_issue",
-              "helpText": "What this field is: Your Jira project's short code — 2 to 10 capital letters.\nWhere to find it: In Jira, go to your project — the key is shown in brackets next to the project name, or in the URL.\nExample: If the project URL is jira.yourcompany.com/projects/PROJ/..., the key is PROJ.\nOther examples: DEV, MOBILE, BACKEND, SUPPORT",
-              "placeholder": "PROJ",
-              "example": "PROJ"
-            },
-            {
-              "name": "Issue Key",
-              "internalKey": "issueKey",
-              "type": "string",
-              "required": false,
-              "description": "Issue key — required for get/update/delete/comment/transition",
-              "helpText": "What this field is: The unique Jira issue identifier — project key + number.\nFormat: PROJECTKEY-NUMBER\nExample: DEV-456 or PROJ-1234 or MOBILE-89\nWhere to find it: Open the issue in Jira — the key is shown at the top left of the issue page.",
-              "placeholder": "PROJ-123",
-              "example": "PROJ-123"
-            },
-            {
-              "name": "Summary",
-              "internalKey": "summary",
-              "type": "string",
-              "required": false,
-              "description": "Issue title/summary — required for create_issue",
-              "helpText": "What this field is: Issue title/summary — required for create_issue.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Summary value.\nTip: Use {{$json.summary}} when this value comes from an earlier step.",
-              "placeholder": "Enter Summary"
-            },
-            {
-              "name": "Description",
-              "internalKey": "description",
-              "type": "textarea",
-              "required": false,
-              "description": "Issue description (plain text, converted to ADF automatically)",
-              "helpText": "What this field is: Issue description.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: Description value.\nTip: Use {{$json.description}} when this value comes from an earlier step.",
-              "placeholder": "Enter Description"
-            },
-            {
-              "name": "Issue Type",
-              "internalKey": "issueType",
-              "type": "string",
-              "required": false,
-              "description": "Issue type — default: Task",
-              "helpText": "What this field is: Issue type — default: Task.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Task.\nTip: Use {{$json.issueType}} when this value comes from an earlier step.",
-              "placeholder": "Task",
-              "example": "Task",
-              "defaultValue": "Task"
-            },
-            {
-              "name": "Priority",
-              "internalKey": "priority",
-              "type": "string",
-              "required": false,
-              "description": "Issue priority",
-              "helpText": "What this field is: Issue priority.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Highest.\nTip: Use {{$json.priority}} when this value comes from an earlier step.",
-              "placeholder": "Highest",
-              "example": "Highest"
-            },
-            {
-              "name": "Assignee",
-              "internalKey": "assignee",
-              "type": "string",
-              "required": false,
-              "description": "Assignee account ID (get from Jira user search)",
-              "helpText": "What this field is: Assignee account ID.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Assignee value.\nTip: Use {{$json.assignee}} when this value comes from an earlier step.",
-              "placeholder": "Enter Assignee"
-            },
-            {
-              "name": "Labels",
-              "internalKey": "labels",
-              "type": "json",
-              "required": false,
-              "description": "Labels to attach to the issue",
-              "helpText": "What this field is: Structured data for Labels to attach to the issue.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Jira.\nExample: [\"bug\",\"urgent\"].\nTip: Use {{$json.labels}} when an earlier step already prepared this data.",
-              "placeholder": "[\"bug\",\"urgent\"]",
-              "example": "[\"bug\",\"urgent\"]"
-            },
-            {
-              "name": "Jql",
-              "internalKey": "jql",
-              "type": "string",
-              "required": false,
-              "description": "JQL query — required for search_issues",
-              "helpText": "What this field is: JQL query — required for search_issues.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: project = PROJ AND status = \"In Progress\".\nTip: Use {{$json.jql}} when this value comes from an earlier step.",
-              "placeholder": "project = PROJ AND status = \"In Progress\"",
-              "example": "project = PROJ AND status = \"In Progress\""
-            },
-            {
-              "name": "Max Results",
-              "internalKey": "maxResults",
-              "type": "number",
-              "required": false,
-              "description": "Max results for search_issues (default: 50)",
-              "helpText": "What this field is: The number used for Max results for search_issues.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 50.\nTip: Use {{$json.maxResults}} when the number comes from an earlier step.",
-              "placeholder": "50",
-              "example": "50",
-              "defaultValue": "50"
-            },
-            {
-              "name": "Comment Body",
-              "internalKey": "commentBody",
-              "type": "textarea",
-              "required": false,
-              "description": "Comment text — required for add_comment",
-              "helpText": "What this field is: Structured data for Comment text — required for add_comment.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Jira.\nExample: {\"name\":\"{{$json.name}}\"}.\nTip: Use {{$json.commentBody}} when an earlier step already prepared this data.",
-              "placeholder": "{\"name\":\"{{$json.name}}\"}"
-            },
-            {
-              "name": "Transition Id",
-              "internalKey": "transitionId",
-              "type": "string",
-              "required": false,
-              "description": "Transition ID — required for transition_issue",
-              "helpText": "What this field is: The Transition ID — required for transition_issue that tells Jira which item to use.\nWhere to find it: Open the item in Jira and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.transitionId}} when an earlier Jira step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            }
-          ],
-          "outputExample": {
-            "id": "10001",
-            "key": "PROJ-42",
-            "self": "https://yourcompany.atlassian.net/rest/api/3/issue/10001"
-          },
-          "outputDescription": "id: Jira internal issue ID. key: Human-readable issue key (e.g. PROJ-42). self: API URL to the issue.",
-          "usageExample": {
-            "scenario": "Create a Jira bug ticket when a Sentry error is detected",
-            "inputValues": {
-              "project": "PROJ",
-              "summary": "{{$json.errorTitle}}",
-              "description": "{{$json.errorDetails}}",
-              "issuetype": "Bug",
-              "priority": "High"
-            },
-            "expectedOutput": "`{{$json.key}}` is the Jira issue key (e.g. PROJ-42)."
-          },
-          "externalDocsUrl": "https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/"
-        },
-        {
-          "name": "Get issue",
-          "value": "get_issue",
-          "description": "Get details of a Jira issue by its key.",
-          "fields": [
-            {
-              "name": "Domain",
-              "internalKey": "domain",
-              "type": "string",
-              "required": false,
-              "description": "Atlassian domain (without https://)",
-              "helpText": "What this field is: The Atlassian domain that tells Jira which item to use.\nWhere to find it: Open the item in Jira and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: yourcompany.atlassian.net.\nTip: Use {{$json.domain}} when an earlier Jira step provides this value.",
-              "placeholder": "yourcompany.atlassian.net",
-              "example": "yourcompany.atlassian.net"
-            },
-            {
-              "name": "Project Key",
-              "internalKey": "projectKey",
-              "type": "string",
-              "required": false,
-              "description": "Project key — required for create_issue",
-              "helpText": "What this field is: The Project key — required for create_issue that tells Jira which item to use.\nWhere to find it: Open the item in Jira and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: PROJ.\nTip: Use {{$json.projectKey}} when an earlier Jira step provides this value.",
-              "placeholder": "PROJ",
-              "example": "PROJ"
-            },
-            {
-              "name": "Issue Key",
-              "internalKey": "issueKey",
-              "type": "string",
-              "required": false,
-              "description": "Issue key — required for get/update/delete/comment/transition",
-              "helpText": "What this field is: The unique Jira issue identifier — project key + number.\nFormat: PROJECTKEY-NUMBER\nExample: DEV-456 or PROJ-1234 or MOBILE-89\nWhere to find it: Open the issue in Jira — the key is shown at the top left of the issue page.",
-              "placeholder": "PROJ-123",
-              "example": "PROJ-123"
-            },
-            {
-              "name": "Summary",
-              "internalKey": "summary",
-              "type": "string",
-              "required": false,
-              "description": "Issue title/summary — required for create_issue",
-              "helpText": "What this field is: Issue title/summary — required for create_issue.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Summary value.\nTip: Use {{$json.summary}} when this value comes from an earlier step.",
-              "placeholder": "Enter Summary"
-            },
-            {
-              "name": "Description",
-              "internalKey": "description",
-              "type": "textarea",
-              "required": false,
-              "description": "Issue description (plain text, converted to ADF automatically)",
-              "helpText": "What this field is: Issue description.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: Description value.\nTip: Use {{$json.description}} when this value comes from an earlier step.",
-              "placeholder": "Enter Description"
-            },
-            {
-              "name": "Issue Type",
-              "internalKey": "issueType",
-              "type": "string",
-              "required": false,
-              "description": "Issue type — default: Task",
-              "helpText": "What this field is: Issue type — default: Task.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Task.\nTip: Use {{$json.issueType}} when this value comes from an earlier step.",
-              "placeholder": "Task",
-              "example": "Task",
-              "defaultValue": "Task"
-            },
-            {
-              "name": "Priority",
-              "internalKey": "priority",
-              "type": "string",
-              "required": false,
-              "description": "Issue priority",
-              "helpText": "What this field is: Issue priority.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Highest.\nTip: Use {{$json.priority}} when this value comes from an earlier step.",
-              "placeholder": "Highest",
-              "example": "Highest"
-            },
-            {
-              "name": "Assignee",
-              "internalKey": "assignee",
-              "type": "string",
-              "required": false,
-              "description": "Assignee account ID (get from Jira user search)",
-              "helpText": "What this field is: Assignee account ID.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Assignee value.\nTip: Use {{$json.assignee}} when this value comes from an earlier step.",
-              "placeholder": "Enter Assignee"
-            },
-            {
-              "name": "Labels",
-              "internalKey": "labels",
-              "type": "json",
-              "required": false,
-              "description": "Labels to attach to the issue",
-              "helpText": "What this field is: Structured data for Labels to attach to the issue.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Jira.\nExample: [\"bug\",\"urgent\"].\nTip: Use {{$json.labels}} when an earlier step already prepared this data.",
-              "placeholder": "[\"bug\",\"urgent\"]",
-              "example": "[\"bug\",\"urgent\"]"
-            },
-            {
-              "name": "Jql",
-              "internalKey": "jql",
-              "type": "string",
-              "required": false,
-              "description": "JQL query — required for search_issues",
-              "helpText": "What this field is: JQL query — required for search_issues.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: project = PROJ AND status = \"In Progress\".\nTip: Use {{$json.jql}} when this value comes from an earlier step.",
-              "placeholder": "project = PROJ AND status = \"In Progress\"",
-              "example": "project = PROJ AND status = \"In Progress\""
-            },
-            {
-              "name": "Max Results",
-              "internalKey": "maxResults",
-              "type": "number",
-              "required": false,
-              "description": "Max results for search_issues (default: 50)",
-              "helpText": "What this field is: The number used for Max results for search_issues.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 50.\nTip: Use {{$json.maxResults}} when the number comes from an earlier step.",
-              "placeholder": "50",
-              "example": "50",
-              "defaultValue": "50"
-            },
-            {
-              "name": "Comment Body",
-              "internalKey": "commentBody",
-              "type": "textarea",
-              "required": false,
-              "description": "Comment text — required for add_comment",
-              "helpText": "What this field is: Structured data for Comment text — required for add_comment.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Jira.\nExample: {\"name\":\"{{$json.name}}\"}.\nTip: Use {{$json.commentBody}} when an earlier step already prepared this data.",
-              "placeholder": "{\"name\":\"{{$json.name}}\"}"
-            },
-            {
-              "name": "Transition Id",
-              "internalKey": "transitionId",
-              "type": "string",
-              "required": false,
-              "description": "Transition ID — required for transition_issue",
-              "helpText": "What this field is: The Transition ID — required for transition_issue that tells Jira which item to use.\nWhere to find it: Open the item in Jira and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.transitionId}} when an earlier Jira step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            }
-          ],
-          "outputExample": {
-            "id": "10001",
-            "key": "PROJ-42",
-            "fields": {
-              "summary": "Login fails for SSO users",
-              "status": {
-                "name": "In Progress"
-              },
-              "assignee": {
-                "displayName": "Alice Smith"
-              },
-              "priority": {
-                "name": "High"
-              }
-            }
-          },
-          "outputDescription": "key: Issue key. fields.summary: Issue title. fields.status.name: Current status. fields.assignee.displayName: Assignee name.",
-          "usageExample": {
-            "scenario": "Read a Jira issue to check its status before sending a reminder",
-            "inputValues": {
-              "issueKey": "{{$json.jiraKey}}"
-            },
-            "expectedOutput": "Full issue details in `{{$json.fields}}`."
-          },
-          "externalDocsUrl": "https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/"
-        },
-        {
-          "name": "Update issue",
-          "value": "update_issue",
-          "description": "Update issue using the Jira node.",
-          "fields": [
-            {
-              "name": "Domain",
-              "internalKey": "domain",
-              "type": "string",
-              "required": false,
-              "description": "Atlassian domain (without https://)",
-              "helpText": "What this field is: The Atlassian domain that tells Jira which item to use.\nWhere to find it: Open the item in Jira and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: yourcompany.atlassian.net.\nTip: Use {{$json.domain}} when an earlier Jira step provides this value.",
-              "placeholder": "yourcompany.atlassian.net",
-              "example": "yourcompany.atlassian.net"
-            },
-            {
-              "name": "Project Key",
-              "internalKey": "projectKey",
-              "type": "string",
-              "required": false,
-              "description": "Project key — required for create_issue",
-              "helpText": "What this field is: The Project key — required for create_issue that tells Jira which item to use.\nWhere to find it: Open the item in Jira and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: PROJ.\nTip: Use {{$json.projectKey}} when an earlier Jira step provides this value.",
-              "placeholder": "PROJ",
-              "example": "PROJ"
-            },
-            {
-              "name": "Issue Key",
-              "internalKey": "issueKey",
-              "type": "string",
-              "required": false,
-              "description": "Issue key — required for get/update/delete/comment/transition",
-              "helpText": "What this field is: The unique Jira issue identifier — project key + number.\nFormat: PROJECTKEY-NUMBER\nExample: DEV-456 or PROJ-1234 or MOBILE-89\nWhere to find it: Open the issue in Jira — the key is shown at the top left of the issue page.",
-              "placeholder": "PROJ-123",
-              "example": "PROJ-123"
-            },
-            {
-              "name": "Summary",
-              "internalKey": "summary",
-              "type": "string",
-              "required": false,
-              "description": "Issue title/summary — required for create_issue",
-              "helpText": "What this field is: Issue title/summary — required for create_issue.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Summary value.\nTip: Use {{$json.summary}} when this value comes from an earlier step.",
-              "placeholder": "Enter Summary"
-            },
-            {
-              "name": "Description",
-              "internalKey": "description",
-              "type": "textarea",
-              "required": false,
-              "description": "Issue description (plain text, converted to ADF automatically)",
-              "helpText": "What this field is: Issue description.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: Description value.\nTip: Use {{$json.description}} when this value comes from an earlier step.",
-              "placeholder": "Enter Description"
-            },
-            {
-              "name": "Issue Type",
-              "internalKey": "issueType",
-              "type": "string",
-              "required": false,
-              "description": "Issue type — default: Task",
-              "helpText": "What this field is: Issue type — default: Task.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Task.\nTip: Use {{$json.issueType}} when this value comes from an earlier step.",
-              "placeholder": "Task",
-              "example": "Task",
-              "defaultValue": "Task"
-            },
-            {
-              "name": "Priority",
-              "internalKey": "priority",
-              "type": "string",
-              "required": false,
-              "description": "Issue priority",
-              "helpText": "What this field is: Issue priority.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Highest.\nTip: Use {{$json.priority}} when this value comes from an earlier step.",
-              "placeholder": "Highest",
-              "example": "Highest"
-            },
-            {
-              "name": "Assignee",
-              "internalKey": "assignee",
-              "type": "string",
-              "required": false,
-              "description": "Assignee account ID (get from Jira user search)",
-              "helpText": "What this field is: Assignee account ID.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Assignee value.\nTip: Use {{$json.assignee}} when this value comes from an earlier step.",
-              "placeholder": "Enter Assignee"
-            },
-            {
-              "name": "Labels",
-              "internalKey": "labels",
-              "type": "json",
-              "required": false,
-              "description": "Labels to attach to the issue",
-              "helpText": "What this field is: Structured data for Labels to attach to the issue.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Jira.\nExample: [\"bug\",\"urgent\"].\nTip: Use {{$json.labels}} when an earlier step already prepared this data.",
-              "placeholder": "[\"bug\",\"urgent\"]",
-              "example": "[\"bug\",\"urgent\"]"
-            },
-            {
-              "name": "Jql",
-              "internalKey": "jql",
-              "type": "string",
-              "required": false,
-              "description": "JQL query — required for search_issues",
-              "helpText": "What this field is: JQL query — required for search_issues.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: project = PROJ AND status = \"In Progress\".\nTip: Use {{$json.jql}} when this value comes from an earlier step.",
-              "placeholder": "project = PROJ AND status = \"In Progress\"",
-              "example": "project = PROJ AND status = \"In Progress\""
-            },
-            {
-              "name": "Max Results",
-              "internalKey": "maxResults",
-              "type": "number",
-              "required": false,
-              "description": "Max results for search_issues (default: 50)",
-              "helpText": "What this field is: The number used for Max results for search_issues.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 50.\nTip: Use {{$json.maxResults}} when the number comes from an earlier step.",
-              "placeholder": "50",
-              "example": "50",
-              "defaultValue": "50"
-            },
-            {
-              "name": "Comment Body",
-              "internalKey": "commentBody",
-              "type": "textarea",
-              "required": false,
-              "description": "Comment text — required for add_comment",
-              "helpText": "What this field is: Structured data for Comment text — required for add_comment.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Jira.\nExample: {\"name\":\"{{$json.name}}\"}.\nTip: Use {{$json.commentBody}} when an earlier step already prepared this data.",
-              "placeholder": "{\"name\":\"{{$json.name}}\"}"
-            },
-            {
-              "name": "Transition Id",
-              "internalKey": "transitionId",
-              "type": "string",
-              "required": false,
-              "description": "Transition ID — required for transition_issue",
-              "helpText": "What this field is: The Transition ID — required for transition_issue that tells Jira which item to use.\nWhere to find it: Open the item in Jira and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.transitionId}} when an earlier Jira step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming Jira data with update issue after a related upstream event is received",
-            "inputValues": {
-              "Domain": "yourcompany.atlassian.net",
-              "Project Key": "PROJ",
-              "Issue Key": "PROJ-123",
-              "Summary": "",
-              "Description": ""
-            },
-            "expectedOutput": "Jira returns structured update issue data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/"
-        },
-        {
-          "name": "Delete issue",
-          "value": "delete_issue",
-          "description": "Delete issue using the Jira node.",
-          "fields": [
-            {
-              "name": "Domain",
-              "internalKey": "domain",
-              "type": "string",
-              "required": false,
-              "description": "Atlassian domain (without https://)",
-              "helpText": "What this field is: The Atlassian domain that tells Jira which item to use.\nWhere to find it: Open the item in Jira and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: yourcompany.atlassian.net.\nTip: Use {{$json.domain}} when an earlier Jira step provides this value.",
-              "placeholder": "yourcompany.atlassian.net",
-              "example": "yourcompany.atlassian.net"
-            },
-            {
-              "name": "Project Key",
-              "internalKey": "projectKey",
-              "type": "string",
-              "required": false,
-              "description": "Project key — required for create_issue",
-              "helpText": "What this field is: The Project key — required for create_issue that tells Jira which item to use.\nWhere to find it: Open the item in Jira and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: PROJ.\nTip: Use {{$json.projectKey}} when an earlier Jira step provides this value.",
-              "placeholder": "PROJ",
-              "example": "PROJ"
-            },
-            {
-              "name": "Issue Key",
-              "internalKey": "issueKey",
-              "type": "string",
-              "required": false,
-              "description": "Issue key — required for get/update/delete/comment/transition",
-              "helpText": "What this field is: The unique Jira issue identifier — project key + number.\nFormat: PROJECTKEY-NUMBER\nExample: DEV-456 or PROJ-1234 or MOBILE-89\nWhere to find it: Open the issue in Jira — the key is shown at the top left of the issue page.",
-              "placeholder": "PROJ-123",
-              "example": "PROJ-123"
-            },
-            {
-              "name": "Summary",
-              "internalKey": "summary",
-              "type": "string",
-              "required": false,
-              "description": "Issue title/summary — required for create_issue",
-              "helpText": "What this field is: Issue title/summary — required for create_issue.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Summary value.\nTip: Use {{$json.summary}} when this value comes from an earlier step.",
-              "placeholder": "Enter Summary"
-            },
-            {
-              "name": "Description",
-              "internalKey": "description",
-              "type": "textarea",
-              "required": false,
-              "description": "Issue description (plain text, converted to ADF automatically)",
-              "helpText": "What this field is: Issue description.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: Description value.\nTip: Use {{$json.description}} when this value comes from an earlier step.",
-              "placeholder": "Enter Description"
-            },
-            {
-              "name": "Issue Type",
-              "internalKey": "issueType",
-              "type": "string",
-              "required": false,
-              "description": "Issue type — default: Task",
-              "helpText": "What this field is: Issue type — default: Task.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Task.\nTip: Use {{$json.issueType}} when this value comes from an earlier step.",
-              "placeholder": "Task",
-              "example": "Task",
-              "defaultValue": "Task"
-            },
-            {
-              "name": "Priority",
-              "internalKey": "priority",
-              "type": "string",
-              "required": false,
-              "description": "Issue priority",
-              "helpText": "What this field is: Issue priority.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Highest.\nTip: Use {{$json.priority}} when this value comes from an earlier step.",
-              "placeholder": "Highest",
-              "example": "Highest"
-            },
-            {
-              "name": "Assignee",
-              "internalKey": "assignee",
-              "type": "string",
-              "required": false,
-              "description": "Assignee account ID (get from Jira user search)",
-              "helpText": "What this field is: Assignee account ID.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Assignee value.\nTip: Use {{$json.assignee}} when this value comes from an earlier step.",
-              "placeholder": "Enter Assignee"
-            },
-            {
-              "name": "Labels",
-              "internalKey": "labels",
-              "type": "json",
-              "required": false,
-              "description": "Labels to attach to the issue",
-              "helpText": "What this field is: Structured data for Labels to attach to the issue.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Jira.\nExample: [\"bug\",\"urgent\"].\nTip: Use {{$json.labels}} when an earlier step already prepared this data.",
-              "placeholder": "[\"bug\",\"urgent\"]",
-              "example": "[\"bug\",\"urgent\"]"
-            },
-            {
-              "name": "Jql",
-              "internalKey": "jql",
-              "type": "string",
-              "required": false,
-              "description": "JQL query — required for search_issues",
-              "helpText": "What this field is: JQL query — required for search_issues.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: project = PROJ AND status = \"In Progress\".\nTip: Use {{$json.jql}} when this value comes from an earlier step.",
-              "placeholder": "project = PROJ AND status = \"In Progress\"",
-              "example": "project = PROJ AND status = \"In Progress\""
-            },
-            {
-              "name": "Max Results",
-              "internalKey": "maxResults",
-              "type": "number",
-              "required": false,
-              "description": "Max results for search_issues (default: 50)",
-              "helpText": "What this field is: The number used for Max results for search_issues.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 50.\nTip: Use {{$json.maxResults}} when the number comes from an earlier step.",
-              "placeholder": "50",
-              "example": "50",
-              "defaultValue": "50"
-            },
-            {
-              "name": "Comment Body",
-              "internalKey": "commentBody",
-              "type": "textarea",
-              "required": false,
-              "description": "Comment text — required for add_comment",
-              "helpText": "What this field is: Structured data for Comment text — required for add_comment.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Jira.\nExample: {\"name\":\"{{$json.name}}\"}.\nTip: Use {{$json.commentBody}} when an earlier step already prepared this data.",
-              "placeholder": "{\"name\":\"{{$json.name}}\"}"
-            },
-            {
-              "name": "Transition Id",
-              "internalKey": "transitionId",
-              "type": "string",
-              "required": false,
-              "description": "Transition ID — required for transition_issue",
-              "helpText": "What this field is: The Transition ID — required for transition_issue that tells Jira which item to use.\nWhere to find it: Open the item in Jira and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.transitionId}} when an earlier Jira step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming Jira data with delete issue after a related upstream event is received",
-            "inputValues": {
-              "Domain": "yourcompany.atlassian.net",
-              "Project Key": "PROJ",
-              "Issue Key": "PROJ-123",
-              "Summary": "",
-              "Description": ""
-            },
-            "expectedOutput": "Jira returns structured delete issue data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/"
-        },
-        {
-          "name": "Search issues",
-          "value": "search_issues",
-          "description": "Search issues using the Jira node.",
-          "fields": [
-            {
-              "name": "Domain",
-              "internalKey": "domain",
-              "type": "string",
-              "required": false,
-              "description": "Atlassian domain (without https://)",
-              "helpText": "What this field is: The Atlassian domain that tells Jira which item to use.\nWhere to find it: Open the item in Jira and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: yourcompany.atlassian.net.\nTip: Use {{$json.domain}} when an earlier Jira step provides this value.",
-              "placeholder": "yourcompany.atlassian.net",
-              "example": "yourcompany.atlassian.net"
-            },
-            {
-              "name": "Project Key",
-              "internalKey": "projectKey",
-              "type": "string",
-              "required": false,
-              "description": "Project key — required for create_issue",
-              "helpText": "What this field is: The Project key — required for create_issue that tells Jira which item to use.\nWhere to find it: Open the item in Jira and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: PROJ.\nTip: Use {{$json.projectKey}} when an earlier Jira step provides this value.",
-              "placeholder": "PROJ",
-              "example": "PROJ"
-            },
-            {
-              "name": "Issue Key",
-              "internalKey": "issueKey",
-              "type": "string",
-              "required": false,
-              "description": "Issue key — required for get/update/delete/comment/transition",
-              "helpText": "What this field is: The unique Jira issue identifier — project key + number.\nFormat: PROJECTKEY-NUMBER\nExample: DEV-456 or PROJ-1234 or MOBILE-89\nWhere to find it: Open the issue in Jira — the key is shown at the top left of the issue page.",
-              "placeholder": "PROJ-123",
-              "example": "PROJ-123"
-            },
-            {
-              "name": "Summary",
-              "internalKey": "summary",
-              "type": "string",
-              "required": false,
-              "description": "Issue title/summary — required for create_issue",
-              "helpText": "What this field is: Issue title/summary — required for create_issue.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Summary value.\nTip: Use {{$json.summary}} when this value comes from an earlier step.",
-              "placeholder": "Enter Summary"
-            },
-            {
-              "name": "Description",
-              "internalKey": "description",
-              "type": "textarea",
-              "required": false,
-              "description": "Issue description (plain text, converted to ADF automatically)",
-              "helpText": "What this field is: Issue description.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: Description value.\nTip: Use {{$json.description}} when this value comes from an earlier step.",
-              "placeholder": "Enter Description"
-            },
-            {
-              "name": "Issue Type",
-              "internalKey": "issueType",
-              "type": "string",
-              "required": false,
-              "description": "Issue type — default: Task",
-              "helpText": "What this field is: Issue type — default: Task.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Task.\nTip: Use {{$json.issueType}} when this value comes from an earlier step.",
-              "placeholder": "Task",
-              "example": "Task",
-              "defaultValue": "Task"
-            },
-            {
-              "name": "Priority",
-              "internalKey": "priority",
-              "type": "string",
-              "required": false,
-              "description": "Issue priority",
-              "helpText": "What this field is: Issue priority.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Highest.\nTip: Use {{$json.priority}} when this value comes from an earlier step.",
-              "placeholder": "Highest",
-              "example": "Highest"
-            },
-            {
-              "name": "Assignee",
-              "internalKey": "assignee",
-              "type": "string",
-              "required": false,
-              "description": "Assignee account ID (get from Jira user search)",
-              "helpText": "What this field is: Assignee account ID.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Assignee value.\nTip: Use {{$json.assignee}} when this value comes from an earlier step.",
-              "placeholder": "Enter Assignee"
-            },
-            {
-              "name": "Labels",
-              "internalKey": "labels",
-              "type": "json",
-              "required": false,
-              "description": "Labels to attach to the issue",
-              "helpText": "What this field is: Structured data for Labels to attach to the issue.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Jira.\nExample: [\"bug\",\"urgent\"].\nTip: Use {{$json.labels}} when an earlier step already prepared this data.",
-              "placeholder": "[\"bug\",\"urgent\"]",
-              "example": "[\"bug\",\"urgent\"]"
-            },
-            {
-              "name": "Jql",
-              "internalKey": "jql",
-              "type": "string",
-              "required": false,
-              "description": "JQL query — required for search_issues",
-              "helpText": "What this field is: JQL query — required for search_issues.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: project = PROJ AND status = \"In Progress\".\nTip: Use {{$json.jql}} when this value comes from an earlier step.",
-              "placeholder": "project = PROJ AND status = \"In Progress\"",
-              "example": "project = PROJ AND status = \"In Progress\""
-            },
-            {
-              "name": "Max Results",
-              "internalKey": "maxResults",
-              "type": "number",
-              "required": false,
-              "description": "Max results for search_issues (default: 50)",
-              "helpText": "What this field is: The number used for Max results for search_issues.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 50.\nTip: Use {{$json.maxResults}} when the number comes from an earlier step.",
-              "placeholder": "50",
-              "example": "50",
-              "defaultValue": "50"
-            },
-            {
-              "name": "Comment Body",
-              "internalKey": "commentBody",
-              "type": "textarea",
-              "required": false,
-              "description": "Comment text — required for add_comment",
-              "helpText": "What this field is: Structured data for Comment text — required for add_comment.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Jira.\nExample: {\"name\":\"{{$json.name}}\"}.\nTip: Use {{$json.commentBody}} when an earlier step already prepared this data.",
-              "placeholder": "{\"name\":\"{{$json.name}}\"}"
-            },
-            {
-              "name": "Transition Id",
-              "internalKey": "transitionId",
-              "type": "string",
-              "required": false,
-              "description": "Transition ID — required for transition_issue",
-              "helpText": "What this field is: The Transition ID — required for transition_issue that tells Jira which item to use.\nWhere to find it: Open the item in Jira and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.transitionId}} when an earlier Jira step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming Jira data with search issues after a related upstream event is received",
-            "inputValues": {
-              "Domain": "yourcompany.atlassian.net",
-              "Project Key": "PROJ",
-              "Issue Key": "PROJ-123",
-              "Summary": "",
-              "Description": ""
-            },
-            "expectedOutput": "Jira returns structured search issues data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/"
-        },
-        {
-          "name": "Add comment",
-          "value": "add_comment",
-          "description": "Add comment using the Jira node.",
-          "fields": [
-            {
-              "name": "Domain",
-              "internalKey": "domain",
-              "type": "string",
-              "required": false,
-              "description": "Atlassian domain (without https://)",
-              "helpText": "What this field is: The Atlassian domain that tells Jira which item to use.\nWhere to find it: Open the item in Jira and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: yourcompany.atlassian.net.\nTip: Use {{$json.domain}} when an earlier Jira step provides this value.",
-              "placeholder": "yourcompany.atlassian.net",
-              "example": "yourcompany.atlassian.net"
-            },
-            {
-              "name": "Project Key",
-              "internalKey": "projectKey",
-              "type": "string",
-              "required": false,
-              "description": "Project key — required for create_issue",
-              "helpText": "What this field is: The Project key — required for create_issue that tells Jira which item to use.\nWhere to find it: Open the item in Jira and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: PROJ.\nTip: Use {{$json.projectKey}} when an earlier Jira step provides this value.",
-              "placeholder": "PROJ",
-              "example": "PROJ"
-            },
-            {
-              "name": "Issue Key",
-              "internalKey": "issueKey",
-              "type": "string",
-              "required": false,
-              "description": "Issue key — required for get/update/delete/comment/transition",
-              "helpText": "What this field is: The unique Jira issue identifier — project key + number.\nFormat: PROJECTKEY-NUMBER\nExample: DEV-456 or PROJ-1234 or MOBILE-89\nWhere to find it: Open the issue in Jira — the key is shown at the top left of the issue page.",
-              "placeholder": "PROJ-123",
-              "example": "PROJ-123"
-            },
-            {
-              "name": "Summary",
-              "internalKey": "summary",
-              "type": "string",
-              "required": false,
-              "description": "Issue title/summary — required for create_issue",
-              "helpText": "What this field is: Issue title/summary — required for create_issue.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Summary value.\nTip: Use {{$json.summary}} when this value comes from an earlier step.",
-              "placeholder": "Enter Summary"
-            },
-            {
-              "name": "Description",
-              "internalKey": "description",
-              "type": "textarea",
-              "required": false,
-              "description": "Issue description (plain text, converted to ADF automatically)",
-              "helpText": "What this field is: Issue description.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: Description value.\nTip: Use {{$json.description}} when this value comes from an earlier step.",
-              "placeholder": "Enter Description"
-            },
-            {
-              "name": "Issue Type",
-              "internalKey": "issueType",
-              "type": "string",
-              "required": false,
-              "description": "Issue type — default: Task",
-              "helpText": "What this field is: Issue type — default: Task.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Task.\nTip: Use {{$json.issueType}} when this value comes from an earlier step.",
-              "placeholder": "Task",
-              "example": "Task",
-              "defaultValue": "Task"
-            },
-            {
-              "name": "Priority",
-              "internalKey": "priority",
-              "type": "string",
-              "required": false,
-              "description": "Issue priority",
-              "helpText": "What this field is: Issue priority.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Highest.\nTip: Use {{$json.priority}} when this value comes from an earlier step.",
-              "placeholder": "Highest",
-              "example": "Highest"
-            },
-            {
-              "name": "Assignee",
-              "internalKey": "assignee",
-              "type": "string",
-              "required": false,
-              "description": "Assignee account ID (get from Jira user search)",
-              "helpText": "What this field is: Assignee account ID.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Assignee value.\nTip: Use {{$json.assignee}} when this value comes from an earlier step.",
-              "placeholder": "Enter Assignee"
-            },
-            {
-              "name": "Labels",
-              "internalKey": "labels",
-              "type": "json",
-              "required": false,
-              "description": "Labels to attach to the issue",
-              "helpText": "What this field is: Structured data for Labels to attach to the issue.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Jira.\nExample: [\"bug\",\"urgent\"].\nTip: Use {{$json.labels}} when an earlier step already prepared this data.",
-              "placeholder": "[\"bug\",\"urgent\"]",
-              "example": "[\"bug\",\"urgent\"]"
-            },
-            {
-              "name": "Jql",
-              "internalKey": "jql",
-              "type": "string",
-              "required": false,
-              "description": "JQL query — required for search_issues",
-              "helpText": "What this field is: JQL query — required for search_issues.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: project = PROJ AND status = \"In Progress\".\nTip: Use {{$json.jql}} when this value comes from an earlier step.",
-              "placeholder": "project = PROJ AND status = \"In Progress\"",
-              "example": "project = PROJ AND status = \"In Progress\""
-            },
-            {
-              "name": "Max Results",
-              "internalKey": "maxResults",
-              "type": "number",
-              "required": false,
-              "description": "Max results for search_issues (default: 50)",
-              "helpText": "What this field is: The number used for Max results for search_issues.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 50.\nTip: Use {{$json.maxResults}} when the number comes from an earlier step.",
-              "placeholder": "50",
-              "example": "50",
-              "defaultValue": "50"
-            },
-            {
-              "name": "Comment Body",
-              "internalKey": "commentBody",
-              "type": "textarea",
-              "required": false,
-              "description": "Comment text — required for add_comment",
-              "helpText": "What this field is: Structured data for Comment text — required for add_comment.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Jira.\nExample: {\"name\":\"{{$json.name}}\"}.\nTip: Use {{$json.commentBody}} when an earlier step already prepared this data.",
-              "placeholder": "{\"name\":\"{{$json.name}}\"}"
-            },
-            {
-              "name": "Transition Id",
-              "internalKey": "transitionId",
-              "type": "string",
-              "required": false,
-              "description": "Transition ID — required for transition_issue",
-              "helpText": "What this field is: The Transition ID — required for transition_issue that tells Jira which item to use.\nWhere to find it: Open the item in Jira and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.transitionId}} when an earlier Jira step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming Jira data with add comment after a related upstream event is received",
-            "inputValues": {
-              "Domain": "yourcompany.atlassian.net",
-              "Project Key": "PROJ",
-              "Issue Key": "PROJ-123",
-              "Summary": "",
-              "Description": ""
-            },
-            "expectedOutput": "Jira returns structured add comment data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/"
-        },
-        {
-          "name": "Transition issue",
-          "value": "transition_issue",
-          "description": "Transition issue using the Jira node.",
-          "fields": [
-            {
-              "name": "Domain",
-              "internalKey": "domain",
-              "type": "string",
-              "required": false,
-              "description": "Atlassian domain (without https://)",
-              "helpText": "What this field is: The Atlassian domain that tells Jira which item to use.\nWhere to find it: Open the item in Jira and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: yourcompany.atlassian.net.\nTip: Use {{$json.domain}} when an earlier Jira step provides this value.",
-              "placeholder": "yourcompany.atlassian.net",
-              "example": "yourcompany.atlassian.net"
-            },
-            {
-              "name": "Project Key",
-              "internalKey": "projectKey",
-              "type": "string",
-              "required": false,
-              "description": "Project key — required for create_issue",
-              "helpText": "What this field is: The Project key — required for create_issue that tells Jira which item to use.\nWhere to find it: Open the item in Jira and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: PROJ.\nTip: Use {{$json.projectKey}} when an earlier Jira step provides this value.",
-              "placeholder": "PROJ",
-              "example": "PROJ"
-            },
-            {
-              "name": "Issue Key",
-              "internalKey": "issueKey",
-              "type": "string",
-              "required": false,
-              "description": "Issue key — required for get/update/delete/comment/transition",
-              "helpText": "What this field is: The unique Jira issue identifier — project key + number.\nFormat: PROJECTKEY-NUMBER\nExample: DEV-456 or PROJ-1234 or MOBILE-89\nWhere to find it: Open the issue in Jira — the key is shown at the top left of the issue page.",
-              "placeholder": "PROJ-123",
-              "example": "PROJ-123"
-            },
-            {
-              "name": "Summary",
-              "internalKey": "summary",
-              "type": "string",
-              "required": false,
-              "description": "Issue title/summary — required for create_issue",
-              "helpText": "What this field is: Issue title/summary — required for create_issue.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Summary value.\nTip: Use {{$json.summary}} when this value comes from an earlier step.",
-              "placeholder": "Enter Summary"
-            },
-            {
-              "name": "Description",
-              "internalKey": "description",
-              "type": "textarea",
-              "required": false,
-              "description": "Issue description (plain text, converted to ADF automatically)",
-              "helpText": "What this field is: Issue description.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: Description value.\nTip: Use {{$json.description}} when this value comes from an earlier step.",
-              "placeholder": "Enter Description"
-            },
-            {
-              "name": "Issue Type",
-              "internalKey": "issueType",
-              "type": "string",
-              "required": false,
-              "description": "Issue type — default: Task",
-              "helpText": "What this field is: Issue type — default: Task.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Task.\nTip: Use {{$json.issueType}} when this value comes from an earlier step.",
-              "placeholder": "Task",
-              "example": "Task",
-              "defaultValue": "Task"
-            },
-            {
-              "name": "Priority",
-              "internalKey": "priority",
-              "type": "string",
-              "required": false,
-              "description": "Issue priority",
-              "helpText": "What this field is: Issue priority.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Highest.\nTip: Use {{$json.priority}} when this value comes from an earlier step.",
-              "placeholder": "Highest",
-              "example": "Highest"
-            },
-            {
-              "name": "Assignee",
-              "internalKey": "assignee",
-              "type": "string",
-              "required": false,
-              "description": "Assignee account ID (get from Jira user search)",
-              "helpText": "What this field is: Assignee account ID.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Assignee value.\nTip: Use {{$json.assignee}} when this value comes from an earlier step.",
-              "placeholder": "Enter Assignee"
-            },
-            {
-              "name": "Labels",
-              "internalKey": "labels",
-              "type": "json",
-              "required": false,
-              "description": "Labels to attach to the issue",
-              "helpText": "What this field is: Structured data for Labels to attach to the issue.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Jira.\nExample: [\"bug\",\"urgent\"].\nTip: Use {{$json.labels}} when an earlier step already prepared this data.",
-              "placeholder": "[\"bug\",\"urgent\"]",
-              "example": "[\"bug\",\"urgent\"]"
-            },
-            {
-              "name": "Jql",
-              "internalKey": "jql",
-              "type": "string",
-              "required": false,
-              "description": "JQL query — required for search_issues",
-              "helpText": "What this field is: JQL query — required for search_issues.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: project = PROJ AND status = \"In Progress\".\nTip: Use {{$json.jql}} when this value comes from an earlier step.",
-              "placeholder": "project = PROJ AND status = \"In Progress\"",
-              "example": "project = PROJ AND status = \"In Progress\""
-            },
-            {
-              "name": "Max Results",
-              "internalKey": "maxResults",
-              "type": "number",
-              "required": false,
-              "description": "Max results for search_issues (default: 50)",
-              "helpText": "What this field is: The number used for Max results for search_issues.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 50.\nTip: Use {{$json.maxResults}} when the number comes from an earlier step.",
-              "placeholder": "50",
-              "example": "50",
-              "defaultValue": "50"
-            },
-            {
-              "name": "Comment Body",
-              "internalKey": "commentBody",
-              "type": "textarea",
-              "required": false,
-              "description": "Comment text — required for add_comment",
-              "helpText": "What this field is: Structured data for Comment text — required for add_comment.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Jira.\nExample: {\"name\":\"{{$json.name}}\"}.\nTip: Use {{$json.commentBody}} when an earlier step already prepared this data.",
-              "placeholder": "{\"name\":\"{{$json.name}}\"}"
-            },
-            {
-              "name": "Transition Id",
-              "internalKey": "transitionId",
-              "type": "string",
-              "required": false,
-              "description": "Transition ID — required for transition_issue",
-              "helpText": "What this field is: The Transition ID — required for transition_issue that tells Jira which item to use.\nWhere to find it: Open the item in Jira and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.transitionId}} when an earlier Jira step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming Jira data with transition issue after a related upstream event is received",
-            "inputValues": {
-              "Domain": "yourcompany.atlassian.net",
-              "Project Key": "PROJ",
-              "Issue Key": "PROJ-123",
-              "Summary": "",
-              "Description": ""
-            },
-            "expectedOutput": "Jira returns structured transition issue data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/"
-        },
-        {
-          "name": "Get projects",
-          "value": "get_projects",
-          "description": "Get projects using the Jira node.",
-          "fields": [
-            {
-              "name": "Domain",
-              "internalKey": "domain",
-              "type": "string",
-              "required": false,
-              "description": "Atlassian domain (without https://)",
-              "helpText": "What this field is: The Atlassian domain that tells Jira which item to use.\nWhere to find it: Open the item in Jira and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: yourcompany.atlassian.net.\nTip: Use {{$json.domain}} when an earlier Jira step provides this value.",
-              "placeholder": "yourcompany.atlassian.net",
-              "example": "yourcompany.atlassian.net"
-            },
-            {
-              "name": "Project Key",
-              "internalKey": "projectKey",
-              "type": "string",
-              "required": false,
-              "description": "Project key — required for create_issue",
-              "helpText": "What this field is: The Project key — required for create_issue that tells Jira which item to use.\nWhere to find it: Open the item in Jira and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: PROJ.\nTip: Use {{$json.projectKey}} when an earlier Jira step provides this value.",
-              "placeholder": "PROJ",
-              "example": "PROJ"
-            },
-            {
-              "name": "Issue Key",
-              "internalKey": "issueKey",
-              "type": "string",
-              "required": false,
-              "description": "Issue key — required for get/update/delete/comment/transition",
-              "helpText": "What this field is: The unique Jira issue identifier — project key + number.\nFormat: PROJECTKEY-NUMBER\nExample: DEV-456 or PROJ-1234 or MOBILE-89\nWhere to find it: Open the issue in Jira — the key is shown at the top left of the issue page.",
-              "placeholder": "PROJ-123",
-              "example": "PROJ-123"
-            },
-            {
-              "name": "Summary",
-              "internalKey": "summary",
-              "type": "string",
-              "required": false,
-              "description": "Issue title/summary — required for create_issue",
-              "helpText": "What this field is: Issue title/summary — required for create_issue.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Summary value.\nTip: Use {{$json.summary}} when this value comes from an earlier step.",
-              "placeholder": "Enter Summary"
-            },
-            {
-              "name": "Description",
-              "internalKey": "description",
-              "type": "textarea",
-              "required": false,
-              "description": "Issue description (plain text, converted to ADF automatically)",
-              "helpText": "What this field is: Issue description.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: Description value.\nTip: Use {{$json.description}} when this value comes from an earlier step.",
-              "placeholder": "Enter Description"
-            },
-            {
-              "name": "Issue Type",
-              "internalKey": "issueType",
-              "type": "string",
-              "required": false,
-              "description": "Issue type — default: Task",
-              "helpText": "What this field is: Issue type — default: Task.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Task.\nTip: Use {{$json.issueType}} when this value comes from an earlier step.",
-              "placeholder": "Task",
-              "example": "Task",
-              "defaultValue": "Task"
-            },
-            {
-              "name": "Priority",
-              "internalKey": "priority",
-              "type": "string",
-              "required": false,
-              "description": "Issue priority",
-              "helpText": "What this field is: Issue priority.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Highest.\nTip: Use {{$json.priority}} when this value comes from an earlier step.",
-              "placeholder": "Highest",
-              "example": "Highest"
-            },
-            {
-              "name": "Assignee",
-              "internalKey": "assignee",
-              "type": "string",
-              "required": false,
-              "description": "Assignee account ID (get from Jira user search)",
-              "helpText": "What this field is: Assignee account ID.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Assignee value.\nTip: Use {{$json.assignee}} when this value comes from an earlier step.",
-              "placeholder": "Enter Assignee"
-            },
-            {
-              "name": "Labels",
-              "internalKey": "labels",
-              "type": "json",
-              "required": false,
-              "description": "Labels to attach to the issue",
-              "helpText": "What this field is: Structured data for Labels to attach to the issue.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Jira.\nExample: [\"bug\",\"urgent\"].\nTip: Use {{$json.labels}} when an earlier step already prepared this data.",
-              "placeholder": "[\"bug\",\"urgent\"]",
-              "example": "[\"bug\",\"urgent\"]"
-            },
-            {
-              "name": "Jql",
-              "internalKey": "jql",
-              "type": "string",
-              "required": false,
-              "description": "JQL query — required for search_issues",
-              "helpText": "What this field is: JQL query — required for search_issues.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: project = PROJ AND status = \"In Progress\".\nTip: Use {{$json.jql}} when this value comes from an earlier step.",
-              "placeholder": "project = PROJ AND status = \"In Progress\"",
-              "example": "project = PROJ AND status = \"In Progress\""
-            },
-            {
-              "name": "Max Results",
-              "internalKey": "maxResults",
-              "type": "number",
-              "required": false,
-              "description": "Max results for search_issues (default: 50)",
-              "helpText": "What this field is: The number used for Max results for search_issues.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 50.\nTip: Use {{$json.maxResults}} when the number comes from an earlier step.",
-              "placeholder": "50",
-              "example": "50",
-              "defaultValue": "50"
-            },
-            {
-              "name": "Comment Body",
-              "internalKey": "commentBody",
-              "type": "textarea",
-              "required": false,
-              "description": "Comment text — required for add_comment",
-              "helpText": "What this field is: Structured data for Comment text — required for add_comment.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Jira.\nExample: {\"name\":\"{{$json.name}}\"}.\nTip: Use {{$json.commentBody}} when an earlier step already prepared this data.",
-              "placeholder": "{\"name\":\"{{$json.name}}\"}"
-            },
-            {
-              "name": "Transition Id",
-              "internalKey": "transitionId",
-              "type": "string",
-              "required": false,
-              "description": "Transition ID — required for transition_issue",
-              "helpText": "What this field is: The Transition ID — required for transition_issue that tells Jira which item to use.\nWhere to find it: Open the item in Jira and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.transitionId}} when an earlier Jira step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming Jira data with get projects after a related upstream event is received",
-            "inputValues": {
-              "Domain": "yourcompany.atlassian.net",
-              "Project Key": "PROJ",
-              "Issue Key": "PROJ-123",
-              "Summary": "",
-              "Description": ""
-            },
-            "expectedOutput": "Jira returns structured get projects data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/"
-        }
-      ]
-    }
-  ],
-  "commonErrors": [
-    {
-      "error": "Authentication failed",
-      "cause": "The saved credential, token, API key, or OAuth grant is missing, expired, or lacks the required scope.",
-      "fix": "Reconnect the service in CtrlChecks → Connections, then re-run the Jira node."
+      name: 'Issues And Projects',
+      description: 'Jira Cloud issue and project operations implemented in the legacy executor.',
+      operations: [
+        op(
+          'Create Issue',
+          'create_issue',
+          'Create Issue posts a new issue to one Jira project. Runtime requires Project Key and Summary, defaults Issue Type to Task, converts Description to ADF, and can include Priority, Assignee, and Labels.',
+          { success: true, issueKey: 'PROJ-42', issueId: '10001', created: { id: '10001', key: 'PROJ-42' } },
+          'success: true when Jira created the issue. issueKey and issueId identify the new issue. created contains the raw Jira create response. _error and _errorDetails appear on validation or API failure.',
+          { projectKey: 'PROJ', summary: '{{$json.errorTitle}}', description: '{{$json.errorDetails}}', issueType: 'Bug', priority: 'High' },
+        ),
+        op(
+          'Get Issue',
+          'get_issue',
+          'Get Issue retrieves one Jira issue by Issue Key and returns the raw issue object under issue while preserving the incoming workflow fields.',
+          { success: true, issue: { key: 'PROJ-42', fields: { summary: 'Login fails', status: { name: 'In Progress' } } } },
+          'success: true when Jira returned the issue. issue contains the raw Jira issue object. _error and _errorDetails appear if issueKey is missing or Jira rejects the request.',
+          { issueKey: '{{$json.issueKey}}' },
+        ),
+        op(
+          'Update Issue',
+          'update_issue',
+          'Update Issue changes summary, description, or priority on an existing Jira issue. Runtime requires Issue Key and at least one of Summary, Description, or Priority.',
+          { success: true, updated: true, issueKey: 'PROJ-42' },
+          'success: true when Jira accepted the update. updated confirms the write and issueKey echoes the target issue. _error and _errorDetails appear on validation or API failure.',
+          { issueKey: 'PROJ-42', summary: 'Updated customer impact summary', priority: 'Highest' },
+        ),
+        op(
+          'Delete Issue',
+          'delete_issue',
+          'Delete Issue removes one Jira issue by Issue Key. Use it only for workflows where deletion is approved and reversible records are not required.',
+          { success: true, deleted: true, issueKey: 'PROJ-42' },
+          'success: true when Jira deleted the issue. deleted is true and issueKey echoes the deleted issue. _error and _errorDetails appear on permission or not-found failures.',
+          { issueKey: 'PROJ-42' },
+        ),
+        op(
+          'Search Issues',
+          'search_issues',
+          'Search Issues posts a JQL query to /rest/api/3/search/jql and returns matching issues plus the reported total. Runtime requests common fields such as summary and status.',
+          { success: true, total: 2, issues: [{ key: 'PROJ-42', fields: { summary: 'Login fails' } }] },
+          'success: true when Jira returned search results. total is the Jira total and issues is the issue array. _error and _errorDetails appear when jql is missing or invalid.',
+          { jql: 'project = PROJ AND status = "In Progress"', maxResults: '25' },
+        ),
+        op(
+          'Transition Issue',
+          'transition_issue',
+          'Transition Issue moves an existing issue through a Jira workflow transition. Runtime requires Issue Key and Transition ID; it does not discover transition IDs for you.',
+          { success: true, transitioned: true, issueKey: 'PROJ-42', transitionId: '31' },
+          'success: true when Jira accepted the transition. transitioned is true and issueKey/transitionId identify what changed. _error and _errorDetails appear on invalid transition or permissions.',
+          { issueKey: 'PROJ-42', transitionId: '31' },
+        ),
+        op(
+          'Add Comment',
+          'add_comment',
+          'Add Comment writes a comment to one Jira issue. Runtime requires Issue Key and Comment Body and converts the plain text body to Atlassian Document Format.',
+          { success: true, commentId: '10002', comment: { id: '10002', body: { type: 'doc' } } },
+          'success: true when Jira created the comment. commentId identifies the comment and comment contains the raw Jira comment response. _error and _errorDetails appear on validation or API failure.',
+          { issueKey: 'PROJ-42', commentBody: '{{$json.approvalNote}}' },
+        ),
+        op(
+          'Get Projects',
+          'get_projects',
+          'Get Projects lists Jira projects visible to the connected account and maps each project to key, id, name, and type.',
+          { success: true, projects: [{ key: 'PROJ', id: '10000', name: 'Product Engineering', type: 'software' }] },
+          'success: true when Jira returned projects. projects is an array of project summaries. _error and _errorDetails appear when the credential cannot list projects.',
+          { maxResults: '50' },
+        ),
+      ],
     },
-    {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
-    },
-    {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
   ],
-  "relatedNodes": []
+  commonErrors: [
+    { error: 'Jira: domain is required (e.g., yourcompany.atlassian.net)', cause: 'Domain is blank or not injected from the Jira credential.', fix: 'Enter your Atlassian domain without https:// or reconnect Jira in Connections.' },
+    { error: 'Jira: email is required - connect your Jira account in the credential selector.', cause: 'The saved Jira credential did not provide an email or username.', fix: 'Reconnect Jira with the email used to sign in to Atlassian.' },
+    { error: 'Jira: API token not found - connect your Jira account in the credential selector.', cause: 'The saved Jira credential did not provide apiToken or password.', fix: 'Create an Atlassian API token and save it in Connections.' },
+    { error: 'Jira create_issue: projectKey and summary are required', cause: 'Create Issue is missing Project Key or Issue Summary.', fix: 'Fill both fields, or map them from the trigger/input step.' },
+    { error: 'Jira update_issue: provide at least one of summary, description, or priority', cause: 'Update Issue was selected but no change fields were filled.', fix: 'Set Summary, Description, or Priority before running the node.' },
+    { error: 'Jira search_issues: jql query is required (e.g., project = PROJ AND status = "In Progress")', cause: 'Search Issues was selected without JQL.', fix: 'Build a JQL query in Jira Advanced Search and paste it into JQL Query.' },
+    { error: 'Jira transition_issue: transitionId is required. Use Get Transitions to find valid IDs.', cause: 'Transition Issue was selected without a Transition ID.', fix: 'Look up the transition ID from Jira or a prior API step and map it here.' },
+  ],
+  relatedNodes: ['jira_trigger', 'gitlab', 'github', 'jenkins', 'slack_message'],
 };

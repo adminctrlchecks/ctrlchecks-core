@@ -50,8 +50,8 @@ function mapActionToNodeTypeFromRegistry(action: AllowedAction): string {
       return allNodeTypes.find(nt => nt === 'slack_message') || 'slack_message';
     
     case 'store_database':
-      // Find database write node from registry
-      return allNodeTypes.find(nt => nt === 'database_write' || (nodeCapabilityRegistryDSL.isOutput(nt) && (unifiedNodeRegistry.get(nt)?.category === 'data'))) || 'database_write';
+      // Prefer concrete database nodes now that generic database_read/database_write are legacy-only.
+      return allNodeTypes.find(nt => nt === 'postgresql' || nt === 'db' || nt === 'mysql' || nt === 'mongodb') || 'postgresql';
     
     case 'condition_check':
       // Find conditional node from registry
@@ -85,12 +85,10 @@ const INTEGRATION_KEYWORDS: Record<string, string[]> = {
   'outlook': ['outlook', 'microsoft mail'],
   
   // Databases
-  'postgresql': ['postgres', 'postgresql'],
+  'postgresql': ['postgres', 'postgresql', 'database', 'sql', 'db', 'store', 'read database', 'query database'],
   'mysql': ['mysql'],
   'mongodb': ['mongo', 'mongodb'],
-  'db': ['db'],
-  'database_write': ['database', 'db', 'store'],
-  'database_read': ['read database', 'query database'],
+  'db': ['supabase', 'supa', 'supa db'],
   
   // CRM
   'hubspot': ['hubspot', 'hub spot'],
@@ -277,8 +275,8 @@ export class StepNodeMapper {
         } else if (context.includes('db')) {
           nodeType = 'db';
         } else {
-          // Default to database_write
-          nodeType = 'database_write';
+          // Default generic SQL/database requests to the concrete PostgreSQL node.
+          nodeType = 'postgresql';
         }
         break;
         

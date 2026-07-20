@@ -1,60 +1,10 @@
 import type { DocsSearchIndexItem } from '../search-index';
 
 export const vercelSearchIndex = [
-  {
-    "type": "node",
-    "title": "Vercel",
-    "slug": "vercel",
-    "category": "Data",
-    "href": "/docs/nodes/vercel",
-    "text": "Vercel Deploy projects and manage deployments on Vercel Use this node when a workflow needs vercel behavior with schema-driven inputs from the CtrlChecks node registry. Data"
-  },
-  {
-    "type": "operation",
-    "title": "Vercel: Deploy Project",
-    "slug": "vercel",
-    "category": "Data",
-    "href": "/docs/nodes/vercel#operation-deploy",
-    "text": "Vercel Operations Deploy Project Deploy Project with the Vercel node using the configured input fields. deploy"
-  },
-  {
-    "type": "field",
-    "title": "Vercel: Token",
-    "slug": "vercel",
-    "category": "Data",
-    "href": "/docs/nodes/vercel#operation-deploy",
-    "text": "Vercel Operations Deploy Project Token token Vercel API token (Bearer token). Use credential selection or template syntax like {{$credentials.vercel.token}}"
-  },
-  {
-    "type": "field",
-    "title": "Vercel: Project Name",
-    "slug": "vercel",
-    "category": "Data",
-    "href": "/docs/nodes/vercel#operation-deploy",
-    "text": "Vercel Operations Deploy Project Project Name projectName Vercel project name (required for deploy operation). Can use template syntax like {{$json.projectName}}"
-  },
-  {
-    "type": "operation",
-    "title": "Vercel: List Deployments",
-    "slug": "vercel",
-    "category": "Data",
-    "href": "/docs/nodes/vercel#operation-list_deployments",
-    "text": "Vercel Operations List Deployments List Deployments with the Vercel node using the configured input fields. list_deployments"
-  },
-  {
-    "type": "field",
-    "title": "Vercel: Token",
-    "slug": "vercel",
-    "category": "Data",
-    "href": "/docs/nodes/vercel#operation-list_deployments",
-    "text": "Vercel Operations List Deployments Token token Vercel API token (Bearer token). Use credential selection or template syntax like {{$credentials.vercel.token}}"
-  },
-  {
-    "type": "field",
-    "title": "Vercel: Project Name",
-    "slug": "vercel",
-    "category": "Data",
-    "href": "/docs/nodes/vercel#operation-list_deployments",
-    "text": "Vercel Operations List Deployments Project Name projectName Vercel project name (required for deploy operation). Can use template syntax like {{$json.projectName}}"
-  }
+  { type: 'node', title: 'Vercel', slug: 'vercel', category: 'DevOps', href: '/docs/nodes/vercel', text: 'Vercel deployment node for deploy and list_deployments. Output is success, data, error with structured error codes.' },
+  { type: 'operation', title: 'Vercel: Deploy Project', slug: 'vercel', category: 'DevOps', href: '/docs/nodes/vercel#operation-deploy', text: 'Deploy Project validates token and projectName then POSTs /v13/deployments. Output data has deploymentId, projectName, url, status, createdAt.' },
+  { type: 'operation', title: 'Vercel: List Deployments', slug: 'vercel', category: 'DevOps', href: '/docs/nodes/vercel#operation-list_deployments', text: 'List Deployments GETs /v13/deployments and returns data.deployments and data.total.' },
+  { type: 'field', title: 'Vercel: operation', slug: 'vercel', category: 'DevOps', href: '/docs/nodes/vercel#field-operation', text: 'Operation must be deploy or list_deployments or runtime returns INVALID_OPERATION.' },
+  { type: 'field', title: 'Vercel: projectName', slug: 'vercel', category: 'DevOps', href: '/docs/nodes/vercel#field-projectName', text: 'Project name required for deploy. Valid characters letters numbers hyphen underscore max 128.' },
+  { type: 'field', title: 'Vercel: token', slug: 'vercel', category: 'DevOps', href: '/docs/nodes/vercel#field-token', text: 'Vercel API token from token field or saved vercel credential. Missing token returns MISSING_TOKEN.' },
 ] satisfies DocsSearchIndexItem[];

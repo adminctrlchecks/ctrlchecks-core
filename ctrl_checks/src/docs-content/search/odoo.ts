@@ -5,608 +5,64 @@ export const odooSearchIndex = [
     "type": "node",
     "title": "Odoo",
     "slug": "odoo",
-    "category": "Data",
+    "category": "CRM",
     "href": "/docs/nodes/odoo",
-    "text": "Odoo Interact with Odoo ERP system (customers, invoices, products, and more) Use this node when a workflow needs odoo behavior with schema-driven inputs from the CtrlChecks node registry. Data"
+    "text": "Odoo Search, read, create, update, or delete records in any Odoo model, or call a custom Odoo method, via JSON-RPC. CRM"
   },
   {
     "type": "operation",
     "title": "Odoo: Get Records",
     "slug": "odoo",
-    "category": "Data",
+    "category": "CRM",
     "href": "/docs/nodes/odoo#operation-getRecords",
-    "text": "Odoo Operations Get Records Get Records with the Odoo node using the configured input fields. getRecords"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Model",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-getRecords",
-    "text": "Odoo Operations Get Records Model model Odoo model name"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Domain",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-getRecords",
-    "text": "Odoo Operations Get Records Domain domain Odoo domain filter (for getRecords)"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Fields",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-getRecords",
-    "text": "Odoo Operations Get Records Fields fields Fields to return (empty = all fields)"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Limit",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-getRecords",
-    "text": "Odoo Operations Get Records Limit limit Maximum number of records to return"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Offset",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-getRecords",
-    "text": "Odoo Operations Get Records Offset offset Pagination offset"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Values",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-getRecords",
-    "text": "Odoo Operations Get Records Values values Field values for create/update operations"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Record Id",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-getRecords",
-    "text": "Odoo Operations Get Records Record Id recordId Record ID for update/delete operations"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Method",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-getRecords",
-    "text": "Odoo Operations Get Records Method method Custom method name for executeMethod operation"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Method Args",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-getRecords",
-    "text": "Odoo Operations Get Records Method Args methodArgs Positional arguments for executeMethod"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Method Kwargs",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-getRecords",
-    "text": "Odoo Operations Get Records Method Kwargs methodKwargs Keyword arguments for executeMethod"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Url",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-getRecords",
-    "text": "Odoo Operations Get Records Url url Odoo base URL, for example https://yourcompany.odoo.com"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Db",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-getRecords",
-    "text": "Odoo Operations Get Records Db db Odoo database name"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Username",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-getRecords",
-    "text": "Odoo Operations Get Records Username username Odoo username or login email"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Password",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-getRecords",
-    "text": "Odoo Operations Get Records Password password Odoo password or API key"
+    "text": "Odoo Get Records Searches and reads records from an Odoo model via search_read."
   },
   {
     "type": "operation",
     "title": "Odoo: Create Record",
     "slug": "odoo",
-    "category": "Data",
+    "category": "CRM",
     "href": "/docs/nodes/odoo#operation-createRecord",
-    "text": "Odoo Operations Create Record Create Record with the Odoo node using the configured input fields. createRecord"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Model",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-createRecord",
-    "text": "Odoo Operations Create Record Model model Odoo model name"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Domain",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-createRecord",
-    "text": "Odoo Operations Create Record Domain domain Odoo domain filter (for getRecords)"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Fields",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-createRecord",
-    "text": "Odoo Operations Create Record Fields fields Fields to return (empty = all fields)"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Limit",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-createRecord",
-    "text": "Odoo Operations Create Record Limit limit Maximum number of records to return"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Offset",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-createRecord",
-    "text": "Odoo Operations Create Record Offset offset Pagination offset"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Values",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-createRecord",
-    "text": "Odoo Operations Create Record Values values Field values for create/update operations"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Record Id",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-createRecord",
-    "text": "Odoo Operations Create Record Record Id recordId Record ID for update/delete operations"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Method",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-createRecord",
-    "text": "Odoo Operations Create Record Method method Custom method name for executeMethod operation"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Method Args",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-createRecord",
-    "text": "Odoo Operations Create Record Method Args methodArgs Positional arguments for executeMethod"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Method Kwargs",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-createRecord",
-    "text": "Odoo Operations Create Record Method Kwargs methodKwargs Keyword arguments for executeMethod"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Url",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-createRecord",
-    "text": "Odoo Operations Create Record Url url Odoo base URL, for example https://yourcompany.odoo.com"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Db",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-createRecord",
-    "text": "Odoo Operations Create Record Db db Odoo database name"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Username",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-createRecord",
-    "text": "Odoo Operations Create Record Username username Odoo username or login email"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Password",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-createRecord",
-    "text": "Odoo Operations Create Record Password password Odoo password or API key"
+    "text": "Odoo Create Record Creates a new record; only the new ID is returned."
   },
   {
     "type": "operation",
     "title": "Odoo: Update Record",
     "slug": "odoo",
-    "category": "Data",
+    "category": "CRM",
     "href": "/docs/nodes/odoo#operation-updateRecord",
-    "text": "Odoo Operations Update Record Update Record with the Odoo node using the configured input fields. updateRecord"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Model",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-updateRecord",
-    "text": "Odoo Operations Update Record Model model Odoo model name"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Domain",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-updateRecord",
-    "text": "Odoo Operations Update Record Domain domain Odoo domain filter (for getRecords)"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Fields",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-updateRecord",
-    "text": "Odoo Operations Update Record Fields fields Fields to return (empty = all fields)"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Limit",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-updateRecord",
-    "text": "Odoo Operations Update Record Limit limit Maximum number of records to return"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Offset",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-updateRecord",
-    "text": "Odoo Operations Update Record Offset offset Pagination offset"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Values",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-updateRecord",
-    "text": "Odoo Operations Update Record Values values Field values for create/update operations"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Record Id",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-updateRecord",
-    "text": "Odoo Operations Update Record Record Id recordId Record ID for update/delete operations"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Method",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-updateRecord",
-    "text": "Odoo Operations Update Record Method method Custom method name for executeMethod operation"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Method Args",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-updateRecord",
-    "text": "Odoo Operations Update Record Method Args methodArgs Positional arguments for executeMethod"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Method Kwargs",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-updateRecord",
-    "text": "Odoo Operations Update Record Method Kwargs methodKwargs Keyword arguments for executeMethod"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Url",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-updateRecord",
-    "text": "Odoo Operations Update Record Url url Odoo base URL, for example https://yourcompany.odoo.com"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Db",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-updateRecord",
-    "text": "Odoo Operations Update Record Db db Odoo database name"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Username",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-updateRecord",
-    "text": "Odoo Operations Update Record Username username Odoo username or login email"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Password",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-updateRecord",
-    "text": "Odoo Operations Update Record Password password Odoo password or API key"
+    "text": "Odoo Update Record Updates an existing record identified by Record ID."
   },
   {
     "type": "operation",
     "title": "Odoo: Delete Record",
     "slug": "odoo",
-    "category": "Data",
+    "category": "CRM",
     "href": "/docs/nodes/odoo#operation-deleteRecord",
-    "text": "Odoo Operations Delete Record Delete Record with the Odoo node using the configured input fields. deleteRecord"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Model",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-deleteRecord",
-    "text": "Odoo Operations Delete Record Model model Odoo model name"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Domain",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-deleteRecord",
-    "text": "Odoo Operations Delete Record Domain domain Odoo domain filter (for getRecords)"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Fields",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-deleteRecord",
-    "text": "Odoo Operations Delete Record Fields fields Fields to return (empty = all fields)"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Limit",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-deleteRecord",
-    "text": "Odoo Operations Delete Record Limit limit Maximum number of records to return"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Offset",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-deleteRecord",
-    "text": "Odoo Operations Delete Record Offset offset Pagination offset"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Values",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-deleteRecord",
-    "text": "Odoo Operations Delete Record Values values Field values for create/update operations"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Record Id",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-deleteRecord",
-    "text": "Odoo Operations Delete Record Record Id recordId Record ID for update/delete operations"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Method",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-deleteRecord",
-    "text": "Odoo Operations Delete Record Method method Custom method name for executeMethod operation"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Method Args",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-deleteRecord",
-    "text": "Odoo Operations Delete Record Method Args methodArgs Positional arguments for executeMethod"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Method Kwargs",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-deleteRecord",
-    "text": "Odoo Operations Delete Record Method Kwargs methodKwargs Keyword arguments for executeMethod"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Url",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-deleteRecord",
-    "text": "Odoo Operations Delete Record Url url Odoo base URL, for example https://yourcompany.odoo.com"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Db",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-deleteRecord",
-    "text": "Odoo Operations Delete Record Db db Odoo database name"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Username",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-deleteRecord",
-    "text": "Odoo Operations Delete Record Username username Odoo username or login email"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Password",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-deleteRecord",
-    "text": "Odoo Operations Delete Record Password password Odoo password or API key"
+    "text": "Odoo Delete Record Permanently deletes an existing record identified by Record ID."
   },
   {
     "type": "operation",
     "title": "Odoo: Execute Method",
     "slug": "odoo",
-    "category": "Data",
+    "category": "CRM",
     "href": "/docs/nodes/odoo#operation-executeMethod",
-    "text": "Odoo Operations Execute Method Execute Method with the Odoo node using the configured input fields. executeMethod"
+    "text": "Odoo Execute Method Calls any custom method Odoo exposes on a model, such as action_confirm."
   },
   {
     "type": "field",
-    "title": "Odoo: Model",
+    "title": "Odoo: Fields (Odoo URL, Database, Username, Password, Operation, Model, Domain Filter, Fields, Limit, Offset, Field Values, Record ID, Method Name, Method Arguments, Method Keyword Arguments)",
     "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-executeMethod",
-    "text": "Odoo Operations Execute Method Model model Odoo model name"
+    "category": "CRM",
+    "href": "/docs/nodes/odoo#operation-getRecords",
+    "text": "Odoo URL Database Username Password Operation Model Domain Filter Fields Limit Offset Field Values Record ID Method Name Method Arguments Method Keyword Arguments"
   },
   {
-    "type": "field",
-    "title": "Odoo: Domain",
+    "type": "guide",
+    "title": "Odoo: Connection setup",
     "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-executeMethod",
-    "text": "Odoo Operations Execute Method Domain domain Odoo domain filter (for getRecords)"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Fields",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-executeMethod",
-    "text": "Odoo Operations Execute Method Fields fields Fields to return (empty = all fields)"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Limit",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-executeMethod",
-    "text": "Odoo Operations Execute Method Limit limit Maximum number of records to return"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Offset",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-executeMethod",
-    "text": "Odoo Operations Execute Method Offset offset Pagination offset"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Values",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-executeMethod",
-    "text": "Odoo Operations Execute Method Values values Field values for create/update operations"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Record Id",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-executeMethod",
-    "text": "Odoo Operations Execute Method Record Id recordId Record ID for update/delete operations"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Method",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-executeMethod",
-    "text": "Odoo Operations Execute Method Method method Custom method name for executeMethod operation"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Method Args",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-executeMethod",
-    "text": "Odoo Operations Execute Method Method Args methodArgs Positional arguments for executeMethod"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Method Kwargs",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-executeMethod",
-    "text": "Odoo Operations Execute Method Method Kwargs methodKwargs Keyword arguments for executeMethod"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Url",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-executeMethod",
-    "text": "Odoo Operations Execute Method Url url Odoo base URL, for example https://yourcompany.odoo.com"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Db",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-executeMethod",
-    "text": "Odoo Operations Execute Method Db db Odoo database name"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Username",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-executeMethod",
-    "text": "Odoo Operations Execute Method Username username Odoo username or login email"
-  },
-  {
-    "type": "field",
-    "title": "Odoo: Password",
-    "slug": "odoo",
-    "category": "Data",
-    "href": "/docs/nodes/odoo#operation-executeMethod",
-    "text": "Odoo Operations Execute Method Password password Odoo password or API key"
+    "category": "CRM",
+    "href": "/docs/nodes/odoo#connection",
+    "text": "Odoo Credentials Database API Key does not currently auto-fill not currently wired"
   }
 ] satisfies DocsSearchIndexItem[];

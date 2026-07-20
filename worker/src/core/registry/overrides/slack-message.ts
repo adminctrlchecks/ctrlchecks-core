@@ -74,6 +74,18 @@ export function overrideSlackMessage(
           },
         }
       : def.inputSchema.iconEmoji,
+    threadTs: {
+      type: 'string' as const,
+      description: 'Optional Slack thread timestamp. Use {{$json.threadTs}} or {{$json.messageTs}} to reply in the triggering thread.',
+      required: false,
+      ownership: 'value' as const,
+      role: 'id' as const,
+      fillMode: {
+        default: 'buildtime_ai_once' as const,
+        supportsRuntimeAI: true,
+        supportsBuildtimeAI: true,
+      },
+    },
   };
 
   return {
@@ -85,10 +97,10 @@ export function overrideSlackMessage(
       operation: 'default',
       label: 'Send Slack Message',
       requiredFields: ['message'],
-      optionalFields: ['channel', 'blocks', 'username', 'iconEmoji'],
+      optionalFields: ['channel', 'threadTs', 'blocks', 'username', 'iconEmoji'],
       conditionallyRequiredFields: [{ field: 'channel', when: { auth: 'slack_oauth2' } }],
       credentialProviders: ['slack'],
-      outputFields: ['id', 'status', 'provider', 'ok', 'channel', 'ts', 'message', 'error'],
+      outputFields: ['id', 'status', 'provider', 'ok', 'channel', 'ts', 'threadTs', 'message', 'error'],
       status: 'implemented',
       forbiddenFields: ['webhookUrl', 'botToken', 'accessToken', 'access_token', 'token'],
     }],

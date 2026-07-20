@@ -148,8 +148,134 @@ const aiLlmAdapter = new LLMAdapter();
 
 // Import route handlers
 import executeWorkflowRoute from './api/execute-workflow';
+import { isInternalExecutionRequest } from './core/execution/internal-execution-auth';
 import internalEngineExecuteRoute from './api/internal-engine-execute';
 import webhookTriggerRoute from './api/webhook-trigger';
+import {
+  telegramRegisterWebhookHandler,
+  telegramUnregisterWebhookHandler,
+  telegramWebhookHandler,
+} from './api/telegram-trigger';
+import {
+  whatsappRegisterWebhookHandler,
+  whatsappUnregisterWebhookHandler,
+  whatsappWebhookHandler,
+  whatsappWebhookVerifyHandler,
+} from './api/whatsapp-trigger';
+import {
+  instagramRegisterWebhookHandler,
+  instagramUnregisterWebhookHandler,
+  instagramWebhookHandler,
+  instagramWebhookVerifyHandler,
+} from './api/instagram-trigger';
+import {
+  facebookRegisterWebhookHandler,
+  facebookUnregisterWebhookHandler,
+  facebookWebhookHandler,
+  facebookWebhookVerifyHandler,
+} from './api/facebook-trigger';
+import {
+  slackRegisterWebhookHandler,
+  slackUnregisterWebhookHandler,
+  slackWebhookHandler,
+  slackWebhookInfoHandler,
+} from './api/slack-trigger';
+import {
+  discordRegisterWebhookHandler,
+  discordUnregisterWebhookHandler,
+  discordWebhookHandler,
+  discordWebhookInfoHandler,
+} from './api/discord-trigger';
+import {
+  microsoftTeamsRegisterWebhookHandler,
+  microsoftTeamsUnregisterWebhookHandler,
+  microsoftTeamsWebhookHandler,
+  microsoftTeamsWebhookInfoHandler,
+} from './api/microsoft-teams-trigger';
+import {
+  gmailRegisterWebhookHandler,
+  gmailUnregisterWebhookHandler,
+  gmailWebhookHandler,
+  gmailWebhookInfoHandler,
+} from './api/gmail-trigger';
+import {
+  outlookRegisterSubscriptionHandler,
+  outlookUnregisterSubscriptionHandler,
+  outlookWebhookHandler,
+  outlookWebhookInfoHandler,
+} from './api/outlook-trigger';
+import {
+  googleCalendarRegisterWatchHandler,
+  googleCalendarUnregisterWatchHandler,
+  googleCalendarWebhookHandler,
+  googleCalendarWebhookInfoHandler,
+} from './api/google-calendar-trigger';
+import {
+  googleSheetsPollingInfoHandler,
+  googleSheetsRegisterPollingHandler,
+  googleSheetsUnregisterPollingHandler,
+} from './api/google-sheets-trigger';
+import {
+  googleDriveRegisterWatchHandler,
+  googleDriveUnregisterWatchHandler,
+  googleDriveWebhookHandler,
+  googleDriveWebhookInfoHandler,
+} from './api/google-drive-trigger';
+import {
+  typeformRegisterWebhookHandler,
+  typeformUnregisterWebhookHandler,
+  typeformWebhookHandler,
+  typeformWebhookInfoHandler,
+} from './api/typeform-trigger';
+import {
+  tallyRegisterWebhookHandler,
+  tallyUnregisterWebhookHandler,
+  tallyWebhookHandler,
+  tallyWebhookInfoHandler,
+} from './api/tally-trigger';
+import {
+  githubRegisterWebhookHandler,
+  githubUnregisterWebhookHandler,
+  githubWebhookHandler,
+  githubWebhookInfoHandler,
+} from './api/github-trigger';
+import {
+  gitlabRegisterWebhookHandler,
+  gitlabUnregisterWebhookHandler,
+  gitlabWebhookHandler,
+  gitlabWebhookInfoHandler,
+} from './api/gitlab-trigger';
+import {
+  jiraRegisterWebhookHandler,
+  jiraUnregisterWebhookHandler,
+  jiraWebhookHandler,
+  jiraWebhookInfoHandler,
+} from './api/jira-trigger';
+import {
+  linearRegisterWebhookHandler,
+  linearUnregisterWebhookHandler,
+  linearWebhookHandler,
+  linearWebhookInfoHandler,
+} from './api/linear-trigger';
+import {
+  trelloRegisterWebhookHandler,
+  trelloUnregisterWebhookHandler,
+  trelloWebhookHandler,
+  trelloWebhookInfoHandler,
+  trelloWebhookValidationHandler,
+} from './api/trello-trigger';
+import {
+  stripeRegisterWebhookHandler,
+  stripeUnregisterWebhookHandler,
+  stripeWebhookHandler,
+  stripeWebhookInfoHandler,
+} from './api/stripe-trigger';
+import {
+  shopifyRegisterWebhookHandler,
+  shopifyUnregisterWebhookHandler,
+  shopifyWebhookHandler,
+  shopifyWebhookInfoHandler,
+} from './api/shopify-trigger';
 import chatApiRoute from './api/chat-api';
 import adminTemplatesRoute from './api/admin-templates';
 import templatesRoute from './api/templates';
@@ -311,7 +437,13 @@ app.use(express.json({
     req.rawBody = Buffer.from(buf);
   },
 }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.urlencoded({
+  extended: true,
+  limit: '50mb',
+  verify: (req: any, _res, buf) => {
+    req.rawBody = Buffer.from(buf);
+  },
+}));
 app.use(corsMiddleware);
 app.use(requestMetricsMiddleware);
 app.use(tokenBucketRateLimiter({
@@ -561,17 +693,8 @@ app.get('/api/chat/health', asyncHandler(async (req: Request, res: Response) => 
 }));
 
 // API Routes
-const INTERNAL_EXECUTION_HEADERS = [
-  'x-internal-form-execution',
-  'x-internal-chat-execution',
-  'x-internal-webhook-execution',
-  'x-internal-engine-execution',
-  'x-internal-trigger-execution',
-  'x-internal-approval-execution',
-];
 const authenticateExternalExecution = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  const isInternalExecution = INTERNAL_EXECUTION_HEADERS.some((header) => req.headers[header] === 'true');
-  if (isInternalExecution) {
+  if (isInternalExecutionRequest({ headers: req.headers, body: req.body, requireExecutionId: true })) {
     next();
     return;
   }
@@ -1177,6 +1300,97 @@ app.delete('/api/connections/linkedin', asyncHandler(authenticateUser), asyncHan
 
 app.post('/api/webhook-trigger/:workflowId', asyncHandler(webhookTriggerRoute));
 app.get('/api/webhook-trigger/:workflowId', asyncHandler(webhookTriggerRoute));
+app.post('/api/telegram/webhook/:workflowId/:nodeId', asyncHandler(telegramWebhookHandler));
+app.post('/api/telegram/webhook/register', asyncHandler(authenticateUser), asyncHandler(telegramRegisterWebhookHandler));
+app.post('/api/telegram/webhook/unregister', asyncHandler(authenticateUser), asyncHandler(telegramUnregisterWebhookHandler));
+app.get('/api/whatsapp/webhook/:workflowId/:nodeId', asyncHandler(whatsappWebhookVerifyHandler));
+app.post('/api/whatsapp/webhook/:workflowId/:nodeId', asyncHandler(whatsappWebhookHandler));
+app.post('/api/whatsapp/webhook/register', asyncHandler(authenticateUser), asyncHandler(whatsappRegisterWebhookHandler));
+app.post('/api/whatsapp/webhook/unregister', asyncHandler(authenticateUser), asyncHandler(whatsappUnregisterWebhookHandler));
+app.get('/api/instagram/webhook/:workflowId/:nodeId', asyncHandler(instagramWebhookVerifyHandler));
+app.post('/api/instagram/webhook/:workflowId/:nodeId', asyncHandler(instagramWebhookHandler));
+app.post('/api/instagram/webhook/register', asyncHandler(authenticateUser), asyncHandler(instagramRegisterWebhookHandler));
+app.post('/api/instagram/webhook/unregister', asyncHandler(authenticateUser), asyncHandler(instagramUnregisterWebhookHandler));
+app.get('/api/facebook/webhook/:workflowId/:nodeId', asyncHandler(facebookWebhookVerifyHandler));
+app.post('/api/facebook/webhook/:workflowId/:nodeId', asyncHandler(facebookWebhookHandler));
+app.post('/api/facebook/webhook/register', asyncHandler(authenticateUser), asyncHandler(facebookRegisterWebhookHandler));
+app.post('/api/facebook/webhook/unregister', asyncHandler(authenticateUser), asyncHandler(facebookUnregisterWebhookHandler));
+app.get('/api/slack/webhook/:workflowId/:nodeId', asyncHandler(slackWebhookInfoHandler));
+app.post('/api/slack/webhook/:workflowId/:nodeId', asyncHandler(slackWebhookHandler));
+app.post('/api/slack/webhook/register', asyncHandler(authenticateUser), asyncHandler(slackRegisterWebhookHandler));
+app.post('/api/slack/webhook/unregister', asyncHandler(authenticateUser), asyncHandler(slackUnregisterWebhookHandler));
+app.get('/api/discord/webhook/:workflowId/:nodeId', asyncHandler(discordWebhookInfoHandler));
+app.post('/api/discord/webhook/:workflowId/:nodeId', asyncHandler(discordWebhookHandler));
+app.post('/api/discord/webhook/register', asyncHandler(authenticateUser), asyncHandler(discordRegisterWebhookHandler));
+app.post('/api/discord/webhook/unregister', asyncHandler(authenticateUser), asyncHandler(discordUnregisterWebhookHandler));
+app.get('/api/microsoft-teams/webhook/:workflowId/:nodeId', asyncHandler(microsoftTeamsWebhookInfoHandler));
+app.post('/api/microsoft-teams/webhook/:workflowId/:nodeId', asyncHandler(microsoftTeamsWebhookHandler));
+app.post('/api/microsoft-teams/webhook/register', asyncHandler(authenticateUser), asyncHandler(microsoftTeamsRegisterWebhookHandler));
+app.post('/api/microsoft-teams/webhook/unregister', asyncHandler(authenticateUser), asyncHandler(microsoftTeamsUnregisterWebhookHandler));
+app.get('/api/gmail/webhook/:workflowId/:nodeId', asyncHandler(gmailWebhookInfoHandler));
+app.post('/api/gmail/webhook/:workflowId/:nodeId', asyncHandler(gmailWebhookHandler));
+app.post('/api/gmail/webhook/register', asyncHandler(authenticateUser), asyncHandler(gmailRegisterWebhookHandler));
+app.post('/api/gmail/webhook/unregister', asyncHandler(authenticateUser), asyncHandler(gmailUnregisterWebhookHandler));
+app.get('/api/outlook/webhook/:workflowId/:nodeId', asyncHandler(outlookWebhookInfoHandler));
+app.post('/api/outlook/webhook/:workflowId/:nodeId', asyncHandler(outlookWebhookHandler));
+app.post('/api/outlook/webhook/register', asyncHandler(authenticateUser), asyncHandler(outlookRegisterSubscriptionHandler));
+app.post('/api/outlook/webhook/unregister', asyncHandler(authenticateUser), asyncHandler(outlookUnregisterSubscriptionHandler));
+app.get('/api/google-calendar/webhook/:workflowId/:nodeId', asyncHandler(googleCalendarWebhookInfoHandler));
+app.post('/api/google-calendar/webhook/:workflowId/:nodeId', asyncHandler(googleCalendarWebhookHandler));
+app.post('/api/google-calendar/webhook/register', asyncHandler(authenticateUser), asyncHandler(googleCalendarRegisterWatchHandler));
+app.post('/api/google-calendar/webhook/unregister', asyncHandler(authenticateUser), asyncHandler(googleCalendarUnregisterWatchHandler));
+app.get('/api/google-sheets/polling/:workflowId/:nodeId', asyncHandler(authenticateUser), asyncHandler(googleSheetsPollingInfoHandler));
+app.post('/api/google-sheets/polling/register', asyncHandler(authenticateUser), asyncHandler(googleSheetsRegisterPollingHandler));
+app.post('/api/google-sheets/polling/unregister', asyncHandler(authenticateUser), asyncHandler(googleSheetsUnregisterPollingHandler));
+app.get('/api/google-drive/webhook/:workflowId/:nodeId', asyncHandler(googleDriveWebhookInfoHandler));
+app.post('/api/google-drive/webhook/:workflowId/:nodeId', asyncHandler(googleDriveWebhookHandler));
+app.post('/api/google-drive/webhook/register', asyncHandler(authenticateUser), asyncHandler(googleDriveRegisterWatchHandler));
+app.post('/api/google-drive/webhook/unregister', asyncHandler(authenticateUser), asyncHandler(googleDriveUnregisterWatchHandler));
+app.get('/api/typeform/webhook/:workflowId/:nodeId', asyncHandler(typeformWebhookInfoHandler));
+app.post('/api/typeform/webhook/:workflowId/:nodeId', asyncHandler(typeformWebhookHandler));
+app.post('/api/typeform/webhook/register', asyncHandler(authenticateUser), asyncHandler(typeformRegisterWebhookHandler));
+app.post('/api/typeform/webhook/unregister', asyncHandler(authenticateUser), asyncHandler(typeformUnregisterWebhookHandler));
+
+app.get('/api/tally/webhook/:workflowId/:nodeId', asyncHandler(tallyWebhookInfoHandler));
+app.post('/api/tally/webhook/:workflowId/:nodeId', asyncHandler(tallyWebhookHandler));
+app.post('/api/tally/webhook/register', asyncHandler(authenticateUser), asyncHandler(tallyRegisterWebhookHandler));
+app.post('/api/tally/webhook/unregister', asyncHandler(authenticateUser), asyncHandler(tallyUnregisterWebhookHandler));
+
+app.get('/api/github/webhook/:workflowId/:nodeId', asyncHandler(githubWebhookInfoHandler));
+app.post('/api/github/webhook/:workflowId/:nodeId', asyncHandler(githubWebhookHandler));
+app.post('/api/github/webhook/register', asyncHandler(authenticateUser), asyncHandler(githubRegisterWebhookHandler));
+app.post('/api/github/webhook/unregister', asyncHandler(authenticateUser), asyncHandler(githubUnregisterWebhookHandler));
+
+app.get('/api/gitlab/webhook/:workflowId/:nodeId', asyncHandler(gitlabWebhookInfoHandler));
+app.post('/api/gitlab/webhook/:workflowId/:nodeId', asyncHandler(gitlabWebhookHandler));
+app.post('/api/gitlab/webhook/register', asyncHandler(authenticateUser), asyncHandler(gitlabRegisterWebhookHandler));
+app.post('/api/gitlab/webhook/unregister', asyncHandler(authenticateUser), asyncHandler(gitlabUnregisterWebhookHandler));
+
+app.get('/api/jira/webhook/:workflowId/:nodeId', asyncHandler(jiraWebhookInfoHandler));
+app.post('/api/jira/webhook/:workflowId/:nodeId', asyncHandler(jiraWebhookHandler));
+app.post('/api/jira/webhook/register', asyncHandler(authenticateUser), asyncHandler(jiraRegisterWebhookHandler));
+app.post('/api/jira/webhook/unregister', asyncHandler(authenticateUser), asyncHandler(jiraUnregisterWebhookHandler));
+
+app.get('/api/linear/webhook/:workflowId/:nodeId', asyncHandler(linearWebhookInfoHandler));
+app.post('/api/linear/webhook/:workflowId/:nodeId', asyncHandler(linearWebhookHandler));
+app.post('/api/linear/webhook/register', asyncHandler(authenticateUser), asyncHandler(linearRegisterWebhookHandler));
+app.post('/api/linear/webhook/unregister', asyncHandler(authenticateUser), asyncHandler(linearUnregisterWebhookHandler));
+
+app.head('/api/trello/webhook/:workflowId/:nodeId', asyncHandler(trelloWebhookValidationHandler));
+app.get('/api/trello/webhook/:workflowId/:nodeId', asyncHandler(trelloWebhookInfoHandler));
+app.post('/api/trello/webhook/:workflowId/:nodeId', asyncHandler(trelloWebhookHandler));
+app.post('/api/trello/webhook/register', asyncHandler(authenticateUser), asyncHandler(trelloRegisterWebhookHandler));
+app.post('/api/trello/webhook/unregister', asyncHandler(authenticateUser), asyncHandler(trelloUnregisterWebhookHandler));
+
+app.get('/api/stripe/webhook/:workflowId/:nodeId', asyncHandler(stripeWebhookInfoHandler));
+app.post('/api/stripe/webhook/:workflowId/:nodeId', asyncHandler(stripeWebhookHandler));
+app.post('/api/stripe/webhook/register', asyncHandler(authenticateUser), asyncHandler(stripeRegisterWebhookHandler));
+app.post('/api/stripe/webhook/unregister', asyncHandler(authenticateUser), asyncHandler(stripeUnregisterWebhookHandler));
+
+app.get('/api/shopify/webhook/:workflowId/:nodeId', asyncHandler(shopifyWebhookInfoHandler));
+app.post('/api/shopify/webhook/:workflowId/:nodeId', asyncHandler(shopifyWebhookHandler));
+app.post('/api/shopify/webhook/register', asyncHandler(authenticateUser), asyncHandler(shopifyRegisterWebhookHandler));
+app.post('/api/shopify/webhook/unregister', asyncHandler(authenticateUser), asyncHandler(shopifyUnregisterWebhookHandler));
 app.post('/api/chat-api', asyncHandler(chatApiRoute));
 
 // Public active templates routes
@@ -2137,6 +2351,36 @@ async function startServer() {
           }).catch(err => {
             console.error('[ServerStartup] ⚠️  Failed to load scheduler module:', err);
             console.error('[ServerStartup] ⚠️  Error details:', err?.stack || err);
+          });
+
+          import('./services/gmail/gmail-trigger-service').then(({ startGmailWatchRenewalScheduler }) => {
+            startGmailWatchRenewalScheduler();
+          }).catch(err => {
+            console.error('[ServerStartup] ⚠️  Failed to start Gmail watch renewal scheduler:', err);
+          });
+
+          import('./services/outlook/outlook-trigger-service').then(({ startOutlookSubscriptionRenewalScheduler }) => {
+            startOutlookSubscriptionRenewalScheduler();
+          }).catch(err => {
+            console.error('[ServerStartup] ⚠️  Failed to start Outlook subscription renewal scheduler:', err);
+          });
+
+          import('./services/google-calendar/google-calendar-trigger-service').then(({ startGoogleCalendarWatchRenewalScheduler }) => {
+            startGoogleCalendarWatchRenewalScheduler();
+          }).catch(err => {
+            console.error('[ServerStartup] ⚠️  Failed to start Google Calendar watch renewal scheduler:', err);
+          });
+
+          import('./services/google-sheets/google-sheets-trigger-service').then(({ startGoogleSheetsPollingScheduler }) => {
+            startGoogleSheetsPollingScheduler();
+          }).catch(err => {
+            console.error('[ServerStartup] ⚠️  Failed to start Google Sheets polling scheduler:', err);
+          });
+
+          import('./services/google-drive/google-drive-trigger-service').then(({ startGoogleDriveWatchRenewalScheduler }) => {
+            startGoogleDriveWatchRenewalScheduler();
+          }).catch(err => {
+            console.error('[ServerStartup] ⚠️  Failed to start Google Drive watch renewal scheduler:', err);
           });
 
           // Start session cleanup service (requires Redis session repository)

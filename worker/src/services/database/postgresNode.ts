@@ -220,7 +220,7 @@ export async function runPostgresNode(context: NodeExecutionContext): Promise<an
     table: inputs.table,
     data: inputs.data,
     where: inputs.where,
-    params: inputs.params,
+    params: inputs.params ?? inputs.parameters,
   };
 
   // Validate credentials

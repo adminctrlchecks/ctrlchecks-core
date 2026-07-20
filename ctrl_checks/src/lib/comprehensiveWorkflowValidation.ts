@@ -78,6 +78,10 @@ function isTriggerNode(node: Node): boolean {
     'webhook_trigger_response',
     'schedule',
     'chat_trigger',
+    'telegram_trigger',
+    'whatsapp_trigger',
+    'instagram_trigger',
+    'facebook_trigger',
     'error_trigger',
     'interval',
     'workflow_trigger',
@@ -87,15 +91,29 @@ function isTriggerNode(node: Node): boolean {
     'gmail_trigger',
     'slack_trigger',
     'discord_trigger',
+    'microsoft_teams_trigger',
+    'outlook_trigger',
+    'google_calendar_trigger',
+    'google_sheets_trigger',
+    'google_drive_trigger',
+    'typeform_trigger',
+    'tally_trigger',
+    'github_trigger',
+    'gitlab_trigger',
+    'jira_trigger',
+    'linear_trigger',
+    'trello_trigger',
+    'stripe_trigger',
+    'shopify_trigger',
   ];
-  
+
   return knownTriggerTypes.includes(type);
 }
 
 // Keep for backward compatibility (used in some places)
 const TRIGGER_NODE_TYPES = [
-  'manual_trigger', 'webhook', 'webhook_trigger_response', 'schedule', 
-  'chat_trigger', 'error_trigger', 'interval', 'workflow_trigger', 'http_trigger'
+  'manual_trigger', 'webhook', 'webhook_trigger_response', 'schedule',
+  'chat_trigger', 'telegram_trigger', 'whatsapp_trigger', 'instagram_trigger', 'facebook_trigger', 'error_trigger', 'interval', 'workflow_trigger', 'http_trigger'
 ];
 
 /**

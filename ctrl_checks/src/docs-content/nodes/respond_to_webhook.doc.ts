@@ -1,95 +1,164 @@
 import type { NodeDoc } from '../types';
+import { richFieldHelp } from './_sharedFieldHelp';
+
+const outputDescription = [
+  'statusCode: HTTP status code normalized by runtime from statusCode, responseCode, status, or default 200.',
+  'headers: Response headers object returned by the node.',
+  'body: Response payload chosen from body, responseBody, incoming body, or the full incoming input object.',
+].join('\n');
 
 export const respondToWebhookDoc: NodeDoc = {
-  "slug": "respond_to_webhook",
-  "displayName": "Respond to Webhook",
-  "category": "Utility",
-  "logoUrl": "/icons/nodes/respond_to_webhook.svg",
-  "description": "Sends HTTP response back to webhook caller",
-  "credentialType": "None",
-  "credentialSetupSteps": [
-    "This node does not need a saved account connection.",
-    "Open the node settings and fill the visible input fields.",
-    "Run the workflow when the required fields are complete."
+  slug: 'respond_to_webhook',
+  displayName: 'Respond to Webhook',
+  category: 'HTTP & API',
+  logoUrl: '/icons/nodes/respond_to_webhook.svg',
+  description: 'Normalize the HTTP response payload intended for a webhook caller, using status code, headers, and response body fields.',
+  credentialType: 'None',
+  credentialSetupSteps: [
+    'Respond to Webhook does not use credentials or a third-party account; it shapes the response that a webhook-style workflow intends to return.',
+    'Use it after an incoming webhook or form workflow has finished the work that the caller is waiting for.',
+    'Connect this node output to the next node with an outgoing line only when another step should inspect {{$json.statusCode}}, {{$json.headers}}, or {{$json.body}}; downstream service node account connection setup is still required for those later service nodes.',
+    'No API key, token, or password belongs in this node. Put only response status, headers, and body content here.',
   ],
-  "credentialDocsUrl": "https://docs.ctrlchecks.com",
-  "resources": [
+  credentialDocsUrl: 'https://docs.ctrlchecks.com',
+  resources: [
     {
-      "name": "Configuration",
-      "description": "Respond to Webhook is configured directly with input fields.",
-      "operations": [
+      name: 'Webhook HTTP Response',
+      description: 'Returns the response object the workflow wants to send back to the original webhook caller.',
+      operations: [
         {
-          "name": "Execute",
-          "value": "default",
-          "description": "Send an HTTP response back to the caller of a Webhook Trigger node.",
-          "fields": [
+          name: 'Return Webhook Response',
+          value: 'default',
+          description: 'Set the HTTP status code, optional response headers, and response body for a webhook-driven workflow. The runtime returns a normalized object with statusCode, headers, and body; the API layer is responsible for using that object as the actual HTTP response.',
+          fields: [
             {
-              "name": "Response Code",
-              "internalKey": "responseCode",
-              "type": "number",
-              "required": false,
-              "description": "HTTP status code",
-              "helpText": "What this field is: The number used for HTTP status code.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 200.\nTip: Use {{$json.responseCode}} when the number comes from an earlier step.",
-              "placeholder": "200",
-              "example": "200",
-              "defaultValue": "200"
+              name: 'Status Code',
+              internalKey: 'statusCode',
+              type: 'number',
+              required: true,
+              description: 'HTTP status code to return to the caller.',
+              helpText: richFieldHelp({
+                what: 'The HTTP status number for the webhook response.',
+                why: 'The caller uses it to decide whether the request succeeded, failed validation, or should be retried.',
+                when: 'Fill it for every response. The visible default is 200.',
+                enter: 'Use 200 for success, 201 for created, 400 for bad input, 401 for unauthorized, 404 for missing data, or 500 for server failure.',
+                source: 'Choose the code from the webhook provider docs or map a decision result such as {{$json.responseStatus}}.',
+                later: 'Later nodes can branch on {{$json.statusCode}} if the workflow continues after this response node.',
+                format: 'Number only, normally in the 100-599 HTTP status range.',
+                example: 'A Stripe-style webhook acknowledgment uses 200 after the event is stored successfully.',
+                empty: 'Runtime falls back to 200 when the value cannot be converted to a number.',
+                mistake: 'Using the old responseCode field in the visual panel; responseCode is only a runtime alias, while the visible field is statusCode.',
+              }),
+              placeholder: '200',
+              example: '200',
+              defaultValue: '200',
             },
             {
-              "name": "Headers",
-              "internalKey": "headers",
-              "type": "json",
-              "required": false,
-              "description": "Response headers",
-              "helpText": "What this field is: Structured data for Response headers.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Respond to Webhook.\nExample: {\"Content-Type\":\"application/json\"}.\nTip: Use {{$json.headers}} when an earlier step already prepared this data.",
-              "placeholder": "{\"Content-Type\":\"application/json\"}",
-              "example": "{\"Content-Type\":\"application/json\"}",
-              "defaultValue": "{\"Content-Type\":\"application/json\"}"
+              name: 'Response Body',
+              internalKey: 'responseBody',
+              type: 'json',
+              required: false,
+              description: 'Visible panel field for the body returned to the webhook caller.',
+              helpText: richFieldHelp({
+                what: 'The JSON body configured in the visual panel for the response.',
+                why: 'It becomes {{$json.body}} unless the backend body alias is also set, in which case body wins.',
+                when: 'Fill it when the caller expects a confirmation object, created ID, validation message, or result summary.',
+                enter: 'Enter JSON such as {"received":true,"orderId":"{{$json.orderId}}"} or map an object from {{$json.responseBody}}.',
+                source: 'Use values produced by previous workflow steps, such as order IDs, ticket numbers, validation messages, or customer emails.',
+                later: 'The normalized output is read from {{$json.body}}, not {{$json.responseBody}}.',
+                format: 'JSON object, array, string, number, or expression that resolves to response content.',
+                example: 'A checkout form response sends {"ok":true,"orderId":"{{$json.orderId}}"} back to the browser.',
+                empty: 'If responseBody and body are empty, runtime falls back to the incoming input body or the full incoming input object.',
+                mistake: 'Expecting a top-level response field; runtime returns body.',
+              }),
+              placeholder: '{"received":true}',
+              example: '{"received":true}',
             },
             {
-              "name": "Body",
-              "internalKey": "body",
-              "type": "textarea",
-              "required": true,
-              "description": "Response body data",
-              "helpText": "What this field is: Structured data for Response body data.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Respond to Webhook.\nExample: {\"name\":\"Alice\",\"email\":\"alice@example.com\"}.\nTip: Use {{$json.body}} when an earlier step already prepared this data.",
-              "placeholder": "{\"key\":\"value\"}",
-              "example": "{\"key\":\"value\"}"
-            }
+              name: 'Headers',
+              internalKey: 'headers',
+              type: 'json',
+              required: false,
+              description: 'Optional HTTP response headers.',
+              helpText: richFieldHelp({
+                what: 'Response headers returned with the webhook reply.',
+                why: 'Headers tell the caller how to parse the body and can support browser or API client behavior.',
+                when: 'Fill it when the caller requires Content-Type, CORS headers, cache headers, or custom response metadata.',
+                enter: 'Enter a JSON object such as {"Content-Type":"application/json"} or {"Access-Control-Allow-Origin":"*"}.',
+                source: 'Use the webhook caller documentation, API contract, or previous workflow data such as {{$json.responseHeaders}}.',
+                later: 'Later nodes can inspect the normalized headers at {{$json.headers}}.',
+                format: 'JSON object with header names as keys and header values as strings.',
+                example: 'An internal API endpoint returns {"Content-Type":"application/json"} so the client parses the response body as JSON.',
+                empty: 'Runtime returns an empty headers object unless a value is provided.',
+                mistake: 'Putting request authentication headers here; this field is for the response sent back to the caller.',
+              }),
+              placeholder: '{"Content-Type":"application/json"}',
+              example: '{"Content-Type":"application/json"}',
+            },
+            {
+              name: 'Body',
+              internalKey: 'body',
+              type: 'json',
+              required: false,
+              description: 'Backend alias for response body accepted by the runtime.',
+              helpText: richFieldHelp({
+                what: 'A backend-compatible alias for the response payload.',
+                why: 'The runtime checks body before responseBody, so AI-generated or imported workflows may use this key.',
+                when: 'Use it in generated workflow JSON or migrated workflows; the visual panel normally exposes Response Body as responseBody.',
+                enter: 'Enter the same response payload you would put in Response Body, such as {"success":true,"id":"{{$json.id}}"}.',
+                source: 'Map it from upstream output such as {{$json.result}}, {{$json.order}}, or {{$json.validationMessage}}.',
+                later: 'The output still appears as {{$json.body}} after runtime normalization.',
+                format: 'JSON-compatible value or expression accepted by the workflow config.',
+                example: 'An imported API workflow sets body to {"ticketId":"{{$json.ticketId}}","accepted":true}.',
+                empty: 'If body is empty, runtime checks responseBody, then incoming body, then the full incoming object.',
+                mistake: 'Setting both body and responseBody with different values and expecting them to merge; body wins.',
+              }),
+              placeholder: '{"success":true}',
+              example: '{"success":true}',
+            },
           ],
-          "outputExample": {
-            "sent": true,
-            "statusCode": 200,
-            "body": {
-              "success": true,
-              "message": "Processed"
-            }
+          outputExample: {
+            statusCode: 200,
+            headers: { 'Content-Type': 'application/json' },
+            body: { received: true, orderId: 'ord_1042' },
           },
-          "outputDescription": "sent: true if the response was dispatched. statusCode: The HTTP status code returned. body: The response body sent.",
-          "usageExample": {
-            "scenario": "Respond to a Stripe webhook with a 200 OK to acknowledge receipt",
-            "inputValues": {
-              "statusCode": "200",
-              "body": "{\"received\": true}",
-              "headers": "{\"Content-Type\": \"application/json\"}"
+          outputDescription,
+          usageExample: {
+            scenario: 'A webhook receives a paid-order event, stores it, and returns a compact acknowledgment to the caller.',
+            inputValues: {
+              statusCode: '200',
+              responseBody: '{"received":true,"orderId":"{{$json.orderId}}"}',
+              headers: '{"Content-Type":"application/json"}',
+              body: '{"received":true,"orderId":"{{$json.orderId}}"}',
             },
-            "expectedOutput": "Stripe receives the 200 response and stops retrying."
+            expectedOutput: 'Use {{$json.statusCode}} for response routing, {{$json.headers}} for response metadata, and {{$json.body.orderId}} if a later node needs the acknowledged order ID.',
           },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
-        }
-      ]
-    }
+          externalDocsUrl: 'https://developer.mozilla.org/en-US/docs/Web/HTTP/Status',
+        },
+      ],
+    },
   ],
-  "commonErrors": [
+  commonErrors: [
     {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
+      error: 'responseCode is only an alias',
+      cause: 'Runtime accepts responseCode and status for compatibility, but the visible panel field is statusCode.',
+      fix: 'Use statusCode in the UI and only rely on responseCode for imported or generated workflow JSON.',
     },
     {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
+      error: 'responseBody and body both resolve to body',
+      cause: 'The executor returns a normalized body field and checks body before responseBody.',
+      fix: 'Set only one payload value unless you intentionally want body to override responseBody.',
+    },
+    {
+      error: 'No sent flag is returned',
+      cause: 'The runtime returns statusCode, headers, and body only; older docs that showed sent: true were fabricated.',
+      fix: 'Use {{$json.statusCode}} and {{$json.body}} instead of {{$json.sent}}.',
+    },
+    {
+      error: 'Use with a webhook response-mode workflow',
+      cause: 'The node normalizes the intended response object, while the surrounding webhook/API layer is what actually sends it to the caller.',
+      fix: 'Place it at the end of a webhook-driven flow and verify the trigger/workflow response behavior during testing.',
+    },
   ],
-  "relatedNodes": []
+  relatedNodes: ['webhook', 'webhook_response', 'http_request'],
 };

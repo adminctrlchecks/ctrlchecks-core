@@ -1,373 +1,392 @@
-import type { NodeDoc } from '../types';
+import type { FieldDoc, NodeDoc, OperationDoc } from '../types';
+
+const help = (
+  label: string,
+  why: string,
+  when: string,
+  enter: string,
+  source: string,
+  format: string,
+  example: string,
+  wrong: string,
+  mistake: string,
+) => `What this field means: ${label}
+Why it matters: ${why}
+When to fill it: ${when}
+What to enter: ${enter}
+Where the value comes from: ${source}
+How to use it later: Later nodes can read returned Instagram Graph API values such as {{$json.id}}, {{$json.data}}, {{$json.paging}}, {{$json.status_code}}, {{$json.commentId}}, {{$json.mediaId}}, or {{$json._error}}.
+Accepted format: ${format}
+Real workplace example: ${example}
+If it is empty or wrong: ${wrong}
+Common mistake to avoid: ${mistake}`;
+
+const fields: FieldDoc[] = [
+  {
+    name: 'Access Token',
+    internalKey: 'accessToken',
+    type: 'string',
+    required: false,
+    description: 'Legacy fallback token; saved Instagram/Meta connection is preferred.',
+    helpText: help('Access Token is a legacy fallback for Instagram Graph API authentication.', 'The current runtime primarily resolves the Instagram/Facebook OAuth token from Connections; direct token fields are not the normal visual-panel path.', 'Leave it blank unless you are migrating an old workflow that explicitly needs a raw token.', 'Prefer a saved Instagram connection; if this field is used, enter the OAuth access token from Meta.', 'Comes from Meta OAuth but should be stored in the credential vault, not normal workflow data.', 'Secret access token string.', 'A migration workflow temporarily carries a token while moving to saved Connections.', 'Missing accessToken is fine when the saved connection exists; an expired token can cause Graph API errors.', 'Do not paste Instagram tokens into input data or examples.'),
+  },
+  {
+    name: 'Account ID',
+    internalKey: 'accountId',
+    type: 'string',
+    required: false,
+    description: 'Legacy alias for Instagram Business Account ID.',
+    helpText: help('Account ID is a legacy visual field for the Instagram Business Account ID.', 'The runtime reads instagramBusinessAccountId directly or auto-resolves it from the connected Facebook Page; accountId is not the preferred runtime key.', 'Use instagramBusinessAccountId instead for new workflows.', 'Leave blank or enter the same numeric Instagram Business Account ID used in instagramBusinessAccountId.', 'Find it from Graph API /me/accounts then page fields=instagram_business_account.', 'Numeric Instagram Business Account ID string.', 'A migrated workflow copies accountId to instagramBusinessAccountId before running media operations.', 'Using only accountId may not target the intended account because the runtime checks instagramBusinessAccountId.', 'Do not assume this alias is enough for every runtime path.'),
+  },
+  {
+    name: 'Resource',
+    internalKey: 'resource',
+    type: 'select',
+    required: true,
+    description: 'Instagram Graph object family to act on.',
+    options: ['user', 'media', 'comment', 'hashtag', 'story', 'insights'],
+    defaultValue: 'media',
+    helpText: help('Resource chooses the Instagram object family: user, media, comment, hashtag, story, or insights.', 'The selected resource determines which operations and IDs matter.', 'Always choose it before setting Operation.', 'Use user for account/profile and account media, media for posts/reels and publishing, comment for moderation/replies, hashtag for hashtag lookup/media, story for story reads, or insights for metrics.', 'Choose from the workflow goal or map {{$json.resource}} only when an upstream step supplies a supported resource.', 'One of: user, media, comment, hashtag, story, insights.', 'A social publishing workflow uses resource=media and operation=createAndPublish for a new image post.', 'Unknown resources return _error.', 'Do not use the old visible message resource; the current runtime has no Instagram message resource.'),
+  },
+  {
+    name: 'Operation',
+    internalKey: 'operation',
+    type: 'select',
+    required: true,
+    description: 'Instagram Graph operation for the selected resource.',
+    options: ['get', 'getMedia', 'getInsights', 'list', 'create', 'publish', 'createAndPublish', 'update', 'delete', 'getContainerStatus', 'reply', 'hide', 'unhide', 'search', 'getRecentMedia', 'getTopMedia'],
+    defaultValue: 'createAndPublish',
+    helpText: help('Operation chooses the actual Graph API action, such as list, createAndPublish, reply, search, or getInsights.', 'The runtime validates operation per resource and returns Unknown operation when the pair is unsupported.', 'Fill it after choosing Resource.', 'Choose createAndPublish for a simple publish, create then publish for two-step video processing, list/get for reads, reply/create/delete/hide for comments, search/getRecentMedia/getTopMedia for hashtags, and getInsights for metrics.', 'Choose from the node goal or map {{$json.operation}} from a controlled prior step.', 'Supported operation string with exact casing, especially createAndPublish.', 'A campaign workflow creates and publishes a product image post after design approval.', 'Wrong resource-operation pairs return _error and do not call the API.', 'Do not pick old sendText/sendMedia operations; this service node does not send Instagram DMs today.'),
+    notes: 'Dropdown options covered: get, getMedia, getInsights, list, create, publish, createAndPublish, update, delete, getContainerStatus, reply, hide, unhide, search, getRecentMedia, and getTopMedia.',
+  },
+  {
+    name: 'Instagram Business Account ID',
+    internalKey: 'instagramBusinessAccountId',
+    type: 'string',
+    required: false,
+    description: 'Business account ID used for account-level media, publishing, and insights.',
+    placeholder: '17841405309211844',
+    helpText: help('Instagram Business Account ID identifies the Instagram professional account connected to a Facebook Page.', 'Most account-level Graph endpoints need it; the runtime can auto-resolve it from the saved connection when the Page is linked correctly.', 'Fill it when auto-resolution fails or the workflow must target a specific Instagram account.', 'Paste the numeric ID or map {{$json.instagramBusinessAccountId}} from Instagram Trigger output.', 'Get it from Graph API /me/accounts, then query the Page field instagram_business_account.', 'Numeric ID string.', 'A multi-brand workflow maps the account ID from the brand record before publishing content.', 'If it cannot be resolved, user/media/insights operations return _error saying the account ID could not be determined.', 'Do not use the Facebook Page ID in this field.'),
+  },
+  {
+    name: 'Recipient ID',
+    internalKey: 'recipientId',
+    type: 'string',
+    required: false,
+    description: 'Legacy DM recipient field not used by the current service-node runtime.',
+    helpText: help('Recipient ID is a legacy field from an older Instagram DM panel design.', 'The current Instagram service node does not implement a message resource, so this value is not used by the runtime paths documented here.', 'Leave it blank for service-node operations; use Instagram Trigger output only with a future/DM-capable node path.', 'If present for compatibility, it is usually {{$json.senderId}} from an Instagram Trigger.', 'Comes from Instagram webhook events, not from post/media publishing.', 'Instagram sender ID string, currently not consumed by this node.', 'A trigger workflow may carry senderId for a future DM response, but media publishing ignores it.', 'Filling it does not send a DM.', 'Do not expect recipientId plus text to work as Instagram Send Text.'),
+  },
+  {
+    name: 'Text',
+    internalKey: 'text',
+    type: 'textarea',
+    required: false,
+    description: 'Legacy DM text field not used by current Instagram publishing paths.',
+    helpText: help('Text is a legacy direct-message text field.', 'The runtime reads message for comment create/reply and caption for media; it does not read text for Instagram DM sending today.', 'Leave it blank unless a legacy workflow uses it for metadata.', 'Use Caption for media posts and Message for comment replies.', 'Usually comes from AI replies or trigger text, but this service node does not send DMs.', 'Plain text, ignored by current published operations.', 'A migrated workflow moves {{$json.aiResponse}} from text to message for comment replies.', 'Putting content only in text does not create a comment reply or DM.', 'Do not confuse Text with Caption or Message.'),
+  },
+  {
+    name: 'Media Type',
+    internalKey: 'media_type',
+    type: 'select',
+    required: false,
+    description: 'Publishing media type.',
+    options: ['IMAGE', 'VIDEO', 'REELS'],
+    defaultValue: 'IMAGE',
+    helpText: help('Media Type tells Instagram whether the create/createAndPublish operation is for IMAGE, VIDEO, or REELS.', 'The runtime uses it to send image_url or video_url and to decide whether share_to_feed matters.', 'Fill it for media create and createAndPublish.', 'Choose IMAGE for a photo, VIDEO for feed video, or REELS for reel publishing.', 'Comes from your asset type, file metadata, or campaign plan.', 'IMAGE, VIDEO, or REELS exactly.', 'A short product demo uses media_type=REELS with video_url from an approved asset.', 'Wrong media type can send the wrong URL field or fail publishing.', 'Do not use lowercase image/video values unless a prior step normalizes them.'),
+  },
+  {
+    name: 'Media URL',
+    internalKey: 'media_url',
+    type: 'url',
+    required: false,
+    description: 'Public image URL for media publishing.',
+    placeholder: 'https://cdn.example.com/post.jpg',
+    helpText: help('Media URL is the public image URL used for IMAGE publishing, and can also be the fallback media source when video_url is blank.', 'create and createAndPublish need a hosted media URL before Instagram can create a media container.', 'Fill it for IMAGE posts or when your asset URL is stored under media_url.', 'Paste a direct public HTTPS image URL or map {{$json.media_url}} / {{$json.imageUrl}} from an asset step.', 'Comes from CDN, DAM, cloud storage, generated image output, or product media records.', 'Direct public http/https URL accepted by Instagram.', 'A retail workflow posts the new product image from {{$json.productImageUrl}}.', 'Blank media_url and video_url returns _error for create/createAndPublish.', 'Do not paste a webpage with the image embedded; use the direct file URL.'),
+  },
+  {
+    name: 'Video URL',
+    internalKey: 'videoUrl',
+    type: 'url',
+    required: false,
+    description: 'Legacy visual alias for video_url.',
+    placeholder: 'https://cdn.example.com/reel.mp4',
+    helpText: help('Video URL is the legacy visual key for hosted video files.', 'The current runtime reads video_url, so this field exists only to help older workflows transition.', 'Use it when an old workflow already stores the value here, then copy or map it into video_url for execution.', 'Paste the same public HTTPS video URL you would use in video_url.', 'Comes from video rendering, cloud storage, or content asset records.', 'Direct public video file URL.', 'A migration workflow maps {{$json.videoUrl}} into video_url before publishing a reel.', 'Filling only videoUrl can leave the runtime without video_url.', 'Do not rely on this legacy alias for new Instagram media publishing.'),
+  },
+  {
+    name: 'Video URL',
+    internalKey: 'video_url',
+    type: 'url',
+    required: false,
+    description: 'Public video URL for VIDEO or REELS publishing.',
+    placeholder: 'https://cdn.example.com/reel.mp4',
+    helpText: help('Video URL is the hosted video file sent for VIDEO or REELS media containers.', 'Instagram must fetch the video file during container creation.', 'Fill it when media_type is VIDEO or REELS.', 'Paste a direct public HTTPS video URL or map {{$json.videoUrl}} from the video export step.', 'Comes from cloud storage, video rendering, DAM, or approved content records.', 'Direct public video file URL, typically MP4.', 'A creator workflow publishes a reel from the final video URL after approval.', 'Blank video_url for video/reel publishing returns _error unless media_url supplies the file.', 'Do not use a private dashboard preview URL.'),
+  },
+  {
+    name: 'Caption',
+    internalKey: 'caption',
+    type: 'textarea',
+    required: false,
+    description: 'Caption for media create/update operations.',
+    placeholder: '{{$json.caption}}',
+    helpText: help('Caption is the text shown with an Instagram media post.', 'It is sent when creating containers and required by the current update operation.', 'Fill it for create/createAndPublish and update when you want or need post text.', 'Type approved caption copy or map {{$json.caption}}, {{$json.socialCopy}}, or {{$json.aiResponse}}.', 'Comes from content planning, AI drafting, product data, or campaign approval.', 'Plain text with hashtags/mentions as allowed by Instagram.', 'A launch workflow uses "Now available: {{$json.productName}} #newarrival".', 'Blank caption is allowed for create but causes _error for update.', 'Do not place comment reply text here; use Message for comment create/reply.'),
+  },
+  {
+    name: 'Creation ID',
+    internalKey: 'creation_id',
+    type: 'string',
+    required: false,
+    description: 'Container ID returned by media create.',
+    placeholder: '17900000000000000',
+    helpText: help('Creation ID is the media container ID returned by Instagram after a create operation.', 'publish needs it to turn an unpublished container into a live post.', 'Fill it for resource=media and operation=publish.', 'Map {{$json.id}} from a previous media create step.', 'Comes from Instagram Graph API create container output.', 'Container ID string.', 'A video workflow creates a container, waits for processing, then publishes {{$json.id}}.', 'Blank creation_id returns _error for publish.', 'Do not use a final mediaId/postId as the creation ID.'),
+  },
+  {
+    name: 'Media ID',
+    internalKey: 'mediaId',
+    type: 'string',
+    required: false,
+    description: 'Existing Instagram media object ID.',
+    placeholder: '17895695668004550',
+    helpText: help('Media ID identifies an existing Instagram post, reel, story-derived object, or media container depending on operation.', 'get, update, delete, getInsights, comments, and container status need it to target the right object.', 'Fill it for media get/update/delete/getInsights/getContainerStatus and comment list/create.', 'Map {{$json.mediaId}} from Instagram Trigger, search/list output, or previous publish result.', 'Comes from Graph API media list, publish output, or webhook events.', 'Instagram media ID string.', 'A moderation workflow lists comments for {{$json.mediaId}} from a webhook event.', 'Missing mediaId returns _error for operations that need it.', 'Do not use the Instagram Business Account ID as a media ID.'),
+  },
+  {
+    name: 'Comment ID',
+    internalKey: 'commentId',
+    type: 'string',
+    required: false,
+    description: 'Instagram comment object ID.',
+    placeholder: '17900000000000000',
+    helpText: help('Comment ID identifies the comment to get, reply to, delete, hide, or unhide.', 'Comment moderation and reply operations need the exact comment object.', 'Fill it for comment get, reply, delete, hide, and unhide.', 'Map {{$json.commentId}} from Instagram Trigger or comment list output.', 'Comes from Instagram webhook comment events or /comments API output.', 'Instagram comment ID string.', 'A support workflow replies to the customer comment that triggered the workflow.', 'Blank commentId returns _error for comment operations that need it.', 'Do not use mediaId where commentId is required.'),
+  },
+  {
+    name: 'Message',
+    internalKey: 'message',
+    type: 'textarea',
+    required: false,
+    description: 'Text body for comment create or reply.',
+    placeholder: '{{$json.aiResponse}}',
+    helpText: help('Message is the text posted as a new comment or reply.', 'The runtime reads message for comment create and reply; replyText/commentText are legacy aliases in UI guidance only unless mapped to message.', 'Fill it for resource=comment with operation=create or reply.', 'Type a fixed response or map {{$json.aiResponse}}, {{$json.replyText}}, or {{$json.commentReply}}.', 'Comes from moderation review, AI Agent, support agent approval, or a template.', 'Plain text accepted by Instagram comments.', 'A support workflow replies "Thanks for reaching out. We sent you details by email." to a product question.', 'Blank message returns _error for comment create/reply.', 'Do not put the reply in Text or Caption and expect comment reply to read it.'),
+  },
+  {
+    name: 'Reply Text',
+    internalKey: 'replyText',
+    type: 'textarea',
+    required: false,
+    description: 'Legacy visual alias for comment reply text.',
+    helpText: help('Reply Text is a legacy visual helper for comment reply copy.', 'The current runtime reads message, so Reply Text should be mapped into Message for reliable execution.', 'Use it only as a UI note or migrate workflows to Message.', 'Enter the same value you plan to map into message, such as {{$json.aiResponse}}.', 'Comes from a trigger, AI Agent, or moderation approval.', 'Plain text, but not read directly by the current Instagram runtime.', 'A migrated workflow copies replyText to message before replying.', 'Filling only replyText may produce a missing message error.', 'Do not rely on replyText as the backend field.'),
+  },
+  {
+    name: 'Metric',
+    internalKey: 'metric',
+    type: 'string',
+    required: false,
+    description: 'Comma-separated Instagram insight metric names.',
+    placeholder: 'reach,impressions',
+    helpText: help('Metric names tell Instagram which insight values to return.', 'Insight operations cannot run without at least one metric.', 'Fill it for user, media, story, or insights getInsights/get operations.', 'Enter a metric string such as reach,impressions or map {{$json.metric}} from a report definition.', 'Comes from Meta Instagram insights documentation or your analytics dashboard requirements.', 'Comma-separated metric names accepted by the endpoint.', 'A monthly report pulls reach and impressions for every campaign post.', 'Blank metric returns _error for insights operations.', 'Do not use display labels if the API expects metric keys.'),
+  },
+  {
+    name: 'Period',
+    internalKey: 'period',
+    type: 'select',
+    required: false,
+    description: 'Aggregation period for supported insights.',
+    options: ['day', 'week', 'days_28', 'lifetime'],
+    defaultValue: 'day',
+    helpText: help('Period controls how Instagram groups supported insight metrics.', 'Some metrics require day, week, days_28, or lifetime and reject unsupported periods.', 'Fill it for insight operations when the default day is not correct.', 'Choose day for daily reporting, week for weekly summaries, days_28 for rolling performance, or lifetime for total metrics where supported.', 'Comes from the analytics cadence or Meta metric requirements.', 'day, week, days_28, or lifetime.', 'A weekly executive digest uses period=week for account reach metrics.', 'Unsupported metric-period combinations fail with a Graph API error.', 'Do not assume every metric supports every period.'),
+  },
+  {
+    name: 'Since',
+    internalKey: 'since',
+    type: 'string',
+    required: false,
+    description: 'Start time/date for insights.',
+    placeholder: '2026-07-01',
+    helpText: help('Since is the start of the reporting window for supported insight calls.', 'It narrows the metrics to the time period your workflow needs.', 'Fill it for insights when you need a bounded date range.', 'Enter an ISO date, timestamp, or map {{$json.since}} from a reporting schedule.', 'Comes from the report period, schedule trigger, or dashboard filter.', 'ISO-like date/time accepted by Graph API.', 'A monthly report uses since={{$json.monthStart}} and until={{$json.monthEnd}}.', 'Invalid dates can be ignored or rejected by Graph API.', 'Do not use local-language dates like 20 July 2026.'),
+  },
+  {
+    name: 'Until',
+    internalKey: 'until',
+    type: 'string',
+    required: false,
+    description: 'End time/date for insights.',
+    placeholder: '2026-07-31',
+    helpText: help('Until is the end of the reporting window for supported insight calls.', 'It pairs with Since so reports cover the intended period.', 'Fill it when a report must end at a known date/time.', 'Enter an ISO date, timestamp, or map {{$json.until}}.', 'Comes from the report period, schedule trigger, or dashboard filter.', 'ISO-like date/time accepted by Graph API.', 'A campaign report ends at {{$json.campaignEndDate}}.', 'Invalid dates can produce empty or failed API results.', 'Do not set until before since.'),
+  },
+  {
+    name: 'Hashtag Name',
+    internalKey: 'hashtagName',
+    type: 'string',
+    required: false,
+    description: 'Hashtag text to search.',
+    placeholder: 'automation',
+    helpText: help('Hashtag Name is the text of the hashtag you want Instagram to resolve.', 'Hashtag search needs a name before it can return a hashtag ID.', 'Fill it for resource=hashtag and operation=search.', 'Enter the hashtag without #, or map {{$json.hashtagName}}.', 'Comes from a campaign tag, brand-monitoring rule, or user form.', 'Plain hashtag text without #.', 'A campaign workflow searches launchweek to find the hashtag ID for monitoring.', 'Blank hashtagName returns _error for hashtag search.', 'Do not include spaces or the # symbol.'),
+  },
+  {
+    name: 'Hashtag ID',
+    internalKey: 'hashtagId',
+    type: 'string',
+    required: false,
+    description: 'Resolved hashtag object ID.',
+    placeholder: '17843700000000000',
+    helpText: help('Hashtag ID identifies a hashtag object returned by hashtag search.', 'Recent and top media endpoints need the ID, not just the hashtag text.', 'Fill it for hashtag get, getRecentMedia, and getTopMedia.', 'Map {{$json.data[0].id}} from hashtag search or paste a known hashtag ID.', 'Comes from Instagram Graph API ig_hashtag_search output.', 'Hashtag ID string.', 'A social-listening workflow finds the hashtag ID once, then pulls recent media for it every hour.', 'Blank hashtagId returns _error for hashtag media operations.', 'Do not use hashtagName where hashtagId is required.'),
+  },
+  {
+    name: 'Story ID',
+    internalKey: 'storyId',
+    type: 'string',
+    required: false,
+    description: 'Instagram story object ID.',
+    placeholder: '17900000000000000',
+    helpText: help('Story ID identifies an Instagram story object.', 'Story get and story insights need it to target the right temporary story.', 'Fill it for resource=story with get or getInsights.', 'Map {{$json.storyId}} from a story list output or webhook event.', 'Comes from Instagram stories API response.', 'Story ID string.', 'A reporting workflow pulls insights for a story after it has been published.', 'Blank storyId returns _error for story get/insights.', 'Do not use mediaId when the operation specifically asks for storyId.'),
+  },
+  {
+    name: 'Fields',
+    internalKey: 'fields',
+    type: 'string',
+    required: false,
+    description: 'Comma-separated Graph API fields to request.',
+    placeholder: 'id,caption,media_type,media_url,permalink,timestamp',
+    helpText: help('Fields tells Graph API which properties to include in read/list results.', 'It controls payload size and whether downstream nodes receive fields such as permalink, like_count, or comments_count.', 'Fill it when the default output does not include the properties you need.', 'Enter comma-separated Graph API field names or map {{$json.fields}} from a report setting.', 'Comes from Meta API documentation and the downstream data requirements.', 'Comma-separated field names, no JSON array.', 'A dashboard workflow requests id,caption,permalink,like_count,comments_count for analytics.', 'Invalid fields can make the Graph API return an error.', 'Do not request every possible field just in case; use the fields the workflow needs.'),
+  },
+  {
+    name: 'Limit',
+    internalKey: 'limit',
+    type: 'number',
+    required: false,
+    description: 'Maximum items per page for list operations.',
+    placeholder: '25',
+    defaultValue: '25',
+    helpText: help('Limit is the page size for list-style Instagram operations.', 'It controls how many media, comments, stories, or hashtag media items return at once.', 'Fill it for list/getMedia/comment list/hashtag media/story list when the default 25 is not right.', 'Enter a whole number from 1 to 100, or map {{$json.limit}}.', 'Comes from report size, dashboard needs, or API quota planning.', 'Whole number; runtime clamps many list calls between 1 and 100.', 'A moderation workflow fetches 50 comments for a high-traffic post.', 'Invalid values fall back or are clamped.', 'Do not combine huge limits with Return All on frequent workflows without quota planning.'),
+  },
+  {
+    name: 'After',
+    internalKey: 'after',
+    type: 'string',
+    required: false,
+    description: 'Pagination cursor for the next page.',
+    placeholder: 'QVFI...',
+    helpText: help('After is the Graph API cursor for fetching the next page of results.', 'It lets the workflow continue from where a previous list call stopped.', 'Fill it when you are manually paging through results.', 'Map {{$json.paging.cursors.after}} from a previous Instagram list response.', 'Comes from Graph API paging cursors.', 'Opaque cursor string; copy exactly.', 'A daily sync saves the after cursor and resumes from it on the next run.', 'Wrong cursors can return duplicate, empty, or failed pages.', 'Do not edit or decode cursor strings.'),
+  },
+  {
+    name: 'Before',
+    internalKey: 'before',
+    type: 'string',
+    required: false,
+    description: 'Pagination cursor for the previous page.',
+    placeholder: 'QVFI...',
+    helpText: help('Before is the Graph API cursor for fetching the previous page of results.', 'It is useful for manual backtracking through paged media/comment results.', 'Fill it only when a previous response gives you a before cursor.', 'Map {{$json.paging.cursors.before}} from a list response.', 'Comes from Graph API paging cursors.', 'Opaque cursor string; copy exactly.', 'A review workflow walks back one page when an operator requests older comments.', 'Wrong cursors can return unexpected or empty pages.', 'Do not type a date into this cursor field.'),
+  },
+  {
+    name: 'Return All',
+    internalKey: 'returnAll',
+    type: 'boolean',
+    required: false,
+    description: 'Collect multiple pages for supported list operations.',
+    defaultValue: 'false',
+    helpText: help('Return All asks the runtime to keep paging until no next page or an internal cap is reached.', 'It changes runtime duration, quota use, and downstream payload size.', 'Turn it on only for reporting/sync workflows that truly need all available items.', 'Use true or false, or map {{$json.returnAll}} from a controlled setting.', 'Comes from business reporting needs, not from Instagram itself.', 'Boolean true or false.', 'A weekly analytics job turns it on to collect media for the reporting period.', 'Large result sets can hit rate limits or create heavy payloads.', 'Do not enable Return All on high-frequency comment moderation workflows.'),
+  },
+  {
+    name: 'Credential ID',
+    internalKey: 'credentialId',
+    type: 'string',
+    required: false,
+    description: 'Legacy saved-credential reference; Connections normally resolves the account automatically.',
+    helpText: help('Credential ID is a compatibility reference to a saved Instagram/Meta credential.', 'Some generated workflows may carry it as metadata, but the normal service-node path resolves the connected account from Connections for the workflow owner or current user.', 'Leave it blank unless you are migrating an old workflow that explicitly stores a credential reference.', 'Prefer selecting the Instagram account in Connections; if this is used, map the saved credential identifier from a trusted setup step.', 'Comes from CtrlChecks credential records, not from Instagram Graph API payloads.', 'Internal credential identifier string, not an OAuth token.', 'A migration workflow keeps credentialId blank after moving the account into Connections.', 'A wrong credentialId can point at the wrong Meta account or fail credential lookup.', 'Do not put an OAuth access token in this field.'),
+  },
+];
+
+const outputDescription = 'id: common Graph API identifier for accounts, media, comments, hashtags, containers, or published posts. data: array/list payload returned by Instagram Graph API for media, comments, hashtag media, stories, and insights. paging: cursor metadata for list calls. status_code: returned by container status checks. success-like responses are raw Graph API objects spread at top level; this node does not always add a separate success flag. _error and _errorDetails: returned for missing OAuth connection, missing instagramBusinessAccountId/mediaId/commentId/creation_id/message/metric/hashtagId/storyId, unsupported resource-operation pairs, Graph API permission errors, or expired tokens.';
+
+const baseInput = {
+  accessToken: '',
+  accountId: '',
+  resource: 'media',
+  operation: 'createAndPublish',
+  instagramBusinessAccountId: '{{$json.instagramBusinessAccountId}}',
+  recipientId: '',
+  text: '',
+  media_type: 'IMAGE',
+  media_url: '{{$json.imageUrl}}',
+  videoUrl: '{{$json.videoUrl}}',
+  video_url: '{{$json.videoUrl}}',
+  caption: '{{$json.caption}}',
+  creation_id: '{{$json.id}}',
+  mediaId: '{{$json.mediaId}}',
+  commentId: '{{$json.commentId}}',
+  message: '{{$json.aiResponse}}',
+  replyText: '{{$json.aiResponse}}',
+  metric: 'reach,impressions',
+  period: 'day',
+  since: '{{$json.since}}',
+  until: '{{$json.until}}',
+  hashtagName: 'automation',
+  hashtagId: '{{$json.hashtagId}}',
+  storyId: '{{$json.storyId}}',
+  fields: 'id,caption,media_type,media_url,permalink,timestamp',
+  limit: '25',
+  after: '',
+  before: '',
+  returnAll: 'false',
+  credentialId: '',
+};
+
+function op(name: string, value: string, description: string, inputValues: Record<string, string>): OperationDoc {
+  return {
+    name,
+    value,
+    description,
+    fields,
+    outputExample: {
+      id: '17900000000000000',
+      data: [{ id: '17895695668004550', caption: 'New product drop', media_type: 'IMAGE' }],
+      paging: { cursors: { after: 'QVFI...' } },
+      status_code: 'FINISHED',
+      _error: undefined,
+    },
+    outputDescription,
+    usageExample: {
+      scenario: `${name} is used by social, moderation, and reporting workflows that need Instagram Graph API behavior against a connected business account.`,
+      inputValues,
+      expectedOutput: 'The next node can read Instagram values like {{$json.id}}, {{$json.data}}, {{$json.paging.cursors.after}}, {{$json.status_code}}, or {{$json._error}}.',
+    },
+    externalDocsUrl: 'https://developers.facebook.com/docs/instagram-platform/',
+  };
+}
 
 export const instagramDoc: NodeDoc = {
-  "slug": "instagram",
-  "displayName": "Instagram",
-  "category": "Communication",
-  "logoUrl": "/icons/nodes/instagram.svg",
-  "description": "Post content to Instagram",
-  "credentialType": "Meta App Credentials",
-  "credentialSetupSteps": [
-    "What this is: The Instagram connection lets CtrlChecks access your Instagram account safely without putting secrets in workflow fields.",
-    "Where to start: Meta for Developers -> your app -> Instagram API setup.",
-    "How to connect: In CtrlChecks, open Connections -> Add Connection -> Instagram, then sign in or paste the secret value requested there.",
-    "Example: the access token shown by Meta.",
-    "Important: Treat tokens, passwords, API keys, and client secrets like bank passwords. Store them in Connections, not in regular workflow fields.",
-    "Test it: Save the connection, run a simple Instagram step, and confirm CtrlChecks can reach the account."
+  slug: 'instagram',
+  displayName: 'Instagram',
+  category: 'Social',
+  logoUrl: '/icons/nodes/instagram.svg',
+  description: 'Read, publish, moderate, and report on Instagram Business content through the Instagram Graph API.',
+  credentialType: 'Instagram OAuth2 / Meta Graph API connection',
+  credentialSetupSteps: [
+    'Connect Instagram in Connections so CtrlChecks stores the OAuth access token in the credential vault and can retrieve it for the workflow owner or current user.',
+    'The connected Meta account must have access to the Facebook Page linked to the Instagram Business Account. Typical scopes include instagram_basic, instagram_content_publish, instagram_manage_comments, pages_show_list, pages_read_engagement, and business_management.',
+    'Test the connection by calling Graph API /me/accounts and confirming the page has an instagram_business_account field.',
+    'Do not store OAuth access tokens in workflow input data. accessToken and credentialId are compatibility fields, not the normal visual-panel path.',
+    'After the Instagram node is configured, connect its output with an outgoing line. Any downstream service node still needs its own account connection.',
   ],
-  "credentialDocsUrl": "https://developers.facebook.com/docs/facebook-login/web",
-  "resources": [
+  credentialDocsUrl: 'https://developers.facebook.com/docs/instagram-platform/',
+  resources: [
     {
-      "name": "Operations",
-      "description": "Instagram exposes operation choices directly.",
-      "operations": [
-        {
-          "name": "Get",
-          "value": "get",
-          "description": "Get details about an Instagram media post.",
-          "fields": [
-            {
-              "name": "Resource",
-              "internalKey": "resource",
-              "type": "string",
-              "required": true,
-              "description": "Instagram resource",
-              "helpText": "What this field is: Instagram resource.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: media.\nTip: Use {{$json.resource}} when this value comes from an earlier step.",
-              "placeholder": "media",
-              "example": "media",
-              "defaultValue": "media"
-            },
-            {
-              "name": "Media Url",
-              "internalKey": "media_url",
-              "type": "url",
-              "required": false,
-              "description": "Media URL (image/video) for create operations",
-              "helpText": "What this field is: The web address for Media URL for create operations.\nHow to fill it: Paste the full URL, including https:// when it is an external service.\nExample: https://example.com/image.jpg.\nTip: Use {{$json.media_url}} when the URL comes from an earlier step.",
-              "placeholder": "https://example.com/image.jpg",
-              "example": "https://example.com/image.jpg"
-            },
-            {
-              "name": "Caption",
-              "internalKey": "caption",
-              "type": "string",
-              "required": false,
-              "description": "Post caption",
-              "helpText": "What this field is: Post caption.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: {{$json.caption}}.\nTip: Use {{$json.caption}} when this value comes from an earlier step.",
-              "placeholder": "{{$json.caption}}",
-              "example": "{{$json.caption}}"
-            },
-            {
-              "name": "Access Token",
-              "internalKey": "accessToken",
-              "type": "string",
-              "required": false,
-              "description": "OAuth2 Access Token for Instagram (if using OAuth authentication)",
-              "helpText": "What this field is: Instagram access token, a secret password that lets CtrlChecks talk to Instagram safely.\nWhere to find it: Meta for Developers -> your app -> Instagram API setup.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the access token shown by Meta.\nImportant: Treat this like a bank password. Make sure the connected account has permission for the action.",
-              "placeholder": "your-instagram-oauth-token",
-              "example": "your-instagram-oauth-token"
-            }
-          ],
-          "outputExample": {
-            "id": "17858893269000001",
-            "caption": "✨ New arrival...",
-            "like_count": 124,
-            "comments_count": 7,
-            "timestamp": "2025-01-15T12:00:00+0000"
-          },
-          "outputDescription": "id: Media ID. caption: Post caption. like_count: Number of likes. comments_count: Number of comments. timestamp: When the post was published.",
-          "usageExample": {
-            "scenario": "Track post engagement metrics after publishing",
-            "inputValues": {
-              "mediaId": "{{$json.id}}"
-            },
-            "expectedOutput": "Returns post insights with `{{$json.like_count}}` and `{{$json.comments_count}}`."
-          },
-          "externalDocsUrl": "https://developers.facebook.com/docs/instagram-platform/"
-        },
-        {
-          "name": "List",
-          "value": "list",
-          "description": "List using the Instagram node.",
-          "fields": [
-            {
-              "name": "Resource",
-              "internalKey": "resource",
-              "type": "string",
-              "required": true,
-              "description": "Instagram resource",
-              "helpText": "What this field is: Instagram resource.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: media.\nTip: Use {{$json.resource}} when this value comes from an earlier step.",
-              "placeholder": "media",
-              "example": "media",
-              "defaultValue": "media"
-            },
-            {
-              "name": "Media Url",
-              "internalKey": "media_url",
-              "type": "url",
-              "required": false,
-              "description": "Media URL (image/video) for create operations",
-              "helpText": "What this field is: The web address for Media URL for create operations.\nHow to fill it: Paste the full URL, including https:// when it is an external service.\nExample: https://example.com/image.jpg.\nTip: Use {{$json.media_url}} when the URL comes from an earlier step.",
-              "placeholder": "https://example.com/image.jpg",
-              "example": "https://example.com/image.jpg"
-            },
-            {
-              "name": "Caption",
-              "internalKey": "caption",
-              "type": "string",
-              "required": false,
-              "description": "Post caption",
-              "helpText": "What this field is: Post caption.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: {{$json.caption}}.\nTip: Use {{$json.caption}} when this value comes from an earlier step.",
-              "placeholder": "{{$json.caption}}",
-              "example": "{{$json.caption}}"
-            },
-            {
-              "name": "Access Token",
-              "internalKey": "accessToken",
-              "type": "string",
-              "required": false,
-              "description": "OAuth2 Access Token for Instagram (if using OAuth authentication)",
-              "helpText": "What this field is: Instagram access token, a secret password that lets CtrlChecks talk to Instagram safely.\nWhere to find it: Meta for Developers -> your app -> Instagram API setup.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the access token shown by Meta.\nImportant: Treat this like a bank password. Make sure the connected account has permission for the action.",
-              "placeholder": "your-instagram-oauth-token",
-              "example": "your-instagram-oauth-token"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "id": "abc123",
-            "mediaId": "abc123",
-            "data": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\nid: Unique identifier returned by the service.\nmediaId: Unique identifier returned by the service.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming Instagram data with list after a related upstream event is received",
-            "inputValues": {
-              "Resource": "media",
-              "Media Url": "https://example.com/image.jpg",
-              "Caption": "{{$json.caption}}",
-              "Access Token": "your-instagram-oauth-token"
-            },
-            "expectedOutput": "Instagram returns structured list data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://developers.facebook.com/docs/instagram-platform/"
-        },
-        {
-          "name": "Create",
-          "value": "create",
-          "description": "Create using the Instagram node.",
-          "fields": [
-            {
-              "name": "Resource",
-              "internalKey": "resource",
-              "type": "string",
-              "required": true,
-              "description": "Instagram resource",
-              "helpText": "What this field is: Instagram resource.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: media.\nTip: Use {{$json.resource}} when this value comes from an earlier step.",
-              "placeholder": "media",
-              "example": "media",
-              "defaultValue": "media"
-            },
-            {
-              "name": "Media Url",
-              "internalKey": "media_url",
-              "type": "url",
-              "required": false,
-              "description": "Media URL (image/video) for create operations",
-              "helpText": "What this field is: The web address for Media URL for create operations.\nHow to fill it: Paste the full URL, including https:// when it is an external service.\nExample: https://example.com/image.jpg.\nTip: Use {{$json.media_url}} when the URL comes from an earlier step.",
-              "placeholder": "https://example.com/image.jpg",
-              "example": "https://example.com/image.jpg"
-            },
-            {
-              "name": "Caption",
-              "internalKey": "caption",
-              "type": "string",
-              "required": false,
-              "description": "Post caption",
-              "helpText": "What this field is: Post caption.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: {{$json.caption}}.\nTip: Use {{$json.caption}} when this value comes from an earlier step.",
-              "placeholder": "{{$json.caption}}",
-              "example": "{{$json.caption}}"
-            },
-            {
-              "name": "Access Token",
-              "internalKey": "accessToken",
-              "type": "string",
-              "required": false,
-              "description": "OAuth2 Access Token for Instagram (if using OAuth authentication)",
-              "helpText": "What this field is: Instagram access token, a secret password that lets CtrlChecks talk to Instagram safely.\nWhere to find it: Meta for Developers -> your app -> Instagram API setup.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the access token shown by Meta.\nImportant: Treat this like a bank password. Make sure the connected account has permission for the action.",
-              "placeholder": "your-instagram-oauth-token",
-              "example": "your-instagram-oauth-token"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "id": "abc123",
-            "mediaId": "abc123",
-            "data": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\nid: Unique identifier returned by the service.\nmediaId: Unique identifier returned by the service.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming Instagram data with create after a related upstream event is received",
-            "inputValues": {
-              "Resource": "media",
-              "Media Url": "https://example.com/image.jpg",
-              "Caption": "{{$json.caption}}",
-              "Access Token": "your-instagram-oauth-token"
-            },
-            "expectedOutput": "Instagram returns structured create data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://developers.facebook.com/docs/instagram-platform/"
-        },
-        {
-          "name": "Publish",
-          "value": "publish",
-          "description": "Publish using the Instagram node.",
-          "fields": [
-            {
-              "name": "Resource",
-              "internalKey": "resource",
-              "type": "string",
-              "required": true,
-              "description": "Instagram resource",
-              "helpText": "What this field is: Instagram resource.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: media.\nTip: Use {{$json.resource}} when this value comes from an earlier step.",
-              "placeholder": "media",
-              "example": "media",
-              "defaultValue": "media"
-            },
-            {
-              "name": "Media Url",
-              "internalKey": "media_url",
-              "type": "url",
-              "required": false,
-              "description": "Media URL (image/video) for create operations",
-              "helpText": "What this field is: The web address for Media URL for create operations.\nHow to fill it: Paste the full URL, including https:// when it is an external service.\nExample: https://example.com/image.jpg.\nTip: Use {{$json.media_url}} when the URL comes from an earlier step.",
-              "placeholder": "https://example.com/image.jpg",
-              "example": "https://example.com/image.jpg"
-            },
-            {
-              "name": "Caption",
-              "internalKey": "caption",
-              "type": "string",
-              "required": false,
-              "description": "Post caption",
-              "helpText": "What this field is: Post caption.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: {{$json.caption}}.\nTip: Use {{$json.caption}} when this value comes from an earlier step.",
-              "placeholder": "{{$json.caption}}",
-              "example": "{{$json.caption}}"
-            },
-            {
-              "name": "Access Token",
-              "internalKey": "accessToken",
-              "type": "string",
-              "required": false,
-              "description": "OAuth2 Access Token for Instagram (if using OAuth authentication)",
-              "helpText": "What this field is: Instagram access token, a secret password that lets CtrlChecks talk to Instagram safely.\nWhere to find it: Meta for Developers -> your app -> Instagram API setup.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the access token shown by Meta.\nImportant: Treat this like a bank password. Make sure the connected account has permission for the action.",
-              "placeholder": "your-instagram-oauth-token",
-              "example": "your-instagram-oauth-token"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "id": "abc123",
-            "mediaId": "abc123",
-            "data": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\nid: Unique identifier returned by the service.\nmediaId: Unique identifier returned by the service.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming Instagram data with publish after a related upstream event is received",
-            "inputValues": {
-              "Resource": "media",
-              "Media Url": "https://example.com/image.jpg",
-              "Caption": "{{$json.caption}}",
-              "Access Token": "your-instagram-oauth-token"
-            },
-            "expectedOutput": "Instagram returns structured publish data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://developers.facebook.com/docs/instagram-platform/"
-        },
-        {
-          "name": "CreateAndPublish",
-          "value": "createAndPublish",
-          "description": "CreateAndPublish using the Instagram node.",
-          "fields": [
-            {
-              "name": "Resource",
-              "internalKey": "resource",
-              "type": "string",
-              "required": true,
-              "description": "Instagram resource",
-              "helpText": "What this field is: Instagram resource.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: media.\nTip: Use {{$json.resource}} when this value comes from an earlier step.",
-              "placeholder": "media",
-              "example": "media",
-              "defaultValue": "media"
-            },
-            {
-              "name": "Media Url",
-              "internalKey": "media_url",
-              "type": "url",
-              "required": false,
-              "description": "Media URL (image/video) for create operations",
-              "helpText": "What this field is: The web address for Media URL for create operations.\nHow to fill it: Paste the full URL, including https:// when it is an external service.\nExample: https://example.com/image.jpg.\nTip: Use {{$json.media_url}} when the URL comes from an earlier step.",
-              "placeholder": "https://example.com/image.jpg",
-              "example": "https://example.com/image.jpg"
-            },
-            {
-              "name": "Caption",
-              "internalKey": "caption",
-              "type": "string",
-              "required": false,
-              "description": "Post caption",
-              "helpText": "What this field is: Post caption.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: {{$json.caption}}.\nTip: Use {{$json.caption}} when this value comes from an earlier step.",
-              "placeholder": "{{$json.caption}}",
-              "example": "{{$json.caption}}"
-            },
-            {
-              "name": "Access Token",
-              "internalKey": "accessToken",
-              "type": "string",
-              "required": false,
-              "description": "OAuth2 Access Token for Instagram (if using OAuth authentication)",
-              "helpText": "What this field is: Instagram access token, a secret password that lets CtrlChecks talk to Instagram safely.\nWhere to find it: Meta for Developers -> your app -> Instagram API setup.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the access token shown by Meta.\nImportant: Treat this like a bank password. Make sure the connected account has permission for the action.",
-              "placeholder": "your-instagram-oauth-token",
-              "example": "your-instagram-oauth-token"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "id": "abc123",
-            "mediaId": "abc123",
-            "data": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\nid: Unique identifier returned by the service.\nmediaId: Unique identifier returned by the service.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming Instagram data with create and publish after a related upstream event is received",
-            "inputValues": {
-              "Resource": "media",
-              "Media Url": "https://example.com/image.jpg",
-              "Caption": "{{$json.caption}}",
-              "Access Token": "your-instagram-oauth-token"
-            },
-            "expectedOutput": "Instagram returns structured create and publish data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://developers.facebook.com/docs/instagram-platform/"
-        }
-      ]
-    }
-  ],
-  "commonErrors": [
-    {
-      "error": "Authentication failed",
-      "cause": "The saved credential, token, API key, or OAuth grant is missing, expired, or lacks the required scope.",
-      "fix": "Reconnect the service in CtrlChecks → Connections, then re-run the Instagram node."
+      name: 'Instagram Graph API',
+      description: 'Resource and Operation together select an Instagram Graph API path. Successful calls preserve object input and spread the raw Graph API response at the top level.',
+      operations: [
+        op('Account and media publishing', 'media', 'Covers user get/getMedia/getInsights and media get/list/create/publish/createAndPublish/update/delete/getInsights/getContainerStatus. Use these operations to publish content, list account media, and inspect media performance.', baseInput),
+        op('Comment moderation', 'comment', 'Covers comment list/get/create/reply/delete/hide/unhide. Use it to respond to or moderate comments on a specific media item.', { ...baseInput, resource: 'comment', operation: 'reply', message: '{{$json.aiResponse}}' }),
+        op('Hashtag, story, and insights reporting', 'reporting', 'Covers hashtag search/get/getRecentMedia/getTopMedia, story get/list/getInsights, and generic insights get. Use it for social listening and performance dashboards.', { ...baseInput, resource: 'hashtag', operation: 'getRecentMedia' }),
+      ],
     },
-    {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
-    },
-    {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
   ],
-  "relatedNodes": []
+  commonErrors: [
+    { error: 'Instagram node: OAuth connection required', cause: 'No Instagram/Facebook OAuth token was available for the workflow owner or current user.', fix: 'Connect Instagram/Meta in Connections and confirm the account has the required Instagram scopes.' },
+    { error: 'Instagram node: Could not determine Instagram Business Account ID.', cause: 'The runtime could not auto-resolve the linked Instagram Business Account and none was provided.', fix: 'Enter instagramBusinessAccountId or reconnect the Facebook Page that owns the Instagram account.' },
+    { error: 'Instagram node: media_url or video_url is required for createAndPublish operation', cause: 'A media publish operation had no public file URL.', fix: 'Provide media_url for images or video_url for videos/reels.' },
+    { error: 'Instagram node: creation_id is required for publish operation', cause: 'Publish was run without the container ID from a prior create operation.', fix: 'Map {{$json.id}} from the media create step into Creation ID.' },
+    { error: 'Instagram node: message is required for reply operation', cause: 'A comment reply/create operation did not include the backend message field.', fix: 'Put the reply body in Message, not only Reply Text or Text.' },
+    { error: 'Instagram node: metric is required for insights operation', cause: 'An insights operation had no metric name.', fix: 'Enter metrics such as reach,impressions or map them from a report definition.' },
+    { error: 'Instagram node: Unknown operation "<operation>" for resource "<resource>"', cause: 'The selected operation does not belong to the selected resource, or an old DM operation was used.', fix: 'Use supported pairs such as media + createAndPublish, comment + reply, or hashtag + getRecentMedia.' },
+    { error: 'Permission error or access token expired', cause: 'Meta rejected the request because the token expired, scopes are missing, or the account does not manage the page/business account.', fix: 'Reconnect Instagram/Meta, grant publishing/comment scopes, and verify page ownership in Meta Business Suite.' },
+  ],
+  relatedNodes: ['instagram_trigger', 'facebook', 'twitter', 'linkedin'],
 };

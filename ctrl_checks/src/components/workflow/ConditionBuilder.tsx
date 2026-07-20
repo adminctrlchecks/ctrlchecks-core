@@ -27,14 +27,14 @@ export interface ConditionBuilderProps {
 }
 
 const OPERATORS = [
-  { value: 'equals', label: '=' },
-  { value: 'not_equals', label: '!=' },
-  { value: 'greater_than', label: '>' },
-  { value: 'less_than', label: '<' },
-  { value: 'greater_than_or_equal', label: '>=' },
-  { value: 'less_than_or_equal', label: '<=' },
-  { value: 'contains', label: 'contains' },
-  { value: 'not_contains', label: 'not contains' },
+  { value: 'equals', label: 'Equals (=)' },
+  { value: 'not_equals', label: 'Does not equal (!=)' },
+  { value: 'greater_than', label: 'Greater than (>)' },
+  { value: 'less_than', label: 'Less than (<)' },
+  { value: 'greater_than_or_equal', label: 'Greater than or equal (>=)' },
+  { value: 'less_than_or_equal', label: 'Less than or equal (<=)' },
+  { value: 'contains', label: 'Contains' },
+  { value: 'not_contains', label: 'Does not contain' },
 ] as const;
 
 /**
@@ -222,7 +222,7 @@ export default function ConditionBuilder({ value, onChange, availableFields = []
     <div className={cn("min-w-0 max-w-full space-y-3", className)}>
       <Label className="text-xs font-medium">Conditions *</Label>
       <p className="text-xs text-muted-foreground break-words">
-        Build conditions using fields, operators, and values. The workflow will branch based on these conditions.
+        Choose a previous-step field, pick the comparison, and enter the value to check. Matching items leave through TRUE; everything else leaves through FALSE.
       </p>
 
       {conditions.map((condition, index) => (
@@ -265,7 +265,7 @@ export default function ConditionBuilder({ value, onChange, availableFields = []
               {(!fieldSuggestions.includes(condition.field)) && (
                 <Input
                   className="h-7 mt-1 text-xs"
-                  placeholder="e.g., $json.age"
+                  placeholder="e.g., $json.orderTotal"
                   value={condition.field}
                   onChange={(e) => {
                     updateCondition(index, { field: e.target.value });
@@ -301,7 +301,7 @@ export default function ConditionBuilder({ value, onChange, availableFields = []
                 className="h-8 text-xs"
                 type={typeof condition.value === 'number' ? 'number' : 'text'}
                 value={String(condition.value)}
-                placeholder="Enter value"
+                placeholder="e.g., approved"
                 onChange={(e) => {
                   const val = e.target.value;
                   // Try to infer type

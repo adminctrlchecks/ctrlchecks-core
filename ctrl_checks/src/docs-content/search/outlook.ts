@@ -7,7 +7,7 @@ export const outlookSearchIndex = [
     slug: 'outlook',
     category: 'Communication',
     href: '/docs/nodes/outlook',
-    text: 'Outlook Send emails via Microsoft Outlook using Microsoft Graph OAuth. Requires a Microsoft Connection with User.Read and Mail.Send. Communication',
+    text: 'Outlook sends plain-text email through Microsoft Graph sendMail using a Microsoft OAuth2 Connection with Mail.Send.',
   },
   {
     type: 'operation',
@@ -15,7 +15,15 @@ export const outlookSearchIndex = [
     slug: 'outlook',
     category: 'Communication',
     href: '/docs/nodes/outlook#operation-send_email',
-    text: 'Outlook Operations Send Email send_email sends a plain-text email from the connected Microsoft mailbox.',
+    text: 'Send Email resolves To, Subject, and Body, sends /me/sendMail, preserves incoming fields, and adds success true when Graph accepts the message.',
+  },
+  {
+    type: 'field',
+    title: 'Outlook: Operation',
+    slug: 'outlook',
+    category: 'Communication',
+    href: '/docs/nodes/outlook#operation-send_email',
+    text: 'Operation supports send_email in the visual panel; legacy send is accepted by runtime.',
   },
   {
     type: 'field',
@@ -23,7 +31,7 @@ export const outlookSearchIndex = [
     slug: 'outlook',
     category: 'Communication',
     href: '/docs/nodes/outlook#operation-send_email',
-    text: 'Outlook Send Email To to recipient email address or comma-separated recipient email addresses.',
+    text: 'To is one or more recipient email addresses, comma-separated, or mapped from a previous field such as {{$json.customerEmail}}.',
   },
   {
     type: 'field',
@@ -31,7 +39,7 @@ export const outlookSearchIndex = [
     slug: 'outlook',
     category: 'Communication',
     href: '/docs/nodes/outlook#operation-send_email',
-    text: 'Outlook Send Email Subject subject email subject line.',
+    text: 'Subject is required plain text for the recipient inbox headline.',
   },
   {
     type: 'field',
@@ -39,6 +47,6 @@ export const outlookSearchIndex = [
     slug: 'outlook',
     category: 'Communication',
     href: '/docs/nodes/outlook#operation-send_email',
-    text: 'Outlook Send Email Body body plain-text email body content.',
+    text: 'Body is required plain-text email content; this executor sends Microsoft Graph contentType Text, not HTML.',
   },
 ] satisfies DocsSearchIndexItem[];

@@ -1,0 +1,121 @@
+{
+  "version_id": "e6c27f9029b2",
+  "full_hash": "e6c27f9029b2a095dd7e84c2fa230a7243192945953a3b55b649998090ef842e",
+  "created_at": "2026-07-14T17:37:01.634Z",
+  "workflow": {
+    "nodes": [
+      {
+        "id": "node_0ef4679d-642b-4e7e-bab5-9dd1880de7f0",
+        "type": "manual_trigger",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "data": {
+          "label": "Manual Trigger",
+          "type": "manual_trigger",
+          "category": "trigger",
+          "config": {
+            "_fillMode": {
+              "inputData": "buildtime_ai_once"
+            },
+            "inputData": {
+              "post_text": "Did you know that prime numbers are the building blocks of mathematics? Just like atoms in chemistry, every whole number greater than 1 is either a prime itself or can be uniquely factored into primes. 🧠✨\n\nFrom cybersecurity (RSA encryption) to cicada life cycles, primes are everywhere! What's your favorite mathematical concept? Let's discuss below! 👇\n\n#Mathematics #PrimeNumbers #STEM #Education #Tech"
+            }
+          }
+        }
+      },
+      {
+        "id": "node_1435c2c5-eb47-4340-b321-78d9ff5d4356",
+        "type": "linkedin",
+        "position": {
+          "x": 290,
+          "y": 160
+        },
+        "data": {
+          "label": "LinkedIn",
+          "type": "linkedin",
+          "category": "social_media",
+          "config": {
+            "text": "{{$json.post_text}}",
+            "media": {},
+            "dryRun": false,
+            "richText": "{{$json.text}}",
+            "_fillMode": {
+              "text": "buildtime_ai_once",
+              "media": "manual_static",
+              "dryRun": "manual_static",
+              "mediaUrl": "manual_static",
+              "richText": "buildtime_ai_once",
+              "operation": "buildtime_ai_once",
+              "personUrn": "manual_static",
+              "visibility": "buildtime_ai_once"
+            },
+            "operation": "create_post",
+            "visibility": "PUBLIC",
+            "credentialId": "linkedin"
+          }
+        }
+      },
+      {
+        "id": "log_output_mrkxodr6_8k8mrt",
+        "type": "log_output",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "data": {
+          "label": "Log Output",
+          "type": "log_output",
+          "category": "output",
+          "config": {
+            "level": "info",
+            "message": "workflow successfully executed"
+          }
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_node_0ef4679d-642b-4e7e-bab5-9dd1880de7f0_node_1435c2c5-eb47-4340-b321-78d9ff5d4356_6e81f3f1-f479-4cfa-a1e4-e81c19e591a0",
+        "source": "node_0ef4679d-642b-4e7e-bab5-9dd1880de7f0",
+        "target": "node_1435c2c5-eb47-4340-b321-78d9ff5d4356",
+        "sourceHandle": "output",
+        "targetHandle": "input",
+        "type": "default"
+      },
+      {
+        "id": "8d8e6085-159d-480f-a581-38e36be58875",
+        "source": "node_1435c2c5-eb47-4340-b321-78d9ff5d4356",
+        "target": "log_output_mrkxodr6_8k8mrt",
+        "type": "default",
+        "sourceHandle": "output",
+        "targetHandle": "input"
+      }
+    ],
+    "metadata": {
+      "id": "26d1f418-20cd-4c88-b68c-7217c9d92861",
+      "workflow_id": "26d1f418-20cd-4c88-b68c-7217c9d92861"
+    }
+  },
+  "metadata": {
+    "source": "ai_editor",
+    "workflowId": "26d1f418-20cd-4c88-b68c-7217c9d92861",
+    "actor": "d1f3dd1a-2081-7056-9577-8ef4e3a8082a",
+    "prompt": "add the log out node with workflow sucessess fully executed message\n\nSelected implementation: Log Output (log_output)."
+  },
+  "dependencies": {
+    "node_library_version": "1.0.0",
+    "assembler_version": "1.0.0"
+  },
+  "compatibility": {
+    "backward_compatible": true,
+    "breaking_changes": [],
+    "deprecated_nodes": [],
+    "migration_path": {
+      "automated": true,
+      "steps": [],
+      "estimated_time": "5 minutes"
+    }
+  }
+}

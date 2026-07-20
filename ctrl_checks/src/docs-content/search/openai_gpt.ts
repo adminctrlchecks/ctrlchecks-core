@@ -2,43 +2,35 @@ import type { DocsSearchIndexItem } from '../search-index';
 
 export const openaiGptSearchIndex = [
   {
-    "type": "node",
-    "title": "OpenAI GPT",
-    "slug": "openai_gpt",
-    "category": "AI",
-    "href": "/docs/nodes/openai_gpt",
-    "text": "OpenAI GPT OpenAI GPT chat completion (GPT-4, GPT-3.5) Use this node when a workflow needs openai gpt behavior with schema-driven inputs from the CtrlChecks node registry. AI"
+    type: 'node',
+    title: 'OpenAI GPT',
+    slug: 'openai_gpt',
+    category: 'AI',
+    href: '/docs/nodes/openai_gpt',
+    text: 'OpenAI GPT legacy LLM adapter OpenAI API Key credential resolver Connections credential vault response model usage finishReason no incoming field passthrough temperature ignored memory ignored messages fallback prompt system context',
   },
   {
-    "type": "operation",
-    "title": "OpenAI GPT: Configure",
-    "slug": "openai_gpt",
-    "category": "AI",
-    "href": "/docs/nodes/openai_gpt#operation-configure",
-    "text": "OpenAI GPT Configuration Configure Configure with the OpenAI GPT node using the configured input fields. configure"
+    type: 'operation',
+    title: 'OpenAI GPT: Execute',
+    slug: 'openai_gpt',
+    category: 'AI',
+    href: '/docs/nodes/openai_gpt',
+    text: 'Execute sends prompt or joined messages to OpenAI. Static prompt can become system context when upstream text exists. Output keys are response model usage finishReason and credential error success false error.',
   },
   {
-    "type": "field",
-    "title": "OpenAI GPT: Model",
-    "slug": "openai_gpt",
-    "category": "AI",
-    "href": "/docs/nodes/openai_gpt#operation-configure",
-    "text": "OpenAI GPT Configuration Configure Model model Model name"
+    type: 'field',
+    title: 'OpenAI GPT: Prompt',
+    slug: 'openai_gpt',
+    category: 'AI',
+    href: '/docs/nodes/openai_gpt',
+    text: 'Prompt System Context prompt messages fallback upstream text user message {{$json.response}}',
   },
   {
-    "type": "field",
-    "title": "OpenAI GPT: Messages",
-    "slug": "openai_gpt",
-    "category": "AI",
-    "href": "/docs/nodes/openai_gpt#operation-configure",
-    "text": "OpenAI GPT Configuration Configure Messages messages Chat messages"
+    type: 'field',
+    title: 'OpenAI GPT: Temperature and Memory',
+    slug: 'openai_gpt',
+    category: 'AI',
+    href: '/docs/nodes/openai_gpt',
+    text: 'Temperature ignored Memory ignored current openai_gpt executor does not pass temperature or read memory',
   },
-  {
-    "type": "field",
-    "title": "OpenAI GPT: Api Key",
-    "slug": "openai_gpt",
-    "category": "AI",
-    "href": "/docs/nodes/openai_gpt#operation-configure",
-    "text": "OpenAI GPT Configuration Configure Api Key apiKey OpenAI API key (node-level, required for this node to run)"
-  }
 ] satisfies DocsSearchIndexItem[];

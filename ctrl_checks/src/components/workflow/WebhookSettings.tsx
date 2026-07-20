@@ -110,7 +110,7 @@ export default function WebhookSettings({ workflowId }: WebhookSettingsProps) {
         <DialogHeader>
           <DialogTitle>Webhook Settings</DialogTitle>
           <DialogDescription>
-            Enable webhook triggers to start this workflow from external services
+            Enable the public URL that outside apps use to start this workflow.
           </DialogDescription>
         </DialogHeader>
 
@@ -156,24 +156,27 @@ export default function WebhookSettings({ workflowId }: WebhookSettingsProps) {
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Send a POST request to this URL to trigger the workflow.
-                  The request body will be passed as input to the workflow.
+                  Paste this full URL into the sending app's webhook settings.
+                  The Webhook Trigger node decides which method, response mode,
+                  and signature settings the workflow expects.
                 </p>
 
                 <div className="p-4 bg-muted rounded-lg space-y-2">
-                  <p className="text-sm font-medium">Example cURL request:</p>
+                  <p className="text-sm font-medium">Example test request:</p>
                   <div className="bg-background p-3 rounded border overflow-x-auto">
                     <pre className="text-xs whitespace-pre-wrap break-words">
                       {`curl -X POST "${webhookUrl}" \\
   -H "Content-Type: application/json" \\
-  -d '{"key": "value"}'`}
+  -d '{"event":"order.created","orderId":"ORD-1048","customerEmail":"alex@example.com"}'`}
                     </pre>
                   </div>
                 </div>
 
                 <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
                   <p className="text-sm text-yellow-600 dark:text-yellow-400">
-                    <strong>Note:</strong> The workflow must be saved and active for webhook triggers to work.
+                    <strong>Note:</strong> The workflow must be saved and active.
+                    If signature verification is on, the sender must sign requests
+                    with the same secret and include the X-Webhook-Signature header.
                   </p>
                 </div>
               </div>

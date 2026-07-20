@@ -64,6 +64,8 @@ export function overrideSwitch(
           // Structural JSON that defines branch ports/case values.
           ownership: 'structural',
           role: 'raw_json',
+          // 'value' is the port/branch identity edges wire to; 'label' is display-only.
+          structuralShapeKeys: ['value'],
         }
       : def.inputSchema.cases,
     ...(def.inputSchema.routingType
@@ -90,6 +92,7 @@ export function overrideSwitch(
             },
             ownership: 'structural',
             role: 'raw_json',
+            structuralShapeKeys: ['value'],
           },
         }
       : {}),

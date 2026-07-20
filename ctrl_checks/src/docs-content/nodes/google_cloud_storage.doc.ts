@@ -1,100 +1,79 @@
-import type { NodeDoc } from '../types';
+import type { FieldDoc, NodeDoc, OperationDoc } from '../types';
+
+const docsUrl = 'https://cloud.google.com/storage/docs';
+
+function rich(label: string, meaning: string, enter: string, wrong: string, later: string, source = 'Copy it from a Google Cloud service account JSON key, Google Cloud Console, or map a workflow value such as {{$json.fileName}}.'): string {
+  return (
+    `What this field is: ${label} - ${meaning}\n` +
+    `Why it matters: Google Cloud Storage uses these values to authenticate, choose the bucket/object, and decide whether to upload, download, delete, or list files.\n` +
+    `When to fill it: Fill Project ID, Client Email, Private Key, Operation, and Bucket for every run, then fill File Name, File Content, or Filter when the selected operation needs them.\n` +
+    `What to enter: ${enter}\n` +
+    `Where the value comes from: ${source}\n` +
+    `How to use it later: ${later}\n` +
+    `Accepted format: Operation is upload, download, delete, or list. Bucket is a GCS bucket name. File Name is an object path. Private Key may include escaped \\n line breaks.\n` +
+    `Real workplace example: A form workflow maps {{$json.invoiceText}} into File Content, uploads invoices/{{$json.invoiceId}}.txt, then sends {{$json.fileName}} and {{$json.fileSize}} to a notification step.\n` +
+    `If it is empty or wrong: ${wrong}\n` +
+    `Common mistake: Using Google OAuth or a Firebase web key. This runtime creates a GCS Storage client from service account projectId, clientEmail, and privateKey fields.`
+  );
+}
+
+const fields: FieldDoc[] = [
+  { name: 'Operation', internalKey: 'operation', type: 'select', required: true, description: 'GCS operation to run.', options: ['upload', 'download', 'delete', 'list'], defaultValue: 'upload', helpText: rich('Operation', 'the object-storage action to execute.', 'Choose upload to save content, download to read one object, delete to remove one object, or list to enumerate objects by optional prefix.', 'Blank or unsupported values return Invalid operation: <value>.', 'Use {{$json.fileName}}, {{$json.fileSize}}, {{$json.data}}, {{$json.deleted}}, {{$json.count}}, or {{$json._error}} after the node.') },
+  { name: 'Project ID', internalKey: 'projectId', type: 'string', required: true, description: 'Google Cloud project ID for the service account.', placeholder: 'my-gcp-project', helpText: rich('Project ID', 'the GCP project used to initialize the Storage client.', 'Enter project_id from the service account JSON or Google Cloud Console.', 'Blank returns projectId is required. Wrong projects can cause permission or bucket-not-found errors.', 'This is setup-only; downstream nodes use returned file metadata or data.') },
+  { name: 'Client Email', internalKey: 'clientEmail', type: 'email', required: true, description: 'Service account email.', placeholder: 'workflow-service@project-id.iam.gserviceaccount.com', helpText: rich('Client Email', 'the service account identity used for GCS API calls.', 'Enter client_email from the service account JSON.', 'Blank returns clientEmail is required. Wrong emails or disabled accounts cause authentication errors.', 'Do not map this downstream; use file outputs instead.') },
+  { name: 'Private Key', internalKey: 'privateKey', type: 'textarea', required: true, description: 'Service account private key.', placeholder: '-----BEGIN PRIVATE KEY-----\\n...', helpText: rich('Private Key', 'the PEM private key paired with Client Email.', 'Paste private_key from the JSON key, preserving line breaks or escaped \\n sequences.', 'Blank returns privateKey is required. Malformed keys return a Google authentication error.', 'Keep this secret in Connections/credential vault when possible; never send it to later nodes.') },
+  { name: 'Bucket Name', internalKey: 'bucket', type: 'string', required: true, description: 'GCS bucket name.', placeholder: 'company-uploads', helpText: rich('Bucket Name', 'the storage bucket selected by storage.bucket(bucket).', 'Enter an existing bucket name such as company-uploads or reports-prod.', 'Blank returns bucket is required. Wrong bucket names or missing IAM permissions return GCS API errors.', 'File operations return object names, content, or counts from this bucket.') },
+  { name: 'File Name', internalKey: 'fileName', type: 'string', required: false, description: 'Object name/path used by upload, download, and delete.', placeholder: 'invoices/inv-1001.txt', helpText: rich('File Name', 'the object path inside the bucket.', 'Enter a path such as file.txt, folder/file.json, or invoices/{{$json.invoiceId}}.txt.', 'Upload without it returns fileName is required for upload. Download/delete without it return fileName is required for download/delete.', 'Upload/download/delete return {{$json.fileName}}; later nodes can log or share that path.') },
+  { name: 'File Content', internalKey: 'fileContent', type: 'textarea', required: false, description: 'Content saved by upload.', placeholder: 'Hello World', helpText: rich('File Content', 'the payload written to GCS during upload.', 'Enter text, a JSON object/string, Buffer-like value from a previous step, or map {{$json.fileContent}}. Objects are JSON-stringified before upload.', 'Upload with null or undefined returns fileContent is required for upload. Empty string is allowed and uploads a zero-byte object.', 'Upload returns {{$json.fileSize}} based on the UTF-8 buffer length.') },
+  { name: 'Filter Prefix', internalKey: 'filter', type: 'string', required: false, description: 'Optional object-name prefix for list.', placeholder: 'invoices/2026/', helpText: rich('Filter Prefix', 'the prefix passed to getFiles({prefix}).', 'Enter a folder-like prefix such as invoices/ or exports/2026/. Leave blank to list the bucket root/all visible objects.', 'Wrong prefixes simply return an empty data array and count 0 unless the bucket call itself fails.', 'List returns {{$json.data}} as file metadata objects and {{$json.count}} as the number returned.') },
+];
+
+function op(name: string, value: string, description: string, outputExample: Record<string, unknown>, outputDescription: string, inputValues: Record<string, string>): OperationDoc {
+  return {
+    name,
+    value,
+    description: `${description} This entry reflects the worker runtime and the legacy database-node wrapper output shape.`,
+    fields,
+    outputExample,
+    outputDescription,
+    usageExample: {
+      scenario: `${name} in a workflow that stores, retrieves, removes, or audits cloud files`,
+      inputValues: { operation: value, projectId: 'my-gcp-project', clientEmail: 'workflow-service@my-gcp-project.iam.gserviceaccount.com', privateKey: '{{$credentials.google_cloud_storage.privateKey}}', bucket: 'company-uploads', ...inputValues },
+      expectedOutput: 'The next node can use {{$json.fileName}}, {{$json.fileSize}}, {{$json.data}}, {{$json.deleted}}, {{$json.count}}, or {{$json._error}} depending on the operation.',
+    },
+    externalDocsUrl: docsUrl,
+  };
+}
 
 export const googleCloudStorageDoc: NodeDoc = {
-  "slug": "google_cloud_storage",
-  "displayName": "Google Cloud Storage",
-  "category": "Data",
-  "logoUrl": "/icons/nodes/google_cloud_storage.svg",
-  "description": "Interact with Google Cloud Storage buckets (upload, download, delete, list)",
-  "credentialType": "Google Cloud Storage Credential",
-  "credentialSetupSteps": [
-    "What this is: The Google Cloud Storage connection lets CtrlChecks access your Google Cloud Storage account safely without putting secrets in workflow fields.",
-    "Where to start: Google Cloud Storage account settings or developer settings.",
-    "How to connect: In CtrlChecks, open Connections -> Add Connection -> Google Cloud Storage, then sign in or paste the secret value requested there.",
-    "Example: the token format shown by Google Cloud Storage.",
-    "Important: Treat tokens, passwords, API keys, and client secrets like bank passwords. Store them in Connections, not in regular workflow fields.",
-    "Test it: Save the connection, run a simple Google Cloud Storage step, and confirm CtrlChecks can reach the account."
+  slug: 'google_cloud_storage',
+  displayName: 'Google Cloud Storage',
+  category: 'Database',
+  logoUrl: '/icons/nodes/google_cloud_storage.svg',
+  description: 'Upload, download, delete, and list objects in a Google Cloud Storage bucket using service account credentials. Successful upload/download/delete results return file metadata or content directly; list returns an array in data plus count.',
+  credentialType: 'Google Cloud Storage Service Account',
+  credentialSetupSteps: [
+    'Create or select a Google Cloud service account and grant only the Storage permissions needed for the target bucket, such as Storage Object Viewer or Storage Object Admin.',
+    'Generate a JSON key and store projectId, clientEmail, and privateKey in CtrlChecks Connections/credential vault where possible.',
+    'Confirm the target bucket exists and the service account has permissions on that bucket.',
+    'Test list with a narrow Filter prefix before enabling upload, download, or delete operations.',
+    'After this node runs, connect its output to the next app, notification, report, or database step. Each downstream service node account connection is configured separately.',
   ],
-  "credentialDocsUrl": "https://cloud.google.com/storage/docs/authentication",
-  "resources": [
-    {
-      "name": "Configuration",
-      "description": "Google Cloud Storage is configured directly with input fields.",
-      "operations": [
-        {
-          "name": "Execute",
-          "value": "default",
-          "description": "Execute using the Google Cloud Storage node.",
-          "fields": [
-            {
-              "name": "File Name",
-              "internalKey": "fileName",
-              "type": "string",
-              "required": false,
-              "description": "File name/path in bucket",
-              "helpText": "What this field is: The File name/path in bucket that tells Google Cloud Storage which item to use.\nWhere to find it: Open the item in Google Cloud Storage and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.fileName}} when an earlier Google Cloud Storage step provides this value.",
-              "placeholder": "Enter File Name"
-            },
-            {
-              "name": "File Content",
-              "internalKey": "fileContent",
-              "type": "textarea",
-              "required": false,
-              "description": "File content for upload",
-              "helpText": "What this field is: The File content for upload that tells Google Cloud Storage which item to use.\nWhere to find it: Open the item in Google Cloud Storage and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.fileContent}} when an earlier Google Cloud Storage step provides this value.",
-              "placeholder": "Enter File Content"
-            },
-            {
-              "name": "Filter",
-              "internalKey": "filter",
-              "type": "string",
-              "required": false,
-              "description": "Prefix filter for list operations",
-              "helpText": "What this field is: Structured data for Prefix filter for list operations.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Google Cloud Storage.\nExample: {\"name\":\"Alice\",\"email\":\"alice@example.com\"}.\nTip: Use {{$json.filter}} when an earlier step already prepared this data.",
-              "placeholder": "Enter Filter"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming Google Cloud Storage data with execute after a related upstream event is received",
-            "inputValues": {
-              "File Name": "",
-              "File Content": "",
-              "Filter": ""
-            },
-            "expectedOutput": "Google Cloud Storage returns structured execute data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://cloud.google.com/storage/docs/json_api"
-        }
-      ]
-    }
+  credentialDocsUrl: 'https://cloud.google.com/iam/docs/keys-create-delete',
+  resources: [{ name: 'Objects', description: 'Google Cloud Storage bucket object operations through @google-cloud/storage.', operations: [
+    op('Upload File', 'upload', 'Saves File Content into Bucket at File Name. Strings are uploaded as UTF-8, Buffers are used directly, and objects are JSON-stringified before writing.', { fileName: 'invoices/inv-1001.txt', fileSize: 42 }, 'fileName: object path written. fileSize: byte length of the content buffer. _error: present when credentials, bucket, fileName, fileContent, or GCS execution fails.', { fileName: 'invoices/{{$json.invoiceId}}.txt', fileContent: '{{$json.invoiceText}}' }),
+    op('Download File', 'download', 'Downloads one object and returns its UTF-8 string content in data. Binary content is not preserved as binary by this runtime.', { fileName: 'invoices/inv-1001.txt', data: 'Invoice INV-1001 paid' }, 'fileName: object path downloaded. data: UTF-8 string content. _error: present when credentials, bucket, fileName, permissions, or GCS execution fails.', { fileName: 'invoices/{{$json.invoiceId}}.txt' }),
+    op('Delete File', 'delete', 'Deletes one object by File Name and returns deleted:true when the SDK delete call completes.', { fileName: 'tmp/export.csv', deleted: true }, 'fileName: object path deleted. deleted: true after the delete call completes. _error: present when credentials, bucket, fileName, permissions, or GCS execution fails.', { fileName: 'tmp/{{$json.fileName}}' }),
+    op('List Files', 'list', 'Lists objects in a bucket and optionally filters them by prefix using the Filter field.', { data: [{ name: 'exports/report.csv', size: '1024', updated: '2026-07-19T09:00:00.000Z' }], count: 1 }, 'data: Array of file metadata objects with name, size, and updated. count: number of objects returned. _error: present when credentials, bucket, permissions, or GCS execution fails.', { filter: 'exports/' }),
+  ] }],
+  commonErrors: [
+    { error: 'projectId is required', cause: 'Project ID was blank before creating the Storage client.', fix: 'Copy project_id from the service account JSON or saved Google Cloud Storage connection.' },
+    { error: 'clientEmail is required', cause: 'Client Email was blank.', fix: 'Copy client_email from the service account JSON.' },
+    { error: 'privateKey is required', cause: 'Private Key was blank.', fix: 'Store private_key in the GCS credential and preserve newline formatting.' },
+    { error: 'Invalid operation: <value>', cause: 'Operation was not upload, download, delete, or list.', fix: 'Choose a supported operation from the dropdown.' },
+    { error: 'bucket is required', cause: 'Bucket Name was blank.', fix: 'Enter the existing bucket name and confirm the service account has access.' },
+    { error: 'fileName/fileContent is required for <operation>', cause: 'Upload/download/delete was missing an object path or upload was missing content.', fix: 'Fill File Name for upload/download/delete and File Content for upload.' },
+    { error: '<GCS operation failed> / _error', cause: 'Google authentication, IAM permission, bucket existence, object path, or Storage API execution failed.', fix: 'Read {{$json._error}}, verify service account IAM on the bucket, and test the object path in Google Cloud Console.' },
   ],
-  "commonErrors": [
-    {
-      "error": "Authentication failed",
-      "cause": "The saved credential, token, API key, or OAuth grant is missing, expired, or lacks the required scope.",
-      "fix": "Reconnect the service in CtrlChecks → Connections, then re-run the Google Cloud Storage node."
-    },
-    {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
-    },
-    {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
-  ],
-  "relatedNodes": []
+  relatedNodes: ['google_drive', 'firebase', 'mongodb', 'db'],
 };

@@ -58,9 +58,7 @@ const NODE_TYPE_ALIASES: Record<string, string[]> = {
   'google_big_query': ['bigquery', 'big_query', 'bq', 'bigquery'],
   
   // Database Nodes
-  'database_write': ['db_write', 'write_db', 'postgresql', 'postgres', 'write', 'insert', 'update', 'delete'],
-  'database_read': ['db_read', 'read_db', 'query_db', 'read', 'select', 'fetch', 'get', 'retrieve'],
-  'postgresql': ['postgres', 'postgresql', 'pg', 'postgres_db'],
+  'postgresql': ['postgres', 'postgresql', 'pg', 'postgres_db', 'database', 'db_write', 'write_db', 'db_read', 'read_db', 'query_db', 'read database', 'query database', 'write database', 'read', 'select', 'fetch', 'get', 'retrieve', 'write', 'insert', 'update', 'delete'],
   'db': ['supa', 'supa_db', 'db'],
   'mysql': ['my_sql', 'mysql'],
   'mongodb': ['mongo', 'mongo_db', 'mongodb'],

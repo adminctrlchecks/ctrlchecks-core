@@ -1,233 +1,95 @@
-import type { NodeDoc } from '../types';
+import type { FieldDoc, NodeDoc, OperationDoc } from '../types';
+
+const docsUrl = 'https://www.mongodb.com/docs/drivers/node/current/';
+
+function rich(label: string, meaning: string, enter: string, wrong: string, later: string, source = 'Use a saved MongoDB Connection String, MongoDB Atlas, MongoDB Compass, or map workflow values such as {{$json.userId}}.'): string {
+  return (
+    `What this field is: ${label} - ${meaning}\n` +
+    `Why it matters: The MongoDB runtime uses these values to connect to the database, choose a collection, parse JSON inputs, and run one driver operation.\n` +
+    `When to fill it: Fill connection details for every run, then fill collection plus the operation-specific filter, document, update, documents, or pipeline fields.\n` +
+    `What to enter: ${enter}\n` +
+    `Where the value comes from: ${source}\n` +
+    `How to use it later: ${later}\n` +
+    `Accepted format: Operation is find, insertOne, insertMany, updateOne, updateMany, deleteOne, deleteMany, or aggregate. JSON fields may be objects/arrays or JSON strings. Connection strings start with mongodb:// or mongodb+srv://.\n` +
+    `Real workplace example: An order workflow maps {{$json.customerId}} into Filter, finds a customer document, then maps {{$json.documents[0].email}} into an email or CRM step.\n` +
+    `If it is empty or wrong: ${wrong}\n` +
+    `Common mistake: Using the old Query field name. The runtime reads filter, projection, sort, document, documents, update, pipeline, and options; it does not read query.`
+  );
+}
+
+const fields: FieldDoc[] = [
+  { name: 'Connection String', internalKey: 'connectionString', type: 'password', required: false, description: 'Full MongoDB URI. Runtime uses it directly when present.', placeholder: 'mongodb+srv://user:pass@cluster.mongodb.net/mydb', helpText: rich('Connection String', 'the full MongoDB URI used to connect.', 'Enter a mongodb:// or mongodb+srv:// URI, preferably through the saved MongoDB Connection String credential.', 'Blank is allowed only when Host mode fields are filled. Empty strings return connectionString must be a non-empty string, and bad URIs return a MongoDB driver error.', 'Do not expose this later; downstream nodes use {{$json.documents}}, {{$json.insertedId}}, {{$json.deletedCount}}, or {{$json._error}}.') },
+  { name: 'Host', internalKey: 'host', type: 'string', required: false, description: 'MongoDB host used when connectionString is blank.', placeholder: 'cluster0.example.mongodb.net', helpText: rich('Host', 'the hostname for non-URI connection mode.', 'Enter a host such as localhost or a cluster host when you are not using connectionString.', 'If connectionString is blank and Host is blank, the node returns host is required when connectionString is not provided.', 'This is setup-only; query results appear in {{$json.documents}} or operation-specific count fields.') },
+  { name: 'Port', internalKey: 'port', type: 'number', required: false, description: 'MongoDB port for host mode. Defaults to 27017.', placeholder: '27017', defaultValue: '27017', helpText: rich('Port', 'the port appended in host mode.', 'Enter 27017 for normal MongoDB, or the port your server exposes.', 'Blank defaults to 27017. Wrong ports return MongoDB connection errors.', 'Output paths are unaffected by this field.') },
+  { name: 'Username', internalKey: 'username', type: 'string', required: false, description: 'MongoDB username, or a saved-credential URI alias.', placeholder: 'db_user', helpText: rich('Username', 'the database username in host mode. A saved mongodb_connection credential stores the full URI here.', 'Use a normal username in host mode. If the injected value starts with mongodb:// or mongodb+srv://, the runtime treats it as connectionString instead.', 'Wrong usernames fail authentication. A saved URI in this field works only if it starts with a MongoDB URI scheme.', 'Never map this downstream; use returned document data instead.') },
+  { name: 'Password', internalKey: 'password', type: 'password', required: false, description: 'MongoDB password, or database-name override for saved URI credentials.', placeholder: 'secret', helpText: rich('Password', 'the database password in host mode. With a saved URI credential, runtime also uses it as database override.', 'Enter the password for host mode, or leave it as the saved connection database name when the credential injector uses username as a URI.', 'Wrong passwords fail authentication; an empty database override may make the runtime infer the database name from the URI path.', 'Keep it in Connections/credential vault and use output data later.') },
+  { name: 'Database', internalKey: 'database', type: 'string', required: false, description: 'Database name. Required in host mode and used as db() target.', placeholder: 'appdb', helpText: rich('Database', 'the MongoDB database selected by client.db(databaseName).', 'Enter the exact database name such as appdb, analytics, or production.', 'Host mode without Database returns database is required. With connectionString, blank makes runtime infer the last URI path segment or fall back to test.', 'Returned documents do not include database name unless your documents contain it.') },
+  { name: 'Auth Source', internalKey: 'authSource', type: 'string', required: false, description: 'Authentication database for host mode. Defaults to admin.', placeholder: 'admin', defaultValue: 'admin', helpText: rich('Auth Source', 'the authSource query parameter in host mode.', 'Enter admin unless your MongoDB user is defined in another authentication database.', 'Wrong authSource causes authentication failures. Blank defaults to admin.', 'This is not returned; downstream nodes use operation outputs.') },
+  { name: 'SSL', internalKey: 'ssl', type: 'boolean', required: false, description: 'Adds ssl=true in host mode when true.', defaultValue: 'false', helpText: rich('SSL', 'whether host mode adds ssl=true to the connection string.', 'Use true for TLS-enabled servers that require it. Atlas SRV URIs usually go through connectionString instead.', 'Wrong SSL settings can cause connection failures or handshake errors.', 'Output shape is unchanged.') },
+  { name: 'Operation', internalKey: 'operation', type: 'select', required: true, description: 'MongoDB driver operation. The UI panel currently exposes find, insertOne, updateOne, and deleteOne; runtime also accepts bulk/aggregate operations.', options: ['find', 'insertOne', 'insertMany', 'updateOne', 'updateMany', 'deleteOne', 'deleteMany', 'aggregate'], defaultValue: 'find', helpText: rich('Operation', 'the MongoDB operation to execute.', 'Choose find, insertOne, updateOne, or deleteOne in the visible panel. Generated configs may also supply insertMany, updateMany, deleteMany, or aggregate, which the runtime supports.', 'Blank returns operation is required. Unsupported values return operation must be one of: find, insertOne, insertMany, updateOne, updateMany, deleteOne, deleteMany, aggregate.', 'Use operation-specific outputs such as {{$json.documents}}, {{$json.insertedId}}, {{$json.insertedCount}}, {{$json.modifiedCount}}, or {{$json.deletedCount}}.') },
+  { name: 'Collection Name', internalKey: 'collection', type: 'string', required: true, description: 'MongoDB collection to operate on.', placeholder: 'users', helpText: rich('Collection Name', 'the collection passed to db.collection(collection).', 'Enter the exact collection name such as users, orders, events, or products.', 'Blank returns collection is required. Wrong names may create empty results or write to an unintended collection.', 'Documents or write results from this collection become the next step input.') },
+  { name: 'Filter', internalKey: 'filter', type: 'json', required: false, description: 'MongoDB query filter for find, update, and delete operations.', placeholder: '{"status":"active"}', helpText: rich('Filter', 'the MongoDB selector object.', 'Enter a JSON object such as {"status":"active"} or {"age":{"$gte":18}}. Use {{$json.filter}} when prepared upstream.', 'Update/delete operations without it throw filter is required for updateOne/updateMany/deleteOne/deleteMany operation. Invalid JSON strings are passed through as strings and can cause driver errors.', 'Find results appear in {{$json.documents}}; update/delete counts appear in {{$json.modifiedCount}} or {{$json.deletedCount}}.') },
+  { name: 'Projection', internalKey: 'projection', type: 'json', required: false, description: 'Optional projection object for find.', placeholder: '{"email":1,"status":1}', helpText: rich('Projection', 'the field projection passed to query.project().', 'Enter {"email":1,"status":1} to include fields or {"largeBlob":0} to exclude a field.', 'Malformed projections can throw driver errors. Blank returns full documents.', 'Only projected fields appear in {{$json.documents[0]}}.') },
+  { name: 'Limit', internalKey: 'limit', type: 'number', required: false, description: 'Maximum documents for find.', placeholder: '100', helpText: rich('Limit', 'the number passed to cursor.limit().', 'Enter a practical number such as 10, 50, or 100.', 'Blank or 0 means no limit call is applied. Very high values can create large payloads.', 'The actual count appears in {{$json.count}} for find/aggregate.') },
+  { name: 'Skip', internalKey: 'skip', type: 'number', required: false, description: 'Number of matching documents to skip for find.', placeholder: '0', helpText: rich('Skip', 'the number passed to cursor.skip().', 'Enter 0 for no offset or a positive integer for pagination.', 'Blank means no skip. Large skips can be slow on big collections.', 'Returned documents start after the skipped records.') },
+  { name: 'Sort', internalKey: 'sort', type: 'json', required: false, description: 'Sort object for find.', placeholder: '{"createdAt":-1}', helpText: rich('Sort', 'the MongoDB sort object for find.', 'Enter {"createdAt":-1} for newest first or {"name":1} for ascending name.', 'Malformed sort objects can return driver errors. Blank keeps natural/default ordering.', 'Sorted documents appear in {{$json.documents}}.') },
+  { name: 'Document', internalKey: 'document', type: 'json', required: false, description: 'Single document for insertOne.', placeholder: '{"email":"{{$json.email}}"}', helpText: rich('Document', 'the single document inserted by insertOne.', 'Enter a JSON object with fields to store, such as {"email":"{{$json.email}}","status":"new"}.', 'insertOne without it throws document is required for insertOne operation.', 'The inserted ID appears in {{$json.insertedId}}.') },
+  { name: 'Documents', internalKey: 'documents', type: 'json', required: false, description: 'Array of documents for insertMany.', placeholder: '[{"email":"a@example.com"},{"email":"b@example.com"}]', helpText: rich('Documents', 'the array inserted by insertMany.', 'Enter a JSON array of document objects.', 'insertMany without an array throws documents array is required for insertMany operation.', 'Inserted IDs and count appear in {{$json.insertedIds}} and {{$json.insertedCount}}.') },
+  { name: 'Update', internalKey: 'update', type: 'json', required: false, description: 'MongoDB update document for updateOne/updateMany.', placeholder: '{"$set":{"status":"active"}}', helpText: rich('Update', 'the update operators sent to MongoDB.', 'Enter an update document such as {"$set":{"status":"active"}}.', 'Update operations without it throw update is required for updateOne/updateMany operation. Plain replacement-style objects can behave differently from operator updates.', 'Use {{$json.matchedCount}}, {{$json.modifiedCount}}, and {{$json.upsertedId}} after the node.') },
+  { name: 'Pipeline', internalKey: 'pipeline', type: 'json', required: false, description: 'Aggregation pipeline for aggregate.', placeholder: '[{"$match":{"status":"active"}},{"$count":"total"}]', helpText: rich('Pipeline', 'the aggregation pipeline stages for aggregate.', 'Enter a JSON array of aggregation stages.', 'aggregate without an array throws pipeline array is required for aggregate operation.', 'Aggregation output appears in {{$json.documents}} with {{$json.count}}.') },
+  { name: 'Options', internalKey: 'options', type: 'json', required: false, description: 'Driver options object for update and aggregate handlers.', placeholder: '{"upsert":true}', helpText: rich('Options', 'optional MongoDB driver options passed to update and aggregate calls.', 'Enter {"upsert":true} for updates or supported aggregate options when needed.', 'Invalid options can be rejected by the MongoDB driver. Blank sends {}.', 'Options are not returned; use the operation result counters.') },
+];
+
+function op(name: string, value: string, description: string, outputExample: Record<string, unknown>, outputDescription: string, inputValues: Record<string, string>): OperationDoc {
+  return {
+    name,
+    value,
+    description: `${description} This entry reflects the worker runtime and the legacy database-node wrapper output shape.`,
+    fields,
+    outputExample,
+    outputDescription,
+    usageExample: {
+      scenario: `${name} in a MongoDB-backed workflow that reads, writes, or audits document records`,
+      inputValues: { operation: value, connectionString: '{{$credentials.mongodb.connectionString}}', database: 'appdb', collection: 'users', ...inputValues },
+      expectedOutput: 'Downstream nodes can use {{$json.documents}}, {{$json.count}}, {{$json.insertedId}}, {{$json.insertedCount}}, {{$json.matchedCount}}, {{$json.modifiedCount}}, {{$json.deletedCount}}, {{$json.acknowledged}}, or {{$json._error}} depending on the operation.',
+    },
+    externalDocsUrl: docsUrl,
+  };
+}
 
 export const mongodbDoc: NodeDoc = {
-  "slug": "mongodb",
-  "displayName": "MongoDB",
-  "category": "Data",
-  "logoUrl": "/icons/nodes/mongodb.svg",
-  "description": "MongoDB database operations",
-  "credentialType": "MongoDB Credential",
-  "credentialSetupSteps": [
-    "What this is: The MongoDB connection lets CtrlChecks access your MongoDB account safely without putting secrets in workflow fields.",
-    "Where to start: MongoDB account settings or developer settings.",
-    "How to connect: In CtrlChecks, open Connections -> Add Connection -> MongoDB, then sign in or paste the secret value requested there.",
-    "Example: the token format shown by MongoDB.",
-    "Important: Treat tokens, passwords, API keys, and client secrets like bank passwords. Store them in Connections, not in regular workflow fields.",
-    "Test it: Save the connection, run a simple MongoDB step, and confirm CtrlChecks can reach the account."
+  slug: 'mongodb',
+  displayName: 'MongoDB',
+  category: 'Database',
+  logoUrl: '/icons/nodes/mongodb.svg',
+  description: 'Run MongoDB driver operations against one collection. The visible panel exposes the common single-document operations, while the runtime also supports insertMany, updateMany, deleteMany, and aggregate when generated config supplies those values.',
+  credentialType: 'MongoDB Connection String',
+  credentialSetupSteps: [
+    'Create a MongoDB Atlas cluster or confirm the host, port, database, username, password, authSource, and SSL settings for your MongoDB server.',
+    'Store the URI in CtrlChecks Connections/credential vault as MongoDB Connection String where possible. The saved mongodb_connection credential stores the full URI in username and can store a database override in password, which this runtime detects.',
+    'Allowlist the worker network in MongoDB Atlas and grant the database user only the collection permissions this workflow needs.',
+    'Test find with a small Limit before enabling insert, update, delete, or aggregate operations.',
+    'After this node runs, connect its output to the next app, notification, report, or database step. Each downstream service node account connection is configured separately.',
   ],
-  "credentialDocsUrl": "https://www.mongodb.com/docs/drivers/node/current/fundamentals/connection/connect/",
-  "resources": [
-    {
-      "name": "Operations",
-      "description": "MongoDB exposes operation choices directly.",
-      "operations": [
-        {
-          "name": "Find",
-          "value": "find",
-          "description": "Find using the MongoDB node.",
-          "fields": [
-            {
-              "name": "Collection",
-              "internalKey": "collection",
-              "type": "string",
-              "required": true,
-              "description": "Collection name",
-              "helpText": "What this field is: Collection name.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: users.\nTip: Use {{$json.collection}} when this value comes from an earlier step.",
-              "placeholder": "users",
-              "example": "users"
-            },
-            {
-              "name": "Query",
-              "internalKey": "query",
-              "type": "textarea",
-              "required": true,
-              "description": "MongoDB query",
-              "helpText": "What this field is: Structured data for MongoDB query.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by MongoDB.\nExample: {\"name\":\"John\"}.\nTip: Use {{$json.query}} when an earlier step already prepared this data.",
-              "placeholder": "{\"name\":\"John\"}",
-              "example": "{\"name\":\"John\"}"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming MongoDB data with find after a related upstream event is received",
-            "inputValues": {
-              "Collection": "users",
-              "Query": "{\"name\":\"John\"}"
-            },
-            "expectedOutput": "MongoDB returns structured find data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://www.mongodb.com/docs/drivers/node/current/"
-        },
-        {
-          "name": "Insert",
-          "value": "insert",
-          "description": "Insert using the MongoDB node.",
-          "fields": [
-            {
-              "name": "Collection",
-              "internalKey": "collection",
-              "type": "string",
-              "required": true,
-              "description": "Collection name",
-              "helpText": "What this field is: Collection name.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: users.\nTip: Use {{$json.collection}} when this value comes from an earlier step.",
-              "placeholder": "users",
-              "example": "users"
-            },
-            {
-              "name": "Query",
-              "internalKey": "query",
-              "type": "textarea",
-              "required": true,
-              "description": "MongoDB query",
-              "helpText": "What this field is: Structured data for MongoDB query.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by MongoDB.\nExample: {\"name\":\"John\"}.\nTip: Use {{$json.query}} when an earlier step already prepared this data.",
-              "placeholder": "{\"name\":\"John\"}",
-              "example": "{\"name\":\"John\"}"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming MongoDB data with insert after a related upstream event is received",
-            "inputValues": {
-              "Collection": "users",
-              "Query": "{\"name\":\"John\"}"
-            },
-            "expectedOutput": "MongoDB returns structured insert data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://www.mongodb.com/docs/drivers/node/current/"
-        },
-        {
-          "name": "Update",
-          "value": "update",
-          "description": "Update using the MongoDB node.",
-          "fields": [
-            {
-              "name": "Collection",
-              "internalKey": "collection",
-              "type": "string",
-              "required": true,
-              "description": "Collection name",
-              "helpText": "What this field is: Collection name.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: users.\nTip: Use {{$json.collection}} when this value comes from an earlier step.",
-              "placeholder": "users",
-              "example": "users"
-            },
-            {
-              "name": "Query",
-              "internalKey": "query",
-              "type": "textarea",
-              "required": true,
-              "description": "MongoDB query",
-              "helpText": "What this field is: Structured data for MongoDB query.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by MongoDB.\nExample: {\"name\":\"John\"}.\nTip: Use {{$json.query}} when an earlier step already prepared this data.",
-              "placeholder": "{\"name\":\"John\"}",
-              "example": "{\"name\":\"John\"}"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming MongoDB data with update after a related upstream event is received",
-            "inputValues": {
-              "Collection": "users",
-              "Query": "{\"name\":\"John\"}"
-            },
-            "expectedOutput": "MongoDB returns structured update data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://www.mongodb.com/docs/drivers/node/current/"
-        },
-        {
-          "name": "Delete",
-          "value": "delete",
-          "description": "Delete using the MongoDB node.",
-          "fields": [
-            {
-              "name": "Collection",
-              "internalKey": "collection",
-              "type": "string",
-              "required": true,
-              "description": "Collection name",
-              "helpText": "What this field is: Collection name.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: users.\nTip: Use {{$json.collection}} when this value comes from an earlier step.",
-              "placeholder": "users",
-              "example": "users"
-            },
-            {
-              "name": "Query",
-              "internalKey": "query",
-              "type": "textarea",
-              "required": true,
-              "description": "MongoDB query",
-              "helpText": "What this field is: Structured data for MongoDB query.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by MongoDB.\nExample: {\"name\":\"John\"}.\nTip: Use {{$json.query}} when an earlier step already prepared this data.",
-              "placeholder": "{\"name\":\"John\"}",
-              "example": "{\"name\":\"John\"}"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming MongoDB data with delete after a related upstream event is received",
-            "inputValues": {
-              "Collection": "users",
-              "Query": "{\"name\":\"John\"}"
-            },
-            "expectedOutput": "MongoDB returns structured delete data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://www.mongodb.com/docs/drivers/node/current/"
-        }
-      ]
-    }
+  credentialDocsUrl: 'https://www.mongodb.com/docs/manual/reference/connection-string/',
+  resources: [{ name: 'Collections', description: 'MongoDB collection operations executed with the Node.js MongoDB driver.', operations: [
+    op('Find Documents', 'find', 'Queries documents with optional filter, projection, sort, skip, and limit. The runtime returns a documents array and count after the legacy database wrapper flattens the data object.', { documents: [{ _id: '64f...', email: 'buyer@example.com', status: 'active' }], count: 1 }, 'documents: Array returned by cursor.toArray(). count: number of documents returned. _error: present when validation, connection, or driver execution fails.', { filter: '{"status":"active"}', projection: '{"email":1,"status":1}', sort: '{"createdAt":-1}', limit: '50', skip: '0' }),
+    op('Insert One', 'insertOne', 'Inserts one document. The returned object is flattened to top-level insertedId and acknowledged fields by the wrapper.', { insertedId: '64f...', acknowledged: true }, 'insertedId: MongoDB ObjectId/value for the inserted document. acknowledged: driver acknowledgement flag. _error: present when document, credentials, or driver execution fails.', { document: '{"email":"{{$json.email}}","status":"new"}' }),
+    op('Insert Many', 'insertMany', 'Inserts an array of documents. This operation is supported by the runtime although the current visible panel does not expose it as a dropdown option.', { insertedIds: { '0': '64f1...', '1': '64f2...' }, insertedCount: 2, acknowledged: true }, 'insertedIds: Driver map of inserted IDs by index. insertedCount: number inserted. acknowledged: driver acknowledgement flag. _error: present when documents is not an array or execution fails.', { documents: '[{"email":"a@example.com"},{"email":"b@example.com"}]' }),
+    op('Update One', 'updateOne', 'Updates the first document matching Filter with the Update document and optional Options.', { matchedCount: 1, modifiedCount: 1, upsertedCount: 0, upsertedId: null, acknowledged: true }, 'matchedCount: number matched. modifiedCount: number changed. upsertedCount/upsertedId: upsert result if options enabled. acknowledged: driver acknowledgement flag. _error: present when filter/update/connection fails.', { filter: '{"_id":"{{$json.userId}}"}', update: '{"$set":{"status":"active"}}', options: '{"upsert":false}' }),
+    op('Update Many', 'updateMany', 'Updates every document matching Filter. Runtime support exists even though the visible panel only offers Update One.', { matchedCount: 3, modifiedCount: 3, upsertedCount: 0, upsertedId: null, acknowledged: true }, 'matchedCount: number matched. modifiedCount: number changed. upsertedCount/upsertedId: upsert result if options enabled. acknowledged: driver acknowledgement flag. _error: present when filter/update/connection fails.', { filter: '{"status":"pending"}', update: '{"$set":{"status":"active"}}', options: '{"upsert":false}' }),
+    op('Delete One', 'deleteOne', 'Deletes the first document matching Filter.', { deletedCount: 1, acknowledged: true }, 'deletedCount: number deleted. acknowledged: driver acknowledgement flag. _error: present when filter/connection fails.', { filter: '{"_id":"{{$json.userId}}"}' }),
+    op('Delete Many', 'deleteMany', 'Deletes every document matching Filter. Runtime support exists even though the visible panel only offers Delete One.', { deletedCount: 4, acknowledged: true }, 'deletedCount: number deleted. acknowledged: driver acknowledgement flag. _error: present when filter/connection fails.', { filter: '{"status":"expired"}' }),
+    op('Aggregate', 'aggregate', 'Runs a MongoDB aggregation pipeline with optional driver options and returns the resulting documents plus count.', { documents: [{ status: 'active', total: 25 }], count: 1 }, 'documents: Array returned by aggregate().toArray(). count: number of aggregation results. _error: present when pipeline is missing, invalid, or execution fails.', { pipeline: '[{"$match":{"status":"active"}},{"$group":{"_id":"$status","total":{"$sum":1}}}]', options: '{}' }),
+  ] }],
+  commonErrors: [
+    { error: 'host is required when connectionString is not provided', cause: 'Neither a full URI nor Host mode connection details were supplied.', fix: 'Use a saved MongoDB Connection String or fill Host plus Database and other connection fields.' },
+    { error: 'database is required', cause: 'Host mode was used without a database name.', fix: 'Enter the exact MongoDB database name or store it in the saved connection database field.' },
+    { error: 'operation is required', cause: 'Operation resolved to an empty value.', fix: 'Choose find, insertOne, insertMany, updateOne, updateMany, deleteOne, deleteMany, or aggregate.' },
+    { error: 'collection is required', cause: 'Collection Name was blank.', fix: 'Enter the exact collection name from MongoDB Atlas, Compass, or your schema.' },
+    { error: 'operation must be one of: find, insertOne, insertMany, updateOne, updateMany, deleteOne, deleteMany, aggregate', cause: 'The operation value did not match the runtime allowlist.', fix: 'Use a supported operation; do not use legacy values such as insert, update, delete, or query.' },
+    { error: 'document/documents array/filter/update/pipeline is required for <operation> operation', cause: 'The selected operation is missing its operation-specific payload.', fix: 'Fill Document for insertOne, Documents for insertMany, Filter for update/delete, Update for update, or Pipeline for aggregate.' },
+    { error: '<MongoDB driver error> / _error', cause: 'Connection string, network allowlist, authentication, JSON shape, or collection permissions failed.', fix: 'Read {{$json._error}}, verify the Atlas connection string and allowlist, then test the same operation in MongoDB Compass.' },
   ],
-  "commonErrors": [
-    {
-      "error": "Authentication failed",
-      "cause": "The saved credential, token, API key, or OAuth grant is missing, expired, or lacks the required scope.",
-      "fix": "Reconnect the service in CtrlChecks → Connections, then re-run the MongoDB node."
-    },
-    {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
-    },
-    {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
-  ],
-  "relatedNodes": []
+  relatedNodes: ['db', 'firebase', 'postgresql', 'google_cloud_storage'],
 };

@@ -227,7 +227,7 @@ export class NodeMapper {
       return 'mongodb';
     }
     if (source.includes('database')) {
-      return 'database_read';
+      return 'postgresql';
     }
     
     // Storage

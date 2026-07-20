@@ -1,95 +1,219 @@
 import type { NodeDoc } from '../types';
+import { richFieldHelp } from './_sharedFieldHelp';
+
+const httpOutputDescription = [
+  'status: HTTP response status code returned by the GraphQL endpoint.',
+  'statusText: HTTP status message returned by the server.',
+  'headers: Response headers from the remote API.',
+  'body: Parsed GraphQL response body or raw response text from HTTP Request.',
+  'data: Alias for body. GraphQL data usually lives at {{$json.body.data}} and GraphQL errors are inside body.errors.',
+  'url: Final endpoint URL used for the request.',
+  'method: Always POST because this node wraps HTTP Request with method POST.',
+  'responseTime: Request duration in milliseconds.',
+  '_error: Present only when HTTP Request fails before a usable response is returned.',
+].join('\n');
 
 export const graphqlDoc: NodeDoc = {
-  "slug": "graphql",
-  "displayName": "GraphQL",
-  "category": "Utility",
-  "logoUrl": "/icons/nodes/graphql.svg",
-  "description": "Make GraphQL requests",
-  "credentialType": "None",
-  "credentialSetupSteps": [
-    "This node does not need a saved account connection.",
-    "Open the node settings and fill the visible input fields.",
-    "Run the workflow when the required fields are complete."
+  slug: 'graphql',
+  displayName: 'GraphQL',
+  category: 'HTTP & API',
+  logoUrl: '/icons/nodes/graphql.svg',
+  description: 'Send a GraphQL query or mutation as an HTTP POST request, with optional variables, operation name, headers, and timeout control.',
+  credentialType: 'None',
+  credentialSetupSteps: [
+    'GraphQL does not use credentials or a saved CtrlChecks connection by itself; it sends the URL, query, variables, and headers you configure in the node.',
+    'For protected APIs, prefer secure secret or credential references in headers instead of typing long-lived API keys into normal workflow fields.',
+    'Connect the GraphQL node output to the next node with an outgoing line; downstream service node account connection setup is still required for those later service nodes.',
+    'Test the endpoint with a small read-only query first, then map response data from {{$json.body.data}} or {{$json.data.data}} in the next step.',
   ],
-  "credentialDocsUrl": "https://docs.ctrlchecks.com",
-  "resources": [
+  credentialDocsUrl: 'https://docs.ctrlchecks.com',
+  resources: [
     {
-      "name": "Configuration",
-      "description": "GraphQL is configured directly with input fields.",
-      "operations": [
+      name: 'GraphQL Request',
+      description: 'Builds a GraphQL payload and delegates execution to the HTTP Request runtime using POST.',
+      operations: [
         {
-          "name": "Execute",
-          "value": "default",
-          "description": "Execute using the GraphQL node.",
-          "fields": [
+          name: 'Execute GraphQL POST',
+          value: 'default',
+          description: 'Execute a GraphQL query or mutation by sending { query, variables, operationName } to the configured endpoint. Use this for APIs such as Shopify GraphQL, GitHub GraphQL, internal schema gateways, or any GraphQL service that accepts POST requests.',
+          fields: [
             {
-              "name": "Url",
-              "internalKey": "url",
-              "type": "url",
-              "required": true,
-              "description": "GraphQL endpoint URL",
-              "helpText": "What this field is: The web address for GraphQL endpoint URL.\nHow to fill it: Paste the full URL, including https:// when it is an external service.\nExample: https://api.example.com/graphql.\nTip: Use {{$json.url}} when the URL comes from an earlier step.",
-              "placeholder": "https://api.example.com/graphql",
-              "example": "https://api.example.com/graphql"
+              name: 'GraphQL Endpoint',
+              internalKey: 'url',
+              type: 'url',
+              required: true,
+              description: 'Full URL of the GraphQL API endpoint.',
+              helpText: richFieldHelp({
+                what: 'The HTTPS address that accepts GraphQL POST requests.',
+                why: 'The runtime sends the query payload to this exact endpoint and returns the final URL as {{$json.url}}.',
+                when: 'Always fill it before running the node.',
+                enter: 'Paste the complete endpoint, including https:// and any path such as /graphql.',
+                source: 'Copy it from the API documentation, your internal API gateway, or a previous HTTP/API step as {{$json.graphqlUrl}}.',
+                later: 'Use {{$json.url}} for audit logs or to confirm which environment, tenant, or workspace was called.',
+                format: 'A full URL such as https://api.example.com/graphql. Expressions such as {{$json.endpoint}} must resolve to a URL string.',
+                example: 'A support workflow calls https://api.company.com/graphql to fetch customer entitlement data before replying to a ticket.',
+                empty: 'The wrapped HTTP Request fails because it has no valid destination.',
+                mistake: 'Entering only a domain name or REST endpoint instead of the GraphQL endpoint path.',
+              }),
+              placeholder: 'https://api.example.com/graphql',
+              example: 'https://api.github.com/graphql',
             },
             {
-              "name": "Query",
-              "internalKey": "query",
-              "type": "textarea",
-              "required": true,
-              "description": "GraphQL query",
-              "helpText": "What this field is: Structured data for GraphQL query.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by GraphQL.\nExample: { user(id: 1) { name email } }.\nTip: Use {{$json.query}} when an earlier step already prepared this data.",
-              "placeholder": "{ user(id: 1) { name email } }",
-              "example": "{ user(id: 1) { name email } }"
+              name: 'Query',
+              internalKey: 'query',
+              type: 'textarea',
+              required: true,
+              description: 'GraphQL query or mutation text.',
+              helpText: richFieldHelp({
+                what: 'The GraphQL document sent in the request body as the query property.',
+                why: 'It determines which data is read or changed and which fields appear under {{$json.body.data}}.',
+                when: 'Always fill it for both read queries and write mutations.',
+                enter: 'Paste a valid GraphQL query or mutation. Use variables such as $customerId instead of inserting risky raw values into the query text.',
+                source: 'Copy the operation from the API explorer, provider docs, or an earlier node that generated a query as {{$json.query}}.',
+                later: 'Map returned fields in later nodes from {{$json.body.data.customer.email}}, {{$json.data.data.order.id}}, or the exact path your schema returns.',
+                format: 'GraphQL document text, for example query GetCustomer($id: ID!) { customer(id: $id) { id email } }.',
+                example: 'An ecommerce workflow runs query GetOrder($id: ID!) { order(id: $id) { id totalPrice status } } before sending a shipping update.',
+                empty: 'The remote GraphQL server usually returns a validation error in the HTTP body, or HTTP Request returns _error if the request cannot be sent.',
+                mistake: 'Using {{$json.id}} directly inside quoted query text when a Variables object would be safer and easier to validate.',
+              }),
+              placeholder: 'query GetCustomer($id: ID!) { customer(id: $id) { id email } }',
+              example: 'query GetCustomer($id: ID!) { customer(id: $id) { id email } }',
             },
             {
-              "name": "Variables",
-              "internalKey": "variables",
-              "type": "json",
-              "required": false,
-              "description": "GraphQL variables",
-              "helpText": "What this field is: Structured data for GraphQL variables.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by GraphQL.\nExample: {\"id\":1}.\nTip: Use {{$json.variables}} when an earlier step already prepared this data.",
-              "placeholder": "{\"id\":1}",
-              "example": "{\"id\":1}"
-            }
+              name: 'Operation Name',
+              internalKey: 'operationName',
+              type: 'string',
+              required: false,
+              description: 'Optional name of the GraphQL operation to execute.',
+              helpText: richFieldHelp({
+                what: 'The named operation selected from the query document.',
+                why: 'GraphQL servers require it when the Query field contains more than one named query or mutation.',
+                when: 'Fill it when your query text includes multiple operations, or when you want logs to show a clear operation name.',
+                enter: 'Type the exact operation name from the query, such as GetCustomer or CreateOrder.',
+                source: 'Read the name after the query or mutation keyword, or map it from {{$json.operationName}} when upstream logic chooses the operation.',
+                later: 'Use {{$json.body.errors}} to troubleshoot when the wrong operation name was selected by the API.',
+                format: 'Plain text matching a GraphQL operation name. Do not include query, mutation, parentheses, or braces.',
+                example: 'A data sync node sets Operation Name to GetCustomer when the same query document also contains UpdateCustomer.',
+                empty: 'Empty is fine for a single-operation document; multiple-operation documents may fail inside body.errors.',
+                mistake: 'Typing the display label from documentation instead of the exact operation name in the GraphQL text.',
+              }),
+              placeholder: 'GetCustomer',
+              example: 'GetCustomer',
+            },
+            {
+              name: 'Variables',
+              internalKey: 'variables',
+              type: 'json',
+              required: false,
+              description: 'JSON object sent as GraphQL variables.',
+              helpText: richFieldHelp({
+                what: 'A JSON object whose keys match the variables declared in the Query field.',
+                why: 'Variables keep dynamic workflow data separate from the query text and are sent in the GraphQL payload.',
+                when: 'Fill it whenever the query uses $variableName values, such as $id or $input.',
+                enter: 'Enter JSON such as {"id":"{{$json.customerId}}"} or map a prepared object from {{$json.variables}}.',
+                source: 'Use IDs, dates, filter values, or input objects from forms, webhooks, databases, and previous API calls.',
+                later: 'The variables themselves are not returned; use response fields from {{$json.body.data}} after the request succeeds.',
+                format: 'A JSON object. If the value is invalid JSON or a template cannot be parsed, runtime silently falls back to {}.',
+                example: 'A clinic workflow sends {"patientId":"{{$json.patientId}}","from":"{{$json.startDate}}"} to fetch patient appointments.',
+                empty: 'Empty becomes {} and may cause the GraphQL server to report missing variables in body.errors.',
+                mistake: 'Writing variable declarations here, such as $id: ID!, instead of a JSON object with actual values.',
+              }),
+              placeholder: '{"id":"{{$json.customerId}}"}',
+              example: '{"id":"cus_1042"}',
+            },
+            {
+              name: 'Headers',
+              internalKey: 'headers',
+              type: 'json',
+              required: false,
+              description: 'HTTP request headers passed to the wrapped HTTP Request node.',
+              helpText: richFieldHelp({
+                what: 'Optional HTTP headers such as Authorization, Content-Type, Accept, or tenant routing headers.',
+                why: 'Most protected GraphQL APIs reject requests without the right auth and content headers.',
+                when: 'Fill it when the API documentation requires an access token, API key, custom tenant header, or content type.',
+                enter: 'Enter a JSON object such as {"Authorization":"Bearer {{$json.accessToken}}","Content-Type":"application/json"}.',
+                source: 'Use secure secret references, a prior token-exchange step, or provider docs for header names. Avoid storing long-lived secrets as plain workflow input.',
+                later: 'Response headers come back as {{$json.headers}}, while request headers are useful mainly for troubleshooting server responses.',
+                format: 'JSON object with header names as keys and string values.',
+                example: 'A Shopify workflow sends {"X-Shopify-Access-Token":"{{$json.shopToken}}"} while querying order data.',
+                empty: 'Empty sends no custom headers; public endpoints may work, protected endpoints usually return 401 or 403 in the response.',
+                mistake: 'Pasting Header: value lines instead of JSON key/value pairs.',
+              }),
+              placeholder: '{"Authorization":"Bearer {{$json.accessToken}}"}',
+              example: '{"Content-Type":"application/json"}',
+            },
+            {
+              name: 'Timeout',
+              internalKey: 'timeout',
+              type: 'number',
+              required: false,
+              description: 'Maximum wait time in milliseconds before the wrapped HTTP Request reports a timeout.',
+              helpText: richFieldHelp({
+                what: 'How long the node waits for the GraphQL server before treating the request as failed.',
+                why: 'Large GraphQL queries can be slow, while customer-facing webhook workflows often need a faster failure.',
+                when: 'Leave the default for normal API calls, increase it for heavy reports, and lower it for time-sensitive flows.',
+                enter: 'Type a number of milliseconds, such as 30000 for 30 seconds.',
+                source: 'Choose the value from the API service-level agreement, workflow timeout policy, or a previous settings step as {{$json.timeoutMs}}.',
+                later: 'Timeout failures appear through the HTTP Request error output, including _error and errorDetails.',
+                format: 'Positive number in milliseconds.',
+                example: 'An overnight inventory sync uses 60000, while a webhook acknowledgment workflow uses 5000.',
+                empty: 'The default 30000 ms is used by the visible panel.',
+                mistake: 'Typing seconds such as 30 when you meant 30000 milliseconds.',
+              }),
+              placeholder: '30000',
+              example: '30000',
+              defaultValue: '30000',
+            },
           ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
+          outputExample: {
+            status: 200,
+            statusText: 'OK',
+            headers: { 'content-type': 'application/json' },
+            body: { data: { customer: { id: 'cus_1042', email: 'asha.rao@example.com' } } },
+            data: { data: { customer: { id: 'cus_1042', email: 'asha.rao@example.com' } } },
+            url: 'https://api.example.com/graphql',
+            method: 'POST',
+            responseTime: 184,
           },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming GraphQL data with execute after a related upstream event is received",
-            "inputValues": {
-              "Url": "https://api.example.com/graphql",
-              "Query": "{ user(id: 1) { name email } }",
-              "Variables": "{\"id\":1}"
+          outputDescription: httpOutputDescription,
+          usageExample: {
+            scenario: 'Fetch a customer record from a GraphQL API before routing the workflow to renewal or support follow-up.',
+            inputValues: {
+              url: 'https://api.example.com/graphql',
+              query: 'query GetCustomer($id: ID!) { customer(id: $id) { id email plan } }',
+              operationName: 'GetCustomer',
+              variables: '{"id":"{{$json.customerId}}"}',
+              headers: '{"Authorization":"Bearer {{$json.accessToken}}","Content-Type":"application/json"}',
+              timeout: '30000',
             },
-            "expectedOutput": "GraphQL returns structured execute data that downstream nodes can reference with {{$json.fieldName}}."
+            expectedOutput: 'Use {{$json.body.data.customer.email}} for the next email step, {{$json.status}} to branch on HTTP status, and {{$json.body.errors}} when the GraphQL server returns schema errors.',
           },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
-        }
-      ]
-    }
+          externalDocsUrl: 'https://graphql.org/learn/queries/',
+        },
+      ],
+    },
   ],
-  "commonErrors": [
+  commonErrors: [
     {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
+      error: 'GraphQL query is sent as an HTTP POST request',
+      cause: 'This node is a wrapper around HTTP Request and always sends method POST with query, variables, and optional operationName.',
+      fix: 'Use HTTP Request directly when an API requires GET-based GraphQL or unusual request encoding.',
     },
     {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
+      error: 'Variables silently fall back to {}',
+      cause: 'If Variables is blank, an invalid JSON string, or a template result that cannot be parsed, runtime catches the error and uses an empty object.',
+      fix: 'Validate the Variables JSON and test with a required variable so body.errors confirms the server received the expected value.',
+    },
+    {
+      error: 'GraphQL errors are inside body.errors',
+      cause: 'Successful HTTP status codes can still include GraphQL-level errors inside the response body.',
+      fix: 'Branch on {{$json.body.errors}} or {{$json.data.errors}} instead of expecting a top-level errors field.',
+    },
+    {
+      error: 'Request timeout or HTTP errors return _error',
+      cause: 'The wrapped HTTP Request runtime reports network, timeout, SSL, and request failures through _error and errorDetails.',
+      fix: 'Check endpoint URL, headers, timeout, and API availability, then inspect {{$json._error}} and {{$json.errorDetails}}.',
+    },
   ],
-  "relatedNodes": []
+  relatedNodes: ['http_request', 'http_post', 'webhook_response'],
 };

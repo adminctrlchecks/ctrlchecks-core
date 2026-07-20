@@ -94,8 +94,8 @@ export function mapActionToNodeType(action: AllowedAction, context?: {
       if (promptLower.includes('db')) {
         return ['db'];
       }
-      // Default to database_write
-      return ['database_write'];
+      // Default generic SQL/database requests to the concrete PostgreSQL node.
+      return ['postgresql'];
     
     case 'condition_check':
       return ['if_else'];

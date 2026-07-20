@@ -1,28 +1,8 @@
 import type { DocsSearchIndexItem } from '../search-index';
 
 export const readBinaryFileSearchIndex = [
-  {
-    "type": "node",
-    "title": "Read Binary File",
-    "slug": "read_binary_file",
-    "category": "Data",
-    "href": "/docs/nodes/read_binary_file",
-    "text": "Read Binary File Read binary files Use this node when a workflow needs read binary file behavior with schema-driven inputs from the CtrlChecks node registry. Data"
-  },
-  {
-    "type": "operation",
-    "title": "Read Binary File: Configure",
-    "slug": "read_binary_file",
-    "category": "Data",
-    "href": "/docs/nodes/read_binary_file#operation-configure",
-    "text": "Read Binary File Configuration Configure Configure with the Read Binary File node using the configured input fields. configure"
-  },
-  {
-    "type": "field",
-    "title": "Read Binary File: File Path",
-    "slug": "read_binary_file",
-    "category": "Data",
-    "href": "/docs/nodes/read_binary_file#operation-configure",
-    "text": "Read Binary File Configuration Configure File Path filePath File path"
-  }
+  { type: 'node', title: 'Read Binary File', slug: 'read_binary_file', category: 'File', href: '/docs/nodes/read_binary_file', text: 'Read Binary File reads a managed workflow file asset by assetId or a safe serverPath/storageKey and returns dataBase64 plus file metadata.' },
+  { type: 'operation', title: 'Read Binary File: Configure', slug: 'read_binary_file', category: 'File', href: '/docs/nodes/read_binary_file#operation-configure', text: 'Configure resolves assetId or serverPath and returns dataBase64, fileName, mimeType, sizeBytes, checksumSha256, storageKey, and filePath.' },
+  { type: 'field', title: 'Read Binary File: Asset ID', slug: 'read_binary_file', category: 'File', href: '/docs/nodes/read_binary_file#operation-configure', text: 'Asset ID comes from Write Binary File output and is required when sourceType is assetId.' },
+  { type: 'field', title: 'Read Binary File: Storage Path', slug: 'read_binary_file', category: 'File', href: '/docs/nodes/read_binary_file#operation-configure', text: 'Storage Path and storageKey are safe backend binary-root paths, not cloud links or local desktop paths.' },
 ] satisfies DocsSearchIndexItem[];

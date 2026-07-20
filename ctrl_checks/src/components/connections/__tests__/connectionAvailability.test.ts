@@ -13,7 +13,6 @@ describe('isComingSoonProvider', () => {
       'xero',
       'shopify',
       'woocommerce',
-      'typeform',
     ];
 
     for (const provider of comingSoonProviders) {
@@ -23,7 +22,7 @@ describe('isComingSoonProvider', () => {
   });
 
   it('leaves enabled and empty providers available', () => {
-    for (const provider of ['google', 'slack', 'github', 'notion', '']) {
+    for (const provider of ['google', 'slack', 'github', 'notion', 'typeform', '']) {
       expect(isComingSoonProvider(provider)).toBe(false);
     }
 

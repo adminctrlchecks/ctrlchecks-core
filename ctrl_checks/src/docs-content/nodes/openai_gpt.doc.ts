@@ -1,86 +1,281 @@
 import type { NodeDoc } from '../types';
 
+const fieldHelp = (parts: {
+  what: string;
+  why: string;
+  when: string;
+  enter: string;
+  source: string;
+  later: string;
+  format: string;
+  example: string;
+  empty: string;
+  mistake: string;
+}) => [
+  `What this field is: ${parts.what}`,
+  `Why it matters: ${parts.why}`,
+  `When to fill it: ${parts.when}`,
+  `What to enter: ${parts.enter}`,
+  `Where the value comes from: ${parts.source}`,
+  `How to use it later: ${parts.later}`,
+  `Accepted format: ${parts.format}`,
+  `Real workplace example: ${parts.example}`,
+  `If it is empty or wrong: ${parts.empty}`,
+  `Common mistake: ${parts.mistake}`,
+].join('\n');
+
 export const openaiGptDoc: NodeDoc = {
-  "slug": "openai_gpt",
-  "displayName": "OpenAI GPT",
-  "category": "AI",
-  "logoUrl": "/icons/nodes/openai_gpt.svg",
-  "description": "OpenAI GPT chat completion (GPT-4, GPT-3.5)",
-  "credentialType": "OpenAI API Key",
-  "credentialSetupSteps": [
-    "What this is: The OpenAI GPT connection lets CtrlChecks access your OpenAI GPT account safely without putting secrets in workflow fields.",
-    "Where to start: platform.openai.com -> API keys.",
-    "How to connect: In CtrlChecks, open Connections -> Add Connection -> OpenAI GPT, then sign in or paste the secret value requested there.",
-    "Example: sk-....",
-    "Important: Treat tokens, passwords, API keys, and client secrets like bank passwords. Store them in Connections, not in regular workflow fields.",
-    "Test it: Save the connection, run a simple OpenAI GPT step, and confirm CtrlChecks can reach the account."
+  slug: 'openai_gpt',
+  displayName: 'OpenAI GPT',
+  category: 'AI',
+  logoUrl: '/icons/nodes/openai_gpt.svg',
+  description: 'Calls OpenAI through the legacy LLM adapter and returns response, model, usage, and finishReason without preserving incoming fields.',
+  credentialType: 'OpenAI API Key',
+  credentialSetupSteps: [
+    'OpenAI GPT needs an OpenAI credential. Prefer Connections or the credential vault so the API key is not stored as ordinary workflow text.',
+    'Create or select an OpenAI API key in platform.openai.com/api-keys. Keys commonly start with sk- or sk-proj-.',
+    'In CtrlChecks, use a service node account connection, credential system mapping, credential vault value, wallet, or key pool where available; the node also accepts apiKey, accessToken, or token as direct fallback fields.',
+    'The runtime first calls the OpenAI credential resolver. If that resolver returns an error, the node returns success false with error before making the adapter call.',
+    'Connect the output to the next service node with an outgoing line, then map fields such as {{$json.response}} in that next node.',
+    'Test with a short prompt and inspect response, model, usage, and finishReason in the execution output.',
   ],
-  "credentialDocsUrl": "https://platform.openai.com/docs/api-reference/authentication",
-  "resources": [
+  credentialDocsUrl: 'https://platform.openai.com/docs/api-reference/authentication',
+  resources: [
     {
-      "name": "Configuration",
-      "description": "OpenAI GPT is configured directly with input fields.",
-      "operations": [
+      name: 'Configuration',
+      description: 'Configure one OpenAI chat completion. Prompt is the primary input; messages are only a fallback when prompt is blank, and Temperature/Memory are visible legacy fields with no current runtime effect.',
+      operations: [
         {
-          "name": "Execute",
-          "value": "default",
-          "description": "Execute using the OpenAI GPT node.",
-          "fields": [
+          name: 'Execute',
+          value: 'default',
+          description: 'Sends Prompt, or joined Messages when Prompt is blank, to the selected OpenAI model. If Prompt is static and upstream text exists, runtime sends Prompt as system context and the upstream text as the user message. Successful output replaces the incoming object with response/model/usage/finishReason.',
+          fields: [
             {
-              "name": "Model",
-              "internalKey": "model",
-              "type": "string",
-              "required": true,
-              "description": "Model name",
-              "helpText": "What this field is: Model name.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: gpt-4o.\nTip: Use {{$json.model}} when this value comes from an earlier step.",
-              "placeholder": "gpt-4o",
-              "example": "gpt-4o"
+              name: 'OpenAI API Key',
+              internalKey: 'apiKey',
+              type: 'password',
+              required: true,
+              description: 'Direct OpenAI API key fallback.',
+              helpText: fieldHelp({
+                what: 'Direct fallback credential for OpenAI when a saved OpenAI connection or credential mapping is not used.',
+                why: 'Without a valid OpenAI credential, the resolver returns an error and no model call is made.',
+                when: 'Fill this only for local testing or legacy workflows; prefer a service node account connection, credential vault, wallet, or key pool in production.',
+                enter: 'Paste an OpenAI key such as sk-proj-... or map a secret expression like {{$credentials.openai.apiKey}}.',
+                source: 'Create the key in platform.openai.com/api-keys or select it from a CtrlChecks OpenAI credential record.',
+                later: 'This value is not returned in output. Later nodes use {{$json.response}}, {{$json.model}}, {{$json.usage}}, and {{$json.finishReason}}.',
+                format: 'String API key. Keep it secret; do not include quotes, spaces, or labels around it.',
+                example: 'A support workflow stores the OpenAI key in Connections and leaves this field mapped to the secure credential value.',
+                empty: 'The OpenAI credential resolver may return success false with error, and the node stops before response is produced.',
+                mistake: 'Pasting the key into Prompt, Slack text, or a normal data field instead of the credential field.',
+              }),
+              placeholder: 'sk-proj-...',
+              example: 'sk-proj-xxxxxxxxxxxxxxxxxxxxxxxx',
+              notes: 'Runtime can also read accessToken or token as legacy fallbacks when apiKey is blank.',
             },
             {
-              "name": "Prompt",
-              "internalKey": "prompt",
-              "type": "textarea",
-              "required": true,
-              "description": "User message or prompt to send to OpenAI",
-              "helpText": "What this field is: User message or prompt to send to OpenAI.\nHow to fill it: Type the text to send or save. You can include values from earlier workflow steps.\nExample: Summarize {{$json.text}}.\nTip: Use {{$json.prompt}} when this value comes from an earlier step.",
-              "placeholder": "Summarize {{$json.text}}",
-              "example": "Summarize {{$json.text}}"
-            }
+              name: 'Access Token',
+              internalKey: 'accessToken',
+              type: 'password',
+              required: false,
+              description: 'Legacy OpenAI token fallback.',
+              helpText: fieldHelp({
+                what: 'An alternate legacy token field read only when apiKey is blank.',
+                why: 'Some older generated workflows stored OpenAI credentials as accessToken instead of apiKey.',
+                when: 'Use it only when migrating an older workflow that already maps an OpenAI token here.',
+                enter: 'A secure expression such as {{$credentials.openai.apiKey}} or a valid OpenAI API token.',
+                source: 'Usually comes from the same OpenAI credential used for apiKey.',
+                later: 'It is consumed during credential resolution and is not exposed to downstream nodes.',
+                format: 'Secret string token. It should not be an OAuth browser access token unless your credential layer intentionally stores OpenAI keys that way.',
+                example: 'A migrated workflow maps accessToken to a vault secret while the UI still shows the newer apiKey field.',
+                empty: 'Runtime falls back to token or the selected OpenAI credential resolver.',
+                mistake: 'Expecting this field to change the output shape; output still uses response/model/usage/finishReason.',
+              }),
+              placeholder: '{{$credentials.openai.apiKey}}',
+              example: '{{$credentials.openai.apiKey}}',
+            },
+            {
+              name: 'Token',
+              internalKey: 'token',
+              type: 'password',
+              required: false,
+              description: 'Second legacy OpenAI token fallback.',
+              helpText: fieldHelp({
+                what: 'A final legacy token field checked after apiKey and accessToken.',
+                why: 'It keeps older workflows working without changing their saved config shape.',
+                when: 'Fill only for legacy workflow compatibility when apiKey/accessToken are not used.',
+                enter: 'A valid OpenAI API key or secure credential expression.',
+                source: 'Credential vault, Connections, or a migrated workflow secret.',
+                later: 'Downstream nodes never receive this token; they receive only the OpenAI response metadata.',
+                format: 'Secret string, usually starting with sk- or sk-proj-.',
+                example: 'An imported workflow has token: {{$credentials.openai.apiKey}} and no apiKey field.',
+                empty: 'The node relies on the selected OpenAI credential resolver or fails with a credential error.',
+                mistake: 'Using a Slack, GitHub, or Anthropic token here; this node only calls OpenAI.',
+              }),
+              placeholder: '{{$credentials.openai.apiKey}}',
+              example: '{{$credentials.openai.apiKey}}',
+            },
+            {
+              name: 'Model',
+              internalKey: 'model',
+              type: 'select',
+              required: true,
+              description: 'OpenAI model sent to the adapter.',
+              helpText: fieldHelp({
+                what: 'The OpenAI model name used for the chat completion request.',
+                why: 'Model choice controls capability, latency, and cost; runtime defaults to gpt-4o when blank.',
+                when: 'Set it whenever the workflow needs a specific cost/performance profile.',
+                enter: 'Choose gpt-4o, gpt-4o-mini, or gpt-4-turbo from the UI, or map a known OpenAI model string.',
+                source: 'OpenAI model names from the OpenAI platform documentation or the visible dropdown.',
+                later: 'The adapter returns the actual model in {{$json.model}} for logging or cost tracking.',
+                format: 'Plain model id string such as gpt-4o-mini.',
+                example: 'Use gpt-4o-mini for high-volume ticket summaries and gpt-4o for complex policy extraction.',
+                empty: 'Runtime uses gpt-4o as the default.',
+                mistake: 'Entering a Gemini, Claude, or local Ollama model name; this node sends provider openai.',
+              }),
+              options: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'],
+              defaultValue: 'gpt-4o',
+              placeholder: 'gpt-4o',
+              example: 'gpt-4o',
+            },
+            {
+              name: 'Prompt / System Context',
+              internalKey: 'prompt',
+              type: 'textarea',
+              required: true,
+              description: 'Prompt text sent to OpenAI.',
+              helpText: fieldHelp({
+                what: 'The main prompt. If it contains expressions, the resolved prompt is sent as the user message; if it is static and upstream text exists, it becomes system context.',
+                why: 'This field determines what OpenAI sees and how downstream response text is shaped.',
+                when: 'Fill it for every normal workflow run. Leave blank only if you intentionally provide a messages array fallback.',
+                enter: 'Write instructions and include expressions such as {{$json.emailBody}}, {{$json.ticketText}}, or {{$json.notes}}.',
+                source: 'Typed instructions plus fields from earlier workflow steps.',
+                later: 'The model answer appears in {{$json.response}}. Incoming fields such as {{$json.ticketId}} are not preserved after this node.',
+                format: 'Plain text with optional CtrlChecks expressions. For JSON output, explicitly ask OpenAI to return JSON.',
+                example: 'Summarize {{$json.emailBody}} in three bullets and include any requested deadline.',
+                empty: 'Runtime joins messages content if messages is an array; otherwise it can send an empty user message or fail through provider behavior.',
+                mistake: 'Expecting Temperature or Memory to change this prompt; the current executor does not pass those settings.',
+              }),
+              placeholder: 'Summarize {{$json.emailBody}} in three bullets.',
+              example: 'Summarize {{$json.emailBody}} in three bullets.',
+            },
+            {
+              name: 'Messages',
+              internalKey: 'messages',
+              type: 'json',
+              required: false,
+              description: 'Fallback messages array used only when Prompt is blank.',
+              helpText: fieldHelp({
+                what: 'A legacy array of message strings or objects with content values.',
+                why: 'It supports old workflows that stored chat content as messages instead of prompt.',
+                when: 'Use only when Prompt is intentionally blank and you want runtime to join message content with newlines.',
+                enter: '[{"role":"user","content":"Summarize {{$json.text}}"}] or an expression that resolves to that shape.',
+                source: 'Earlier chat steps, saved workflow JSON, or a manual JSON field.',
+                later: 'Joined text becomes the prompt; output still appears as {{$json.response}}, not as messages.',
+                format: 'JSON array. Object role values are ignored by the fallback join; only content strings are used.',
+                example: 'A chat import maps messages from {{$json.conversationMessages}} while Prompt stays blank.',
+                empty: 'If Prompt is also empty, the node has no meaningful user content to send.',
+                mistake: 'Filling both Prompt and Messages and expecting Messages to be used; Prompt wins.',
+              }),
+              placeholder: '[{"role":"user","content":"Summarize {{$json.text}}"}]',
+              example: '[{"role":"user","content":"Summarize {{$json.text}}"}]',
+            },
+            {
+              name: 'Temperature (ignored)',
+              internalKey: 'temperature',
+              type: 'number',
+              required: false,
+              description: 'Visible legacy field not passed to OpenAI by the current executor.',
+              helpText: fieldHelp({
+                what: 'A visible compatibility field from the UI.',
+                why: 'It appears configurable, but the openai_gpt executor currently does not pass temperature into llmAdapter.chat.',
+                when: 'Leave the default unless the worker executor is updated to honor it.',
+                enter: 'Any numeric value is saved in config but has no effect on current OpenAI runtime behavior.',
+                source: 'Manual UI entry or older workflow defaults.',
+                later: 'It is not returned in output and cannot be referenced from {{$json.temperature}} unless a previous node already had that field.',
+                format: 'Number such as 0.2 or 0.7, kept only as saved config today.',
+                example: 'A team sets 0.2 expecting deterministic summaries, but current runtime sends no temperature option.',
+                empty: 'No runtime change occurs because the field is ignored.',
+                mistake: 'Troubleshooting response creativity by changing this field without changing the actual prompt.',
+              }),
+              defaultValue: '0.7',
+              placeholder: '0.7',
+              example: '0.7',
+            },
+            {
+              name: 'Memory (ignored)',
+              internalKey: 'memory',
+              type: 'number',
+              required: false,
+              description: 'Visible legacy field not read by the current executor.',
+              helpText: fieldHelp({
+                what: 'A saved UI value that suggests conversation memory, but no memory is read or written by openai_gpt.',
+                why: 'Users must know this node does not preserve conversation turns or incoming fields automatically.',
+                when: 'Do not rely on it. Put any needed prior conversation directly into Prompt or an upstream text field.',
+                enter: 'A number can be saved, but it will not affect the OpenAI request.',
+                source: 'Legacy workflow defaults and the visual panel.',
+                later: 'Nothing appears in output for memory; only response, model, usage, and finishReason are returned.',
+                format: 'Number such as 10, ignored at runtime.',
+                example: 'For a support thread summary, map {{$json.conversationHistory}} into Prompt instead of setting Memory to 10.',
+                empty: 'No runtime behavior changes.',
+                mistake: 'Expecting the node to remember earlier executions or keep customerId after the OpenAI call.',
+              }),
+              defaultValue: '10',
+              placeholder: '10',
+              example: '10',
+            },
           ],
-          "outputExample": {
-            "text": "Here is the generated response from the selected model.",
-            "length": 55
+          outputExample: {
+            response: 'The customer is asking for a refund because the package arrived late.',
+            model: 'gpt-4o',
+            usage: { prompt_tokens: 120, completion_tokens: 18, total_tokens: 138 },
+            finishReason: 'stop',
           },
-          "outputDescription": "text: Value returned by this operation.\nlength: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming OpenAI GPT data with execute after a related upstream event is received",
-            "inputValues": {
-              "Model": "gpt-4o",
-              "Prompt": "Summarize {{$json.text}}"
+          outputDescription: 'response contains the OpenAI text. model contains the adapter model. usage contains provider token metadata when returned. finishReason contains the provider finish reason when returned. error appears with success false only when the OpenAI credential resolver fails before the adapter call. Successful output does not preserve upstream fields.',
+          usageExample: {
+            scenario: 'Summarize an inbound support email before posting the short version to Slack.',
+            inputValues: {
+              apiKey: '{{$credentials.openai.apiKey}}',
+              model: 'gpt-4o',
+              prompt: 'Summarize {{$json.emailBody}} in three bullets.',
+              messages: '[]',
+              accessToken: '',
+              token: '',
+              temperature: '0.7',
+              memory: '10',
             },
-            "expectedOutput": "OpenAI GPT returns structured execute data that downstream nodes can reference with {{$json.fieldName}}."
+            expectedOutput: 'Use {{$json.response}} as the summary, {{$json.model}} for audit logs, and preserve needed upstream IDs before this node because {{$json.ticketId}} will not be carried through automatically.',
           },
-          "externalDocsUrl": "https://platform.openai.com/docs/api-reference"
-        }
-      ]
-    }
+          externalDocsUrl: 'https://platform.openai.com/docs/api-reference/chat',
+        },
+      ],
+    },
   ],
-  "commonErrors": [
+  commonErrors: [
     {
-      "error": "Authentication failed",
-      "cause": "The saved credential, token, API key, or OAuth grant is missing, expired, or lacks the required scope.",
-      "fix": "Reconnect the service in CtrlChecks → Connections, then re-run the OpenAI GPT node."
+      error: 'OpenAI credential error returns success false with error',
+      cause: 'The selected OpenAI connection, credential system entry, credential vault value, wallet, key pool, or direct API key was missing or invalid.',
+      fix: 'Reconnect the service node account connection, verify the OpenAI API Key starts with sk-, or map apiKey/accessToken/token from a secure credential source.',
     },
     {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
+      error: 'Prompt and Messages are both empty',
+      cause: 'Prompt resolved to an empty string and there was no messages array content to join.',
+      fix: 'Fill Prompt with the actual instruction and upstream field, for example Summarize {{$json.emailBody}}.',
     },
     {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
+      error: 'Temperature and Memory have no effect',
+      cause: 'The current openai_gpt executor does not pass temperature to the adapter and does not read memory.',
+      fix: 'Control behavior through Prompt and include all needed context in Prompt or upstream text until the worker code changes.',
+    },
+    {
+      error: 'Next node cannot find upstream fields',
+      cause: 'Successful OpenAI output replaces the incoming object instead of spreading fields like customerId or ticketId.',
+      fix: 'Save identifiers before this step, merge them back later, or include them in a downstream-safe object before calling OpenAI.',
+    },
+    {
+      error: 'Provider/API failure bubbles from the LLM adapter',
+      cause: 'OpenAI rejected the request, model, quota, or account state after credential resolution succeeded.',
+      fix: 'Check the OpenAI account, model name, quota, and prompt size, then retry with a smaller prompt or supported model.',
+    },
   ],
-  "relatedNodes": []
+  relatedNodes: ['ai_chat_model', 'google_gemini', 'anthropic_claude'],
 };

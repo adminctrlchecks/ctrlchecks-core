@@ -1,662 +1,97 @@
-import type { NodeDoc } from '../types';
+import type { FieldDoc, NodeDoc } from '../types';
+
+const help = (field: string, why: string, when: string, enter: string, source: string, format: string, example: string, wrong: string, mistake: string) => `What this field is: ${field}
+Why it matters: ${why}
+When to fill it: ${when}
+What to enter: ${enter}
+Where the value comes from: ${source}
+How to use it later: Map previous data with {{$json.fieldName}} and use this node output later as {{$json.rows}}, {{$json.rowsAffected}}, {{$json.inserted}}, {{$json.records}}, or {{$json.returnValue}}.
+Accepted format: ${format}
+Real workplace example: ${example}
+If it is empty or wrong: ${wrong}
+Common mistake: ${mistake}`;
+
+const field = (
+  name: string,
+  internalKey: string,
+  type: FieldDoc['type'],
+  required: boolean,
+  description: string,
+  text: Parameters<typeof help>,
+  extra: Partial<FieldDoc> = {},
+): FieldDoc => ({ name, internalKey, type, required, description, helpText: help(...text), ...extra });
+
+const fields: FieldDoc[] = [
+  field('Host', 'host', 'string', true, 'SQL Server or Azure SQL host name.', ['The network address of the SQL Server instance.', 'The executor cannot connect without a server host.', 'Fill it for every operation unless a saved SQL Server connection injects it.', 'Enter a host such as server.database.windows.net, sql.internal, or 10.0.2.15.', 'Copy it from Azure SQL Connection strings, SQL Server Management Studio, your DBA, or an internal platform dashboard. You can map {{$json.sqlServerHost}}.', 'Host name or IP address; the runtime also accepts server as an alias.', 'sales-prod.database.windows.net for an Azure SQL database.', 'The run returns _error "host is required" or a network connection error.', 'Do not include tcp:, the database name, or the port in this field.'], { placeholder: 'server.database.windows.net', example: 'sales-prod.database.windows.net' }),
+  field('Port', 'port', 'number', false, 'SQL Server TCP port.', ['The TCP port used by SQL Server.', 'Host and port together locate the database service.', 'Fill it when your server does not use the default 1433.', 'Enter 1433 for most SQL Server and Azure SQL instances.', 'Find it in database connection details or ask your DBA. You can map {{$json.sqlPort}}.', 'Number between 1 and 65535.', '1433 for Azure SQL.', 'The run returns _error "port must be a valid number between 1 and 65535" or cannot connect.', 'Do not type host:1433 here; use digits only.'], { placeholder: '1433', defaultValue: '1433', example: '1433' }),
+  field('Database', 'database', 'string', true, 'Database name to connect to.', ['The SQL Server database that contains the tables and stored procedures.', 'One server can host many databases, so this selects the correct one.', 'Fill it for every operation unless a saved connection injects it.', 'Enter the exact database name.', 'Copy it from SSMS, Azure SQL, application config, or your DBA. You can map {{$json.databaseName}}.', 'Plain database name.', 'SalesOpsProd for customer workflow tables.', 'The run returns _error "database is required" or SQL Server reports an unknown database.', 'Do not enter a table name here; tables go in Table.'], { placeholder: 'SalesOpsProd', example: 'SalesOpsProd' }),
+  field('Username', 'username', 'string', true, 'SQL Server login user.', ['The login name used for SQL Server authentication.', 'SQL Server checks this user before allowing reads or writes.', 'Fill it when the saved credential does not inject it.', 'Enter a SQL login or Azure SQL user such as app_writer or user@server.', 'Copy it from your credential vault, Azure SQL settings, or DBA. You can map {{$json.sqlUsername}} only when generated from a secure config step.', 'Plain user name string.', 'report_reader for read-only reporting workflows.', 'The run returns _error "username is required" or SQL Server access denied.', 'Do not use an admin account for routine workflow automation.'], { placeholder: 'app_writer', example: 'report_reader' }),
+  field('Password', 'password', 'password', true, 'SQL Server password.', ['The secret password for the SQL Server user.', 'The database rejects the connection without valid credentials.', 'Prefer storing it in Connections; fill this visible workflow field only as a direct fallback.', 'Use the password for the selected SQL login.', 'Get it from your password vault, Azure SQL, or DBA. Avoid mapping secrets from normal workflow payloads.', 'Secret text stored as a masked credential value when used directly.', 'A saved SQL Server Database Connection for app_writer.', 'The run returns _error "password is required" or an access denied error.', 'Do not paste passwords into test data, notes, or upstream JSON fields.'], { placeholder: 'Use Connections when possible', notes: 'Store database passwords in Connections or a credential vault whenever possible.' }),
+  field('Encrypt', 'encrypt', 'boolean', false, 'Whether the connection uses encryption.', ['This controls the mssql driver encrypt option.', 'Azure SQL and many production systems require encrypted transport.', 'Keep it on for Azure SQL and production databases unless your DBA says otherwise.', 'Use true for encrypted connections and false only for local or legacy servers.', 'Read it from the SQL Server connection guide or ask your DBA. You can map {{$json.encryptSql}}.', 'Boolean true or false. Runtime defaults to true unless explicitly false.', 'true for Azure SQL.', 'The run may fail with TLS or certificate errors if the setting does not match the server.', 'Do not disable encryption to bypass a certificate problem in production.'], { defaultValue: 'true', example: 'true' }),
+  field('Trust Server Certificate', 'trustServerCertificate', 'boolean', false, 'Whether to accept an untrusted SQL Server certificate.', ['This controls the mssql driver trustServerCertificate option.', 'It can allow local/self-signed certificates while still encrypting the connection.', 'Use it only for local development or controlled internal servers with self-signed certs.', 'Enter true only when approved; otherwise leave false.', 'Ask your DBA or platform team whether the certificate chain is trusted. You can map {{$json.trustSqlCert}}.', 'Boolean true or false. Runtime defaults to false.', 'true for a local SQL Server container with a self-signed certificate.', 'The run may fail with certificate validation errors.', 'Do not turn this on for public production servers without approval.'], { defaultValue: 'false', example: 'false' }),
+  field('Operation', 'operation', 'select', true, 'SQL Server action to run.', ['The action tells the executor whether to run raw T-SQL, insert rows, update rows, delete rows, or execute a stored procedure.', 'It decides which fields are required and what output shape comes back.', 'Choose it before filling Query, Table, Data, Where, or Procedure Name.', 'Use executeQuery for custom SQL, insert to add rows, update to change matching rows, delete to remove matching rows, and storedProcedure to run an existing stored procedure.', 'Choose from the dropdown based on the business action in this workflow.', 'One of executeQuery, insert, update, delete, or storedProcedure. Runtime also normalizes select/query/raw_sql aliases to executeQuery.', 'storedProcedure to run dbo.RecalculateCustomerScore after a customer update.', 'The run returns _error "operation is required" or "operation must be one of..." for unsupported values.', 'Do not use raw SQL for routine inserts when the table/data helper is clearer and easier to review.'], { options: ['executeQuery', 'insert', 'update', 'delete', 'storedProcedure'], defaultValue: 'executeQuery' }),
+  field('Query', 'query', 'textarea', false, 'Raw T-SQL query.', ['The SQL text sent to SQL Server for Execute Query.', 'It is the actual database instruction when you choose Execute Query.', 'Required for executeQuery unless you provide Table, in which case the runtime can generate a SELECT TOP query.', 'Write T-SQL with named @parameters, such as @status.', 'Write approved SQL yourself, copy from a DBA, or map a vetted query from {{$json.sql}}.', 'T-SQL string. Use @name placeholders with Params.', 'SELECT TOP 100 id, email FROM dbo.Customers WHERE status = @status', 'The run returns _error "query is required for executeQuery operation" or SQL Server syntax errors.', 'Do not paste untrusted customer input directly into SQL; use Params.'], { placeholder: 'SELECT TOP 100 * FROM dbo.Users WHERE status = @status', example: 'SELECT TOP 100 id, email FROM dbo.Customers WHERE status = @status' }),
+  field('Table', 'table', 'string', false, 'Table used by insert, update, delete, or generated select.', ['The SQL Server table that helper operations target.', 'Insert, Update, Delete, and generated Execute Query build SQL around this table.', 'Required for insert/update/delete, and useful for executeQuery when Query is blank and you want a generated SELECT TOP query.', 'Enter a table name, optionally with schema, such as dbo.Customers.', 'Copy it from SSMS, Azure Data Studio, or a DBA-approved schema document. You can map {{$json.tableName}} only from trusted routing data.', 'Schema-qualified SQL Server identifier such as dbo.Users.', 'dbo.Customers for a sales automation table.', 'The run returns table is required or SQL Server reports invalid object name.', 'Do not include user-provided text as a table name.']),
+  field('Data', 'data', 'json', false, 'Row values for insert or update.', ['The column values to write.', 'Insert uses it as new row data; Update uses it as replacement values for matching rows.', 'Required for insert and update.', 'Enter a JSON object for one row, or an array of objects for multiple inserts.', 'Map fields from forms, webhooks, CRM records, or previous database rows.', 'JSON object or JSON array of objects.', '{"email":"{{$json.email}}","status":"active"}', 'The run returns data is required or SQL Server rejects missing/unknown columns.', 'Do not include columns that do not exist or values with the wrong data type.'], { placeholder: '{"email":"{{$json.email}}","status":"active"}', example: '{"email":"alex@example.com","status":"active"}' }),
+  field('Where', 'where', 'json', false, 'Exact-match row filter.', ['The filter that decides which rows Update or Delete affects.', 'The executor refuses update/delete without it to avoid broad accidental changes.', 'Required for update and delete; also used when generating a SELECT TOP query from Table.', 'Enter a JSON object where keys are column names and values are exact matches.', 'Use stable IDs from previous steps, such as {{$json.customerId}}.', 'JSON object. Multiple keys are combined with AND.', '{"id":"{{$json.customerId}}"}', 'The run returns where clause is required, or no rows change if the values do not match.', 'Do not leave Where empty for write/delete operations.'], { placeholder: '{"id":"{{$json.customerId}}"}', example: '{"id":1048}' }),
+  field('Procedure Name', 'procedureName', 'string', false, 'Stored procedure to execute.', ['The name of an existing SQL Server stored procedure.', 'Stored Procedure operation cannot run without knowing which procedure to call.', 'Required for storedProcedure.', 'Enter the procedure name, usually schema-qualified.', 'Copy it from SSMS, a DBA runbook, or your application database documentation.', 'Procedure identifier such as dbo.RecalculateTotals.', 'dbo.RecalculateCustomerScore for a customer scoring workflow.', 'The run returns procedureName is required or SQL Server cannot find the procedure.', 'Do not put EXEC or parameters in this field; use Procedure Name plus Params.']),
+  field('Params', 'params', 'json', false, 'Named T-SQL parameters.', ['The values bound to @parameter names in Query or Stored Procedure.', 'Parameters keep values separate from SQL text and are required by many stored procedures.', 'Use it when Query contains @names or a stored procedure expects inputs.', 'Enter a JSON object such as {"status":"active","customerId":1048}.', 'Map values from upstream nodes, forms, webhooks, or database rows.', 'JSON object with parameter names as keys.', '{"status":"active"} for @status.', 'Wrong names or types may cause SQL Server parameter or conversion errors.', 'Do not include the @ symbol in JSON keys unless your stored procedure specifically expects it.'], { placeholder: '{"status":"active"}', example: '{"status":"active"}' }),
+  field('Parameters', 'parameters', 'json', false, 'Alias for Params.', ['This is an alias accepted by the backend inventory for named parameters.', 'It supports generated workflows that use parameters instead of params.', 'Use it only when your generated config uses this field name; otherwise use Params.', 'Enter the same JSON object you would use in Params.', 'Map from previous workflow data or a generated config step.', 'JSON object.', '{"customerId":"{{$json.customerId}}"}', 'If both Params and Parameters are present, the runtime uses Params first.', 'Do not split query parameters across both fields unless you know which one wins.'], { placeholder: '{"customerId":"{{$json.customerId}}"}', example: '{"customerId":1048}' }),
+  field('Filters', 'filters', 'json', false, 'Alias for Where.', ['This is an alias the runtime parses as Where when Where is not set.', 'It keeps older/generated table-select configs working.', 'Use it only for generated configs that still say Filters.', 'Enter exact-match conditions as a JSON object.', 'Map IDs or stable fields from previous steps.', 'JSON object.', '{"status":"active"}', 'If Where and Filters both exist, Where wins.', 'Do not expect SQL operators here; it only builds equality checks.'], { placeholder: '{"status":"active"}', example: '{"status":"active"}' }),
+  field('Limit', 'limit', 'number', false, 'Maximum rows for generated table select.', ['The row cap used when Execute Query has Table but no Query.', 'It prevents generated SELECT TOP queries from returning too much data.', 'Use it only for generated table select behavior.', 'Enter a number from 1 to 10000. Invalid values fall back to 100.', 'Choose it from the downstream step capacity or reporting need. You can map {{$json.limit}}.', 'Whole number.', '100 for an operations report preview.', 'Invalid or empty values default to 100.', 'Do not assume Limit affects a custom Query; add TOP in the SQL text yourself.'], { placeholder: '100', defaultValue: '100', example: '100' }),
+];
+
+const op = (name: string, value: string, description: string, inputValues: Record<string, string>, outputExample: Record<string, unknown>, outputDescription: string) => ({
+  name,
+  value,
+  description,
+  fields,
+  outputExample,
+  outputDescription,
+  usageExample: {
+    scenario: `${name} SQL Server data for reporting, synchronization, cleanup, or stored-procedure automation after an upstream workflow step provides row values or IDs.`,
+    inputValues: { operation: value, host: 'sales-prod.database.windows.net', port: '1433', database: 'SalesOpsProd', username: 'report_reader', password: 'Use saved SQL Server connection', ...inputValues },
+    expectedOutput: 'Use SQL Server output later as {{$json.rows}}, {{$json.rowsAffected}}, {{$json.inserted}}, {{$json.records}}, or {{$json.returnValue}}.',
+  },
+  externalDocsUrl: 'https://learn.microsoft.com/sql/',
+});
 
 export const sqlServerDoc: NodeDoc = {
-  "slug": "sql_server",
-  "displayName": "SQL Server",
-  "category": "Data",
-  "logoUrl": "/icons/nodes/sql_server.svg",
-  "description": "Connect to and query Microsoft SQL Server databases.",
-  "credentialType": "None",
-  "credentialSetupSteps": [
-    "This node does not need a saved account connection.",
-    "Open the node settings and fill the visible input fields.",
-    "Run the workflow when the required fields are complete."
+  slug: 'sql_server',
+  displayName: 'SQL Server',
+  category: 'Data',
+  logoUrl: '/icons/nodes/sql_server.svg',
+  description: 'Run T-SQL, insert rows, update rows, delete rows, and call stored procedures on Microsoft SQL Server or Azure SQL from a workflow.',
+  credentialType: 'SQL Server Database Connection',
+  credentialSetupSteps: [
+    'Create or select a SQL Server Database Connection in CtrlChecks Connections so host, port, database, username, password, encryption, and certificate settings can live in the credential vault.',
+    'Use a least-privilege SQL login: read-only for reports, write permissions only for insert/update/delete workflows, and execute permission only for required stored procedures.',
+    'For Azure SQL, keep Encrypt enabled. Use Trust Server Certificate only for local or approved internal self-signed certificates.',
+    'Test with Execute Query using SELECT 1 or a small SELECT TOP query before enabling write/delete operations.',
+    'Connect this node output to the next node with an outgoing line; downstream service node account connection is still required for Slack, email, CRM, storage, or other service nodes.',
   ],
-  "credentialDocsUrl": "https://docs.ctrlchecks.com",
-  "resources": [
+  credentialDocsUrl: 'https://learn.microsoft.com/sql/relational-databases/security/choose-an-authentication-mode',
+  resources: [
     {
-      "name": "Operations",
-      "description": "SQL Server exposes operation choices directly.",
-      "operations": [
-        {
-          "name": "ExecuteQuery",
-          "value": "executeQuery",
-          "description": "ExecuteQuery using the SQL Server node.",
-          "fields": [
-            {
-              "name": "Host",
-              "internalKey": "host",
-              "type": "string",
-              "required": true,
-              "description": "SQL Server hostname",
-              "helpText": "What this field is: SQL Server hostname.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Host value.\nTip: Use {{$json.host}} when this value comes from an earlier step.",
-              "placeholder": "Enter Host"
-            },
-            {
-              "name": "Port",
-              "internalKey": "port",
-              "type": "number",
-              "required": false,
-              "description": "SQL Server port",
-              "helpText": "What this field is: The number used for SQL Server port.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 1433.\nTip: Use {{$json.port}} when the number comes from an earlier step.",
-              "placeholder": "1433",
-              "example": "1433",
-              "defaultValue": "1433"
-            },
-            {
-              "name": "Username",
-              "internalKey": "username",
-              "type": "string",
-              "required": true,
-              "description": "SQL Server username",
-              "helpText": "What this field is: SQL Server username.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Username value.\nTip: Use {{$json.username}} when this value comes from an earlier step.",
-              "placeholder": "Enter Username"
-            },
-            {
-              "name": "Password",
-              "internalKey": "password",
-              "type": "password",
-              "required": true,
-              "description": "SQL Server password",
-              "helpText": "What this field is: SQL Server token, a secret password that lets CtrlChecks talk to SQL Server safely.\nWhere to find it: SQL Server account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by SQL Server.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "Enter Password",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Database",
-              "internalKey": "database",
-              "type": "string",
-              "required": true,
-              "description": "Database name",
-              "helpText": "What this field is: The Database name that tells SQL Server which item to use.\nWhere to find it: Open the item in SQL Server and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.database}} when an earlier SQL Server step provides this value.",
-              "placeholder": "Enter Database"
-            },
-            {
-              "name": "Encrypt",
-              "internalKey": "encrypt",
-              "type": "boolean",
-              "required": false,
-              "description": "Enable encryption",
-              "helpText": "What this field is: An on/off switch for Enable encryption.\nHow to fill it: Turn ON to enable this option. Turn OFF to leave it disabled.\nExample: Turn ON when this workflow should use encrypt; turn OFF for the default behavior.",
-              "placeholder": "true",
-              "example": "true",
-              "defaultValue": "true"
-            },
-            {
-              "name": "Trust Server Certificate",
-              "internalKey": "trustServerCertificate",
-              "type": "boolean",
-              "required": false,
-              "description": "Trust server certificate",
-              "helpText": "What this field is: An on/off switch for Trust server certificate.\nHow to fill it: Turn ON to enable this option. Turn OFF to leave it disabled.\nExample: Turn ON when this workflow should use trust server certificate; turn OFF for the default behavior.",
-              "placeholder": "false",
-              "example": "false",
-              "defaultValue": "false"
-            },
-            {
-              "name": "Query",
-              "internalKey": "query",
-              "type": "textarea",
-              "required": true,
-              "description": "SQL query",
-              "helpText": "What this field is: Structured data for SQL query.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by SQL Server.\nExample: status = active.\nTip: Use {{$json.query}} when an earlier step already prepared this data.",
-              "placeholder": "status = active"
-            },
-            {
-              "name": "Table",
-              "internalKey": "table",
-              "type": "string",
-              "required": true,
-              "description": "Table name",
-              "helpText": "What this field is: The Table name that tells SQL Server which item to use.\nWhere to find it: Open the item in SQL Server and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: customers.\nTip: Use {{$json.table}} when an earlier SQL Server step provides this value.",
-              "placeholder": "customers"
-            },
-            {
-              "name": "Procedure Name",
-              "internalKey": "procedureName",
-              "type": "string",
-              "required": false,
-              "description": "Stored procedure name",
-              "helpText": "What this field is: Stored procedure name.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Procedure Name value.\nTip: Use {{$json.procedureName}} when this value comes from an earlier step.",
-              "placeholder": "Enter Procedure Name"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "executeQuery",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming SQL Server data with execute query after a related upstream event is received",
-            "inputValues": {
-              "Host": "",
-              "Port": "1433",
-              "Username": "",
-              "Password": "",
-              "Database": ""
-            },
-            "expectedOutput": "SQL Server returns structured execute query data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
-        },
-        {
-          "name": "Insert",
-          "value": "insert",
-          "description": "Insert using the SQL Server node.",
-          "fields": [
-            {
-              "name": "Host",
-              "internalKey": "host",
-              "type": "string",
-              "required": true,
-              "description": "SQL Server hostname",
-              "helpText": "What this field is: SQL Server hostname.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Host value.\nTip: Use {{$json.host}} when this value comes from an earlier step.",
-              "placeholder": "Enter Host"
-            },
-            {
-              "name": "Port",
-              "internalKey": "port",
-              "type": "number",
-              "required": false,
-              "description": "SQL Server port",
-              "helpText": "What this field is: The number used for SQL Server port.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 1433.\nTip: Use {{$json.port}} when the number comes from an earlier step.",
-              "placeholder": "1433",
-              "example": "1433",
-              "defaultValue": "1433"
-            },
-            {
-              "name": "Username",
-              "internalKey": "username",
-              "type": "string",
-              "required": true,
-              "description": "SQL Server username",
-              "helpText": "What this field is: SQL Server username.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Username value.\nTip: Use {{$json.username}} when this value comes from an earlier step.",
-              "placeholder": "Enter Username"
-            },
-            {
-              "name": "Password",
-              "internalKey": "password",
-              "type": "password",
-              "required": true,
-              "description": "SQL Server password",
-              "helpText": "What this field is: SQL Server token, a secret password that lets CtrlChecks talk to SQL Server safely.\nWhere to find it: SQL Server account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by SQL Server.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "Enter Password",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Database",
-              "internalKey": "database",
-              "type": "string",
-              "required": true,
-              "description": "Database name",
-              "helpText": "What this field is: The Database name that tells SQL Server which item to use.\nWhere to find it: Open the item in SQL Server and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.database}} when an earlier SQL Server step provides this value.",
-              "placeholder": "Enter Database"
-            },
-            {
-              "name": "Encrypt",
-              "internalKey": "encrypt",
-              "type": "boolean",
-              "required": false,
-              "description": "Enable encryption",
-              "helpText": "What this field is: An on/off switch for Enable encryption.\nHow to fill it: Turn ON to enable this option. Turn OFF to leave it disabled.\nExample: Turn ON when this workflow should use encrypt; turn OFF for the default behavior.",
-              "placeholder": "true",
-              "example": "true",
-              "defaultValue": "true"
-            },
-            {
-              "name": "Trust Server Certificate",
-              "internalKey": "trustServerCertificate",
-              "type": "boolean",
-              "required": false,
-              "description": "Trust server certificate",
-              "helpText": "What this field is: An on/off switch for Trust server certificate.\nHow to fill it: Turn ON to enable this option. Turn OFF to leave it disabled.\nExample: Turn ON when this workflow should use trust server certificate; turn OFF for the default behavior.",
-              "placeholder": "false",
-              "example": "false",
-              "defaultValue": "false"
-            },
-            {
-              "name": "Query",
-              "internalKey": "query",
-              "type": "textarea",
-              "required": true,
-              "description": "SQL query",
-              "helpText": "What this field is: Structured data for SQL query.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by SQL Server.\nExample: status = active.\nTip: Use {{$json.query}} when an earlier step already prepared this data.",
-              "placeholder": "status = active"
-            },
-            {
-              "name": "Table",
-              "internalKey": "table",
-              "type": "string",
-              "required": true,
-              "description": "Table name",
-              "helpText": "What this field is: The Table name that tells SQL Server which item to use.\nWhere to find it: Open the item in SQL Server and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: customers.\nTip: Use {{$json.table}} when an earlier SQL Server step provides this value.",
-              "placeholder": "customers"
-            },
-            {
-              "name": "Procedure Name",
-              "internalKey": "procedureName",
-              "type": "string",
-              "required": false,
-              "description": "Stored procedure name",
-              "helpText": "What this field is: Stored procedure name.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Procedure Name value.\nTip: Use {{$json.procedureName}} when this value comes from an earlier step.",
-              "placeholder": "Enter Procedure Name"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "insert",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming SQL Server data with insert after a related upstream event is received",
-            "inputValues": {
-              "Host": "",
-              "Port": "1433",
-              "Username": "",
-              "Password": "",
-              "Database": ""
-            },
-            "expectedOutput": "SQL Server returns structured insert data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
-        },
-        {
-          "name": "Update",
-          "value": "update",
-          "description": "Update using the SQL Server node.",
-          "fields": [
-            {
-              "name": "Host",
-              "internalKey": "host",
-              "type": "string",
-              "required": true,
-              "description": "SQL Server hostname",
-              "helpText": "What this field is: SQL Server hostname.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Host value.\nTip: Use {{$json.host}} when this value comes from an earlier step.",
-              "placeholder": "Enter Host"
-            },
-            {
-              "name": "Port",
-              "internalKey": "port",
-              "type": "number",
-              "required": false,
-              "description": "SQL Server port",
-              "helpText": "What this field is: The number used for SQL Server port.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 1433.\nTip: Use {{$json.port}} when the number comes from an earlier step.",
-              "placeholder": "1433",
-              "example": "1433",
-              "defaultValue": "1433"
-            },
-            {
-              "name": "Username",
-              "internalKey": "username",
-              "type": "string",
-              "required": true,
-              "description": "SQL Server username",
-              "helpText": "What this field is: SQL Server username.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Username value.\nTip: Use {{$json.username}} when this value comes from an earlier step.",
-              "placeholder": "Enter Username"
-            },
-            {
-              "name": "Password",
-              "internalKey": "password",
-              "type": "password",
-              "required": true,
-              "description": "SQL Server password",
-              "helpText": "What this field is: SQL Server token, a secret password that lets CtrlChecks talk to SQL Server safely.\nWhere to find it: SQL Server account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by SQL Server.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "Enter Password",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Database",
-              "internalKey": "database",
-              "type": "string",
-              "required": true,
-              "description": "Database name",
-              "helpText": "What this field is: The Database name that tells SQL Server which item to use.\nWhere to find it: Open the item in SQL Server and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.database}} when an earlier SQL Server step provides this value.",
-              "placeholder": "Enter Database"
-            },
-            {
-              "name": "Encrypt",
-              "internalKey": "encrypt",
-              "type": "boolean",
-              "required": false,
-              "description": "Enable encryption",
-              "helpText": "What this field is: An on/off switch for Enable encryption.\nHow to fill it: Turn ON to enable this option. Turn OFF to leave it disabled.\nExample: Turn ON when this workflow should use encrypt; turn OFF for the default behavior.",
-              "placeholder": "true",
-              "example": "true",
-              "defaultValue": "true"
-            },
-            {
-              "name": "Trust Server Certificate",
-              "internalKey": "trustServerCertificate",
-              "type": "boolean",
-              "required": false,
-              "description": "Trust server certificate",
-              "helpText": "What this field is: An on/off switch for Trust server certificate.\nHow to fill it: Turn ON to enable this option. Turn OFF to leave it disabled.\nExample: Turn ON when this workflow should use trust server certificate; turn OFF for the default behavior.",
-              "placeholder": "false",
-              "example": "false",
-              "defaultValue": "false"
-            },
-            {
-              "name": "Query",
-              "internalKey": "query",
-              "type": "textarea",
-              "required": true,
-              "description": "SQL query",
-              "helpText": "What this field is: Structured data for SQL query.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by SQL Server.\nExample: status = active.\nTip: Use {{$json.query}} when an earlier step already prepared this data.",
-              "placeholder": "status = active"
-            },
-            {
-              "name": "Table",
-              "internalKey": "table",
-              "type": "string",
-              "required": true,
-              "description": "Table name",
-              "helpText": "What this field is: The Table name that tells SQL Server which item to use.\nWhere to find it: Open the item in SQL Server and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: customers.\nTip: Use {{$json.table}} when an earlier SQL Server step provides this value.",
-              "placeholder": "customers"
-            },
-            {
-              "name": "Procedure Name",
-              "internalKey": "procedureName",
-              "type": "string",
-              "required": false,
-              "description": "Stored procedure name",
-              "helpText": "What this field is: Stored procedure name.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Procedure Name value.\nTip: Use {{$json.procedureName}} when this value comes from an earlier step.",
-              "placeholder": "Enter Procedure Name"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "update",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming SQL Server data with update after a related upstream event is received",
-            "inputValues": {
-              "Host": "",
-              "Port": "1433",
-              "Username": "",
-              "Password": "",
-              "Database": ""
-            },
-            "expectedOutput": "SQL Server returns structured update data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
-        },
-        {
-          "name": "Delete",
-          "value": "delete",
-          "description": "Delete using the SQL Server node.",
-          "fields": [
-            {
-              "name": "Host",
-              "internalKey": "host",
-              "type": "string",
-              "required": true,
-              "description": "SQL Server hostname",
-              "helpText": "What this field is: SQL Server hostname.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Host value.\nTip: Use {{$json.host}} when this value comes from an earlier step.",
-              "placeholder": "Enter Host"
-            },
-            {
-              "name": "Port",
-              "internalKey": "port",
-              "type": "number",
-              "required": false,
-              "description": "SQL Server port",
-              "helpText": "What this field is: The number used for SQL Server port.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 1433.\nTip: Use {{$json.port}} when the number comes from an earlier step.",
-              "placeholder": "1433",
-              "example": "1433",
-              "defaultValue": "1433"
-            },
-            {
-              "name": "Username",
-              "internalKey": "username",
-              "type": "string",
-              "required": true,
-              "description": "SQL Server username",
-              "helpText": "What this field is: SQL Server username.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Username value.\nTip: Use {{$json.username}} when this value comes from an earlier step.",
-              "placeholder": "Enter Username"
-            },
-            {
-              "name": "Password",
-              "internalKey": "password",
-              "type": "password",
-              "required": true,
-              "description": "SQL Server password",
-              "helpText": "What this field is: SQL Server token, a secret password that lets CtrlChecks talk to SQL Server safely.\nWhere to find it: SQL Server account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by SQL Server.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "Enter Password",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Database",
-              "internalKey": "database",
-              "type": "string",
-              "required": true,
-              "description": "Database name",
-              "helpText": "What this field is: The Database name that tells SQL Server which item to use.\nWhere to find it: Open the item in SQL Server and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.database}} when an earlier SQL Server step provides this value.",
-              "placeholder": "Enter Database"
-            },
-            {
-              "name": "Encrypt",
-              "internalKey": "encrypt",
-              "type": "boolean",
-              "required": false,
-              "description": "Enable encryption",
-              "helpText": "What this field is: An on/off switch for Enable encryption.\nHow to fill it: Turn ON to enable this option. Turn OFF to leave it disabled.\nExample: Turn ON when this workflow should use encrypt; turn OFF for the default behavior.",
-              "placeholder": "true",
-              "example": "true",
-              "defaultValue": "true"
-            },
-            {
-              "name": "Trust Server Certificate",
-              "internalKey": "trustServerCertificate",
-              "type": "boolean",
-              "required": false,
-              "description": "Trust server certificate",
-              "helpText": "What this field is: An on/off switch for Trust server certificate.\nHow to fill it: Turn ON to enable this option. Turn OFF to leave it disabled.\nExample: Turn ON when this workflow should use trust server certificate; turn OFF for the default behavior.",
-              "placeholder": "false",
-              "example": "false",
-              "defaultValue": "false"
-            },
-            {
-              "name": "Query",
-              "internalKey": "query",
-              "type": "textarea",
-              "required": true,
-              "description": "SQL query",
-              "helpText": "What this field is: Structured data for SQL query.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by SQL Server.\nExample: status = active.\nTip: Use {{$json.query}} when an earlier step already prepared this data.",
-              "placeholder": "status = active"
-            },
-            {
-              "name": "Table",
-              "internalKey": "table",
-              "type": "string",
-              "required": true,
-              "description": "Table name",
-              "helpText": "What this field is: The Table name that tells SQL Server which item to use.\nWhere to find it: Open the item in SQL Server and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: customers.\nTip: Use {{$json.table}} when an earlier SQL Server step provides this value.",
-              "placeholder": "customers"
-            },
-            {
-              "name": "Procedure Name",
-              "internalKey": "procedureName",
-              "type": "string",
-              "required": false,
-              "description": "Stored procedure name",
-              "helpText": "What this field is: Stored procedure name.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Procedure Name value.\nTip: Use {{$json.procedureName}} when this value comes from an earlier step.",
-              "placeholder": "Enter Procedure Name"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "delete",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming SQL Server data with delete after a related upstream event is received",
-            "inputValues": {
-              "Host": "",
-              "Port": "1433",
-              "Username": "",
-              "Password": "",
-              "Database": ""
-            },
-            "expectedOutput": "SQL Server returns structured delete data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
-        },
-        {
-          "name": "StoredProcedure",
-          "value": "storedProcedure",
-          "description": "StoredProcedure using the SQL Server node.",
-          "fields": [
-            {
-              "name": "Host",
-              "internalKey": "host",
-              "type": "string",
-              "required": true,
-              "description": "SQL Server hostname",
-              "helpText": "What this field is: SQL Server hostname.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Host value.\nTip: Use {{$json.host}} when this value comes from an earlier step.",
-              "placeholder": "Enter Host"
-            },
-            {
-              "name": "Port",
-              "internalKey": "port",
-              "type": "number",
-              "required": false,
-              "description": "SQL Server port",
-              "helpText": "What this field is: The number used for SQL Server port.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 1433.\nTip: Use {{$json.port}} when the number comes from an earlier step.",
-              "placeholder": "1433",
-              "example": "1433",
-              "defaultValue": "1433"
-            },
-            {
-              "name": "Username",
-              "internalKey": "username",
-              "type": "string",
-              "required": true,
-              "description": "SQL Server username",
-              "helpText": "What this field is: SQL Server username.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Username value.\nTip: Use {{$json.username}} when this value comes from an earlier step.",
-              "placeholder": "Enter Username"
-            },
-            {
-              "name": "Password",
-              "internalKey": "password",
-              "type": "password",
-              "required": true,
-              "description": "SQL Server password",
-              "helpText": "What this field is: SQL Server token, a secret password that lets CtrlChecks talk to SQL Server safely.\nWhere to find it: SQL Server account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by SQL Server.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "Enter Password",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Database",
-              "internalKey": "database",
-              "type": "string",
-              "required": true,
-              "description": "Database name",
-              "helpText": "What this field is: The Database name that tells SQL Server which item to use.\nWhere to find it: Open the item in SQL Server and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.database}} when an earlier SQL Server step provides this value.",
-              "placeholder": "Enter Database"
-            },
-            {
-              "name": "Encrypt",
-              "internalKey": "encrypt",
-              "type": "boolean",
-              "required": false,
-              "description": "Enable encryption",
-              "helpText": "What this field is: An on/off switch for Enable encryption.\nHow to fill it: Turn ON to enable this option. Turn OFF to leave it disabled.\nExample: Turn ON when this workflow should use encrypt; turn OFF for the default behavior.",
-              "placeholder": "true",
-              "example": "true",
-              "defaultValue": "true"
-            },
-            {
-              "name": "Trust Server Certificate",
-              "internalKey": "trustServerCertificate",
-              "type": "boolean",
-              "required": false,
-              "description": "Trust server certificate",
-              "helpText": "What this field is: An on/off switch for Trust server certificate.\nHow to fill it: Turn ON to enable this option. Turn OFF to leave it disabled.\nExample: Turn ON when this workflow should use trust server certificate; turn OFF for the default behavior.",
-              "placeholder": "false",
-              "example": "false",
-              "defaultValue": "false"
-            },
-            {
-              "name": "Query",
-              "internalKey": "query",
-              "type": "textarea",
-              "required": true,
-              "description": "SQL query",
-              "helpText": "What this field is: Structured data for SQL query.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by SQL Server.\nExample: status = active.\nTip: Use {{$json.query}} when an earlier step already prepared this data.",
-              "placeholder": "status = active"
-            },
-            {
-              "name": "Table",
-              "internalKey": "table",
-              "type": "string",
-              "required": true,
-              "description": "Table name",
-              "helpText": "What this field is: The Table name that tells SQL Server which item to use.\nWhere to find it: Open the item in SQL Server and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: customers.\nTip: Use {{$json.table}} when an earlier SQL Server step provides this value.",
-              "placeholder": "customers"
-            },
-            {
-              "name": "Procedure Name",
-              "internalKey": "procedureName",
-              "type": "string",
-              "required": false,
-              "description": "Stored procedure name",
-              "helpText": "What this field is: Stored procedure name.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Procedure Name value.\nTip: Use {{$json.procedureName}} when this value comes from an earlier step.",
-              "placeholder": "Enter Procedure Name"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "storedProcedure",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming SQL Server data with stored procedure after a related upstream event is received",
-            "inputValues": {
-              "Host": "",
-              "Port": "1433",
-              "Username": "",
-              "Password": "",
-              "Database": ""
-            },
-            "expectedOutput": "SQL Server returns structured stored procedure data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://docs.ctrlchecks.com"
-        }
-      ]
-    }
-  ],
-  "commonErrors": [
-    {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
+      name: 'Operations',
+      description: 'SQL Server uses the mssql driver. The workflow executor flattens successful data objects and returns _error for validation, connection, parameter, certificate, or SQL execution failures.',
+      operations: [
+        op('Execute Query', 'executeQuery', 'Runs raw T-SQL with optional named parameters. If Query is blank but Table is filled, the runtime can generate SELECT TOP with optional Where/Filters and Limit.', { query: 'SELECT TOP 100 id, email FROM dbo.Customers WHERE status = @status', params: '{"status":"active"}' }, { rows: [{ id: 1048, email: 'alex@example.com' }], rowsAffected: 1 }, 'rows: SQL Server recordset returned by the query. rowsAffected: first rowsAffected count from mssql. _error appears for validation or execution failure.'),
+        op('Insert', 'insert', 'Inserts one or more rows into Table using Data JSON and returns inserted rows through OUTPUT INSERTED.*. Use it for approved database writes from forms, webhooks, or app events.', { table: 'dbo.Customers', data: '{"email":"{{$json.email}}","status":"active"}' }, { inserted: [{ id: 1048, email: 'alex@example.com', status: 'active' }], count: 1 }, 'inserted: rows returned by OUTPUT INSERTED.*. count: number of inserted rows. _error appears when table/data/credentials or SQL execution fails.'),
+        op('Update', 'update', 'Updates rows in Table matching Where JSON. Use it for controlled status updates, enrichment, or marking records processed.', { table: 'dbo.Customers', data: '{"last_contacted_at":"{{$json.contactedAt}}"}', where: '{"id":"{{$json.customerId}}"}' }, { rowsAffected: 1 }, 'rowsAffected: number of rows updated. _error appears when table, data, or where is missing or SQL Server rejects the statement.'),
+        op('Delete', 'delete', 'Deletes rows in Table matching Where JSON. Use it only when a stable ID or exact filter identifies the rows to remove.', { table: 'dbo.Sessions', where: '{"id":"{{$json.sessionId}}"}' }, { rowsAffected: 1 }, 'rowsAffected: number of rows deleted. _error appears when table or where is missing or SQL Server rejects the statement.'),
+        op('Stored Procedure', 'storedProcedure', 'Executes an existing SQL Server stored procedure with optional Params. Use it when database-side business logic already lives in a stored procedure.', { procedureName: 'dbo.RecalculateCustomerScore', params: '{"customerId":"{{$json.customerId}}"}' }, { records: [{ customerId: 1048, score: 82 }], returnValue: 0 }, 'records: first recordset returned by the stored procedure. returnValue: SQL Server procedure return value. _error appears when procedureName, params, credentials, or execution fails.'),
+      ],
     },
-    {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
   ],
-  "relatedNodes": []
+  commonErrors: [
+    { error: 'host is required', cause: 'Host/server was empty or not injected from the selected SQL Server connection.', fix: 'Fill Host or select a SQL Server Database Connection that stores host, port, database, username, and password.' },
+    { error: 'username is required / password is required / database is required', cause: 'A required connection field is missing.', fix: 'Complete the saved connection or direct fallback fields before running the node.' },
+    { error: 'query is required for executeQuery operation', cause: 'Execute Query was selected without Query or a generated Table select.', fix: 'Enter T-SQL in Query, or provide Table for the generated SELECT TOP path.' },
+    { error: 'where clause is required for update operation', cause: 'Update was selected without a row filter.', fix: 'Add Where JSON such as {"id":"{{$json.customerId}}"} before running.' },
+    { error: 'where clause is required for delete operation', cause: 'Delete was selected without a row filter.', fix: 'Add a narrow Where JSON object so only the intended rows are removed.' },
+    { error: 'operation must be one of: executeQuery, insert, update, delete, storedProcedure', cause: 'The operation value is unsupported or stale.', fix: 'Choose a supported SQL Server operation from the dropdown.' },
+    { error: 'SQL Server operation failed', cause: 'SQL Server rejected the login, certificate, parameter, table name, procedure name, or SQL statement.', fix: 'Check credentials, Encrypt/Trust Server Certificate, SQL syntax, table names, parameter names, and permissions.' },
+  ],
+  relatedNodes: ['postgresql', 'mysql', 'timescaledb', 'db'],
 };

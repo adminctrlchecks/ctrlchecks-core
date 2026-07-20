@@ -4,6 +4,7 @@
 import { Request, Response } from 'express';
 import { getDbClient } from '../core/database/aws-db-client';
 import { config } from '../core/config';
+import { normalizeExecutionStatus, normalizeExecutionTrigger } from '../core/execution/execution-db-enums';
 import { getChatServer } from '../services/chat/chat-server';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -273,11 +274,15 @@ export async function submitChatMessage(req: Request, res: Response) {
       .insert({
         workflow_id: workflowId,
         user_id: workflow.user_id,
-        status: 'running',
-        trigger: 'chat',
+        status: normalizeExecutionStatus('running'),
+        trigger: normalizeExecutionTrigger('chat'),
         input: executionInput,
         logs: [],
         started_at: startedAt,
+        metadata: {
+          originalTrigger: 'chat',
+          triggerNodeId: nodeId,
+        },
       })
       .select()
       .single();

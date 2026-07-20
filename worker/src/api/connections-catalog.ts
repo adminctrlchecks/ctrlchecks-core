@@ -139,7 +139,7 @@ const DASHBOARD_OAUTH: Record<string, OAuthProviderMetadata> = {
     statusProvider: 'facebook',
     connectUrl: '/api/oauth/facebook/start',
     disconnectUrl: '/api/connections/facebook/disconnect',
-    scopes: ['pages_show_list', 'pages_read_engagement', 'pages_manage_posts', 'public_profile', 'email'],
+    scopes: ['pages_show_list', 'pages_read_engagement', 'pages_manage_metadata', 'pages_manage_posts', 'pages_manage_engagement', 'pages_messaging', 'leads_retrieval', 'public_profile', 'email'],
     flow: 'backend_redirect',
   },
   notion: {
@@ -184,7 +184,7 @@ const DASHBOARD_OAUTH: Record<string, OAuthProviderMetadata> = {
     statusTable: 'instagram_oauth_tokens',
     connectUrl: '/api/oauth/instagram/authorize',
     disconnectUrl: '/api/connections/instagram',
-    scopes: ['instagram_basic', 'instagram_content_publish', 'pages_show_list', 'pages_read_engagement'],
+    scopes: ['instagram_basic', 'instagram_content_publish', 'instagram_manage_messages', 'instagram_manage_comments', 'pages_show_list', 'pages_read_engagement', 'pages_manage_metadata'],
     flow: 'frontend_code_exchange',
   },
   salesforce: {
@@ -244,10 +244,26 @@ const FIELD_OVERRIDES: Record<string, ConnectionCredentialField[]> = {
   ],
   discord: [
     { name: 'botToken',   label: 'Bot Token',   type: 'password', required: false, helpCategory: 'generic_token', docsUrl: 'https://discord.com/developers/applications' },
+    { name: 'publicKey',  label: 'Application Public Key', type: 'password', required: false, helpCategory: 'generic_token', docsUrl: 'https://discord.com/developers/applications' },
+    { name: 'applicationId', label: 'Application ID', type: 'text', required: false, helpCategory: 'generic_token', docsUrl: 'https://discord.com/developers/applications' },
     { name: 'webhookUrl', label: 'Webhook URL', type: 'url',      required: false, helpCategory: 'webhook_url',   docsUrl: 'https://support.discord.com/hc/en-us/articles/228383668' },
   ],
+  microsoft_teams: [
+    { name: 'webhookUrl', label: 'Incoming Webhook URL', type: 'url', required: false, helpCategory: 'webhook_url', docsUrl: 'https://learn.microsoft.com/microsoftteams/platform/webhooks-and-connectors/how-to/add-incoming-webhook' },
+    { name: 'appId', label: 'Microsoft App ID', type: 'text', required: false, helpCategory: 'generic_token', docsUrl: 'https://learn.microsoft.com/microsoftteams/platform/bots/how-to/create-a-bot-for-teams' },
+    { name: 'appPassword', label: 'Microsoft App Password', type: 'password', required: false, helpCategory: 'generic_token', docsUrl: 'https://learn.microsoft.com/microsoftteams/platform/bots/how-to/create-a-bot-for-teams' },
+    { name: 'validationSecret', label: 'Webhook Validation Secret', type: 'password', required: false, helpCategory: 'generic_token' },
+  ],
   telegram: [
-    { name: 'botToken', label: 'Bot Token', type: 'password', required: true, helpCategory: 'generic_token', docsUrl: 'https://core.telegram.org/bots/features#botfather' },
+    {
+      name: 'botToken',
+      label: 'Telegram Bot Token',
+      type: 'password',
+      required: true,
+      placeholder: '123456789:ABCdef...',
+      helpCategory: 'generic_token',
+      docsUrl: 'https://core.telegram.org/bots/features#botfather',
+    },
   ],
   mailgun: [
     { name: 'apiKey', label: 'Private API Key', type: 'password', required: true, helpCategory: 'api_key', docsUrl: 'https://app.mailgun.com/settings/api_security' },
@@ -264,10 +280,12 @@ const FIELD_OVERRIDES: Record<string, ConnectionCredentialField[]> = {
   ],
   whatsapp: [
     { name: 'accessToken', label: 'Permanent Access Token', type: 'password', required: true, helpCategory: 'bearer_token', docsUrl: 'https://developers.facebook.com/docs/whatsapp/cloud-api/get-started' },
+    { name: 'phoneNumberId', label: 'Phone Number ID', type: 'text', required: true, placeholder: '123456789012345', helpCategory: 'generic_id', docsUrl: 'https://developers.facebook.com/docs/whatsapp/cloud-api/get-started' },
   ],
   shopify: [
     { name: 'shopDomain', label: 'Shop Domain',            type: 'text',     required: true,  placeholder: 'your-store.myshopify.com', helpCategory: 'base_url',  docsUrl: 'https://shopify.dev/docs/apps/auth/admin-app-access-tokens' },
     { name: 'apiKey',     label: 'Admin API Access Token', type: 'password', required: true,  placeholder: 'shpat_...',               helpCategory: 'api_key',   docsUrl: 'https://shopify.dev/docs/apps/auth/admin-app-access-tokens' },
+    { name: 'clientSecret', label: 'App Client Secret / Webhook Signing Secret', type: 'password', required: false, placeholder: 'app client secret', helpCategory: 'api_key', docsUrl: 'https://shopify.dev/docs/apps/build/webhooks/verify-deliveries' },
   ],
   freshdesk: [
     { name: 'domain', label: 'Domain',  type: 'text',     required: true, placeholder: 'yourcompany.freshdesk.com', helpCategory: 'base_url', docsUrl: 'https://developers.freshdesk.com/api/' },
@@ -284,6 +302,20 @@ const FIELD_OVERRIDES: Record<string, ConnectionCredentialField[]> = {
   ],
   airtable: [
     { name: 'apiKey', label: 'Personal Access Token', type: 'password', required: true, helpCategory: 'api_key', docsUrl: 'https://airtable.com/create/tokens' },
+  ],
+  calendly: [
+    { name: 'token', label: 'Personal Access Token', type: 'password', required: true, helpCategory: 'bearer_token', docsUrl: 'https://developer.calendly.com/api-docs' },
+  ],
+  linear: [
+    { name: 'token', label: 'Personal API Key', type: 'password', required: true, helpCategory: 'api_key', docsUrl: 'https://developers.linear.app/docs/graphql/working-with-the-graphql-api' },
+  ],
+  trello: [
+    { name: 'apiKey', label: 'API Key', type: 'password', required: true, helpCategory: 'api_key', docsUrl: 'https://trello.com/app-key' },
+    { name: 'token', label: 'API Token', type: 'password', required: true, helpCategory: 'generic_token', docsUrl: 'https://developer.atlassian.com/cloud/trello/guides/rest-api/api-introduction/' },
+    { name: 'appSecret', label: 'App Secret', type: 'password', required: false, helpCategory: 'api_key', docsUrl: 'https://trello.com/app-key' },
+  ],
+  typeform: [
+    { name: 'token', label: 'Personal Access Token', type: 'password', required: true, helpCategory: 'bearer_token', docsUrl: 'https://www.typeform.com/developers/get-started/personal-access-token/' },
   ],
   stripe: [
     { name: 'apiKey',        label: 'Secret Key',      type: 'password', required: true,  placeholder: 'sk_live_...', helpCategory: 'api_key', docsUrl: 'https://dashboard.stripe.com/apikeys' },

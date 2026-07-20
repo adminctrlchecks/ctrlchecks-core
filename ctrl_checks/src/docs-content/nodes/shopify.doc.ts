@@ -1,537 +1,66 @@
-import type { NodeDoc } from '../types';
+import type { FieldDoc, NodeDoc, OperationDoc } from '../types';
+
+const docsUrl = 'https://shopify.dev/docs/api/admin-rest';
+
+function rich(label: string, meaning: string, enter: string, wrong: string, source = 'Type the value directly or map it from an earlier workflow step such as {{$json.productId}}.'): string {
+  return (
+    `What this field is: ${label} - ${meaning}\n` +
+    `Why it matters: Shopify uses it to choose the store, resource, operation, record ID, list size, or create/update payload.\n` +
+    `When to fill it: Fill it when the selected Shopify action needs this value. Store and authentication are needed for every real API call.\n` +
+    `What to enter: ${enter}\n` +
+    `Where the value comes from: ${source}\n` +
+    `How to use it later: Downstream nodes can read Shopify output with {{$json.items}}, {{$json.item}}, {{$json.deleted}}, {{$json.id}}, {{$json.success}}, or {{$json._error}}.\n` +
+    `Accepted format: Store domain is plain text, IDs are numeric Shopify IDs as text, Limit is a number, and Payload/Data must be a JSON object.\n` +
+    `Real workplace example: A paid-order workflow maps {{$json.productId}} into Product ID, retrieves the product, and then sends {{$json.item.product.title}} to a support or fulfillment message.\n` +
+    `If it is empty or wrong: ${wrong}\n` +
+    `Common mistake: Selecting a visible operation such as get_product without also realizing the runtime currently expects operation get plus resource product.`
+  );
+}
+
+const fields: FieldDoc[] = [
+  { name: 'Resource', internalKey: 'resource', type: 'select', required: true, description: 'The Shopify object type. Runtime supports product/products, order/orders, customer/customers, and other pluralizable REST resource paths in advanced configs.', options: ['product', 'order', 'customer', 'products', 'orders', 'customers'], defaultValue: 'product', helpText: rich('Resource', 'the Shopify REST resource path the node should work with.', 'Use product, order, or customer for normal workflows. Advanced configs can use a plural Shopify REST resource path.', 'If omitted, runtime defaults to product. If set to an unsupported Shopify path, Shopify returns an API error in _errorDetails.') },
+  { name: 'Operation', internalKey: 'operation', type: 'select', required: true, description: 'Runtime-supported values are get, list, create, update, and delete. The visual panel currently exposes get_product, list_products, create_product, update_product, get_order, list_orders, create_order, get_customer, and list_customers; those visible values are not translated by the executor today.', options: ['get', 'list', 'create', 'update', 'delete', 'get_product', 'list_products', 'create_product', 'update_product', 'get_order', 'list_orders', 'create_order', 'get_customer', 'list_customers'], defaultValue: 'get', helpText: rich('Operation', 'the generic action to run against the selected Resource.', 'Use get/list/create/update/delete in generated or hand-edited configs. The visible values get_product, list_products, create_product, update_product, get_order, list_orders, create_order, get_customer, and list_customers currently fail as unsupported operation values.', 'Unsupported visible aliases return Shopify: Unsupported operation "...".') },
+  { name: 'Shop Domain', internalKey: 'shopDomain', type: 'string', required: false, description: 'Shopify store domain.', placeholder: 'my-store.myshopify.com', helpText: rich('Shop Domain', 'the Shopify shop hostname used to build the Admin API URL.', 'Enter my-store.myshopify.com or just my-store. The runtime removes https:// and appends .myshopify.com when no dot is present.', 'If missing and not available from a saved Shopify connection, the node returns Shopify: shopDomain is required.') },
+  { name: 'API Key / Access Token', internalKey: 'apiKey', type: 'string', required: false, description: 'Optional Shopify Admin API access token fallback; prefer a saved Shopify connection.', placeholder: 'shpat_...', helpText: rich('API Key / Access Token', 'the Shopify Admin API token used when a saved connection does not provide one.', 'Usually leave blank and use Connections. For a controlled test, enter an Admin API token beginning shpat_.', 'If no token is found, the node returns Shopify: access token not found.', 'Shopify Admin -> Settings -> Apps and sales channels -> Develop apps -> Admin API access token, but production tokens belong in Connections/credential vault.') },
+  { name: 'ID', internalKey: 'id', type: 'string', required: false, description: 'Generic Shopify record ID used before productId/orderId/customerId fallbacks.', placeholder: '1234567890', helpText: rich('ID', 'the generic record identifier for get, update, or delete.', 'Enter a Shopify numeric ID such as 1234567890 or map {{$json.id}}.', 'Update/delete require an ID and return Shopify update: id is required or Shopify delete: id is required when it is missing.') },
+  { name: 'Product ID', internalKey: 'productId', type: 'string', required: false, description: 'Product ID fallback read by the runtime.', placeholder: '1234567890', helpText: rich('Product ID', 'a Shopify product ID used when ID is blank.', 'Enter the numeric product ID from Shopify Admin, a webhook, or {{$json.productId}}.', 'If you use get/update/delete for product without any ID fallback, list may run for get/list or update/delete will fail for missing id.') },
+  { name: 'Order ID', internalKey: 'orderId', type: 'string', required: false, description: 'Order ID fallback read by the runtime.', placeholder: '5001000000', helpText: rich('Order ID', 'a Shopify order ID used when ID and product-specific IDs are blank.', 'Enter the numeric order ID from a Shopify trigger or Admin URL.', 'Using the human order number such as #1001 instead of the numeric ID causes Shopify get/update/delete to fail.') },
+  { name: 'Customer ID', internalKey: 'customerId', type: 'string', required: false, description: 'Customer ID fallback read by the runtime.', placeholder: '7001000000', helpText: rich('Customer ID', 'a Shopify customer ID used when other ID fields are blank.', 'Enter the numeric customer ID from Shopify or map {{$json.customerId}}.', 'If the ID belongs to the wrong resource, Shopify returns not found or a resource-specific API error.') },
+  { name: 'Payload (JSON)', internalKey: 'data', type: 'json', required: false, description: 'Object payload for create/update. The runtime wraps it under product/order/customer automatically based on resource.', placeholder: '{"title":"New product"}', helpText: rich('Payload (JSON)', 'the object sent to Shopify for create or update.', 'Enter a JSON object such as {"title":"New product"} for products or {"email":"buyer@example.com"} for customers. For product create, a filled title field can also be converted into this payload by runtime, but the panel does not expose title separately.', 'Create/update return Shopify create: data is required (object) or Shopify update: data is required (object) when this is missing or invalid JSON.') },
+  { name: 'Limit', internalKey: 'limit', type: 'number', required: false, description: 'Number of records requested for list operations.', placeholder: '50', defaultValue: '50', helpText: rich('Limit', 'the maximum number of records requested from Shopify for list-style runs.', 'Enter 50, 100, or map {{$json.limit}}.', 'Invalid or blank values silently default to 50. Very high values may be capped by Shopify or slow the workflow.') },
+];
+
+function op(name: string, value: string, description: string, outputExample: Record<string, unknown>, outputDescription: string, inputValues: Record<string, string>): OperationDoc {
+  return { name, value, description, fields, outputExample, outputDescription, usageExample: { scenario: `${name} in a Shopify operations workflow using store data from an earlier trigger or form step`, inputValues, expectedOutput: 'The next node can use {{$json.items}}, {{$json.item}}, {{$json.deleted}}, {{$json.id}}, or {{$json._error}} depending on the operation result.' }, externalDocsUrl: docsUrl };
+}
 
 export const shopifyDoc: NodeDoc = {
-  "slug": "shopify",
-  "displayName": "Shopify",
-  "category": "Data",
-  "logoUrl": "/icons/nodes/shopify.svg",
-  "description": "Shopify store operations",
-  "credentialType": "Shopify API Key",
-  "credentialSetupSteps": [
-    "What this is: The Shopify connection lets CtrlChecks access your Shopify account safely without putting secrets in workflow fields.",
-    "Where to start: Shopify Admin -> Apps -> Develop apps -> your app -> API credentials.",
-    "How to connect: In CtrlChecks, open Connections -> Add Connection -> Shopify, then sign in or paste the secret value requested there.",
-    "Example: shpat_... for custom apps, or the access token Shopify gives your app.",
-    "Important: Treat tokens, passwords, API keys, and client secrets like bank passwords. Store them in Connections, not in regular workflow fields.",
-    "Test it: Save the connection, run a simple Shopify step, and confirm CtrlChecks can reach the account."
+  slug: 'shopify',
+  displayName: 'Shopify',
+  category: 'Ecommerce',
+  logoUrl: '/icons/nodes/shopify.svg',
+  description: 'Read, list, create, update, and delete Shopify Admin API resources. The runtime expects generic resource plus operation fields; current visual operation aliases are documented as unsupported until the panel is aligned.',
+  credentialType: 'Shopify API Key',
+  credentialSetupSteps: [
+    'Create a Shopify Admin API connection in CtrlChecks Connections with Store URL and Admin API access token so the credential system/credential vault can inject both safely.',
+    'The Admin API token needs the read/write scopes for the resource you use, such as products, orders, or customers.',
+    'Do not paste long-lived Shopify tokens into normal workflow fields unless you are doing a controlled temporary test. Prefer Connections.',
+    'Downstream nodes such as Email, Slack, CRM, or Google Sheets still need their own connections; the Shopify connection only authorizes Shopify calls.',
+    'After this node runs, connect its output to the next fulfillment, customer-support, notification, or reporting step. Each downstream service node account connection is configured separately.',
   ],
-  "credentialDocsUrl": "https://shopify.dev/docs/apps/auth/admin-app-access-tokens",
-  "resources": [
-    {
-      "name": "Operations",
-      "description": "Shopify exposes operation choices directly.",
-      "operations": [
-        {
-          "name": "Get",
-          "value": "get",
-          "description": "Get using the Shopify node.",
-          "fields": [
-            {
-              "name": "Shop Domain",
-              "internalKey": "shopDomain",
-              "type": "string",
-              "required": false,
-              "description": "Shopify shop domain (e.g., your-store.myshopify.com)",
-              "helpText": "What this field is: The Shopify shop domain that tells Shopify which item to use.\nWhere to find it: Open the item in Shopify and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: my-store.myshopify.com.\nTip: Use {{$json.shopDomain}} when an earlier Shopify step provides this value.",
-              "placeholder": "my-store.myshopify.com",
-              "example": "my-store.myshopify.com"
-            },
-            {
-              "name": "Api Key",
-              "internalKey": "apiKey",
-              "type": "password",
-              "required": false,
-              "description": "Shopify Admin API access token (optional if stored in vault under key \"shopify\")",
-              "helpText": "What this field is: Shopify Admin API access token, a secret password that lets CtrlChecks talk to Shopify safely.\nWhere to find it: Shopify Admin -> Apps -> Develop apps -> your app -> API credentials.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: shpat_... for custom apps, or the access token Shopify gives your app.\nImportant: Treat this like a bank password. The token must have scopes for the resources this workflow reads or writes.",
-              "placeholder": "shpat_...",
-              "example": "shpat_...",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Resource",
-              "internalKey": "resource",
-              "type": "string",
-              "required": true,
-              "description": "Resource: product, order, customer",
-              "helpText": "What this field is: The Shopify entity type to work with.\nOptions: product, order, customer.\nExample: product to manage your catalog, order to track/update orders, customer to look up buyers.\nTip: The resource determines which Shopify API endpoint is called.",
-              "placeholder": "product",
-              "example": "product",
-              "defaultValue": "product"
-            },
-            {
-              "name": "Id",
-              "internalKey": "id",
-              "type": "string",
-              "required": false,
-              "description": "Resource ID (for get/update/delete). Alias for productId/orderId/customerId.",
-              "helpText": "What this field is: The Resource ID . Alias that tells Shopify which item to use.\nWhere to find it: Open the item in Shopify and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 1234567890.\nTip: Use {{$json.id}} when an earlier Shopify step provides this value.",
-              "placeholder": "1234567890",
-              "example": "1234567890"
-            },
-            {
-              "name": "Product Id",
-              "internalKey": "productId",
-              "type": "string",
-              "required": false,
-              "description": "Product ID",
-              "helpText": "What this field is: The Product ID that tells Shopify which item to use.\nWhere to find it: Open the item in Shopify and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 1234567890.\nTip: Use {{$json.productId}} when an earlier Shopify step provides this value.",
-              "placeholder": "1234567890",
-              "example": "1234567890"
-            },
-            {
-              "name": "Order Id",
-              "internalKey": "orderId",
-              "type": "string",
-              "required": false,
-              "description": "Order ID",
-              "helpText": "What this field is: The Shopify order number.\nWhere to find it: Shopify Admin → Orders — the # column shows order IDs.\nExample: 1234 or gid://shopify/Order/1234",
-              "placeholder": "1234567890",
-              "example": "1234567890"
-            },
-            {
-              "name": "Customer Id",
-              "internalKey": "customerId",
-              "type": "string",
-              "required": false,
-              "description": "Customer ID",
-              "helpText": "What this field is: The Customer ID that tells Shopify which item to use.\nWhere to find it: Open the item in Shopify and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 1234567890.\nTip: Use {{$json.customerId}} when an earlier Shopify step provides this value.",
-              "placeholder": "1234567890",
-              "example": "1234567890"
-            },
-            {
-              "name": "Data",
-              "internalKey": "data",
-              "type": "json",
-              "required": true,
-              "description": "Payload for create/update (resource wrapper is added automatically)",
-              "helpText": "What this field is: Structured data for Payload.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Shopify.\nExample: {\"title\":\"New product\"}.\nTip: Use {{$json.data}} when an earlier step already prepared this data.",
-              "placeholder": "{\"title\":\"New product\"}",
-              "example": "{\"title\":\"New product\"}"
-            },
-            {
-              "name": "Limit",
-              "internalKey": "limit",
-              "type": "number",
-              "required": false,
-              "description": "List limit (for list operation)",
-              "helpText": "What this field is: The number used for List limit.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 50.\nTip: Use {{$json.limit}} when the number comes from an earlier step.",
-              "placeholder": "50",
-              "example": "50",
-              "defaultValue": "50"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming Shopify data with get after a related upstream event is received",
-            "inputValues": {
-              "Shop Domain": "my-store.myshopify.com",
-              "Api Key": "shpat_...",
-              "Resource": "product",
-              "Id": "1234567890",
-              "Product Id": "1234567890"
-            },
-            "expectedOutput": "Shopify returns structured get data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://shopify.dev/docs/api/admin-rest"
-        },
-        {
-          "name": "Create",
-          "value": "create",
-          "description": "Create using the Shopify node.",
-          "fields": [
-            {
-              "name": "Shop Domain",
-              "internalKey": "shopDomain",
-              "type": "string",
-              "required": false,
-              "description": "Shopify shop domain (e.g., your-store.myshopify.com)",
-              "helpText": "What this field is: The Shopify shop domain that tells Shopify which item to use.\nWhere to find it: Open the item in Shopify and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: my-store.myshopify.com.\nTip: Use {{$json.shopDomain}} when an earlier Shopify step provides this value.",
-              "placeholder": "my-store.myshopify.com",
-              "example": "my-store.myshopify.com"
-            },
-            {
-              "name": "Api Key",
-              "internalKey": "apiKey",
-              "type": "password",
-              "required": false,
-              "description": "Shopify Admin API access token (optional if stored in vault under key \"shopify\")",
-              "helpText": "What this field is: Shopify Admin API access token, a secret password that lets CtrlChecks talk to Shopify safely.\nWhere to find it: Shopify Admin -> Apps -> Develop apps -> your app -> API credentials.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: shpat_... for custom apps, or the access token Shopify gives your app.\nImportant: Treat this like a bank password. The token must have scopes for the resources this workflow reads or writes.",
-              "placeholder": "shpat_...",
-              "example": "shpat_...",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Resource",
-              "internalKey": "resource",
-              "type": "string",
-              "required": true,
-              "description": "Resource: product, order, customer",
-              "helpText": "What this field is: The Shopify entity type to work with.\nOptions: product, order, customer.\nExample: product to manage your catalog, order to track/update orders, customer to look up buyers.\nTip: The resource determines which Shopify API endpoint is called.",
-              "placeholder": "product",
-              "example": "product",
-              "defaultValue": "product"
-            },
-            {
-              "name": "Id",
-              "internalKey": "id",
-              "type": "string",
-              "required": false,
-              "description": "Resource ID (for get/update/delete). Alias for productId/orderId/customerId.",
-              "helpText": "What this field is: The Resource ID . Alias that tells Shopify which item to use.\nWhere to find it: Open the item in Shopify and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 1234567890.\nTip: Use {{$json.id}} when an earlier Shopify step provides this value.",
-              "placeholder": "1234567890",
-              "example": "1234567890"
-            },
-            {
-              "name": "Product Id",
-              "internalKey": "productId",
-              "type": "string",
-              "required": false,
-              "description": "Product ID",
-              "helpText": "What this field is: The Product ID that tells Shopify which item to use.\nWhere to find it: Open the item in Shopify and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 1234567890.\nTip: Use {{$json.productId}} when an earlier Shopify step provides this value.",
-              "placeholder": "1234567890",
-              "example": "1234567890"
-            },
-            {
-              "name": "Order Id",
-              "internalKey": "orderId",
-              "type": "string",
-              "required": false,
-              "description": "Order ID",
-              "helpText": "What this field is: The Order ID that tells Shopify which item to use.\nWhere to find it: Open the item in Shopify and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 1234567890.\nTip: Use {{$json.orderId}} when an earlier Shopify step provides this value.",
-              "placeholder": "1234567890",
-              "example": "1234567890"
-            },
-            {
-              "name": "Customer Id",
-              "internalKey": "customerId",
-              "type": "string",
-              "required": false,
-              "description": "Customer ID",
-              "helpText": "What this field is: The Customer ID that tells Shopify which item to use.\nWhere to find it: Open the item in Shopify and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 1234567890.\nTip: Use {{$json.customerId}} when an earlier Shopify step provides this value.",
-              "placeholder": "1234567890",
-              "example": "1234567890"
-            },
-            {
-              "name": "Data",
-              "internalKey": "data",
-              "type": "json",
-              "required": true,
-              "description": "Payload for create/update (resource wrapper is added automatically)",
-              "helpText": "What this field is: Structured data for Payload.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Shopify.\nExample: {\"title\":\"New product\"}.\nTip: Use {{$json.data}} when an earlier step already prepared this data.",
-              "placeholder": "{\"title\":\"New product\"}",
-              "example": "{\"title\":\"New product\"}"
-            },
-            {
-              "name": "Limit",
-              "internalKey": "limit",
-              "type": "number",
-              "required": false,
-              "description": "List limit (for list operation)",
-              "helpText": "What this field is: The number used for List limit.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 50.\nTip: Use {{$json.limit}} when the number comes from an earlier step.",
-              "placeholder": "50",
-              "example": "50",
-              "defaultValue": "50"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming Shopify data with create after a related upstream event is received",
-            "inputValues": {
-              "Shop Domain": "my-store.myshopify.com",
-              "Api Key": "shpat_...",
-              "Resource": "product",
-              "Id": "1234567890",
-              "Product Id": "1234567890"
-            },
-            "expectedOutput": "Shopify returns structured create data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://shopify.dev/docs/api/admin-rest"
-        },
-        {
-          "name": "Update",
-          "value": "update",
-          "description": "Update using the Shopify node.",
-          "fields": [
-            {
-              "name": "Shop Domain",
-              "internalKey": "shopDomain",
-              "type": "string",
-              "required": false,
-              "description": "Shopify shop domain (e.g., your-store.myshopify.com)",
-              "helpText": "What this field is: The Shopify shop domain that tells Shopify which item to use.\nWhere to find it: Open the item in Shopify and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: my-store.myshopify.com.\nTip: Use {{$json.shopDomain}} when an earlier Shopify step provides this value.",
-              "placeholder": "my-store.myshopify.com",
-              "example": "my-store.myshopify.com"
-            },
-            {
-              "name": "Api Key",
-              "internalKey": "apiKey",
-              "type": "password",
-              "required": false,
-              "description": "Shopify Admin API access token (optional if stored in vault under key \"shopify\")",
-              "helpText": "What this field is: Shopify Admin API access token, a secret password that lets CtrlChecks talk to Shopify safely.\nWhere to find it: Shopify Admin -> Apps -> Develop apps -> your app -> API credentials.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: shpat_... for custom apps, or the access token Shopify gives your app.\nImportant: Treat this like a bank password. The token must have scopes for the resources this workflow reads or writes.",
-              "placeholder": "shpat_...",
-              "example": "shpat_...",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Resource",
-              "internalKey": "resource",
-              "type": "string",
-              "required": true,
-              "description": "Resource: product, order, customer",
-              "helpText": "What this field is: The Shopify entity type to work with.\nOptions: product, order, customer.\nExample: product to manage your catalog, order to track/update orders, customer to look up buyers.\nTip: The resource determines which Shopify API endpoint is called.",
-              "placeholder": "product",
-              "example": "product",
-              "defaultValue": "product"
-            },
-            {
-              "name": "Id",
-              "internalKey": "id",
-              "type": "string",
-              "required": false,
-              "description": "Resource ID (for get/update/delete). Alias for productId/orderId/customerId.",
-              "helpText": "What this field is: The Resource ID . Alias that tells Shopify which item to use.\nWhere to find it: Open the item in Shopify and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 1234567890.\nTip: Use {{$json.id}} when an earlier Shopify step provides this value.",
-              "placeholder": "1234567890",
-              "example": "1234567890"
-            },
-            {
-              "name": "Product Id",
-              "internalKey": "productId",
-              "type": "string",
-              "required": false,
-              "description": "Product ID",
-              "helpText": "What this field is: The Product ID that tells Shopify which item to use.\nWhere to find it: Open the item in Shopify and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 1234567890.\nTip: Use {{$json.productId}} when an earlier Shopify step provides this value.",
-              "placeholder": "1234567890",
-              "example": "1234567890"
-            },
-            {
-              "name": "Order Id",
-              "internalKey": "orderId",
-              "type": "string",
-              "required": false,
-              "description": "Order ID",
-              "helpText": "What this field is: The Order ID that tells Shopify which item to use.\nWhere to find it: Open the item in Shopify and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 1234567890.\nTip: Use {{$json.orderId}} when an earlier Shopify step provides this value.",
-              "placeholder": "1234567890",
-              "example": "1234567890"
-            },
-            {
-              "name": "Customer Id",
-              "internalKey": "customerId",
-              "type": "string",
-              "required": false,
-              "description": "Customer ID",
-              "helpText": "What this field is: The Customer ID that tells Shopify which item to use.\nWhere to find it: Open the item in Shopify and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 1234567890.\nTip: Use {{$json.customerId}} when an earlier Shopify step provides this value.",
-              "placeholder": "1234567890",
-              "example": "1234567890"
-            },
-            {
-              "name": "Data",
-              "internalKey": "data",
-              "type": "json",
-              "required": true,
-              "description": "Payload for create/update (resource wrapper is added automatically)",
-              "helpText": "What this field is: Structured data for Payload.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Shopify.\nExample: {\"title\":\"New product\"}.\nTip: Use {{$json.data}} when an earlier step already prepared this data.",
-              "placeholder": "{\"title\":\"New product\"}",
-              "example": "{\"title\":\"New product\"}"
-            },
-            {
-              "name": "Limit",
-              "internalKey": "limit",
-              "type": "number",
-              "required": false,
-              "description": "List limit (for list operation)",
-              "helpText": "What this field is: The number used for List limit.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 50.\nTip: Use {{$json.limit}} when the number comes from an earlier step.",
-              "placeholder": "50",
-              "example": "50",
-              "defaultValue": "50"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming Shopify data with update after a related upstream event is received",
-            "inputValues": {
-              "Shop Domain": "my-store.myshopify.com",
-              "Api Key": "shpat_...",
-              "Resource": "product",
-              "Id": "1234567890",
-              "Product Id": "1234567890"
-            },
-            "expectedOutput": "Shopify returns structured update data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://shopify.dev/docs/api/admin-rest"
-        },
-        {
-          "name": "Delete",
-          "value": "delete",
-          "description": "Delete using the Shopify node.",
-          "fields": [
-            {
-              "name": "Shop Domain",
-              "internalKey": "shopDomain",
-              "type": "string",
-              "required": false,
-              "description": "Shopify shop domain (e.g., your-store.myshopify.com)",
-              "helpText": "What this field is: The Shopify shop domain that tells Shopify which item to use.\nWhere to find it: Open the item in Shopify and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: my-store.myshopify.com.\nTip: Use {{$json.shopDomain}} when an earlier Shopify step provides this value.",
-              "placeholder": "my-store.myshopify.com",
-              "example": "my-store.myshopify.com"
-            },
-            {
-              "name": "Api Key",
-              "internalKey": "apiKey",
-              "type": "password",
-              "required": false,
-              "description": "Shopify Admin API access token (optional if stored in vault under key \"shopify\")",
-              "helpText": "What this field is: Shopify Admin API access token, a secret password that lets CtrlChecks talk to Shopify safely.\nWhere to find it: Shopify Admin -> Apps -> Develop apps -> your app -> API credentials.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: shpat_... for custom apps, or the access token Shopify gives your app.\nImportant: Treat this like a bank password. The token must have scopes for the resources this workflow reads or writes.",
-              "placeholder": "shpat_...",
-              "example": "shpat_...",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Resource",
-              "internalKey": "resource",
-              "type": "string",
-              "required": true,
-              "description": "Resource: product, order, customer",
-              "helpText": "What this field is: The Shopify entity type to work with.\nOptions: product, order, customer.\nExample: product to manage your catalog, order to track/update orders, customer to look up buyers.\nTip: The resource determines which Shopify API endpoint is called.",
-              "placeholder": "product",
-              "example": "product",
-              "defaultValue": "product"
-            },
-            {
-              "name": "Id",
-              "internalKey": "id",
-              "type": "string",
-              "required": false,
-              "description": "Resource ID (for get/update/delete). Alias for productId/orderId/customerId.",
-              "helpText": "What this field is: The Resource ID . Alias that tells Shopify which item to use.\nWhere to find it: Open the item in Shopify and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 1234567890.\nTip: Use {{$json.id}} when an earlier Shopify step provides this value.",
-              "placeholder": "1234567890",
-              "example": "1234567890"
-            },
-            {
-              "name": "Product Id",
-              "internalKey": "productId",
-              "type": "string",
-              "required": false,
-              "description": "Product ID",
-              "helpText": "What this field is: The Product ID that tells Shopify which item to use.\nWhere to find it: Open the item in Shopify and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 1234567890.\nTip: Use {{$json.productId}} when an earlier Shopify step provides this value.",
-              "placeholder": "1234567890",
-              "example": "1234567890"
-            },
-            {
-              "name": "Order Id",
-              "internalKey": "orderId",
-              "type": "string",
-              "required": false,
-              "description": "Order ID",
-              "helpText": "What this field is: The Order ID that tells Shopify which item to use.\nWhere to find it: Open the item in Shopify and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 1234567890.\nTip: Use {{$json.orderId}} when an earlier Shopify step provides this value.",
-              "placeholder": "1234567890",
-              "example": "1234567890"
-            },
-            {
-              "name": "Customer Id",
-              "internalKey": "customerId",
-              "type": "string",
-              "required": false,
-              "description": "Customer ID",
-              "helpText": "What this field is: The Customer ID that tells Shopify which item to use.\nWhere to find it: Open the item in Shopify and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 1234567890.\nTip: Use {{$json.customerId}} when an earlier Shopify step provides this value.",
-              "placeholder": "1234567890",
-              "example": "1234567890"
-            },
-            {
-              "name": "Data",
-              "internalKey": "data",
-              "type": "json",
-              "required": true,
-              "description": "Payload for create/update (resource wrapper is added automatically)",
-              "helpText": "What this field is: Structured data for Payload.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Shopify.\nExample: {\"title\":\"New product\"}.\nTip: Use {{$json.data}} when an earlier step already prepared this data.",
-              "placeholder": "{\"title\":\"New product\"}",
-              "example": "{\"title\":\"New product\"}"
-            },
-            {
-              "name": "Limit",
-              "internalKey": "limit",
-              "type": "number",
-              "required": false,
-              "description": "List limit (for list operation)",
-              "helpText": "What this field is: The number used for List limit.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 50.\nTip: Use {{$json.limit}} when the number comes from an earlier step.",
-              "placeholder": "50",
-              "example": "50",
-              "defaultValue": "50"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "",
-            "id": "abc123",
-            "message": "",
-            "data": {},
-            "result": {},
-            "output": {},
-            "error": {}
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\nid: Unique identifier returned by the service.\nmessage: Value returned by this operation.\ndata: Returned records from the service.\nresult: Value returned by this operation.\noutput: Value returned by this operation.\nerror: Value returned by this operation.",
-          "usageExample": {
-            "scenario": "Process incoming Shopify data with delete after a related upstream event is received",
-            "inputValues": {
-              "Shop Domain": "my-store.myshopify.com",
-              "Api Key": "shpat_...",
-              "Resource": "product",
-              "Id": "1234567890",
-              "Product Id": "1234567890"
-            },
-            "expectedOutput": "Shopify returns structured delete data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://shopify.dev/docs/api/admin-rest"
-        }
-      ]
-    }
+  credentialDocsUrl: 'https://shopify.dev/docs/apps/build/authentication-authorization/access-tokens/admin-app-access-tokens',
+  resources: [{ name: 'Admin Resources', description: 'The same generic operations work across Shopify product, order, customer, and advanced REST resources. Get with no ID behaves like list in the current runtime.', operations: [
+    op('Get or List Resource', 'get', 'Gets one Shopify resource when an ID is present; if no ID is present, the same get operation lists records. list also lists records directly. This dual behavior is runtime behavior, not separate visual operation aliases.', { success: true, item: { product: { id: 123, title: 'Blue T-Shirt' } } }, 'success: true when Shopify returns data. item: raw Shopify response for one record. items: array extracted from the raw list response for list/no-ID runs. _error and _errorDetails appear when Shopify rejects the request.', { resource: 'product', operation: 'get', shopDomain: 'my-store.myshopify.com', productId: '{{$json.productId}}' }),
+    op('Create Resource', 'create', 'Creates a Shopify product, order, customer, or advanced resource by wrapping Payload under the singular resource key expected by the Shopify REST Admin API.', { success: true, item: { product: { id: 123, title: 'New product' } } }, 'success: true when Shopify creates the record. item: raw Shopify create response, usually containing product, order, or customer. _error and _errorDetails appear on validation or permission errors.', { resource: 'product', operation: 'create', shopDomain: 'my-store.myshopify.com', data: '{"title":"New product"}' }),
+    op('Update Resource', 'update', 'Updates one Shopify resource by ID. The runtime adds the ID into the payload object before sending a PUT request to the selected resource path.', { success: true, item: { product: { id: 123, title: 'Updated product' } } }, 'success: true when Shopify updates the record. item: raw Shopify update response. _error and _errorDetails appear if the ID, payload, token, scope, or resource path is wrong.', { resource: 'product', operation: 'update', shopDomain: 'my-store.myshopify.com', productId: '{{$json.productId}}', data: '{"title":"Updated product"}' }),
+    op('Delete Resource', 'delete', 'Deletes one Shopify resource by ID with a DELETE request. The runtime returns a synthetic deleted confirmation rather than Shopify record data.', { success: true, deleted: true, id: '1234567890' }, 'success: true when Shopify accepts the delete. deleted: true is a local confirmation. id: the ID sent to Shopify. _error and _errorDetails appear when delete fails.', { resource: 'product', operation: 'delete', shopDomain: 'my-store.myshopify.com', productId: '{{$json.productId}}' }),
+  ] }],
+  commonErrors: [
+    { error: 'Shopify: shopDomain is required (e.g., my-store.myshopify.com or saved in the Shopify connection)', cause: 'The node had no Shop Domain and no saved Shopify connection supplied one.', fix: 'Fill Shop Domain or connect Shopify in Connections with the store URL.' },
+    { error: 'Shopify: access token not found. Provide apiKey or vault credential "shopify".', cause: 'No Admin API token was found in the node config or credential vault.', fix: 'Save a Shopify connection or provide a temporary Admin API access token in apiKey.' },
+    { error: 'Shopify create: data is required (object) / Shopify update: data is required (object)', cause: 'Create or update was run without a valid JSON object payload.', fix: 'Provide Payload JSON such as {"title":"New product"} or map an object from an earlier step.' },
+    { error: 'Shopify update: id is required / Shopify delete: id is required', cause: 'Update or delete did not receive id, productId, orderId, or customerId.', fix: 'Map the correct numeric Shopify ID from a trigger, list/get result, or form field.' },
+    { error: 'Shopify: Unsupported operation "<value>". Supported: get/list/create/update/delete', cause: 'A visible alias like get_product, list_products, create_order, or get_customer was used instead of the generic runtime value.', fix: 'Use resource plus get/list/create/update/delete until the visual panel is aligned.' },
   ],
-  "commonErrors": [
-    {
-      "error": "Authentication failed",
-      "cause": "The saved credential, token, API key, or OAuth grant is missing, expired, or lacks the required scope.",
-      "fix": "Reconnect the service in CtrlChecks → Connections, then re-run the Shopify node."
-    },
-    {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
-    },
-    {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
-  ],
-  "relatedNodes": []
+  relatedNodes: ['shopify_trigger', 'woocommerce', 'stripe', 'paypal'],
 };

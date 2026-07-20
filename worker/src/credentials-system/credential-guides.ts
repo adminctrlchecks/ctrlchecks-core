@@ -303,11 +303,15 @@ export const specificGuides: Record<string, GuideOverride> = {
       'Select the Slack workspace you want to connect.',
       'Review the requested permissions (post messages, read channels) and click Allow.',
       'After connecting, invite the CtrlChecks bot to each channel it should post in: open the channel in Slack, type /invite @CtrlChecks, and press Enter.',
+      'For Slack Trigger workflows, copy the app Signing Secret from Slack app settings -> Basic Information and save it on the Slack connection or set SLACK_SIGNING_SECRET on the worker.',
     ],
     troubleshooting: [
       '"App installation disabled" — a Slack admin has restricted app installations. Ask your Slack admin to allow it at yourworkspace.slack.com/admin/apps.',
       'Bot can post to DMs but not channels — you forgot to invite the bot. Type /invite @CtrlChecks in the target channel.',
       'Redirect URI mismatch — ensure SLACK_CLIENT_ID and GENERIC_SLACK_OAUTH_REDIRECT_URI are set in your worker .env.',
+    ],
+    securityNotes: [
+      'For Slack Trigger workflows, keep the app Signing Secret in Connections or SLACK_SIGNING_SECRET and never paste it into public workflow fields.',
     ],
     docsUrl: 'https://api.slack.com/authentication',
   },
@@ -824,6 +828,49 @@ export const specificGuides: Record<string, GuideOverride> = {
 
   // ─── Discord ──────────────────────────────────────────────────────────────────
 
+  microsoft_teams_bot: {
+    summary: 'Save the Microsoft App ID and App Password for a Teams bot so workflows can reply to Microsoft Teams Trigger conversations.',
+    prerequisites: [
+      'A Microsoft Teams app or Azure Bot registration that is installed in the target team, channel, or personal scope.',
+      'Access to the Azure portal or app registration where the bot credentials are managed.',
+    ],
+    steps: [
+      'Open the Azure Bot or app registration used by your Teams app.',
+      'Copy the Microsoft App ID from Configuration or the app registration Overview page.',
+      'Create or copy a client secret / app password from Certificates & secrets.',
+      'Save Microsoft App ID and Microsoft App Password in this Microsoft Teams Bot connection.',
+      'Use Microsoft Teams Trigger to receive a message, then map serviceUrl and conversationId into the Microsoft Teams action node to reply.',
+      'Do not paste the app password into workflow Message, Service URL, Conversation ID, or Reply To Activity ID fields.',
+    ],
+    fieldGuides: {
+      appId: {
+        label: 'Microsoft App ID',
+        description: 'Application ID for the Azure Bot or Teams app that sends Bot Framework replies.',
+        whereToFind: 'Azure portal -> your Azure Bot or app registration -> Overview or Configuration -> Microsoft App ID / Application (client) ID.',
+        example: '00000000-0000-0000-0000-000000000000',
+      },
+      appPassword: {
+        label: 'Microsoft App Password / Client Secret',
+        description: 'Secret used with the Microsoft App ID to request a Bot Framework access token for Teams replies.',
+        whereToFind: 'Azure portal -> app registration -> Certificates & secrets -> Client secrets -> New client secret.',
+        notes: [
+          'Copy the secret value immediately; Azure shows it only once.',
+          'Rotate this secret when it expires or if it was shared outside CtrlChecks.',
+        ],
+      },
+      validationSecret: {
+        label: 'Webhook Validation Secret',
+        description: 'Optional shared secret for CtrlChecks test or simulation requests. Production Teams Bot Framework requests use JWT validation.',
+        whereToFind: 'Choose a long internal secret if your test harness requires one; otherwise leave it blank.',
+      },
+    },
+    securityNotes: [
+      'The Microsoft Teams node only needs this connection for Bot Framework trigger replies. Simple channel webhooks use the Microsoft Teams Incoming Webhook URL instead.',
+      ...STANDARD_SECURITY,
+    ],
+    docsUrl: 'https://learn.microsoft.com/en-us/microsoftteams/platform/bots/how-to/authentication/auth-flow-bot',
+  },
+
   discord_bot_token: {
     summary: 'Create a Discord bot application and paste its token here to send messages to Discord channels.',
     prerequisites: [
@@ -836,7 +883,8 @@ export const specificGuides: Record<string, GuideOverride> = {
       'Click "Bot" in the left menu → click "Reset Token" → confirm → copy the token.',
       'Enable Developer Mode in Discord: User Settings → Advanced → Developer Mode ON. Then right-click any channel → Copy Channel ID for use in workflow nodes.',
       'Invite the bot to your server: in the Discord app dashboard go to OAuth2 → URL Generator → select "bot" scope + "Send Messages" permission → copy the URL → open it in a browser → select your server → Authorize.',
-      'Paste the bot token into the Bot Token field and click Save.',
+      'For Discord Trigger, copy the Application ID and Public Key from General Information.',
+      'Paste the bot token, Application ID, and Public Key into the Discord connection and click Save.',
     ],
     fieldGuides: {
       token: {
@@ -848,6 +896,20 @@ export const specificGuides: Record<string, GuideOverride> = {
           'You also need to invite the bot to the target server before it can send messages.',
           'Enable Developer Mode in Discord to right-click channels/users and copy their IDs.',
         ],
+      },
+      publicKey: {
+        label: 'Application Public Key',
+        description: 'Discord application public key used to verify signed Interaction and Webhook Event requests.',
+        whereToFind: 'discord.com/developers/applications -> your app -> General Information -> Public Key.',
+        notes: [
+          'Required for Discord Trigger signature validation.',
+          'Keep signature validation enabled in production.',
+        ],
+      },
+      applicationId: {
+        label: 'Application ID',
+        description: 'Discord application ID used for interaction follow-up replies.',
+        whereToFind: 'discord.com/developers/applications -> your app -> General Information -> Application ID.',
       },
     },
     docsUrl: 'https://discord.com/developers/docs/getting-started',

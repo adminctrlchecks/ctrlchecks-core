@@ -175,3 +175,4 @@ Thumbs.db
 
 # HubSpot config file
 hubspot.config.yml
+.vercel

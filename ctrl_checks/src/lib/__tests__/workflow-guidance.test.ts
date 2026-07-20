@@ -7,6 +7,27 @@ function readiness(result: ReturnType<typeof mapWorkflowIssueToGuidance>) {
   expect(result.title).toBe('Finish setup before running');
 }
 
+// ─── structural drift (post-freeze) ──────────────────────────────────────────
+
+describe('mapWorkflowIssueToGuidance — post-freeze structural drift', () => {
+  it('names the exact node/field instead of falling through to the generic fallback', () => {
+    const result = mapWorkflowIssueToGuidance({
+      code: 'TOPOLOGY_MUTATION_BLOCKED_CONFIGURING_INPUTS',
+      message: 'Post-freeze structural config drift detected. Structure cannot be rewritten in this phase.',
+      details: {
+        drifts: [
+          { nodeId: 'node-1', nodeLabel: 'Route by Status', nodeType: 'switch', field: 'cases', changedKeys: ['value'] },
+        ],
+      },
+    });
+
+    expect(result.title).toBe('This structure is locked');
+    expect(result.description).toContain('Route by Status');
+    expect(result.description).toContain('Cases');
+    expect(result.nextSteps?.join(' ')).toContain('Route by Status');
+  });
+});
+
 // ─── string input ────────────────────────────────────────────────────────────
 
 describe('mapWorkflowIssueToGuidance — string input', () => {

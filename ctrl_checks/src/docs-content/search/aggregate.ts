@@ -10,6 +10,7 @@ export const aggregateSearchIndex = [
     href: `/docs/nodes/aggregate#operation-${operation}`,
     text: `Aggregate ${operation} operation over input.items using optional field path${operation === 'join' ? ' and delimiter' : ''}`,
   })),
+  { type: 'field', title: 'Aggregate: Operation', slug: 'aggregate', category: 'Data', href: '/docs/nodes/aggregate#operation-sum', text: 'Aggregate operation dropdown sum avg count min max join' },
   { type: 'field', title: 'Aggregate: Field', slug: 'aggregate', category: 'Data', href: '/docs/nodes/aggregate#operation-sum', text: 'Aggregate field optional nested path amount order.total' },
   { type: 'field', title: 'Aggregate: Delimiter', slug: 'aggregate', category: 'Data', href: '/docs/nodes/aggregate#operation-join', text: 'Aggregate join delimiter newline tab comma pipe' },
 ] satisfies DocsSearchIndexItem[];

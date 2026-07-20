@@ -34,6 +34,8 @@ interface SQLServerOperation {
   params?: Record<string, any>;
 }
 
+type SQLServerOperationName = SQLServerOperation['name'];
+
 /**
  * Validate SQL Server credentials
  */
@@ -60,6 +62,75 @@ function validateCredentials(credentials: SQLServerCredentials): { valid: boolea
 }
 
 /**
+ * Parse JSON-like config values from the frontend/properties panel.
+ */
+function parseConfigObject(value: unknown): Record<string, any> | undefined {
+  if (!value) {
+    return undefined;
+  }
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, any>;
+  }
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
+function parseConfigData(value: unknown): Record<string, any> | Record<string, any>[] | undefined {
+  if (!value) {
+    return undefined;
+  }
+  if (typeof value === 'object') {
+    return value as Record<string, any> | Record<string, any>[];
+  }
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === 'object'
+        ? (parsed as Record<string, any> | Record<string, any>[])
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
+function normalizeOperationName(operation: unknown): SQLServerOperationName | undefined {
+  if (typeof operation !== 'string') {
+    return undefined;
+  }
+
+  const normalized = operation.trim();
+  if (normalized === 'query' || normalized === 'rawSql' || normalized === 'raw_sql' || normalized === 'select') {
+    return 'executeQuery';
+  }
+
+  const validOperations: SQLServerOperationName[] = ['executeQuery', 'insert', 'update', 'delete', 'storedProcedure'];
+  return validOperations.includes(normalized as SQLServerOperationName)
+    ? (normalized as SQLServerOperationName)
+    : undefined;
+}
+
+function quoteIdentifierPart(identifier: string): string {
+  const trimmed = identifier.trim();
+  if (!trimmed || trimmed.includes(']')) {
+    throw new Error(`Invalid SQL Server identifier: ${identifier}`);
+  }
+  return `[${trimmed}]`;
+}
+
+function quoteIdentifierPath(identifier: string): string {
+  return identifier.split('.').map(quoteIdentifierPart).join('.');
+}
+
+/**
  * Build WHERE clause from object
  */
 function buildWhereClause(where: Record<string, any>): { clause: string; params: Record<string, any> } {
@@ -69,12 +140,24 @@ function buildWhereClause(where: Record<string, any>): { clause: string; params:
 
   for (const [key, value] of Object.entries(where)) {
     const paramName = `param${paramIndex++}`;
-    conditions.push(`[${key}] = @${paramName}`);
+    conditions.push(`${quoteIdentifierPath(key)} = @${paramName}`);
     params[paramName] = value;
   }
 
   return {
     clause: conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '',
+    params,
+  };
+}
+
+function buildSelectQuery(table: string, where?: Record<string, any>, limit?: unknown): { query: string; params: Record<string, any> } {
+  const limitNumber = Number(limit || 100);
+  const safeLimit = Number.isInteger(limitNumber) && limitNumber > 0 && limitNumber <= 10000 ? limitNumber : 100;
+  const tableName = quoteIdentifierPath(table);
+  const { clause, params } = where ? buildWhereClause(where) : { clause: '', params: {} };
+
+  return {
+    query: `SELECT TOP (${safeLimit}) * FROM ${tableName} ${clause}`.trim(),
     params,
   };
 }
@@ -122,10 +205,10 @@ async function executeOperation(
       for (const record of dataArray) {
         const columns = Object.keys(record);
         const values = columns.map((col, idx) => `@val${idx}`);
-        const columnsStr = columns.map(col => `[${col}]`).join(', ');
+        const columnsStr = columns.map(quoteIdentifierPath).join(', ');
         const valuesStr = values.join(', ');
 
-        const query = `INSERT INTO [${operation.table}] (${columnsStr}) OUTPUT INSERTED.* VALUES (${valuesStr})`;
+        const query = `INSERT INTO ${quoteIdentifierPath(operation.table)} (${columnsStr}) OUTPUT INSERTED.* VALUES (${valuesStr})`;
 
         const insertRequest = pool.request();
         columns.forEach((col, idx) => {
@@ -160,11 +243,11 @@ async function executeOperation(
 
       for (const [key, value] of Object.entries(operation.data)) {
         const paramName = `set${paramIndex++}`;
-        setClauses.push(`[${key}] = @${paramName}`);
+        setClauses.push(`${quoteIdentifierPath(key)} = @${paramName}`);
         setParams[paramName] = value;
       }
 
-      const query = `UPDATE [${operation.table}] SET ${setClauses.join(', ')} ${whereClause}`;
+      const query = `UPDATE ${quoteIdentifierPath(operation.table)} SET ${setClauses.join(', ')} ${whereClause}`;
 
       const updateRequest = pool.request();
       Object.entries({ ...setParams, ...whereParams }).forEach(([key, value]) => {
@@ -186,7 +269,7 @@ async function executeOperation(
       }
 
       const { clause: whereClause, params: whereParams } = buildWhereClause(operation.where);
-      const query = `DELETE FROM [${operation.table}] ${whereClause}`;
+      const query = `DELETE FROM ${quoteIdentifierPath(operation.table)} ${whereClause}`;
 
       const deleteRequest = pool.request();
       Object.entries(whereParams).forEach(([key, value]) => {
@@ -205,7 +288,6 @@ async function executeOperation(
       }
 
       const procRequest = pool.request();
-      procRequest.input('procedure', sql.VarChar, operation.procedureName);
 
       if (operation.params) {
         for (const [key, value] of Object.entries(operation.params)) {
@@ -228,12 +310,36 @@ async function executeOperation(
 /**
  * Run SQL Server node
  */
-export async function runSQLServerNode(context: NodeExecutionContext): Promise<any> {
+export async function runSQLServerNode(
+  context: NodeExecutionContext,
+  sqlClient: Pick<typeof sql, 'connect'> = sql
+): Promise<any> {
   const { inputs } = context;
+
+  const host = inputs.host || inputs.server;
+  const operationName = normalizeOperationName(inputs.operation);
+  const where = parseConfigObject(inputs.where ?? inputs.filters);
+  const params = parseConfigObject(inputs.params ?? inputs.parameters);
+  const data = parseConfigData(inputs.data);
+  let generatedSelect: { query: string; params: Record<string, any> } | undefined;
+
+  try {
+    generatedSelect = operationName === 'executeQuery' && !inputs.query && inputs.table
+      ? buildSelectQuery(String(inputs.table), where, inputs.limit)
+      : undefined;
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error.message || 'Invalid SQL Server table or filter configuration',
+    };
+  }
+
+  const query = inputs.query || generatedSelect?.query;
+  const selectParams = generatedSelect?.params;
 
   // Extract credentials
   const credentials: SQLServerCredentials = {
-    host: inputs.host,
+    host,
     port: inputs.port || 1433,
     username: inputs.username,
     password: inputs.password,
@@ -244,13 +350,13 @@ export async function runSQLServerNode(context: NodeExecutionContext): Promise<a
 
   // Extract operation
   const operation: SQLServerOperation = {
-    name: inputs.operation,
-    query: inputs.query,
+    name: operationName as SQLServerOperationName,
+    query,
     table: inputs.table,
-    data: inputs.data,
-    where: inputs.where,
+    data,
+    where,
     procedureName: inputs.procedureName,
-    params: inputs.params,
+    params: selectParams || params,
   };
 
   // Validate credentials
@@ -270,8 +376,8 @@ export async function runSQLServerNode(context: NodeExecutionContext): Promise<a
     };
   }
 
-  const validOperations = ['executeQuery', 'insert', 'update', 'delete', 'storedProcedure'];
-  if (!validOperations.includes(operation.name)) {
+  const validOperations: SQLServerOperationName[] = ['executeQuery', 'insert', 'update', 'delete', 'storedProcedure'];
+  if (!operation.name || !validOperations.includes(operation.name)) {
     return {
       success: false,
       error: `operation must be one of: ${validOperations.join(', ')}`,
@@ -299,7 +405,7 @@ export async function runSQLServerNode(context: NodeExecutionContext): Promise<a
   let pool: sql.ConnectionPool | null = null;
 
   try {
-    pool = await sql.connect(config);
+    pool = await sqlClient.connect(config) as sql.ConnectionPool;
 
     // Execute operation
     const result = await executeOperation(pool, operation);

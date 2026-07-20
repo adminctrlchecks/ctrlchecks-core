@@ -1,0 +1,175 @@
+# Implementation Plan
+
+- [x] 1. Write bug condition exploration tests
+  - **Property 1: Bug Condition** - Email Alias Resolves to Wrong Node Type / Pipeline Phase Atomicity / Stale Credential Discovery / Premature Credential Injection
+  - **CRITICAL**: These tests MUST FAIL on unfixed code — failure confirms the bugs exist
+  - **DO NOT attempt to fix the tests or the code when they fail**
+  - **NOTE**: These tests encode the expected behavior — they will validate the fix when they pass after implementation
+  - **GOAL**: Surface counterexamples that demonstrate all four bug classes exist
+  - **Scoped PBT Approach**: Scope each property to the concrete failing case(s) to ensure reproducibility
+  - P1 — `worker/src/services/ai/node-type-normalization-service.ts`: Call `normalizeNodeType('email')` and assert result is `'google_gmail'`. On unfixed code this returns `'ollama'` — confirms Class 1 root cause (isBugCondition: input.text CONTAINS 'email' AND resolvedNodeType NOT IN ['google_gmail'])
+  - P2 — `worker/src/api/attach-inputs.ts`: Mock `normalizeWorkflowGraph` to throw, call the handler, then read workflow phase from DB. Assert phase is unchanged. On unfixed code the phase will have advanced to `configuring_inputs` — confirms Class 2 root cause (isBugCondition: graphNormalization FAILS AND workflowPhase CHANGED)
+  - P3 — `worker/src/services/ai/credential-discovery-phase.ts`: Save a workflow with `google_gmail` node to DB, then call `discoverCredentials` with an in-memory object that has `ollama` node. Assert discovery uses `google_gmail` (from DB). On unfixed code it uses the stale `ollama` — confirms Class 3 root cause (isBugCondition: nodeTypesUsed != nodeTypesInLatestDBRow)
+  - P4 — `worker/src/api/attach-credentials.ts`: Set workflow phase to `configuring_inputs`, call the handler, assert it returns 409. On unfixed code it proceeds — confirms Class 4 root cause (isBugCondition: phase != 'inputs_applied' AND credentialInjectionAttempted)
+  - Run all four tests on UNFIXED code
+  - **EXPECTED OUTCOME**: All four tests FAIL (this is correct — it proves the bugs exist)
+  - Document counterexamples found: `normalizeNodeType('email')` → `'ollama'`; phase changes on normalization failure; discovery uses stale in-memory node types; credential injection runs when phase is `configuring_inputs`
+  - Mark task complete when tests are written, run, and failures are documented
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
+
+- [x] 2. Write preservation property tests (BEFORE implementing fix)
+  - **Property 2: Preservation** - Non-Email Alias Resolution / Successful attach-inputs Flow / Non-Email Credential Discovery
+  - **IMPORTANT**: Follow observation-first methodology — observe UNFIXED code behavior for non-buggy inputs first
+  - Observe: `resolveAlias('slack')` returns `'slack'` on unfixed code; `resolveAlias('jira')` returns `'jira'`; `resolveAlias('google_sheets')` returns `'google_sheets'` (isBugCondition returns false for these)
+  - Observe: A successful `attach-inputs` call advances phase to `configuring_inputs` and applies field ownership and config merge correctly on unfixed code
+  - Observe: Credential discovery for Jira/Slack/Sheets nodes returns correct `CredentialRequirement` entries on unfixed code
+  - Write property-based test: for all non-email aliases, `resolveAlias(alias)` returns the same canonical type before and after the fix (`worker/src/core/registry/unified-node-registry.ts`)
+  - Write property-based test: for any valid workflow, a successful `attach-inputs` call still advances phase and applies config merge (`worker/src/api/attach-inputs.ts`)
+  - Write property-based test: for workflows with Jira, Slack, or Sheets nodes, credential discovery returns correct requirements (`worker/src/services/ai/credential-discovery-phase.ts`)
+  - Verify all preservation tests PASS on UNFIXED code
+  - **EXPECTED OUTCOME**: Tests PASS (confirms baseline behavior to preserve)
+  - Mark task complete when tests are written, run, and passing on unfixed code
+  - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
+
+- [x] 3. Inline alias map into unified-node-registry.ts
+  - [x] 3.1 Add private ALIAS_MAP inside UnifiedNodeRegistry
+    - File: `worker/src/core/registry/unified-node-registry.ts`
+    - Add `private readonly ALIAS_MAP: Record<string, string>` as a class field
+    - Populate with all canonical alias entries including all email aliases: `'email'`, `'mail'`, `'gmail'`, `'send_email'`, `'google_mail'`, `'send via gmail'`, `'google email'` → `'google_gmail'`
+    - Include all existing aliases currently delegated to external resolver files
+    - _Bug_Condition: isBugCondition where resolvedNodeType(input) NOT IN ['google_gmail'] for email aliases_
+    - _Expected_Behavior: unifiedNodeRegistry.resolveAlias(alias) === 'google_gmail' for all email aliases_
+    - _Preservation: resolveAlias for all non-email aliases must return unchanged canonical types_
+    - _Requirements: 2.1, 4.1, 4.2, 4.3_
+  - [x] 3.2 Update resolveAlias to use internal ALIAS_MAP
+    - File: `worker/src/core/registry/unified-node-registry.ts`
+    - Update `resolveAlias` to look up `this.ALIAS_MAP[alias]` directly
+    - Add fallback: `this.has(alias) ? alias : undefined`
+    - Remove any delegation to `node-type-resolver-util` or other external resolver files
+    - _Requirements: 4.1, 4.6_
+
+- [x] 4. Fix capability-resolver.ts
+  - [x] 4.1 Remove email aliases from AI_PROCESSING capability mapping
+    - File: `worker/src/services/ai/capability-resolver.ts`
+    - Remove `'email'`, `'mail'`, `'send_email'`, `'send'`, `'notify'` from `CAPABILITY_TO_NODES[AICapability.AI_PROCESSING]`
+    - Remove the same aliases from the `aliases` map in `normalizeCapability` where they map to `AICapability.AI_PROCESSING`
+    - Add guard comment: `// Email aliases must NOT be treated as AI capabilities — they resolve via unified-node-registry alias map`
+    - _Bug_Condition: isBugCondition where capabilityResolver.isCapability('email') returns true causing resolution to ollama_
+    - _Expected_Behavior: 'email' is NOT an AI capability; resolves only via registry alias map to google_gmail_
+    - _Requirements: 2.1, 4.2_
+
+- [x] 5. Migrate imports away from legacy resolver files
+  - [x] 5.1 Migrate imports in core and API files
+    - Files: `worker/src/core/utils/ai-specified-nodes-context.ts`, `worker/src/api/execute-workflow.ts`, `worker/src/api/plan-chain-guards.ts`
+    - Replace `resolveNodeType` from `./node-type-resolver-util` or `../core/utils/node-type-resolver-util` with `unifiedNodeRegistry.resolveAlias()` from `unified-node-registry`
+    - For `resolveCanonicalNodeTypeStrict` callers (`plan-chain-guards.ts`): inline strict check — `if (!unifiedNodeRegistry.has(type)) throw new Error(...)`
+    - _Requirements: 4.1, 4.6_
+  - [x] 5.2 Migrate imports in service files
+    - Files: `worker/src/services/workflow-lifecycle-manager.ts`, `worker/src/services/workflow-planner.ts`, `worker/src/services/node-auto-configurator.ts`, `worker/src/services/fix-agent.ts`
+    - Replace all imports from `node-type-resolver-util` and `node-type-normalization-service` with `unifiedNodeRegistry.resolveAlias()`
+    - _Requirements: 4.1, 4.6_
+  - [x] 5.3 Migrate imports in AI service files
+    - Files: `worker/src/services/ai/intent-completeness-validator.ts`, `worker/src/services/ai/intent-confidence-scorer.ts`, `worker/src/services/ai/plan-driven-workflow-builder.ts`, `worker/src/services/ai/structured-intent-validator.ts`, `worker/src/services/ai/summarize-layer.ts`, `worker/src/services/ai/workflow-builder.ts`, `worker/src/services/ai/workflow-dsl.ts`, `worker/src/services/ai/workflow-dsl-compiler.ts`, `worker/src/services/ai/production-workflow-builder.ts`
+    - Replace all imports from `node-type-resolver-util`, `node-type-resolver`, and `node-type-normalization-service` with `unifiedNodeRegistry.resolveAlias()`
+    - For `resolveCanonicalNodeTypeStrict` callers (`plan-driven-workflow-builder.ts`, `summarize-layer.ts`): inline strict check
+    - _Requirements: 4.1, 4.6_
+  - [x] 5.4 Confirm zero remaining imports from legacy files
+    - Run grep to verify: `grep -r "node-type-resolver" worker/src --include="*.ts"` returns zero results outside the legacy files themselves
+    - Run grep to verify: `grep -r "nodeTypeResolver" worker/src --include="*.ts"` returns zero results
+    - Run grep to verify: `grep -r "node-type-normalization-service" worker/src --include="*.ts"` returns zero results
+    - Do NOT proceed to Task 6 until all three greps return zero results
+    - _Requirements: 4.6_
+
+- [x] 6. Delete legacy resolver files
+  - [x] 6.1 Delete the four legacy resolver files
+    - Delete `worker/src/services/nodes/node-type-resolver.ts`
+    - Delete `worker/src/core/utils/node-type-resolver-util.ts`
+    - Delete `worker/src/utils/nodeTypeResolver.ts`
+    - Delete `worker/src/services/ai/node-type-normalization-service.ts`
+    - Prerequisite: Task 5.4 must confirm zero remaining imports before this step
+    - _Bug_Condition: isBugCondition where competing resolver files intercept alias before unified-node-registry_
+    - _Expected_Behavior: No file outside unified-node-registry.ts contains a NODE_TYPE_ALIASES constant or equivalent alias map_
+    - _Requirements: 4.1, 4.6_
+
+- [x] 7. Remove hardcoded email disambiguation from intent files
+  - [x] 7.1 Remove email disambiguation from intent-constraint-engine.ts
+    - File: `worker/src/services/ai/intent-constraint-engine.ts` (lines ~532-560)
+    - Remove hardcoded email→gmail disambiguation logic
+    - Replace with delegation to `unifiedNodeRegistry.resolveAlias()`
+    - _Requirements: 2.1, 4.3_
+  - [x] 7.2 Remove email disambiguation from node-resolver.ts
+    - File: `worker/src/services/ai/node-resolver.ts`
+    - Remove context-aware email mapping hardcoded logic
+    - Replace with delegation to `unifiedNodeRegistry.resolveAlias()`
+    - _Requirements: 2.1, 4.3_
+  - [x] 7.3 Remove email disambiguation from intent-aware-planner.ts
+    - File: `worker/src/services/ai/intent-aware-planner.ts`
+    - Remove email output node fallback hardcoded logic
+    - Replace with delegation to `unifiedNodeRegistry.resolveAlias()`
+    - _Requirements: 2.1, 4.3_
+
+- [x] 8. Fix attach-inputs.ts phase atomicity
+  - [x] 8.1 Move phase update to after successful normalization
+    - File: `worker/src/api/attach-inputs.ts`
+    - Remove the unconditional `await supabase.from('workflows').update({ phase: 'configuring_inputs' })` call that runs before normalization
+    - Wrap normalization in try/catch
+    - After `normalizeWorkflowGraph` succeeds and `validateNormalizedGraph` passes, add the phase update inside the success path
+    - In the catch block, return HTTP 400 without any phase mutation
+    - Pseudocode: `try { normalizedGraph = normalizeWorkflowGraph(...); if (!validation.valid) return res.status(400)...; await supabase.update({ phase: 'configuring_inputs' }) } catch { return res.status(400)... // no phase update }`
+    - _Bug_Condition: isBugCondition where graphNormalization(workflowId) FAILS AND workflowPhase CHANGED_
+    - _Expected_Behavior: phase unchanged after failed normalization; phase advances to configuring_inputs only on success_
+    - _Preservation: Successful attach-inputs calls must still advance phase and apply field ownership and config merge in existing order_
+    - _Requirements: 2.3, 2.4, 4.4_
+
+- [x] 9. Fix credential-discovery-phase.ts to read from DB
+  - [x] 9.1 Modify discoverCredentials to accept workflowId and supabase client
+    - File: `worker/src/services/ai/credential-discovery-phase.ts`
+    - Add `workflowId: string` and `supabase` client as parameters (or modify existing signature)
+    - Fetch the latest committed workflow row from DB at the start of discovery
+    - Walk the DB row's nodes — not the in-memory `Workflow` object parameter
+    - _Bug_Condition: isBugCondition where nodeTypesUsed(input) != nodeTypesInLatestDBRow(input.workflowId)_
+    - _Expected_Behavior: discovery node types match the most recently committed DB row for workflowId_
+    - _Preservation: Credential discovery for non-email nodes (Jira, Slack, Sheets) must still return correct CredentialRequirement entries_
+    - _Requirements: 2.5, 4.5_
+  - [x] 9.2 Update all callers of discoverCredentials
+    - Files: `worker/src/services/workflow-lifecycle-manager.ts` and any other callers
+    - Update callers to pass `workflowId` (and supabase client) instead of the in-memory workflow object
+    - _Requirements: 2.5, 4.5_
+
+- [x] 10. Fix attach-credentials.ts phase guard
+  - [x] 10.1 Add inputs_applied as required phase for credential attachment
+    - File: `worker/src/api/attach-credentials.ts`
+    - Add check: if `currentPhase !== 'inputs_applied'`, return HTTP 409 with message `"attach-inputs must complete successfully before credentials can be attached"`
+    - Keep existing blocks for `executing`, `running`, `archived` phases
+    - _Bug_Condition: isBugCondition where phase != 'inputs_applied' AND credentialInjectionAttempted_
+    - _Expected_Behavior: attach-credentials returns 409 when phase is not inputs_applied_
+    - _Preservation: attach-credentials must still run correctly when phase is inputs_applied_
+    - _Requirements: 2.4, 2.6_
+
+- [x] 11. Fix verification — run property-based tests against fixed code
+  - [x] 11.1 Verify bug condition exploration tests now pass
+    - **Property 1: Expected Behavior** - Email Alias / Phase Atomicity / DB Discovery / Phase Guard
+    - **IMPORTANT**: Re-run the SAME tests from task 1 — do NOT write new tests
+    - The tests from task 1 encode the expected behavior
+    - Run all four bug condition tests from step 1 against the fixed code
+    - P1: `resolveAlias('email')` → `'google_gmail'` (never `'ollama'`) — `worker/src/core/registry/unified-node-registry.ts`
+    - P2: phase unchanged after failed `attach-inputs` normalization — `worker/src/api/attach-inputs.ts`
+    - P3: credential discovery uses committed DB node types — `worker/src/services/ai/credential-discovery-phase.ts`
+    - P4: `attach-credentials` returns 409 when phase is not `inputs_applied` — `worker/src/api/attach-credentials.ts`
+    - **EXPECTED OUTCOME**: All four tests PASS (confirms all bugs are fixed)
+    - _Requirements: 2.1, 2.3, 2.4, 2.5_
+  - [x] 11.2 Verify preservation tests still pass
+    - **Property 2: Preservation** - Non-Email Aliases / Successful attach-inputs / Non-Email Credential Discovery
+    - **IMPORTANT**: Re-run the SAME tests from task 2 — do NOT write new tests
+    - Run all preservation property tests from step 2 against the fixed code
+    - **EXPECTED OUTCOME**: All preservation tests PASS (confirms no regressions)
+    - Confirm non-email aliases (`slack`, `jira`, `google_sheets`, `notion`) still resolve correctly
+    - Confirm successful `attach-inputs` flows still advance phase and apply config merge
+    - Confirm credential discovery for non-email nodes still returns correct requirements
+    - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
+
+- [x] 12. Checkpoint — Ensure all tests pass
+  - Ensure all tests pass; ask the user if questions arise
+  - Verify no remaining imports from deleted legacy files: `grep -r "node-type-resolver\|nodeTypeResolver\|node-type-normalization-service" worker/src --include="*.ts"`
+  - Verify no alias maps outside unified-node-registry.ts: `grep -r "NODE_TYPE_ALIASES\|ALIAS_TO_CANONICAL" worker/src --include="*.ts"`
+  - Verify no hardcoded email disambiguation outside registry: `grep -r "google_gmail\|send.*email\|email.*gmail" worker/src/services/ai --include="*.ts"` (should only appear in registry and test files)

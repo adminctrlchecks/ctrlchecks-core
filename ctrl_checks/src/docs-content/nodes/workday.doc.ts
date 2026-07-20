@@ -1,649 +1,383 @@
 import type { NodeDoc } from '../types';
+import { richFieldHelp } from './_sharedFieldHelp';
+
+const workdayOutputDescription = [
+  'success: true when the Workday HTTP response is successful, false on unsupported operations, Workday API errors, or unexpected request failures.',
+  'resource: The configured Workday resource value.',
+  'operation: The configured Workday operation value.',
+  'tenant: The configured tenant value echoed for troubleshooting.',
+  'records: For get_many, data.data when it is an array, the raw response when it is an array, or [] otherwise. On failures it is [].',
+  'record: Present for get_by_id, create, and update successful responses, containing the parsed Workday response body.',
+  'count: data.total when Workday returns it, otherwise the normalized records length.',
+  'pagination: limit, offset, and total values used for list-style output.',
+  'meta: The parsed Workday response body on success.',
+  'error: String message on unsupported operations, non-2xx Workday responses, or unexpected request failures.',
+].join('\n');
 
 export const workdayDoc: NodeDoc = {
-  "slug": "workday",
-  "displayName": "Workday",
-  "category": "Utility",
-  "logoUrl": "/icons/nodes/workday.svg",
-  "description": "Read and manage Workday HR, staffing, and organizational data through the Workday REST APIs.",
-  "credentialType": "Workday Credential",
-  "credentialSetupSteps": [
-    "What this is: The Workday connection lets CtrlChecks access your Workday account safely without putting secrets in workflow fields.",
-    "Where to start: Workday account settings or developer settings.",
-    "How to connect: In CtrlChecks, open Connections -> Add Connection -> Workday, then sign in or paste the secret value requested there.",
-    "Example: the token format shown by Workday.",
-    "Important: Treat tokens, passwords, API keys, and client secrets like bank passwords. Store them in Connections, not in regular workflow fields.",
-    "Test it: Save the connection, run a simple Workday step, and confirm CtrlChecks can reach the account."
+  slug: 'workday',
+  displayName: 'Workday',
+  category: 'HTTP & API',
+  logoUrl: '/icons/nodes/workday.svg',
+  description: 'Call Workday REST API paths for workers, jobs, organizations, supervisory organizations, and positions.',
+  credentialType: 'Workday Connection',
+  credentialSetupSteps: [
+    'Create or connect a Workday connection in CtrlChecks Connections when possible, using an OAuth access token or Basic Auth credentials supplied by a Workday administrator.',
+    'The current executor reads resolved node config fields, so accessToken for OAuth or username and password for Basic Auth must be available to the node at runtime.',
+    'Confirm the tenant and REST API base URL with your Workday administrator because implementation, preview, and production tenants often use different hosts.',
+    'Connect the Workday node output to the next step with an outgoing line; downstream service node account connection setup is still required for later service nodes.',
   ],
-  "credentialDocsUrl": "https://community.workday.com/articles/1084547",
-  "resources": [
+  credentialDocsUrl: 'https://community.workday.com/articles/1084547',
+  resources: [
     {
-      "name": "Operations",
-      "description": "Workday exposes operation choices directly.",
-      "operations": [
+      name: 'Workday REST API',
+      description: 'Builds a Workday URL from baseUrl plus resource or rawPath, sends OAuth or Basic authentication, and normalizes the parsed response.',
+      operations: [
         {
-          "name": "Get many",
-          "value": "get_many",
-          "description": "Get many using the Workday node.",
-          "fields": [
+          name: 'Run Workday Operation',
+          value: 'default',
+          description: 'Run get_many, get_by_id, create, or update against a Workday REST path. rawPath can override the resource abstraction for advanced Workday endpoints while still using the selected method behavior.',
+          fields: [
             {
-              "name": "Base Url",
-              "internalKey": "baseUrl",
-              "type": "url",
-              "required": false,
-              "description": "Workday REST API base URL",
-              "helpText": "What this field is: The web address for Workday REST API base URL.\nHow to fill it: Paste the full URL, including https:// when it is an external service.\nExample: https://api.example.com.\nTip: Use {{$json.baseUrl}} when the URL comes from an earlier step.",
-              "placeholder": "https://api.example.com",
-              "example": "https://api.example.com"
+              name: 'Base URL',
+              internalKey: 'baseUrl',
+              type: 'string',
+              required: false,
+              description: 'Workday REST API base URL.',
+              helpText: richFieldHelp({
+                what: 'The root Workday REST URL that the node prefixes before the resource or rawPath.',
+                why: 'Runtime builds the final request URL from this value and removes one trailing slash.',
+                when: 'Fill it when your tenant uses a specific implementation, preview, or production host, or when you want to avoid the default generated URL.',
+                enter: 'Paste the full REST API base URL, usually including the tenant path, such as https://wd2-impl-services1.workday.com/ccx/api/v1/mytenant.',
+                source: 'Get it from Workday REST API documentation, your Workday administrator, or a saved Workday connection.',
+                later: 'The final endpoint is not returned separately, so keep baseUrl clear for troubleshooting Workday API errors.',
+                format: 'HTTPS URL without a trailing slash. If omitted, runtime builds https://wd2-impl-services1.workday.com/ccx/api/v1/{tenant}.',
+                example: 'An HR integration points test runs to an implementation tenant and production runs to the production tenant base URL.',
+                empty: 'Runtime builds a default URL from Tenant; if Tenant is also empty, the generated URL is incomplete.',
+                mistake: 'Entering only the hostname when the Workday API path and tenant are also required.',
+              }),
+              placeholder: 'https://wd2-impl-services1.workday.com/ccx/api/v1/mytenant',
+              example: 'https://wd2-impl-services1.workday.com/ccx/api/v1/mytenant',
             },
             {
-              "name": "Tenant",
-              "internalKey": "tenant",
-              "type": "string",
-              "required": false,
-              "description": "Workday tenant identifier",
-              "helpText": "What this field is: The Workday tenant identifier that tells Workday which item to use.\nWhere to find it: Open the item in Workday and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.tenant}} when an earlier Workday step provides this value.",
-              "placeholder": "Enter Tenant"
+              name: 'Tenant',
+              internalKey: 'tenant',
+              type: 'string',
+              required: false,
+              description: 'Workday tenant identifier echoed in output and used for the default base URL.',
+              helpText: richFieldHelp({
+                what: 'The Workday tenant identifier for the environment this step should call.',
+                why: 'Runtime uses it when Base URL is blank and echoes it as {{$json.tenant}} for troubleshooting.',
+                when: 'Fill it whenever Base URL does not already identify the tenant, or when logs need to show the tenant used.',
+                enter: 'Type the tenant short name exactly as provided by Workday administration.',
+                source: 'Get it from your Workday admin, API client setup, or a saved Workday connection.',
+                later: 'Downstream logging can read {{$json.tenant}} to show which environment was called.',
+                format: 'Plain tenant string such as mycompany or mycompany_preview.',
+                example: 'A staffing workflow uses tenant mycompany_impl while testing worker lookups before production rollout.',
+                empty: 'Runtime may build an incomplete default URL if Base URL is blank too.',
+                mistake: 'Using an employee ID, organization ID, or company display name instead of the Workday tenant identifier.',
+              }),
+              placeholder: 'mycompany',
+              example: 'mycompany',
             },
             {
-              "name": "Auth Type",
-              "internalKey": "authType",
-              "type": "select",
-              "required": false,
-              "description": "Auth method: oauth2 or basic",
-              "helpText": "Options: Choose how this Workday step signs in.\nHow to choose it: Pick oauth2 to sign in with Workday and click Allow, or basic when your Workday admin gave you a username and password.\nExample: oauth2.\nTip: Use {{$json.authType}} only when an earlier step already provides a valid option value.",
-              "placeholder": "oauth2",
-              "example": "oauth2",
-              "defaultValue": "oauth2",
-              "options": [
-                "OAuth 2.0",
-                "Basic Auth"
-              ]
+              name: 'Auth Type',
+              internalKey: 'authType',
+              type: 'select',
+              required: true,
+              description: 'Authentication mode: oauth2 or basic.',
+              helpText: richFieldHelp({
+                what: 'The authentication header style for the Workday request.',
+                why: 'Runtime sends Bearer accessToken for OAuth 2.0 or Basic base64(username:password) for Basic Auth.',
+                when: 'Choose OAuth 2.0 when using a Workday API client token, or Basic Auth when your admin provided integration-system user credentials.',
+                enter: 'Select OAuth 2.0 or Basic Auth.',
+                source: 'Use the authentication method approved for your Workday tenant and integration security policy.',
+                later: 'Authentication failures return success false with an error string from Workday rather than a top-level _error.',
+                format: 'One of oauth2 or basic.',
+                example: 'A production worker sync uses OAuth 2.0, while a legacy implementation tenant may still use Basic Auth for testing.',
+                empty: 'Runtime defaults to oauth2.',
+                mistake: 'Selecting OAuth 2.0 while only filling username and password, or selecting Basic Auth while only filling accessToken.',
+              }),
+              options: ['OAuth 2.0', 'Basic Auth'],
+              placeholder: 'oauth2',
+              example: 'oauth2',
+              defaultValue: 'oauth2',
             },
             {
-              "name": "Access Token",
-              "internalKey": "accessToken",
-              "type": "string",
-              "required": false,
-              "description": "OAuth 2.0 Bearer token",
-              "helpText": "What this field is: Workday token, a secret password that lets CtrlChecks talk to Workday safely.\nWhere to find it: Workday account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by Workday.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "token_..."
+              name: 'Access Token',
+              internalKey: 'accessToken',
+              type: 'string',
+              required: false,
+              description: 'OAuth 2.0 token used when Auth Type is oauth2.',
+              helpText: richFieldHelp({
+                what: 'The OAuth access token sent as the Workday Bearer token.',
+                why: 'Workday rejects OAuth-protected REST API calls without a valid token for the tenant and API scope.',
+                when: 'Fill it when Auth Type is OAuth 2.0.',
+                enter: 'Provide a current Workday access token, preferably via a saved connection or credential-filled config.',
+                source: 'Obtain it from a Workday Registered API Client OAuth flow or a secure token broker.',
+                later: 'The token is not returned; use {{$json.success}} and {{$json.error}} to troubleshoot the call.',
+                format: 'Plain token string without the word Bearer because runtime adds Bearer automatically.',
+                example: 'An employee onboarding sync uses an OAuth token scoped to read workers and positions.',
+                empty: 'Runtime still sends an empty Bearer header; Workday usually responds with success false and an authorization error.',
+                mistake: 'Pasting a client ID, refresh token, or Basic Auth password into the access token field.',
+              }),
+              placeholder: 'Workday OAuth 2.0 access token',
+              example: 'eyJhbGciOi...',
             },
             {
-              "name": "Username",
-              "internalKey": "username",
-              "type": "string",
-              "required": false,
-              "description": "Basic auth username",
-              "helpText": "What this field is: Basic auth username.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Username value.\nTip: Use {{$json.username}} when this value comes from an earlier step.",
-              "placeholder": "Enter Username"
+              name: 'Username',
+              internalKey: 'username',
+              type: 'string',
+              required: false,
+              description: 'Basic Auth username used when Auth Type is basic.',
+              helpText: richFieldHelp({
+                what: 'The Workday Basic Auth username used to build the Authorization header.',
+                why: 'Runtime base64-encodes username:password when Auth Type is basic.',
+                when: 'Fill it only when Auth Type is Basic Auth.',
+                enter: 'Type the integration system user name exactly as supplied by Workday administration.',
+                source: 'Get it from the Workday integration system user configuration or a saved Workday connection.',
+                later: 'It is not returned; failed authentication appears as success false with an error string.',
+                format: 'Plain username string, often an integration-system account name.',
+                example: 'A legacy staffing report uses a dedicated integration user with read-only worker permissions.',
+                empty: 'Runtime still builds a Basic header with a blank username, which Workday usually rejects.',
+                mistake: 'Using an employee login that lacks integration security-group permissions.',
+              }),
+              placeholder: 'svc_account@tenant',
+              example: 'svc_account@tenant',
             },
             {
-              "name": "Password",
-              "internalKey": "password",
-              "type": "password",
-              "required": false,
-              "description": "Basic auth password",
-              "helpText": "What this field is: Workday token, a secret password that lets CtrlChecks talk to Workday safely.\nWhere to find it: Workday account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by Workday.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "Enter Password",
-              "notes": "Stored and displayed as a masked credential value."
+              name: 'Password',
+              internalKey: 'password',
+              type: 'password',
+              required: false,
+              description: 'Basic Auth password used when Auth Type is basic.',
+              helpText: richFieldHelp({
+                what: 'The Workday Basic Auth password paired with Username.',
+                why: 'Runtime includes it in the Basic Authorization header when Auth Type is basic.',
+                when: 'Fill it only when Auth Type is Basic Auth.',
+                enter: 'Use the integration system user password from a secure connection or credential-filled config.',
+                source: 'Get it from the Workday integration user secret store or your Workday administrator.',
+                later: 'The password is not returned; use {{$json.error}} to troubleshoot failed authentication.',
+                format: 'Secret string. Store it in a connection where possible instead of typing it into ordinary workflow input.',
+                example: 'An implementation tenant test uses Basic Auth credentials supplied for a temporary integration user.',
+                empty: 'Runtime still builds a Basic header with a blank password, which Workday usually rejects.',
+                mistake: 'Leaving old credentials in a copied workflow after the integration user password rotated.',
+              }),
+              placeholder: 'Basic Auth password',
+              example: 'stored in connection',
+              notes: 'Stored and displayed as a masked credential value when supplied through credential UI.',
             },
             {
-              "name": "Resource",
-              "internalKey": "resource",
-              "type": "select",
-              "required": true,
-              "description": "Workday resource",
-              "helpText": "What this field is: The Workday entity type to query or manage.\nOptions: Workers, Jobs, Organizations, Supervisory Organizations, Positions.\nExample: workers to list employees, positions to view open roles.\nThis selection determines the API path used in the Workday request.",
-              "placeholder": "workers",
-              "example": "workers",
-              "defaultValue": "workers",
-              "options": [
-                "Workers",
-                "Jobs",
-                "Organizations",
-                "Supervisory Organizations",
-                "Positions"
-              ]
+              name: 'Resource',
+              internalKey: 'resource',
+              type: 'select',
+              required: true,
+              description: 'Standard Workday resource path segment.',
+              helpText: richFieldHelp({
+                what: 'The standard Workday resource path used when Raw Path is empty.',
+                why: 'Runtime appends /workers, /jobs, /organizations, /supervisoryOrganizations, or /positions to Base URL.',
+                when: 'Choose it for common HR, staffing, organization, and position operations.',
+                enter: 'Select Workers, Jobs, Organizations, Supervisory Organizations, or Positions.',
+                source: 'Choose from the Workday entity your workflow needs, or map a valid value such as {{$json.workdayResource}}.',
+                later: 'The selected value is echoed as {{$json.resource}} in the node output.',
+                format: 'One of workers, jobs, organizations, supervisoryOrganizations, positions.',
+                example: 'An onboarding workflow selects workers to fetch employee records before creating downstream accounts.',
+                empty: 'The default workers value is used by the UI and backend schema.',
+                mistake: 'Expecting this dropdown to cover every Workday REST path; use Raw Path for advanced endpoints.',
+              }),
+              options: ['Workers', 'Jobs', 'Organizations', 'Supervisory Organizations', 'Positions'],
+              placeholder: 'workers',
+              example: 'workers',
+              defaultValue: 'workers',
             },
             {
-              "name": "Record Id",
-              "internalKey": "recordId",
-              "type": "string",
-              "required": false,
-              "description": "Record ID",
-              "helpText": "What this field is: The Record ID that tells Workday which item to use.\nWhere to find it: Open the item in Workday and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.recordId}} when an earlier Workday step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
+              name: 'Operation',
+              internalKey: 'operation',
+              type: 'select',
+              required: true,
+              description: 'HTTP-style action to perform.',
+              helpText: richFieldHelp({
+                what: 'The action that determines HTTP method and URL shape.',
+                why: 'Runtime uses GET for get_many and get_by_id, POST for create, and PATCH for update.',
+                when: 'Choose get_many for lists, get_by_id for one record, create to POST a body, or update to PATCH an existing record.',
+                enter: 'Select Get Many, Get By ID, Create, or Update.',
+                source: 'Use the workflow task and Workday API documentation to choose the supported method for the target path.',
+                later: 'The selected value is echoed as {{$json.operation}} and can drive logging or branches.',
+                format: 'One of get_many, get_by_id, create, update.',
+                example: 'A daily HR sync uses get_many for workers, while a staffing update uses update with a record ID.',
+                empty: 'The default get_many value is used by the UI and backend schema.',
+                mistake: 'Choosing create or update for a Workday path that is read-only in your tenant.',
+              }),
+              options: ['Get Many', 'Get By ID', 'Create', 'Update'],
+              placeholder: 'get_many',
+              example: 'get_many',
+              defaultValue: 'get_many',
             },
             {
-              "name": "Payload",
-              "internalKey": "payload",
-              "type": "json",
-              "required": false,
-              "description": "Request body for create/update",
-              "helpText": "What this field is: Structured data for Request body.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Workday.\nExample: {}.\nTip: Use {{$json.payload}} when an earlier step already prepared this data.",
-              "placeholder": "{}",
-              "example": "{}",
-              "defaultValue": "{}"
+              name: 'Record ID',
+              internalKey: 'recordId',
+              type: 'string',
+              required: false,
+              description: 'Workday record ID appended for get_by_id and update.',
+              helpText: richFieldHelp({
+                what: 'The identifier appended after the resource or rawPath for single-record operations.',
+                why: 'Runtime builds /resource/{recordId} for get_by_id and update.',
+                when: 'Fill it for get_by_id and update. Leave it empty for get_many and create.',
+                enter: 'Map the Workday ID from a previous lookup, form, or database row, such as {{$json.workerId}}.',
+                source: 'Use the ID returned by Workday, stored in HR data, or selected by a previous step.',
+                later: 'Successful single-record operations return the parsed body under {{$json.record}}.',
+                format: 'Plain ID string accepted by the target Workday path.',
+                example: 'A worker-profile workflow maps {{$json.workerId}} before fetching one worker record.',
+                empty: 'Runtime does not validate it before the call, so Workday may receive a URL ending with a blank ID segment.',
+                mistake: 'Using a display name or employee number when the REST endpoint expects Workday internal ID.',
+              }),
+              placeholder: '{{$json.id}}',
+              example: 'worker_1042',
             },
             {
-              "name": "Limit",
-              "internalKey": "limit",
-              "type": "number",
-              "required": false,
-              "description": "Max records",
-              "helpText": "What this field is: The number used for Max records.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 50.\nTip: Use {{$json.limit}} when the number comes from an earlier step.",
-              "placeholder": "50",
-              "example": "50",
-              "defaultValue": "50"
+              name: 'Payload (JSON)',
+              internalKey: 'payload',
+              type: 'json',
+              required: false,
+              description: 'Request body for create and update.',
+              helpText: richFieldHelp({
+                what: 'The JSON object serialized as the Workday request body for POST or PATCH.',
+                why: 'Create and update operations send this body exactly as JSON.stringify(payload).',
+                when: 'Fill it for create and update. Leave it empty for list and single-record reads.',
+                enter: 'Enter a JSON object matching the target Workday REST endpoint requirements.',
+                source: 'Build it from HR forms, approved change records, database rows, or a previous Function step as {{$json.workdayPayload}}.',
+                later: 'Successful create/update responses are returned under {{$json.record}} and the parsed body also appears in {{$json.meta}}.',
+                format: 'JSON object or value accepted by the Workday endpoint.',
+                example: 'A staffing workflow sends a PATCH payload prepared from an approved position-change request.',
+                empty: 'Runtime sends {} for create or update because the default payload is an empty object.',
+                mistake: 'Assuming the node validates Workday-specific payload fields before sending; validation happens at Workday.',
+              }),
+              placeholder: '{"workerType":"Employee"}',
+              example: '{"workerType":"Employee"}',
+              defaultValue: '{}',
             },
             {
-              "name": "Offset",
-              "internalKey": "offset",
-              "type": "number",
-              "required": false,
-              "description": "Records to skip",
-              "helpText": "What this field is: The number used for Records to skip.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 0.\nTip: Use {{$json.offset}} when the number comes from an earlier step.",
-              "placeholder": "0",
-              "example": "0",
-              "defaultValue": "0"
-            }
+              name: 'Limit',
+              internalKey: 'limit',
+              type: 'number',
+              required: false,
+              description: 'limit query parameter for get_many.',
+              helpText: richFieldHelp({
+                what: 'The maximum number of records requested in a get_many call.',
+                why: 'Runtime appends ?limit={limit}&offset={offset} to list requests.',
+                when: 'Fill it for get_many when you need to control batch size or reduce API load.',
+                enter: 'Type a number such as 50 or 100, based on what the Workday endpoint supports.',
+                source: 'Choose from API limits, workflow throughput needs, or a mapped setting like {{$json.limit}}.',
+                later: 'The node echoes it in {{$json.pagination.limit}}.',
+                format: 'Number used directly as the limit query parameter.',
+                example: 'A worker sync uses limit 50 to process manageable chunks during business hours.',
+                empty: 'Runtime uses the default 50.',
+                mistake: 'Expecting Limit to cap create or update operations; it only affects get_many URL construction.',
+              }),
+              placeholder: '50',
+              example: '50',
+              defaultValue: '50',
+            },
+            {
+              name: 'Offset',
+              internalKey: 'offset',
+              type: 'number',
+              required: false,
+              description: 'offset query parameter for get_many.',
+              helpText: richFieldHelp({
+                what: 'The number of records to skip in a get_many call.',
+                why: 'Runtime appends it to the list URL so workflows can page through Workday data.',
+                when: 'Fill it for get_many after the first page, or when resuming from a stored sync position.',
+                enter: 'Type 0 for the first page, then increase by the page size for later requests.',
+                source: 'Use scheduler state, database checkpoint data, or previous output such as {{$json.nextOffset}}.',
+                later: 'The node echoes it in {{$json.pagination.offset}} for logging and continuation logic.',
+                format: 'Number used directly as the offset query parameter.',
+                example: 'A nightly worker export uses offsets 0, 50, and 100 to process records in batches.',
+                empty: 'Runtime uses the default 0.',
+                mistake: 'Using Offset with get_by_id, create, or update; runtime only uses it for get_many.',
+              }),
+              placeholder: '0',
+              example: '0',
+              defaultValue: '0',
+            },
+            {
+              name: 'Raw Path (Override)',
+              internalKey: 'rawPath',
+              type: 'string',
+              required: false,
+              description: 'Optional path appended to baseUrl instead of the selected resource.',
+              helpText: richFieldHelp({
+                what: 'A custom Workday REST path used instead of the Resource dropdown path.',
+                why: 'It lets advanced workflows call Workday endpoints that are not represented by the five standard resources.',
+                when: 'Fill it only when Workday documentation gives a specific path you need to call.',
+                enter: 'Enter a path beginning with /, such as /workers/{{$json.workerId}}/staffingInformation.',
+                source: 'Copy the path from Workday REST API docs, an administrator-approved integration design, or a previous step.',
+                later: 'The resource value is still echoed in output, but the actual URL uses rawPath for construction.',
+                format: 'Path string appended to baseUrl. Runtime does not encode or validate each segment for you.',
+                example: 'A staffing workflow calls a worker-specific staffingInformation path that is not available in the Resource dropdown.',
+                empty: 'Runtime uses /{resource} from the Resource dropdown.',
+                mistake: 'Entering a full URL here. Put the host and API root in Base URL and only the path in Raw Path.',
+              }),
+              placeholder: '/workers/{{$json.workerId}}/staffingInformation',
+              example: '/workers/{{$json.workerId}}/staffingInformation',
+            },
           ],
-          "outputExample": {
-            "success": true,
-            "operation": "get_many",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
+          outputExample: {
+            success: true,
+            resource: 'workers',
+            operation: 'get_many',
+            tenant: 'mycompany',
+            records: [{ id: 'worker_1042', descriptor: 'Asha Rao' }],
+            count: 1,
+            pagination: { limit: 50, offset: 0, total: 1 },
+            meta: { total: 1, data: [{ id: 'worker_1042', descriptor: 'Asha Rao' }] },
           },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming Workday data with get many after a related upstream event is received",
-            "inputValues": {
-              "Base Url": "https://api.example.com",
-              "Tenant": "",
-              "Auth Type": "oauth2",
-              "Access Token": "",
-              "Username": ""
+          outputDescription: workdayOutputDescription,
+          usageExample: {
+            scenario: 'Fetch a page of Workday workers before sending employee records to identity-provisioning steps.',
+            inputValues: {
+              baseUrl: 'https://wd2-impl-services1.workday.com/ccx/api/v1/mytenant',
+              tenant: 'mytenant',
+              authType: 'oauth2',
+              accessToken: '{{$json.workdayAccessToken}}',
+              resource: 'workers',
+              operation: 'get_many',
+              limit: '50',
+              offset: '0',
             },
-            "expectedOutput": "Workday returns structured get many data that downstream nodes can reference with {{$json.fieldName}}."
+            expectedOutput: 'The next node can iterate {{$json.records}}, log {{$json.pagination.total}}, and branch on {{$json.success}} when Workday returns an error.',
           },
-          "externalDocsUrl": "https://community.workday.com/sites/default/files/file-hosting/restapi/index.html"
+          externalDocsUrl: 'https://community.workday.com/sites/default/files/file-hosting/restapi/index.html',
         },
-        {
-          "name": "Get by id",
-          "value": "get_by_id",
-          "description": "Get by id using the Workday node.",
-          "fields": [
-            {
-              "name": "Base Url",
-              "internalKey": "baseUrl",
-              "type": "url",
-              "required": false,
-              "description": "Workday REST API base URL",
-              "helpText": "What this field is: The web address for Workday REST API base URL.\nHow to fill it: Paste the full URL, including https:// when it is an external service.\nExample: https://api.example.com.\nTip: Use {{$json.baseUrl}} when the URL comes from an earlier step.",
-              "placeholder": "https://api.example.com",
-              "example": "https://api.example.com"
-            },
-            {
-              "name": "Tenant",
-              "internalKey": "tenant",
-              "type": "string",
-              "required": false,
-              "description": "Workday tenant identifier",
-              "helpText": "What this field is: The Workday tenant identifier that tells Workday which item to use.\nWhere to find it: Open the item in Workday and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.tenant}} when an earlier Workday step provides this value.",
-              "placeholder": "Enter Tenant"
-            },
-            {
-              "name": "Auth Type",
-              "internalKey": "authType",
-              "type": "select",
-              "required": false,
-              "description": "Auth method: oauth2 or basic",
-              "helpText": "Options: Choose how this Workday step signs in.\nHow to choose it: Pick oauth2 to sign in with Workday and click Allow, or basic when your Workday admin gave you a username and password.\nExample: oauth2.\nTip: Use {{$json.authType}} only when an earlier step already provides a valid option value.",
-              "placeholder": "oauth2",
-              "example": "oauth2",
-              "defaultValue": "oauth2",
-              "options": [
-                "OAuth 2.0",
-                "Basic Auth"
-              ]
-            },
-            {
-              "name": "Access Token",
-              "internalKey": "accessToken",
-              "type": "string",
-              "required": false,
-              "description": "OAuth 2.0 Bearer token",
-              "helpText": "What this field is: Workday token, a secret password that lets CtrlChecks talk to Workday safely.\nWhere to find it: Workday account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by Workday.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "token_..."
-            },
-            {
-              "name": "Username",
-              "internalKey": "username",
-              "type": "string",
-              "required": false,
-              "description": "Basic auth username",
-              "helpText": "What this field is: Basic auth username.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Username value.\nTip: Use {{$json.username}} when this value comes from an earlier step.",
-              "placeholder": "Enter Username"
-            },
-            {
-              "name": "Password",
-              "internalKey": "password",
-              "type": "password",
-              "required": false,
-              "description": "Basic auth password",
-              "helpText": "What this field is: Workday token, a secret password that lets CtrlChecks talk to Workday safely.\nWhere to find it: Workday account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by Workday.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "Enter Password",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Resource",
-              "internalKey": "resource",
-              "type": "select",
-              "required": true,
-              "description": "Workday resource",
-              "helpText": "What this field is: The Workday entity type to query or manage.\nOptions: Workers, Jobs, Organizations, Supervisory Organizations, Positions.\nExample: workers to list employees, positions to view open roles.\nThis selection determines the API path used in the Workday request.",
-              "placeholder": "workers",
-              "example": "workers",
-              "defaultValue": "workers",
-              "options": [
-                "Workers",
-                "Jobs",
-                "Organizations",
-                "Supervisory Organizations",
-                "Positions"
-              ]
-            },
-            {
-              "name": "Record Id",
-              "internalKey": "recordId",
-              "type": "string",
-              "required": false,
-              "description": "Record ID",
-              "helpText": "What this field is: The Record ID that tells Workday which item to use.\nWhere to find it: Open the item in Workday and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.recordId}} when an earlier Workday step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Payload",
-              "internalKey": "payload",
-              "type": "json",
-              "required": false,
-              "description": "Request body for create/update",
-              "helpText": "What this field is: Structured data for Request body.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Workday.\nExample: {}.\nTip: Use {{$json.payload}} when an earlier step already prepared this data.",
-              "placeholder": "{}",
-              "example": "{}",
-              "defaultValue": "{}"
-            },
-            {
-              "name": "Limit",
-              "internalKey": "limit",
-              "type": "number",
-              "required": false,
-              "description": "Max records",
-              "helpText": "What this field is: The number used for Max records.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 50.\nTip: Use {{$json.limit}} when the number comes from an earlier step.",
-              "placeholder": "50",
-              "example": "50",
-              "defaultValue": "50"
-            },
-            {
-              "name": "Offset",
-              "internalKey": "offset",
-              "type": "number",
-              "required": false,
-              "description": "Records to skip",
-              "helpText": "What this field is: The number used for Records to skip.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 0.\nTip: Use {{$json.offset}} when the number comes from an earlier step.",
-              "placeholder": "0",
-              "example": "0",
-              "defaultValue": "0"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "get_by_id",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming Workday data with get by id after a related upstream event is received",
-            "inputValues": {
-              "Base Url": "https://api.example.com",
-              "Tenant": "",
-              "Auth Type": "oauth2",
-              "Access Token": "",
-              "Username": ""
-            },
-            "expectedOutput": "Workday returns structured get by id data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://community.workday.com/sites/default/files/file-hosting/restapi/index.html"
-        },
-        {
-          "name": "Create",
-          "value": "create",
-          "description": "Create using the Workday node.",
-          "fields": [
-            {
-              "name": "Base Url",
-              "internalKey": "baseUrl",
-              "type": "url",
-              "required": false,
-              "description": "Workday REST API base URL",
-              "helpText": "What this field is: The web address for Workday REST API base URL.\nHow to fill it: Paste the full URL, including https:// when it is an external service.\nExample: https://api.example.com.\nTip: Use {{$json.baseUrl}} when the URL comes from an earlier step.",
-              "placeholder": "https://api.example.com",
-              "example": "https://api.example.com"
-            },
-            {
-              "name": "Tenant",
-              "internalKey": "tenant",
-              "type": "string",
-              "required": false,
-              "description": "Workday tenant identifier",
-              "helpText": "What this field is: The Workday tenant identifier that tells Workday which item to use.\nWhere to find it: Open the item in Workday and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.tenant}} when an earlier Workday step provides this value.",
-              "placeholder": "Enter Tenant"
-            },
-            {
-              "name": "Auth Type",
-              "internalKey": "authType",
-              "type": "select",
-              "required": false,
-              "description": "Auth method: oauth2 or basic",
-              "helpText": "Options: Choose how this Workday step signs in.\nHow to choose it: Pick oauth2 to sign in with Workday and click Allow, or basic when your Workday admin gave you a username and password.\nExample: oauth2.\nTip: Use {{$json.authType}} only when an earlier step already provides a valid option value.",
-              "placeholder": "oauth2",
-              "example": "oauth2",
-              "defaultValue": "oauth2",
-              "options": [
-                "OAuth 2.0",
-                "Basic Auth"
-              ]
-            },
-            {
-              "name": "Access Token",
-              "internalKey": "accessToken",
-              "type": "string",
-              "required": false,
-              "description": "OAuth 2.0 Bearer token",
-              "helpText": "What this field is: Workday token, a secret password that lets CtrlChecks talk to Workday safely.\nWhere to find it: Workday account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by Workday.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "token_..."
-            },
-            {
-              "name": "Username",
-              "internalKey": "username",
-              "type": "string",
-              "required": false,
-              "description": "Basic auth username",
-              "helpText": "What this field is: Basic auth username.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Username value.\nTip: Use {{$json.username}} when this value comes from an earlier step.",
-              "placeholder": "Enter Username"
-            },
-            {
-              "name": "Password",
-              "internalKey": "password",
-              "type": "password",
-              "required": false,
-              "description": "Basic auth password",
-              "helpText": "What this field is: Workday token, a secret password that lets CtrlChecks talk to Workday safely.\nWhere to find it: Workday account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by Workday.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "Enter Password",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Resource",
-              "internalKey": "resource",
-              "type": "select",
-              "required": true,
-              "description": "Workday resource",
-              "helpText": "What this field is: The Workday entity type to query or manage.\nOptions: Workers, Jobs, Organizations, Supervisory Organizations, Positions.\nExample: workers to list employees, positions to view open roles.\nThis selection determines the API path used in the Workday request.",
-              "placeholder": "workers",
-              "example": "workers",
-              "defaultValue": "workers",
-              "options": [
-                "Workers",
-                "Jobs",
-                "Organizations",
-                "Supervisory Organizations",
-                "Positions"
-              ]
-            },
-            {
-              "name": "Record Id",
-              "internalKey": "recordId",
-              "type": "string",
-              "required": false,
-              "description": "Record ID",
-              "helpText": "What this field is: The Record ID that tells Workday which item to use.\nWhere to find it: Open the item in Workday and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.recordId}} when an earlier Workday step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Payload",
-              "internalKey": "payload",
-              "type": "json",
-              "required": false,
-              "description": "Request body for create/update",
-              "helpText": "What this field is: Structured data for Request body.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Workday.\nExample: {}.\nTip: Use {{$json.payload}} when an earlier step already prepared this data.",
-              "placeholder": "{}",
-              "example": "{}",
-              "defaultValue": "{}"
-            },
-            {
-              "name": "Limit",
-              "internalKey": "limit",
-              "type": "number",
-              "required": false,
-              "description": "Max records",
-              "helpText": "What this field is: The number used for Max records.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 50.\nTip: Use {{$json.limit}} when the number comes from an earlier step.",
-              "placeholder": "50",
-              "example": "50",
-              "defaultValue": "50"
-            },
-            {
-              "name": "Offset",
-              "internalKey": "offset",
-              "type": "number",
-              "required": false,
-              "description": "Records to skip",
-              "helpText": "What this field is: The number used for Records to skip.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 0.\nTip: Use {{$json.offset}} when the number comes from an earlier step.",
-              "placeholder": "0",
-              "example": "0",
-              "defaultValue": "0"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "create",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming Workday data with create after a related upstream event is received",
-            "inputValues": {
-              "Base Url": "https://api.example.com",
-              "Tenant": "",
-              "Auth Type": "oauth2",
-              "Access Token": "",
-              "Username": ""
-            },
-            "expectedOutput": "Workday returns structured create data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://community.workday.com/sites/default/files/file-hosting/restapi/index.html"
-        },
-        {
-          "name": "Update",
-          "value": "update",
-          "description": "Update using the Workday node.",
-          "fields": [
-            {
-              "name": "Base Url",
-              "internalKey": "baseUrl",
-              "type": "url",
-              "required": false,
-              "description": "Workday REST API base URL",
-              "helpText": "What this field is: The web address for Workday REST API base URL.\nHow to fill it: Paste the full URL, including https:// when it is an external service.\nExample: https://api.example.com.\nTip: Use {{$json.baseUrl}} when the URL comes from an earlier step.",
-              "placeholder": "https://api.example.com",
-              "example": "https://api.example.com"
-            },
-            {
-              "name": "Tenant",
-              "internalKey": "tenant",
-              "type": "string",
-              "required": false,
-              "description": "Workday tenant identifier",
-              "helpText": "What this field is: The Workday tenant identifier that tells Workday which item to use.\nWhere to find it: Open the item in Workday and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.tenant}} when an earlier Workday step provides this value.",
-              "placeholder": "Enter Tenant"
-            },
-            {
-              "name": "Auth Type",
-              "internalKey": "authType",
-              "type": "select",
-              "required": false,
-              "description": "Auth method: oauth2 or basic",
-              "helpText": "Options: Choose how this Workday step signs in.\nHow to choose it: Pick oauth2 to sign in with Workday and click Allow, or basic when your Workday admin gave you a username and password.\nExample: oauth2.\nTip: Use {{$json.authType}} only when an earlier step already provides a valid option value.",
-              "placeholder": "oauth2",
-              "example": "oauth2",
-              "defaultValue": "oauth2",
-              "options": [
-                "OAuth 2.0",
-                "Basic Auth"
-              ]
-            },
-            {
-              "name": "Access Token",
-              "internalKey": "accessToken",
-              "type": "string",
-              "required": false,
-              "description": "OAuth 2.0 Bearer token",
-              "helpText": "What this field is: Workday token, a secret password that lets CtrlChecks talk to Workday safely.\nWhere to find it: Workday account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by Workday.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "token_..."
-            },
-            {
-              "name": "Username",
-              "internalKey": "username",
-              "type": "string",
-              "required": false,
-              "description": "Basic auth username",
-              "helpText": "What this field is: Basic auth username.\nHow to fill it: Type the value exactly as it should be sent to the service.\nExample: Username value.\nTip: Use {{$json.username}} when this value comes from an earlier step.",
-              "placeholder": "Enter Username"
-            },
-            {
-              "name": "Password",
-              "internalKey": "password",
-              "type": "password",
-              "required": false,
-              "description": "Basic auth password",
-              "helpText": "What this field is: Workday token, a secret password that lets CtrlChecks talk to Workday safely.\nWhere to find it: Workday account settings or developer settings.\nHow to fill it: Store this secret in CtrlChecks Connections when possible. Paste it here only when this field is explicitly asking for the token.\nExample: the token format shown by Workday.\nImportant: Treat this like a bank password. Use CtrlChecks Connections when possible.",
-              "placeholder": "Enter Password",
-              "notes": "Stored and displayed as a masked credential value."
-            },
-            {
-              "name": "Resource",
-              "internalKey": "resource",
-              "type": "select",
-              "required": true,
-              "description": "Workday resource",
-              "helpText": "What this field is: The Workday entity type to query or manage.\nOptions: Workers, Jobs, Organizations, Supervisory Organizations, Positions.\nExample: workers to list employees, positions to view open roles.\nThis selection determines the API path used in the Workday request.",
-              "placeholder": "workers",
-              "example": "workers",
-              "defaultValue": "workers",
-              "options": [
-                "Workers",
-                "Jobs",
-                "Organizations",
-                "Supervisory Organizations",
-                "Positions"
-              ]
-            },
-            {
-              "name": "Record Id",
-              "internalKey": "recordId",
-              "type": "string",
-              "required": false,
-              "description": "Record ID",
-              "helpText": "What this field is: The Record ID that tells Workday which item to use.\nWhere to find it: Open the item in Workday and copy the ID, name, or URL part shown by that service. You can also use the value returned by a previous step.\nExample: 123456789.\nTip: Use {{$json.recordId}} when an earlier Workday step provides this value.",
-              "placeholder": "abc123",
-              "example": "abc123"
-            },
-            {
-              "name": "Payload",
-              "internalKey": "payload",
-              "type": "json",
-              "required": false,
-              "description": "Request body for create/update",
-              "helpText": "What this field is: Structured data for Request body.\nHow to fill it: Enter data in { } brackets for an object or [ ] brackets for a list. Use exact field names expected by Workday.\nExample: {}.\nTip: Use {{$json.payload}} when an earlier step already prepared this data.",
-              "placeholder": "{}",
-              "example": "{}",
-              "defaultValue": "{}"
-            },
-            {
-              "name": "Limit",
-              "internalKey": "limit",
-              "type": "number",
-              "required": false,
-              "description": "Max records",
-              "helpText": "What this field is: The number used for Max records.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 50.\nTip: Use {{$json.limit}} when the number comes from an earlier step.",
-              "placeholder": "50",
-              "example": "50",
-              "defaultValue": "50"
-            },
-            {
-              "name": "Offset",
-              "internalKey": "offset",
-              "type": "number",
-              "required": false,
-              "description": "Records to skip",
-              "helpText": "What this field is: The number used for Records to skip.\nHow to fill it: Type digits only. Do not add words unless this field says they are allowed.\nExample: 0.\nTip: Use {{$json.offset}} when the number comes from an earlier step.",
-              "placeholder": "0",
-              "example": "0",
-              "defaultValue": "0"
-            }
-          ],
-          "outputExample": {
-            "success": true,
-            "operation": "update",
-            "data": {
-              "id": "item_123",
-              "status": "completed"
-            }
-          },
-          "outputDescription": "success: Whether the service accepted the request.\noperation: Value returned by this operation.\ndata: Returned records from the service.",
-          "usageExample": {
-            "scenario": "Process incoming Workday data with update after a related upstream event is received",
-            "inputValues": {
-              "Base Url": "https://api.example.com",
-              "Tenant": "",
-              "Auth Type": "oauth2",
-              "Access Token": "",
-              "Username": ""
-            },
-            "expectedOutput": "Workday returns structured update data that downstream nodes can reference with {{$json.fieldName}}."
-          },
-          "externalDocsUrl": "https://community.workday.com/sites/default/files/file-hosting/restapi/index.html"
-        }
-      ]
-    }
+      ],
+    },
   ],
-  "commonErrors": [
+  commonErrors: [
     {
-      "error": "Authentication failed",
-      "cause": "The saved credential, token, API key, or OAuth grant is missing, expired, or lacks the required scope.",
-      "fix": "Reconnect the service in CtrlChecks → Connections, then re-run the Workday node."
+      error: 'Unsupported operation: <operation>',
+      cause: 'Runtime only supports get_many, get_by_id, create, and update for the Workday node.',
+      fix: 'Choose one of the supported operations or use HTTP Request for a custom method not implemented here.',
     },
     {
-      "error": "Required field missing",
-      "cause": "A required input is empty or an upstream expression resolved to an empty value.",
-      "fix": "Open the node, fill every required field, and verify the upstream node output before running."
+      error: 'Workday API error <status>: <response text>',
+      cause: 'Workday returned a non-2xx HTTP response after the request was sent.',
+      fix: 'Check tenant, baseUrl, authType, token or Basic Auth credentials, path, permissions, and payload requirements.',
     },
     {
-      "error": "Invalid input format",
-      "cause": "A field value does not match the format expected by the node or service API.",
-      "fix": "Check JSON, date, URL, email, and ID fields against the examples shown in the node documentation."
-    }
+      error: 'Blank auth fields are still sent to Workday',
+      cause: 'The executor does not pre-validate accessToken, username, or password before building the Authorization header.',
+      fix: 'Validate credentials before running and branch on {{$json.success}} plus {{$json.error}} after the node.',
+    },
+    {
+      error: 'Raw Path ignores the Resource path for URL construction',
+      cause: 'When rawPath is configured, runtime uses it instead of /{resource}, though resource is still echoed in output.',
+      fix: 'Clear Raw Path when you want the selected Resource dropdown to control the endpoint.',
+    },
+    {
+      error: 'Next node cannot find Workday records',
+      cause: 'Runtime only fills records from data.data arrays or raw array responses; single-record operations return parsed data under record.',
+      fix: 'Use {{$json.records}} for get_many and {{$json.record}} for get_by_id, create, and update.',
+    },
   ],
-  "relatedNodes": []
+  relatedNodes: ['http_request', 'salesforce', 'sap', 'microsoft_dynamics'],
 };

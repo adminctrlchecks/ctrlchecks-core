@@ -2,6 +2,44 @@ import type { UnifiedNodeDefinition } from '../../types/unified-node-contract';
 import type { NodeSchema } from '../../../services/nodes/node-library';
 import { getGoogleTokenForContext, googleApiRequest, mergedInputs } from './google-workspace-utils';
 
+function stringInput(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizeUploadPayload(inputs: Record<string, any>): { rawData: string; mimeType?: string } {
+  const candidates = [
+    inputs.fileData,
+    inputs.fileContent,
+    inputs.dataBase64,
+    inputs.data?.dataBase64,
+    inputs.content?.dataBase64,
+    inputs.data,
+    inputs.content,
+  ];
+  for (const candidate of candidates) {
+    if (candidate === undefined || candidate === null) continue;
+    if (Buffer.isBuffer(candidate)) return { rawData: candidate.toString('base64') };
+    if (candidate instanceof Uint8Array) return { rawData: Buffer.from(candidate).toString('base64') };
+    if (typeof candidate === 'object') {
+      const nested = normalizeUploadPayload(candidate);
+      if (nested.rawData) return nested;
+      continue;
+    }
+    const raw = stringInput(candidate);
+    if (!raw) continue;
+    const dataUrl = raw.match(/^data:([^;,]+)?(?:;charset=[^;,]+)?;base64,(.*)$/is);
+    if (dataUrl) return { rawData: dataUrl[2], mimeType: dataUrl[1] || undefined };
+    return { rawData: raw };
+  }
+  return { rawData: '' };
+}
+
+function bufferFromPayload(rawData: string): Buffer {
+  const compact = rawData.replace(/\s/g, '');
+  const isLikelyBase64 = compact.length > 0 && compact.length % 4 === 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(compact);
+  return Buffer.from(isLikelyBase64 ? compact : rawData, isLikelyBase64 ? 'base64' : 'utf8');
+}
+
 export function overrideGoogleDrive(
   def: UnifiedNodeDefinition,
   _schema: NodeSchema,
@@ -22,6 +60,24 @@ export function overrideGoogleDrive(
       required: false,
       ownership: 'value' as const,
       role: 'content' as const,
+      fillMode: { default: 'manual_static' as const, supportsRuntimeAI: true, supportsBuildtimeAI: true },
+    },
+    fileContent: {
+      type: 'string' as const,
+      description: 'Legacy alias for fileData.',
+      required: false,
+      ownership: 'value' as const,
+      role: 'content' as const,
+      aliasOf: 'fileData',
+      fillMode: { default: 'manual_static' as const, supportsRuntimeAI: true, supportsBuildtimeAI: true },
+    },
+    dataBase64: {
+      type: 'string' as const,
+      description: 'Base64 file content for upload.',
+      required: false,
+      ownership: 'value' as const,
+      role: 'content' as const,
+      aliasOf: 'fileData',
       fillMode: { default: 'manual_static' as const, supportsRuntimeAI: true, supportsBuildtimeAI: true },
     },
     mimeType: {
@@ -67,16 +123,36 @@ export function overrideGoogleDrive(
         } else if (operation === 'download') {
           const fileId = String(inputs.fileId || '').trim();
           if (!fileId) throw new Error('fileId is required for download');
-          output = await googleApiRequest(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`, accessToken);
+          const metadata = await googleApiRequest(
+            `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?fields=id,name,mimeType,size,webViewLink,modifiedTime`,
+            accessToken,
+          );
+          const downloaded = await googleApiRequest(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`, accessToken);
+          const binaryPayload = downloaded && typeof downloaded === 'object' && 'dataBase64' in downloaded
+            ? downloaded as Record<string, any>
+            : null;
+          output = {
+            fileId,
+            id: fileId,
+            fileName: metadata?.name,
+            name: metadata?.name,
+            mimeType: metadata?.mimeType || binaryPayload?.contentType || 'application/octet-stream',
+            sizeBytes: Number(metadata?.size || binaryPayload?.size || 0) || undefined,
+            size: Number(metadata?.size || binaryPayload?.size || 0) || undefined,
+            webViewLink: metadata?.webViewLink,
+            modifiedTime: metadata?.modifiedTime,
+            ...(binaryPayload
+              ? { dataBase64: binaryPayload.dataBase64 }
+              : { content: downloaded }),
+          };
         } else if (operation === 'upload') {
           const fileName = String(inputs.fileName || '').trim();
           if (!fileName) throw new Error('fileName is required for upload');
-          const rawData = String(inputs.fileData || '');
+          const payload = normalizeUploadPayload(inputs);
+          const rawData = payload.rawData;
           if (!rawData) throw new Error('fileData is required for upload');
-          const mimeType = String(inputs.mimeType || 'application/octet-stream');
-          const data = rawData.startsWith('data:')
-            ? Buffer.from(rawData.split(',')[1] || '', 'base64')
-            : Buffer.from(rawData, /^[A-Za-z0-9+/]+={0,2}$/.test(rawData) ? 'base64' : 'utf8');
+          const mimeType = String(inputs.mimeType || payload.mimeType || 'application/octet-stream');
+          const data = bufferFromPayload(rawData);
           const boundary = `ctrlchecks_${Date.now()}`;
           const metadata: Record<string, any> = { name: fileName };
           if (inputs.folderId) metadata.parents = [String(inputs.folderId)];
@@ -91,10 +167,20 @@ export function overrideGoogleDrive(
             headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
             body,
           });
+          output = {
+            fileId: output?.id,
+            id: output?.id,
+            fileName: output?.name,
+            name: output?.name,
+            mimeType: output?.mimeType || mimeType,
+            sizeBytes: Number(output?.size || data.length),
+            size: Number(output?.size || data.length),
+            webViewLink: output?.webViewLink,
+          };
         } else {
           throw new Error(`Unsupported Google Drive operation: ${operation}`);
         }
-        return { success: true, output: { operation, data: output } };
+        return { success: true, output: { operation, data: output, ...output } };
       } catch (error: any) {
         return { success: false, error: { code: 'GOOGLE_DRIVE_FAILED', message: error?.message || 'Google Drive operation failed' } };
       }

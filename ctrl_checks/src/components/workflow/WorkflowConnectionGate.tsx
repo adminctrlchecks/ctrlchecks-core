@@ -12,6 +12,13 @@ interface Props {
   onDismiss: () => void;
 }
 
+const STATUS_LABELS: Record<string, string> = {
+  missing: 'Not connected',
+  missing_scope: 'Missing permission',
+  expired: 'Needs reconnect',
+  error: 'Check failed',
+};
+
 export function WorkflowConnectionGate({ missingConnections, workflowId, workflowName, isLoading, onDismiss }: Props) {
   const navigate = useNavigate();
 
@@ -88,12 +95,12 @@ export function WorkflowConnectionGate({ missingConnections, workflowId, workflo
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-foreground truncate">{conn.displayName}</p>
                     <p className="text-xs text-muted-foreground">
-                      Needed by {conn.nodes.length} node{conn.nodes.length !== 1 ? 's' : ''}
+                      {conn.reason || `Needed by ${conn.nodes.length} node${conn.nodes.length !== 1 ? 's' : ''}`}
                     </p>
                   </div>
                   <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400 shrink-0">
                     <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
-                    Not connected
+                    {STATUS_LABELS[conn.status ?? 'missing'] ?? 'Not connected'}
                   </span>
                 </div>
               ))}

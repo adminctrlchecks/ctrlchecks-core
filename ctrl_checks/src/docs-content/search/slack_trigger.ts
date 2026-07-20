@@ -33,4 +33,28 @@ export const slackTriggerSearchIndex = [
     href: '/docs/nodes/slack_trigger#operation-receive',
     text: 'validateSignature X-Slack-Signature signing secret timestamp',
   },
+  {
+    type: 'field',
+    title: 'Slack Trigger fields',
+    slug: 'slack_trigger',
+    category: 'Triggers',
+    href: '/docs/nodes/slack_trigger#operation-receive',
+    text: 'Fields include connectionId, eventTypes, channelIds, allowedUserIds, commandFilter, teamId, signingSecret, and validateSignature.',
+  },
+  {
+    type: 'field',
+    title: 'Slack Trigger outputs',
+    slug: 'slack_trigger',
+    category: 'Triggers',
+    href: '/docs/nodes/slack_trigger#operation-receive',
+    text: 'Outputs eventId eventType source userId username text timestamp teamId enterpriseId channelId channelName chatId threadTs messageTs command triggerId responseUrl callbackId actionId interactionType raw trigger workflow_id node_id sessionId _slack.',
+  },
+  {
+    type: 'field',
+    title: 'Slack Trigger connection setup',
+    slug: 'slack_trigger',
+    category: 'Triggers',
+    href: '/docs/nodes/slack_trigger#connection-setup',
+    text: 'Connect Slack OAuth2 in Connections with chat:write, app_mentions:read, channels:history, groups:history, im:history, mpim:history, and commands scopes. Save the app Signing Secret for X-Slack-Signature validation and use the generated webhook URL for Event Subscriptions, Slash Commands, and Interactivity.',
+  },
 ] satisfies DocsSearchIndexItem[];

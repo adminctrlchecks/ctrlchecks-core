@@ -28,6 +28,9 @@ interface FormConfig {
   submitButtonText: string;
   successMessage: string;
   redirectUrl: string;
+  allowMultipleSubmissions: boolean;
+  requireAuthentication: boolean;
+  captcha: boolean;
 }
 
 interface FormNodeSettingsProps {
@@ -161,18 +164,21 @@ export default function FormNodeSettings({ config, onConfigChange }: FormNodeSet
   ];
 
   const formHelp = {
-    formTitle: 'What this field is: The title shown at the top of the public form.\nHow to fill it: Use a short name that tells users what they are submitting.\nExample: Customer Feedback Form.',
-    formDescription: 'What this field is: Optional helper text shown below the form title.\nHow to fill it: Explain what the form is for or what users should prepare.\nExample: Tell us what happened and we will contact you within one business day.',
-    fields: 'What this section is: These are the questions users will answer on the form.\nHow to fill it: Add one field per question, choose the right type, and mark only truly necessary questions as required.\nExample: Name, Email, Phone, Message.',
-    fieldLabel: 'What this field is: The question or label shown to the person filling the form.\nHow to fill it: Write it in plain language.\nExample: Email Address.',
-    fieldType: 'What this field is: The kind of answer the form should collect.\nHow to choose it: Use Email for email addresses, Phone for phone numbers, Select/Radio for fixed choices, and Textarea for long answers.',
-    internalName: 'What this field is: The machine-friendly key used in workflow output after the form is submitted.\nHow to fill it: Use lowercase letters, numbers, and underscores.\nExample: customer_email. Later nodes can use {{$json.customer_email}}.',
-    placeholder: 'What this field is: Light example text shown inside the empty form field.\nHow to fill it: Show users the expected format without putting real data there.\nExample: alice@example.com.',
-    options: 'What this field is: The allowed choices for a Select or Radio field.\nHow to fill it: Type choices separated by commas.\nExample: New, In Progress, Done.',
-    required: 'What this field is: Controls whether the user must answer this question before submitting.\nHow to choose it: Turn it on only for information the workflow cannot run without.',
-    submitButtonText: 'What this field is: The text on the button users click to submit the form.\nHow to fill it: Use a clear action.\nExample: Send Request or Submit.',
-    successMessage: 'What this field is: The message shown after the form is submitted successfully.\nHow to fill it: Confirm what happened and what comes next.\nExample: Thank you. We received your request.',
-    redirectUrl: 'What this field is: Optional web page users are sent to after submitting.\nHow to fill it: Paste a full HTTPS URL, or leave empty to show the success message on the same page.\nExample: https://example.com/thank-you.',
+    formTitle: 'What this field is: The heading people see at the top of the public form.\nWhy it matters: It confirms they opened the right form.\nWhen to fill it: Before sharing the form URL.\nWhat to enter: A short name such as Support Request, Request a Demo, Vendor Onboarding, or Employee Equipment Request.\nWhere the value comes from: Your form purpose.\nHow to use it later: Later nodes usually map answers like {{$json.customer_email}}.\nAccepted format: Plain text.\nReal workplace example: Support Request for a form that creates a helpdesk ticket.\nIf it is empty or wrong: Submitters may be confused.\nCommon mistake: Using internal automation wording instead of submitter-friendly wording.',
+    formDescription: 'What this field is: Optional helper text under the form title.\nWhy it matters: It tells submitters what to prepare and what happens next.\nWhen to fill it: Use it when the title alone is not enough.\nWhat to enter: One to three friendly instruction sentences.\nWhere the value comes from: Your team process.\nHow to use it later: It is display text only; later nodes use answers like {{$json.data.message}}.\nAccepted format: Plain text.\nReal workplace example: Tell us what happened and support will reply within one business day.\nIf it is empty or wrong: Users may leave out needed details.\nCommon mistake: Adding private internal notes that submitters can see.',
+    fields: 'What this section is: The questions people answer on the form.\nWhy it matters: These become the data later workflow nodes can use.\nWhen to fill it: Add at least one field before sharing the form.\nWhat to enter: One field per answer you need, with a label, internal name, type, and required setting.\nWhere the value comes from: Your intake process.\nHow to use it later: Map answers such as {{$json.email}}, {{$json.data.email}}, or {{$json.files}}.\nAccepted format: Use Add Field, or JSON with name, label, type, required, placeholder, and options.\nReal workplace example: customer_email, issue_category, order_number, and message for a support form.\nIf it is empty or wrong: Later nodes may not find the data they need.\nCommon mistake: Renaming internal names after mapping downstream nodes.',
+    fieldLabel: 'What this field is: The visible question text for one answer.\nWhy it matters: Clear labels produce cleaner submissions.\nWhen to fill it: For every field.\nWhat to enter: Work Email, Order Number, Company Name, or How can we help?\nWhere the value comes from: Use words submitters understand.\nHow to use it later: Later nodes map the internal name, such as {{$json.work_email}}, not the label.\nAccepted format: Plain text.\nReal workplace example: Order Number tells customers to enter ORD-1048.\nIf it is empty or wrong: Users may answer incorrectly.\nCommon mistake: Writing customer_email instead of Customer Email.',
+    fieldType: 'What this field is: The kind of answer the form collects.\nWhy it matters: It controls validation and the input control.\nWhen to fill it: For every field.\nWhat to enter: text for short answers, email for email addresses, number for numeric values, tel for phone numbers, url for links, date for dates, textarea for long messages, select for a dropdown, checkbox for yes/no, radio for one visible choice, or file for uploads.\nWhere the value comes from: Pick it from the answer format.\nHow to use it later: Values appear under the internal name, such as {{$json.phone_number}}.\nAccepted format: text, email, number, tel, url, date, textarea, select, checkbox, radio, or file.\nReal workplace example: select for Department so routing values stay consistent.\nIf it is empty or wrong: Data may be rejected or messy.\nCommon mistake: Using text when email, number, url, or date validation would help.',
+    internalName: 'What this field is: The stable key used in workflow output.\nWhy it matters: Later nodes use it in mappings.\nWhen to fill it: Review it before connecting downstream nodes.\nWhat to enter: Lowercase letters, numbers, and underscores such as customer_email or issue_category.\nWhere the value comes from: The editor can generate it from the label; make it clear and stable.\nHow to use it later: Use {{$json.customer_email}} or {{$json.data.customer_email}}.\nAccepted format: lowercase_with_underscores.\nReal workplace example: issue_category routes requests to Billing or Technical.\nIf it is empty or wrong: Later mappings can fail.\nCommon mistake: Renaming it after downstream nodes already use it.',
+    placeholder: 'What this field is: Light example text inside an empty field.\nWhy it matters: It shows the expected format without adding more instructions.\nWhen to fill it: Use it for text-like fields when an example helps.\nWhat to enter: Fake examples such as alex@example.com, ORD-1048, or https://example.com.\nWhere the value comes from: The format your team expects.\nHow to use it later: Placeholder text is not submitted; later nodes use the actual answer like {{$json.order_number}}.\nAccepted format: Plain text, never real customer data.\nReal workplace example: ORD-1048 for Order Number.\nIf it is empty or wrong: Answers may be inconsistent.\nCommon mistake: Treating the placeholder as a submitted default value.',
+    options: 'What this field is: Allowed choices for select and radio fields.\nWhy it matters: Fixed choices make routing and reporting reliable.\nWhen to fill it: When the field type is select or radio.\nWhat to enter: Comma-separated choices or label:value pairs.\nWhere the value comes from: Approved departments, categories, statuses, or request types.\nHow to use it later: Branch on {{$json.issue_category}} equals billing or technical.\nAccepted format: Billing, Technical, Sales or Billing Team:billing.\nReal workplace example: Billing Team:billing, Technical Support:technical, Sales:sales.\nIf it is empty or wrong: Submitters may have no useful choices.\nCommon mistake: Changing option values without updating Switch or If/Else nodes.',
+    required: 'What this field is: Whether the submitter must answer this question.\nWhy it matters: It prevents missing values later nodes need.\nWhen to fill it: Turn it on only for essential answers.\nWhat to enter: true/on for mandatory answers, false/off for optional ones.\nWhere the value comes from: Your minimum intake requirement.\nHow to use it later: Required answers make mappings like {{$json.customer_email}} safer.\nAccepted format: true or false.\nReal workplace example: true for Work Email on a demo request form.\nIf it is empty or wrong: Too many required fields reduce completion; too few can break the workflow.\nCommon mistake: Marking every question required.',
+    submitButtonText: 'What this field is: The action label on the submit button.\nWhy it matters: It tells users what clicking will do.\nWhen to fill it: Change it when Submit is too generic.\nWhat to enter: Send Request, Submit Ticket, Register, Request Demo, or Send Feedback.\nWhere the value comes from: The submitter goal.\nHow to use it later: This is display text only; later nodes use submitted answers like {{$json.email}}.\nAccepted format: Short plain text.\nReal workplace example: Submit Ticket for a support form.\nIf it is empty or wrong: Users may be unsure what happens next.\nCommon mistake: Using vague wording like OK.',
+    successMessage: 'What this field is: The confirmation after a successful submission.\nWhy it matters: It prevents duplicate submissions and explains the next step.\nWhen to fill it: Before sharing the form.\nWhat to enter: Confirm receipt and set follow-up expectations.\nWhere the value comes from: Your team response process.\nHow to use it later: Later nodes can send separate follow-ups using {{$json.customer_email}}.\nAccepted format: Plain text.\nReal workplace example: Thanks, we received your request. A specialist will email you within one business day.\nIf it is empty or wrong: Submitters may submit again or contact the team separately.\nCommon mistake: Promising a response time your team cannot meet.',
+    redirectUrl: 'What this field is: Optional page users see after submitting.\nWhy it matters: It can send them to next steps, a thank-you page, or onboarding.\nWhen to fill it: Only when submitters should leave the form page.\nWhat to enter: A full HTTPS URL, or leave blank to show the success message.\nWhere the value comes from: A page controlled by your company or team.\nHow to use it later: It changes the user experience only; later nodes still use {{$json.data.email}}.\nAccepted format: A full URL beginning with https://.\nReal workplace example: https://example.com/event/next-steps.\nIf it is empty or wrong: Users stay on the form page or hit a broken link.\nCommon mistake: Using an internal admin URL.',
+    allowMultipleSubmissions: 'What this field is: Whether the same person can submit more than once.\nWhy it matters: Some processes are repeatable and some are one-time.\nWhen to fill it: Review it before sharing the form.\nWhat to enter: true for support, feedback, expenses, or maintenance requests; false for applications, votes, RSVPs, or eligibility checks.\nWhere the value comes from: Your business rule.\nHow to use it later: You can still check duplicates with {{$json.employee_id}} or {{$json.customer_email}}.\nAccepted format: true or false.\nReal workplace example: true for IT help requests.\nIf it is empty or wrong: Valid repeats may be blocked or duplicates may appear.\nCommon mistake: Turning it off for customer support.',
+    requireAuthentication: 'What this field is: Whether submitters must sign in.\nWhy it matters: It ties submissions to known users for protected processes.\nWhen to fill it: Turn it on for internal or sensitive forms; leave it off for public forms.\nWhat to enter: true to require sign-in, false for public access.\nWhere the value comes from: Your access policy.\nHow to use it later: Later nodes may use submitter identity with {{$json.data}}.\nAccepted format: true or false.\nReal workplace example: true for employee equipment requests.\nIf it is empty or wrong: Public users may be blocked or internal forms may accept anonymous submissions.\nCommon mistake: Enabling it on a marketing lead form.',
+    captcha: 'What this field is: A spam-prevention check before submission.\nWhy it matters: It helps stop automated spam from creating workflow runs.\nWhen to fill it: Turn it on for public forms unknown users can reach.\nWhat to enter: true to require CAPTCHA, false for trusted internal forms.\nWhere the value comes from: The form spam risk.\nHow to use it later: CAPTCHA only controls whether the workflow starts; later nodes receive successful answers like {{$json.message}}.\nAccepted format: true or false.\nReal workplace example: true for a public contact form that creates CRM leads.\nIf it is empty or wrong: Spam may create runs or trusted users may face friction.\nCommon mistake: Using CAPTCHA instead of also validating required fields.',
   };
 
   return (
@@ -399,6 +405,74 @@ export default function FormNodeSettings({ config, onConfigChange }: FormNodeSet
           <p className="text-xs text-muted-foreground">
             Leave empty to show success message on the same page
           </p>
+        </div>
+      </div>
+
+      {/* Form Behavior */}
+      <div className="space-y-3">
+        <Label className="min-w-0 break-words">Form Behavior</Label>
+
+        <div className="flex items-center justify-between gap-2 rounded-md border p-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <Label htmlFor="allowMultipleSubmissions" className="cursor-pointer min-w-0 break-words">
+              Allow Multiple Submissions
+            </Label>
+            <InputGuideLink
+              fieldKey="allowMultipleSubmissions"
+              fieldLabel="Allow Multiple Submissions"
+              fieldType="boolean"
+              nodeType="form"
+              helpText={formHelp.allowMultipleSubmissions}
+              className="mt-0"
+            />
+          </div>
+          <Switch
+            id="allowMultipleSubmissions"
+            checked={config.allowMultipleSubmissions}
+            onCheckedChange={(checked) => handleConfigFieldChange('allowMultipleSubmissions', checked)}
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-2 rounded-md border p-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <Label htmlFor="requireAuthentication" className="cursor-pointer min-w-0 break-words">
+              Require Authentication
+            </Label>
+            <InputGuideLink
+              fieldKey="requireAuthentication"
+              fieldLabel="Require Authentication"
+              fieldType="boolean"
+              nodeType="form"
+              helpText={formHelp.requireAuthentication}
+              className="mt-0"
+            />
+          </div>
+          <Switch
+            id="requireAuthentication"
+            checked={config.requireAuthentication}
+            onCheckedChange={(checked) => handleConfigFieldChange('requireAuthentication', checked)}
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-2 rounded-md border p-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <Label htmlFor="captcha" className="cursor-pointer min-w-0 break-words">
+              Enable CAPTCHA
+            </Label>
+            <InputGuideLink
+              fieldKey="captcha"
+              fieldLabel="Enable CAPTCHA"
+              fieldType="boolean"
+              nodeType="form"
+              helpText={formHelp.captcha}
+              className="mt-0"
+            />
+          </div>
+          <Switch
+            id="captcha"
+            checked={config.captcha}
+            onCheckedChange={(checked) => handleConfigFieldChange('captcha', checked)}
+          />
         </div>
       </div>
     </div>

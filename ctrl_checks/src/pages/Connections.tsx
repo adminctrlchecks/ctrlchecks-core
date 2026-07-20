@@ -16,6 +16,7 @@ import { isComingSoonProvider } from '@/components/connections/connectionAvailab
 import { useConnections } from '@/hooks/useConnections';
 import { useCredentialTypes } from '@/hooks/useCredentialTypes';
 import { invalidateAfterConnectionChange } from '@/lib/queryInvalidation';
+import { QUERY_KEYS } from '@/lib/queryKeys';
 import type { ConnectionRecord, CredentialTypeDefinition } from '@/lib/api/connections';
 
 // ─── Provider categories ──────────────────────────────────────────────────────
@@ -188,6 +189,21 @@ export default function Connections() {
   const returnTo = searchParams.get('returnTo');
   const workflowName = searchParams.get('workflowName');
   const requestedService = searchParams.get('service') || searchParams.get('credentialType');
+  const returnToWorkflowId = returnTo?.match(/^\/workflow\/([^/?#]+)/)?.[1];
+
+  // Invalidate the workflow connection gate when leaving this page so that
+  // returning to /workflow/:id always refetches readiness — the workflow page
+  // may have been unmounted while the user was here, so its own
+  // "came back from /connections" recheck cannot be relied on.
+  useEffect(() => {
+    return () => {
+      if (returnToWorkflowId) {
+        qc.invalidateQueries({ queryKey: QUERY_KEYS.workflowConnectionStatus(returnToWorkflowId) });
+      } else {
+        qc.invalidateQueries({ queryKey: QUERY_KEYS.workflowConnectionStatusRoot });
+      }
+    };
+  }, [returnToWorkflowId, qc]);
 
   useEffect(() => {
     if (!user?.id) return;

@@ -1046,7 +1046,7 @@ Return JSON only with node_type fields matching the exact node types from the li
     const outputNodeTypes = [
       'google_gmail', 'email', 'slack_message', 'discord', 'telegram',
       'notification', 'webhook_response', 'respond_to_webhook',
-      'database_write', 'aws_s3', 'dropbox', 'airtable', 'notion', 'clickup',
+      'postgresql', 'mysql', 'mongodb', 'db', 'aws_s3', 'dropbox', 'airtable', 'notion', 'clickup',
     ];
     
     // Find output nodes (nodes that are final destinations)
@@ -1168,7 +1168,7 @@ Return JSON only with node_type fields matching the exact node types from the li
     }
 
     if (promptLower.includes('database') || promptLower.includes('store') || promptLower.includes('save') || promptLower.includes('db')) {
-      const nodeType = availableNodeTypes.find(t => t === 'database_write' || t === 'db');
+      const nodeType = availableNodeTypes.find(t => t === 'postgresql' || t === 'db' || t === 'mysql' || t === 'mongodb');
       if (nodeType) steps.push({ node_type: nodeType, order: steps.length + 1 });
     }
 

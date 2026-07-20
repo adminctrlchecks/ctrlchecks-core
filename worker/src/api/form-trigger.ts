@@ -12,6 +12,7 @@ import {
   dispatchFormRemote,
 } from '../services/trigger-service-client';
 import { logger } from '../core/logger';
+import { normalizeExecutionStatus, normalizeExecutionTrigger } from '../core/execution/execution-db-enums';
 
 export { coerceFormFields, type FormFieldConfig } from './form-field-coercion';
 
@@ -397,8 +398,8 @@ export async function submitForm(req: Request, res: Response) {
         .insert({
           workflow_id: workflowId,
           user_id: workflow.user_id,
-          status: "waiting",
-          trigger: "form",
+          status: normalizeExecutionStatus("waiting"),
+          trigger: normalizeExecutionTrigger("form"),
           waiting_for_node_id: effectiveNodeId,
           input: {},
           logs: [],
@@ -478,7 +479,7 @@ export async function submitForm(req: Request, res: Response) {
     const { error: updateError } = await db
       .from("executions")
       .update({
-        status: "running",
+        status: normalizeExecutionStatus("running"),
         input: executionInput,
         waiting_for_node_id: null,
       })
