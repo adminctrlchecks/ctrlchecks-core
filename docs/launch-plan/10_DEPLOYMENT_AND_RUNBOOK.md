@@ -47,7 +47,7 @@ COGNITO_DOMAIN=ap-south-1atyvsyflq.auth.ap-south-1.amazoncognito.com
 COGNITO_ISSUER=https://cognito-idp.ap-south-1.amazonaws.com/ap-south-1_aTYvSYflq
 
 # AI — GEMINI_API_KEY already set. Add GEMINI_API_KEYS once you have a second key:
-# GEMINI_API_KEYS=AIzaSyDrHWCvQCZWByQ8LbdlTqCiw2SJeT8xCpc,AIzaSy...secondkey
+# GEMINI_API_KEYS=AIzaSy...,AIzaSy...secondkey
 GEMINI_KEY_COOLDOWN_SECONDS=60
 GEMINI_MAX_RETRIES=2
 
