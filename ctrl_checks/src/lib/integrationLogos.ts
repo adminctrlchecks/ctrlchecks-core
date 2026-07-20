@@ -44,6 +44,7 @@ export const INTEGRATION_LOGO_MAP: Record<string, string> = {
   google_sheets_trigger: '/integrations-logos/Google-Sheets.svg',
   google_drive:     '/integrations-logos/Google-Drive.svg',
   google_drive_trigger: '/integrations-logos/Google-Drive.svg',
+  google_doc:       '/integrations-logos/Google-Docs.svg',
   google_docs:      '/integrations-logos/Google-Docs.svg',
   google_calendar:  '/integrations-logos/Google-Calender.svg',
   google_calendar_trigger: '/integrations-logos/Google-Calender.svg',
@@ -58,6 +59,7 @@ export const INTEGRATION_LOGO_MAP: Record<string, string> = {
   firebase:         '/integrations-logos/Firebase.svg',
   redis:            '/integrations-logos/Redis.svg',
   supabase:         '/integrations-logos/Supabase.svg',
+  db:               '/integrations-logos/Supabase.svg',
 
   // Storage
   dropbox:          '/integrations-logos/Dropbox.svg',
@@ -126,6 +128,45 @@ export const INTEGRATION_LOGO_MAP: Record<string, string> = {
   // Misc
   contentful:       '/integrations-logos/Contentful.svg',
   wordpress:        '/integrations-logos/WordPress.svg',
+
+  // DevOps / Monitoring
+  docker:           '/integrations-logos/Docker.svg',
+  kubernetes:       '/integrations-logos/Kubernetes.svg',
+  pagerduty:        '/integrations-logos/PagerDuty.svg',
+  datadog:          '/integrations-logos/Datadog.svg',
+  sentry:           '/integrations-logos/Sentry.svg',
+
+  // Authentication
+  okta:             '/integrations-logos/Okta.svg',
+  auth0:            '/integrations-logos/Auth0.svg',
+  keycloak:         '/integrations-logos/Keycloak.svg',
+
+  // Payment / E-commerce
+  razorpay:         '/integrations-logos/Razorpay.svg',
+  magento:          '/integrations-logos/Magento.svg',
+  bigcommerce:      '/integrations-logos/BigCommerce.svg',
+
+  // Analytics
+  mixpanel:         '/integrations-logos/Mixpanel.svg',
+  segment:          '/integrations-logos/Segment.svg',
+  amplitude:        '/integrations-logos/Amplitude.svg',
+  elasticsearch:    '/integrations-logos/Elasticsearch.svg',
+  google_analytics: '/integrations-logos/Google-Analytics.svg',
+
+  // Productivity / Storage / Database
+  todoist:          '/integrations-logos/Todoist.svg',
+  box:              '/integrations-logos/Box.svg',
+  minio:            '/integrations-logos/MinIO.svg',
+  snowflake:        '/integrations-logos/Snowflake.svg',
+  sqlite:           '/integrations-logos/SQLite.svg',
+  reddit:           '/integrations-logos/Reddit.svg',
+
+  // AI
+  google_veo:       '/integrations-logos/Google-Veo.svg',
+  azure_openai:     '/integrations-logos/Azure-OpenAI.svg',
+
+  // CRM
+  microsoft_dynamics: '/integrations-logos/Microsoft-Dynamics.svg',
 };
 
 /** Returns the logo path for a given node type, or undefined if none exists. */
