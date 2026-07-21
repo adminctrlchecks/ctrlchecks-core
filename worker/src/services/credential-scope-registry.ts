@@ -1,3 +1,5 @@
+import { connectorRegistry } from './connectors/connector-registry';
+
 export const PROVIDER_REQUIRED_SCOPES: Record<string, string[]> = {
   google: [
     'openid',
@@ -178,7 +180,22 @@ const NODE_REQUIRED_SCOPES: Record<string, string[]> = {
 export function credentialRequirementForNode(nodeType: string): { provider: string; requiredScopes: string[] } | null {
   const key = nodeType.trim().toLowerCase();
   const provider = NODE_PROVIDER[key];
-  if (!provider) return null;
-  const requiredScopes = NODE_REQUIRED_SCOPES[key] ?? requiredScopesForProvider(provider);
-  return { provider, requiredScopes };
+  if (provider) {
+    const requiredScopes = NODE_REQUIRED_SCOPES[key] ?? requiredScopesForProvider(provider);
+    return { provider, requiredScopes };
+  }
+
+  // NODE_PROVIDER above only covers OAuth-scoped providers. Non-OAuth node types
+  // (database connection strings, Stripe/Shopify/AWS/SFTP API keys, etc.) aren't
+  // listed there, so without this fallback they silently skip the scope-aware
+  // readiness gate (getWorkflowConnectionReadiness) and fall through to the legacy
+  // discovery path. Fall back to the connector registry — the single source of
+  // truth for node->provider mapping — instead of hand-duplicating another
+  // 30-40 node type entries here that would drift out of sync over time.
+  const connector = connectorRegistry.getConnectorByNodeType(key);
+  if (!connector) return null;
+  return {
+    provider: connector.credentialContract.provider,
+    requiredScopes: connector.credentialContract.scopes ?? [],
+  };
 }

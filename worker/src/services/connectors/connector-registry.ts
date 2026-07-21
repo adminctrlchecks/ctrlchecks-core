@@ -45,6 +45,7 @@ export class ConnectorRegistry {
 
   constructor() {
     this.registerAllConnectors();
+    this.validateNoNodeTypeCollisions();
   }
 
   /**
@@ -440,7 +441,12 @@ export class ConnectorRegistry {
         required: true,
         credentialFieldName: 'connectionString',
       },
-      nodeTypes: ['postgresql', 'mysql', 'mongodb', 'db'],
+      // ✅ FIX: previously listed postgresql/mysql/mongodb/db here too. Since Map iteration
+      // is insertion order and this connector registers first, it silently shadowed the
+      // dedicated postgresql/mysql/mongodb/db (Supabase) connectors below for every lookup,
+      // injecting a nonexistent 'connectionString' field into Supabase credentials (apiKey)
+      // and misreporting all four node types as "Database Connection String" in the UI.
+      nodeTypes: [],
       description: 'Connect to database via connection string',
     });
 
@@ -1363,7 +1369,9 @@ export class ConnectorRegistry {
         required: true,
         credentialFieldName: 'appId',
       },
-      nodeTypes: ['microsoft_teams_trigger', 'microsoft_teams'],
+      // ✅ FIX: 'microsoft_teams' removed — it belongs to the microsoft_teams connector above;
+      // listing it here only worked because that connector happens to register first.
+      nodeTypes: ['microsoft_teams_trigger'],
       description: 'Receive Microsoft Teams Bot Framework activities and reply to Teams conversations',
     });
 
@@ -1998,6 +2006,35 @@ export class ConnectorRegistry {
     }
 
     this.connectors.set(connector.id, connector);
+  }
+
+  /**
+   * Guard against the class of bug where two connectors both claim the same
+   * node type: getConnectorByNodeType() resolves by Map insertion order, so an
+   * overlap silently makes the earlier-registered connector shadow the other
+   * one for every runtime lookup (credential resolution, injection, gating)
+   * instead of surfacing as an error. Fail fast at startup instead.
+   */
+  private validateNoNodeTypeCollisions(): void {
+    const owner = new Map<string, string>(); // nodeType -> connector id
+    const collisions: string[] = [];
+
+    for (const connector of this.connectors.values()) {
+      for (const nodeType of connector.nodeTypes) {
+        const existingOwnerId = owner.get(nodeType);
+        if (existingOwnerId && existingOwnerId !== connector.id) {
+          collisions.push(`'${nodeType}' claimed by both '${existingOwnerId}' and '${connector.id}'`);
+        } else {
+          owner.set(nodeType, connector.id);
+        }
+      }
+    }
+
+    if (collisions.length > 0) {
+      throw new Error(
+        `ConnectorRegistry: ambiguous nodeType ownership detected — each node type must map to exactly one connector. ${collisions.join('; ')}`
+      );
+    }
   }
 
   /**

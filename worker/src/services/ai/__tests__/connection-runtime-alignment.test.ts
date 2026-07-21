@@ -12,6 +12,28 @@ function read(relPath: string): string {
 }
 
 describe('connection runtime alignment', () => {
+  it('has no two connectors claiming the same node type', () => {
+    // getConnectorByNodeType() resolves by Map insertion order, so an overlap
+    // silently makes one connector shadow another for every runtime credential
+    // lookup instead of surfacing as an error (e.g. a generic 'database_connection'
+    // catch-all previously shadowed the dedicated postgresql/mysql/mongodb/db connectors).
+    const owner = new Map<string, string>();
+    const collisions: string[] = [];
+
+    for (const connector of connectorRegistry.getAllConnectors()) {
+      for (const nodeType of connector.nodeTypes) {
+        const existingOwnerId = owner.get(nodeType);
+        if (existingOwnerId && existingOwnerId !== connector.id) {
+          collisions.push(`'${nodeType}' claimed by both '${existingOwnerId}' and '${connector.id}'`);
+        } else {
+          owner.set(nodeType, connector.id);
+        }
+      }
+    }
+
+    expect(collisions).toEqual([]);
+  });
+
   it('maps every connector node type to exactly one catalog entry by vaultKey', () => {
     const catalog = getConnectionCatalog();
     const catalogByVaultKey = new Map(catalog.map((entry) => [entry.vaultKey, entry]));
