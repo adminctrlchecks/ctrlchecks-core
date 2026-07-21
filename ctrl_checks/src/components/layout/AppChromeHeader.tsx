@@ -12,7 +12,7 @@ import { useAuth } from '@/lib/auth';
 import { useRole } from '@/hooks/useRole';
 import { useTheme } from '@/hooks/useTheme';
 import { cn } from '@/lib/utils';
-import { Moon, Sun, Shield, UserCircle, LogOut, User, Zap } from 'lucide-react';
+import { Moon, Sun, Shield, UserCircle, LogOut, User, Zap, Search } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { USER_PRIMARY_NAV } from './nav-config';
 
@@ -71,6 +71,15 @@ export function AppChromeHeader({
 
         <div className="flex items-center gap-2 sm:gap-3">
           {endSlot}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate('/search')}
+            className="rounded-full"
+            title="Search"
+          >
+            <Search className="h-5 w-5" />
+          </Button>
           {showThemeToggle && (
             <Button
               variant="ghost"

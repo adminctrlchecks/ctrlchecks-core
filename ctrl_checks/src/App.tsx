@@ -11,6 +11,7 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import { AdminRoute } from "./components/admin/AdminRoute";
 import SchedulerInitializer from "./components/workflow/SchedulerInitializer";
 import { ConnectionStatus } from "./components/ConnectionStatus";
+import { SmartHelpLayer } from "@/components/smart-help/SmartHelpLayer";
 
 const Chatbot = lazy(() => import("@/components/ui/Chatbot"));
 const Index = lazy(() => import("./pages/Index"));
@@ -58,6 +59,8 @@ const Terms = lazy(() => import("./pages/Terms"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Subscriptions = lazy(() => import("./pages/Subscriptions"));
 const Connections = lazy(() => import("./pages/Connections"));
+const AdaptiveUI = lazy(() => import("./pages/AdaptiveUI"));
+const SmartSearch = lazy(() => import("./pages/SmartSearch"));
 const IntroductionPage = lazy(() => import("./pages/doc-pages/IntroductionPage"));
 const GettingStartedPage = lazy(() => import("./pages/doc-pages/GettingStartedPage"));
 const NodeDocPage = lazy(() => import("./pages/doc-pages/NodeDocPage"));
@@ -76,6 +79,14 @@ const ConditionalChatbot = () => {
       <Chatbot />
     </Suspense>
   );
+};
+
+// SmartHelpLayer's toggle FAB shares the same bottom-right corner as the landing
+// page's Chatbot FAB — hide it there so the two never overlap.
+const ConditionalSmartHelp = () => {
+  const location = useLocation();
+  if (location.pathname === "/") return null;
+  return <SmartHelpLayer />;
 };
 
 const queryClient = new QueryClient({
@@ -131,6 +142,8 @@ const App = () => (
                   <Route path="/settings/profile" element={<Profile />} />
                   <Route path="/subscriptions" element={<Subscriptions />} />
                   <Route path="/connections" element={<Connections />} />
+                  <Route path="/adaptive-ui" element={<AdaptiveUI />} />
+                  <Route path="/search" element={<SmartSearch />} />
                   <Route path="/docs" element={<Navigate to="/docs/introduction" replace />} />
                   <Route path="/docs/introduction" element={<IntroductionPage />} />
                   <Route path="/docs/getting-started/:slug" element={<GettingStartedPage />} />
@@ -231,6 +244,7 @@ const App = () => (
               </Suspense>
               <ConditionalChatbot />
               <ConnectionStatus />
+              <ConditionalSmartHelp />
             </BrowserRouter>
           </TooltipProvider>
           </WorkflowAuthProvider>

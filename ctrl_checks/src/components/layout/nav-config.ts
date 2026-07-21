@@ -11,6 +11,7 @@ import {
   Users,
   ArrowLeft,
   CreditCard,
+  Sparkles,
 } from 'lucide-react';
 
 export interface UserNavItem {
@@ -25,6 +26,7 @@ export const USER_PRIMARY_NAV: UserNavItem[] = [
   { title: 'Workflows', path: '/workflows', icon: GitBranch },
   { title: 'Executions', path: '/executions', icon: Play },
   { title: 'Connections', path: '/connections', icon: Link2 },
+  { title: 'Adaptive UI', path: '/adaptive-ui', icon: Sparkles },
   { title: 'Documentation', path: '/docs', icon: BookOpen },
 ];
 

@@ -297,6 +297,11 @@ import testType1NodeHandler from './api/test-type1-node';
 import testAllType1NodesHandler from './api/test-all-type1-nodes';
 import aiGateway from './api/ai-gateway';
 import aiErrorGuidanceHandler from './api/ai-error-guidance';
+import aiHelpHandler from './api/ai-help';
+import adaptiveUIHandler from './api/adaptive-ui';
+import generateOnboardingPathHandler from './api/onboarding/generate';
+import { getOnboardingStateHandler, patchOnboardingStateHandler } from './api/onboarding/state';
+import searchHandler from './api/search';
 import { generateHandler as smartPlannerGenerate, answerHandler as smartPlannerAnswer, getWorkflowHandler as smartPlannerGetWorkflow } from './api/smart-planner';
 import * as trainingStats from './api/training-stats';
 import getCredentialsRoute from './api/get-credentials';
@@ -1461,6 +1466,47 @@ app.post('/api/capability-selection/generate', asyncHandler(authenticateUser), a
 app.post('/api/capability-selection/confirm', asyncHandler(authenticateUser), asyncHandler(geminiWalletContextMiddleware), asyncHandler(requireWorkflowCapacityForAi), asyncHandler(confirmCapabilityWorkflow));
 console.log('🎯 Capability Selection API available at /api/capability-selection/{analyze,generate,confirm}');
 
+// Adaptive UI Engine — personalizes existing screens from intent + existing product data.
+// Uses the same intent-analysis/capability-grouping calls as capability-selection/analyze,
+// so it shares the same auth + Gemini-wallet + capacity middleware chain.
+app.post(
+  '/api/adaptive-ui',
+  asyncHandler(authenticateUser),
+  asyncHandler(geminiWalletContextMiddleware),
+  asyncHandler(requireWorkflowCapacityForAi),
+  distributedRateLimit({ endpointKey: 'adaptive-ui', perUserLimit: 30, globalLimit: 1000, windowMs: 60_000 }),
+  asyncHandler(adaptiveUIHandler)
+);
+console.log('🧭 Adaptive UI Engine available at /api/adaptive-ui');
+
+// Onboarding Agent — extends the same engine/pattern as /api/adaptive-ui (see
+// worker/src/services/onboarding/). Generate calls Gemini so it shares that
+// middleware chain; state read/write is a cheap DB round trip, auth only.
+app.post(
+  '/api/onboarding/generate',
+  asyncHandler(authenticateUser),
+  asyncHandler(geminiWalletContextMiddleware),
+  asyncHandler(requireWorkflowCapacityForAi),
+  distributedRateLimit({ endpointKey: 'onboarding-generate', perUserLimit: 20, globalLimit: 800, windowMs: 60_000 }),
+  asyncHandler(generateOnboardingPathHandler)
+);
+app.get('/api/onboarding/state', asyncHandler(authenticateUser), asyncHandler(getOnboardingStateHandler));
+app.patch('/api/onboarding/state', asyncHandler(authenticateUser), asyncHandler(patchOnboardingStateHandler));
+console.log('🧭 Onboarding Agent available at /api/onboarding/{generate,state}');
+
+// Smart Search — a single-call Gemini generator (not the capability-grouper
+// pipeline), so it skips requireWorkflowCapacityForAi (that gate limits
+// workflow-generation quota, which is unrelated to searching) but still
+// shares geminiWalletContextMiddleware since it does consume Gemini usage.
+app.post(
+  '/api/search',
+  asyncHandler(authenticateUser),
+  asyncHandler(geminiWalletContextMiddleware),
+  distributedRateLimit({ endpointKey: 'smart-search', perUserLimit: 40, globalLimit: 1500, windowMs: 60_000 }),
+  asyncHandler(searchHandler)
+);
+console.log('🔎 Smart Search available at /api/search');
+
 // Smart Planner–Driven Workflow Orchestration (planner decides WHAT, system decides HOW)
 app.post(
   '/api/generate',
@@ -2029,6 +2075,18 @@ console.log('🤖 AI Gateway available at /api/ai');
 
 // AI Error Guidance endpoint (no auth required — guidance is not sensitive)
 app.post('/api/ai/error-guidance', asyncHandler(aiErrorGuidanceHandler));
+
+// Contextual AI Help endpoint (SmartHelpLayer) — hover/click triggered, no auth required
+app.post(
+  '/api/ai-help',
+  distributedRateLimit({
+    endpointKey: 'ai-help',
+    perUserLimit: 60,
+    globalLimit: 2000,
+    windowMs: 60_000,
+  }),
+  asyncHandler(aiHelpHandler)
+);
 
 // Training Statistics API
 app.get('/api/training/stats', asyncHandler(trainingStats.getTrainingStats));

@@ -395,3 +395,10 @@
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-muted-foreground/40;
 }
+
+/* Smart Help (AI Help Mode) — hides the native cursor everywhere so the
+   custom glowing pointer in SmartHelpLayer reads as the only cursor. */
+html.smart-help-active,
+html.smart-help-active * {
+  cursor: none !important;
+}

@@ -23,6 +23,7 @@ import { Tables, Json } from "@/integrations/aws/types";
 import { toast } from "@/hooks/use-toast";
 import { is406Error } from "@/lib/utils";
 import { workflowAPI } from "@/lib/api/workflowAPI";
+import { OnboardingPathCard } from "@/components/onboarding/OnboardingPathCard";
 
 type WorkflowRecord = Tables<'workflows'> & {
   last_execution?: { started_at: string; status: string } | null;
@@ -473,6 +474,8 @@ export default function Dashboard() {
               </WorkflowActionButton>
             </div>
           </div>
+
+        <OnboardingPathCard />
 
         {/* Stats */}
         {statsError && (
