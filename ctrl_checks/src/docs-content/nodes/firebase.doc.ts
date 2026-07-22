@@ -79,5 +79,5 @@ export const firebaseDoc: NodeDoc = {
     { error: 'collection/documentId/data/databaseUrl is required', cause: 'The selected operation is missing one of its required fields.', fix: 'Fill Collection for all operations, Document ID for get/update/delete, Data for add/update/realtime_set, and Database URL for realtime operations.' },
     { error: '<Firebase Admin SDK error> / _error', cause: 'Credential formatting, permissions, database URL, or Firebase service availability failed.', fix: 'Read {{$json._error}}, verify the service account JSON, and test the same collection/path in Firebase Console.' },
   ],
-  relatedNodes: ['db', 'google_cloud_storage', 'mongodb'],
+  relatedNodes: ['supabase', 'google_cloud_storage', 'mongodb'],
 };

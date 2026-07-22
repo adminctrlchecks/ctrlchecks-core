@@ -4146,10 +4146,10 @@ Output:
     ],
   },
   {
-    // Backend canonical type is 'db' (the Supabase node). Must match so the node appears
-    // in the library (backend-supported list has 'db', not 'supabase') and so the Properties
-    // panel loads the backend 'db' schema — which is what renders the connection picker.
-    type: 'db',
+    // Backend canonical type is 'supabase'. Must match so the node appears in the library
+    // (backend-supported list has 'supabase') and so the Properties panel loads the
+    // backend 'supabase' schema — which is what renders the connection picker.
+    type: 'supabase',
     label: 'Supabase',
     category: 'database',
     icon: 'Database',

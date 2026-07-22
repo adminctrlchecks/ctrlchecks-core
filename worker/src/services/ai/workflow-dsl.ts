@@ -1964,7 +1964,7 @@ export class DSLGenerator {
     }
     
     // Sheets/database nodes typically read
-    if (nodeTypeLower.includes('sheet') || nodeTypeLower.includes('database') || nodeTypeLower.includes('db')) {
+    if (nodeTypeLower.includes('sheet') || nodeTypeLower.includes('database') || nodeTypeLower.includes('db') || nodeTypeLower === 'supabase') {
       // Check if prompt mentions "write" or "create"
       if (/\b(write|create|insert|add)\b/.test(promptLower)) {
         return 'write';

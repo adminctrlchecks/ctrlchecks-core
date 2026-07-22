@@ -33,7 +33,7 @@ export class EnhancedKeywordMatcher {
     ['google_gmail', ['gmail', 'g mail', 'google mail', 'google email', 'email', 'send email', 'mail']],
     // Database variations
     ['postgresql', ['database', 'sql', 'read from database', 'query database', 'write to database', 'save to database', 'insert', 'update', 'select']],
-    ['db', ['supabase', 'supa', 'supa db', 'db']],
+    ['supabase', ['supabase', 'supa', 'supa db', 'db']],
     // HTTP variations
     ['http_request', ['http', 'api', 'request', 'fetch', 'call api', 'http request', 'api call', 'endpoint']],
     // Schedule variations

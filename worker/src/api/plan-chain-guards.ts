@@ -297,7 +297,7 @@ export function validateCanonicalChainCompleteness(
       const suspicious = canonical.filter((n) => {
         const nt = stripPlanTokenToType(n);
         return (
-          ['delay', 'wait', 'db', 'google_sheets', 'salesforce', 'ai_agent', 'ai_chat_model', 'ai_service'].includes(nt) &&
+          ['delay', 'wait', 'supabase', 'google_sheets', 'salesforce', 'ai_agent', 'ai_chat_model', 'ai_service'].includes(nt) &&
           !hasExplicitCue(promptLower, nt)
         );
       });

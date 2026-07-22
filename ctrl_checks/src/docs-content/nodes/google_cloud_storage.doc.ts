@@ -75,5 +75,5 @@ export const googleCloudStorageDoc: NodeDoc = {
     { error: 'fileName/fileContent is required for <operation>', cause: 'Upload/download/delete was missing an object path or upload was missing content.', fix: 'Fill File Name for upload/download/delete and File Content for upload.' },
     { error: '<GCS operation failed> / _error', cause: 'Google authentication, IAM permission, bucket existence, object path, or Storage API execution failed.', fix: 'Read {{$json._error}}, verify service account IAM on the bucket, and test the object path in Google Cloud Console.' },
   ],
-  relatedNodes: ['google_drive', 'firebase', 'mongodb', 'db'],
+  relatedNodes: ['google_drive', 'firebase', 'mongodb', 'supabase'],
 };

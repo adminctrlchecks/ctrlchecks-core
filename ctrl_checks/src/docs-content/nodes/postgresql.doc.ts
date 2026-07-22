@@ -253,5 +253,5 @@ export const postgresqlDoc: NodeDoc = {
     { error: 'operation must be one of: executeQuery, insert, update, delete', cause: 'The operation value does not match the runtime executor.', fix: 'Use the UI dropdown values or update older saved workflow JSON.' },
     { error: 'The server does not support SSL connections', cause: 'SSL mode was enabled for a database that does not accept SSL.', fix: 'Use SSL Mode disable for local/non-SSL servers, or require for managed databases that need SSL.' },
   ],
-  relatedNodes: ['mysql', 'db', 'timescaledb', 'google_bigquery'],
+  relatedNodes: ['mysql', 'supabase', 'timescaledb', 'google_bigquery'],
 };

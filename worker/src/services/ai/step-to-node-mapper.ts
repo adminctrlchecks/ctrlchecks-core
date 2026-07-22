@@ -91,8 +91,8 @@ export function mapActionToNodeType(action: AllowedAction, context?: {
       if (promptLower.includes('mongodb') || promptLower.includes('mongo')) {
         return ['mongodb'];
       }
-      if (promptLower.includes('db')) {
-        return ['db'];
+      if (promptLower.includes('supabase') || promptLower.includes('db')) {
+        return ['supabase'];
       }
       // Default generic SQL/database requests to the concrete PostgreSQL node.
       return ['postgresql'];

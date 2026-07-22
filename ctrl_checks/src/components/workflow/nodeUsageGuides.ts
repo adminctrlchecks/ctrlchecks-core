@@ -4355,7 +4355,7 @@ Output: {
     ],
   },
 
-  db: {
+  supabase: {
     overview: 'Use the canonical Supabase node to run Supabase SDK operations. Runtime supports select, insert, update, delete, and rpc; the old Raw SQL query option is not executed by this node.',
     inputs: ['url', 'anonKey', 'serviceRoleKey', 'schema', 'operation', 'table', 'columns', 'filters', 'filter', 'limit', 'order', 'data', 'functionName', 'params'],
     outputs: ['rows', 'inserted', 'count', 'result', '_error'],
@@ -4380,11 +4380,11 @@ Output: {
     ],
   },
 
-  supabase: {
-    overview: 'Legacy guide key for older Supabase references. The UI-visible canonical node type is db.',
-    inputs: ['See db'],
+  db: {
+    overview: 'Legacy guide key for older Supabase references. The UI-visible canonical node type is supabase.',
+    inputs: ['See supabase'],
     outputs: ['rows', 'inserted', 'count', 'result', '_error'],
-    example: `Use node type: db
+    example: `Use node type: supabase
 Operation: select
 Table: users
 
@@ -4393,8 +4393,8 @@ Output: {
   count: 1
 }`,
     tips: [
-      'Prefer the db node guide for active workflows',
-      'Raw SQL query is not supported by the db runtime',
+      'Prefer the supabase node guide for active workflows',
+      'Raw SQL query is not supported by the supabase runtime',
       'Use PostgreSQL for raw SQL workflows',
     ],
   },

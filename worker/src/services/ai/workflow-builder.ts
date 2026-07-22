@@ -5471,9 +5471,9 @@ Return JSON:
             // Find data source node and create operation node (hubspot, airtable)
             const dataSourceIndex = simplifiedStructure.steps.findIndex((s: any) => {
               const stepType = s.data?.type || s.type || s.nodeType;
-              return ['google_sheets', 'postgresql', 'mysql', 'mongodb', 'db'].includes(stepType);
+              return ['google_sheets', 'postgresql', 'mysql', 'mongodb', 'supabase'].includes(stepType);
             });
-            
+
             const createOperationIndex = simplifiedStructure.steps.findIndex((s: any) => {
               const stepType = s.data?.type || s.type || s.nodeType;
               return ['hubspot', 'airtable', 'salesforce', 'zoho_crm', 'pipedrive'].includes(stepType);
@@ -6361,7 +6361,7 @@ Return JSON:
     // If it's a simple workflow, remove unnecessary transformation nodes
     if (isSimpleNotification || isSimpleSave || isSimpleRead) {
       const transformationNodeTypes = ['set_variable', 'if_else', 'text_formatter', 'javascript', 'json_parser', 'edit_fields', 'merge_data'];
-      const actionNodeTypes = ['slack_message', 'discord', 'google_gmail', 'email', 'google_sheets', 'postgresql', 'mysql', 'mongodb', 'db', 'google_doc'];
+      const actionNodeTypes = ['slack_message', 'discord', 'google_gmail', 'email', 'google_sheets', 'postgresql', 'mysql', 'mongodb', 'supabase', 'google_doc'];
       
       // Find action nodes (the actual task)
       const actionNodes = steps.filter(step => 
@@ -6648,7 +6648,7 @@ Return JSON:
         stepLower.includes('database') ||
         step.type === 'database_read' ||
         step.type === 'database_write' ||
-        step.type === 'db'
+        step.type === 'supabase'
       )) {
         const preference = nodeEquivalenceMapper.getNodeOption('database', nodePreferences.database);
         if (preference && nodeLibrary.getSchema(preference.nodeType)) {
@@ -8904,7 +8904,7 @@ Return JSON:
     if (typeLower.includes('database_write')) {
       return ['affectedRows', 'insertId', 'result', 'rowsAffected'];
     }
-    if (typeLower === 'db') {
+    if (typeLower === 'supabase') {
       return ['data', 'error', 'rows'];
     }
     if (typeLower.includes('postgres') || typeLower.includes('mysql') || 
@@ -9707,13 +9707,13 @@ return {
       // ============================================
       'database_read': ['rows', 'data', 'result'],
       'database_write': ['affectedRows', 'insertId', 'result', 'rowsAffected'],
-      'db': ['data', 'error', 'rows'],
+      'supabase': ['data', 'error', 'rows'],
       'postgresql': ['rows', 'data', 'result'],
       'mysql': ['rows', 'data', 'result'],
       'mongodb': ['documents', 'data', 'result'],
       'redis': ['value', 'data', 'result'],
       'airtable': ['record', 'records', 'data', 'output'],
-      
+
       // ============================================
       // CRM & MARKETING NODES
       // ============================================
@@ -9850,7 +9850,7 @@ return {
         // Database
         'database_read': ['query', 'connectionString', 'host', 'port', 'database', 'username', 'password'],
         'database_write': ['query', 'connectionString', 'host', 'port', 'database', 'username', 'password'],
-        'db': ['operation', 'table', 'select', 'filter', 'data'],
+        'supabase': ['operation', 'table', 'select', 'filter', 'data'],
         'postgresql': ['query', 'host', 'port', 'database', 'username', 'password'],
         'mysql': ['query', 'host', 'port', 'database', 'username', 'password'],
         'mongodb': ['operation', 'collection', 'query', 'data', 'connectionString'],
@@ -10020,7 +10020,7 @@ return {
       // Database
       'database_read': 'rows',
       'database_write': 'affectedRows',
-      'db': 'data',
+      'supabase': 'data',
       'postgresql': 'rows',
       'mysql': 'rows',
       'mongodb': 'documents',
@@ -10153,7 +10153,7 @@ return {
       // Database
       'database_read': 'query', // ✅ CRITICAL: database_read receives SQL query via 'query'
       'database_write': 'query', // ✅ CRITICAL: database_write receives SQL query via 'query'
-      'db': 'data', // ✅ CRITICAL: db receives record data via 'data' field (for insert/update)
+      'supabase': 'data', // ✅ CRITICAL: supabase receives record data via 'data' field (for insert/update)
       'postgresql': 'query', // ✅ CRITICAL: postgresql receives SQL query via 'query'
       'mysql': 'query', // ✅ CRITICAL: mysql receives SQL query via 'query'
       'mongodb': 'data', // ✅ CRITICAL: mongodb receives document data via 'data' field (for insert/update)
@@ -10465,12 +10465,12 @@ return {
         // ============================================
         'database_read': ['rows', 'data', 'result'],
         'database_write': ['affectedRows', 'insertId', 'result', 'rowsAffected'],
-        'db': ['data', 'error', 'rows'],
+        'supabase': ['data', 'error', 'rows'],
         'postgresql': ['rows', 'data', 'result'],
         'mysql': ['rows', 'data', 'result'],
         'mongodb': ['documents', 'data', 'result'],
         'redis': ['value', 'data', 'result'],
-        
+
         // ============================================
         // CRM & MARKETING NODES
         // ============================================
@@ -11100,7 +11100,7 @@ return {
       // CRITICAL: Validate that connections respect logical flow patterns:
       // Pattern 1: data source (read) → loop → create operation (write)
       // Pattern 2: integration (read) → data source (write)
-      const dataSourceTypes = ['google_sheets', 'google_doc', 'postgresql', 'mysql', 'mongodb', 'db', 'airtable', 'notion'];
+      const dataSourceTypes = ['google_sheets', 'google_doc', 'postgresql', 'mysql', 'mongodb', 'supabase', 'airtable', 'notion'];
       const loopType = 'loop';
       const createOperationTypes = ['hubspot', 'zoho', 'pipedrive', 'airtable', 'notion'];
       const integrationReadTypes = ['hubspot', 'zoho', 'pipedrive', 'airtable', 'notion'];
@@ -13247,7 +13247,7 @@ Identify what needs to be changed. Respond with JSON:
       'postgresql',
       'mysql',
       'mongodb',
-      'db',
+      'supabase',
       'airtable',
       'notion',
       'csv',

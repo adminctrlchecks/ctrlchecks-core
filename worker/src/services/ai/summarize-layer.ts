@@ -6845,7 +6845,7 @@ Rules:
     // Strong, explicit data-source cues.
     const dataCueMap: Array<{ nodeType: string; re: RegExp; reason: string }> = [
       { nodeType: 'google_sheets', re: /\bgoogle\s*sheet|spreadsheet|sheet\b/, reason: 'explicit sheet data source requested' },
-      { nodeType: 'db', re: /\bsupabase\b/, reason: 'explicit db data source requested' },
+      { nodeType: 'supabase', re: /\bsupabase\b/, reason: 'explicit supabase data source requested' },
       { nodeType: 'postgresql', re: /\bpostgres|postgresql\b/, reason: 'explicit postgresql data source requested' },
       { nodeType: 'mysql', re: /\bmysql\b/, reason: 'explicit mysql data source requested' },
       { nodeType: 'mongodb', re: /\bmongodb|mongo\b/, reason: 'explicit mongodb data source requested' },

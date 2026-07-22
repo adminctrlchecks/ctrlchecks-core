@@ -362,8 +362,8 @@ export class UnifiedNodeRegistry implements INodeRegistry {
     'mongodb': 'mongodb',
     'mongo': 'mongodb',
     'mongo_db': 'mongodb',
-    'db': 'db',
-    'supabase': 'db',
+    'supabase': 'supabase',
+    'db': 'supabase', // legacy alias — canonical type reverted 'db' -> 'supabase'
     'redis': 'redis',
     'firebase': 'firebase',
     'firestore': 'firebase',
@@ -1326,8 +1326,7 @@ export class UnifiedNodeRegistry implements INodeRegistry {
     mongodb:       { credentialTypeId: 'mongodb_connection',   label: 'MongoDB Connection',       authType: 'basic_auth' },
     redis:         { credentialTypeId: 'redis_connection',     label: 'Redis Connection',         authType: 'api_key' },
     firebase:      { credentialTypeId: 'firebase_credentials', label: 'Firebase Credentials',     authType: 'api_key' },
-    // Supabase node's canonical type is 'db'; its credential type is supabase_api_key (provider 'db').
-    db:            { credentialTypeId: 'supabase_api_key',     label: 'Supabase Connection',      authType: 'bearer_token' },
+    supabase:      { credentialTypeId: 'supabase_api_key',     label: 'Supabase Connection',      authType: 'bearer_token' },
     oracle_database: { credentialTypeId: 'oracle_connection', label: 'Oracle Connection',        authType: 'basic_auth' },
     sftp:          { credentialTypeId: 'sftp_credentials',     label: 'SFTP Credentials',         authType: 'basic_auth' },
     ftp:           { credentialTypeId: 'ftp_credentials',      label: 'FTP Credentials',          authType: 'basic_auth' },
@@ -1742,7 +1741,7 @@ export class UnifiedNodeRegistry implements INodeRegistry {
     if (fromBase) return fromBase;
     if (t === 'http_request' || t === 'http_post' || t === 'graphql' || t === 'webhook_response') return 'http';
     if (t === 'email') return 'email';
-    if (t.includes('database_') || t === 'postgresql' || t === 'db' || t === 'mysql' || t === 'mongodb' || t === 'redis')
+    if (t.includes('database_') || t === 'postgresql' || t === 'supabase' || t === 'mysql' || t === 'mongodb' || t === 'redis')
       return 'database';
     if (t === 'linkedin' || t === 'twitter' || t === 'instagram' || t === 'facebook' || t === 'facebook_trigger') return t.split('_')[0];
     if (t === 'vercel') return 'vercel';

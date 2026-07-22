@@ -1536,7 +1536,7 @@ export const credentialTypeDefinitions: CredentialTypeDefinition[] = addCredenti
   // ─── Supabase ─────────────────────────────────────────────────────────────────
   {
     id: 'supabase_api_key',
-    provider: 'db',
+    provider: 'supabase',
     displayName: 'Supabase Project Credentials',
     authType: 'bearer_token',
     inputFields: [

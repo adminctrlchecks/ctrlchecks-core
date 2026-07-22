@@ -424,7 +424,7 @@ export function convertSchemaToConfigField(
     frontendType = 'firebaseDocumentSelect';
   }
 
-  if (nodeType === 'db' && fieldKey === 'table') {
+  if (nodeType === 'supabase' && fieldKey === 'table') {
     frontendType = 'supabaseTableSelect';
   }
 

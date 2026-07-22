@@ -129,7 +129,6 @@ describe('NODE_TYPES — metadata shape contract', () => {
 const KNOWN_NODE_TYPES_GAPS = new Set([
   'cache_get',         // caching node — needs UI metadata
   'cache_set',         // caching node — needs UI metadata
-  'db',                // generic DB alias — needs UI metadata
   // 'delay'            — closed Task 6
   // 'email'            — closed Task 6
   // 'execute_workflow' — closed Task 6

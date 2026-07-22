@@ -1046,7 +1046,7 @@ Return JSON only with node_type fields matching the exact node types from the li
     const outputNodeTypes = [
       'google_gmail', 'email', 'slack_message', 'discord', 'telegram',
       'notification', 'webhook_response', 'respond_to_webhook',
-      'postgresql', 'mysql', 'mongodb', 'db', 'aws_s3', 'dropbox', 'airtable', 'notion', 'clickup',
+      'postgresql', 'mysql', 'mongodb', 'supabase', 'aws_s3', 'dropbox', 'airtable', 'notion', 'clickup',
     ];
     
     // Find output nodes (nodes that are final destinations)
@@ -1167,8 +1167,8 @@ Return JSON only with node_type fields matching the exact node types from the li
       if (nodeType) steps.push({ node_type: nodeType, order: steps.length + 1 });
     }
 
-    if (promptLower.includes('database') || promptLower.includes('store') || promptLower.includes('save') || promptLower.includes('db')) {
-      const nodeType = availableNodeTypes.find(t => t === 'postgresql' || t === 'db' || t === 'mysql' || t === 'mongodb');
+    if (promptLower.includes('database') || promptLower.includes('store') || promptLower.includes('save') || promptLower.includes('db') || promptLower.includes('supabase')) {
+      const nodeType = availableNodeTypes.find(t => t === 'postgresql' || t === 'supabase' || t === 'mysql' || t === 'mongodb');
       if (nodeType) steps.push({ node_type: nodeType, order: steps.length + 1 });
     }
 

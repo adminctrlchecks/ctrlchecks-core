@@ -282,7 +282,7 @@ const overridesByType: Record<string, OverrideFn> = {
   write_binary_file: overrideWriteBinaryFile,
   // ✅ BATCH 9: Database
   postgresql: overridePostgresql,
-  db: overrideSupabase,
+  supabase: overrideSupabase,
   mysql: overrideMysql,
   mongodb: overrideMongodb,
   firebase: overrideFirebase,

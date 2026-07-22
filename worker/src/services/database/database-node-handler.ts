@@ -52,7 +52,7 @@ export async function executeDatabaseNode(
       return await runSQLiteNode(context);
     }
 
-    case 'db': {
+    case 'supabase': {
       const { runSupabaseNode } = await import('./supabaseNode');
       return await runSupabaseNode(context);
     }

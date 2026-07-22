@@ -93,5 +93,5 @@ export const timescaledbDoc: NodeDoc = {
     { error: 'timeColumn/interval/bucketColumn/valueColumn is required for <operation> operation', cause: 'A Timescale helper is missing its required time-series field.', fix: 'Fill Time Column and Bucket Interval, plus Group Column for Time Bucket or Value Column for First/Last.' },
     { error: 'TimescaleDB operation failed', cause: 'Connection, SSL, table name, column name, SQL syntax, interval, or permission failed in PostgreSQL/TimescaleDB.', fix: 'Test SELECT 1, verify SSL, confirm table/column names, and use Execute Query for advanced filters.' },
   ],
-  relatedNodes: ['postgresql', 'sql_server', 'mysql', 'db'],
+  relatedNodes: ['postgresql', 'sql_server', 'mysql', 'supabase'],
 };

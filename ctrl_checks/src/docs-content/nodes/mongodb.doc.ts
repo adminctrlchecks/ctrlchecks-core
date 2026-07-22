@@ -91,5 +91,5 @@ export const mongodbDoc: NodeDoc = {
     { error: 'document/documents array/filter/update/pipeline is required for <operation> operation', cause: 'The selected operation is missing its operation-specific payload.', fix: 'Fill Document for insertOne, Documents for insertMany, Filter for update/delete, Update for update, or Pipeline for aggregate.' },
     { error: '<MongoDB driver error> / _error', cause: 'Connection string, network allowlist, authentication, JSON shape, or collection permissions failed.', fix: 'Read {{$json._error}}, verify the Atlas connection string and allowlist, then test the same operation in MongoDB Compass.' },
   ],
-  relatedNodes: ['db', 'firebase', 'postgresql', 'google_cloud_storage'],
+  relatedNodes: ['supabase', 'firebase', 'postgresql', 'google_cloud_storage'],
 };

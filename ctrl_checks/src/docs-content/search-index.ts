@@ -18,7 +18,6 @@ export async function loadDocsSearchIndex(): Promise<DocsSearchIndexItem[]> {
     import('./search/http_request').then((mod) => mod.httpRequestSearchIndex),
     import('./search/respond_to_webhook').then((mod) => mod.respondToWebhookSearchIndex),
     import('./search/postgresql').then((mod) => mod.postgresqlSearchIndex),
-    import('./search/db').then((mod) => mod.dbSearchIndex),
     import('./search/supabase').then((mod) => mod.supabaseSearchIndex),
     import('./search/google_sheets').then((mod) => mod.googleSheetsSearchIndex),
     import('./search/google_sheets_trigger').then((mod) => mod.googleSheetsTriggerSearchIndex),

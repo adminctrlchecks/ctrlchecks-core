@@ -2059,11 +2059,11 @@ export class NodeLibrary {
 
   private createSupabaseSchema(): NodeSchema {
     return {
-      type: 'db',
+      type: 'supabase',
       label: 'Supabase',
       category: 'database',
       description: 'Interact with Supabase (PostgreSQL + realtime + storage)',
-      providers: ['db'],
+      providers: ['supabase'],
       configSchema: {
         required: ['table', 'operation'],
         optional: {
@@ -2097,7 +2097,7 @@ export class NodeLibrary {
           'Other database systems',
         ],
         keywords: [
-          'db', 'db database', 'db db', 'db table',
+          'supabase', 'db', 'db database', 'db db', 'db table',
           'db realtime', 'db storage', 'db api',
           'db integration', 'db backend'
         ],

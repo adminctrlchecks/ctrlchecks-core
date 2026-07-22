@@ -59,7 +59,7 @@ const NODE_TYPE_ALIASES: Record<string, string[]> = {
   
   // Database Nodes
   'postgresql': ['postgres', 'postgresql', 'pg', 'postgres_db', 'database', 'db_write', 'write_db', 'db_read', 'read_db', 'query_db', 'read database', 'query database', 'write database', 'read', 'select', 'fetch', 'get', 'retrieve', 'write', 'insert', 'update', 'delete'],
-  'db': ['supa', 'supa_db', 'db'],
+  'supabase': ['supabase', 'supa', 'supa_db', 'db'],
   'mysql': ['my_sql', 'mysql'],
   'mongodb': ['mongo', 'mongo_db', 'mongodb'],
   

@@ -242,5 +242,5 @@ export const mysqlDoc: NodeDoc = {
     { error: 'where clause is required for update operation', cause: 'Update was selected without a Where filter.', fix: 'Add a narrow Where object such as {"id":"{{$json.id}}"}.' },
     { error: 'operation must be one of: executeQuery, insert, update, delete', cause: 'The operation value does not match the runtime executor.', fix: 'Choose one of the dropdown operations now aligned with the worker.' },
   ],
-  relatedNodes: ['postgresql', 'db', 'mongodb', 'redis'],
+  relatedNodes: ['postgresql', 'supabase', 'mongodb', 'redis'],
 };

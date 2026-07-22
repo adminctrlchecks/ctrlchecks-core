@@ -23,6 +23,7 @@ import { Edge } from '@xyflow/react';
 import { Json } from '@/integrations/aws/types';
 import { updateTemplate } from '@/lib/api/admin';
 import { validateAndFixWorkflow } from '@/lib/workflowValidation';
+import { enforceFrontendRenderContract, normalizeBackendWorkflow, validateNodeTypesRegistered } from '@/lib/node-type-normalizer';
 
 export default function TemplateEditor() {
   const { id } = useParams();
@@ -63,29 +64,45 @@ export default function TemplateEditor() {
       if (data) {
         setTemplateData(data);
         setWorkflowName(data.name);
-        
-        // CRITICAL: Normalize and regenerate IDs to ensure uniqueness
-        // This also filters out any nodes that don't exist in the node library
-        const originalNodeCount = Array.isArray(data.nodes) ? data.nodes.length : 0;
-        const normalized = validateAndFixWorkflow({
+
+        // Run the same 4-step hydration pipeline WorkflowBuilder.loadWorkflow() uses,
+        // so admin template editing never diverges from what end users see when they
+        // apply the template (see docs/TEMPLATE_NODE_AUDIT_AND_ADMIN_EDITOR_FIX_PLAN.md).
+        const backendWorkflow = {
           nodes: (data.nodes as unknown as WorkflowNode[]) || [],
-          edges: (data.edges as unknown as Edge[]) || []
+          edges: (data.edges as unknown as Edge[]) || [],
+        };
+
+        const normalizedBackend = normalizeBackendWorkflow(backendWorkflow);
+        const normalized = validateAndFixWorkflow({
+          nodes: normalizedBackend.nodes,
+          edges: normalizedBackend.edges,
         });
-        
-        const removedNodes = originalNodeCount - normalized.nodes.length;
-        setInvalidNodesCount(removedNodes);
-        
-        if (removedNodes > 0) {
+        const contracted = enforceFrontendRenderContract({
+          nodes: normalized.nodes as any[],
+          edges: normalized.edges as any[],
+        });
+
+        const typeValidation = validateNodeTypesRegistered(contracted.nodes as any[]);
+        setInvalidNodesCount(typeValidation.missingTypes.length);
+
+        if (!typeValidation.valid) {
           toast({
-            title: 'Invalid Nodes Removed',
-            description: `${removedNodes} node(s) were removed because they don't exist in the node library. Only nodes from the node library are allowed.`,
+            title: 'Unregistered Node Types Found',
+            description: `${typeValidation.missingTypes.length} node(s) use a type not currently registered: ${typeValidation.missingTypes.join(', ')}. They may not render or execute correctly until fixed.`,
             variant: 'destructive',
           });
         }
-        
-        setNodes(normalized.nodes);
-        setEdges(normalized.edges);
-        setIsDirty(removedNodes > 0); // Mark as dirty if nodes were removed
+
+        const validEdges = (contracted.edges as any[]).filter((edge: any) => {
+          const sourceExists = (contracted.nodes as any[]).some((n: any) => n.id === edge.source);
+          const targetExists = (contracted.nodes as any[]).some((n: any) => n.id === edge.target);
+          return sourceExists && targetExists;
+        });
+
+        setNodes(contracted.nodes as WorkflowNode[]);
+        setEdges(validEdges as Edge[]);
+        setIsDirty(false);
       }
     } catch (error) {
       console.error('Error loading template:', error);
@@ -212,7 +229,7 @@ export default function TemplateEditor() {
           )}
           {invalidNodesCount > 0 && (
             <Badge variant="destructive" className="mr-2">
-              ⚠️ {invalidNodesCount} invalid node(s) removed
+              ⚠️ {invalidNodesCount} unregistered node type(s)
             </Badge>
           )}
           <Button variant="outline" size="sm" onClick={handleSave} disabled={isSaving}>

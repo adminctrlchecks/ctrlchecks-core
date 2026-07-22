@@ -87,5 +87,5 @@ export const airtableDoc: NodeDoc = {
     { error: 'Airtable node: Invalid records format: <message>', cause: 'Records or Fields for a write operation could not be parsed into an object/array.', fix: 'Use valid JSON with exact Airtable field names, preferably an array of {fields:{...}} objects.' },
     { error: 'Airtable node: Unsupported operation: <operation>', cause: 'Operation was not list/read, get, create, update, upsert, or delete.', fix: 'Choose one of the supported operation values; the Table resource option does not add table-management operations.' },
   ],
-  relatedNodes: ['db', 'google_sheets', 'notion', 'postgresql'],
+  relatedNodes: ['supabase', 'google_sheets', 'notion', 'postgresql'],
 };

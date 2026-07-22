@@ -425,6 +425,7 @@ function resolveNodeTypeAlias(nodeType: string, validNodeTypes: Set<string>): st
         'mongo_db': 'mongodb',
         'mongodb': 'mongodb',
         'supabase': 'supabase',
+        'db': 'supabase', // legacy alias — canonical type reverted 'db' -> 'supabase'
         'redis': 'redis',
 
         // ── Storage ──────────────────────────────────────────────────────────

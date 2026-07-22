@@ -15157,7 +15157,7 @@ export async function executeNodeLegacy(
     case 'redis':
     case 'snowflake':
     case 'sqlite':
-    case 'db':
+    case 'supabase':
     case 'firebase':
     case 'google_cloud_storage':
     case 'timescaledb':

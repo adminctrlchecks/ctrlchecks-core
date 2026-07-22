@@ -75,7 +75,7 @@ import { zendeskDoc } from '../nodes/zendesk.doc';
 import { zohoCrmDoc } from '../nodes/zoho_crm.doc';
 import { bitbucketDoc } from '../nodes/bitbucket.doc';
 import { airtableDoc } from '../nodes/airtable.doc';
-import { dbDoc } from '../nodes/db.doc';
+import { supabaseDoc } from '../nodes/supabase.doc';
 import { firebaseDoc } from '../nodes/firebase.doc';
 import { googleCloudStorageDoc } from '../nodes/google_cloud_storage.doc';
 import { mongodbDoc } from '../nodes/mongodb.doc';
@@ -605,7 +605,7 @@ const AUDITED_NODE_DOCS: Array<{
     credentialKind: 'airtable',
   },
   {
-    doc: dbDoc,
+    doc: supabaseDoc,
     usageInputKeys: ['operation', 'url'],
     outputDescriptionTerms: ['_error'],
     troubleshootingTerms: [

@@ -8,7 +8,6 @@ import { formDoc } from './nodes/form.doc';
 import { httpRequestDoc } from './nodes/http_request.doc';
 import { respondToWebhookDoc } from './nodes/respond_to_webhook.doc';
 import { postgresqlDoc } from './nodes/postgresql.doc';
-import { dbDoc } from './nodes/db.doc';
 import { supabaseDoc } from './nodes/supabase.doc';
 import { googleSheetsDoc } from './nodes/google_sheets.doc';
 import { googleSheetsTriggerDoc } from './nodes/google_sheets_trigger.doc';
@@ -186,7 +185,6 @@ export const allNodes: NodeDoc[] = [
   httpRequestDoc,
   respondToWebhookDoc,
   postgresqlDoc,
-  dbDoc,
   supabaseDoc,
   googleSheetsDoc,
   googleSheetsTriggerDoc,

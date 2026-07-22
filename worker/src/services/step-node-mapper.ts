@@ -51,7 +51,7 @@ function mapActionToNodeTypeFromRegistry(action: AllowedAction): string {
     
     case 'store_database':
       // Prefer concrete database nodes now that generic database_read/database_write are legacy-only.
-      return allNodeTypes.find(nt => nt === 'postgresql' || nt === 'db' || nt === 'mysql' || nt === 'mongodb') || 'postgresql';
+      return allNodeTypes.find(nt => nt === 'postgresql' || nt === 'supabase' || nt === 'mysql' || nt === 'mongodb') || 'postgresql';
     
     case 'condition_check':
       // Find conditional node from registry
@@ -88,7 +88,7 @@ const INTEGRATION_KEYWORDS: Record<string, string[]> = {
   'postgresql': ['postgres', 'postgresql', 'database', 'sql', 'db', 'store', 'read database', 'query database'],
   'mysql': ['mysql'],
   'mongodb': ['mongo', 'mongodb'],
-  'db': ['supabase', 'supa', 'supa db'],
+  'supabase': ['supabase', 'supa', 'supa db', 'db'],
   
   // CRM
   'hubspot': ['hubspot', 'hub spot'],
@@ -272,8 +272,8 @@ export class StepNodeMapper {
           nodeType = 'mysql';
         } else if (context.includes('mongo')) {
           nodeType = 'mongodb';
-        } else if (context.includes('db')) {
-          nodeType = 'db';
+        } else if (context.includes('supabase') || context.includes('db')) {
+          nodeType = 'supabase';
         } else {
           // Default generic SQL/database requests to the concrete PostgreSQL node.
           nodeType = 'postgresql';

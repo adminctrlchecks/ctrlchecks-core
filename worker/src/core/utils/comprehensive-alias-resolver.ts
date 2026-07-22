@@ -267,7 +267,8 @@ export const COMPREHENSIVE_NODE_ALIAS_REGISTRY: Record<string, string[]> = {
     'postgresql db',
   ],
 
-  'db': [
+  'supabase': [
+    'supabase',
     'supa',
     'supa db',
     'db',

@@ -93,5 +93,5 @@ export const sqlServerDoc: NodeDoc = {
     { error: 'operation must be one of: executeQuery, insert, update, delete, storedProcedure', cause: 'The operation value is unsupported or stale.', fix: 'Choose a supported SQL Server operation from the dropdown.' },
     { error: 'SQL Server operation failed', cause: 'SQL Server rejected the login, certificate, parameter, table name, procedure name, or SQL statement.', fix: 'Check credentials, Encrypt/Trust Server Certificate, SQL syntax, table names, parameter names, and permissions.' },
   ],
-  relatedNodes: ['postgresql', 'mysql', 'timescaledb', 'db'],
+  relatedNodes: ['postgresql', 'mysql', 'timescaledb', 'supabase'],
 };

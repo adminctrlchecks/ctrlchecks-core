@@ -155,7 +155,7 @@ export class WorkflowAnalyzer {
         if (nodeType.includes('http') || nodeType.includes('api')) {
           externalServices.add('http');
         }
-        if (nodeType.includes('database') || nodeType === 'db') {
+        if (nodeType.includes('database') || nodeType === 'db' || nodeType === 'supabase') {
           externalServices.add('database');
         }
         if (nodeType.includes('google') || nodeType.includes('gmail')) {

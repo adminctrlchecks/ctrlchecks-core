@@ -44,7 +44,7 @@ const getNodeIcon = (nodeType?: string, nodeName?: string): React.ComponentType<
   if (type.includes('webhook')) return Webhook;
   if (type.includes('javascript') || type.includes('code')) return Code;
   if (type.includes('if') || type.includes('else') || type.includes('condition')) return GitBranch;
-  if (type.includes('database') || type.includes('db')) return Database;
+  if (type.includes('database') || type.includes('db') || type.includes('supabase')) return Database;
   if (type.includes('form')) return FileText;
   if (type.includes('chat') || type.includes('message')) return MessageSquare;
   if (type.includes('interval') || type.includes('timer')) return Timer;
