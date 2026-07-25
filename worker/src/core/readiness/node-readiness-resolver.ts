@@ -84,6 +84,18 @@ export interface CredentialReadinessInput {
   simpleDescription?: string;
   technicalDescription?: string;
   howToObtain?: string;
+  status?: string;
+  action?: string;
+  nodeId?: string;
+  nodeType?: string;
+  nodeLabel?: string;
+  operation?: string;
+  operationLabel?: string;
+  connectionId?: string;
+  connectionName?: string;
+  requiredScopes?: string[];
+  availableScopes?: string[];
+  reason?: string;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -291,6 +303,14 @@ function credentialDisplayName(credential: CredentialReadinessInput): string {
   );
 }
 
+function actionLabel(action: string | undefined): string {
+  if (action === 'connect') return 'Connect';
+  if (action === 'select_connection') return 'Select a connection';
+  if (action === 'reconnect') return 'Reconnect';
+  if (action === 'repair') return 'Repair';
+  return 'Review';
+}
+
 export function buildCredentialReadinessIssues(input: {
   nodes: WorkflowNode[];
   credentials?: CredentialReadinessInput[];
@@ -311,19 +331,24 @@ export function buildCredentialReadinessIssues(input: {
         ? String((node.data as any)?.label || def?.label || nodeType || node.id)
         : String(def?.label || nodeType || 'This node');
       const displayName = credentialDisplayName(credential);
+      const reason = credential.reason || credential.simpleDescription || credential.technicalDescription || `${displayName} is not connected or active.`;
+      const operation = credential.operation;
+      const operationLabel = credential.operationLabel;
       issues.push({
         kind: 'missing_credential',
         code: 'NODE_MISSING_CREDENTIAL',
-        nodeId: node?.id || String(nodeId || ''),
-        nodeType,
-        nodeLabel,
+        nodeId: credential.nodeId || node?.id || String(nodeId || ''),
+        nodeType: credential.nodeType || nodeType,
+        nodeLabel: credential.nodeLabel || nodeLabel,
         provider: credential.provider,
         credentialType: credential.type || credential.category,
-        credentialId: credential.credentialId || credential.vaultKey,
-        message: `${nodeLabel} needs a ${displayName} connection.`,
-        reason: credential.simpleDescription || credential.technicalDescription || `${displayName} is not connected or active.`,
-        helpText: credential.howToObtain || `Connect ${displayName} before running this node.`,
-        nextSteps: [`Connect or reconnect ${displayName}.`],
+        credentialId: credential.connectionId || credential.credentialId || credential.vaultKey,
+        operation,
+        operationLabel,
+        message: `${credential.nodeLabel || nodeLabel} needs ${displayName}${operationLabel ? ` for ${operationLabel}` : ''}.`,
+        reason,
+        helpText: credential.howToObtain || reason,
+        nextSteps: [`${actionLabel(credential.action)} ${displayName}.`],
       });
     }
   }
@@ -386,6 +411,27 @@ export function buildReadinessDetails(issues: NodeReadinessIssue[]): NodeReadine
       fieldKey: issue.fieldKey,
       friendlyLabel: issue.fieldLabel || humanizeKey(issue.fieldKey),
       fieldLabel: issue.fieldLabel || humanizeKey(issue.fieldKey),
+      description: issue.reason || issue.helpText || issue.message,
+      reason: issue.reason,
+    });
+  }
+  for (const issue of missingCredentials) {
+    const groupKey = issue.nodeId || issue.nodeType;
+    if (!groupKey) continue;
+    if (!grouped.has(groupKey)) {
+      grouped.set(groupKey, {
+        nodeId: issue.nodeId,
+        nodeLabel: issue.nodeLabel,
+        nodeType: issue.nodeType,
+        operation: issue.operation,
+        missingFields: [],
+      });
+    }
+    grouped.get(groupKey)!.missingFields.push({
+      fieldName: 'connection',
+      fieldKey: 'connection',
+      friendlyLabel: issue.credentialType || issue.provider || 'Connection',
+      fieldLabel: issue.credentialType || issue.provider || 'Connection',
       description: issue.reason || issue.helpText || issue.message,
       reason: issue.reason,
     });

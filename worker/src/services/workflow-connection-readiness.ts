@@ -1,16 +1,9 @@
 /**
  * Workflow Connection Readiness Service
  *
- * Single authoritative, scope-aware answer to "can every credential-bearing
- * node in this workflow actually run?". The Connections page shows saved
- * `connections` rows, but runtime execution resolves through
- * `unified_credentials` with node-specific scopes (e.g. Gmail needs
- * `gmail.send`). This service reconciles both stores per node and returns
- * one readiness envelope that the workflow gate, run button, and execution
- * preflight can all consume.
- *
- * Security: never log or return secrets, access/refresh tokens, encrypted
- * credentials, or raw OAuth payloads — only ids, providers, scopes, statuses.
+ * Canonical, registry-driven answer to whether every credential-capable node
+ * has a usable connection. This is the single backend contract consumed by
+ * workflow open/save/run/debug readiness paths.
  */
 
 import {
@@ -25,21 +18,34 @@ import {
   credentialFixMessage,
 } from './credential-errors';
 import { credentialTypeDefinitions } from '../credentials-system/credential-type-registry';
+import type { AuthType, ConnectionRecord } from '../credentials-system/types';
 import { logger } from '../core/logger';
 import {
   canonicalCredentialTypeId,
   canonicalProvider,
-  findCanonicalConnectionByProvider as findCanonicalCredentialConnectionByProvider,
+  getDecryptedConnection,
+  listCanonicalConnectionsByProvider,
 } from './canonical-credential-lookup';
+import { connectorRegistry } from './connectors/connector-registry';
 
 export { canonicalCredentialTypeId, canonicalProvider } from './canonical-credential-lookup';
 
 export type ConnectionReadinessStatus =
   | 'ready'
   | 'missing'
-  | 'expired'
+  | 'invalid_ref'
+  | 'runtime_missing'
   | 'missing_scope'
+  | 'expired'
+  | 'revoked'
   | 'error';
+
+export type ConnectionReadinessAction =
+  | 'connect'
+  | 'select_connection'
+  | 'reconnect'
+  | 'repair'
+  | 'none';
 
 export type ConnectionReadinessAuthType =
   | 'oauth2'
@@ -54,20 +60,28 @@ export interface WorkflowConnectionRequirement {
   nodeId: string;
   nodeType: string;
   nodeLabel: string;
-  /** Canonical provider (google, linkedin, notion, …) */
+  operation?: string;
+  operationLabel?: string;
   provider: string;
-  /** Canonical credential type id (google_oauth2, …) */
+  providerLabel: string;
   credentialTypeId: string;
+  credentialLabel: string;
   authType: ConnectionReadinessAuthType;
   requiredScopes: string[];
 }
 
 export interface ConnectionReadinessRow extends WorkflowConnectionRequirement {
   status: ConnectionReadinessStatus;
+  action: ConnectionReadinessAction;
   connectionId?: string;
+  connectionName?: string;
   credentialId?: string;
-  source: 'connections' | 'unified_credentials' | 'legacy_token_table' | 'credential_service';
+  source: 'connections' | 'unified_credentials' | 'legacy_token_table' | 'credential_service' | 'none';
   availableScopes?: string[];
+  explicitRef?: string;
+  explicitRefKey?: string;
+  legacyRef?: string;
+  candidateConnectionIds?: string[];
   reason?: string;
   checkedAt: string;
 }
@@ -81,8 +95,12 @@ export interface WorkflowConnectionReadinessResponse {
     requiredCount: number;
     readyCount: number;
     missingCount: number;
+    invalidRefCount: number;
+    runtimeMissingCount: number;
     missingScopeCount: number;
     expiredCount: number;
+    revokedCount: number;
+    errorCount: number;
   };
 }
 
@@ -93,36 +111,277 @@ export interface ReadinessNode {
     type?: string;
     label?: string;
     name?: string;
+    config?: Record<string, unknown>;
+    connectionRefs?: Record<string, unknown>;
+    connectionId?: string;
   };
 }
 
-/** Find the canonical OAuth2 credential-type id for a provider (google -> google_oauth2). */
-function credentialTypeIdForProvider(provider: string): { credentialTypeId: string; authType: ConnectionReadinessAuthType } {
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isUuid(value: string): boolean {
+  return UUID_RE.test(value.trim());
+}
+
+function nodeConfig(node: ReadinessNode): Record<string, unknown> {
+  return (node.data?.config || {}) as Record<string, unknown>;
+}
+
+function nodeOperation(node: ReadinessNode): string | undefined {
+  const op = nodeConfig(node).operation;
+  return typeof op === 'string' && op.trim() ? op.trim() : undefined;
+}
+
+function humanizeKey(value: string): string {
+  return value
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function providerDisplayName(provider: string): string {
+  return humanizeKey(provider || 'connection');
+}
+
+function credentialTypeForProvider(provider: string): { credentialTypeId: string; authType: ConnectionReadinessAuthType; label: string } {
   const canonical = canonicalProvider(provider);
   const oauthDef = credentialTypeDefinitions.find(
     (definition) => definition.provider === canonical && definition.authType === 'oauth2',
   );
-  if (oauthDef) return { credentialTypeId: canonicalCredentialTypeId(oauthDef.id), authType: 'oauth2' };
-
-  const anyDef = credentialTypeDefinitions.find((definition) => definition.provider === canonical);
+  const anyDef = oauthDef || credentialTypeDefinitions.find((definition) => definition.provider === canonical);
   if (anyDef) {
     return {
       credentialTypeId: canonicalCredentialTypeId(anyDef.id),
       authType: anyDef.authType as ConnectionReadinessAuthType,
+      label: anyDef.displayName || providerDisplayName(canonical),
     };
   }
-  return { credentialTypeId: `${canonical}_oauth2`, authType: 'oauth2' };
+  return {
+    credentialTypeId: `${canonical}_oauth2`,
+    authType: 'oauth2',
+    label: providerDisplayName(canonical),
+  };
 }
 
-/** "https://www.googleapis.com/auth/gmail.send" -> "gmail.send" for display. */
+function credentialTypeForContract(provider: string, contractType?: string) {
+  const byProvider = credentialTypeDefinitions.filter((definition) => definition.provider === canonicalProvider(provider));
+  const preferredAuthType: AuthType | undefined =
+    contractType === 'oauth' ? 'oauth2' :
+    contractType === 'api_key' ? 'api_key' :
+    contractType === 'token' ? 'bearer_token' :
+    contractType === 'basic_auth' ? 'basic_auth' :
+    undefined;
+  const match = preferredAuthType
+    ? byProvider.find((definition) => definition.authType === preferredAuthType)
+    : undefined;
+  if (match) {
+    return {
+      credentialTypeId: canonicalCredentialTypeId(match.id),
+      authType: match.authType as ConnectionReadinessAuthType,
+      label: match.displayName || providerDisplayName(provider),
+    };
+  }
+  return credentialTypeForProvider(provider);
+}
+
 function shortScopeLabel(scope: string): string {
   const trimmed = scope.replace(/\/+$/, '');
   const lastSegment = trimmed.slice(trimmed.lastIndexOf('/') + 1);
   return lastSegment || scope;
 }
 
+function connectionIsUsable(connection: ConnectionRecord | null | undefined): boolean {
+  if (!connection) return false;
+  if (connection.status !== 'active') return false;
+  if (!connection.expiresAt) return true;
+  return new Date(connection.expiresAt).getTime() > Date.now();
+}
+
+function connectionStatusIssue(connection: ConnectionRecord): Pick<ConnectionReadinessRow, 'status' | 'action' | 'reason'> | null {
+  if (connection.status === 'revoked') {
+    return { status: 'revoked', action: 'reconnect', reason: `${connection.provider} connection was revoked. Reconnect it before running this node.` };
+  }
+  if (connection.status === 'expired' || (connection.expiresAt && new Date(connection.expiresAt).getTime() <= Date.now())) {
+    return { status: 'expired', action: 'reconnect', reason: `${connection.provider} connection expired. Reconnect it before running this node.` };
+  }
+  if (connection.status !== 'active') {
+    return { status: 'invalid_ref', action: 'repair', reason: `${connection.provider} connection is ${connection.status}. Select an active connection.` };
+  }
+  return null;
+}
+
+function collectRefCandidates(input: {
+  node: ReadinessNode;
+  provider: string;
+  credentialTypeId: string;
+  vaultKey?: string;
+}): Array<{ key: string; value: string; legacyOnly?: boolean }> {
+  const config = nodeConfig(input.node) as Record<string, unknown>;
+  const refs = {
+    ...((config.connectionRefs || {}) as Record<string, unknown>),
+    ...((input.node.data?.connectionRefs || {}) as Record<string, unknown>),
+  };
+  const keys = Array.from(new Set([
+    input.provider,
+    input.credentialTypeId,
+    input.vaultKey,
+    `${input.provider}_oauth2`,
+    `${input.provider}_api_key`,
+  ].filter(Boolean) as string[]));
+
+  const out: Array<{ key: string; value: string; legacyOnly?: boolean }> = [];
+  for (const key of keys) {
+    const value = refs[key];
+    if (typeof value === 'string' && value.trim()) out.push({ key, value: value.trim() });
+  }
+  const direct = config.connectionId || input.node.data?.connectionId;
+  if (typeof direct === 'string' && direct.trim()) out.push({ key: 'connectionId', value: direct.trim() });
+
+  const legacyCredentialId = config.credentialId;
+  if (typeof legacyCredentialId === 'string' && legacyCredentialId.trim()) {
+    out.push({ key: 'credentialId', value: legacyCredentialId.trim(), legacyOnly: true });
+  }
+
+  return out;
+}
+
+function valueLooksLikeProviderAlias(value: string, provider: string, credentialTypeId: string, vaultKey?: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return (
+    canonicalProvider(normalized) === canonicalProvider(provider) ||
+    canonicalCredentialTypeId(normalized) === canonicalCredentialTypeId(credentialTypeId) ||
+    (!!vaultKey && normalized === vaultKey.trim().toLowerCase())
+  );
+}
+
+async function resolveExplicitConnection(input: {
+  userId: string;
+  provider: string;
+  credentialTypeId: string;
+  authType: ConnectionReadinessAuthType;
+  refs: Array<{ key: string; value: string; legacyOnly?: boolean }>;
+}): Promise<{
+  connection?: ConnectionRecord;
+  source?: ConnectionReadinessRow['source'];
+  invalid?: ConnectionReadinessRow;
+  legacyRef?: string;
+}> {
+  const authTypes = [input.authType as AuthType];
+  for (const ref of input.refs) {
+    if (!isUuid(ref.value)) {
+      if (valueLooksLikeProviderAlias(ref.value, input.provider, input.credentialTypeId)) {
+        return { legacyRef: ref.value };
+      }
+      return {
+        invalid: {
+          workflowId: '',
+          nodeId: '',
+          nodeType: '',
+          nodeLabel: '',
+          provider: input.provider,
+          providerLabel: providerDisplayName(input.provider),
+          credentialTypeId: input.credentialTypeId,
+          credentialLabel: providerDisplayName(input.provider),
+          authType: input.authType,
+          requiredScopes: [],
+          status: 'invalid_ref',
+          action: 'repair',
+          source: 'none',
+          explicitRef: ref.value,
+          explicitRefKey: ref.key,
+          reason: `"${ref.value}" is not a saved connection id. Select an active ${input.provider} connection.`,
+          checkedAt: new Date().toISOString(),
+        },
+      };
+    }
+
+    try {
+      const found = await getDecryptedConnection(input.userId, ref.value);
+      const connection = found?.connection;
+      if (!connection) {
+        return {
+          invalid: {
+            workflowId: '',
+            nodeId: '',
+            nodeType: '',
+            nodeLabel: '',
+            provider: input.provider,
+            providerLabel: providerDisplayName(input.provider),
+            credentialTypeId: input.credentialTypeId,
+            credentialLabel: providerDisplayName(input.provider),
+            authType: input.authType,
+            requiredScopes: [],
+            status: 'invalid_ref',
+            action: 'repair',
+            source: 'none',
+            explicitRef: ref.value,
+            explicitRefKey: ref.key,
+            reason: `Selected connection was not found. Select an active ${input.provider} connection.`,
+            checkedAt: new Date().toISOString(),
+          },
+        };
+      }
+      if (
+        canonicalProvider(connection.provider) !== canonicalProvider(input.provider) ||
+        (authTypes.length > 0 && connection.authType !== authTypes[0])
+      ) {
+        return {
+          invalid: {
+            workflowId: '',
+            nodeId: '',
+            nodeType: '',
+            nodeLabel: '',
+            provider: input.provider,
+            providerLabel: providerDisplayName(input.provider),
+            credentialTypeId: input.credentialTypeId,
+            credentialLabel: providerDisplayName(input.provider),
+            authType: input.authType,
+            requiredScopes: [],
+            status: 'invalid_ref',
+            action: 'select_connection',
+            source: found.source,
+            explicitRef: ref.value,
+            explicitRefKey: ref.key,
+            reason: `Selected connection is for ${connection.provider}, but this node needs ${input.provider}.`,
+            checkedAt: new Date().toISOString(),
+          },
+        };
+      }
+      return { connection, source: found.source };
+    } catch (error) {
+      return {
+        invalid: {
+          workflowId: '',
+          nodeId: '',
+          nodeType: '',
+          nodeLabel: '',
+          provider: input.provider,
+          providerLabel: providerDisplayName(input.provider),
+          credentialTypeId: input.credentialTypeId,
+          credentialLabel: providerDisplayName(input.provider),
+          authType: input.authType,
+          requiredScopes: [],
+          status: 'invalid_ref',
+          action: 'repair',
+          source: 'none',
+          explicitRef: ref.value,
+          explicitRefKey: ref.key,
+          reason: `Selected connection could not be loaded. Select or reconnect ${input.provider}.`,
+          checkedAt: new Date().toISOString(),
+        },
+      };
+    }
+  }
+  return {};
+}
+
 interface DryRunOutcome {
   status: ConnectionReadinessStatus;
+  action: ConnectionReadinessAction;
   credentialId?: string;
   availableScopes?: string[];
   reason?: string;
@@ -143,6 +402,7 @@ async function dryRunCredential(
     });
     return {
       status: 'ready',
+      action: 'none',
       credentialId: credential.id,
       availableScopes: credential.scopes,
     };
@@ -151,27 +411,57 @@ async function dryRunCredential(
       const scopeLabels = requiredScopes.map(shortScopeLabel).join(', ');
       return {
         status: 'missing_scope',
+        action: 'reconnect',
         availableScopes: error.availableScopes,
-        reason: `Connected ${provider} account is missing the ${scopeLabels} permission. Reconnect ${provider} to grant it.`,
+        reason: `Connected ${provider} account is missing ${scopeLabels}. Reconnect ${provider} to grant the required permission.`,
       };
     }
     if (error instanceof CredentialExpiredError || error instanceof CredentialRefreshError) {
       return {
         status: 'expired',
+        action: 'reconnect',
         reason: `${provider} credential expired and could not be refreshed. ${credentialFixMessage(provider, requiredScopes)}`,
       };
     }
     if (error instanceof CredentialNotFoundError) {
       return {
-        status: 'missing',
-        reason: `No active ${provider} credential found for the required permission(s).`,
+        status: 'runtime_missing',
+        action: 'reconnect',
+        reason: `A saved ${provider} connection exists, but the runtime token is missing. Reconnect ${provider} to restore access.`,
       };
     }
     return {
       status: 'error',
+      action: 'repair',
       reason: `Credential check failed: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
+}
+
+function rowWithBase(base: WorkflowConnectionRequirement, patch: Partial<ConnectionReadinessRow>, checkedAt: string): ConnectionReadinessRow {
+  const {
+    workflowId: _workflowId,
+    nodeId: _nodeId,
+    nodeType: _nodeType,
+    nodeLabel: _nodeLabel,
+    operation: _operation,
+    operationLabel: _operationLabel,
+    provider: _provider,
+    providerLabel: _providerLabel,
+    credentialTypeId: _credentialTypeId,
+    credentialLabel: _credentialLabel,
+    authType: _authType,
+    requiredScopes: _requiredScopes,
+    ...rowPatch
+  } = patch;
+  return {
+    ...base,
+    status: 'error',
+    action: 'repair',
+    source: 'none',
+    checkedAt,
+    ...rowPatch,
+  };
 }
 
 export async function getWorkflowConnectionReadiness(input: {
@@ -183,96 +473,177 @@ export async function getWorkflowConnectionReadiness(input: {
   const { workflowId, userId, nodes } = input;
   const includeSatisfied = input.includeSatisfied !== false;
   const checkedAt = new Date().toISOString();
-
-  // Memoize per provider+scopes so N nodes sharing a requirement hit the
-  // credential store once.
   const dryRunCache = new Map<string, Promise<DryRunOutcome>>();
-  const connectionCache = new Map<string, ReturnType<typeof findCanonicalCredentialConnectionByProvider>>();
-
+  const connectionListCache = new Map<string, Promise<{ connections: ConnectionRecord[]; source: ConnectionReadinessRow['source'] }>>();
   const rows: ConnectionReadinessRow[] = [];
 
   for (const node of nodes || []) {
     const nodeType = (node.data?.type || node.type || '').trim();
     if (!nodeType) continue;
 
-    const requirement = credentialRequirementForNode(nodeType);
-    if (!requirement) continue;
+    const operation = nodeOperation(node);
+    const connector = connectorRegistry.getConnectorByNodeType(nodeType.toLowerCase());
+    const requirement = credentialRequirementForNode(nodeType, operation);
+    if (!requirement || connector?.credentialContract.required === false) continue;
 
     const provider = canonicalProvider(requirement.provider);
-    const requiredScopes = requirement.requiredScopes;
-    const { credentialTypeId, authType } = credentialTypeIdForProvider(provider);
+    const requiredScopes = Array.from(new Set(requirement.requiredScopes || []));
+    const credentialType = credentialTypeForContract(provider, connector?.credentialContract.type);
     const nodeLabel = node.data?.label || node.data?.name || nodeType;
     const nodeId = node.id || nodeType;
+    const base: WorkflowConnectionRequirement = {
+      workflowId,
+      nodeId,
+      nodeType,
+      nodeLabel,
+      operation,
+      operationLabel: operation ? humanizeKey(operation) : undefined,
+      provider,
+      providerLabel: providerDisplayName(provider),
+      credentialTypeId: credentialType.credentialTypeId,
+      credentialLabel: connector?.credentialContract.displayName || credentialType.label,
+      authType: credentialType.authType,
+      requiredScopes,
+    };
+
+    const authTypes = [credentialType.authType as AuthType];
+    const listKey = `${provider}::${authTypes.join('+')}`;
+    if (!connectionListCache.has(listKey)) {
+      connectionListCache.set(
+        listKey,
+        listCanonicalConnectionsByProvider(userId, provider, authTypes)
+          .catch(() => ({ connections: [], source: 'none' as const })),
+      );
+    }
+
+    const refs = collectRefCandidates({
+      node,
+      provider,
+      credentialTypeId: credentialType.credentialTypeId,
+      vaultKey: connector?.credentialContract.vaultKey,
+    });
+    const explicit = await resolveExplicitConnection({
+      userId,
+      provider,
+      credentialTypeId: credentialType.credentialTypeId,
+      authType: credentialType.authType,
+      refs,
+    });
+
+    if (explicit.invalid) {
+      rows.push(rowWithBase(base, explicit.invalid, checkedAt));
+      continue;
+    }
+
+    const listResult = await connectionListCache.get(listKey)!;
+    let connection = explicit.connection;
+    let source = explicit.source || listResult.source;
+    let legacyRef = explicit.legacyRef;
+
+    if (!connection) {
+      if (listResult.connections.length > 1) {
+        rows.push(rowWithBase(base, {
+          status: 'invalid_ref',
+          action: 'select_connection',
+          source,
+          legacyRef,
+          candidateConnectionIds: listResult.connections.map((item) => item.id),
+          reason: `Multiple active ${provider} connections exist. Select the one this node should use.`,
+        }, checkedAt));
+        continue;
+      }
+      connection = listResult.connections[0];
+    }
+
+    if (!connection) {
+      rows.push(rowWithBase(base, {
+        status: 'missing',
+        action: 'connect',
+        source: 'none',
+        legacyRef,
+        reason: `No active ${provider} connection found. Connect ${provider} before running ${nodeLabel}.`,
+      }, checkedAt));
+      continue;
+    }
+
+    const connectionIssue = connectionStatusIssue(connection);
+    if (connectionIssue) {
+      rows.push(rowWithBase(base, {
+        ...connectionIssue,
+        connectionId: connection.id,
+        connectionName: connection.name,
+        source,
+        legacyRef,
+      }, checkedAt));
+      continue;
+    }
+
+    if (requiredScopes.length === 0 && connectionIsUsable(connection)) {
+      rows.push(rowWithBase(base, {
+        status: 'ready',
+        action: 'none',
+        connectionId: connection.id,
+        connectionName: connection.name,
+        credentialId: connection.id,
+        source,
+        legacyRef,
+        availableScopes: [],
+      }, checkedAt));
+      continue;
+    }
 
     const dryRunKey = `${provider}::${[...requiredScopes].sort().join('+')}`;
     if (!dryRunCache.has(dryRunKey)) {
       dryRunCache.set(dryRunKey, dryRunCredential(userId, provider, requiredScopes, nodeLabel));
     }
-    if (!connectionCache.has(provider)) {
-      connectionCache.set(
-        provider,
-        findCanonicalCredentialConnectionByProvider(userId, provider).catch(() => null),
-      );
-    }
+    const outcome = await dryRunCache.get(dryRunKey)!;
 
-    const [dryRunOutcome, connectionResult] = await Promise.all([
-      dryRunCache.get(dryRunKey)!,
-      connectionCache.get(provider)!,
-    ]);
-    const connection = connectionResult?.connection ?? null;
-
-    const outcome: DryRunOutcome =
-      requiredScopes.length === 0 && connection
-        ? {
-            status: 'ready',
-            credentialId: connection.id,
-            availableScopes: [],
-          }
-        : dryRunOutcome;
-
-    let reason = outcome.reason;
-    if (outcome.status === 'missing' && connection) {
-      // The exact "Active but Not connected" contradiction: a saved
-      // connections row exists but no runtime credential backs it.
-      reason = `A saved ${provider} connection exists but its runtime credential is missing. Reconnect ${provider} to restore access.`;
-    }
-
-    rows.push({
-      workflowId,
-      nodeId,
-      nodeType,
-      nodeLabel,
-      provider,
-      credentialTypeId,
-      authType,
-      requiredScopes,
+    rows.push(rowWithBase(base, {
       status: outcome.status,
-      connectionId: connection?.id,
+      action: outcome.action,
+      connectionId: connection.id,
+      connectionName: connection.name,
       credentialId: outcome.credentialId,
-      source: outcome.status === 'ready'
-        ? (outcome.credentialId === connection?.id
-            ? (connectionResult?.source || 'connections')
-            : 'unified_credentials')
-        : connectionResult?.source || 'unified_credentials',
+      source: outcome.status === 'ready' ? 'unified_credentials' : source,
+      legacyRef,
       availableScopes: outcome.availableScopes,
-      reason,
-      checkedAt,
-    });
+      reason: outcome.reason,
+    }, checkedAt));
   }
 
   const missing = rows.filter((row) => row.status !== 'ready');
   const summary = {
     requiredCount: rows.length,
     readyCount: rows.filter((row) => row.status === 'ready').length,
-    missingCount: missing.length,
+    missingCount: rows.filter((row) => row.status === 'missing').length,
+    invalidRefCount: rows.filter((row) => row.status === 'invalid_ref').length,
+    runtimeMissingCount: rows.filter((row) => row.status === 'runtime_missing').length,
     missingScopeCount: rows.filter((row) => row.status === 'missing_scope').length,
     expiredCount: rows.filter((row) => row.status === 'expired').length,
+    revokedCount: rows.filter((row) => row.status === 'revoked').length,
+    errorCount: rows.filter((row) => row.status === 'error').length,
   };
 
+  logger.info('[ConnectionReadiness] summary', {
+    workflowId,
+    nodeCount: nodes?.length || 0,
+    providerNames: Array.from(new Set(rows.map((row) => row.provider))),
+    ...summary,
+  });
+
   for (const row of missing) {
-    logger.info(
-      `[ConnectionReadiness] workflow=${workflowId} node=${row.nodeId} type=${row.nodeType} provider=${row.provider} status=${row.status} connectionRow=${row.connectionId ? 'found' : 'none'} requiredScopes=${row.requiredScopes.join(',')} availableScopes=${(row.availableScopes || []).join(',') || 'n/a'}`,
-    );
+    logger.info('[ConnectionReadiness] issue', {
+      workflowId,
+      nodeId: row.nodeId,
+      nodeType: row.nodeType,
+      provider: row.provider,
+      operation: row.operation,
+      status: row.status,
+      action: row.action,
+      hasConnectionRow: Boolean(row.connectionId),
+      requiredScopes: row.requiredScopes,
+      availableScopes: row.availableScopes || [],
+    });
   }
 
   return {

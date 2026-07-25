@@ -14,10 +14,29 @@ interface Props {
 
 const STATUS_LABELS: Record<string, string> = {
   missing: 'Not connected',
+  invalid_ref: 'Select connection',
+  runtime_missing: 'Reconnect',
   missing_scope: 'Missing permission',
   expired: 'Needs reconnect',
+  revoked: 'Revoked',
   error: 'Check failed',
 };
+
+const ACTION_LABELS: Record<string, string> = {
+  connect: 'Connect',
+  select_connection: 'Select',
+  reconnect: 'Reconnect',
+  repair: 'Repair',
+  none: 'Ready',
+};
+
+function issueTitle(conn: WorkflowMissingConnection): string {
+  const parts = [
+    conn.nodeLabel || conn.nodes[0],
+    conn.operationLabel || conn.operation,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(' - ') : conn.displayName;
+}
 
 export function WorkflowConnectionGate({ missingConnections, workflowId, workflowName, isLoading, onDismiss }: Props) {
   const navigate = useNavigate();
@@ -86,21 +105,25 @@ export function WorkflowConnectionGate({ missingConnections, workflowId, workflo
 
             {/* Connection list */}
             <div className="space-y-2">
-              {missingConnections.map((conn) => (
+              {missingConnections.map((conn, index) => (
                 <div
-                  key={conn.provider}
+                  key={`${conn.nodeId || conn.provider}-${conn.status || 'missing'}-${index}`}
                   className="flex items-center gap-3 rounded-xl border border-border bg-muted/30 px-3.5 py-3"
                 >
                   <ProviderLogo provider={conn.provider} size={28} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{conn.displayName}</p>
+                    <p className="text-sm font-medium text-foreground truncate">{issueTitle(conn)}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">
+                      {conn.credentialLabel || conn.displayName}
+                      {conn.connectionName ? ` - ${conn.connectionName}` : ''}
+                    </p>
                     <p className="text-xs text-muted-foreground">
                       {conn.reason || `Needed by ${conn.nodes.length} node${conn.nodes.length !== 1 ? 's' : ''}`}
                     </p>
                   </div>
                   <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400 shrink-0">
                     <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
-                    {STATUS_LABELS[conn.status ?? 'missing'] ?? 'Not connected'}
+                    {ACTION_LABELS[conn.action ?? ''] || STATUS_LABELS[conn.status ?? 'missing'] || 'Review'}
                   </span>
                 </div>
               ))}

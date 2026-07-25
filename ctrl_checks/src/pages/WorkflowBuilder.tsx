@@ -135,7 +135,7 @@ export default function WorkflowBuilder() {
   const [reliabilityStatus, setReliabilityStatus] = useState<ReliabilityUiState | null>(null);
   const [gateDismissed, setGateDismissed] = useState(false);
 
-  const { missingConnections, isLoading: isCheckingConnections } = useWorkflowConnectionStatus(
+  const { missingConnections, isLoading: isCheckingConnections, recheck: recheckConnections } = useWorkflowConnectionStatus(
     id && id !== 'new' ? id : null
   );
 
@@ -1173,6 +1173,7 @@ export default function WorkflowBuilder() {
         } else {
           console.log('[execute-workflow] ✅ Inputs attached successfully');
           markAttachInputsPayloadPersisted(finalWorkflowId, inputsToAttach);
+          await recheckConnections();
         }
         }
       } else {
@@ -1184,6 +1185,28 @@ export default function WorkflowBuilder() {
         {
           code: 'ATTACH_INPUTS_FAILED',
           message: attachError instanceof Error ? attachError.message : 'Workflow inputs could not be updated',
+          operation: 'run',
+        },
+        nodes as any[],
+        { operation: 'run' }
+      );
+      setExecutionGuidance(guidance);
+      setIsRunning(false);
+      return;
+    }
+
+    const readinessResult = await recheckConnections();
+    const latestMissingConnections = readinessResult.data ?? [];
+    if (latestMissingConnections.length > 0) {
+      useWorkflowStore.getState().setWorkflowConnectionAlertCount(latestMissingConnections.length);
+      setGateDismissed(false);
+      const first = latestMissingConnections[0];
+      const target = [first.nodeLabel, first.operationLabel || first.operation].filter(Boolean).join(' - ');
+      const guidance = await getWorkflowGuidanceWithSetupContext(
+        {
+          code: 'EXECUTION_MISSING_CREDENTIALS',
+          message: `${target || first.displayName} needs ${first.credentialLabel || first.displayName}.`,
+          details: { missingCredentials: latestMissingConnections },
           operation: 'run',
         },
         nodes as any[],
@@ -1333,7 +1356,7 @@ export default function WorkflowBuilder() {
     } finally {
       // Async execution stays "running" until ExecutionConsole emits a terminal event.
     }
-  }, [nodes, consoleExpanded, resetAllNodeStatuses]);
+  }, [nodes, consoleExpanded, resetAllNodeStatuses, recheckConnections]);
 
   const handleCancel = useCallback(async () => {
     if (!activeExecutionId) return;

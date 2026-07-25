@@ -12,7 +12,12 @@ import {
   buildReadinessDetails,
   buildWorkflowReadinessIssues,
   readinessErrorCode,
+  type CredentialReadinessInput,
 } from '../core/readiness/node-readiness-resolver';
+import {
+  getWorkflowConnectionReadiness,
+  type ConnectionReadinessRow,
+} from '../services/workflow-connection-readiness';
 
 // WorkflowNode interface must match execute-workflow.ts
 interface WorkflowNode {
@@ -24,6 +29,36 @@ interface WorkflowNode {
     category: string;
     config: Record<string, unknown>;
   };
+}
+
+function canonicalRowsToCredentialInputs(rows: ConnectionReadinessRow[]): CredentialReadinessInput[] {
+  return rows
+    .filter((row) => row.status !== 'ready')
+    .map((row) => ({
+      provider: row.provider,
+      type: row.authType,
+      displayName: row.credentialLabel || row.providerLabel,
+      required: true,
+      satisfied: false,
+      nodeId: row.nodeId,
+      nodeIds: [row.nodeId],
+      nodeType: row.nodeType,
+      nodeTypes: [row.nodeType],
+      nodeLabel: row.nodeLabel,
+      operation: row.operation,
+      operationLabel: row.operationLabel,
+      scopes: row.requiredScopes,
+      requiredScopes: row.requiredScopes,
+      availableScopes: row.availableScopes,
+      credentialId: row.credentialTypeId,
+      connectionId: row.connectionId,
+      connectionName: row.connectionName,
+      status: row.status,
+      action: row.action,
+      simpleDescription: row.reason,
+      technicalDescription: row.reason,
+      howToObtain: row.reason,
+    }));
 }
 
 /**
@@ -156,15 +191,16 @@ export default async function executeNodeHandler(req: Request, res: Response) {
     }
 
     // ✅ PRE-EXECUTION: Validate this node's config before running
-    const { credentialDiscoveryPhase } = await import('../services/ai/credential-discovery-phase');
-    const credentialDiscovery = await credentialDiscoveryPhase.discoverCredentials(
-      { nodes: [node as any], edges: [] } as any,
-      currentUserId || userId
-    );
+    const connectionReadiness = await getWorkflowConnectionReadiness({
+      workflowId,
+      userId: currentUserId || userId,
+      nodes: [node as any],
+      includeSatisfied: true,
+    });
     const readinessDetails = buildReadinessDetails(
       buildWorkflowReadinessIssues({
         nodes: [node as any],
-        credentials: credentialDiscovery.missingCredentials || [],
+        credentials: canonicalRowsToCredentialInputs(connectionReadiness.missing),
       })
     );
     if (readinessDetails.readinessIssues.length > 0) {
@@ -174,7 +210,16 @@ export default async function executeNodeHandler(req: Request, res: Response) {
         error: 'Node is not ready to run',
         message: `This node needs configuration before it can run.`,
         hint: 'Open the Properties panel and complete the highlighted connection or required fields.',
-        details: readinessDetails,
+        details: {
+          ...readinessDetails,
+          connectionReadiness,
+        },
+        readinessIssues: readinessDetails.readinessIssues,
+        missingInputs: readinessDetails.missingInputs,
+        missingCredentials: readinessDetails.missingCredentials,
+        invalidInputs: readinessDetails.invalidInputs,
+        runtimeValidationIssues: readinessDetails.runtimeValidationIssues,
+        issues: readinessDetails.issues,
         executionTime: Date.now() - startTime,
         nodeId,
         nodeType,

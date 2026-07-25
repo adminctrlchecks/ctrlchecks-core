@@ -1,15 +1,11 @@
-import { resolveCredentialDryRun, formatCredentialError } from './credential-resolver';
-import { credentialRequirementForNode } from './credential-scope-registry';
+import {
+  getWorkflowConnectionReadiness,
+  type ConnectionReadinessRow,
+  type ReadinessNode,
+  type WorkflowConnectionReadinessResponse,
+} from './workflow-connection-readiness';
 
-export interface PreflightNode {
-  id?: string;
-  type?: string;
-  data?: {
-    type?: string;
-    label?: string;
-    name?: string;
-  };
-}
+export interface PreflightNode extends ReadinessNode {}
 
 export interface ExecutionPreflightFailure {
   nodeId: string;
@@ -17,12 +13,43 @@ export interface ExecutionPreflightFailure {
   nodeType: string;
   provider: string;
   requiredScopes: string[];
+  status: string;
+  action: string;
+  connectionId?: string;
+  connectionName?: string;
+  operation?: string;
+  operationLabel?: string;
   error: unknown;
 }
 
 export interface ExecutionPreflightResult {
   ok: boolean;
   failures: ExecutionPreflightFailure[];
+  readiness: WorkflowConnectionReadinessResponse;
+}
+
+function rowToFailure(row: ConnectionReadinessRow): ExecutionPreflightFailure {
+  return {
+    nodeId: row.nodeId,
+    nodeName: row.nodeLabel,
+    nodeType: row.nodeType,
+    provider: row.provider,
+    requiredScopes: row.requiredScopes,
+    status: row.status,
+    action: row.action,
+    connectionId: row.connectionId,
+    connectionName: row.connectionName,
+    operation: row.operation,
+    operationLabel: row.operationLabel,
+    error: {
+      status: row.status,
+      action: row.action,
+      message: row.reason || `${row.provider} connection is not ready.`,
+      provider: row.provider,
+      requiredScopes: row.requiredScopes,
+      availableScopes: row.availableScopes,
+    },
+  };
 }
 
 export async function executionPreflight(input: {
@@ -30,32 +57,16 @@ export async function executionPreflight(input: {
   ownerId: string;
   nodes: PreflightNode[];
 }): Promise<ExecutionPreflightResult> {
-  const failures: ExecutionPreflightFailure[] = [];
+  const readiness = await getWorkflowConnectionReadiness({
+    workflowId: input.workflowId,
+    userId: input.ownerId,
+    nodes: input.nodes,
+    includeSatisfied: true,
+  });
 
-  for (const node of input.nodes) {
-    const nodeType = node.data?.type || node.type || '';
-    const requirement = credentialRequirementForNode(nodeType);
-    if (!requirement) continue;
-
-    try {
-      await resolveCredentialDryRun({
-        userId: input.ownerId,
-        provider: requirement.provider,
-        requiredScopes: requirement.requiredScopes,
-        action: node.data?.label || node.data?.name || nodeType,
-      });
-    } catch (error) {
-      failures.push({
-        nodeId: node.id || nodeType,
-        nodeName: node.data?.label || node.data?.name || nodeType,
-        nodeType,
-        provider: requirement.provider,
-        requiredScopes: requirement.requiredScopes,
-        error: formatCredentialError(error, node.data?.label || nodeType),
-      });
-    }
-  }
-
-  return { ok: failures.length === 0, failures };
+  return {
+    ok: readiness.ready,
+    failures: readiness.missing.map(rowToFailure),
+    readiness,
+  };
 }
-

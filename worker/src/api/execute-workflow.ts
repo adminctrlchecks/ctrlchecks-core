@@ -65,7 +65,9 @@ import {
   buildReadinessDetails,
   buildWorkflowReadinessIssues,
   readinessErrorCode,
+  type CredentialReadinessInput,
 } from '../core/readiness/node-readiness-resolver';
+import type { ConnectionReadinessRow } from '../services/workflow-connection-readiness';
 
 const EXECUTION_RUNTIME_MARKER = 'runtime-marker-2026-03-20-v1';
 const configuredResumePreflightTimeoutMs = Number(process.env.EXECUTION_RESUME_PREFLIGHT_TIMEOUT_MS || 15000);
@@ -229,6 +231,35 @@ interface ExecutionLog {
   runtimeInputAudit?: unknown;
   runtimeInputHandoffAudit?: unknown;
   runtimeResolutionAudit?: unknown;
+}
+
+function canonicalRowsToCredentialInputs(rows: ConnectionReadinessRow[]): CredentialReadinessInput[] {
+  return rows
+    .filter((row) => row.status !== 'ready')
+    .map((row) => ({
+      provider: row.provider,
+      type: row.authType,
+      displayName: row.credentialLabel || row.providerLabel,
+      required: true,
+      satisfied: false,
+      nodeId: row.nodeId,
+      nodeIds: [row.nodeId],
+      nodeType: row.nodeType,
+      nodeTypes: [row.nodeType],
+      nodeLabel: row.nodeLabel,
+      operation: row.operation,
+      operationLabel: row.operationLabel,
+      scopes: row.requiredScopes,
+      requiredScopes: row.requiredScopes,
+      availableScopes: row.availableScopes,
+      credentialId: row.credentialTypeId,
+      connectionId: row.connectionId,
+      connectionName: row.connectionName,
+      status: row.status,
+      action: row.action,
+      simpleDescription: row.reason,
+      howToObtain: row.reason,
+    }));
 }
 
 export interface ScheduleWiseNodeParams {
@@ -18951,7 +18982,9 @@ export default async function executeWorkflowHandler(req: Request, res: Response
       'Credential discovery'
     );
     const requiredCredentialsCount = credentialDiscovery.requiredCredentials?.length || 0;
-    const missingCredentialsCount = credentialDiscovery.missingCredentials?.length || 0;
+    const missingCredentialsCount = credentialPreflight.readiness
+      ? credentialPreflight.readiness.missing.length
+      : (credentialDiscovery.missingCredentials?.length || 0);
     
     // ✅ CRITICAL: Check if inputs are attached
     const nodeInputs = workflowLifecycleManager.discoverNodeInputs({ nodes, edges });
@@ -19077,10 +19110,13 @@ export default async function executeWorkflowHandler(req: Request, res: Response
     const allMissingInputs = [...missingInputs, ...typeMismatchInputs];
     const discoveryManualRequiredMissingCount = nodeInputs.inputs.filter((i) => i.required).length;
     const blockingMissingCount = allMissingInputs.filter((i) => i.required).length;
+    const canonicalCredentialInputs = credentialPreflight.readiness
+      ? canonicalRowsToCredentialInputs(credentialPreflight.readiness.missing || [])
+      : (credentialDiscovery.missingCredentials || []);
     const readinessDetails = buildReadinessDetails(
       buildWorkflowReadinessIssues({
         nodes: nodes as any,
-        credentials: credentialDiscovery.missingCredentials || [],
+        credentials: canonicalCredentialInputs,
       })
     );
     if (discoveryManualRequiredMissingCount !== blockingMissingCount) {
@@ -19098,6 +19134,7 @@ export default async function executeWorkflowHandler(req: Request, res: Response
       requiredCredentialsCount,
       ...readinessDetails,
       legacyMissingCredentialsCount: missingCredentialsCount,
+      connectionReadiness: credentialPreflight.readiness,
       legacyMissingInputsCount: allMissingInputs.length,
       legacyMissingInputs: allMissingInputs.map((input: any) => ({
         nodeId: input.nodeId,
@@ -19184,9 +19221,16 @@ export default async function executeWorkflowHandler(req: Request, res: Response
           phase: workflowStatus,
           details: {
             ...readinessDetails,
+            connectionReadiness: credentialPreflight.readiness,
             legacyMissingInputs: allMissingInputs.map(i => `${i.nodeId}.${i.fieldName}`),
             credentialDiscoveryMissingCredentials: credentialDiscovery.missingCredentials?.map((c: any) => c.nodeId) || [],
           },
+          readinessIssues: readinessDetails.readinessIssues,
+          missingInputs: readinessDetails.missingInputs,
+          missingCredentials: readinessDetails.missingCredentials,
+          invalidInputs: readinessDetails.invalidInputs,
+          runtimeValidationIssues: readinessDetails.runtimeValidationIssues,
+          issues: readinessDetails.issues,
           hint: 'Configure the workflow nodes with required inputs and credentials, then try again.',
         });
       }
@@ -19254,6 +19298,12 @@ export default async function executeWorkflowHandler(req: Request, res: Response
           ? `Workflow is missing ${summary}.`
           : 'Workflow is missing required setup.',
         details: readinessCheck,
+        readinessIssues: readinessDetails.readinessIssues,
+        missingInputs: readinessDetails.missingInputs,
+        missingCredentials: readinessDetails.missingCredentials,
+        invalidInputs: readinessDetails.invalidInputs,
+        runtimeValidationIssues: readinessDetails.runtimeValidationIssues,
+        issues: readinessDetails.issues,
         hint: 'Open the Properties panel and complete the highlighted connection or required fields.',
       });
     }

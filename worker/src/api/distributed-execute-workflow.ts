@@ -22,6 +22,7 @@ import {
   type CredentialReadinessInput,
   type NodeReadinessDetails,
 } from '../core/readiness/node-readiness-resolver';
+import type { ConnectionReadinessRow } from '../services/workflow-connection-readiness';
 
 /**
  * Normalize If/Else node conditions field
@@ -73,6 +74,16 @@ function preflightFailuresToCredentialInputs(failures: any[]): CredentialReadine
     nodeIds: [failure.nodeId].filter(Boolean),
     nodeTypes: [failure.nodeType].filter(Boolean),
     scopes: failure.requiredScopes,
+    requiredScopes: failure.requiredScopes,
+    status: failure.status,
+    action: failure.action,
+    nodeId: failure.nodeId,
+    nodeType: failure.nodeType,
+    nodeLabel: failure.nodeName,
+    operation: failure.operation,
+    operationLabel: failure.operationLabel,
+    connectionId: failure.connectionId,
+    connectionName: failure.connectionName,
     simpleDescription:
       failure.error?.message ||
       failure.error?.error ||
@@ -80,6 +91,35 @@ function preflightFailuresToCredentialInputs(failures: any[]): CredentialReadine
     technicalDescription: typeof failure.error === 'string' ? failure.error : undefined,
     howToObtain: `Connect or reconnect ${failure.provider || 'this account'} before running this node.`,
   }));
+}
+
+function canonicalRowsToCredentialInputs(rows: ConnectionReadinessRow[]): CredentialReadinessInput[] {
+  return rows
+    .filter((row) => row.status !== 'ready')
+    .map((row) => ({
+      provider: row.provider,
+      type: row.authType,
+      displayName: row.credentialLabel || row.providerLabel,
+      required: true,
+      satisfied: false,
+      nodeId: row.nodeId,
+      nodeIds: [row.nodeId],
+      nodeType: row.nodeType,
+      nodeTypes: [row.nodeType],
+      nodeLabel: row.nodeLabel,
+      operation: row.operation,
+      operationLabel: row.operationLabel,
+      scopes: row.requiredScopes,
+      requiredScopes: row.requiredScopes,
+      availableScopes: row.availableScopes,
+      credentialId: row.credentialTypeId,
+      connectionId: row.connectionId,
+      connectionName: row.connectionName,
+      status: row.status,
+      action: row.action,
+      simpleDescription: row.reason,
+      howToObtain: row.reason,
+    }));
 }
 
 function sameProvider(left: unknown, right: unknown): boolean {
@@ -329,7 +369,7 @@ export default async function distributedExecuteWorkflow(
     const missingCredentialsCount = credentialDiscovery.missingCredentials?.length || 0;
 
     const workflowOwnerId = (workflow as any).user_id || currentUserId;
-    let preflightResult: { ok: boolean; failures: any[] } = { ok: true, failures: [] };
+    let preflightResult: { ok: boolean; failures: any[]; readiness?: any } = { ok: true, failures: [] };
     if (workflowOwnerId) {
       const { executionPreflight } = await import('../services/execution-preflight');
       preflightResult = await executionPreflight({
@@ -339,18 +379,23 @@ export default async function distributedExecuteWorkflow(
       });
     }
 
+    const canonicalCredentialInputs = preflightResult.readiness
+      ? canonicalRowsToCredentialInputs(preflightResult.readiness.missing || [])
+      : (credentialDiscovery.missingCredentials || []);
     const baseReadinessIssues = buildWorkflowReadinessIssues({
       nodes,
-      credentials: credentialDiscovery.missingCredentials || [],
+      credentials: canonicalCredentialInputs,
     });
-    const effectivePreflightFailures = preflightResult.ok
-      ? []
-      : filterPreflightCredentialFailures({
-          failures: preflightResult.failures,
-          baseIssues: baseReadinessIssues,
-          credentialDiscovery,
-        });
-    const preflightReadinessIssues = effectivePreflightFailures.length === 0
+    const effectivePreflightFailures = preflightResult.readiness
+      ? (preflightResult.failures || [])
+      : (preflightResult.ok
+          ? []
+          : filterPreflightCredentialFailures({
+              failures: preflightResult.failures,
+              baseIssues: baseReadinessIssues,
+              credentialDiscovery,
+            }));
+    const preflightReadinessIssues = preflightResult.readiness || effectivePreflightFailures.length === 0
       ? []
       : buildCredentialReadinessIssues({
           nodes,
@@ -375,12 +420,19 @@ export default async function distributedExecuteWorkflow(
         nodes
       ),
       executionPreflightReady: preflightResult.ok,
+      connectionReadiness: preflightResult.readiness,
       executionPreflightMissingCredentials: effectivePreflightFailures.map((failure: any) => ({
         nodeId: failure.nodeId,
         nodeType: failure.nodeType,
         nodeLabel: failure.nodeName,
         provider: failure.provider,
         displayName: failure.provider,
+        status: failure.status,
+        action: failure.action,
+        operation: failure.operation,
+        operationLabel: failure.operationLabel,
+        connectionId: failure.connectionId,
+        connectionName: failure.connectionName,
         requiredScopes: failure.requiredScopes,
       })),
       executionPreflightIgnoredCredentialsCount: Math.max(
@@ -462,6 +514,12 @@ export default async function distributedExecuteWorkflow(
           phase: workflowPhase,
           status: workflowStatus,
           details: readinessCheck,
+          readinessIssues: readinessDetails.readinessIssues,
+          missingInputs: readinessDetails.missingInputs,
+          missingCredentials: readinessDetails.missingCredentials,
+          invalidInputs: readinessDetails.invalidInputs,
+          runtimeValidationIssues: readinessDetails.runtimeValidationIssues,
+          issues: readinessDetails.issues,
           hint: 'Open the Properties panel and complete the highlighted connection or required fields.',
         });
         return;
@@ -478,6 +536,12 @@ export default async function distributedExecuteWorkflow(
           : 'Workflow is missing required setup.',
         phase: workflowStatus,
         details: readinessCheck,
+        readinessIssues: readinessDetails.readinessIssues,
+        missingInputs: readinessDetails.missingInputs,
+        missingCredentials: readinessDetails.missingCredentials,
+        invalidInputs: readinessDetails.invalidInputs,
+        runtimeValidationIssues: readinessDetails.runtimeValidationIssues,
+        issues: readinessDetails.issues,
         hint: 'Open the Properties panel and complete the highlighted connection or required fields.',
       });
       return;
@@ -490,6 +554,12 @@ export default async function distributedExecuteWorkflow(
         message: `Workflow requires inputs that are not configured: ${allMissingInputs.map(i => `${i.nodeLabel}.${i.fieldName}`).join(', ')}`,
         phase: workflowStatus,
         details: readinessCheck,
+        readinessIssues: readinessDetails.readinessIssues,
+        missingInputs: readinessDetails.missingInputs,
+        missingCredentials: readinessDetails.missingCredentials,
+        invalidInputs: readinessDetails.invalidInputs,
+        runtimeValidationIssues: readinessDetails.runtimeValidationIssues,
+        issues: readinessDetails.issues,
         hint: 'Open the Properties panel and complete the highlighted required fields.',
       });
       return;
@@ -505,6 +575,12 @@ export default async function distributedExecuteWorkflow(
         message: `Workflow requires credentials that are not connected: ${missingCreds}`,
         phase: workflowStatus,
         details: readinessCheck,
+        readinessIssues: readinessDetails.readinessIssues,
+        missingInputs: readinessDetails.missingInputs,
+        missingCredentials: readinessDetails.missingCredentials,
+        invalidInputs: readinessDetails.invalidInputs,
+        runtimeValidationIssues: readinessDetails.runtimeValidationIssues,
+        issues: readinessDetails.issues,
         hint: 'Open Connections and connect or reconnect each listed account.',
       });
       return;

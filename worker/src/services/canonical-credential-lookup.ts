@@ -99,6 +99,26 @@ export async function findCanonicalConnectionByProvider(
   return local ? { connection: local, source: 'connections' } : null;
 }
 
+export async function listCanonicalConnectionsByProvider(
+  userId: string,
+  provider: string,
+  authTypes?: AuthType[],
+): Promise<{ connections: ConnectionRecord[]; source: CredentialLookupSource }> {
+  const canonical = canonicalProvider(provider);
+  const authTypeSet = authTypes?.length ? new Set<AuthType>(authTypes) : null;
+  const all = await listCanonicalConnections(userId);
+  const now = Date.now();
+  const connections = all.connections
+    .filter((connection) => (
+      canonicalProvider(connection.provider) === canonical &&
+      (!authTypeSet || authTypeSet.has(connection.authType)) &&
+      connection.status === 'active' &&
+      (!connection.expiresAt || new Date(connection.expiresAt).getTime() > now)
+    ))
+    .sort(byMostRecentlyUsed);
+  return { connections, source: all.source };
+}
+
 export async function getDecryptedConnection(
   userId: string,
   connectionId: string,

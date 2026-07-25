@@ -177,11 +177,41 @@ const NODE_REQUIRED_SCOPES: Record<string, string[]> = {
   outlook_trigger: ['https://graph.microsoft.com/Mail.Read', 'https://graph.microsoft.com/Calendars.Read'],
 };
 
-export function credentialRequirementForNode(nodeType: string): { provider: string; requiredScopes: string[] } | null {
+const NODE_OPERATION_REQUIRED_SCOPES: Record<string, Record<string, string[]>> = {
+  google_gmail: {
+    send: ['https://www.googleapis.com/auth/gmail.send'],
+    read: ['https://www.googleapis.com/auth/gmail.readonly'],
+    get: ['https://www.googleapis.com/auth/gmail.readonly'],
+    list: ['https://www.googleapis.com/auth/gmail.readonly'],
+  },
+  gmail: {
+    send: ['https://www.googleapis.com/auth/gmail.send'],
+    read: ['https://www.googleapis.com/auth/gmail.readonly'],
+    get: ['https://www.googleapis.com/auth/gmail.readonly'],
+    list: ['https://www.googleapis.com/auth/gmail.readonly'],
+  },
+  google_sheets: {
+    read: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+    get: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+    append: ['https://www.googleapis.com/auth/spreadsheets'],
+    update: ['https://www.googleapis.com/auth/spreadsheets'],
+    write: ['https://www.googleapis.com/auth/spreadsheets'],
+  },
+};
+
+function normalizeOperation(operation: unknown): string {
+  return String(operation || '').trim().toLowerCase();
+}
+
+export function credentialRequirementForNode(
+  nodeType: string,
+  operation?: unknown,
+): { provider: string; requiredScopes: string[] } | null {
   const key = nodeType.trim().toLowerCase();
   const provider = NODE_PROVIDER[key];
   if (provider) {
-    const requiredScopes = NODE_REQUIRED_SCOPES[key] ?? requiredScopesForProvider(provider);
+    const operationScopes = NODE_OPERATION_REQUIRED_SCOPES[key]?.[normalizeOperation(operation)];
+    const requiredScopes = operationScopes ?? NODE_REQUIRED_SCOPES[key] ?? requiredScopesForProvider(provider);
     return { provider, requiredScopes };
   }
 

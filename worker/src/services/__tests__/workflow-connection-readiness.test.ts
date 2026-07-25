@@ -32,7 +32,8 @@ jest.mock('../canonical-credential-lookup', () => ({
     if (key === 'google_oauth' || key === 'google oauth') return 'google_oauth2';
     return key.replace(/\s+/g, '_');
   },
-  findCanonicalConnectionByProvider: jest.fn(),
+  listCanonicalConnectionsByProvider: jest.fn(),
+  getDecryptedConnection: jest.fn(),
 }));
 
 jest.mock('../../core/logger', () => ({
@@ -42,11 +43,13 @@ jest.mock('../../core/logger', () => ({
 const { resolveCredentialDryRun } = jest.requireMock('../credential-resolver') as {
   resolveCredentialDryRun: jest.Mock;
 };
-const { findCanonicalConnectionByProvider } = jest.requireMock('../canonical-credential-lookup') as {
-  findCanonicalConnectionByProvider: jest.Mock;
+const { listCanonicalConnectionsByProvider, getDecryptedConnection } = jest.requireMock('../canonical-credential-lookup') as {
+  listCanonicalConnectionsByProvider: jest.Mock;
+  getDecryptedConnection: jest.Mock;
 };
 
 const GMAIL_SEND = 'https://www.googleapis.com/auth/gmail.send';
+const CONN_UUID = '11111111-1111-4111-8111-111111111111';
 
 const gmailNode = {
   id: 'n1',
@@ -68,6 +71,13 @@ const baseInput = {
 
 const notFoundContext = { userId: 'user-1', provider: 'google', requiredScopes: [GMAIL_SEND] };
 
+function mockActiveGoogleConnection() {
+  listCanonicalConnectionsByProvider.mockResolvedValue({
+    connections: [{ id: 'conn-1', name: 'Google', provider: 'google', authType: 'oauth2', status: 'active' }],
+    source: 'connections',
+  });
+}
+
 describe('canonical mapping', () => {
   it('maps provider aliases to canonical providers', () => {
     expect(canonicalProvider('gmail')).toBe('google');
@@ -85,18 +95,22 @@ describe('canonical mapping', () => {
 describe('getWorkflowConnectionReadiness', () => {
   beforeEach(() => {
     resolveCredentialDryRun.mockReset();
-    findCanonicalConnectionByProvider.mockReset();
-    findCanonicalConnectionByProvider.mockResolvedValue(null);
+    listCanonicalConnectionsByProvider.mockReset();
+    listCanonicalConnectionsByProvider.mockResolvedValue({ connections: [], source: 'connections' });
+    getDecryptedConnection.mockReset();
+    getDecryptedConnection.mockResolvedValue(null);
   });
 
   it('reports missing when a connections row is active but unified_credentials has no row', async () => {
     resolveCredentialDryRun.mockRejectedValue(new CredentialNotFoundError(notFoundContext));
-    findCanonicalConnectionByProvider.mockResolvedValue({
-      connection: {
+    listCanonicalConnectionsByProvider.mockResolvedValue({
+      connections: [{
         id: 'conn-1',
+        name: 'Google',
         provider: 'google',
+        authType: 'oauth2',
         status: 'active',
-      },
+      }],
       source: 'connections',
     });
 
@@ -105,7 +119,7 @@ describe('getWorkflowConnectionReadiness', () => {
     expect(result.ready).toBe(false);
     expect(result.rows).toHaveLength(1);
     const row = result.rows[0];
-    expect(row.status).toBe('missing');
+    expect(row.status).toBe('runtime_missing');
     expect(row.provider).toBe('google');
     expect(row.credentialTypeId).toBe('google_oauth2');
     expect(row.connectionId).toBe('conn-1');
@@ -114,13 +128,18 @@ describe('getWorkflowConnectionReadiness', () => {
     expect(result.summary).toEqual({
       requiredCount: 1,
       readyCount: 0,
-      missingCount: 1,
+      missingCount: 0,
+      invalidRefCount: 0,
+      runtimeMissingCount: 1,
       missingScopeCount: 0,
       expiredCount: 0,
+      revokedCount: 0,
+      errorCount: 0,
     });
   });
 
   it('reports missing_scope when the Google credential lacks gmail.send', async () => {
+    mockActiveGoogleConnection();
     const availableScopes = ['https://www.googleapis.com/auth/spreadsheets'];
     resolveCredentialDryRun.mockRejectedValue(
       new CredentialMissingScopeError(notFoundContext, availableScopes),
@@ -146,7 +165,10 @@ describe('getWorkflowConnectionReadiness', () => {
       expiresAt: null,
       source: 'oauth_callback',
     });
-    findCanonicalConnectionByProvider.mockResolvedValue({ connection: { id: 'conn-1' }, source: 'connections' });
+    listCanonicalConnectionsByProvider.mockResolvedValue({
+      connections: [{ id: 'conn-1', name: 'Google', provider: 'google', authType: 'oauth2', status: 'active' }],
+      source: 'connections',
+    });
 
     const result = await getWorkflowConnectionReadiness(baseInput);
 
@@ -171,8 +193,8 @@ describe('getWorkflowConnectionReadiness', () => {
     resolveCredentialDryRun.mockRejectedValue(
       new CredentialNotFoundError({ userId: 'user-1', provider: 'supabase', requiredScopes: [] }),
     );
-    findCanonicalConnectionByProvider.mockResolvedValue({
-      connection: { id: 'supabase-local', provider: 'supabase', status: 'active' },
+    listCanonicalConnectionsByProvider.mockResolvedValue({
+      connections: [{ id: 'supabase-local', name: 'Supabase', provider: 'supabase', authType: 'api_key', status: 'active' }],
       source: 'connections',
     });
 
@@ -198,8 +220,8 @@ describe('getWorkflowConnectionReadiness', () => {
     resolveCredentialDryRun.mockRejectedValue(
       new CredentialNotFoundError({ userId: 'user-1', provider: 'supabase', requiredScopes: [] }),
     );
-    findCanonicalConnectionByProvider.mockResolvedValue({
-      connection: { id: 'supabase-remote', provider: 'supabase', status: 'active' },
+    listCanonicalConnectionsByProvider.mockResolvedValue({
+      connections: [{ id: 'supabase-remote', name: 'Supabase', provider: 'supabase', authType: 'api_key', status: 'active' }],
       source: 'credential_service',
     });
 
@@ -218,7 +240,7 @@ describe('getWorkflowConnectionReadiness', () => {
     resolveCredentialDryRun.mockRejectedValue(
       new CredentialNotFoundError({ userId: 'user-1', provider: 'supabase', requiredScopes: [] }),
     );
-    findCanonicalConnectionByProvider.mockResolvedValue(null);
+    listCanonicalConnectionsByProvider.mockResolvedValue({ connections: [], source: 'connections' });
 
     const result = await getWorkflowConnectionReadiness({
       workflowId: 'wf-1',
@@ -230,11 +252,12 @@ describe('getWorkflowConnectionReadiness', () => {
     expect(result.rows[0]).toMatchObject({
       provider: 'supabase',
       status: 'missing',
-      source: 'unified_credentials',
+      source: 'none',
     });
   });
 
   it('reports expired when the credential cannot be refreshed', async () => {
+    mockActiveGoogleConnection();
     resolveCredentialDryRun.mockRejectedValue(new CredentialExpiredError(notFoundContext));
 
     const result = await getWorkflowConnectionReadiness(baseInput);
@@ -244,6 +267,7 @@ describe('getWorkflowConnectionReadiness', () => {
   });
 
   it('skips nodes without credential requirements and dedupes lookups per provider+scopes', async () => {
+    mockActiveGoogleConnection();
     resolveCredentialDryRun.mockResolvedValue({
       id: 'cred-1',
       userId: 'user-1',
@@ -266,10 +290,11 @@ describe('getWorkflowConnectionReadiness', () => {
     expect(result.rows.map((r) => r.nodeId)).toEqual(['n1', 'n2']);
     // Same provider + scopes → one credential lookup, one connection lookup
     expect(resolveCredentialDryRun).toHaveBeenCalledTimes(1);
-    expect(findCanonicalConnectionByProvider).toHaveBeenCalledTimes(1);
+    expect(listCanonicalConnectionsByProvider).toHaveBeenCalledTimes(1);
   });
 
   it('returns only non-ready rows when includeSatisfied is false', async () => {
+    mockActiveGoogleConnection();
     resolveCredentialDryRun.mockResolvedValue({
       id: 'cred-1',
       userId: 'user-1',
@@ -286,7 +311,7 @@ describe('getWorkflowConnectionReadiness', () => {
     expect(result.summary.requiredCount).toBe(1);
   });
 
-  it('does not fail readiness when the connections lookup errors', async () => {
+  it('reports missing when the provider connection lookup errors before an active row can be found', async () => {
     resolveCredentialDryRun.mockResolvedValue({
       id: 'cred-1',
       userId: 'user-1',
@@ -295,11 +320,89 @@ describe('getWorkflowConnectionReadiness', () => {
       expiresAt: null,
       source: 'oauth_callback',
     });
-    findCanonicalConnectionByProvider.mockRejectedValue(new Error('db down'));
+    listCanonicalConnectionsByProvider.mockRejectedValue(new Error('db down'));
 
     const result = await getWorkflowConnectionReadiness(baseInput);
 
-    expect(result.ready).toBe(true);
+    expect(result.ready).toBe(false);
+    expect(result.rows[0].status).toBe('missing');
     expect(result.rows[0].connectionId).toBeUndefined();
+  });
+
+  it('treats legacy credentialId provider aliases as provider fallback without UUID lookup', async () => {
+    resolveCredentialDryRun.mockResolvedValue({
+      id: 'cred-1',
+      userId: 'user-1',
+      provider: 'google',
+      scopes: [GMAIL_SEND],
+      expiresAt: null,
+      source: 'oauth_callback',
+    });
+    listCanonicalConnectionsByProvider.mockResolvedValue({
+      connections: [{ id: CONN_UUID, name: 'Google', provider: 'google', authType: 'oauth2', status: 'active' }],
+      source: 'connections',
+    });
+
+    const result = await getWorkflowConnectionReadiness({
+      ...baseInput,
+      nodes: [{
+        ...gmailNode,
+        data: {
+          ...gmailNode.data,
+          config: { credentialId: 'google' },
+        },
+      }],
+    });
+
+    expect(getDecryptedConnection).not.toHaveBeenCalled();
+    expect(result.ready).toBe(true);
+    expect(result.rows[0]).toMatchObject({
+      status: 'ready',
+      legacyRef: 'google',
+      connectionId: CONN_UUID,
+    });
+  });
+
+  it('returns invalid_ref for an explicit stale UUID connection reference', async () => {
+    getDecryptedConnection.mockRejectedValue(new Error('Connection not found'));
+
+    const result = await getWorkflowConnectionReadiness({
+      ...baseInput,
+      nodes: [{
+        ...gmailNode,
+        data: {
+          ...gmailNode.data,
+          connectionRefs: { google_oauth2: CONN_UUID },
+        },
+      }],
+    });
+
+    expect(result.ready).toBe(false);
+    expect(result.rows[0]).toMatchObject({
+      status: 'invalid_ref',
+      action: 'repair',
+      explicitRef: CONN_UUID,
+    });
+    expect(resolveCredentialDryRun).not.toHaveBeenCalled();
+  });
+
+  it('requires explicit selection when multiple active provider connections match', async () => {
+    listCanonicalConnectionsByProvider.mockResolvedValue({
+      connections: [
+        { id: CONN_UUID, name: 'Google A', provider: 'google', authType: 'oauth2', status: 'active' },
+        { id: '22222222-2222-4222-8222-222222222222', name: 'Google B', provider: 'google', authType: 'oauth2', status: 'active' },
+      ],
+      source: 'connections',
+    });
+
+    const result = await getWorkflowConnectionReadiness(baseInput);
+
+    expect(result.ready).toBe(false);
+    expect(result.rows[0]).toMatchObject({
+      status: 'invalid_ref',
+      action: 'select_connection',
+      candidateConnectionIds: [CONN_UUID, '22222222-2222-4222-8222-222222222222'],
+    });
+    expect(resolveCredentialDryRun).not.toHaveBeenCalled();
   });
 });

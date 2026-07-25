@@ -62,6 +62,10 @@ import {
 } from '../core/utils/attach-inputs-merge-guard';
 import type { NodeInputField, NodeInputSchema } from '../core/types/unified-node-contract';
 import { logger } from '../core/logger';
+import {
+  getWorkflowConnectionReadiness,
+  type WorkflowConnectionReadinessResponse,
+} from '../services/workflow-connection-readiness';
 
 /**
  * Credential-class fields are usually injected via attach-credentials / vault.
@@ -198,6 +202,41 @@ export function mergeOwnershipUnlockInputsForNode(
     updated = true;
     logger.info(`[AttachInputs] Applied ownership unlock for ${node.id}.${unlockFieldName}: ${truthy}`);
   }
+  return updated;
+}
+
+export function normalizeLegacyConnectionRefsFromReadiness(
+  nodes: any[],
+  readiness: WorkflowConnectionReadinessResponse | undefined,
+): number {
+  if (!readiness) return 0;
+  const nodesById = new Map((nodes || []).map((node: any) => [String(node?.id || ''), node]));
+  let updated = 0;
+
+  for (const row of readiness.rows || []) {
+    if (!row.legacyRef || !row.connectionId || row.status !== 'ready') continue;
+    const node = nodesById.get(row.nodeId);
+    if (!node) continue;
+    if (!node.data) node.data = {};
+    if (!node.data.config || typeof node.data.config !== 'object') node.data.config = {};
+    const config = node.data.config as Record<string, any>;
+    const connectionRefs = {
+      ...((config.connectionRefs || {}) as Record<string, string>),
+      ...((node.data.connectionRefs || {}) as Record<string, string>),
+    };
+    const key = row.credentialTypeId || row.provider;
+    if (connectionRefs[key] !== row.connectionId) {
+      connectionRefs[key] = row.connectionId;
+      updated += 1;
+    }
+    config.connectionRefs = connectionRefs;
+    node.data.connectionRefs = connectionRefs;
+    if (typeof config.credentialId === 'string' && config.credentialId.trim() === row.legacyRef) {
+      config.provider = config.provider || row.provider;
+      delete config.credentialId;
+    }
+  }
+
   return updated;
 }
 
@@ -1911,6 +1950,38 @@ async function runAttachInputsPipeline(req: Request, res: Response): Promise<{ s
       attachInputsPositionSnapshot
     );
     const edgesToSave = finalNormalizedGraph.edges;
+    let connectionReadiness: WorkflowConnectionReadinessResponse | undefined;
+    if (userId) {
+      try {
+        connectionReadiness = await getWorkflowConnectionReadiness({
+          workflowId,
+          userId,
+          nodes: nodesToSave as any,
+          includeSatisfied: true,
+        });
+        const normalizedRefCount = normalizeLegacyConnectionRefsFromReadiness(nodesToSave as any[], connectionReadiness);
+        if (normalizedRefCount > 0) {
+          connectionReadiness = await getWorkflowConnectionReadiness({
+            workflowId,
+            userId,
+            nodes: nodesToSave as any,
+            includeSatisfied: true,
+          });
+          logger.info('[AttachInputs] Normalized legacy connection refs from canonical readiness', {
+            workflowId,
+            normalizedRefCount,
+          });
+        }
+        if (connectionReadiness.ready && nextPhase === 'ready_for_ownership') {
+          nextPhase = 'ready_for_execution';
+        }
+        if (!connectionReadiness.ready && nextPhase === 'ready_for_execution') {
+          nextPhase = 'ready_for_ownership';
+        }
+      } catch (readinessError) {
+        logger.warn('[AttachInputs] Canonical connection readiness failed (non-fatal):', readinessError);
+      }
+    }
     // Persist all migrations applied across both normalization passes for future idempotency
     const allAppliedMigrations = Array.from(new Set([
       ...accumulatedMigrations,
@@ -2302,9 +2373,9 @@ async function runAttachInputsPipeline(req: Request, res: Response): Promise<{ s
 
     return { statusCode: 200, body: ({
       success: true,
-      workflow: finalNormalizedGraph,
-      nodes: finalNormalizedGraph.nodes,
-      edges: finalNormalizedGraph.edges,
+      workflow: { ...finalNormalizedGraph, nodes: nodesToSave, edges: edgesToSave },
+      nodes: nodesToSave,
+      edges: edgesToSave,
       validation: {
         valid: validation.valid,
         errors: validation.errors.map(e => e.message),
@@ -2313,6 +2384,7 @@ async function runAttachInputsPipeline(req: Request, res: Response): Promise<{ s
       status: nextStatus,
       phase: nextPhase,
       ready: nextPhase === 'ready_for_execution',
+      connectionReadiness,
       message: nextPhase === 'ready_for_execution' 
         ? 'Node inputs injected successfully. Workflow is ready for execution.'
         : 'Node inputs injected successfully. Credentials required.',
