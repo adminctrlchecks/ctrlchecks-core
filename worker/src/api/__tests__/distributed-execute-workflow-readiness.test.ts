@@ -75,6 +75,24 @@ function supabaseNode(
   };
 }
 
+function workflowNode(
+  id: string,
+  nodeType: string,
+  label: string,
+  config: Record<string, unknown>,
+) {
+  return {
+    id,
+    type: 'custom',
+    position: { x: 0, y: 0 },
+    data: {
+      type: nodeType,
+      label,
+      config,
+    },
+  };
+}
+
 function workflow(nodes: any[]) {
   return {
     id: 'workflow-1',
@@ -148,6 +166,43 @@ describe('distributedExecuteWorkflow readiness contract', () => {
   });
 
   it('returns missing Supabase Insert data, not credentials, when a saved connection is active', async () => {
+    credentialDiscoveryPhase.discoverCredentials.mockResolvedValue({
+      requiredCredentials: [{
+        provider: 'supabase',
+        type: 'api_key',
+        vaultKey: 'supabase',
+        displayName: 'Supabase',
+        required: true,
+        satisfied: true,
+        nodeIds: ['supabase-1'],
+        nodeTypes: ['supabase'],
+      }],
+      satisfiedCredentials: [{
+        provider: 'supabase',
+        type: 'api_key',
+        vaultKey: 'supabase',
+        displayName: 'Supabase',
+        required: true,
+        satisfied: true,
+        nodeIds: ['supabase-1'],
+        nodeTypes: ['supabase'],
+      }],
+      missingCredentials: [],
+      allDiscovered: true,
+      errors: [],
+      warnings: [],
+    });
+    executionPreflight.mockResolvedValue({
+      ok: false,
+      failures: [{
+        nodeId: 'supabase-1',
+        nodeName: 'Supabase',
+        nodeType: 'supabase',
+        provider: 'supabase',
+        requiredScopes: [],
+        error: { message: 'Supabase is not connected' },
+      }],
+    });
     const row = workflow([
       supabaseNode(
         'supabase-1',
@@ -172,6 +227,8 @@ describe('distributedExecuteWorkflow readiness contract', () => {
       fieldLabel: 'Data',
     });
     expect(body.details.missingCredentials).toEqual([]);
+    expect(body.details.executionPreflightMissingCredentials).toEqual([]);
+    expect(body.details.executionPreflightIgnoredCredentialsCount).toBe(1);
   });
 
   it('returns canonical credential guidance when the connection is truly missing', async () => {
@@ -260,7 +317,43 @@ describe('distributedExecuteWorkflow readiness contract', () => {
     expect(body.details.issues).toHaveLength(2);
   });
 
-  it('merges executionPreflight credential failures into canonical readiness details', async () => {
+  it('suppresses same-node preflight credential fallbacks for any node with concrete field blockers', async () => {
+    executionPreflight.mockResolvedValue({
+      ok: false,
+      failures: [{
+        nodeId: 'slack-1',
+        nodeName: 'Slack Message',
+        nodeType: 'slack_message',
+        provider: 'slack',
+        requiredScopes: ['chat:write'],
+        error: { message: 'Slack is not connected' },
+      }],
+    });
+    const row = workflow([
+      workflowNode('slack-1', 'slack_message', 'Slack Message', {
+        channel: '#alerts',
+      }),
+    ]);
+
+    const { body } = await run(row);
+
+    expect(body.code).toBe('EXECUTION_MISSING_INPUTS');
+    expect(body.details.readinessIssues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'missing_input',
+          nodeId: 'slack-1',
+          nodeType: 'slack_message',
+          fieldKey: 'message',
+        }),
+      ]),
+    );
+    expect(body.details.missingCredentials).toEqual([]);
+    expect(body.details.executionPreflightMissingCredentials).toEqual([]);
+    expect(body.details.executionPreflightIgnoredCredentialsCount).toBe(1);
+  });
+
+  it('merges executionPreflight credential failures into canonical readiness details when no concrete field blocker exists', async () => {
     executionPreflight.mockResolvedValue({
       ok: false,
       failures: [{
@@ -273,15 +366,18 @@ describe('distributedExecuteWorkflow readiness contract', () => {
       }],
     });
     const row = workflow([
-      supabaseNode('supabase-1', 'Supabase', { operation: 'insert', table: 'users' }),
+      supabaseNode('supabase-1', 'Supabase', {
+        operation: 'insert',
+        table: 'users',
+        data: { name: 'Ada' },
+      }),
     ]);
 
     const { body } = await run(row);
 
-    expect(body.code).toBe('EXECUTION_NOT_READY');
+    expect(body.code).toBe('EXECUTION_MISSING_CREDENTIALS');
     expect(body.details.readinessIssues).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ kind: 'missing_input', fieldKey: 'data' }),
         expect.objectContaining({ kind: 'missing_credential', provider: 'supabase' }),
       ]),
     );

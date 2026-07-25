@@ -82,6 +82,59 @@ function preflightFailuresToCredentialInputs(failures: any[]): CredentialReadine
   }));
 }
 
+function sameProvider(left: unknown, right: unknown): boolean {
+  const a = String(left || '').trim().toLowerCase();
+  const b = String(right || '').trim().toLowerCase();
+  return Boolean(a && b && a === b);
+}
+
+function credentialReferencesFailureNode(credential: any, failure: any): boolean {
+  const nodeIds = Array.isArray(credential?.nodeIds) ? credential.nodeIds : [];
+  if (nodeIds.length === 0) return true;
+  return nodeIds.includes(failure.nodeId);
+}
+
+function preflightFailureIsContradictedByDiscovery(failure: any, credentialDiscovery: any): boolean {
+  return (credentialDiscovery.satisfiedCredentials || []).some((credential: any) => (
+    sameProvider(credential.provider, failure.provider) &&
+    credentialReferencesFailureNode(credential, failure)
+  ));
+}
+
+function preflightFailureDuplicatesDiscovery(failure: any, baseIssues: ReturnType<typeof buildWorkflowReadinessIssues>): boolean {
+  return baseIssues.some((issue) => (
+    issue.kind === 'missing_credential' &&
+    issue.nodeId === failure.nodeId &&
+    sameProvider(issue.provider, failure.provider)
+  ));
+}
+
+function filterPreflightCredentialFailures(input: {
+  failures: any[];
+  baseIssues: ReturnType<typeof buildWorkflowReadinessIssues>;
+  credentialDiscovery: any;
+}): any[] {
+  const runtimeBlockedNodes = new Set(
+    input.baseIssues
+      .filter((issue) => issue.kind === 'missing_input' || issue.kind === 'invalid_input')
+      .map((issue) => issue.nodeId)
+      .filter(Boolean),
+  );
+
+  return (input.failures || []).filter((failure) => {
+    if (preflightFailureIsContradictedByDiscovery(failure, input.credentialDiscovery)) {
+      return false;
+    }
+    if (preflightFailureDuplicatesDiscovery(failure, input.baseIssues)) {
+      return false;
+    }
+    if (runtimeBlockedNodes.has(failure.nodeId)) {
+      return false;
+    }
+    return true;
+  });
+}
+
 function readinessSummary(details: NodeReadinessDetails): string {
   const missingInputsSummary = details.missingInputs
     .map((issue) => `${issue.nodeLabel}.${issue.fieldLabel || issue.fieldKey}`)
@@ -290,11 +343,18 @@ export default async function distributedExecuteWorkflow(
       nodes,
       credentials: credentialDiscovery.missingCredentials || [],
     });
-    const preflightReadinessIssues = preflightResult.ok
+    const effectivePreflightFailures = preflightResult.ok
+      ? []
+      : filterPreflightCredentialFailures({
+          failures: preflightResult.failures,
+          baseIssues: baseReadinessIssues,
+          credentialDiscovery,
+        });
+    const preflightReadinessIssues = effectivePreflightFailures.length === 0
       ? []
       : buildCredentialReadinessIssues({
           nodes,
-          credentials: preflightFailuresToCredentialInputs(preflightResult.failures),
+          credentials: preflightFailuresToCredentialInputs(effectivePreflightFailures),
         });
     const readinessDetails = buildReadinessDetails([
       ...baseReadinessIssues,
@@ -315,7 +375,7 @@ export default async function distributedExecuteWorkflow(
         nodes
       ),
       executionPreflightReady: preflightResult.ok,
-      executionPreflightMissingCredentials: preflightResult.failures.map((failure: any) => ({
+      executionPreflightMissingCredentials: effectivePreflightFailures.map((failure: any) => ({
         nodeId: failure.nodeId,
         nodeType: failure.nodeType,
         nodeLabel: failure.nodeName,
@@ -323,6 +383,10 @@ export default async function distributedExecuteWorkflow(
         displayName: failure.provider,
         requiredScopes: failure.requiredScopes,
       })),
+      executionPreflightIgnoredCredentialsCount: Math.max(
+        0,
+        (preflightResult.failures || []).length - effectivePreflightFailures.length,
+      ),
       executionValidationReady: executionValidation.ready,
       executionValidationErrors: executionValidation.errors,
       executionValidationIssues: executionValidation.validationIssues || [],
