@@ -51,7 +51,10 @@ describe('missingConnectionsFromResponse', () => {
           {
             nodeId: 'n1',
             provider: 'google',
+            credentialTypeId: 'google_oauth2',
             status: 'missing_scope',
+            requiredScopes: ['https://www.googleapis.com/auth/gmail.send'],
+            connectionId: 'conn-1',
             reason: 'Missing Gmail send permission',
           },
         ],
@@ -63,7 +66,10 @@ describe('missingConnectionsFromResponse', () => {
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
       provider: 'google',
+      credentialTypeId: 'google_oauth2',
       status: 'missing_scope',
+      requiredScopes: ['https://www.googleapis.com/auth/gmail.send'],
+      connectionId: 'conn-1',
       reason: 'Missing Gmail send permission',
       nodes: ['n1'],
     });

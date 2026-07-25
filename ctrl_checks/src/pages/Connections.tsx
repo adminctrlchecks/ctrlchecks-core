@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
-import { Search, RefreshCw, Plus, ArrowLeft } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Search, RefreshCw, Plus, ArrowLeft, Loader2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { awsClient } from '@/integrations/aws/client';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,11 @@ import { ProviderLogo } from '@/components/connections/ProviderLogo';
 import { isComingSoonProvider } from '@/components/connections/connectionAvailability';
 import { useConnections } from '@/hooks/useConnections';
 import { useCredentialTypes } from '@/hooks/useCredentialTypes';
+import { useOAuthFlow } from '@/hooks/useOAuthFlow';
+import {
+  fetchWorkflowMissingConnections,
+  type WorkflowMissingConnection,
+} from '@/hooks/useWorkflowConnectionStatus';
 import { invalidateAfterConnectionChange } from '@/lib/queryInvalidation';
 import { QUERY_KEYS } from '@/lib/queryKeys';
 import type { ConnectionRecord, CredentialTypeDefinition } from '@/lib/api/connections';
@@ -55,6 +60,59 @@ function groupByCategory<T extends { provider: string }>(items: T[]): Record<str
     (groups[cat] ??= []).push(item);
   }
   return groups;
+}
+
+interface WorkflowRepairGroup {
+  key: string;
+  provider: string;
+  displayName: string;
+  credentialTypeId?: string;
+  connectionId?: string;
+  connectionName?: string;
+  requiredScopes: string[];
+  issues: WorkflowMissingConnection[];
+}
+
+function groupWorkflowIssues(issues: WorkflowMissingConnection[]): WorkflowRepairGroup[] {
+  const groups = new Map<string, WorkflowRepairGroup>();
+  for (const issue of issues) {
+    const key = [
+      issue.provider,
+      issue.credentialTypeId || '',
+      issue.connectionId || '',
+    ].join(':');
+    const existing = groups.get(key) || {
+      key,
+      provider: issue.provider,
+      displayName: issue.displayName,
+      credentialTypeId: issue.credentialTypeId,
+      connectionId: issue.connectionId,
+      connectionName: issue.connectionName,
+      requiredScopes: [],
+      issues: [],
+    };
+    existing.issues.push(issue);
+    for (const scope of issue.requiredScopes || []) {
+      if (!existing.requiredScopes.includes(scope)) existing.requiredScopes.push(scope);
+    }
+    groups.set(key, existing);
+  }
+  return Array.from(groups.values());
+}
+
+function compactScope(scope: string): string {
+  return scope
+    .replace(/^https:\/\/www\.googleapis\.com\/auth\//, '')
+    .replace(/^https:\/\/graph\.microsoft\.com\//, '')
+    .replace(/^https:\/\/www\.linkedin\.com\/oauth\/v2\//, '');
+}
+
+function repairVerb(group: WorkflowRepairGroup): string {
+  const statuses = new Set(group.issues.map((issue) => issue.status));
+  if (group.connectionId || statuses.has('expired') || statuses.has('missing_scope') || statuses.has('runtime_missing')) {
+    return `Reconnect ${group.displayName}`;
+  }
+  return `Connect ${group.displayName}`;
 }
 
 // ─── Inline service catalog ───────────────────────────────────────────────────
@@ -179,17 +237,31 @@ export default function Connections() {
   const qc = useQueryClient();
   const { data: connections = [], isLoading, refetch, isFetching } = useConnections();
   const { data: credentialTypes = [], isLoading: credentialTypesLoading } = useCredentialTypes();
+  const oauthFlow = useOAuthFlow();
   const [searchParams, setSearchParams] = useSearchParams();
   const [connSearch, setConnSearch] = useState('');
   const [authFilter, setAuthFilter] = useState<'all' | 'oauth' | 'api_key'>('all');
   const [modalOpen, setModalOpen] = useState(false);
   const [modalPreset, setModalPreset] = useState<string | undefined>();
   const [editingConnection, setEditingConnection] = useState<ConnectionRecord | null>(null);
+  const [repairError, setRepairError] = useState<string | null>(null);
 
   const returnTo = searchParams.get('returnTo');
   const workflowName = searchParams.get('workflowName');
   const requestedService = searchParams.get('service') || searchParams.get('credentialType');
   const returnToWorkflowId = returnTo?.match(/^\/workflow\/([^/?#]+)/)?.[1];
+  const workflowReadinessQuery = useQuery({
+    queryKey: QUERY_KEYS.workflowConnectionStatus(returnToWorkflowId ?? 'connections-none'),
+    queryFn: () => fetchWorkflowMissingConnections(returnToWorkflowId!),
+    enabled: !!returnToWorkflowId,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    retry: 1,
+  });
+  const workflowIssues = workflowReadinessQuery.data ?? [];
+  const repairGroups = useMemo(() => groupWorkflowIssues(workflowIssues), [workflowIssues]);
 
   // Invalidate the workflow connection gate when leaving this page so that
   // returning to /workflow/:id always refetches readiness — the workflow page
@@ -245,6 +317,48 @@ export default function Connections() {
   function handleSaved() {
     if (returnTo) {
       navigate(returnTo);
+    }
+  }
+
+  async function handleRepairGroup(group: WorkflowRepairGroup) {
+    setRepairError(null);
+    const credentialType = group.credentialTypeId
+      ? credentialTypes.find((type) => type.id === group.credentialTypeId)
+      : credentialTypes.find((type) => type.provider === group.provider && type.authType === 'oauth2');
+    if (!credentialType) {
+      setConnSearch(group.displayName || group.provider);
+      setRepairError(`No OAuth connection type was found for ${group.displayName}.`);
+      return;
+    }
+
+    const existingConnectionId = group.connectionId || connections.find((connection) => (
+      connection.provider === group.provider &&
+      connection.authType === 'oauth2' &&
+      connection.credentialTypeId === credentialType.id
+    ))?.id;
+    const returnHere = `${window.location.origin}${window.location.pathname}${window.location.search}`;
+
+    try {
+      if (existingConnectionId) {
+        await oauthFlow.reconnect(existingConnectionId, {
+          scopes: group.requiredScopes,
+          returnTo: returnHere,
+        });
+      } else {
+        await oauthFlow.connect(credentialType.id, {
+          scopes: group.requiredScopes,
+          returnTo: returnHere,
+        });
+      }
+
+      invalidateAfterConnectionChange(qc);
+      await refetch();
+      const latest = await workflowReadinessQuery.refetch();
+      if (returnTo && (latest.data ?? []).length === 0) {
+        navigate(returnTo);
+      }
+    } catch (error) {
+      setRepairError(error instanceof Error ? error.message : 'Connection repair did not complete.');
     }
   }
 
@@ -313,6 +427,86 @@ export default function Connections() {
 
       <main className="container mx-auto px-4 py-8 max-w-5xl">
         <WorkflowAuthGate>
+          {returnToWorkflowId && (
+            <section className="mb-6 rounded-lg border border-amber-200 bg-amber-50/70 p-4 text-amber-950">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold">Workflow connection repair</h2>
+                  <p className="mt-1 text-sm text-amber-900/80">
+                    {workflowReadinessQuery.isFetching && workflowIssues.length === 0
+                      ? 'Checking the workflow connection requirements...'
+                      : repairGroups.length > 0
+                        ? 'Reconnect the accounts below with the exact permissions this workflow needs.'
+                        : 'This workflow has no remaining connection blockers.'}
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => workflowReadinessQuery.refetch()}
+                  disabled={workflowReadinessQuery.isFetching}
+                  className="border-amber-300 bg-white/70 text-amber-950 hover:bg-white"
+                >
+                  <RefreshCw className={`h-4 w-4 mr-1.5 ${workflowReadinessQuery.isFetching ? 'animate-spin' : ''}`} />
+                  Recheck
+                </Button>
+              </div>
+
+              {repairError && (
+                <div className="mt-3 rounded-md border border-amber-300 bg-white/70 px-3 py-2 text-sm text-amber-950">
+                  {repairError}
+                </div>
+              )}
+
+              {repairGroups.length > 0 && (
+                <div className="mt-4 space-y-3">
+                  {repairGroups.map((group) => (
+                    <div
+                      key={group.key}
+                      className="rounded-md border border-amber-200 bg-white p-3 shadow-sm"
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <ProviderLogo provider={group.provider} size={28} />
+                            <div>
+                              <p className="text-sm font-semibold text-foreground">{group.displayName}</p>
+                              {group.connectionName && (
+                                <p className="text-xs text-muted-foreground">{group.connectionName}</p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="mt-2 space-y-1">
+                            {group.issues.map((issue) => (
+                              <p key={`${issue.nodeId}-${issue.operation}-${issue.status}`} className="text-xs text-muted-foreground">
+                                <span className="font-medium text-foreground">{issue.nodeLabel || issue.nodeId}</span>
+                                {issue.operationLabel ? ` - ${issue.operationLabel}` : ''}
+                                {issue.reason ? `: ${issue.reason}` : ''}
+                              </p>
+                            ))}
+                          </div>
+                          {group.requiredScopes.length > 0 && (
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              Permissions: {group.requiredScopes.map(compactScope).join(', ')}
+                            </p>
+                          )}
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={() => handleRepairGroup(group)}
+                          disabled={oauthFlow.isLoading || credentialTypesLoading}
+                          className="shrink-0"
+                        >
+                          {oauthFlow.isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
+                          {repairVerb(group)}
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
 
           {/* ── Saved connections section ── */}
           <section className="mb-10">

@@ -231,6 +231,24 @@ function mapOAuthErrorToUserMessage(rawMessage: string): string {
   return 'The connection could not be completed. Please try again.';
 }
 
+function workflowIdFromReturnTo(returnTo?: string | null): string | null {
+  if (!returnTo) return null;
+  const workflowMatch = returnTo.match(/\/workflow\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
+  if (workflowMatch) return workflowMatch[1];
+
+  try {
+    const url = new URL(returnTo, frontendOrigin());
+    const nestedReturnTo = url.searchParams.get('returnTo');
+    if (nestedReturnTo && nestedReturnTo !== returnTo) {
+      return workflowIdFromReturnTo(nestedReturnTo);
+    }
+  } catch {
+    // Leave invalid URLs alone; they simply do not target a workflow cache.
+  }
+
+  return null;
+}
+
 export async function oauthCallbackHandler(req: Request, res: Response) {
   const code = String(req.query.code || req.body.code || '');
   const state = String(req.query.state || req.body.state || '');
@@ -247,12 +265,11 @@ export async function oauthCallbackHandler(req: Request, res: Response) {
     throw error;
   }
   // Invalidate missing-items cache so the frontend sees the connected status immediately
-  const returnTo = result.returnTo || '';
-  const workflowIdMatch = returnTo.match(/\/workflow\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
-  if (workflowIdMatch) {
+  const workflowId = workflowIdFromReturnTo(result.returnTo);
+  if (workflowId) {
     const redisUrl = process.env.REDIS_URL || 'redis://redis:6379';
     getCacheRedisClient(redisUrl).then(redis => {
-      if (redis) invalidateMissingItemsCache(workflowIdMatch[1], redis).catch(() => {});
+      if (redis) invalidateMissingItemsCache(workflowId, redis).catch(() => {});
     }).catch(() => {});
   }
 
@@ -272,6 +289,7 @@ export async function oauthReconnectHandler(req: Request, res: Response) {
     userId: userId(req),
     credentialTypeId: connection.credentialTypeId,
     connectionId: connection.id,
+    scopes: typeof req.query.scopes === 'string' ? req.query.scopes.split(',') : req.body.scopes,
     returnTo: req.body.returnTo || req.headers.origin || process.env.FRONTEND_URL,
   });
   res.json(result);

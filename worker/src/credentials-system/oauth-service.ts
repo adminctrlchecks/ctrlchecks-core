@@ -111,7 +111,7 @@ export class OAuthService {
       provider: definition.provider,
       userId: state.user_id,
       tokenResponse: { ...token, scopes },
-      requiredScopes: definition.requiredScopes || definition.oauth2.defaultScopes,
+      requiredScopes: scopes.length ? scopes : (definition.requiredScopes || definition.oauth2.defaultScopes),
       source: 'generic_oauth',
     });
     const connection = await this.persistConnectionFromCallback({

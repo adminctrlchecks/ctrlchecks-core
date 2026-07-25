@@ -111,12 +111,13 @@ export function useOAuthFlow() {
   );
 
   const reconnect = useCallback(
-    async (connectionId: string) => {
+    async (connectionId: string, opts?: { scopes?: string[]; returnTo?: string }) => {
       setStatus('opening');
       setError(null);
       try {
         const { authorizationUrl } = await reconnectOAuth(connectionId, {
           returnTo: `${window.location.origin}/connections`,
+          ...opts,
         });
         setStatus('waiting');
         await openOAuthPopup(authorizationUrl);

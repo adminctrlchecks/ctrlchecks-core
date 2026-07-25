@@ -176,7 +176,7 @@ export async function startOAuth(
 
 export async function reconnectOAuth(
   connectionId: string,
-  opts?: { returnTo?: string },
+  opts?: { returnTo?: string; scopes?: string[] },
 ): Promise<{ authorizationUrl: string; state: string }> {
   return apiFetch<{ authorizationUrl: string; state: string }>(
     `/api/credential-connections/connections/${connectionId}/reconnect`,

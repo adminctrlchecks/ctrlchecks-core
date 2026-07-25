@@ -31,9 +31,13 @@ export interface WorkflowMissingConnection {
   nodeType?: string;
   operation?: string;
   operationLabel?: string;
+  credentialTypeId?: string;
   credentialLabel?: string;
   connectionId?: string;
   connectionName?: string;
+  requiredScopes?: string[];
+  availableScopes?: string[];
+  candidateConnectionIds?: string[];
   status?: ConnectionReadinessStatus;
   action?: ConnectionReadinessAction;
   reason?: string;
@@ -45,11 +49,15 @@ interface ConnectionReadinessRow {
   nodeType?: string;
   provider: string;
   providerLabel?: string;
+  credentialTypeId?: string;
   credentialLabel?: string;
   operation?: string;
   operationLabel?: string;
   connectionId?: string;
   connectionName?: string;
+  requiredScopes?: string[];
+  availableScopes?: string[];
+  candidateConnectionIds?: string[];
   status: ConnectionReadinessStatus;
   action?: ConnectionReadinessAction;
   reason?: string;
@@ -94,9 +102,13 @@ export function missingConnectionsFromResponse(body: {
       nodeType: row.nodeType,
       operation: row.operation,
       operationLabel: row.operationLabel,
+      credentialTypeId: row.credentialTypeId,
       credentialLabel: row.credentialLabel,
       connectionId: row.connectionId,
       connectionName: row.connectionName,
+      requiredScopes: row.requiredScopes,
+      availableScopes: row.availableScopes,
+      candidateConnectionIds: row.candidateConnectionIds,
       status: row.status,
       action: row.action,
       reason: row.reason,
@@ -124,7 +136,7 @@ export function missingConnectionsFromResponse(body: {
     }));
 }
 
-async function fetchWorkflowMissingConnections(workflowId: string): Promise<WorkflowMissingConnection[]> {
+export async function fetchWorkflowMissingConnections(workflowId: string): Promise<WorkflowMissingConnection[]> {
   const { data: { session } } = await awsClient.auth.getSession();
   const token = session?.access_token;
 
