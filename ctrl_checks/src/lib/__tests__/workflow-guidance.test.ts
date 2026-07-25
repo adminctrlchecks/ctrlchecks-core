@@ -136,6 +136,29 @@ describe('mapWorkflowIssueToGuidance — safety-net details trigger readiness', 
     );
   });
 
+  it('triggers when details.readinessIssues has canonical structured items', () => {
+    const result = mapWorkflowIssueToGuidance({
+      code: 'OTHER',
+      details: {
+        readinessIssues: [{
+          kind: 'missing_input',
+          nodeId: 'supabase-1',
+          nodeType: 'supabase',
+          nodeLabel: 'Supabase',
+          operation: 'insert',
+          operationLabel: 'Insert',
+          fieldKey: 'data',
+          fieldLabel: 'Data',
+          helpText: 'Data for insert/update',
+        }],
+      },
+    });
+
+    readiness(result);
+    expect(result.missingItems?.join(' ')).toContain('Data for Supabase');
+    expect(result.missingItems?.join(' ')).toContain('Insert');
+  });
+
   it('does NOT trigger when details arrays are empty', () => {
     const result = mapWorkflowIssueToGuidance({
       code: 'OTHER',

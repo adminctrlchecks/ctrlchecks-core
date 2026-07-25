@@ -1,15 +1,15 @@
 /**
  * Universal pre-execution config validator.
  *
- * Scans every node in a workflow before any execution begins.
- * Uses nodeDefinitionRegistry.validateInputs() — fully data-driven, zero node-specific branches.
- *
- * Returns a structured result that maps directly to the GuidedStatusCard frontend pipeline:
- *   { code: 'MISSING_REQUIRED_INPUTS', details: { missingInputs: [...], issues: [...] } }
+ * The public return shape is kept for existing GuidedStatusCard consumers, but
+ * missing fields now come from the operation-aware readiness resolver.
  */
 
-import { nodeDefinitionRegistry } from '../types/node-definition';
 import { validateWorkflowNodeIntelligence, type NodeFieldIntelligenceIssue } from './node-field-intelligence';
+import {
+  buildReadinessDetails,
+  buildWorkflowReadinessIssues,
+} from '../readiness/node-readiness-resolver';
 
 export interface MissingField {
   fieldName: string;
@@ -32,7 +32,6 @@ export interface ConfigValidationResult {
   missingInputs: Array<{ fieldName: string; nodeLabel: string; description: string }>;
 }
 
-/** Node types that have no meaningful user-facing config to validate */
 const SKIP_TYPES = new Set([
   'trigger',
   'webhook_trigger',
@@ -43,11 +42,6 @@ const SKIP_TYPES = new Set([
   'no_op',
 ]);
 
-/**
- * Validates all node configs in a workflow before execution starts.
- *
- * @param nodes  Array of workflow node objects ({ id, type, data: { config } })
- */
 export function validateWorkflowConfig(
   nodes: Array<{
     id: string;
@@ -60,78 +54,58 @@ export function validateWorkflowConfig(
     };
   }>,
 ): ConfigValidationResult {
-  const issues: ConfigIssue[] = [];
-
-  for (const node of nodes) {
-    const nodeType = node.type;
-    if (SKIP_TYPES.has(nodeType)) continue;
-
-    const def = nodeDefinitionRegistry.get(nodeType);
-    if (!def) continue; // Unknown type — skip, let execution handle it
-
-    const config = node.data?.config ?? {};
-    const nodeLabel = node.data?.label || def.label || nodeType;
-
-    const refs = {
-      ...(((config as any).connectionRefs || {}) as Record<string, unknown>),
-      ...((node.data?.connectionRefs || {}) as Record<string, unknown>),
-    };
-    const hasSelectedConnection =
-      Object.values(refs).some((value) => typeof value === 'string' && value.trim().length > 0) ||
-      (typeof (config as any).connectionId === 'string' && (config as any).connectionId.trim().length > 0) ||
-      (typeof node.data?.connectionId === 'string' && node.data.connectionId.trim().length > 0);
-
-    const validationConfig = { ...config };
-    if (hasSelectedConnection) {
-      const credentialFields = new Set<string>(def.credentialSchema?.credentialFields || []);
-      for (const [fieldName, spec] of Object.entries(def.inputSchema || {})) {
-        if (spec?.ownership === 'credential') credentialFields.add(fieldName);
-      }
-      for (const fieldName of credentialFields) {
-        const current = validationConfig[fieldName];
-        if (current === undefined || current === null || (typeof current === 'string' && current.trim() === '')) {
-          validationConfig[fieldName] = '__selected_connection__';
-        }
-      }
-    }
-
-    const { valid, errors } = def.validateInputs(validationConfig);
-    if (valid) continue;
-
-    // Map each error string back to a MissingField using the inputSchema for labels
-    const missingFields: MissingField[] = errors.map((err) => {
-      // Try to find the field key in the error (e.g. "documentId is required")
-      const fieldKey = Object.keys(def.inputSchema).find((k) =>
-        err.toLowerCase().includes(k.toLowerCase()),
-      );
-      const fieldSpec = fieldKey ? def.inputSchema[fieldKey] : undefined;
-      return {
-        fieldName: fieldKey || err,
-        friendlyLabel: fieldSpec?.description?.split('—')[0].trim() || fieldKey || err,
-        description: err,
-      };
-    });
-
-    issues.push({ nodeId: node.id, nodeLabel, nodeType, missingFields });
-  }
-
-  const missingInputs = issues.flatMap((issue) =>
-    issue.missingFields.map((f) => ({
-      fieldName: f.friendlyLabel,
-      nodeLabel: issue.nodeLabel,
-      description: f.description,
-    })),
+  const readinessDetails = buildReadinessDetails(
+    buildWorkflowReadinessIssues({
+      nodes: nodes
+        .filter((node) => !SKIP_TYPES.has(node.type))
+        .map((node) => ({
+          id: node.id,
+          type: node.type,
+          position: { x: 0, y: 0 },
+          data: {
+            type: node.type,
+            label: node.data?.label || node.type,
+            category: 'custom',
+            config: node.data?.config || {},
+            connectionRefs: node.data?.connectionRefs,
+            connectionId: node.data?.connectionId,
+          },
+        })) as any,
+    })
   );
 
+  const issues: ConfigIssue[] = readinessDetails.issues.map((issue) => ({
+    nodeId: issue.nodeId,
+    nodeLabel: issue.nodeLabel,
+    nodeType: issue.nodeType,
+    missingFields: issue.missingFields.map((field) => ({
+      fieldName: field.fieldKey,
+      friendlyLabel: field.friendlyLabel,
+      description: field.description,
+    })),
+  }));
+
+  const missingInputs = readinessDetails.missingInputs.map((issue) => ({
+    fieldName: issue.fieldKey || issue.fieldLabel || 'field',
+    fieldKey: issue.fieldKey,
+    fieldLabel: issue.fieldLabel,
+    nodeId: issue.nodeId,
+    nodeType: issue.nodeType,
+    nodeLabel: issue.nodeLabel,
+    operation: issue.operation,
+    operationLabel: issue.operationLabel,
+    description: issue.reason || issue.helpText || issue.message,
+    helpText: issue.helpText,
+    exampleValue: issue.exampleValue,
+    examples: issue.examples,
+  }));
+
   const intelligenceIssues = validateWorkflowNodeIntelligence({ nodes: nodes as any, edges: [] });
-  // Intelligence issues are advisory only — they cannot see the credential vault or runtime
-  // template values, so treating them as hard blocks causes false "stuck at running" executions.
-  // Only nodeDefinitionRegistry.validateInputs() issues (real missing config) block execution.
 
   return {
     valid: issues.length === 0,
     issues,
     validationIssues: intelligenceIssues,
-    missingInputs,
+    missingInputs: missingInputs as ConfigValidationResult['missingInputs'],
   };
 }

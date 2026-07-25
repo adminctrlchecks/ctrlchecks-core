@@ -11,6 +11,11 @@ import { workflowLifecycleManager } from '../workflow-lifecycle-manager';
 import { getDbClient } from '../../core/database/aws-db-client';
 import { isPlaceholderValue } from '../../core/utils/placeholder-filter';
 import { InputControlType } from '../../core/utils/schema-input-control';
+import {
+  buildReadinessDetails,
+  buildWorkflowReadinessIssues,
+  type NodeReadinessDetails,
+} from '../../core/readiness/node-readiness-resolver';
 
 export interface UnifiedMissingCredential {
   provider: string;
@@ -48,6 +53,7 @@ export interface UnifiedMissingInput {
 export interface UnifiedMissingItems {
   credentials: UnifiedMissingCredential[];
   inputs: UnifiedMissingInput[];
+  readiness?: NodeReadinessDetails;
   /** Optional grouped view for clients (no duplicate flat arrays). */
   display?: {
     summary: {
@@ -104,6 +110,7 @@ export function normalizeUnifiedMissingItems(items: UnifiedMissingItems): Unifie
   return {
     credentials,
     inputs,
+    readiness: items.readiness,
     display: {
       summary: {
         missingCredentialCount: credentials.length,
@@ -174,6 +181,12 @@ export async function getUnifiedMissingItems(
 
   // Discover node inputs
   const nodeInputsDiscovery = workflowLifecycleManager.discoverNodeInputs(workflow);
+  const readiness = buildReadinessDetails(
+    buildWorkflowReadinessIssues({
+      nodes: workflow.nodes,
+      credentials: credentialDiscovery.missingCredentials || [],
+    })
+  );
 
   // Convert node inputs to unified format (ownership-driven value questions only)
   const unifiedInputs: UnifiedMissingInput[] = nodeInputsDiscovery.inputs
@@ -221,5 +234,6 @@ export async function getUnifiedMissingItems(
   return normalizeUnifiedMissingItems({
     credentials: unifiedCredentials,
     inputs: unifiedInputs,
+    readiness,
   });
 }

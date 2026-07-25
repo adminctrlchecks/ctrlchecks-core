@@ -83,6 +83,28 @@ function formatCredential(value: unknown): string | null {
   return nodeLabel ? `${humanizeKey(direct)} for ${nodeLabel}` : humanizeKey(direct);
 }
 
+function formatReadinessIssue(value: unknown): string | null {
+  if (!value || typeof value !== 'object') return null;
+  const item = value as Record<string, unknown>;
+  const nodeLabel = getString(item.nodeLabel) || getString(item.nodeName) || getString(item.nodeType) || getString(item.nodeId);
+  const fieldName =
+    getString(item.fieldLabel) ||
+    getString(item.fieldName) ||
+    getString(item.fieldKey) ||
+    getString(item.field) ||
+    getString(item.name);
+  const operation = getString(item.operationLabel) || getString(item.operation);
+  const reason = getString(item.helpText) || getString(item.reason) || getString(item.description) || getString(item.message);
+
+  if (!fieldName) return formatCredential(value);
+  const fieldLabel = humanizeKey(fieldName);
+  const prefix = nodeLabel ? `${fieldLabel} for ${nodeLabel}` : fieldLabel;
+  const withOperation = operation ? `${prefix} (${humanizeKey(operation)})` : prefix;
+  return reason && !reason.toLowerCase().includes(fieldName.toLowerCase())
+    ? `${withOperation} - ${reason}`
+    : withOperation;
+}
+
 function formatValidationIssue(value: unknown): string | null {
   if (!value) return null;
   if (typeof value === 'string') return value;
@@ -183,6 +205,18 @@ function collectValidationDetails(details: Record<string, unknown>): unknown[] {
 }
 
 function extractMissingInputs(details: Record<string, unknown>): string[] {
+  const readinessInputs = Array.isArray(details.readinessIssues)
+    ? details.readinessIssues.filter((issue) =>
+        issue && typeof issue === 'object' &&
+        ((issue as Record<string, unknown>).kind === 'missing_input' ||
+          (issue as Record<string, unknown>).kind === 'invalid_input')
+      )
+    : [];
+  const readinessItems = readinessInputs
+    .map(formatReadinessIssue)
+    .filter((item): item is string => Boolean(item));
+  if (readinessItems.length > 0) return unique(readinessItems);
+
   const raw = Array.isArray(details.missingInputs) ? details.missingInputs : [];
   const items = raw.map(formatMissingInput).filter((item): item is string => Boolean(item));
   if (items.length > 0) return unique(items);
@@ -219,6 +253,16 @@ function extractMissingInputs(details: Record<string, unknown>): string[] {
 }
 
 function extractMissingCredentials(details: Record<string, unknown>): string[] {
+  const readinessCredentials = Array.isArray(details.readinessIssues)
+    ? details.readinessIssues.filter((issue) =>
+        issue && typeof issue === 'object' && (issue as Record<string, unknown>).kind === 'missing_credential'
+      )
+    : [];
+  const readinessItems = readinessCredentials
+    .map(formatReadinessIssue)
+    .filter((item): item is string => Boolean(item));
+  if (readinessItems.length > 0) return unique(readinessItems);
+
   const source =
     Array.isArray(details.missingCredentials) ? details.missingCredentials :
     Array.isArray(details.executionValidationMissingCredentials) ? details.executionValidationMissingCredentials :
@@ -380,6 +424,7 @@ export function mapWorkflowIssueToGuidance(input: WorkflowIssueInput): GuidedSta
   // regardless of error code — prevents fallback from masking real structured data.
   const safetyDetails = toRecord(payload.details);
   const hasMissingData =
+    (Array.isArray(safetyDetails.readinessIssues) && (safetyDetails.readinessIssues as unknown[]).length > 0) ||
     (Array.isArray(safetyDetails.missingCredentials) && (safetyDetails.missingCredentials as unknown[]).length > 0) ||
     (Array.isArray(safetyDetails.missingInputs) && (safetyDetails.missingInputs as unknown[]).length > 0) ||
     (Array.isArray(safetyDetails.runtimeValidationIssues) && (safetyDetails.runtimeValidationIssues as unknown[]).length > 0) ||

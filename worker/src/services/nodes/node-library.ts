@@ -2079,13 +2079,53 @@ export class NodeLibrary {
           data: {
             type: 'object',
             description: 'Data for insert/update',
+            examples: [{ name: '{{$json.name}}', email: '{{$json.email}}' }],
           },
           filters: {
             type: 'object',
             description: 'Filter conditions',
+            examples: [{ id: '{{$json.id}}' }],
           },
         },
       },
+      operationContracts: [
+        {
+          operation: 'select',
+          label: 'Select',
+          requiredFields: ['operation', 'table'],
+          optionalFields: ['filters', 'data'],
+          credentialProviders: ['supabase'],
+          outputFields: ['data', 'count'],
+          status: 'implemented',
+        },
+        {
+          operation: 'insert',
+          label: 'Insert',
+          requiredFields: ['operation', 'table', 'data'],
+          optionalFields: ['filters'],
+          credentialProviders: ['supabase'],
+          outputFields: ['data'],
+          status: 'implemented',
+        },
+        {
+          operation: 'update',
+          label: 'Update',
+          requiredFields: ['operation', 'table', 'filters', 'data'],
+          optionalFields: [],
+          credentialProviders: ['supabase'],
+          outputFields: ['data'],
+          status: 'implemented',
+        },
+        {
+          operation: 'delete',
+          label: 'Delete',
+          requiredFields: ['operation', 'table', 'filters'],
+          optionalFields: ['data'],
+          credentialProviders: ['supabase'],
+          outputFields: ['data'],
+          status: 'implemented',
+        },
+      ],
       aiSelectionCriteria: {
         whenToUse: [
           'User mentions Supabase',

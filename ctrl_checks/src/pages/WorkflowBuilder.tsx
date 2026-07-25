@@ -57,6 +57,7 @@ function hasConcreteBackendDiagnostics(details: Record<string, unknown> | undefi
   if (!details) return false;
   const arrays = [
     details.missingInputs,
+    details.readinessIssues,
     details.runtimeValidationIssues,
     details.missingCredentials,
     details.executionValidationIssues,

@@ -221,7 +221,7 @@ function resolveMissingFieldKey(
   inputSchema: Record<string, any>
 ): string | null {
   const schemaKeys = Object.keys(inputSchema);
-  const fieldName = getDebugString(missingField.fieldName);
+  const fieldName = getDebugString(missingField.fieldKey) || getDebugString(missingField.fieldName);
   if (fieldName && Object.prototype.hasOwnProperty.call(inputSchema, fieldName)) {
     return fieldName;
   }
@@ -316,6 +316,17 @@ function buildDebugValidationErrors(
   const outputRecord = detailsRecord.output && typeof detailsRecord.output === 'object' && !Array.isArray(detailsRecord.output)
     ? detailsRecord.output as Record<string, unknown>
     : {};
+
+  const readinessIssues = Array.isArray(detailsRecord.readinessIssues) ? detailsRecord.readinessIssues : [];
+  for (const readinessIssue of readinessIssues) {
+    if (!readinessIssue || typeof readinessIssue !== 'object' || Array.isArray(readinessIssue)) continue;
+    const issueRecord = readinessIssue as Record<string, unknown>;
+    const issueKind = getDebugString(issueRecord.kind);
+    if (issueKind !== 'missing_input' && issueKind !== 'invalid_input') continue;
+    const issueNodeId = getDebugString(issueRecord.nodeId);
+    if (selectedNodeId && issueNodeId && issueNodeId !== selectedNodeId) continue;
+    addFieldError(issueRecord);
+  }
 
   const missingInputs = Array.isArray(detailsRecord.missingInputs) ? detailsRecord.missingInputs : [];
   for (const missingInput of missingInputs) {

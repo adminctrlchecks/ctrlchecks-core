@@ -36,11 +36,8 @@ import { AgenticWorkflowBuilder } from './ai/workflow-builder';
 import { unifiedGraphOrchestrator } from '../core/orchestration';
 import { executionOrderManager } from '../core/orchestration/execution-order-manager';
 import { getNodeCapabilityDedupeKey } from '../core/utils/node-capability-dedupe';
-import { isPlaceholderValue } from '../core/utils/placeholder-filter';
 import { buildTagsFromRegistry } from './ai/gemini-node-selector';
-import { resolveEffectiveFieldFillMode } from '../core/utils/fill-mode-resolver';
 import { validateStructuralReadiness } from '../core/validation/workflow-save-validator';
-import { computeFieldRequiredBeforeExecution } from '../core/validation/registry-field-contract';
 import { materializeStructuralFields } from './ai/structure-materializer';
 import { applyStructuralIntentAlignment } from './ai/intent-structural-projection';
 import { hydrateRequiredConfigFromRegistryDefaults } from '../core/validation/workflow-config-hydrator';
@@ -50,8 +47,12 @@ import {
 } from './ai/structured-workflow-prompt';
 import { pruneProposedPlanChain } from './ai/plan-chain-prune';
 import { getInputControlMetadata, InputControlType } from '../core/utils/schema-input-control';
-import { isCredentialOwnership, isStructuralOwnership } from '../core/utils/field-ownership';
+import { isCredentialOwnership } from '../core/utils/field-ownership';
 import type { FieldFillMode } from '../core/types/unified-node-contract';
+import {
+  buildNodeInputReadinessIssues,
+  buildReadinessDetails,
+} from '../core/readiness/node-readiness-resolver';
 
 /**
  * Credential gate helper (spec task 6).
@@ -1585,90 +1586,53 @@ export class WorkflowLifecycleManager {
       supportsBuildtimeAI?: boolean;
     }> = [];
 
-    const perNodeMissingFields: Array<{
-      nodeId: string;
-      nodeType: string;
-      missingFields: string[];
-    }> = [];
+    const readinessDetails = buildReadinessDetails(
+      workflow.nodes.flatMap((node) =>
+        buildNodeInputReadinessIssues({
+          node: node as any,
+          includeProviderDefaultFields: true,
+        })
+      )
+    );
+    const perNodeMissingFields = readinessDetails.issues.map((issue) => ({
+      nodeId: issue.nodeId,
+      nodeType: issue.nodeType,
+      missingFields: issue.missingFields.map((field) => field.fieldKey),
+    }));
 
-    for (const node of workflow.nodes) {
-      const nodeType = unifiedNormalizeNodeType(node);
-      const schema = nodeLibrary.getSchema(nodeType);
-      
-      if (!schema) {
+    for (const issue of readinessDetails.missingInputs) {
+      if (!issue.fieldKey) continue;
+      const def = unifiedNodeRegistry.get(issue.nodeType);
+      const fieldDef = def?.inputSchema?.[issue.fieldKey];
+      if (!fieldDef || isCredentialOwnership(issue.fieldKey, fieldDef)) {
         continue;
       }
-
-      const nodeLabel = node.data?.label || schema.label;
-      const existingConfig = node.data?.config || {};
-      const nodeMissingFields: string[] = [];
-      const unifiedDefinition = unifiedNodeRegistry.get(nodeType);
-      const definitionInputSchema = unifiedDefinition?.inputSchema;
-
-      const unifiedInputSchema = definitionInputSchema || {};
-      for (const [fieldName, fieldDef] of Object.entries(unifiedInputSchema)) {
-        if (isCredentialOwnership(fieldName, fieldDef) || isStructuralOwnership(fieldName, fieldDef)) {
-          continue;
-        }
-
-        const effectiveMode = resolveEffectiveFieldFillMode(fieldName, definitionInputSchema, existingConfig);
-        if (effectiveMode === 'runtime_ai') {
-          continue;
-        }
-
-        const requiredForSelectedOperation = computeFieldRequiredBeforeExecution(
-          nodeType,
-          fieldName,
-          fieldDef as any,
-          existingConfig as Record<string, unknown>
-        );
-        if (!requiredForSelectedOperation) {
-          continue;
-        }
-
-        const existingValue = existingConfig[fieldName];
-        const hasConcreteValue =
-          existingValue !== undefined &&
-          existingValue !== null &&
-          !(typeof existingValue === 'string' && existingValue.trim() === '') &&
-          !(Array.isArray(existingValue) && existingValue.length === 0) &&
-          !(typeof existingValue === 'object' && !Array.isArray(existingValue) && Object.keys(existingValue).length === 0) &&
-          !isPlaceholderValue(existingValue);
-        if (hasConcreteValue) {
-          continue;
-        }
-
-        nodeMissingFields.push(fieldName);
-        const controlMetadata = getInputControlMetadata(fieldName, fieldDef as any);
-        inputs.push({
-          nodeId: node.id,
-          nodeType,
-          nodeLabel,
-          fieldName,
-          fieldType: fieldDef.type || 'string',
-          inputType: controlMetadata.inputType,
-          options: controlMetadata.options,
-          placeholder: controlMetadata.placeholder,
-          uiWidget: controlMetadata.uiWidget,
-          description: fieldDef.description || fieldName,
-          required: requiredForSelectedOperation,
-          defaultValue: fieldDef.default,
-          examples: fieldDef.examples,
-          ownership: fieldDef.ownership || 'value',
-          fillModeDefault: fieldDef.fillMode?.default,
-          supportsRuntimeAI: fieldDef.fillMode?.supportsRuntimeAI !== false,
-          supportsBuildtimeAI: fieldDef.fillMode?.supportsBuildtimeAI !== false,
-        });
-      }
-
-      if (nodeMissingFields.length > 0) {
-        perNodeMissingFields.push({
-          nodeId: node.id,
-          nodeType,
-          missingFields: nodeMissingFields,
-        });
-      }
+      const controlMetadata = getInputControlMetadata(issue.fieldKey, fieldDef as any);
+      inputs.push({
+        nodeId: issue.nodeId,
+        nodeType: issue.nodeType,
+        nodeLabel: issue.nodeLabel,
+        fieldName: issue.fieldKey,
+        fieldType: issue.fieldType || fieldDef.type || 'string',
+        inputType: controlMetadata.inputType,
+        options: controlMetadata.options,
+        placeholder: controlMetadata.placeholder,
+        uiWidget: controlMetadata.uiWidget,
+        description: issue.helpText || fieldDef.description || issue.fieldKey,
+        required: true,
+        defaultValue: fieldDef.default,
+        examples: fieldDef.examples,
+        ownership: fieldDef.ownership || 'value',
+        fillModeDefault: fieldDef.fillMode?.default,
+        supportsRuntimeAI: fieldDef.fillMode?.supportsRuntimeAI !== false,
+        supportsBuildtimeAI: fieldDef.fillMode?.supportsBuildtimeAI !== false,
+      });
     }
+
+    inputs.sort((a, b) => {
+      const ownershipRank = (input: typeof inputs[number]) => input.ownership === 'value' ? 0 : 1;
+      return ownershipRank(a) - ownershipRank(b) || `${a.nodeId}:${a.fieldName}`.localeCompare(`${b.nodeId}:${b.fieldName}`);
+    });
 
     console.log('[WorkflowLifecycle] nodes_detected', {
       nodeCount: workflow.nodes?.length || 0,

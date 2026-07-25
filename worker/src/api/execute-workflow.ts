@@ -61,6 +61,11 @@ import { geminiWalletService } from '../services/ai/gemini-wallet-service';
 import { logger } from '../core/logger';
 import { normalizeExecutionStatus, normalizeExecutionTrigger } from '../core/execution/execution-db-enums';
 import { collectInternalExecutionHeaders, getInternalExecutionSource } from '../core/execution/internal-execution-auth';
+import {
+  buildReadinessDetails,
+  buildWorkflowReadinessIssues,
+  readinessErrorCode,
+} from '../core/readiness/node-readiness-resolver';
 
 const EXECUTION_RUNTIME_MARKER = 'runtime-marker-2026-03-20-v1';
 const configuredResumePreflightTimeoutMs = Number(process.env.EXECUTION_RESUME_PREFLIGHT_TIMEOUT_MS || 15000);
@@ -19072,6 +19077,12 @@ export default async function executeWorkflowHandler(req: Request, res: Response
     const allMissingInputs = [...missingInputs, ...typeMismatchInputs];
     const discoveryManualRequiredMissingCount = nodeInputs.inputs.filter((i) => i.required).length;
     const blockingMissingCount = allMissingInputs.filter((i) => i.required).length;
+    const readinessDetails = buildReadinessDetails(
+      buildWorkflowReadinessIssues({
+        nodes: nodes as any,
+        credentials: credentialDiscovery.missingCredentials || [],
+      })
+    );
     if (discoveryManualRequiredMissingCount !== blockingMissingCount) {
       logger.warn('[ExecuteWorkflow] ⚠️ READINESS_DISCOVERY_MISMATCH', {
         workflowId,
@@ -19085,9 +19096,10 @@ export default async function executeWorkflowHandler(req: Request, res: Response
       workflowId,
       phase: workflowStatus,
       requiredCredentialsCount,
-      missingCredentialsCount,
-      missingInputsCount: allMissingInputs.length,
-      missingInputs: allMissingInputs.map((input: any) => ({
+      ...readinessDetails,
+      legacyMissingCredentialsCount: missingCredentialsCount,
+      legacyMissingInputsCount: allMissingInputs.length,
+      legacyMissingInputs: allMissingInputs.map((input: any) => ({
         nodeId: input.nodeId,
         nodeType: input.nodeType,
         nodeLabel: input.nodeLabel,
@@ -19096,7 +19108,7 @@ export default async function executeWorkflowHandler(req: Request, res: Response
         description: input.description,
         required: input.required,
       })),
-      missingCredentials: (credentialDiscovery.missingCredentials || []).map((credential: any) => ({
+      credentialDiscoveryMissingCredentials: (credentialDiscovery.missingCredentials || []).map((credential: any) => ({
         nodeId: credential.nodeId,
         nodeType: credential.nodeType,
         nodeLabel: credential.nodeLabel,
@@ -19171,10 +19183,9 @@ export default async function executeWorkflowHandler(req: Request, res: Response
           message: `Workflow is in "${workflowStatus}" status and missing: ${missingItems.join(', ')}. Please configure the workflow before executing.`,
           phase: workflowStatus,
           details: {
-            missingInputsCount: allMissingInputs.length,
-            missingCredentialsCount: missingCredentialsCount,
-            missingInputs: allMissingInputs.map(i => `${i.nodeId}.${i.fieldName}`),
-            missingCredentials: credentialDiscovery.missingCredentials?.map((c: any) => c.nodeId) || [],
+            ...readinessDetails,
+            legacyMissingInputs: allMissingInputs.map(i => `${i.nodeId}.${i.fieldName}`),
+            credentialDiscoveryMissingCredentials: credentialDiscovery.missingCredentials?.map((c: any) => c.nodeId) || [],
           },
           hint: 'Configure the workflow nodes with required inputs and credentials, then try again.',
         });
@@ -19221,6 +19232,29 @@ export default async function executeWorkflowHandler(req: Request, res: Response
         error: 'Workflow has no trigger',
         message: 'Workflow must have at least one trigger node to execute',
         details: readinessCheck,
+      });
+    }
+
+    if (readinessDetails.readinessIssues.length > 0) {
+      const missingInputsSummary = readinessDetails.missingInputs
+        .map((issue) => `${issue.nodeLabel}.${issue.fieldLabel || issue.fieldKey}`)
+        .join(', ');
+      const missingCredentialsSummary = readinessDetails.missingCredentials
+        .map((issue) => issue.provider || issue.credentialId || issue.nodeLabel)
+        .join(', ');
+      const summary = [
+        missingInputsSummary ? `missing input(s): ${missingInputsSummary}` : '',
+        missingCredentialsSummary ? `missing connection(s): ${missingCredentialsSummary}` : '',
+      ].filter(Boolean).join('; ');
+      await markResumedExecutionFailed(`Workflow not ready for execution: ${summary}`);
+      return res.status(400).json({
+        code: readinessErrorCode(readinessDetails.readinessIssues),
+        error: 'Workflow not ready for execution',
+        message: summary
+          ? `Workflow is missing ${summary}.`
+          : 'Workflow is missing required setup.',
+        details: readinessCheck,
+        hint: 'Open the Properties panel and complete the highlighted connection or required fields.',
       });
     }
     

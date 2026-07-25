@@ -97,6 +97,32 @@ export function overrideLinkedin(
           options: operationOptions,
         },
       },
+      articleUrl: {
+        type: 'string',
+        description: 'LinkedIn article URL to share',
+        required: false,
+        examples: ['https://www.linkedin.com/pulse/example-article', '{{$json.articleUrl}}'],
+        ownership: 'value',
+        fillMode: {
+          default: 'manual_static',
+          supportsRuntimeAI: true,
+          supportsBuildtimeAI: true,
+        },
+        ui: { visibleIf: { field: 'operation', equals: 'create_article' } },
+      },
+      postId: {
+        type: 'string',
+        description: 'LinkedIn post ID or URN to delete',
+        required: false,
+        examples: ['urn:li:share:1234567890', '{{$json.postId}}'],
+        ownership: 'value',
+        fillMode: {
+          default: 'manual_static',
+          supportsRuntimeAI: true,
+          supportsBuildtimeAI: true,
+        },
+        ui: { visibleIf: { field: 'operation', equals: 'delete_post' } },
+      },
     },
     operationContracts,
     execute: async (context) => {

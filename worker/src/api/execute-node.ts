@@ -8,6 +8,11 @@ import { executeNode } from './execute-workflow';
 import { LRUNodeOutputsCache } from '../core/cache/lru-node-outputs-cache';
 import { logger } from '../core/logger';
 import { buildRuntimeValidationGuidance } from '../core/utils/runtime-validation-guidance';
+import {
+  buildReadinessDetails,
+  buildWorkflowReadinessIssues,
+  readinessErrorCode,
+} from '../core/readiness/node-readiness-resolver';
 
 // WorkflowNode interface must match execute-workflow.ts
 interface WorkflowNode {
@@ -151,29 +156,29 @@ export default async function executeNodeHandler(req: Request, res: Response) {
     }
 
     // ✅ PRE-EXECUTION: Validate this node's config before running
-    const { validateWorkflowConfig } = await import('../core/utils/pre-execution-validator');
-    const configCheck = validateWorkflowConfig([
-      {
-        id: node.id,
-        type: nodeType,
-        data: {
-          label: node.data.label,
-          config: node.data.config as Record<string, any>,
-          connectionRefs: (node.data as any).connectionRefs,
-          connectionId: (node.data as any).connectionId,
-        },
-      },
-    ]);
-    if (!configCheck.valid) {
+    const { credentialDiscoveryPhase } = await import('../services/ai/credential-discovery-phase');
+    const credentialDiscovery = await credentialDiscoveryPhase.discoverCredentials(
+      { nodes: [node as any], edges: [] } as any,
+      currentUserId || userId
+    );
+    const readinessDetails = buildReadinessDetails(
+      buildWorkflowReadinessIssues({
+        nodes: [node as any],
+        credentials: credentialDiscovery.missingCredentials || [],
+      })
+    );
+    if (readinessDetails.readinessIssues.length > 0) {
       return res.status(400).json({
-        code: 'MISSING_REQUIRED_INPUTS',
-        error: 'Node has missing required fields',
+        success: false,
+        code: readinessErrorCode(readinessDetails.readinessIssues),
+        error: 'Node is not ready to run',
         message: `This node needs configuration before it can run.`,
-        hint: "Open the Properties panel and fill in the missing fields.",
-        details: {
-          missingInputs: configCheck.missingInputs,
-          issues: configCheck.issues,
-        },
+        hint: 'Open the Properties panel and complete the highlighted connection or required fields.',
+        details: readinessDetails,
+        executionTime: Date.now() - startTime,
+        nodeId,
+        nodeType,
+        runId,
       });
     }
 
