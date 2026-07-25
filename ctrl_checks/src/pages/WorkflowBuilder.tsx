@@ -25,6 +25,7 @@ import { buildFormPublicUrl } from '@/lib/formPublicUrl';
 import { enforceFrontendRenderContract, normalizeBackendWorkflow, validateNodeTypesRegistered } from '@/lib/node-type-normalizer';
 import { GuidedStatusCard } from '@/components/ui/guided-status-card';
 import { mapWorkflowIssueToGuidance, type GuidedStatusContent } from '@/lib/workflow-guidance';
+import { isExpectedReadinessStatusCode } from '@/lib/readiness-status-codes';
 import { getAIGuidance, type AIGuidanceErrorData, type AIGuidanceWorkflowContext } from '@/lib/ai-error-guidance';
 import { buildWorkflowGuidanceContext } from '@/lib/workflow-guidance-context';
 import { useExecutionNotifications } from '../hooks/useExecutionNotifications';
@@ -59,6 +60,7 @@ function hasConcreteBackendDiagnostics(details: Record<string, unknown> | undefi
     details.missingInputs,
     details.readinessIssues,
     details.runtimeValidationIssues,
+    details.invalidInputs,
     details.missingCredentials,
     details.executionValidationIssues,
     details.executionValidationErrors,
@@ -747,7 +749,7 @@ export default function WorkflowBuilder() {
         reliabilityStatus.circuitOpen ||
         reliabilityStatus.dlqRoutingEnabled === false ||
         reliabilityStatus.selfCorrectionTriggered ||
-        reliabilityStatus.lastErrorCode)
+        (reliabilityStatus.lastErrorCode && !isExpectedReadinessStatusCode(reliabilityStatus.lastErrorCode)))
   );
 
   const handleRun = useCallback(async (autoSave = false) => {
@@ -1453,7 +1455,9 @@ export default function WorkflowBuilder() {
                 {reliabilityStatus.circuitOpen && <div>Circuit breakers: open circuit detected</div>}
                 {reliabilityStatus.dlqRoutingEnabled === false && <div>DLQ routing: disabled</div>}
                 {reliabilityStatus.selfCorrectionTriggered && <div>Self-correction: triggered</div>}
-                {reliabilityStatus.lastErrorCode && <div>Last error code: {reliabilityStatus.lastErrorCode}</div>}
+                {reliabilityStatus.lastErrorCode && !isExpectedReadinessStatusCode(reliabilityStatus.lastErrorCode) && (
+                  <div>Last error code: {reliabilityStatus.lastErrorCode}</div>
+                )}
               </div>
             </div>
           )}

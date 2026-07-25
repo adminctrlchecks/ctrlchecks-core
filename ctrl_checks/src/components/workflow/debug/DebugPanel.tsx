@@ -41,6 +41,66 @@ function getDebugErrorDescription(error: StructuredDebugError | string | undefin
   );
 }
 
+const EXPECTED_READINESS_CODES = new Set([
+  'EXECUTION_NOT_READY',
+  'EXECUTION_MISSING_INPUTS',
+  'EXECUTION_MISSING_CREDENTIALS',
+  'WORKFLOW_NOT_CONFIRMED',
+  'WORKFLOW_SETUP_PENDING',
+  'WORKFLOW_NOT_READY',
+  'MISSING_REQUIRED_INPUTS',
+  'CONNECTION_SETUP_REQUIRED',
+  'NODE_MISSING_INPUT',
+  'NODE_MISSING_CREDENTIAL',
+  'NODE_INVALID_INPUT',
+]);
+
+function hasConcreteReadinessDetails(details: unknown): boolean {
+  if (!details || typeof details !== 'object' || Array.isArray(details)) return false;
+  const record = details as Record<string, unknown>;
+  return [
+    record.readinessIssues,
+    record.missingInputs,
+    record.missingCredentials,
+    record.invalidInputs,
+    record.runtimeValidationIssues,
+    record.issues,
+  ].some((value) => Array.isArray(value) && value.length > 0);
+}
+
+export function isExpectedReadinessDebugError(error: StructuredDebugError | string | undefined): boolean {
+  if (!error) return false;
+  if (typeof error === 'string') {
+    const normalized = error.toLowerCase();
+    return (
+      normalized.includes('needs configuration') ||
+      normalized.includes('not ready') ||
+      normalized.includes('missing required') ||
+      normalized.includes('connect or reconnect')
+    );
+  }
+
+  const code = typeof error.code === 'string' ? error.code.toUpperCase() : '';
+  const message = getDebugErrorDescription(error, '').toLowerCase();
+  return (
+    EXPECTED_READINESS_CODES.has(code) ||
+    hasConcreteReadinessDetails(error.details) ||
+    message.includes('needs configuration') ||
+    message.includes('not ready') ||
+    message.includes('missing required') ||
+    message.includes('connect or reconnect')
+  );
+}
+
+export function getDebugFailureToast(error: StructuredDebugError | string | undefined, fallback = 'Execution failed') {
+  if (isExpectedReadinessDebugError(error)) return null;
+  return {
+    title: 'Execution Failed',
+    description: getDebugErrorDescription(error, fallback),
+    variant: 'destructive' as const,
+  };
+}
+
 function getNodeOutputFailure(output: unknown): StructuredDebugError | null {
   if (!output || typeof output !== 'object' || Array.isArray(output)) return null;
   const record = output as Record<string, unknown>;
@@ -243,11 +303,8 @@ export default function DebugPanel({ onClose }: DebugPanelProps) {
         const errorPayload = await response.json().catch(() => ({ error: 'Execute node failed' }));
         const structuredError = toErrorRecord(errorPayload, 'Execute node failed', response.status);
         setNodeStatus(debugNodeId, 'error', structuredError);
-        toast({
-          title: 'Execution Failed',
-          description: getDebugErrorDescription(structuredError),
-          variant: 'destructive',
-        });
+        const failureToast = getDebugFailureToast(structuredError);
+        if (failureToast) toast(failureToast);
         return;
       }
 
@@ -258,11 +315,8 @@ export default function DebugPanel({ onClose }: DebugPanelProps) {
         if (outputFailure) {
           setNodeOutput(debugNodeId, data.output, data.executionTime);
           setNodeStatus(debugNodeId, 'error', outputFailure);
-          toast({
-            title: 'Execution Failed',
-            description: getDebugErrorDescription(outputFailure, 'Node returned a failed result'),
-            variant: 'destructive',
-          });
+          const failureToast = getDebugFailureToast(outputFailure, 'Node returned a failed result');
+          if (failureToast) toast(failureToast);
           return;
         }
 
@@ -276,20 +330,19 @@ export default function DebugPanel({ onClose }: DebugPanelProps) {
       } else {
         const structuredError = toErrorRecord(data, 'Execution failed');
         setNodeStatus(debugNodeId, 'error', structuredError);
-        toast({
-          title: 'Execution Failed',
-          description: getDebugErrorDescription(structuredError, 'Unknown error'),
-          variant: 'destructive',
-        });
+        const failureToast = getDebugFailureToast(structuredError, 'Unknown error');
+        if (failureToast) toast(failureToast);
       }
     } catch (error: any) {
       const errorMessage = error?.message || 'Failed to execute node';
       setNodeStatus(debugNodeId, 'error', errorMessage);
-      toast({
-        title: 'Error',
-        description: errorMessage,
-        variant: 'destructive',
-      });
+      const failureToast = getDebugFailureToast(errorMessage, 'Failed to execute node');
+      if (failureToast) {
+        toast({
+          ...failureToast,
+          title: 'Error',
+        });
+      }
     } finally {
       setIsRunning(false);
     }

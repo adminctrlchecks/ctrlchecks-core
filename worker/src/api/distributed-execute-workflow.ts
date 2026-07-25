@@ -14,6 +14,14 @@ import { createObjectStorageService } from '../services/workflow-executor/object
 import { ErrorCode } from '../core/utils/error-codes';
 import { normalizeIfElseConfig } from '../core/utils/if-else-conditions';
 import { logger } from '../core/logger';
+import {
+  buildCredentialReadinessIssues,
+  buildReadinessDetails,
+  buildWorkflowReadinessIssues,
+  readinessErrorCode,
+  type CredentialReadinessInput,
+  type NodeReadinessDetails,
+} from '../core/readiness/node-readiness-resolver';
 
 /**
  * Normalize If/Else node conditions field
@@ -21,6 +29,74 @@ import { logger } from '../core/logger';
  */
 function normalizeIfElseConditions(config: Record<string, unknown>): Record<string, unknown> {
   return normalizeIfElseConfig(config);
+}
+
+function legacyMissingInputs(inputs: any[]) {
+  return inputs.map((input: any) => ({
+    nodeId: input.nodeId,
+    nodeType: input.nodeType,
+    nodeLabel: input.nodeLabel,
+    fieldName: input.fieldName,
+    fieldType: input.fieldType,
+    description: input.description,
+    required: input.required,
+  }));
+}
+
+function legacyMissingCredentials(credentials: any[], nodes: any[]) {
+  return (credentials || []).map((credential: any) => {
+    const firstNodeId = Array.isArray(credential.nodeIds) ? credential.nodeIds[0] : credential.nodeId;
+    const firstNodeType = Array.isArray(credential.nodeTypes) ? credential.nodeTypes[0] : credential.nodeType;
+    const matchingNode = firstNodeId ? nodes.find((n: any) => n.id === firstNodeId) : null;
+    const derivedNodeLabel = matchingNode
+      ? (matchingNode.data?.label || matchingNode.data?.type || firstNodeType || '')
+      : (firstNodeType || '');
+    return {
+      nodeId: firstNodeId || '',
+      nodeType: firstNodeType || '',
+      nodeLabel: derivedNodeLabel,
+      provider: credential.provider,
+      displayName: credential.displayName,
+      vaultKey: credential.vaultKey,
+      credentialId: credential.credentialId,
+    };
+  });
+}
+
+function preflightFailuresToCredentialInputs(failures: any[]): CredentialReadinessInput[] {
+  return (failures || []).map((failure: any) => ({
+    provider: failure.provider,
+    type: 'oauth',
+    displayName: failure.provider,
+    required: true,
+    satisfied: false,
+    nodeIds: [failure.nodeId].filter(Boolean),
+    nodeTypes: [failure.nodeType].filter(Boolean),
+    scopes: failure.requiredScopes,
+    simpleDescription:
+      failure.error?.message ||
+      failure.error?.error ||
+      `${failure.provider || 'This account'} is not connected or active.`,
+    technicalDescription: typeof failure.error === 'string' ? failure.error : undefined,
+    howToObtain: `Connect or reconnect ${failure.provider || 'this account'} before running this node.`,
+  }));
+}
+
+function readinessSummary(details: NodeReadinessDetails): string {
+  const missingInputsSummary = details.missingInputs
+    .map((issue) => `${issue.nodeLabel}.${issue.fieldLabel || issue.fieldKey}`)
+    .join(', ');
+  const invalidInputsSummary = details.invalidInputs
+    .map((issue) => `${issue.nodeLabel}.${issue.fieldLabel || issue.fieldKey}`)
+    .join(', ');
+  const missingCredentialsSummary = details.missingCredentials
+    .map((issue) => issue.provider || issue.credentialId || issue.nodeLabel)
+    .join(', ');
+  return [
+    missingInputsSummary ? `missing input(s): ${missingInputsSummary}` : '',
+    invalidInputsSummary ? `invalid input(s): ${invalidInputsSummary}` : '',
+    missingCredentialsSummary ? `missing connection(s): ${missingCredentialsSummary}` : '',
+  ].filter(Boolean).join('; ');
 }
 
 /**
@@ -199,39 +275,54 @@ export default async function distributedExecuteWorkflow(
     const requiredCredentialsCount = credentialDiscovery.requiredCredentials?.length || 0;
     const missingCredentialsCount = credentialDiscovery.missingCredentials?.length || 0;
 
+    const workflowOwnerId = (workflow as any).user_id || currentUserId;
+    let preflightResult: { ok: boolean; failures: any[] } = { ok: true, failures: [] };
+    if (workflowOwnerId) {
+      const { executionPreflight } = await import('../services/execution-preflight');
+      preflightResult = await executionPreflight({
+        workflowId,
+        ownerId: workflowOwnerId,
+        nodes,
+      });
+    }
+
+    const baseReadinessIssues = buildWorkflowReadinessIssues({
+      nodes,
+      credentials: credentialDiscovery.missingCredentials || [],
+    });
+    const preflightReadinessIssues = preflightResult.ok
+      ? []
+      : buildCredentialReadinessIssues({
+          nodes,
+          credentials: preflightFailuresToCredentialInputs(preflightResult.failures),
+        });
+    const readinessDetails = buildReadinessDetails([
+      ...baseReadinessIssues,
+      ...preflightReadinessIssues,
+    ]);
+
     const readinessCheck = {
       workflowId,
       phase: workflowPhase,
       status: workflowStatus,
       requiredCredentialsCount,
-      missingCredentialsCount,
-      missingInputsCount: allMissingInputs.length,
-      missingInputs: allMissingInputs.map((input: any) => ({
-        nodeId: input.nodeId,
-        nodeType: input.nodeType,
-        nodeLabel: input.nodeLabel,
-        fieldName: input.fieldName,
-        fieldType: input.fieldType,
-        description: input.description,
-        required: input.required,
+      ...readinessDetails,
+      legacyMissingCredentialsCount: missingCredentialsCount,
+      legacyMissingInputsCount: allMissingInputs.length,
+      legacyMissingInputs: legacyMissingInputs(allMissingInputs),
+      credentialDiscoveryMissingCredentials: legacyMissingCredentials(
+        credentialDiscovery.missingCredentials || [],
+        nodes
+      ),
+      executionPreflightReady: preflightResult.ok,
+      executionPreflightMissingCredentials: preflightResult.failures.map((failure: any) => ({
+        nodeId: failure.nodeId,
+        nodeType: failure.nodeType,
+        nodeLabel: failure.nodeName,
+        provider: failure.provider,
+        displayName: failure.provider,
+        requiredScopes: failure.requiredScopes,
       })),
-      missingCredentials: (credentialDiscovery.missingCredentials || []).map((credential: any) => {
-        const firstNodeId = Array.isArray(credential.nodeIds) ? credential.nodeIds[0] : credential.nodeId;
-        const firstNodeType = Array.isArray(credential.nodeTypes) ? credential.nodeTypes[0] : credential.nodeType;
-        const matchingNode = firstNodeId ? nodes.find((n: any) => n.id === firstNodeId) : null;
-        const derivedNodeLabel = matchingNode
-          ? (matchingNode.data?.label || matchingNode.data?.type || firstNodeType || '')
-          : (firstNodeType || '');
-        return {
-          nodeId: firstNodeId || '',
-          nodeType: firstNodeType || '',
-          nodeLabel: derivedNodeLabel,
-          provider: credential.provider,
-          displayName: credential.displayName,
-          vaultKey: credential.vaultKey,
-          credentialId: credential.credentialId,
-        };
-      }),
       executionValidationReady: executionValidation.ready,
       executionValidationErrors: executionValidation.errors,
       executionValidationIssues: executionValidation.validationIssues || [],
@@ -241,10 +332,11 @@ export default async function distributedExecuteWorkflow(
     logger.info('[DistributedExecuteWorkflow] Readiness check:', JSON.stringify(readinessCheck, null, 2));
 
     const isStatusReadyLegacy = workflowStatus === 'ready' && executionValidation.ready && allMissingInputs.length === 0;
-    const credentialsAttached = missingCredentialsCount === 0;
+    const credentialsAttached = readinessDetails.missingCredentials.length === 0;
+    const hasCanonicalReadinessIssues = readinessDetails.readinessIssues.length > 0;
 
     if (!isStatusReady && !isStatusReadyLegacy) {
-      if (executionValidation.ready && allMissingInputs.length === 0 && missingCredentialsCount === 0) {
+      if (executionValidation.ready && allMissingInputs.length === 0 && !hasCanonicalReadinessIssues) {
         logger.info(`[DistributedExecuteWorkflow] Validation passes but phase is "${workflowPhase}" - updating to active, phase to ready_for_execution`);
         
         // ✅ CRITICAL: Update status to 'active' (valid enum) and phase to 'ready_for_execution' (TEXT)
@@ -294,17 +386,37 @@ export default async function distributedExecuteWorkflow(
 
         logger.info(`[DistributedExecuteWorkflow] ✅ Status updated to active, phase to ready_for_execution for workflow ${workflowId}`);
       } else {
+        const summary = readinessSummary(readinessDetails);
         res.status(400).json({
-          code: ErrorCode.EXECUTION_NOT_READY,
+          code: hasCanonicalReadinessIssues
+            ? readinessErrorCode(readinessDetails.readinessIssues)
+            : ErrorCode.EXECUTION_NOT_READY,
           error: 'Workflow not ready for execution',
-          message: `Workflow phase is "${workflowPhase}" but must be "ready_for_execution"`,
+          message: summary
+            ? `Workflow is missing ${summary}.`
+            : `Workflow phase is "${workflowPhase}" but must be "ready_for_execution"`,
           phase: workflowPhase,
           status: workflowStatus,
           details: readinessCheck,
-          hint: 'Workflow must have inputs and credentials attached before execution.',
+          hint: 'Open the Properties panel and complete the highlighted connection or required fields.',
         });
         return;
       }
+    }
+
+    if (hasCanonicalReadinessIssues) {
+      const summary = readinessSummary(readinessDetails);
+      res.status(400).json({
+        code: readinessErrorCode(readinessDetails.readinessIssues),
+        error: 'Workflow not ready for execution',
+        message: summary
+          ? `Workflow is missing ${summary}.`
+          : 'Workflow is missing required setup.',
+        phase: workflowStatus,
+        details: readinessCheck,
+        hint: 'Open the Properties panel and complete the highlighted connection or required fields.',
+      });
+      return;
     }
 
     if (allMissingInputs.length > 0) {
@@ -314,56 +426,24 @@ export default async function distributedExecuteWorkflow(
         message: `Workflow requires inputs that are not configured: ${allMissingInputs.map(i => `${i.nodeLabel}.${i.fieldName}`).join(', ')}`,
         phase: workflowStatus,
         details: readinessCheck,
-        hint: 'Please attach inputs to this workflow using /api/workflows/:id/attach-inputs before executing.',
+        hint: 'Open the Properties panel and complete the highlighted required fields.',
       });
       return;
     }
 
     if (!credentialsAttached) {
-      const missingCreds = credentialDiscovery.missingCredentials?.map((c: any) => c.displayName || c.provider).join(', ') || 'unknown credentials';
+      const missingCreds = readinessDetails.missingCredentials
+        .map((issue) => issue.provider || issue.credentialId || issue.nodeLabel)
+        .join(', ') || 'unknown credentials';
       res.status(400).json({
         code: ErrorCode.EXECUTION_MISSING_CREDENTIALS,
         error: 'Workflow not ready for execution',
         message: `Workflow requires credentials that are not connected: ${missingCreds}`,
         phase: workflowStatus,
         details: readinessCheck,
-        hint: 'Please connect the required accounts in the Connections page before executing.',
+        hint: 'Open Connections and connect or reconnect each listed account.',
       });
       return;
-    }
-
-    // ✅ PREFLIGHT: Run executionPreflight to catch missing OAuth credentials (e.g. google_sheets,
-    // google_gmail) that credentialDiscoveryPhase may not detect due to vault/schema mismatches.
-    // This mirrors the same check inside execute-workflow.ts and is authoritative for OAuth providers.
-    {
-      const { executionPreflight } = await import('../services/execution-preflight');
-      const workflowOwnerId = (workflow as any).user_id || currentUserId;
-      const preflightResult = await executionPreflight({
-        workflowId,
-        ownerId: workflowOwnerId || '',
-        nodes,
-      });
-      if (!preflightResult.ok) {
-        const missingProviders = [...new Set(preflightResult.failures.map((f: any) => f.provider))];
-        res.status(400).json({
-          code: ErrorCode.EXECUTION_MISSING_CREDENTIALS,
-          error: 'Workflow not ready for execution',
-          message: `Workflow requires accounts that are not connected: ${missingProviders.join(', ')}`,
-          phase: workflowStatus,
-          details: {
-            ...readinessCheck,
-            missingCredentials: preflightResult.failures.map((f: any) => ({
-              nodeId: f.nodeId,
-              nodeType: f.nodeType,
-              nodeLabel: f.nodeName,
-              provider: f.provider,
-              displayName: f.provider,
-            })),
-          },
-          hint: 'Please connect the required accounts in the Connections page, then try again.',
-        });
-        return;
-      }
     }
 
     // ✅ PRE-FLIGHT: Check for existing active execution BEFORE creating any records.

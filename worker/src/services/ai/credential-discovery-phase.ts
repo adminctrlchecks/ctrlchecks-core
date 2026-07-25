@@ -356,7 +356,10 @@ export class CredentialDiscoveryPhase {
             // prevents ghost UUIDs from deleted/revoked connections reporting satisfied.
             if (userId) {
               const nodeConfig = (node.data?.config || {}) as Record<string, unknown>;
-              const connectionRefs = (node.data?.connectionRefs || {}) as Record<string, unknown>;
+              const connectionRefs = {
+                ...(((nodeConfig as any).connectionRefs || {}) as Record<string, unknown>),
+                ...((node.data?.connectionRefs || {}) as Record<string, unknown>),
+              };
               const credentialId = String(
                 nodeConfig.credentialId ||
                 nodeConfig.credentialRef ||

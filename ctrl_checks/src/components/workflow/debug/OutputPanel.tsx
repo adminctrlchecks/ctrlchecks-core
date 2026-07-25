@@ -191,6 +191,10 @@ export default function OutputPanel({
     () => (structuredError ? mapWorkflowIssueToGuidance(structuredError) : null),
     [structuredError]
   );
+  const stringGuidance = useMemo(
+    () => (typeof error === 'string' ? mapWorkflowIssueToGuidance(error) : null),
+    [error]
+  );
   // 'attention' is the tone `mapWorkflowIssueToGuidance` reserves exclusively for its generic,
   // unclassified catch-all. Any other tone means the error text was actually recognized (a
   // provider rejection like Slack not_in_channel, a readiness/missing-field issue, an auth
@@ -752,9 +756,25 @@ export default function OutputPanel({
           </div>
         )}
 
-        {typeof error === 'string' && (
-          <div className="px-4 py-3 bg-destructive/10 border-b border-border">
-            <p className="text-sm text-destructive font-mono">{error}</p>
+        {typeof error === 'string' && status === 'error' && stringGuidance && (
+          <div className="px-4 py-3 space-y-3 border-b border-border bg-muted/10">
+            <GuidedStatusCard
+              title={stringGuidance.title}
+              description={stringGuidance.description}
+              resolution={stringGuidance.resolution}
+              details={stringGuidance.details}
+              missingItems={stringGuidance.missingItems}
+              nextSteps={stringGuidance.nextSteps}
+              tone={stringGuidance.tone}
+            />
+            <details className="rounded-md border border-border/50 bg-background/60 px-3 py-2 text-xs">
+              <summary className="cursor-pointer select-none font-medium text-muted-foreground hover:text-foreground">
+                Technical details
+              </summary>
+              <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] text-muted-foreground">
+                {error}
+              </pre>
+            </details>
           </div>
         )}
 

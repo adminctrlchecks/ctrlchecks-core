@@ -205,8 +205,9 @@ function collectValidationDetails(details: Record<string, unknown>): unknown[] {
 }
 
 function extractMissingInputs(details: Record<string, unknown>): string[] {
-  const readinessInputs = Array.isArray(details.readinessIssues)
-    ? details.readinessIssues.filter((issue) =>
+  const readinessIssues = Array.isArray(details.readinessIssues) ? details.readinessIssues : null;
+  const readinessInputs = readinessIssues
+    ? readinessIssues.filter((issue) =>
         issue && typeof issue === 'object' &&
         ((issue as Record<string, unknown>).kind === 'missing_input' ||
           (issue as Record<string, unknown>).kind === 'invalid_input')
@@ -215,7 +216,7 @@ function extractMissingInputs(details: Record<string, unknown>): string[] {
   const readinessItems = readinessInputs
     .map(formatReadinessIssue)
     .filter((item): item is string => Boolean(item));
-  if (readinessItems.length > 0) return unique(readinessItems);
+  if (readinessIssues && readinessIssues.length > 0) return unique(readinessItems);
 
   const raw = Array.isArray(details.missingInputs) ? details.missingInputs : [];
   const items = raw.map(formatMissingInput).filter((item): item is string => Boolean(item));
@@ -253,15 +254,16 @@ function extractMissingInputs(details: Record<string, unknown>): string[] {
 }
 
 function extractMissingCredentials(details: Record<string, unknown>): string[] {
-  const readinessCredentials = Array.isArray(details.readinessIssues)
-    ? details.readinessIssues.filter((issue) =>
+  const readinessIssues = Array.isArray(details.readinessIssues) ? details.readinessIssues : null;
+  const readinessCredentials = readinessIssues
+    ? readinessIssues.filter((issue) =>
         issue && typeof issue === 'object' && (issue as Record<string, unknown>).kind === 'missing_credential'
       )
     : [];
   const readinessItems = readinessCredentials
     .map(formatReadinessIssue)
     .filter((item): item is string => Boolean(item));
-  if (readinessItems.length > 0) return unique(readinessItems);
+  if (readinessIssues && readinessIssues.length > 0) return unique(readinessItems);
 
   const source =
     Array.isArray(details.missingCredentials) ? details.missingCredentials :

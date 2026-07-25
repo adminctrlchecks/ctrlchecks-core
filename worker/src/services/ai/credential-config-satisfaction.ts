@@ -41,7 +41,11 @@ export function isOAuthRefSatisfiedInConfig(config: Record<string, unknown>): bo
  * provider instead of typing credentials inline — node.data.connectionRefs[<provider>|…].
  */
 export function isConnectionLinkedInConfig(node: WorkflowNode, provider: string): boolean {
-  const connectionRefs = (node.data?.connectionRefs || {}) as Record<string, unknown>;
+  const config = (node.data?.config || {}) as Record<string, unknown>;
+  const connectionRefs = {
+    ...((config.connectionRefs || {}) as Record<string, unknown>),
+    ...((node.data?.connectionRefs || {}) as Record<string, unknown>),
+  };
   const candidateKeys = [
     provider,
     `${provider}_connection`,

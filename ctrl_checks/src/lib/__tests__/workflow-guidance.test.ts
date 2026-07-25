@@ -155,8 +155,59 @@ describe('mapWorkflowIssueToGuidance — safety-net details trigger readiness', 
     });
 
     readiness(result);
-    expect(result.missingItems?.join(' ')).toContain('Data for Supabase');
-    expect(result.missingItems?.join(' ')).toContain('Insert');
+    expect(result.missingItems).toContain('Input: Data for Supabase (Insert)');
+  });
+
+  it('canonical missing input wins over legacy missingCredentials fallback', () => {
+    const result = mapWorkflowIssueToGuidance({
+      code: 'EXECUTION_MISSING_CREDENTIALS',
+      message: 'Workflow requires credentials',
+      details: {
+        readinessIssues: [{
+          kind: 'missing_input',
+          nodeId: 'supabase-1',
+          nodeType: 'supabase',
+          nodeLabel: 'Supabase',
+          operation: 'insert',
+          operationLabel: 'Insert',
+          fieldKey: 'data',
+          fieldLabel: 'Data',
+        }],
+        missingCredentials: [{ displayName: 'Supabase', nodeLabel: 'Supabase' }],
+      },
+    });
+
+    readiness(result);
+    expect(result.missingItems).toContain('Input: Data for Supabase (Insert)');
+    expect(result.missingItems?.some((item) => item.startsWith('Connection:'))).toBe(false);
+    expect(result.tone).toBe('configuration');
+  });
+
+  it('shows both canonical missing inputs and credentials when both exist', () => {
+    const result = mapWorkflowIssueToGuidance({
+      code: 'EXECUTION_NOT_READY',
+      details: {
+        readinessIssues: [
+          {
+            kind: 'missing_input',
+            nodeLabel: 'Supabase',
+            operation: 'insert',
+            operationLabel: 'Insert',
+            fieldKey: 'data',
+            fieldLabel: 'Data',
+          },
+          {
+            kind: 'missing_credential',
+            nodeLabel: 'Supabase',
+            provider: 'supabase',
+          },
+        ],
+      },
+    });
+
+    expect(result.title).toBe('Finish setup before running');
+    expect(result.missingItems).toContain('Input: Data for Supabase (Insert)');
+    expect(result.missingItems?.some((item) => item.startsWith('Connection:'))).toBe(true);
   });
 
   it('does NOT trigger when details arrays are empty', () => {
