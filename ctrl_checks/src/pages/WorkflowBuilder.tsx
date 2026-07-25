@@ -1514,9 +1514,9 @@ export default function WorkflowBuilder() {
     if (!user || isLoading || nodes.length === 0) return;
     
     const autoRunParam = searchParams.get('autoRun');
-    const currentWorkflowId = useWorkflowStore.getState().workflowId;
+    const autoRunWorkflowId = useWorkflowStore.getState().workflowId;
     
-    if (autoRunParam === 'true' && currentWorkflowId === id && !hasAutoRun.current) {
+    if (autoRunParam === 'true' && autoRunWorkflowId === id && !hasAutoRun.current) {
       hasAutoRun.current = true;
       // Remove the autoRun parameter from URL to prevent re-running on refresh
       const newSearchParams = new URLSearchParams(searchParams);
