@@ -359,13 +359,39 @@ async function resolveSupabaseConnectionInput(userId: string, connectionId: stri
   const connection = await connectionService.getDecryptedConnection(userId, connectionId);
   const creds = connection.credentials as Record<string, unknown>;
   return {
-    projectUrl: String(creds.projectUrl || creds.url || '').trim().replace(/\/$/, ''),
+    projectUrl: normalizeSupabaseProjectUrl(String(creds.projectUrl || creds.url || '').trim()),
     token: String(creds.token || creds.serviceRoleKey || creds.anonKey || '').trim(),
   };
 }
 
 function supabaseHeaders(token: string): Record<string, string> {
   return { apikey: token, Authorization: `Bearer ${token}` };
+}
+
+function supabaseOpenApiHeaders(token: string): Record<string, string> {
+  return { ...supabaseHeaders(token), Accept: 'application/openapi+json' };
+}
+
+function normalizeSupabaseProjectUrl(rawUrl: string): string {
+  if (!rawUrl) return '';
+  const withScheme = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
+  return withScheme
+    .trim()
+    .replace(/\/+$/, '')
+    .replace(/\/(?:rest|auth|storage)\/v1\/?$/i, '');
+}
+
+async function fetchSupabaseTableNames(input: SupabaseConnectionInput): Promise<string[]> {
+  const resp = await fetch(`${input.projectUrl}/rest/v1/`, { headers: supabaseOpenApiHeaders(input.token) });
+  if (!resp.ok) {
+    throw new Error(`Supabase returned ${resp.status}`);
+  }
+  const spec: any = await resp.json();
+  return Object.keys(spec?.paths || {})
+    .filter((p) => p !== '/')
+    .map((p) => p.replace(/^\//, ''))
+    .filter((p) => p && !p.includes('/'))
+    .sort();
 }
 
 export async function listSupabaseTablesHandler(req: Request, res: Response) {
@@ -386,14 +412,7 @@ export async function listSupabaseTablesHandler(req: Request, res: Response) {
   }
 
   try {
-    const resp = await fetch(`${input.projectUrl}/rest/v1/`, { headers: supabaseHeaders(input.token) });
-    if (!resp.ok) {
-      return res.status(502).json({ success: false, error: `Supabase returned ${resp.status}` });
-    }
-    const spec: any = await resp.json();
-    const tables = Object.keys(spec?.paths || {})
-      .filter((p) => p !== '/')
-      .map((p) => p.replace(/^\//, ''));
+    const tables = await fetchSupabaseTableNames(input);
     res.json({ success: true, tables });
   } catch (err: any) {
     res.status(502).json({ success: false, error: err.message || 'Could not connect to Supabase' });
@@ -424,9 +443,7 @@ export async function previewSupabaseTableHandler(req: Request, res: Response) {
   try {
     // Only preview tables that actually exist — avoids issuing a request for an
     // arbitrary client-supplied table name.
-    const specResp = await fetch(`${input.projectUrl}/rest/v1/`, { headers: supabaseHeaders(input.token) });
-    const spec: any = await specResp.json().catch(() => ({}));
-    const knownTables = Object.keys(spec?.paths || {}).filter((p) => p !== '/').map((p) => p.replace(/^\//, ''));
+    const knownTables = await fetchSupabaseTableNames(input);
     if (!knownTables.includes(table)) {
       return res.status(404).json({ success: false, error: `Table "${table}" not found` });
     }
