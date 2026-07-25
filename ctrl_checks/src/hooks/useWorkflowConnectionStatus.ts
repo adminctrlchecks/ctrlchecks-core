@@ -244,7 +244,9 @@ function actionRank(action: ConnectionReadinessAction): number {
   }
 }
 
-export function groupWorkflowConnectionIssues(issues: WorkflowMissingConnection[]): WorkflowConnectionGroup[] {
+export function groupWorkflowConnectionIssues(issues: WorkflowMissingConnection[] | unknown): WorkflowConnectionGroup[] {
+  if (!Array.isArray(issues)) return [];
+
   const groups = new Map<string, WorkflowConnectionGroup>();
   for (const issue of issues) {
     const candidateKey = (issue.candidateConnectionIds || []).slice().sort().join(',');

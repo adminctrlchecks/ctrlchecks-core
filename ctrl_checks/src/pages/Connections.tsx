@@ -17,7 +17,7 @@ import { useConnections } from '@/hooks/useConnections';
 import { useCredentialTypes } from '@/hooks/useCredentialTypes';
 import { useOAuthFlow } from '@/hooks/useOAuthFlow';
 import {
-  fetchWorkflowMissingConnections,
+  fetchWorkflowSetupStatus,
   groupWorkflowConnectionIssues,
   type WorkflowMissingConnection,
   type WorkflowConnectionGroup,
@@ -47,6 +47,8 @@ const CATEGORY_ORDER = [
   'Communication', 'Cloud & DevOps', 'Databases', 'File Transfer', 'AI & Data', 'Content & CMS',
   'Payments & Business', 'Other',
 ];
+
+const EMPTY_WORKFLOW_ISSUES: WorkflowMissingConnection[] = [];
 
 function categoryFor(provider: string): string {
   for (const [cat, providers] of Object.entries(PROVIDER_CATEGORIES)) {
@@ -218,7 +220,7 @@ export default function Connections() {
   const returnToWorkflowId = returnTo?.match(/^\/workflow\/([^/?#]+)/)?.[1];
   const workflowReadinessQuery = useQuery({
     queryKey: QUERY_KEYS.workflowConnectionStatus(returnToWorkflowId ?? 'connections-none'),
-    queryFn: () => fetchWorkflowMissingConnections(returnToWorkflowId!),
+    queryFn: () => fetchWorkflowSetupStatus(returnToWorkflowId!),
     enabled: !!returnToWorkflowId,
     staleTime: 0,
     gcTime: 0,
@@ -226,7 +228,7 @@ export default function Connections() {
     refetchOnWindowFocus: true,
     retry: 1,
   });
-  const workflowIssues = workflowReadinessQuery.data ?? [];
+  const workflowIssues = workflowReadinessQuery.data?.missingConnections ?? EMPTY_WORKFLOW_ISSUES;
   const repairGroups = useMemo(() => groupWorkflowConnectionIssues(workflowIssues), [workflowIssues]);
 
   // Invalidate the workflow connection gate when leaving this page so that

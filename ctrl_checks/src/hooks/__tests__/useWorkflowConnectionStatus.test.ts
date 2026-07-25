@@ -138,6 +138,17 @@ describe('workflowSetupStatusFromResponse', () => {
 });
 
 describe('groupWorkflowConnectionIssues', () => {
+  it('does not crash when a cached readiness object is passed instead of an array', () => {
+    const groups = groupWorkflowConnectionIssues({
+      ready: false,
+      missingConnections: [
+        { provider: 'provider_a', displayName: 'Provider A', nodes: ['node-1'] },
+      ],
+    });
+
+    expect(groups).toEqual([]);
+  });
+
   it('groups rows by provider requirement and unions required coverage', () => {
     const groups = groupWorkflowConnectionIssues([
       {
