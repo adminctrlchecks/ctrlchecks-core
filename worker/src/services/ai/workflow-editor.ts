@@ -5,6 +5,7 @@ import { geminiOrchestrator } from './gemini-orchestrator';
 import { unifiedNodeRegistry } from '../../core/registry/unified-node-registry';
 import { unifiedNormalizeNodeType, unifiedNormalizeNodeTypeString } from '../../core/utils/unified-node-type-normalizer';
 import { unifiedGraphOrchestrator } from '../../core/orchestration/unified-graph-orchestrator';
+import { executionOrderManager } from '../../core/orchestration/execution-order-manager';
 import type { Workflow, WorkflowNode, WorkflowEdge } from '../../core/types/ai-types';
 import type { ExecutionOrder } from '../../core/orchestration/execution-order-manager';
 import type {
@@ -152,6 +153,7 @@ export class AIWorkflowEditor {
     const originalEdgesById = new Map<string, WorkflowEdge>();
     for (const n of workflow.nodes) originalNodesById.set(n.id, n);
     for (const e of workflow.edges) originalEdgesById.set(e.id, e);
+    let bootstrapTailNodeId: string | undefined;
 
     const mutationOps = operations.filter(
       (op): op is AiEditorMutationOperation =>
@@ -209,7 +211,42 @@ export class AIWorkflowEditor {
 
           const positionHint = op.kind === 'insert_safety_node' ? op.position : op.positionHint;
           const injectionPosition = positionHint?.relation || 'after';
-          const referenceNodeId = positionHint?.referenceNodeId || currentWorkflow.nodes[0]?.id;
+          if (op.kind === 'add_node' && !positionHint?.referenceNodeId && (currentWorkflow.nodes.length === 0 || bootstrapTailNodeId)) {
+            const previousTailNodeId = bootstrapTailNodeId;
+            const positionedNode: WorkflowNode = {
+              ...newNode,
+              position: {
+                x: currentWorkflow.nodes.length * 260,
+                y: 0,
+              },
+            };
+            const bootstrapEdge: WorkflowEdge | undefined = previousTailNodeId
+              ? {
+                  id: `${previousTailNodeId}-${positionedNode.id}`,
+                  source: previousTailNodeId,
+                  target: positionedNode.id,
+                  type: 'main',
+                  sourceHandle: 'default',
+                  targetHandle: 'default',
+                }
+              : undefined;
+            currentWorkflow = {
+              nodes: [...currentWorkflow.nodes, positionedNode],
+              edges: bootstrapEdge ? [...currentWorkflow.edges, bootstrapEdge] : currentWorkflow.edges,
+              metadata: currentWorkflow.metadata,
+            };
+            executionOrder = executionOrderManager.initialize(currentWorkflow);
+            const validation = unifiedGraphOrchestrator.validateWorkflow(currentWorkflow, executionOrder);
+            if (validation.errors.length) errors.push(...validation.errors);
+            if (validation.warnings.length) warnings.push(...validation.warnings);
+            bootstrapTailNodeId = positionedNode.id;
+            continue;
+          }
+
+          const referenceNodeId =
+            positionHint?.referenceNodeId ||
+            bootstrapTailNodeId ||
+            currentWorkflow.nodes[0]?.id;
 
           if (!referenceNodeId) {
             errors.push('add_node: no referenceNodeId available to place the node');
@@ -232,6 +269,9 @@ export class AIWorkflowEditor {
           executionOrder = result.executionOrder;
           if (result.errors.length) errors.push(...result.errors);
           if (result.warnings.length) warnings.push(...result.warnings);
+          if (op.kind === 'add_node' && bootstrapTailNodeId && !positionHint?.referenceNodeId) {
+            bootstrapTailNodeId = newNode.id;
+          }
         } else if (op.kind === 'remove_node') {
           const result = unifiedGraphOrchestrator.removeNode(currentWorkflow, op.nodeId);
           currentWorkflow = result.workflow;
@@ -688,6 +728,7 @@ export class AIWorkflowEditor {
    */
   private getSuggestStructuredOutputSchema(workflow: Workflow): Record<string, unknown> {
     const nodeIds = (workflow.nodes || []).map((node) => node.id);
+    const isBlankWorkflow = nodeIds.length === 0;
     return {
       type: 'object',
       properties: {
@@ -710,7 +751,9 @@ export class AIWorkflowEditor {
                 type: 'string',
                 enum: [...nodeIds, 'none'],
                 description:
-                  'The existing workflow node this action applies to: the node to replace/remove/reconfigure, or the reference node for add_node/insert_safety_node placement. Use "none" only for refactor_linearize.',
+                  isBlankWorkflow
+                    ? 'Use "none" for add_node operations that create the first blank-canvas workflow nodes. There are no existing node ids yet.'
+                    : 'The existing workflow node this action applies to: the node to replace/remove/reconfigure, or the reference node for add_node/insert_safety_node placement. Use "none" only for refactor_linearize.',
               },
               newNodeType: {
                 type: 'string',
@@ -888,6 +931,7 @@ export class AIWorkflowEditor {
     const nodePromptSummary = this.buildWorkflowNodePromptSummary(workflow);
     const edgePromptSummary = this.buildWorkflowEdgePromptSummary(workflow);
     const graphRewriteContext = this.buildGraphRewriteContext(workflow);
+    const isBlankWorkflow = (workflow.nodes || []).length === 0;
 
     const opHelp = [
       'Every operation object MUST contain these three fields: "action", "targetNodeId", "newNodeType".',
@@ -898,7 +942,9 @@ export class AIWorkflowEditor {
       '- Change one config value: { "action":"update_node_config", "targetNodeId":"<existing node id>", "newNodeType":"none", "configPath":"/field", "configValueJson":"<JSON-encoded value>" }',
       '- Add a new node: { "action":"add_node", "targetNodeId":"<reference node id>", "newNodeType":"<type to create>", "relation":"before"|"after" }',
       '- Insert a guard/safety node: { "action":"insert_safety_node", "targetNodeId":"<reference node id>", "newNodeType":"<type>", "relation":"before"|"after" }',
-      'targetNodeId must be an existing workflow node id. newNodeType must be a known node type, or "none" where no new node is created.',
+      isBlankWorkflow
+        ? 'Blank workflow bootstrap: use add_node with targetNodeId "none" for each starter node in the desired order. Start with a trigger such as manual_trigger when the user asks for a manually run workflow. The backend will place the first node and chain later unreferenced add_node operations after the previous new node.'
+        : 'targetNodeId must be an existing workflow node id. newNodeType must be a known node type, or "none" where no new node is created.',
       'configOverridesJson, when used, must be a JSON object string using only config fields from the selected node type schema.',
       'Do not output edges.',
     ].join('\n');
@@ -925,6 +971,7 @@ export class AIWorkflowEditor {
         '- For multi-part requests, return all necessary operations in one ordered operations array.',
         '- For adding a terminal/log/result node, use add_node with positionHint after the final relevant node and include only supported config fields.',
         '- If a selected target node type requires configuration and the user did not provide concrete field values, use safe schema/default values only when they are obvious from the request or existing comparable nodes; otherwise return a clear question and no operations.',
+        '- For a blank workflow, do not ask the user to add a starter node manually. If the request gives enough intent to start, return one or more add_node operations with targetNodeId "none".',
         '- The message should explain what will change in plain English. It must not include raw JSON.',
         '- When the request contains multiple changes, the message must list each planned change as a numbered step, in the same order as the operations array (e.g. "1. Replace the Gmail on the If/Else false branch with Slack. 2. Replace the Slack on the pending branch with Gmail.").',
       ].join('\n'),

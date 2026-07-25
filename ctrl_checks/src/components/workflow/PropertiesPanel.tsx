@@ -817,10 +817,13 @@ export default function PropertiesPanel({
     }
 
     const currentWorkflow = buildAiEditorWorkflowPayload();
-    if (!Array.isArray(currentWorkflow.nodes) || currentWorkflow.nodes.length === 0) {
+    const isBlankWorkflow = !Array.isArray(currentWorkflow.nodes) || currentWorkflow.nodes.length === 0;
+    const isBlankBootstrapPreview =
+      isBlankWorkflow && pendingAiOperations.every((operation) => operation.kind === 'add_node');
+    if (isBlankWorkflow && !isBlankBootstrapPreview) {
       toast({
         title: 'Nothing to apply',
-        description: 'Add at least one node before applying AI edits.',
+        description: 'This preview does not create starter nodes for the blank workflow.',
         variant: 'destructive',
       });
       return;
@@ -943,10 +946,6 @@ export default function PropertiesPanel({
 
     try {
       const currentWorkflow = buildAiEditorWorkflowPayload();
-
-      if (!Array.isArray(currentWorkflow.nodes) || currentWorkflow.nodes.length === 0) {
-        throw new Error('Current workflow has no nodes. Please add at least one node before using the AI editor.');
-      }
 
       const { data: sessionData } = await awsClient.auth.getSession();
       const token = sessionData?.session?.access_token;
@@ -1094,7 +1093,7 @@ export default function PropertiesPanel({
     try {
       const currentWorkflow = buildAiEditorWorkflowPayload();
       if (!Array.isArray(currentWorkflow.nodes) || currentWorkflow.nodes.length === 0) {
-        throw new Error('Current workflow has no nodes. Please add at least one node before using the AI editor.');
+        throw new Error('Preview fixes require an existing workflow with run context. Ask the AI editor to create starter nodes first.');
       }
 
       const { data: sessionData } = await awsClient.auth.getSession();

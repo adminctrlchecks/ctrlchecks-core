@@ -30,6 +30,8 @@ const Approvals = lazy(() => import("./pages/Approvals"));
 const Templates = lazy(() => import("./pages/Templates"));
 const TemplatesManager = lazy(() => import("./pages/admin/TemplatesManager"));
 const TemplateEditor = lazy(() => import("./pages/admin/TemplateEditor"));
+const LandingDemoManager = lazy(() => import("./pages/admin/LandingDemoManager"));
+const LandingDemoEditor = lazy(() => import("./pages/admin/LandingDemoEditor"));
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const UsersManager = lazy(() => import("./pages/admin/UsersManager"));
 const UserDetails = lazy(() => import("./pages/admin/UserDetails"));
@@ -164,6 +166,22 @@ const App = () => (
                     element={
                       <AdminRoute>
                         <TemplatesManager />
+                      </AdminRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin/landing-demo"
+                    element={
+                      <AdminRoute>
+                        <LandingDemoManager />
+                      </AdminRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin/landing-demo/:id/edit"
+                    element={
+                      <AdminRoute>
+                        <LandingDemoEditor />
                       </AdminRoute>
                     }
                   />

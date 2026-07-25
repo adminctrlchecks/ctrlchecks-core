@@ -1,16 +1,9 @@
-import { useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
-import { Play } from "lucide-react";
+import { InteractiveDemoPreview } from "@/components/landing/InteractiveDemoPreview";
 import { landingViewport, springSoft } from "@/components/landing/landing-motion";
-
-/** Slide 4 — product demo hook; env override, then local public fallback. */
-const DEMO_VIDEO_URL =
-  (import.meta.env.VITE_LANDING_DEMO_VIDEO_URL as string | undefined)?.trim() || "/demo.mp4";
 
 export function WorkflowDemoSection() {
   const reduceMotion = useReducedMotion();
-  const [videoFailed, setVideoFailed] = useState(false);
-  const hasVideo = Boolean(DEMO_VIDEO_URL);
 
   return (
     <section id="demo" className="py-12 sm:py-16" aria-labelledby="demo-heading">
@@ -33,7 +26,7 @@ export function WorkflowDemoSection() {
             <span className="text-gradient">build themselves</span>
           </h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            Software that engineers its own workflows, from intent to execution in one flow.
+            Pick a common request and watch a visual automation map appear before signup.
           </p>
         </motion.div>
 
@@ -42,49 +35,9 @@ export function WorkflowDemoSection() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={landingViewport}
           transition={reduceMotion ? { duration: 0.4, delay: 0.08 } : { ...springSoft, delay: 0.12 }}
-          className="mx-auto mt-12 max-w-4xl"
+          className="mx-auto mt-12 max-w-5xl"
         >
-          <div className="relative overflow-hidden rounded-2xl border border-border/60 bg-muted/20 shadow-lg dark:bg-muted/10">
-            <div className="aspect-video w-full">
-              {hasVideo && !videoFailed ? (
-                <video
-                  className="h-full w-full object-cover"
-                  controls
-                  playsInline
-                  preload="metadata"
-                  src={DEMO_VIDEO_URL}
-                  onError={() => setVideoFailed(true)}
-                >
-                  <track kind="captions" />
-                </video>
-              ) : (
-                <div className="flex h-full min-h-[200px] flex-col items-center justify-center gap-4 bg-gradient-to-b from-primary/10 via-background/80 to-secondary/10 px-6 py-16 sm:min-h-[280px]">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full border border-primary/40 bg-background/60 text-primary shadow-sm backdrop-blur-sm">
-                    <Play className="h-7 w-7" aria-hidden />
-                  </div>
-                  <p className="text-center text-sm font-medium text-foreground sm:text-base">
-                    Demo video coming soon
-                  </p>
-                  <p className="max-w-md text-center text-xs text-muted-foreground sm:text-sm">
-                    {videoFailed ? "Could not load demo video from " : "Drop your asset in hosting and set "}
-                    {videoFailed ? (
-                      <code className="rounded bg-muted px-1.5 py-0.5 text-[0.7rem] sm:text-xs">
-                        {DEMO_VIDEO_URL}
-                      </code>
-                    ) : null}
-                    {!videoFailed ? (
-                      <>
-                        <code className="rounded bg-muted px-1.5 py-0.5 text-[0.7rem] sm:text-xs">
-                          VITE_LANDING_DEMO_VIDEO_URL
-                        </code>{" "}
-                        to the file URL.
-                      </>
-                    ) : null}
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
+          <InteractiveDemoPreview />
         </motion.div>
       </div>
     </section>

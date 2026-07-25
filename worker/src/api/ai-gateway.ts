@@ -1189,7 +1189,8 @@ router.post('/editor/chat', async (req: Request, res: Response) => {
     const intent = classifyUnifiedAiEditorIntent(prompt, !!selectedExecutionId);
     const wantsChange = intent === 'propose_change' || intent === 'mixed';
     const wantsExplanation = intent === 'explain_run' || intent === 'explain_workflow' || intent === 'mixed';
-    const candidateOptions = wantsChange ? discoverAiEditorNodeCandidates(prompt, 4) : [];
+    const isBlankWorkflow = Array.isArray(body.workflow?.nodes) && body.workflow.nodes.length === 0;
+    const candidateOptions = wantsChange ? discoverAiEditorNodeCandidates(prompt, isBlankWorkflow ? 8 : 4) : [];
     const selectedCandidate =
       body.selectedCandidateNodeType && candidateOptions.find((candidate) => candidate.nodeType === body.selectedCandidateNodeType)
         ? candidateOptions.find((candidate) => candidate.nodeType === body.selectedCandidateNodeType)
@@ -1247,7 +1248,7 @@ router.post('/editor/chat', async (req: Request, res: Response) => {
       });
     }
 
-    if (wantsChange && shouldClarifyNodeChoice(intent, prompt, candidateOptions, selectedCandidate?.nodeType)) {
+    if (!isBlankWorkflow && wantsChange && shouldClarifyNodeChoice(intent, prompt, candidateOptions, selectedCandidate?.nodeType)) {
       const message = [
         'I found a few valid ways to implement that. Choose the one you want, and I will prepare a safe preview.',
         '',

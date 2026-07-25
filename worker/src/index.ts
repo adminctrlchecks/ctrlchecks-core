@@ -277,8 +277,10 @@ import {
   shopifyWebhookInfoHandler,
 } from './api/shopify-trigger';
 import chatApiRoute from './api/chat-api';
+import adminLandingDemoRoute from './api/admin-landing-demo';
 import adminTemplatesRoute from './api/admin-templates';
 import templatesRoute from './api/templates';
+import { listLandingDemoScenarios, recordLandingDemoEvent } from './api/landing-demo';
 import adminUsersRoute from './api/admin-users';
 import deleteAccountRoute from './api/delete-account';
 import copyTemplateRoute from './api/copy-template';
@@ -1401,6 +1403,25 @@ app.post('/api/chat-api', asyncHandler(chatApiRoute));
 // Public active templates routes
 app.get('/api/templates', asyncHandler(templatesRoute));
 app.get('/api/templates/:id', asyncHandler(templatesRoute));
+app.get('/api/landing-demo/scenarios', asyncHandler(listLandingDemoScenarios));
+app.post(
+  '/api/landing-demo/events',
+  distributedRateLimit({
+    endpointKey: 'landing-demo-events',
+    perUserLimit: 60,
+    globalLimit: 3000,
+    windowMs: 60_000,
+  }),
+  asyncHandler(recordLandingDemoEvent)
+);
+
+// Admin landing demo routes
+app.get('/api/admin-landing-demo', adminLogger('landing-demo-list'), asyncHandler(authenticateUser), requireAdmin, asyncHandler(adminLandingDemoRoute));
+app.get('/api/admin-landing-demo/:id', adminLogger('landing-demo-get'), asyncHandler(authenticateUser), requireAdmin, asyncHandler(adminLandingDemoRoute));
+app.post('/api/admin-landing-demo', adminLogger('landing-demo-create'), asyncHandler(authenticateUser), requireAdmin, asyncHandler(adminLandingDemoRoute));
+app.put('/api/admin-landing-demo/:id', adminLogger('landing-demo-update'), asyncHandler(authenticateUser), requireAdmin, asyncHandler(adminLandingDemoRoute));
+app.patch('/api/admin-landing-demo/:id', adminLogger('landing-demo-patch'), asyncHandler(authenticateUser), requireAdmin, asyncHandler(adminLandingDemoRoute));
+app.delete('/api/admin-landing-demo/:id', adminLogger('landing-demo-delete'), asyncHandler(authenticateUser), requireAdmin, asyncHandler(adminLandingDemoRoute));
 
 // Admin templates routes (with /api prefix)
 app.get('/api/admin-templates', asyncHandler(adminTemplatesRoute));

@@ -14,6 +14,7 @@ type AppRole = Database['public']['Enums']['app_role'];
 
 const ADMIN_API_BASE = `${ENDPOINTS.itemBackend}/admin-templates`;
 const ADMIN_USERS_API_BASE = `${ENDPOINTS.itemBackend}/admin-users`;
+const ADMIN_LANDING_DEMO_API_BASE = `${ENDPOINTS.itemBackend}/api/admin-landing-demo`;
 
 export interface AdminUser {
   id: string;
@@ -45,6 +46,48 @@ export interface AdminUserDetails extends AdminUser {
   totalWorkflowsBuilt: number;
   workflows: AdminUserWorkflowSummary[];
 }
+
+export interface LandingDemoNode {
+  label: string;
+  icon: string;
+  category: string;
+  position: {
+    x: number;
+    y: number;
+  };
+}
+
+export interface LandingDemoEdge {
+  source: string;
+  target: string;
+  sourceHandle?: string;
+  label?: string;
+}
+
+export interface LandingDemoStep {
+  id: string;
+  type: 'node' | 'edge';
+  delayMs: number;
+  node?: LandingDemoNode;
+  edge?: LandingDemoEdge;
+}
+
+export interface LandingDemoScript {
+  steps: LandingDemoStep[];
+}
+
+export interface LandingDemoScenario {
+  id: string;
+  label: string;
+  sortOrder: number;
+  isActive: boolean;
+  script: LandingDemoScript;
+  createdBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type LandingDemoScenarioInput = Pick<LandingDemoScenario, 'label' | 'sortOrder' | 'isActive' | 'script'>;
 
 function normalizeAdminUser(raw: Partial<AdminUser> & { id: string }): AdminUser {
   return {
@@ -341,3 +384,106 @@ export async function getUserDetails(userId: string): Promise<AdminUserDetails> 
   };
 }
 
+export async function getLandingDemoScenarios(): Promise<LandingDemoScenario[]> {
+  const token = await getAuthToken();
+
+  const response = await fetch(ADMIN_LANDING_DEMO_API_BASE, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to fetch landing demo scenarios');
+  }
+
+  const data = await response.json();
+  return data.scenarios || [];
+}
+
+export async function getLandingDemoScenario(id: string): Promise<LandingDemoScenario> {
+  const token = await getAuthToken();
+
+  const response = await fetch(`${ADMIN_LANDING_DEMO_API_BASE}/${id}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to fetch landing demo scenario');
+  }
+
+  const data = await response.json();
+  return data.scenario;
+}
+
+export async function createLandingDemoScenario(input: LandingDemoScenarioInput): Promise<LandingDemoScenario> {
+  const token = await getAuthToken();
+
+  const response = await fetch(ADMIN_LANDING_DEMO_API_BASE, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(input),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to create landing demo scenario');
+  }
+
+  const data = await response.json();
+  return data.scenario;
+}
+
+export async function updateLandingDemoScenario(
+  id: string,
+  input: Partial<LandingDemoScenarioInput>
+): Promise<LandingDemoScenario> {
+  const token = await getAuthToken();
+
+  const response = await fetch(`${ADMIN_LANDING_DEMO_API_BASE}/${id}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(input),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to update landing demo scenario');
+  }
+
+  const data = await response.json();
+  return data.scenario;
+}
+
+export async function deleteLandingDemoScenario(id: string): Promise<{ success: boolean }> {
+  const token = await getAuthToken();
+
+  const response = await fetch(`${ADMIN_LANDING_DEMO_API_BASE}/${id}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to delete landing demo scenario');
+  }
+
+  return response.json();
+}

@@ -12,6 +12,7 @@ import {
   ArrowLeft,
   CreditCard,
   Sparkles,
+  MonitorPlay,
 } from 'lucide-react';
 
 export interface UserNavItem {
@@ -39,6 +40,7 @@ export interface AdminNavItem {
 export const ADMIN_SECTION_NAV: AdminNavItem[] = [
   { title: 'Admin home', path: '/admin/dashboard', icon: Shield },
   { title: 'Templates', path: '/admin/templates', icon: LayoutTemplate },
+  { title: 'Landing Demo', path: '/admin/landing-demo', icon: MonitorPlay },
   { title: 'Users', path: '/admin/users', icon: Users },
   { title: 'Subscriptions', path: '/admin/subscriptions', icon: CreditCard },
   { title: 'Documentation', path: '/docs', icon: BookOpen },

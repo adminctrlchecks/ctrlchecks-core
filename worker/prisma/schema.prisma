@@ -127,3 +127,36 @@ model WorkflowFileAsset {
   @@schema("public")
   @@map("workflow_file_assets")
 }
+
+model LandingDemoScenario {
+  id        String   @id @default(uuid()) @db.Uuid
+  label     String   @db.Text
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  script    Json
+  createdBy String?  @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  events LandingDemoEvent[]
+
+  @@index([isActive, sortOrder])
+  @@schema("public")
+  @@map("landing_demo_scenarios")
+}
+
+model LandingDemoEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  scenarioId String?  @map("scenario_id") @db.Uuid
+  sessionId  String   @map("session_id") @db.Text
+  eventType  String   @map("event_type") @db.Text
+  referrer   String?  @db.Text
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  scenario LandingDemoScenario? @relation(fields: [scenarioId], references: [id])
+
+  @@index([scenarioId], map: "idx_landing_demo_events_scenario")
+  @@index([createdAt], map: "idx_landing_demo_events_created")
+  @@schema("public")
+  @@map("landing_demo_events")
+}
