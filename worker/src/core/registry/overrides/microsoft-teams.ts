@@ -21,13 +21,19 @@ export function overrideMicrosoftTeams(
       label: 'Send Webhook Message',
       requiredFields: ['webhookUrl', 'message'],
       optionalFields: [],
-      credentialProviders: [],
+      credentialProviders: ['microsoft_teams'],
       outputFields: ['success', 'teams'],
       status: 'implemented',
     }],
     credentialSchema: {
-      requirements: [],
-      credentialFields: [],
+      requirements: [{
+        credentialTypeId: 'microsoft_teams_webhook',
+        provider: 'microsoft_teams',
+        category: 'credential',
+        required: true,
+        description: 'Microsoft Teams incoming webhook URL',
+      }],
+      credentialFields: ['connectionId', 'webhookUrl'],
     },
     execute: async (context) => {
       return await executeViaLegacyExecutor({ context, schema });

@@ -11,9 +11,13 @@
  */
 
 import { getCredentialVault, CredentialAccessContext } from '../../services/credential-vault';
-import { connectionService } from '../../credentials-system/connection-service';
 import { getCredentialType } from '../../credentials-system/credential-type-registry';
 import type { AuthType, DecryptedConnection } from '../../credentials-system/types';
+import {
+  findCanonicalConnection,
+  findCanonicalConnectionByProvider,
+  getDecryptedConnection,
+} from '../../services/canonical-credential-lookup';
 
 const CONNECTION_SECRET_AUTH_TYPES: AuthType[] = [
   'api_key',
@@ -137,13 +141,15 @@ async function retrieveConnectionCredential(
   if (!userId) return null;
 
   for (const credentialTypeId of credentialTypeCandidatesForKey(key)) {
-    const record = await connectionService.findCanonicalConnection(userId, credentialTypeId);
+    const record = await findCanonicalConnection(userId, credentialTypeId);
     if (!record) continue;
-    const connection = await connectionService.getDecryptedConnection(userId, record.id);
+    const decrypted = await getDecryptedConnection(userId, record.connection.id);
+    if (!decrypted) continue;
+    const connection = decrypted.connection;
     return {
       value: legacyCredentialValueFromConnection(connection),
       metadata: {
-        source: 'connections',
+        source: record.source,
         connectionId: connection.id,
         credentialTypeId: connection.credentialTypeId,
         provider: connection.provider,
@@ -152,17 +158,19 @@ async function retrieveConnectionCredential(
   }
 
   for (const provider of providerCandidatesForKey(key)) {
-    const record = await connectionService.findCanonicalConnectionByProvider(
+    const record = await findCanonicalConnectionByProvider(
       userId,
       provider,
       CONNECTION_SECRET_AUTH_TYPES,
     );
     if (!record) continue;
-    const connection = await connectionService.getDecryptedConnection(userId, record.id);
+    const decrypted = await getDecryptedConnection(userId, record.connection.id);
+    if (!decrypted) continue;
+    const connection = decrypted.connection;
     return {
       value: legacyCredentialValueFromConnection(connection),
       metadata: {
-        source: 'connections',
+        source: record.source,
         connectionId: connection.id,
         credentialTypeId: connection.credentialTypeId,
         provider: connection.provider,

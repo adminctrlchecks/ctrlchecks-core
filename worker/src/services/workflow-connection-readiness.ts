@@ -15,7 +15,6 @@
 
 import {
   credentialRequirementForNode,
-  normalizeProvider,
 } from './credential-scope-registry';
 import { resolveCredentialDryRun } from './credential-resolver';
 import {
@@ -25,10 +24,15 @@ import {
   CredentialRefreshError,
   credentialFixMessage,
 } from './credential-errors';
-import { connectionService } from '../credentials-system/connection-service';
 import { credentialTypeDefinitions } from '../credentials-system/credential-type-registry';
-import type { ConnectionRecord } from '../credentials-system/types';
 import { logger } from '../core/logger';
+import {
+  canonicalCredentialTypeId,
+  canonicalProvider,
+  findCanonicalConnectionByProvider as findCanonicalCredentialConnectionByProvider,
+} from './canonical-credential-lookup';
+
+export { canonicalCredentialTypeId, canonicalProvider } from './canonical-credential-lookup';
 
 export type ConnectionReadinessStatus =
   | 'ready'
@@ -90,31 +94,6 @@ export interface ReadinessNode {
     label?: string;
     name?: string;
   };
-}
-
-/**
- * Aliases seen across the codebase / stored workflow JSON for provider and
- * credential-type identifiers. Normalized once here — never in the UI,
- * wizard, preflight, or execution individually.
- */
-const PROVIDER_ALIASES: Record<string, string> = {
-  gmail: 'google',
-  google_gmail: 'google',
-};
-
-const CREDENTIAL_TYPE_ALIASES: Record<string, string> = {
-  google_oauth: 'google_oauth2',
-  'google oauth': 'google_oauth2',
-};
-
-export function canonicalProvider(provider: string): string {
-  const key = provider.trim().toLowerCase();
-  return normalizeProvider(PROVIDER_ALIASES[key] || key);
-}
-
-export function canonicalCredentialTypeId(value: string): string {
-  const key = value.trim().toLowerCase().replace(/\s+/g, ' ');
-  return CREDENTIAL_TYPE_ALIASES[key] || key.replace(/\s+/g, '_');
 }
 
 /** Find the canonical OAuth2 credential-type id for a provider (google -> google_oauth2). */
@@ -208,7 +187,7 @@ export async function getWorkflowConnectionReadiness(input: {
   // Memoize per provider+scopes so N nodes sharing a requirement hit the
   // credential store once.
   const dryRunCache = new Map<string, Promise<DryRunOutcome>>();
-  const connectionCache = new Map<string, Promise<ConnectionRecord | null>>();
+  const connectionCache = new Map<string, ReturnType<typeof findCanonicalCredentialConnectionByProvider>>();
 
   const rows: ConnectionReadinessRow[] = [];
 
@@ -232,14 +211,15 @@ export async function getWorkflowConnectionReadiness(input: {
     if (!connectionCache.has(provider)) {
       connectionCache.set(
         provider,
-        connectionService.findCanonicalConnectionByProvider(userId, provider).catch(() => null),
+        findCanonicalCredentialConnectionByProvider(userId, provider).catch(() => null),
       );
     }
 
-    const [dryRunOutcome, connection] = await Promise.all([
+    const [dryRunOutcome, connectionResult] = await Promise.all([
       dryRunCache.get(dryRunKey)!,
       connectionCache.get(provider)!,
     ]);
+    const connection = connectionResult?.connection ?? null;
 
     const outcome: DryRunOutcome =
       requiredScopes.length === 0 && connection
@@ -269,7 +249,11 @@ export async function getWorkflowConnectionReadiness(input: {
       status: outcome.status,
       connectionId: connection?.id,
       credentialId: outcome.credentialId,
-      source: outcome.status === 'ready' ? 'unified_credentials' : connection ? 'connections' : 'unified_credentials',
+      source: outcome.status === 'ready'
+        ? (outcome.credentialId === connection?.id
+            ? (connectionResult?.source || 'connections')
+            : 'unified_credentials')
+        : connectionResult?.source || 'unified_credentials',
       availableScopes: outcome.availableScopes,
       reason,
       checkedAt,

@@ -21,10 +21,18 @@ jest.mock('../credential-resolver', () => ({
   resolveCredentialDryRun: jest.fn(),
 }));
 
-jest.mock('../../credentials-system/connection-service', () => ({
-  connectionService: {
-    findCanonicalConnectionByProvider: jest.fn(),
+jest.mock('../canonical-credential-lookup', () => ({
+  canonicalProvider: (provider: string) => {
+    const key = provider.trim().toLowerCase();
+    if (key === 'gmail' || key === 'google_gmail') return 'google';
+    return key;
   },
+  canonicalCredentialTypeId: (value: string) => {
+    const key = value.trim().toLowerCase().replace(/\s+/g, ' ');
+    if (key === 'google_oauth' || key === 'google oauth') return 'google_oauth2';
+    return key.replace(/\s+/g, '_');
+  },
+  findCanonicalConnectionByProvider: jest.fn(),
 }));
 
 jest.mock('../../core/logger', () => ({
@@ -34,8 +42,8 @@ jest.mock('../../core/logger', () => ({
 const { resolveCredentialDryRun } = jest.requireMock('../credential-resolver') as {
   resolveCredentialDryRun: jest.Mock;
 };
-const { connectionService } = jest.requireMock('../../credentials-system/connection-service') as {
-  connectionService: { findCanonicalConnectionByProvider: jest.Mock };
+const { findCanonicalConnectionByProvider } = jest.requireMock('../canonical-credential-lookup') as {
+  findCanonicalConnectionByProvider: jest.Mock;
 };
 
 const GMAIL_SEND = 'https://www.googleapis.com/auth/gmail.send';
@@ -44,6 +52,12 @@ const gmailNode = {
   id: 'n1',
   type: 'custom',
   data: { type: 'google_gmail', label: 'Send Email' },
+};
+
+const supabaseNode = {
+  id: 'supabase-1',
+  type: 'custom',
+  data: { type: 'supabase', label: 'Query Supabase' },
 };
 
 const baseInput = {
@@ -71,16 +85,19 @@ describe('canonical mapping', () => {
 describe('getWorkflowConnectionReadiness', () => {
   beforeEach(() => {
     resolveCredentialDryRun.mockReset();
-    connectionService.findCanonicalConnectionByProvider.mockReset();
-    connectionService.findCanonicalConnectionByProvider.mockResolvedValue(null);
+    findCanonicalConnectionByProvider.mockReset();
+    findCanonicalConnectionByProvider.mockResolvedValue(null);
   });
 
   it('reports missing when a connections row is active but unified_credentials has no row', async () => {
     resolveCredentialDryRun.mockRejectedValue(new CredentialNotFoundError(notFoundContext));
-    connectionService.findCanonicalConnectionByProvider.mockResolvedValue({
-      id: 'conn-1',
-      provider: 'google',
-      status: 'active',
+    findCanonicalConnectionByProvider.mockResolvedValue({
+      connection: {
+        id: 'conn-1',
+        provider: 'google',
+        status: 'active',
+      },
+      source: 'connections',
     });
 
     const result = await getWorkflowConnectionReadiness(baseInput);
@@ -129,7 +146,7 @@ describe('getWorkflowConnectionReadiness', () => {
       expiresAt: null,
       source: 'oauth_callback',
     });
-    connectionService.findCanonicalConnectionByProvider.mockResolvedValue({ id: 'conn-1' });
+    findCanonicalConnectionByProvider.mockResolvedValue({ connection: { id: 'conn-1' }, source: 'connections' });
 
     const result = await getWorkflowConnectionReadiness(baseInput);
 
@@ -148,6 +165,73 @@ describe('getWorkflowConnectionReadiness', () => {
         requiredScopes: [GMAIL_SEND],
       }),
     );
+  });
+
+  it('reports ready for Supabase when an active local connection exists', async () => {
+    resolveCredentialDryRun.mockRejectedValue(
+      new CredentialNotFoundError({ userId: 'user-1', provider: 'supabase', requiredScopes: [] }),
+    );
+    findCanonicalConnectionByProvider.mockResolvedValue({
+      connection: { id: 'supabase-local', provider: 'supabase', status: 'active' },
+      source: 'connections',
+    });
+
+    const result = await getWorkflowConnectionReadiness({
+      workflowId: 'wf-1',
+      userId: 'user-1',
+      nodes: [supabaseNode],
+    });
+
+    expect(result.ready).toBe(true);
+    expect(result.missing).toHaveLength(0);
+    expect(result.rows[0]).toMatchObject({
+      provider: 'supabase',
+      credentialTypeId: 'supabase_api_key',
+      connectionId: 'supabase-local',
+      credentialId: 'supabase-local',
+      source: 'connections',
+      status: 'ready',
+    });
+  });
+
+  it('reports ready for Supabase when an active remote credential-service connection exists', async () => {
+    resolveCredentialDryRun.mockRejectedValue(
+      new CredentialNotFoundError({ userId: 'user-1', provider: 'supabase', requiredScopes: [] }),
+    );
+    findCanonicalConnectionByProvider.mockResolvedValue({
+      connection: { id: 'supabase-remote', provider: 'supabase', status: 'active' },
+      source: 'credential_service',
+    });
+
+    const result = await getWorkflowConnectionReadiness({
+      workflowId: 'wf-1',
+      userId: 'user-1',
+      nodes: [supabaseNode],
+    });
+
+    expect(result.ready).toBe(true);
+    expect(result.rows[0].source).toBe('credential_service');
+    expect(result.rows[0].connectionId).toBe('supabase-remote');
+  });
+
+  it('reports missing for Supabase when no active connection exists in either source', async () => {
+    resolveCredentialDryRun.mockRejectedValue(
+      new CredentialNotFoundError({ userId: 'user-1', provider: 'supabase', requiredScopes: [] }),
+    );
+    findCanonicalConnectionByProvider.mockResolvedValue(null);
+
+    const result = await getWorkflowConnectionReadiness({
+      workflowId: 'wf-1',
+      userId: 'user-1',
+      nodes: [supabaseNode],
+    });
+
+    expect(result.ready).toBe(false);
+    expect(result.rows[0]).toMatchObject({
+      provider: 'supabase',
+      status: 'missing',
+      source: 'unified_credentials',
+    });
   });
 
   it('reports expired when the credential cannot be refreshed', async () => {
@@ -182,7 +266,7 @@ describe('getWorkflowConnectionReadiness', () => {
     expect(result.rows.map((r) => r.nodeId)).toEqual(['n1', 'n2']);
     // Same provider + scopes → one credential lookup, one connection lookup
     expect(resolveCredentialDryRun).toHaveBeenCalledTimes(1);
-    expect(connectionService.findCanonicalConnectionByProvider).toHaveBeenCalledTimes(1);
+    expect(findCanonicalConnectionByProvider).toHaveBeenCalledTimes(1);
   });
 
   it('returns only non-ready rows when includeSatisfied is false', async () => {
@@ -211,7 +295,7 @@ describe('getWorkflowConnectionReadiness', () => {
       expiresAt: null,
       source: 'oauth_callback',
     });
-    connectionService.findCanonicalConnectionByProvider.mockRejectedValue(new Error('db down'));
+    findCanonicalConnectionByProvider.mockRejectedValue(new Error('db down'));
 
     const result = await getWorkflowConnectionReadiness(baseInput);
 

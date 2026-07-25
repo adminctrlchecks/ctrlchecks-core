@@ -7,6 +7,7 @@ import { nodeRegistryService } from '../credentials-system/node-registry-service
 import { oauthService } from '../credentials-system/oauth-service';
 import { getCacheRedisClient, invalidateMissingItemsCache, invalidateAllMissingItemsCaches } from '../middleware/redisGetCache';
 import { logger } from '../core/logger';
+import { listCanonicalConnections } from '../services/canonical-credential-lookup';
 
 function userId(req: Request): string {
   const id = (req as any).user?.id || req.query.user_id || req.body?.userId;
@@ -64,20 +65,11 @@ export async function registryNodesHandler(_req: Request, res: Response) {
 
 export async function listConnectionsHandler(req: Request, res: Response) {
   const uid = userId(req);
-
-  // Credential-service canary — route % of traffic to the remote service.
-  // Fallback: worker vault (existing path). Rollback: CREDENTIAL_SERVICE_ENABLED=false.
-  const { shouldUseCredentialService, listConnectionsRemote } = await import('../services/credential-service-client');
-  if (shouldUseCredentialService(uid)) {
-    const remote = await listConnectionsRemote(uid);
-    if (remote !== null) {
-      return res.json({ connections: remote, source: 'credential-service' });
-    }
-    // Remote returned null (error/timeout) → fall through to local path
-    logger.warn('[listConnectionsHandler] Credential-service fallback for user:', uid);
-  }
-
-  res.json({ connections: await connectionService.listConnections(uid) });
+  const result = await listCanonicalConnections(uid);
+  res.json({
+    connections: result.connections,
+    ...(result.source === 'credential_service' ? { source: 'credential-service' } : {}),
+  });
 }
 
 export async function createConnectionHandler(req: Request, res: Response) {

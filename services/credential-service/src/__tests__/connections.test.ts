@@ -22,6 +22,8 @@ import request from 'supertest';
 // Override queryDb to use mockQuery so tests control rows returned
 const { queryDb } = jest.requireMock('../lib/db') as { queryDb: jest.Mock };
 
+process.env.CREDENTIAL_SERVICE_KEY = '';
+
 import app from '../index';
 
 const MOCK_ROW = {
@@ -155,6 +157,31 @@ describe('GET /connections/:provider', () => {
   it('returns 401 without user identity', async () => {
     const res = await request(app).get('/connections/google');
     expect(res.status).toBe(401);
+  });
+});
+
+describe('GET /connections/:id/decrypted', () => {
+  it('returns decrypted credentials for worker runtime service-key calls', async () => {
+    queryDb.mockResolvedValue([{ ...MOCK_ROW, encrypted_credentials: 'v1:encrypted-secret' }]);
+    const res = await request(app)
+      .get('/connections/conn-uuid-1/decrypted')
+      .set('x-user-id', 'user-123')
+      .set('x-service-key', 'test-service-key');
+
+    expect(res.status).toBe(200);
+    expect(res.body.connection.id).toBe('conn-uuid-1');
+    expect(res.body.connection.credentials).toEqual({ token: '[DECRYPTED]' });
+  });
+
+  it('returns 404 when the runtime connection does not exist', async () => {
+    queryDb.mockResolvedValue([]);
+    const res = await request(app)
+      .get('/connections/missing/decrypted')
+      .set('x-user-id', 'user-123')
+      .set('x-service-key', 'test-service-key');
+
+    expect(res.status).toBe(404);
+    expect(res.body.code).toBe('CONNECTION_NOT_FOUND');
   });
 });
 

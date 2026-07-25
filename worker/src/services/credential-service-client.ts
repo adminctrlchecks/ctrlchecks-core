@@ -16,7 +16,7 @@
  * See: docs/engineering/credential-service-contract.md
  */
 
-import type { ConnectionRecord } from '../credentials-system/types';
+import type { ConnectionRecord, DecryptedConnection } from '../credentials-system/types';
 import { incCredentialDelegation } from '../middleware/highScaleMetrics';
 
 // ── FNV-1a 32-bit hash — deterministic canary routing ────────────────────────
@@ -254,6 +254,22 @@ export async function getConnectionByProviderRemote(
 ): Promise<ConnectionRecord | null> {
   const result = await serviceGet<{ connection: ConnectionRecord }>(
     `/connections/${encodeURIComponent(provider)}`,
+    userId,
+  );
+  return result?.connection ?? null;
+}
+
+/**
+ * Get a decrypted connection by UUID for worker runtime use.
+ * This endpoint is internal-only in the credential service and protected by
+ * the service key. Returns null when disabled, not found, or on any error.
+ */
+export async function getDecryptedConnectionRemote(
+  userId: string,
+  id: string,
+): Promise<DecryptedConnection | null> {
+  const result = await serviceGet<{ connection: DecryptedConnection }>(
+    `/connections/${encodeURIComponent(id)}/decrypted`,
     userId,
   );
   return result?.connection ?? null;

@@ -1329,7 +1329,7 @@ export class ConnectorRegistry {
     // ============================================
     this.register({
       id: 'microsoft_teams',
-      provider: 'microsoft',
+      provider: 'microsoft_teams',
       service: 'teams',
       capabilities: [
         'notification.send',
@@ -1338,7 +1338,7 @@ export class ConnectorRegistry {
       ],
       keywords: ['microsoft teams', 'teams', 'ms teams'],
       credentialContract: {
-        provider: 'microsoft',
+        provider: 'microsoft_teams',
         type: 'webhook',
         vaultKey: 'microsoft_teams',
         displayName: 'Microsoft Teams Webhook URL',

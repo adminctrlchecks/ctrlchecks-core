@@ -51,6 +51,11 @@ import { decryptToken } from '../core/utils/token-encryption';
 import { retrieveCredential } from '../core/utils/credential-retriever';
 import { readAcknowledgedHttpResponse } from '../core/http/acknowledged-response';
 import { connectionService } from '../credentials-system/connection-service';
+import {
+  findCanonicalConnection as findCanonicalCredentialConnection,
+  getDecryptedConnection as getCanonicalDecryptedConnection,
+  markConnectionUsed as markCanonicalConnectionUsed,
+} from '../services/canonical-credential-lookup';
 import { stripSystemKeys, stripRoutingMeta } from '../core/execution/system-key-filter';
 import { geminiWalletService } from '../services/ai/gemini-wallet-service';
 import { logger } from '../core/logger';
@@ -520,8 +525,8 @@ async function collectConnectionRefIdsWithFallback(
     // credential contract, including compatibility aliases such as Contentful -> Bearer Token.
     if (credentialTypeIds.length > 0) {
       for (const credentialTypeId of credentialTypeIds) {
-        const connection = await connectionService.findCanonicalConnection(ownerUserId, credentialTypeId);
-        if (connection) return [connection.id];
+        const connection = await findCanonicalCredentialConnection(ownerUserId, credentialTypeId);
+        if (connection) return [connection.connection.id];
       }
     }
   } catch {
@@ -572,6 +577,8 @@ function mergeRuntimeCredentials(config: Record<string, unknown>, credentials: R
     ['password', 'apiToken'],          // Jira: vault 'password' (API token) → node 'apiToken'
     ['domain', 'baseUrl'],             // Jira: vault 'domain' → node 'baseUrl' (https:// added at runtime)
     ['apiBaseUrl', 'baseUrl'],          // Mailgun: optional custom API base URL
+    ['projectUrl', 'url'],              // Supabase: connection project URL -> node URL
+    ['token', 'serviceRoleKey'],        // Supabase: service role token -> node service role key
   ];
   for (const [from, to] of aliases) {
     // Also treat '' as unset: schema defaults (apiKey: '', token: '') must not block injection
@@ -607,12 +614,12 @@ async function injectSelectedConnectionCredentials(params: {
   let nextConfig = { ...params.config };
   for (const connectionId of connectionIds) {
     try {
-      let connection: Awaited<ReturnType<typeof connectionService.getDecryptedConnection>> | null = null;
+      let connection: Awaited<ReturnType<typeof getCanonicalDecryptedConnection>> | null = null;
       let resolvedOwnerUserId = ownerUserId;
       let lastLookupError: unknown;
       for (const candidateUserId of ownerUserIds) {
         try {
-          connection = await connectionService.getDecryptedConnection(candidateUserId, connectionId);
+          connection = await getCanonicalDecryptedConnection(candidateUserId, connectionId);
           resolvedOwnerUserId = candidateUserId;
           break;
         } catch (error) {
@@ -622,17 +629,17 @@ async function injectSelectedConnectionCredentials(params: {
       if (!connection) {
         throw lastLookupError instanceof Error ? lastLookupError : new Error('Connection not found');
       }
-      if (acceptedCredentialTypes.size > 0 && !acceptedCredentialTypes.has(connection.credentialTypeId)) {
+      if (acceptedCredentialTypes.size > 0 && !acceptedCredentialTypes.has(connection.connection.credentialTypeId)) {
         return {
           config: nextConfig,
-          error: `Connection "${connection.name}" is a ${connection.credentialTypeId} credential, but this node requires ${Array.from(acceptedCredentialTypes).join(', ')}.`,
+          error: `Connection "${connection.connection.name}" is a ${connection.connection.credentialTypeId} credential, but this node requires ${Array.from(acceptedCredentialTypes).join(', ')}.`,
         };
       }
-      if (connection.status !== 'active') {
-        return { config: nextConfig, error: `Connection "${connection.name}" is not active. Please reconnect before executing this workflow.` };
+      if (connection.connection.status !== 'active') {
+        return { config: nextConfig, error: `Connection "${connection.connection.name}" is not active. Please reconnect before executing this workflow.` };
       }
-      nextConfig = mergeRuntimeCredentials(nextConfig, connection.credentials);
-      await connectionService.markUsed(resolvedOwnerUserId, connectionId);
+      nextConfig = mergeRuntimeCredentials(nextConfig, connection.connection.credentials);
+      await markCanonicalConnectionUsed(resolvedOwnerUserId, connection.connection.id, connection.source);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to resolve selected connection';
       // Stale/wrong ref — try auto-selecting the canonical connection for this node instead
@@ -649,12 +656,12 @@ async function injectSelectedConnectionCredentials(params: {
         let fallbackResolved = false;
         for (const fallbackCredentialTypeId of fallbackTypeIds) {
           for (const candidateUserId of ownerUserIds) {
-            const fallback = await connectionService.findCanonicalConnection(candidateUserId, fallbackCredentialTypeId);
+            const fallback = await findCanonicalCredentialConnection(candidateUserId, fallbackCredentialTypeId);
             if (fallback) {
-              const conn = await connectionService.getDecryptedConnection(candidateUserId, fallback.id);
-              if (conn.status === 'active') {
-                nextConfig = mergeRuntimeCredentials(nextConfig, conn.credentials);
-                await connectionService.markUsed(candidateUserId, fallback.id);
+              const conn = await getCanonicalDecryptedConnection(candidateUserId, fallback.connection.id);
+              if (conn?.connection.status === 'active') {
+                nextConfig = mergeRuntimeCredentials(nextConfig, conn.connection.credentials);
+                await markCanonicalConnectionUsed(candidateUserId, conn.connection.id, conn.source);
                 fallbackResolved = true;
                 break;
               }
@@ -695,7 +702,11 @@ async function resolveOpenAiApiKeyForNode(params: {
   }
 
   try {
-    const connection = await connectionService.getDecryptedConnection(ownerUserId, selectedConnectionId);
+    const lookup = await getCanonicalDecryptedConnection(ownerUserId, selectedConnectionId);
+    const connection = lookup?.connection;
+    if (!connection) {
+      return { error: 'Selected OpenAI connection is not available for this workflow owner: Connection not found' };
+    }
     if (connection.provider !== 'openai' || connection.credentialTypeId !== 'openai_api_key') {
       return { error: 'Selected connection is not an OpenAI API Key connection.' };
     }
@@ -710,7 +721,7 @@ async function resolveOpenAiApiKeyForNode(params: {
     if (!apiKey.trim()) {
       return { error: `OpenAI connection "${connection.name}" does not contain an API key.` };
     }
-    await connectionService.markUsed(ownerUserId, connection.id);
+    await markCanonicalConnectionUsed(ownerUserId, connection.id, lookup.source);
     return { apiKey: apiKey.trim() };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to resolve selected connection';
@@ -730,7 +741,11 @@ async function resolveGeminiApiKeyForNode(params: {
   // If the user selected a connection, use that key.
   if (selectedConnectionId && ownerUserId) {
     try {
-      const connection = await connectionService.getDecryptedConnection(ownerUserId, selectedConnectionId);
+      const lookup = await getCanonicalDecryptedConnection(ownerUserId, selectedConnectionId);
+      const connection = lookup?.connection;
+      if (!connection) {
+        return { error: 'Selected Gemini connection is not available: Connection not found' };
+      }
       if (connection.provider !== 'gemini' || connection.credentialTypeId !== 'gemini_api_key') {
         return { error: 'Selected connection is not a Gemini API Key connection.' };
       }
@@ -741,7 +756,7 @@ async function resolveGeminiApiKeyForNode(params: {
       if (!apiKey) {
         return { error: `Gemini connection "${connection.name}" does not contain an API key.` };
       }
-      await connectionService.markUsed(ownerUserId, connection.id);
+      await markCanonicalConnectionUsed(ownerUserId, connection.id, lookup.source);
       return { apiKey };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to resolve selected connection';

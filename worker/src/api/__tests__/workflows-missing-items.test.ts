@@ -69,6 +69,20 @@ function makeReadinessRow(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
+function makeSupabaseReadinessRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return makeReadinessRow({
+    nodeId: 'n-supabase',
+    nodeType: 'supabase',
+    nodeLabel: 'Query Supabase',
+    provider: 'supabase',
+    credentialTypeId: 'supabase_api_key',
+    authType: 'api_key',
+    requiredScopes: [],
+    source: 'credential_service',
+    ...overrides,
+  });
+}
+
 function mockDb(nodes: unknown[] = [{ id: 'n1', data: { type: 'google_gmail', label: 'Send Email' } }]) {
   getDbClient.mockReturnValue({
     auth: {
@@ -184,6 +198,74 @@ describe('getMissingItemsHandler', () => {
     expect(google.scopes).toContain(GMAIL_SEND);
     expect(body.connectionReadiness.missing[0].status).toBe('missing_scope');
     expect(body.display.summary.missingCredentialCount).toBe(2);
+  });
+
+  it('returns no missing Supabase credential when readiness finds an active credential-service connection', async () => {
+    mockDb([{ id: 'n-supabase', data: { type: 'supabase', label: 'Query Supabase' } }]);
+    getUnifiedMissingItems.mockResolvedValue({
+      credentials: [
+        {
+          provider: 'supabase',
+          type: 'api_key',
+          nodes: ['n-supabase'],
+          fields: ['projectUrl', 'token'],
+          displayName: 'Supabase',
+          vaultKey: 'supabase',
+          satisfied: false,
+        },
+      ],
+      inputs: [],
+      display: { summary: { missingCredentialCount: 1, missingInputCount: 0 }, inputsByNode: [] },
+    });
+    const readyRow = makeSupabaseReadinessRow({
+      status: 'ready',
+      connectionId: 'supabase-remote',
+      credentialId: 'supabase-remote',
+    });
+    getWorkflowConnectionReadiness.mockResolvedValue({
+      workflowId: 'wf-1',
+      ready: true,
+      rows: [readyRow],
+      missing: [],
+      summary: { requiredCount: 1, readyCount: 1, missingCount: 0, missingScopeCount: 0, expiredCount: 0 },
+    });
+
+    const res = makeRes();
+    await getMissingItemsHandler(makeReq(), res);
+
+    const body = res.json.mock.calls[0][0];
+    expect(body.credentials.find((c: any) => c.provider === 'supabase')?.satisfied).toBe(true);
+    expect(body.display.summary.missingCredentialCount).toBe(0);
+  });
+
+  it('returns a missing Supabase credential when readiness reports no active credential exists', async () => {
+    mockDb([{ id: 'n-supabase', data: { type: 'supabase', label: 'Query Supabase' } }]);
+    getUnifiedMissingItems.mockResolvedValue({
+      credentials: [],
+      inputs: [],
+      display: { summary: { missingCredentialCount: 0, missingInputCount: 0 }, inputsByNode: [] },
+    });
+    const missingRow = makeSupabaseReadinessRow({
+      status: 'missing',
+      source: 'unified_credentials',
+      reason: 'No active supabase credential found for the required permission(s).',
+    });
+    getWorkflowConnectionReadiness.mockResolvedValue({
+      workflowId: 'wf-1',
+      ready: false,
+      rows: [missingRow],
+      missing: [missingRow],
+      summary: { requiredCount: 1, readyCount: 0, missingCount: 1, missingScopeCount: 0, expiredCount: 0 },
+    });
+
+    const res = makeRes();
+    await getMissingItemsHandler(makeReq(), res);
+
+    const body = res.json.mock.calls[0][0];
+    const supabase = body.credentials.find((c: any) => c.provider === 'supabase');
+    expect(supabase.satisfied).toBe(false);
+    expect(supabase.nodes).toEqual(['n-supabase']);
+    expect(body.display.summary.missingCredentialCount).toBe(1);
   });
 
   it('falls back to discovery-only results when readiness fails', async () => {

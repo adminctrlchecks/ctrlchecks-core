@@ -1,8 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { randomUUID } from 'crypto';
 import { queryDb } from '../lib/db';
-import { encryptJson, decryptJson, maskSecrets } from '../lib/crypto';
-import { extractUserId } from '../middleware/auth';
+import { encryptJson, decryptJson } from '../lib/crypto';
+import { extractUserId, requireServiceKey } from '../middleware/auth';
 
 const router = Router();
 
@@ -173,6 +173,51 @@ router.get('/:provider', async (req: Request, res: Response) => {
       code: 'DB_ERROR',
       ref: req.requestId,
     });
+  }
+});
+
+// ── GET /connections/:id/decrypted ───────────────────────────────────────────
+// Internal worker runtime endpoint. Normal connection metadata routes never
+// return secret material; this route is service-key-only so execution can use
+// credentials saved in the remote store without diverging from readiness.
+
+router.get('/:id/decrypted', requireServiceKey, async (req: Request, res: Response) => {
+  const uid = extractUserId(req);
+  if (!uid) {
+    return res.status(401).json({
+      error: 'Unauthorized',
+      code: 'USER_ID_REQUIRED',
+      ref: req.requestId,
+    });
+  }
+
+  const { id } = req.params;
+
+  try {
+    const rows = await queryDb(
+      `SELECT id, user_id, name, credential_type_id, provider, auth_type, encrypted_credentials,
+              status, metadata, expires_at, last_tested_at, last_used_at, created_at, updated_at
+       FROM connections
+       WHERE id = $1
+         AND user_id = $2
+         AND status <> 'revoked'
+       LIMIT 1`,
+      [id, uid],
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Not Found', code: 'CONNECTION_NOT_FOUND', ref: req.requestId });
+    }
+
+    return res.json({
+      connection: {
+        ...mapRow(rows[0]),
+        credentials: decryptJson(rows[0].encrypted_credentials),
+      },
+    });
+  } catch (err: any) {
+    console.error(`[${req.requestId}] [connections] decrypted-by-id error:`, err?.message);
+    return res.status(503).json({ error: 'Service Unavailable', code: 'DB_ERROR', ref: req.requestId });
   }
 });
 

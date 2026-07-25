@@ -63,7 +63,11 @@ import {
 import { config as runtimeConfig } from '../config';
 import { verifyAndRepairNodeOutput } from '../../services/ai/ai-output-verifier';
 import { Sentry } from '../sentry';
-import { connectionService } from '../../credentials-system/connection-service';
+import {
+  findCanonicalConnection,
+  getDecryptedConnection,
+  markConnectionUsed,
+} from '../../services/canonical-credential-lookup';
 
 /** Stable nodeOutputs cache keys — see `worker/docs/OBSERVABILITY_CONTRACT.md`. */
 export const EXECUTION_OBSERVABILITY_KEYS = {
@@ -251,9 +255,9 @@ async function injectDynamicConnectionCredentials(params: {
   if (connectionIds.length === 0 && ownerUserIds.length > 0 && acceptedCredentialTypeIds.length > 0) {
     for (const ownerUserId of ownerUserIds) {
       for (const credentialTypeId of acceptedCredentialTypeIds) {
-        const canonical = await connectionService.findCanonicalConnection(ownerUserId, credentialTypeId).catch(() => null);
+        const canonical = await findCanonicalConnection(ownerUserId, credentialTypeId).catch(() => null);
         if (canonical) {
-          connectionIds = [canonical.id];
+          connectionIds = [canonical.connection.id];
           break;
         }
       }
@@ -276,7 +280,12 @@ async function injectDynamicConnectionCredentials(params: {
 
     for (const ownerUserId of ownerUserIds) {
       try {
-        const connection = await connectionService.getDecryptedConnection(ownerUserId, connectionId);
+        const lookup = await getDecryptedConnection(ownerUserId, connectionId);
+        const connection = lookup?.connection;
+        if (!connection) {
+          lastMessage = 'Connection not found';
+          continue;
+        }
         if (
           acceptedCredentialTypeIds.length > 0 &&
           !acceptedCredentialTypeIds.includes(connection.credentialTypeId)
@@ -289,7 +298,7 @@ async function injectDynamicConnectionCredentials(params: {
           continue;
         }
         nextConfig = mergeConnectionCredentialsIntoConfig(nextConfig, connection.credentials);
-        await connectionService.markUsed(ownerUserId, connection.id);
+        await markConnectionUsed(ownerUserId, connection.id, lookup.source);
         resolved = true;
         break;
       } catch (error) {

@@ -212,6 +212,13 @@ describe('credential-service-client — CRUD methods disabled (flag off)', () =>
     expect(result).toBeNull();
     expect(mockFetch).not.toHaveBeenCalled();
   });
+
+  it('getDecryptedConnectionRemote returns null without fetching', async () => {
+    const { getDecryptedConnectionRemote } = await import('../credential-service-client');
+    const result = await getDecryptedConnectionRemote('u1', 'conn-id');
+    expect(result).toBeNull();
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
 });
 
 describe('credential-service-client — CRUD methods ENABLED=true, CANARY=100', () => {
@@ -299,6 +306,18 @@ describe('credential-service-client — CRUD methods ENABLED=true, CANARY=100', 
     const { getConnectionByProviderRemote } = await import('../credential-service-client');
     const result = await getConnectionByProviderRemote('user-crud', 'nonexistent');
     expect(result).toBeNull();
+  });
+
+  it('getDecryptedConnectionRemote GETs /connections/:id/decrypted and returns credentials for runtime', async () => {
+    const decrypted = { ...CONN_ROW, credentials: { token: 'secret-token' } };
+    mockFetch.mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve({ connection: decrypted }) });
+    const { getDecryptedConnectionRemote } = await import('../credential-service-client');
+    const result = await getDecryptedConnectionRemote('user-crud', 'c-uuid-1');
+    expect(result).toEqual(decrypted);
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://localhost:3004/connections/c-uuid-1/decrypted',
+      expect.objectContaining({ method: 'GET' }),
+    );
   });
 
   // ── updateConnectionRemote ──

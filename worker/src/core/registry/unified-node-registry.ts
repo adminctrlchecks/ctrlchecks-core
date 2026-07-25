@@ -1253,6 +1253,7 @@ export class UnifiedNodeRegistry implements INodeRegistry {
     discord:         { credentialTypeId: 'discord_bot_token',    label: 'Discord Bot Token',        authType: 'bearer_token' },
     discord_trigger: { credentialTypeId: 'discord_bot_token',    label: 'Discord Bot Token',        authType: 'bearer_token' },
     discord_webhook: { credentialTypeId: 'discord_webhook',      label: 'Discord Webhook URL',      authType: 'api_key' },
+    microsoft_teams: { credentialTypeId: 'microsoft_teams_webhook', label: 'Microsoft Teams Webhook URL', authType: 'api_key' },
     microsoft_teams_trigger: { credentialTypeId: 'microsoft_teams_bot', label: 'Microsoft Teams Bot', authType: 'api_key' },
     gmail_trigger: { credentialTypeId: 'google_oauth2', label: 'Google OAuth2', authType: 'oauth2' },
     outlook_trigger: { credentialTypeId: 'microsoft_oauth2', label: 'Microsoft OAuth2', authType: 'oauth2' },

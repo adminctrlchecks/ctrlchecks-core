@@ -8,9 +8,23 @@ jest.mock('../../../services/credential-vault', () => ({
   getCredentialVault: jest.fn(),
 }));
 
+jest.mock('../../../services/canonical-credential-lookup', () => ({
+  findCanonicalConnection: jest.fn(),
+  findCanonicalConnectionByProvider: jest.fn(),
+  getDecryptedConnection: jest.fn(),
+}));
+
 import { getCredentialVault } from '../../../services/credential-vault';
+import {
+  findCanonicalConnection,
+  findCanonicalConnectionByProvider,
+  getDecryptedConnection,
+} from '../../../services/canonical-credential-lookup';
 
 const mockGetCredentialVault = getCredentialVault as jest.Mock;
+const mockFindCanonicalConnection = findCanonicalConnection as jest.Mock;
+const mockFindCanonicalConnectionByProvider = findCanonicalConnectionByProvider as jest.Mock;
+const mockGetDecryptedConnection = getDecryptedConnection as jest.Mock;
 
 const makeVault = (overrides: Record<string, jest.Mock> = {}) => ({
   retrieve: jest.fn(),
@@ -23,6 +37,9 @@ const ctx = { userId: 'user-1', workflowId: 'wf-1', nodeId: 'node-1', nodeType: 
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockFindCanonicalConnection.mockResolvedValue(null);
+  mockFindCanonicalConnectionByProvider.mockResolvedValue(null);
+  mockGetDecryptedConnection.mockResolvedValue(null);
 });
 
 // ─── retrieveCredential ───────────────────────────────────────────────────────
@@ -50,6 +67,35 @@ describe('retrieveCredential', () => {
 
     const result = await retrieveCredential(ctx, 'missing_key');
     expect(result).toBeNull();
+  });
+
+  it('retrieves Supabase credentials from the canonical remote connection source', async () => {
+    const vault = makeVault({ retrieve: jest.fn().mockResolvedValue(null) });
+    mockGetCredentialVault.mockReturnValue(vault);
+    mockFindCanonicalConnection.mockResolvedValue({
+      connection: { id: 'supabase-remote', credentialTypeId: 'supabase_api_key', provider: 'supabase' },
+      source: 'credential_service',
+    });
+    mockGetDecryptedConnection.mockResolvedValue({
+      source: 'credential_service',
+      connection: {
+        id: 'supabase-remote',
+        credentialTypeId: 'supabase_api_key',
+        provider: 'supabase',
+        credentials: {
+          projectUrl: 'https://project.supabase.co',
+          token: 'service-role-key',
+        },
+      },
+    });
+
+    const result = await retrieveCredential(ctx, 'supabase');
+
+    expect(JSON.parse(result || '{}')).toEqual({
+      projectUrl: 'https://project.supabase.co',
+      token: 'service-role-key',
+    });
+    expect(mockGetDecryptedConnection).toHaveBeenCalledWith('user-1', 'supabase-remote');
   });
 
   it('returns null and logs when vault.retrieve throws an Error', async () => {

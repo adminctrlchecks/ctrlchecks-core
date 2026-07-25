@@ -1104,6 +1104,27 @@ export const credentialTypeDefinitions: CredentialTypeDefinition[] = addCredenti
 
   // ─── Discord ─────────────────────────────────────────────────────────────────
   {
+    id: 'microsoft_teams_webhook',
+    provider: 'microsoft_teams',
+    displayName: 'Microsoft Teams Webhook URL',
+    authType: 'api_key',
+    inputFields: [
+      {
+        name: 'webhookUrl',
+        label: 'Webhook URL',
+        type: 'url',
+        required: true,
+        secret: true,
+        helpText: 'Create an incoming webhook in the Teams channel workflow or connector settings.',
+      },
+    ],
+    form: { layout: 'stacked', submitLabel: 'Save Webhook', testLabel: 'Test Teams Webhook' },
+    validation: { requiredFields: ['webhookUrl'] },
+    injection: [],
+    refresh: { enabled: false, refreshBeforeSeconds: 0 },
+    maskFields: ['webhookUrl'],
+  },
+  {
     id: 'microsoft_teams_bot',
     provider: 'microsoft_teams',
     displayName: 'Microsoft Teams Bot',
