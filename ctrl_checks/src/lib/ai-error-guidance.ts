@@ -52,6 +52,20 @@ export interface AIGuidanceWorkflowContext {
   }>;
 }
 
+function hasStructuredReadinessDetails(details: unknown): boolean {
+  if (!details || typeof details !== 'object' || Array.isArray(details)) return false;
+  const record = details as Record<string, unknown>;
+  return [
+    record.readinessIssues,
+    record.missingInputs,
+    record.missingCredentials,
+    record.invalidInputs,
+    record.runtimeValidationIssues,
+    record.groupedIssues,
+    record.issues,
+  ].some((value) => Array.isArray(value) && value.length > 0);
+}
+
 /**
  * Fetches AI-generated guidance from the backend.
  * Falls back to static rule-based guidance on any failure.
@@ -60,6 +74,10 @@ export async function getAIGuidance(
   errorData: AIGuidanceErrorData,
   workflowContext?: AIGuidanceWorkflowContext
 ): Promise<GuidedStatusContent> {
+  if (hasStructuredReadinessDetails(errorData.details)) {
+    return mapWorkflowIssueToGuidance(errorData);
+  }
+
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);

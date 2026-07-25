@@ -25,8 +25,21 @@ jest.mock('../../services/ai/credential-discovery-phase', () => ({
   },
 }));
 
-jest.mock('../../services/execution-preflight', () => ({
-  executionPreflight: jest.fn(),
+jest.mock('../../core/readiness/workflow-readiness-aggregator', () => ({
+  buildWorkflowReadinessEnvelope: jest.fn(),
+  workflowReadinessResponseFields: jest.fn((readiness: any) => ({
+    ready: readiness.ready,
+    workflowId: readiness.workflowId,
+    summary: readiness.summary,
+    readinessIssues: readiness.readinessIssues,
+    missingInputs: readiness.missingInputs,
+    missingCredentials: readiness.missingCredentials,
+    invalidInputs: readiness.invalidInputs,
+    runtimeValidationIssues: readiness.runtimeValidationIssues,
+    issues: readiness.issues,
+    groupedIssues: readiness.groupedIssues,
+    connectionReadiness: readiness.connectionReadiness,
+  })),
 }));
 
 jest.mock('../workflow-setup-lifecycle', () => ({
@@ -51,29 +64,9 @@ const { credentialDiscoveryPhase } = jest.requireMock('../../services/ai/credent
     discoverCredentials: jest.Mock;
   };
 };
-const { executionPreflight } = jest.requireMock('../../services/execution-preflight') as {
-  executionPreflight: jest.Mock;
+const { buildWorkflowReadinessEnvelope } = jest.requireMock('../../core/readiness/workflow-readiness-aggregator') as {
+  buildWorkflowReadinessEnvelope: jest.Mock;
 };
-
-function supabaseNode(
-  id: string,
-  label: string,
-  config: Record<string, unknown>,
-  connectionRefs?: Record<string, string>,
-) {
-  return {
-    id,
-    type: 'custom',
-    position: { x: 0, y: 0 },
-    data: {
-      type: 'supabase',
-      label,
-      category: 'database',
-      config,
-      ...(connectionRefs ? { connectionRefs } : {}),
-    },
-  };
-}
 
 function workflowNode(
   id: string,
@@ -93,7 +86,7 @@ function workflowNode(
   };
 }
 
-function workflow(nodes: any[]) {
+function workflow(nodes: any[], overrides: Record<string, unknown> = {}) {
   return {
     id: 'workflow-1',
     user_id: 'user-1',
@@ -102,6 +95,60 @@ function workflow(nodes: any[]) {
     phase: 'ready_for_execution',
     nodes,
     edges: [],
+    ...overrides,
+  };
+}
+
+function readiness(overrides: Record<string, unknown> = {}) {
+  const readinessIssues = (overrides.readinessIssues as any[]) || [];
+  const missingInputs = readinessIssues.filter((issue) => issue.kind === 'missing_input' || issue.kind === 'invalid_input');
+  const missingCredentials = readinessIssues.filter((issue) => issue.kind === 'missing_credential');
+  const invalidInputs = readinessIssues.filter((issue) => issue.kind === 'invalid_input');
+  const runtimeValidationIssues = [...missingInputs, ...invalidInputs];
+  const issues = Array.from(new Set(readinessIssues.map((issue) => issue.nodeId))).map((nodeId) => ({
+    nodeId,
+    nodeLabel: readinessIssues.find((issue) => issue.nodeId === nodeId)?.nodeLabel,
+    nodeType: readinessIssues.find((issue) => issue.nodeId === nodeId)?.nodeType,
+    missingFields: readinessIssues
+      .filter((issue) => issue.nodeId === nodeId)
+      .map((issue) => ({
+        fieldName: issue.fieldKey || issue.provider || 'connection',
+        fieldKey: issue.fieldKey || 'connection',
+        friendlyLabel: issue.fieldLabel || issue.provider || 'Connection',
+        fieldLabel: issue.fieldLabel || issue.provider || 'Connection',
+        description: issue.reason || issue.message || '',
+      })),
+  }));
+  return {
+    ready: readinessIssues.length === 0,
+    workflowId: 'workflow-1',
+    code: readinessIssues.some((issue) => issue.kind === 'missing_credential') && missingInputs.length > 0
+      ? 'EXECUTION_NOT_READY'
+      : readinessIssues.some((issue) => issue.kind === 'missing_credential')
+        ? 'EXECUTION_MISSING_CREDENTIALS'
+        : readinessIssues.length > 0
+          ? 'EXECUTION_MISSING_INPUTS'
+          : null,
+    readinessIssues,
+    missingInputs,
+    missingCredentials,
+    invalidInputs,
+    runtimeValidationIssues,
+    missingInputsCount: missingInputs.length,
+    missingCredentialsCount: missingCredentials.length,
+    invalidInputsCount: invalidInputs.length,
+    issues,
+    groupedIssues: issues,
+    summary: {
+      totalNodes: 0,
+      checkedNodes: 0,
+      issueCount: readinessIssues.length,
+      missingInputCount: missingInputs.length,
+      missingCredentialCount: missingCredentials.length,
+      invalidInputCount: invalidInputs.length,
+      runtimeValidationIssueCount: runtimeValidationIssues.length,
+    },
+    ...overrides,
   };
 }
 
@@ -144,7 +191,7 @@ async function run(workflowRow: any) {
   return { status, json, body: json.mock.calls[0]?.[0] };
 }
 
-describe('distributedExecuteWorkflow readiness contract', () => {
+describe('distributedExecuteWorkflow canonical workflow readiness contract', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     workflowLifecycleManager.validateExecutionReady.mockResolvedValue({
@@ -162,225 +209,117 @@ describe('distributedExecuteWorkflow readiness contract', () => {
       errors: [],
       warnings: [],
     });
-    executionPreflight.mockResolvedValue({ ok: true, failures: [] });
+    buildWorkflowReadinessEnvelope.mockResolvedValue(readiness());
   });
 
-  it('returns missing Supabase Insert data, not credentials, when a saved connection is active', async () => {
-    credentialDiscoveryPhase.discoverCredentials.mockResolvedValue({
-      requiredCredentials: [{
-        provider: 'supabase',
-        type: 'api_key',
-        vaultKey: 'supabase',
-        displayName: 'Supabase',
-        required: true,
-        satisfied: true,
-        nodeIds: ['supabase-1'],
-        nodeTypes: ['supabase'],
-      }],
-      satisfiedCredentials: [{
-        provider: 'supabase',
-        type: 'api_key',
-        vaultKey: 'supabase',
-        displayName: 'Supabase',
-        required: true,
-        satisfied: true,
-        nodeIds: ['supabase-1'],
-        nodeTypes: ['supabase'],
-      }],
-      missingCredentials: [],
-      allDiscovered: true,
-      errors: [],
-      warnings: [],
-    });
-    executionPreflight.mockResolvedValue({
-      ok: false,
-      failures: [{
-        nodeId: 'supabase-1',
-        nodeName: 'Supabase',
-        nodeType: 'supabase',
-        provider: 'supabase',
-        requiredScopes: [],
-        error: { message: 'Supabase is not connected' },
-      }],
-    });
-    const row = workflow([
-      supabaseNode(
-        'supabase-1',
-        'Supabase',
-        { operation: 'insert', table: 'users' },
-        { supabase_api_key: 'conn-active' },
-      ),
-    ]);
-
-    const { status, body } = await run(row);
-
-    expect(status).toHaveBeenCalledWith(400);
-    expect(body.code).toBe('EXECUTION_MISSING_INPUTS');
-    expect(body.details.readinessIssues).toHaveLength(1);
-    expect(body.details.readinessIssues[0]).toMatchObject({
-      kind: 'missing_input',
-      nodeId: 'supabase-1',
-      nodeType: 'supabase',
-      operation: 'insert',
-      operationLabel: 'Insert',
-      fieldKey: 'data',
-      fieldLabel: 'Data',
-    });
-    expect(body.details.missingCredentials).toEqual([]);
-    expect(body.details.executionPreflightMissingCredentials).toEqual([]);
-    expect(body.details.executionPreflightIgnoredCredentialsCount).toBe(1);
-  });
-
-  it('returns canonical credential guidance when the connection is truly missing', async () => {
-    credentialDiscoveryPhase.discoverCredentials.mockResolvedValue({
-      requiredCredentials: [],
-      satisfiedCredentials: [],
-      missingCredentials: [{
-        provider: 'supabase',
-        type: 'api_key',
-        vaultKey: 'supabase',
-        displayName: 'Supabase',
-        required: true,
-        satisfied: false,
-        nodeIds: ['supabase-1'],
-        nodeTypes: ['supabase'],
-      }],
-      allDiscovered: true,
-      errors: [],
-      warnings: [],
-    });
-    const row = workflow([
-      supabaseNode('supabase-1', 'Supabase', {
-        operation: 'insert',
-        table: 'users',
-        data: { name: 'Ada' },
-      }),
-    ]);
-
-    const { status, body } = await run(row);
-
-    expect(status).toHaveBeenCalledWith(400);
-    expect(body.code).toBe('EXECUTION_MISSING_CREDENTIALS');
-    expect(body.details.readinessIssues).toHaveLength(1);
-    expect(body.details.readinessIssues[0]).toMatchObject({
-      kind: 'missing_credential',
-      nodeId: 'supabase-1',
-      provider: 'supabase',
-    });
-    expect(body.details.missingInputs).toEqual([]);
-  });
-
-  it('includes both field and credential blockers without credential-first masking', async () => {
-    credentialDiscoveryPhase.discoverCredentials.mockResolvedValue({
-      requiredCredentials: [],
-      satisfiedCredentials: [],
-      missingCredentials: [{
-        provider: 'supabase',
-        type: 'api_key',
-        vaultKey: 'supabase',
-        displayName: 'Supabase',
-        required: true,
-        satisfied: false,
-        nodeIds: ['supabase-1'],
-        nodeTypes: ['supabase'],
-      }],
-      allDiscovered: true,
-      errors: [],
-      warnings: [],
-    });
-    const row = workflow([
-      supabaseNode('supabase-1', 'Supabase', { operation: 'insert', table: 'users' }),
-    ]);
-
-    const { body } = await run(row);
-
-    expect(body.code).toBe('EXECUTION_NOT_READY');
-    expect(body.details.readinessIssues.some((issue: any) => issue.kind === 'missing_input')).toBe(true);
-    expect(body.details.readinessIssues.some((issue: any) => issue.kind === 'missing_credential')).toBe(true);
-  });
-
-  it('lists every missing operation-aware field across nodes', async () => {
-    const row = workflow([
-      supabaseNode('supabase-1', 'Insert User', { operation: 'insert', table: 'users' }),
-      supabaseNode('supabase-2', 'Insert Order', { operation: 'insert', table: 'orders' }),
-    ]);
-
-    const { body } = await run(row);
-
-    expect(body.code).toBe('EXECUTION_MISSING_INPUTS');
-    expect(body.details.readinessIssues).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ nodeId: 'supabase-1', fieldKey: 'data', operation: 'insert' }),
-        expect.objectContaining({ nodeId: 'supabase-2', fieldKey: 'data', operation: 'insert' }),
-      ]),
-    );
-    expect(body.details.issues).toHaveLength(2);
-  });
-
-  it('suppresses same-node preflight credential fallbacks for any node with concrete field blockers', async () => {
-    executionPreflight.mockResolvedValue({
-      ok: false,
-      failures: [{
-        nodeId: 'slack-1',
-        nodeName: 'Slack Message',
-        nodeType: 'slack_message',
-        provider: 'slack',
-        requiredScopes: ['chat:write'],
-        error: { message: 'Slack is not connected' },
-      }],
-    });
-    const row = workflow([
-      workflowNode('slack-1', 'slack_message', 'Slack Message', {
-        channel: '#alerts',
-      }),
-    ]);
-
-    const { body } = await run(row);
-
-    expect(body.code).toBe('EXECUTION_MISSING_INPUTS');
-    expect(body.details.readinessIssues).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
+  it('returns every operation-aware missing field across the workflow', async () => {
+    buildWorkflowReadinessEnvelope.mockResolvedValue(readiness({
+      readinessIssues: [
+        {
           kind: 'missing_input',
-          nodeId: 'slack-1',
-          nodeType: 'slack_message',
+          code: 'NODE_MISSING_INPUT',
+          nodeId: 'node-1',
+          nodeType: 'service_action',
+          nodeLabel: 'Create Record',
+          operation: 'create',
+          operationLabel: 'Create',
+          fieldKey: 'payload',
+          fieldLabel: 'Payload',
+          message: 'Payload is required for Create.',
+        },
+        {
+          kind: 'missing_input',
+          code: 'NODE_MISSING_INPUT',
+          nodeId: 'node-2',
+          nodeType: 'message_action',
+          nodeLabel: 'Send Message',
+          operation: 'send',
+          operationLabel: 'Send',
           fieldKey: 'message',
-        }),
+          fieldLabel: 'Message',
+          message: 'Message is required for Send.',
+        },
+      ],
+    }));
+
+    const { status, body } = await run(workflow([
+      workflowNode('node-1', 'service_action', 'Create Record', { operation: 'create' }),
+      workflowNode('node-2', 'message_action', 'Send Message', { operation: 'send' }),
+    ]));
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(body.code).toBe('EXECUTION_MISSING_INPUTS');
+    expect(body.readinessIssues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ nodeId: 'node-1', operationLabel: 'Create', fieldLabel: 'Payload' }),
+        expect.objectContaining({ nodeId: 'node-2', operationLabel: 'Send', fieldLabel: 'Message' }),
       ]),
     );
+    expect(body.details.groupedIssues).toHaveLength(2);
     expect(body.details.missingCredentials).toEqual([]);
-    expect(body.details.executionPreflightMissingCredentials).toEqual([]);
-    expect(body.details.executionPreflightIgnoredCredentialsCount).toBe(1);
   });
 
-  it('merges executionPreflight credential failures into canonical readiness details when no concrete field blocker exists', async () => {
-    executionPreflight.mockResolvedValue({
-      ok: false,
-      failures: [{
-        nodeId: 'supabase-1',
-        nodeName: 'Supabase',
-        nodeType: 'supabase',
-        provider: 'supabase',
-        requiredScopes: [],
-        error: { message: 'Supabase is not connected' },
+  it('returns missing connection guidance only when the canonical issue is credential-related', async () => {
+    buildWorkflowReadinessEnvelope.mockResolvedValue(readiness({
+      readinessIssues: [{
+        kind: 'missing_credential',
+        code: 'NODE_MISSING_CREDENTIAL',
+        nodeId: 'node-1',
+        nodeType: 'service_action',
+        nodeLabel: 'Create Record',
+        operation: 'create',
+        operationLabel: 'Create',
+        provider: 'external',
+        credentialType: 'oauth2',
+        status: 'missing',
+        action: 'connect',
+        message: 'Create Record needs External OAuth.',
+        reason: 'No active connection was found.',
       }],
-    });
-    const row = workflow([
-      supabaseNode('supabase-1', 'Supabase', {
-        operation: 'insert',
-        table: 'users',
-        data: { name: 'Ada' },
-      }),
-    ]);
+    }));
 
-    const { body } = await run(row);
+    const { status, body } = await run(workflow([
+      workflowNode('node-1', 'service_action', 'Create Record', { operation: 'create', payload: {} }),
+    ]));
 
+    expect(status).toHaveBeenCalledWith(400);
     expect(body.code).toBe('EXECUTION_MISSING_CREDENTIALS');
-    expect(body.details.readinessIssues).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ kind: 'missing_credential', provider: 'supabase' }),
-      ]),
-    );
-    expect(body.details.executionPreflightMissingCredentials).toHaveLength(1);
+    expect(body.missingInputs).toEqual([]);
+    expect(body.missingCredentials[0]).toMatchObject({
+      nodeId: 'node-1',
+      provider: 'external',
+      status: 'missing',
+      action: 'connect',
+    });
+  });
+
+  it('does not overwrite field blockers with generic credential guidance while phase is not ready', async () => {
+    buildWorkflowReadinessEnvelope.mockResolvedValue(readiness({
+      readinessIssues: [{
+        kind: 'missing_input',
+        code: 'NODE_MISSING_INPUT',
+        nodeId: 'node-1',
+        nodeType: 'message_action',
+        nodeLabel: 'Send Message',
+        operation: 'send',
+        operationLabel: 'Send',
+        fieldKey: 'message',
+        fieldLabel: 'Message',
+        message: 'Message is required for Send.',
+      }],
+    }));
+
+    const { status, body } = await run(workflow([
+      workflowNode('node-1', 'message_action', 'Send Message', { operation: 'send' }),
+    ], { phase: 'draft', status: 'draft' }));
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(body.code).toBe('EXECUTION_MISSING_INPUTS');
+    expect(body.message).toContain('Send Message.Message');
+    expect(body.missingCredentials).toEqual([]);
+    expect(body.details.readinessIssues[0]).toMatchObject({
+      nodeId: 'node-1',
+      fieldLabel: 'Message',
+    });
   });
 });

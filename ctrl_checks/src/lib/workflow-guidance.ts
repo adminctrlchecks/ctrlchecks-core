@@ -96,7 +96,12 @@ function formatReadinessIssue(value: unknown): string | null {
   const operation = getString(item.operationLabel) || getString(item.operation);
   const reason = getString(item.helpText) || getString(item.reason) || getString(item.description) || getString(item.message);
 
-  if (!fieldName) return formatCredential(value);
+  if (!fieldName) {
+    const credential = formatCredential(value);
+    return reason && credential && !reason.toLowerCase().includes(credential.toLowerCase())
+      ? `${credential} - ${reason}`
+      : credential;
+  }
   const fieldLabel = humanizeKey(fieldName);
   const prefix = nodeLabel ? `${fieldLabel} for ${nodeLabel}` : fieldLabel;
   const withOperation = operation ? `${prefix} (${humanizeKey(operation)})` : prefix;
@@ -209,8 +214,10 @@ function extractMissingInputs(details: Record<string, unknown>): string[] {
   const readinessInputs = readinessIssues
     ? readinessIssues.filter((issue) =>
         issue && typeof issue === 'object' &&
-        ((issue as Record<string, unknown>).kind === 'missing_input' ||
-          (issue as Record<string, unknown>).kind === 'invalid_input')
+        (((issue as Record<string, unknown>).kind === 'missing_input' ||
+          (issue as Record<string, unknown>).kind === 'invalid_input') ||
+          ((issue as Record<string, unknown>).category === 'missing_input' ||
+            (issue as Record<string, unknown>).category === 'invalid_input'))
       )
     : [];
   const readinessItems = readinessInputs
@@ -257,7 +264,16 @@ function extractMissingCredentials(details: Record<string, unknown>): string[] {
   const readinessIssues = Array.isArray(details.readinessIssues) ? details.readinessIssues : null;
   const readinessCredentials = readinessIssues
     ? readinessIssues.filter((issue) =>
-        issue && typeof issue === 'object' && (issue as Record<string, unknown>).kind === 'missing_credential'
+        issue && typeof issue === 'object' &&
+        ((issue as Record<string, unknown>).kind === 'missing_credential' ||
+          [
+            'missing_credential',
+            'invalid_connection_ref',
+            'runtime_credential_missing',
+            'permission_missing',
+            'connection_expired',
+            'connection_revoked',
+          ].includes(getString((issue as Record<string, unknown>).category)))
       )
     : [];
   const readinessItems = readinessCredentials

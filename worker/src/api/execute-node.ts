@@ -9,15 +9,12 @@ import { LRUNodeOutputsCache } from '../core/cache/lru-node-outputs-cache';
 import { logger } from '../core/logger';
 import { buildRuntimeValidationGuidance } from '../core/utils/runtime-validation-guidance';
 import {
-  buildReadinessDetails,
-  buildWorkflowReadinessIssues,
   readinessErrorCode,
-  type CredentialReadinessInput,
 } from '../core/readiness/node-readiness-resolver';
 import {
-  getWorkflowConnectionReadiness,
-  type ConnectionReadinessRow,
-} from '../services/workflow-connection-readiness';
+  buildWorkflowReadinessEnvelope,
+  workflowReadinessResponseFields,
+} from '../core/readiness/workflow-readiness-aggregator';
 
 // WorkflowNode interface must match execute-workflow.ts
 interface WorkflowNode {
@@ -29,36 +26,6 @@ interface WorkflowNode {
     category: string;
     config: Record<string, unknown>;
   };
-}
-
-function canonicalRowsToCredentialInputs(rows: ConnectionReadinessRow[]): CredentialReadinessInput[] {
-  return rows
-    .filter((row) => row.status !== 'ready')
-    .map((row) => ({
-      provider: row.provider,
-      type: row.authType,
-      displayName: row.credentialLabel || row.providerLabel,
-      required: true,
-      satisfied: false,
-      nodeId: row.nodeId,
-      nodeIds: [row.nodeId],
-      nodeType: row.nodeType,
-      nodeTypes: [row.nodeType],
-      nodeLabel: row.nodeLabel,
-      operation: row.operation,
-      operationLabel: row.operationLabel,
-      scopes: row.requiredScopes,
-      requiredScopes: row.requiredScopes,
-      availableScopes: row.availableScopes,
-      credentialId: row.credentialTypeId,
-      connectionId: row.connectionId,
-      connectionName: row.connectionName,
-      status: row.status,
-      action: row.action,
-      simpleDescription: row.reason,
-      technicalDescription: row.reason,
-      howToObtain: row.reason,
-    }));
 }
 
 /**
@@ -191,35 +158,24 @@ export default async function executeNodeHandler(req: Request, res: Response) {
     }
 
     // ✅ PRE-EXECUTION: Validate this node's config before running
-    const connectionReadiness = await getWorkflowConnectionReadiness({
+    const readiness = await buildWorkflowReadinessEnvelope({
       workflowId,
       userId: currentUserId || userId,
       nodes: [node as any],
-      includeSatisfied: true,
+      includeSatisfiedConnections: true,
     });
-    const readinessDetails = buildReadinessDetails(
-      buildWorkflowReadinessIssues({
-        nodes: [node as any],
-        credentials: canonicalRowsToCredentialInputs(connectionReadiness.missing),
-      })
-    );
-    if (readinessDetails.readinessIssues.length > 0) {
+    const readinessFields = workflowReadinessResponseFields(readiness);
+    if (readiness.readinessIssues.length > 0) {
       return res.status(400).json({
         success: false,
-        code: readinessErrorCode(readinessDetails.readinessIssues),
+        code: readinessErrorCode(readiness.readinessIssues),
         error: 'Node is not ready to run',
         message: `This node needs configuration before it can run.`,
         hint: 'Open the Properties panel and complete the highlighted connection or required fields.',
         details: {
-          ...readinessDetails,
-          connectionReadiness,
+          ...readinessFields,
         },
-        readinessIssues: readinessDetails.readinessIssues,
-        missingInputs: readinessDetails.missingInputs,
-        missingCredentials: readinessDetails.missingCredentials,
-        invalidInputs: readinessDetails.invalidInputs,
-        runtimeValidationIssues: readinessDetails.runtimeValidationIssues,
-        issues: readinessDetails.issues,
+        ...readinessFields,
         executionTime: Date.now() - startTime,
         nodeId,
         nodeType,

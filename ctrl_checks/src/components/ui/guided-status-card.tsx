@@ -108,9 +108,12 @@ export function GuidedStatusCard({
             </div>
           )}
           {details && (
-            <p className="rounded-md bg-muted/30 px-2 py-1.5 text-[11px] leading-relaxed text-muted-foreground/85 break-words">
-              Details: {details}
-            </p>
+            <details className="rounded-md bg-muted/30 px-2 py-1.5 text-[11px] leading-relaxed text-muted-foreground/85">
+              <summary className="cursor-pointer select-none font-medium text-foreground/70">
+                Technical details
+              </summary>
+              <p className="mt-1 break-words">{details}</p>
+            </details>
           )}
         </div>
         {onDismiss && (

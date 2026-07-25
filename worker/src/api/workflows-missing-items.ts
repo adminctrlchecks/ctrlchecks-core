@@ -16,11 +16,14 @@
 import { Request, Response } from 'express';
 import { getUnifiedMissingItems } from '../services/ai/credential-input-discovery';
 import {
-  getWorkflowConnectionReadiness,
   canonicalProvider,
   type WorkflowConnectionReadinessResponse,
   type ConnectionReadinessRow,
 } from '../services/workflow-connection-readiness';
+import {
+  buildWorkflowReadinessEnvelope,
+  workflowReadinessResponseFields,
+} from '../core/readiness/workflow-readiness-aggregator';
 import { getDbClient } from '../core/database/aws-db-client';
 import { logger } from '../core/logger';
 
@@ -83,8 +86,9 @@ export default async function getMissingItemsHandler(req: Request, res: Response
     // unified_credentials by provider + node-required scopes and reconciles
     // against saved connections rows, so it is authoritative for both cases.
     let connectionReadiness: WorkflowConnectionReadinessResponse | undefined;
+    let workflowReadiness: Awaited<ReturnType<typeof buildWorkflowReadinessEnvelope>> | undefined;
 
-    if (userId) {
+    {
       try {
         // Load the workflow nodes so we can run the readiness check
         const { data: workflowRow } = await db
@@ -100,48 +104,51 @@ export default async function getMissingItemsHandler(req: Request, res: Response
               : workflowRow.graph || {};
           const nodes: any[] = workflowRow.nodes || graphData.nodes || [];
 
-          connectionReadiness = await getWorkflowConnectionReadiness({
+          workflowReadiness = await buildWorkflowReadinessEnvelope({
             workflowId,
             userId,
             nodes,
-            includeSatisfied: true,
+            includeSatisfiedConnections: true,
           });
+          connectionReadiness = workflowReadiness.connectionReadiness;
 
           // Rebuild the legacy credentials array for readiness-covered
           // providers from readiness rows, so the two never disagree.
-          const readinessProviders = new Set(connectionReadiness.rows.map((row) => row.provider));
-          const untouched = missingItems.credentials.filter(
-            (cred) => !readinessProviders.has(canonicalProvider(cred.provider)),
-          );
+          if (connectionReadiness) {
+            const readinessProviders = new Set(connectionReadiness.rows.map((row) => row.provider));
+            const untouched = missingItems.credentials.filter(
+              (cred) => !readinessProviders.has(canonicalProvider(cred.provider)),
+            );
 
-          const byProvider = new Map<string, ConnectionReadinessRow[]>();
-          for (const row of connectionReadiness.rows) {
-            const list = byProvider.get(row.provider) || [];
-            list.push(row);
-            byProvider.set(row.provider, list);
-          }
+            const byProvider = new Map<string, ConnectionReadinessRow[]>();
+            for (const row of connectionReadiness.rows) {
+              const list = byProvider.get(row.provider) || [];
+              list.push(row);
+              byProvider.set(row.provider, list);
+            }
 
-          const derived = Array.from(byProvider.entries()).map(([provider, rows]) => {
-            const notReady = rows.filter((row) => row.status !== 'ready');
-            const relevant = notReady.length > 0 ? notReady : rows;
-            return {
-              provider,
-              type: 'oauth' as const,
-              nodes: Array.from(new Set(relevant.map((row) => row.nodeId))),
-              fields: [],
-              displayName: providerDisplayName(provider),
-              vaultKey: provider,
-              scopes: Array.from(new Set(relevant.flatMap((row) => row.requiredScopes))),
-              satisfied: notReady.length === 0,
-            };
-          });
+            const derived = Array.from(byProvider.entries()).map(([provider, rows]) => {
+              const notReady = rows.filter((row) => row.status !== 'ready');
+              const relevant = notReady.length > 0 ? notReady : rows;
+              return {
+                provider,
+                type: 'oauth' as const,
+                nodes: Array.from(new Set(relevant.map((row) => row.nodeId))),
+                fields: [],
+                displayName: providerDisplayName(provider),
+                vaultKey: provider,
+                scopes: Array.from(new Set(relevant.flatMap((row) => row.requiredScopes))),
+                satisfied: notReady.length === 0,
+              };
+            });
 
-          missingItems.credentials = [...untouched, ...derived];
+            missingItems.credentials = [...untouched, ...derived];
 
-          // Rebuild display summary
-          const missingCount = missingItems.credentials.filter((c) => c.satisfied === false).length;
-          if (missingItems.display) {
-            missingItems.display.summary.missingCredentialCount = missingCount;
+            // Rebuild display summary
+            const missingCount = missingItems.credentials.filter((c) => c.satisfied === false).length;
+            if (missingItems.display) {
+              missingItems.display.summary.missingCredentialCount = missingCount;
+            }
           }
         }
       } catch (readinessErr) {
@@ -155,6 +162,7 @@ export default async function getMissingItemsHandler(req: Request, res: Response
       workflowId,
       ...missingItems,
       ...(connectionReadiness ? { connectionReadiness } : {}),
+      ...(workflowReadiness ? workflowReadinessResponseFields(workflowReadiness) : {}),
     });
   } catch (error: any) {
     logger.error('[MissingItems] Error:', error);

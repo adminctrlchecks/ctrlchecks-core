@@ -210,6 +210,37 @@ describe('mapWorkflowIssueToGuidance — safety-net details trigger readiness', 
     expect(result.missingItems?.some((item) => item.startsWith('Connection:'))).toBe(true);
   });
 
+  it('renders category-based workflow readiness issues without vague count fallback', () => {
+    const result = mapWorkflowIssueToGuidance({
+      code: 'EXECUTION_NOT_READY',
+      details: {
+        readinessIssues: [
+          {
+            category: 'missing_input',
+            nodeLabel: 'Send Message',
+            operationLabel: 'Send',
+            fieldKey: 'message',
+            fieldLabel: 'Message',
+            reason: 'Message is empty.',
+          },
+          {
+            category: 'runtime_credential_missing',
+            nodeLabel: 'Create Record',
+            operationLabel: 'Create',
+            provider: 'external',
+            displayName: 'External OAuth',
+            reason: 'A saved connection exists, but the runtime token is missing.',
+          },
+        ],
+        missingInputsCount: 5,
+      },
+    });
+
+    expect(result.missingItems).toContain('Input: Message for Send Message (Send)');
+    expect(result.missingItems?.some((item) => item.includes('External OAuth for Create Record'))).toBe(true);
+    expect(result.missingItems?.some((item) => item.includes('5 required input'))).toBe(false);
+  });
+
   it('does NOT trigger when details arrays are empty', () => {
     const result = mapWorkflowIssueToGuidance({
       code: 'OTHER',

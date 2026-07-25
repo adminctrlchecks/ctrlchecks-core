@@ -165,12 +165,15 @@ describe('getAIGuidance — context merging into request body', () => {
     expect(requestBodyOf(fetchMock).context.missingInputs).toEqual(inputs);
   });
 
-  it('reads missingInputs from errorData.details when workflowContext is absent', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse({ title: 'T', description: 'D' }));
+  it('keeps missingInputs from errorData.details in deterministic local guidance', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse({ title: 'Vague AI title', description: 'Vague AI desc' }));
     vi.stubGlobal('fetch', fetchMock);
     const inputs = [{ fieldName: 'token', nodeLabel: 'Auth' }];
-    await getAIGuidance({ details: { missingInputs: inputs } });
-    expect(requestBodyOf(fetchMock).context.missingInputs).toEqual(inputs);
+    const payload = { details: { missingInputs: inputs } };
+    const result = await getAIGuidance(payload);
+    expect(result).toBe(STATIC_FALLBACK);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mapWorkflowIssueToGuidance).toHaveBeenCalledWith(payload);
   });
 
   it('sends undefined for missingInputs when errorData.details.missingInputs is not an array', async () => {
@@ -188,12 +191,42 @@ describe('getAIGuidance — context merging into request body', () => {
     expect(requestBodyOf(fetchMock).context.missingCredentials).toEqual(creds);
   });
 
-  it('reads missingCredentials from errorData.details when workflowContext absent', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse({ title: 'T', description: 'D' }));
+  it('keeps missingCredentials from errorData.details in deterministic local guidance', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse({ title: 'Vague AI title', description: 'Vague AI desc' }));
     vi.stubGlobal('fetch', fetchMock);
     const creds = [{ provider: 'github', displayName: 'GitHub' }];
-    await getAIGuidance({ details: { missingCredentials: creds } });
-    expect(requestBodyOf(fetchMock).context.missingCredentials).toEqual(creds);
+    const payload = { details: { missingCredentials: creds } };
+    const result = await getAIGuidance(payload);
+    expect(result).toBe(STATIC_FALLBACK);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mapWorkflowIssueToGuidance).toHaveBeenCalledWith(payload);
+  });
+
+  it('does not allow AI guidance to replace canonical readinessIssues with vague copy', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse({
+      title: 'Fill in the remaining fields',
+      description: 'Fill in some required fields.',
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const payload = {
+      code: 'EXECUTION_MISSING_INPUTS',
+      details: {
+        readinessIssues: [{
+          kind: 'missing_input',
+          nodeId: 'node-1',
+          nodeLabel: 'Send Message',
+          operationLabel: 'Send',
+          fieldKey: 'message',
+          fieldLabel: 'Message',
+        }],
+      },
+    };
+
+    const result = await getAIGuidance(payload);
+
+    expect(result).toBe(STATIC_FALLBACK);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mapWorkflowIssueToGuidance).toHaveBeenCalledWith(payload);
   });
 
   it('sends executionValidationErrors from workflowContext', async () => {

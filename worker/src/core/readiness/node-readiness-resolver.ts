@@ -26,6 +26,13 @@ export interface NodeReadinessIssue {
   provider?: string;
   credentialType?: string;
   credentialId?: string;
+  credentialTypeId?: string;
+  connectionId?: string;
+  connectionName?: string;
+  status?: string;
+  action?: string;
+  requiredScopes?: string[];
+  availableScopes?: string[];
   operation?: string;
   operationLabel?: string;
   fieldKey?: string;
@@ -342,7 +349,14 @@ export function buildCredentialReadinessIssues(input: {
         nodeLabel: credential.nodeLabel || nodeLabel,
         provider: credential.provider,
         credentialType: credential.type || credential.category,
+        credentialTypeId: credential.credentialId,
         credentialId: credential.connectionId || credential.credentialId || credential.vaultKey,
+        connectionId: credential.connectionId,
+        connectionName: credential.connectionName,
+        status: credential.status,
+        action: credential.action,
+        requiredScopes: credential.requiredScopes || credential.scopes,
+        availableScopes: credential.availableScopes,
         operation,
         operationLabel,
         message: `${credential.nodeLabel || nodeLabel} needs ${displayName}${operationLabel ? ` for ${operationLabel}` : ''}.`,
