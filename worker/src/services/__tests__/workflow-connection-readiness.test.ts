@@ -428,6 +428,94 @@ describe('getWorkflowConnectionReadiness', () => {
     expect(resolveCredentialDryRun).not.toHaveBeenCalled();
   });
 
+  it('falls back from a stale explicit UUID connection reference to one compatible provider connection', async () => {
+    getDecryptedConnection.mockRejectedValue(new Error('Connection not found'));
+    resolveCredentialDryRun.mockResolvedValue({
+      id: 'cred-union',
+      userId: 'user-1',
+      provider: 'google',
+      scopes: [GMAIL_SEND, SHEETS_WRITE],
+      expiresAt: null,
+      source: 'oauth_callback',
+    });
+    listCanonicalConnectionsByProvider.mockResolvedValue({
+      connections: [{ id: 'conn-1', name: 'Google', provider: 'google', authType: 'oauth2', status: 'active' }],
+      source: 'connections',
+    });
+
+    const result = await getWorkflowConnectionReadiness({
+      workflowId: 'wf-1',
+      userId: 'user-1',
+      nodes: [
+        {
+          ...gmailNode,
+          data: {
+            ...gmailNode.data,
+            connectionRefs: { google_oauth2: CONN_UUID },
+          },
+        },
+        {
+          ...sheetsAppendNode,
+          data: {
+            ...sheetsAppendNode.data,
+            connectionRefs: { google_oauth2: CONN_UUID },
+          },
+        },
+      ],
+    });
+
+    expect(result.ready).toBe(true);
+    expect(result.missing).toHaveLength(0);
+    expect(result.rows).toHaveLength(2);
+    expect(result.rows.map((row) => row.status)).toEqual(['ready', 'ready']);
+    expect(result.rows.every((row) => row.connectionId === 'conn-1')).toBe(true);
+    expect(resolveCredentialDryRun).toHaveBeenCalledTimes(1);
+    expect(resolveCredentialDryRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        provider: 'google',
+        requiredScopes: expect.arrayContaining([GMAIL_SEND, SHEETS_WRITE]),
+      }),
+    );
+  });
+
+  it('does not fall back when an explicit UUID points at a different provider', async () => {
+    getDecryptedConnection.mockResolvedValue({
+      connection: {
+        id: CONN_UUID,
+        name: 'Slack',
+        provider: 'slack',
+        credentialTypeId: 'slack_oauth2',
+        authType: 'oauth2',
+        status: 'active',
+      },
+      source: 'connections',
+    });
+    listCanonicalConnectionsByProvider.mockResolvedValue({
+      connections: [{ id: 'conn-1', name: 'Google', provider: 'google', authType: 'oauth2', status: 'active' }],
+      source: 'connections',
+    });
+
+    const result = await getWorkflowConnectionReadiness({
+      ...baseInput,
+      nodes: [{
+        ...gmailNode,
+        data: {
+          ...gmailNode.data,
+          connectionRefs: { google_oauth2: CONN_UUID },
+        },
+      }],
+    });
+
+    expect(result.ready).toBe(false);
+    expect(result.rows[0]).toMatchObject({
+      status: 'invalid_ref',
+      action: 'select_connection',
+      explicitRef: CONN_UUID,
+    });
+    expect(resolveCredentialDryRun).not.toHaveBeenCalled();
+  });
+
   it('falls back from a stale legacy credentialId UUID to one compatible provider connection', async () => {
     getDecryptedConnection.mockRejectedValue(new Error('Connection could not be loaded'));
     resolveCredentialDryRun.mockResolvedValue({

@@ -282,6 +282,7 @@ async function resolveExplicitConnection(input: {
   connection?: ConnectionRecord;
   source?: ConnectionReadinessRow['source'];
   invalid?: ConnectionReadinessRow;
+  canFallbackFromInvalidRef?: boolean;
   legacyRef?: string;
 }> {
   const authTypes = [input.authType as AuthType];
@@ -318,6 +319,7 @@ async function resolveExplicitConnection(input: {
       const connection = found?.connection;
       if (!connection) {
         return {
+          canFallbackFromInvalidRef: true,
           invalid: {
             workflowId: '',
             nodeId: '',
@@ -368,6 +370,7 @@ async function resolveExplicitConnection(input: {
       return { connection, source: found.source };
     } catch (error) {
       return {
+        canFallbackFromInvalidRef: true,
         invalid: {
           workflowId: '',
           nodeId: '',
@@ -582,7 +585,7 @@ export async function getWorkflowConnectionReadiness(input: {
         ))
       : undefined;
 
-    if (explicit.invalid && !invalidLegacyRef) {
+    if (explicit.invalid && !invalidLegacyRef && !explicit.canFallbackFromInvalidRef) {
       rows.push(rowWithBase(base, explicit.invalid, checkedAt));
       continue;
     }
@@ -592,6 +595,10 @@ export async function getWorkflowConnectionReadiness(input: {
     let legacyRef = explicit.legacyRef || invalidLegacyRef?.value;
 
     if (!connection) {
+      if (explicit.invalid && listResult.connections.length === 0) {
+        rows.push(rowWithBase(base, explicit.invalid, checkedAt));
+        continue;
+      }
       if (listResult.connections.length > 1) {
         rows.push(rowWithBase(base, {
           status: 'invalid_ref',
