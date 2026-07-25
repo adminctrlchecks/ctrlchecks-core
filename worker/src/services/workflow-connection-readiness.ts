@@ -573,15 +573,23 @@ export async function getWorkflowConnectionReadiness(input: {
       refs,
     });
 
-    if (explicit.invalid) {
+    const listResult = await connectionListCache.get(listKey)!;
+    const invalidLegacyRef = explicit.invalid
+      ? refs.find((ref) => (
+          ref.legacyOnly &&
+          ref.key === explicit.invalid?.explicitRefKey &&
+          ref.value === explicit.invalid?.explicitRef
+        ))
+      : undefined;
+
+    if (explicit.invalid && !invalidLegacyRef) {
       rows.push(rowWithBase(base, explicit.invalid, checkedAt));
       continue;
     }
 
-    const listResult = await connectionListCache.get(listKey)!;
     let connection = explicit.connection;
     let source = explicit.source || listResult.source;
-    let legacyRef = explicit.legacyRef;
+    let legacyRef = explicit.legacyRef || invalidLegacyRef?.value;
 
     if (!connection) {
       if (listResult.connections.length > 1) {
