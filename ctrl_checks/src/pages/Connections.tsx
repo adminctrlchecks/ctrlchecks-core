@@ -18,7 +18,9 @@ import { useCredentialTypes } from '@/hooks/useCredentialTypes';
 import { useOAuthFlow } from '@/hooks/useOAuthFlow';
 import {
   fetchWorkflowMissingConnections,
+  groupWorkflowConnectionIssues,
   type WorkflowMissingConnection,
+  type WorkflowConnectionGroup,
 } from '@/hooks/useWorkflowConnectionStatus';
 import { invalidateAfterConnectionChange } from '@/lib/queryInvalidation';
 import { QUERY_KEYS } from '@/lib/queryKeys';
@@ -62,44 +64,6 @@ function groupByCategory<T extends { provider: string }>(items: T[]): Record<str
   return groups;
 }
 
-interface WorkflowRepairGroup {
-  key: string;
-  provider: string;
-  displayName: string;
-  credentialTypeId?: string;
-  connectionId?: string;
-  connectionName?: string;
-  requiredScopes: string[];
-  issues: WorkflowMissingConnection[];
-}
-
-function groupWorkflowIssues(issues: WorkflowMissingConnection[]): WorkflowRepairGroup[] {
-  const groups = new Map<string, WorkflowRepairGroup>();
-  for (const issue of issues) {
-    const key = [
-      issue.provider,
-      issue.credentialTypeId || '',
-      issue.connectionId || '',
-    ].join(':');
-    const existing = groups.get(key) || {
-      key,
-      provider: issue.provider,
-      displayName: issue.displayName,
-      credentialTypeId: issue.credentialTypeId,
-      connectionId: issue.connectionId,
-      connectionName: issue.connectionName,
-      requiredScopes: [],
-      issues: [],
-    };
-    existing.issues.push(issue);
-    for (const scope of issue.requiredScopes || []) {
-      if (!existing.requiredScopes.includes(scope)) existing.requiredScopes.push(scope);
-    }
-    groups.set(key, existing);
-  }
-  return Array.from(groups.values());
-}
-
 function compactScope(scope: string): string {
   return scope
     .replace(/^https:\/\/www\.googleapis\.com\/auth\//, '')
@@ -107,9 +71,11 @@ function compactScope(scope: string): string {
     .replace(/^https:\/\/www\.linkedin\.com\/oauth\/v2\//, '');
 }
 
-function repairVerb(group: WorkflowRepairGroup): string {
-  const statuses = new Set(group.issues.map((issue) => issue.status));
-  if (group.connectionId || statuses.has('expired') || statuses.has('missing_scope') || statuses.has('runtime_missing')) {
+function repairVerb(group: WorkflowConnectionGroup): string {
+  if (group.action === 'select_connection') {
+    return 'Select connection';
+  }
+  if (group.connectionId || group.statuses.includes('expired') || group.statuses.includes('missing_scope') || group.statuses.includes('runtime_missing')) {
     return `Reconnect ${group.displayName}`;
   }
   return `Connect ${group.displayName}`;
@@ -261,7 +227,7 @@ export default function Connections() {
     retry: 1,
   });
   const workflowIssues = workflowReadinessQuery.data ?? [];
-  const repairGroups = useMemo(() => groupWorkflowIssues(workflowIssues), [workflowIssues]);
+  const repairGroups = useMemo(() => groupWorkflowConnectionIssues(workflowIssues), [workflowIssues]);
 
   // Invalidate the workflow connection gate when leaving this page so that
   // returning to /workflow/:id always refetches readiness — the workflow page
@@ -320,8 +286,13 @@ export default function Connections() {
     }
   }
 
-  async function handleRepairGroup(group: WorkflowRepairGroup) {
+  async function handleRepairGroup(group: WorkflowConnectionGroup) {
     setRepairError(null);
+    if (group.action === 'select_connection') {
+      setConnSearch(group.displayName || group.provider);
+      setRepairError('Multiple saved accounts can satisfy this requirement. Select the intended saved connection on the affected workflow nodes instead of creating a duplicate connection.');
+      return;
+    }
     const credentialType = group.credentialTypeId
       ? credentialTypes.find((type) => type.id === group.credentialTypeId)
       : credentialTypes.find((type) => type.provider === group.provider && type.authType === 'oauth2');
@@ -436,7 +407,7 @@ export default function Connections() {
                     {workflowReadinessQuery.isFetching && workflowIssues.length === 0
                       ? 'Checking the workflow connection requirements...'
                       : repairGroups.length > 0
-                        ? 'Reconnect the accounts below with the exact permissions this workflow needs.'
+                        ? 'Review the account requirements below. One compatible saved connection can cover all listed nodes for each provider when it includes the required permissions.'
                         : 'This workflow has no remaining connection blockers.'}
                   </p>
                 </div>
@@ -488,6 +459,11 @@ export default function Connections() {
                           {group.requiredScopes.length > 0 && (
                             <p className="mt-2 text-xs text-muted-foreground">
                               Permissions: {group.requiredScopes.map(compactScope).join(', ')}
+                            </p>
+                          )}
+                          {group.candidateConnectionIds.length > 1 && (
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              Multiple saved accounts match. Select the intended connection for the listed nodes.
                             </p>
                           )}
                         </div>

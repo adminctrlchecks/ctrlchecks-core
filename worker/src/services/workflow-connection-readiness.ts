@@ -119,6 +119,20 @@ export interface ReadinessNode {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+interface PreparedConnectionRequirement {
+  node: ReadinessNode;
+  base: WorkflowConnectionRequirement;
+  provider: string;
+  authTypes: AuthType[];
+  listKey: string;
+  credentialType: {
+    credentialTypeId: string;
+    authType: ConnectionReadinessAuthType;
+    label: string;
+  };
+  vaultKey?: string;
+}
+
 function isUuid(value: string): boolean {
   return UUID_RE.test(value.trim());
 }
@@ -475,6 +489,8 @@ export async function getWorkflowConnectionReadiness(input: {
   const checkedAt = new Date().toISOString();
   const dryRunCache = new Map<string, Promise<DryRunOutcome>>();
   const connectionListCache = new Map<string, Promise<{ connections: ConnectionRecord[]; source: ConnectionReadinessRow['source'] }>>();
+  const preparedRequirements: PreparedConnectionRequirement[] = [];
+  const unionScopesByListKey = new Map<string, string[]>();
   const rows: ConnectionReadinessRow[] = [];
 
   for (const node of nodes || []) {
@@ -508,6 +524,33 @@ export async function getWorkflowConnectionReadiness(input: {
 
     const authTypes = [credentialType.authType as AuthType];
     const listKey = `${provider}::${authTypes.join('+')}`;
+    preparedRequirements.push({
+      node,
+      base,
+      provider,
+      authTypes,
+      listKey,
+      credentialType,
+      vaultKey: connector?.credentialContract.vaultKey,
+    });
+
+    const unionScopes = unionScopesByListKey.get(listKey) || [];
+    for (const scope of requiredScopes) {
+      if (!unionScopes.includes(scope)) unionScopes.push(scope);
+    }
+    unionScopesByListKey.set(listKey, unionScopes);
+  }
+
+  for (const prepared of preparedRequirements) {
+    const {
+      node,
+      base,
+      provider,
+      authTypes,
+      listKey,
+      credentialType,
+      vaultKey,
+    } = prepared;
     if (!connectionListCache.has(listKey)) {
       connectionListCache.set(
         listKey,
@@ -520,7 +563,7 @@ export async function getWorkflowConnectionReadiness(input: {
       node,
       provider,
       credentialTypeId: credentialType.credentialTypeId,
-      vaultKey: connector?.credentialContract.vaultKey,
+      vaultKey,
     });
     const explicit = await resolveExplicitConnection({
       userId,
@@ -561,7 +604,7 @@ export async function getWorkflowConnectionReadiness(input: {
         action: 'connect',
         source: 'none',
         legacyRef,
-        reason: `No active ${provider} connection found. Connect ${provider} before running ${nodeLabel}.`,
+        reason: `No active ${provider} connection found. Connect ${provider} before running ${base.nodeLabel}.`,
       }, checkedAt));
       continue;
     }
@@ -578,7 +621,10 @@ export async function getWorkflowConnectionReadiness(input: {
       continue;
     }
 
-    if (requiredScopes.length === 0 && connectionIsUsable(connection)) {
+    const requiredScopes = base.requiredScopes;
+    const unionRequiredScopes = unionScopesByListKey.get(listKey) || requiredScopes;
+
+    if (unionRequiredScopes.length === 0 && connectionIsUsable(connection)) {
       rows.push(rowWithBase(base, {
         status: 'ready',
         action: 'none',
@@ -592,9 +638,9 @@ export async function getWorkflowConnectionReadiness(input: {
       continue;
     }
 
-    const dryRunKey = `${provider}::${[...requiredScopes].sort().join('+')}`;
+    const dryRunKey = `${provider}::${[...unionRequiredScopes].sort().join('+')}`;
     if (!dryRunCache.has(dryRunKey)) {
-      dryRunCache.set(dryRunKey, dryRunCredential(userId, provider, requiredScopes, nodeLabel));
+      dryRunCache.set(dryRunKey, dryRunCredential(userId, provider, unionRequiredScopes, base.nodeLabel));
     }
     const outcome = await dryRunCache.get(dryRunKey)!;
 

@@ -1,6 +1,6 @@
 ﻿import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Link2, Play, Save, Settings, Upload, Download, Square } from 'lucide-react';
+import { ArrowLeft, Link2, Play, Save, Settings, Upload, Download, Square, ListChecks } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -23,10 +23,14 @@ import { awsClient } from '@/integrations/aws/client';
 import { workflowScheduler } from '@/lib/workflowScheduler';
 
 interface WorkflowHeaderProps {
-  onSave: () => void;
+  onSave: () => void | Promise<boolean | void>;
   onRun: (autoSave?: boolean) => void;
+  onCheckSetup: () => void;
   isSaving?: boolean;
   isRunning?: boolean;
+  isCheckingSetup?: boolean;
+  setupReadyForRun?: boolean;
+  setupCheckStale?: boolean;
   onImport?: (data: any) => void;
   onCancel?: () => void;
   missingConnectionsCount?: number;
@@ -36,8 +40,12 @@ interface WorkflowHeaderProps {
 export default function WorkflowHeader({
   onSave,
   onRun,
+  onCheckSetup,
   isSaving,
   isRunning,
+  isCheckingSetup,
+  setupReadyForRun = false,
+  setupCheckStale = false,
   onImport,
   onCancel,
   missingConnectionsCount = 0,
@@ -239,7 +247,7 @@ export default function WorkflowHeader({
           {missingConnectionsCount > 0 && (
             <Popover>
               <PopoverTrigger asChild>
-                <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-destructive animate-pulse cursor-pointer z-10" />
+                <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-amber-500 animate-pulse cursor-pointer z-10" />
               </PopoverTrigger>
               <PopoverContent side="bottom" align="end" className="w-72 p-3 space-y-2">
                 <p className="text-sm font-semibold">Connections needed</p>
@@ -269,24 +277,23 @@ export default function WorkflowHeader({
           {isSaving ? 'Saving...' : 'Save'}
         </Button>
 
-        {isDirty && (
-          <WorkflowActionButton
-            size="sm"
-            variant="outline"
-            className="border-primary/50 text-primary hover:bg-primary/10"
-            onClick={() => onRun(true)}
-            disabled={isRunning || isSaving || isScheduleActive || missingConnectionsCount > 0}
-            tooltip={
-              missingConnectionsCount > 0
-                ? 'Connect your accounts in Connections before running'
-                : isScheduleActive ? 'Manual Run is disabled when schedule is active' : 'Save and run workflow'
-            }
-          >
-            <Save className="mr-2 h-4 w-4" />
-            <Play className="mr-2 h-4 w-4" />
-            Save & Run
-          </WorkflowActionButton>
-        )}
+        <WorkflowActionButton
+          size="sm"
+          variant="outline"
+          className="border-primary/50 text-primary hover:bg-primary/10"
+          onClick={onCheckSetup}
+          disabled={isRunning || isSaving || isCheckingSetup || isScheduleActive}
+          tooltip={
+            isScheduleActive
+              ? 'Manual Run is disabled when schedule is active'
+              : isDirty
+                ? 'Save the current graph and check setup'
+                : 'Check workflow setup'
+          }
+        >
+          <ListChecks className="mr-2 h-4 w-4" />
+          {isCheckingSetup ? 'Checking...' : 'Check Setup'}
+        </WorkflowActionButton>
 
         {isRunning && onCancel && (
           <Button
@@ -303,11 +310,15 @@ export default function WorkflowHeader({
           size="sm"
           className="gradient-primary text-primary-foreground"
           onClick={() => onRun(false)}
-          disabled={isRunning || isScheduleActive || missingConnectionsCount > 0}
+          disabled={isRunning || isScheduleActive || !setupReadyForRun}
           tooltip={
-            missingConnectionsCount > 0
-              ? 'Connect your accounts in Connections before running'
-              : isScheduleActive ? 'Manual Run is disabled when schedule is active' : undefined
+            isScheduleActive
+              ? 'Manual Run is disabled when schedule is active'
+              : setupCheckStale
+                ? 'Run Check Setup again after editing'
+                : !setupReadyForRun
+                  ? 'Run Check Setup before running'
+                  : undefined
           }
         >
           <Play className="mr-2 h-4 w-4" />

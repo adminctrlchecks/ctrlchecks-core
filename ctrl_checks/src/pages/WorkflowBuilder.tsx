@@ -134,8 +134,17 @@ export default function WorkflowBuilder() {
   const [lastResolvedInputs, setLastResolvedInputs] = useState<LastResolvedInputsMap>({});
   const [reliabilityStatus, setReliabilityStatus] = useState<ReliabilityUiState | null>(null);
   const [gateDismissed, setGateDismissed] = useState(false);
+  const [setupPanelOpen, setSetupPanelOpen] = useState(false);
+  const [isCheckingSetup, setIsCheckingSetup] = useState(false);
+  const [latestSetupCheck, setLatestSetupCheck] = useState<{ workflowId: string; ready: boolean; checkedAt: number } | null>(null);
 
-  const { missingConnections, isLoading: isCheckingConnections, recheck: recheckConnections } = useWorkflowConnectionStatus(
+  const {
+    readiness: workflowReadiness,
+    missingConnections,
+    isLoading: isCheckingConnections,
+    checkedAt: readinessCheckedAt,
+    recheck: recheckConnections,
+  } = useWorkflowConnectionStatus(
     id && id !== 'new' ? id : null
   );
 
@@ -145,6 +154,7 @@ export default function WorkflowBuilder() {
   const {
     nodes,
     edges,
+    isDirty,
     setNodes,
     setEdges,
     setWorkflowId,
@@ -303,6 +313,7 @@ export default function WorkflowBuilder() {
         setNodes(contracted.nodes);
         setEdges(validEdges);
         setIsDirty(false);
+        void recheckConnections();
         
         toast({
           title: 'Workflow loaded',
@@ -327,7 +338,7 @@ export default function WorkflowBuilder() {
     } finally {
       setIsLoading(false);
     }
-  }, [setWorkflowId, setWorkflowPhase, setWorkflowName, setNodes, setEdges, setIsDirty, resetWorkflow]);
+  }, [setWorkflowId, setWorkflowPhase, setWorkflowName, setNodes, setEdges, setIsDirty, resetWorkflow, recheckConnections]);
 
   const loadLastResolvedInputs = useCallback(async (workflowId: string) => {
     try {
@@ -358,6 +369,8 @@ export default function WorkflowBuilder() {
     setReliabilityStatus(null);
     setExecutionGuidance(null);
     setGateDismissed(false);
+    setSetupPanelOpen(false);
+    setLatestSetupCheck(null);
 
     if (id && id !== 'new') {
       // Check if we're already loading this workflow to prevent duplicate loads
@@ -372,6 +385,22 @@ export default function WorkflowBuilder() {
     }
   }, [id, user, loadWorkflow, resetWorkflow, loadLastResolvedInputs]);
 
+  useEffect(() => {
+    if (!id || id === 'new' || !workflowReadiness || !readinessCheckedAt) return;
+    const ready = workflowReadiness.ready && !useWorkflowStore.getState().isDirty;
+    setLatestSetupCheck({
+      workflowId: id,
+      ready,
+      checkedAt: readinessCheckedAt,
+    });
+    if (ready) {
+      setGateDismissed(true);
+      setSetupPanelOpen(false);
+    } else if (missingConnections.length > 0) {
+      setGateDismissed(false);
+    }
+  }, [id, workflowReadiness, readinessCheckedAt, missingConnections.length, isDirty]);
+
   // Sync missing connections count to global store so AppSidebar can show a badge
   useEffect(() => {
     useWorkflowStore.getState().setWorkflowConnectionAlertCount(missingConnections.length);
@@ -379,12 +408,17 @@ export default function WorkflowBuilder() {
     return () => { useWorkflowStore.getState().setWorkflowConnectionAlertCount(0); };
   }, [missingConnections.length]);
 
+  useEffect(() => {
+    if (!isDirty) return;
+    setLatestSetupCheck((prev) => prev && prev.ready ? { ...prev, ready: false, checkedAt: Date.now() } : prev);
+  }, [isDirty]);
+
   // Auto-run workflow if autoRun parameter is present (for AI-generated workflows)
   // Note: This useEffect is moved after handleRun definition to avoid initialization order issues
 
-  const handleSave = useCallback(async () => {
-    if (!user) return;
-    if (isSavingRef.current) return;
+  const handleSave = useCallback(async (): Promise<boolean> => {
+    if (!user) return false;
+    if (isSavingRef.current) return false;
     isSavingRef.current = true;
 
     setIsSaving(true);
@@ -613,7 +647,48 @@ export default function WorkflowBuilder() {
       setIsSaving(false);
       if (saveSucceeded) setIsDirty(false);
     }
+    return saveSucceeded;
   }, [nodes, edges, user, navigate, setWorkflowId, setIsDirty]);
+
+  const handleCheckSetup = useCallback(async () => {
+    setIsCheckingSetup(true);
+    setSetupPanelOpen(true);
+    setExecutionGuidance(null);
+    try {
+      let finalWorkflowId = useWorkflowStore.getState().workflowId;
+      if (!finalWorkflowId || useWorkflowStore.getState().isDirty) {
+        const saved = await handleSave();
+        if (!saved) {
+          setLatestSetupCheck(finalWorkflowId ? { workflowId: finalWorkflowId, ready: false, checkedAt: Date.now() } : null);
+          return;
+        }
+        finalWorkflowId = useWorkflowStore.getState().workflowId;
+      }
+
+      if (!finalWorkflowId) {
+        setLatestSetupCheck(null);
+        return;
+      }
+
+      const result = await recheckConnections();
+      const latestReadiness = result.data;
+      const ready = Boolean(latestReadiness?.ready);
+      setLatestSetupCheck({ workflowId: finalWorkflowId, ready, checkedAt: Date.now() });
+      if (ready) {
+        setGateDismissed(true);
+        setSetupPanelOpen(false);
+        toast({
+          title: 'Setup check passed',
+          description: 'This workflow is ready to run.',
+        });
+      } else {
+        setGateDismissed(false);
+        setSetupPanelOpen(true);
+      }
+    } finally {
+      setIsCheckingSetup(false);
+    }
+  }, [handleSave, recheckConnections]);
 
   const handleImportWorkflow = useCallback((workflowData: { name?: string; nodes?: unknown[]; edges?: unknown[] }) => {
     try {
@@ -751,6 +826,18 @@ export default function WorkflowBuilder() {
         reliabilityStatus.selfCorrectionTriggered ||
         (reliabilityStatus.lastErrorCode && !isExpectedReadinessStatusCode(reliabilityStatus.lastErrorCode)))
   );
+  const currentWorkflowId = id && id !== 'new' ? id : useWorkflowStore.getState().workflowId;
+  const setupReadyForRun = Boolean(
+    currentWorkflowId &&
+      latestSetupCheck?.workflowId === currentWorkflowId &&
+      latestSetupCheck.ready &&
+      !isDirty,
+  );
+  const setupCheckStale = Boolean(
+    currentWorkflowId &&
+      (!latestSetupCheck || latestSetupCheck.workflowId !== currentWorkflowId || isDirty),
+  );
+  const hasSetupBlockers = Boolean(workflowReadiness && !workflowReadiness.ready);
 
   const handleRun = useCallback(async (autoSave = false) => {
     setExecutionGuidance(null);
@@ -842,6 +929,27 @@ export default function WorkflowBuilder() {
       ).then(setExecutionGuidance);
       setIsRunning(false);
       return;
+    }
+
+    const setupCheckIsCurrent =
+      latestSetupCheck?.workflowId === finalWorkflowId &&
+      latestSetupCheck.ready &&
+      !useWorkflowStore.getState().isDirty;
+
+    if (!setupCheckIsCurrent) {
+      const readinessResult = await recheckConnections();
+      const latestReadiness = readinessResult.data;
+      const ready = Boolean(latestReadiness?.ready);
+      setLatestSetupCheck({ workflowId: finalWorkflowId, ready, checkedAt: Date.now() });
+      if (!ready) {
+        useWorkflowStore.getState().setWorkflowConnectionAlertCount(latestReadiness?.missingConnections.length || 0);
+        setGateDismissed(false);
+        setSetupPanelOpen(true);
+        setIsRunning(false);
+        return;
+      }
+      setGateDismissed(true);
+      setSetupPanelOpen(false);
     }
 
     let workflowCheckForRun: { id: string; name?: string | null; status?: string | null; phase?: string | null } | null = null;
@@ -1196,23 +1304,14 @@ export default function WorkflowBuilder() {
     }
 
     const readinessResult = await recheckConnections();
-    const latestMissingConnections = readinessResult.data ?? [];
-    if (latestMissingConnections.length > 0) {
+    const latestReadiness = readinessResult.data;
+    const latestMissingConnections = latestReadiness?.missingConnections ?? [];
+    const readyForExecution = Boolean(latestReadiness?.ready);
+    setLatestSetupCheck({ workflowId: finalWorkflowId, ready: readyForExecution, checkedAt: Date.now() });
+    if (!readyForExecution) {
       useWorkflowStore.getState().setWorkflowConnectionAlertCount(latestMissingConnections.length);
       setGateDismissed(false);
-      const first = latestMissingConnections[0];
-      const target = [first.nodeLabel, first.operationLabel || first.operation].filter(Boolean).join(' - ');
-      const guidance = await getWorkflowGuidanceWithSetupContext(
-        {
-          code: 'EXECUTION_MISSING_CREDENTIALS',
-          message: `${target || first.displayName} needs ${first.credentialLabel || first.displayName}.`,
-          details: { missingCredentials: latestMissingConnections },
-          operation: 'run',
-        },
-        nodes as any[],
-        { operation: 'run' }
-      );
-      setExecutionGuidance(guidance);
+      setSetupPanelOpen(true);
       setIsRunning(false);
       return;
     }
@@ -1356,7 +1455,19 @@ export default function WorkflowBuilder() {
     } finally {
       // Async execution stays "running" until ExecutionConsole emits a terminal event.
     }
-  }, [nodes, consoleExpanded, resetAllNodeStatuses, recheckConnections]);
+  }, [
+    nodes,
+    edges,
+    user,
+    navigate,
+    latestSetupCheck,
+    consoleExpanded,
+    resetAllNodeStatuses,
+    recheckConnections,
+    setWorkflowId,
+    setIsDirty,
+    setActiveExecution,
+  ]);
 
   const handleCancel = useCallback(async () => {
     if (!activeExecutionId) return;
@@ -1442,20 +1553,28 @@ export default function WorkflowBuilder() {
       <WorkflowHeader
         onSave={handleSave}
         onRun={handleRun}
+        onCheckSetup={handleCheckSetup}
         isSaving={isSaving}
         isRunning={isRunning}
+        isCheckingSetup={isCheckingSetup || isCheckingConnections}
+        setupReadyForRun={setupReadyForRun}
+        setupCheckStale={setupCheckStale}
         onImport={handleImportWorkflow}
         onCancel={activeExecutionId ? handleCancel : undefined}
         missingConnectionsCount={missingConnections.length}
         missingConnections={missingConnections.map(c => ({ provider: c.provider, displayName: c.displayName }))}
       />
-      {!gateDismissed && id && id !== 'new' && (missingConnections.length > 0 || isCheckingConnections) && (
+      {id && id !== 'new' && (setupPanelOpen || (!gateDismissed && (hasSetupBlockers || isCheckingConnections))) && (
         <WorkflowConnectionGate
           missingConnections={missingConnections}
           workflowId={id}
           workflowName={useWorkflowStore.getState().workflowName}
           isLoading={isCheckingConnections && missingConnections.length === 0}
-          onDismiss={() => setGateDismissed(true)}
+          readiness={workflowReadiness}
+          onDismiss={() => {
+            setSetupPanelOpen(false);
+            setGateDismissed(true);
+          }}
         />
       )}
       <Suspense

@@ -49,6 +49,7 @@ const { listCanonicalConnectionsByProvider, getDecryptedConnection } = jest.requ
 };
 
 const GMAIL_SEND = 'https://www.googleapis.com/auth/gmail.send';
+const SHEETS_WRITE = 'https://www.googleapis.com/auth/spreadsheets';
 const CONN_UUID = '11111111-1111-4111-8111-111111111111';
 
 const gmailNode = {
@@ -61,6 +62,12 @@ const supabaseNode = {
   id: 'supabase-1',
   type: 'custom',
   data: { type: 'supabase', label: 'Query Supabase' },
+};
+
+const sheetsAppendNode = {
+  id: 'sheets-1',
+  type: 'custom',
+  data: { type: 'google_sheets', label: 'Append Row', config: { operation: 'append' } },
 };
 
 const baseInput = {
@@ -185,6 +192,41 @@ describe('getWorkflowConnectionReadiness', () => {
         userId: 'user-1',
         provider: 'google',
         requiredScopes: [GMAIL_SEND],
+      }),
+    );
+  });
+
+  it('checks the union of provider operation requirements for all rows in the workflow', async () => {
+    resolveCredentialDryRun.mockResolvedValue({
+      id: 'cred-union',
+      userId: 'user-1',
+      provider: 'google',
+      scopes: [GMAIL_SEND, SHEETS_WRITE],
+      expiresAt: null,
+      source: 'oauth_callback',
+    });
+    listCanonicalConnectionsByProvider.mockResolvedValue({
+      connections: [{ id: 'conn-1', name: 'Google', provider: 'google', authType: 'oauth2', status: 'active' }],
+      source: 'connections',
+    });
+
+    const result = await getWorkflowConnectionReadiness({
+      workflowId: 'wf-1',
+      userId: 'user-1',
+      nodes: [gmailNode, sheetsAppendNode],
+    });
+
+    expect(result.ready).toBe(true);
+    expect(result.rows).toHaveLength(2);
+    expect(result.rows.map((row) => row.status)).toEqual(['ready', 'ready']);
+    expect(result.rows.find((row) => row.nodeId === 'n1')?.requiredScopes).toEqual([GMAIL_SEND]);
+    expect(result.rows.find((row) => row.nodeId === 'sheets-1')?.requiredScopes).toEqual([SHEETS_WRITE]);
+    expect(resolveCredentialDryRun).toHaveBeenCalledTimes(1);
+    expect(resolveCredentialDryRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        provider: 'google',
+        requiredScopes: expect.arrayContaining([GMAIL_SEND, SHEETS_WRITE]),
       }),
     );
   });
