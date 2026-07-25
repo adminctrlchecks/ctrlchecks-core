@@ -595,6 +595,7 @@ export async function getWorkflowConnectionReadiness(input: {
     let legacyRef = explicit.legacyRef || invalidLegacyRef?.value;
 
     if (!connection) {
+      // Stale saved refs can survive reconnects; recover through provider-level readiness when unambiguous.
       if (explicit.invalid && listResult.connections.length === 0) {
         rows.push(rowWithBase(base, explicit.invalid, checkedAt));
         continue;
