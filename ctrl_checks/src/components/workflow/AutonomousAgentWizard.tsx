@@ -3530,18 +3530,23 @@ export function AutonomousAgentWizard() {
                             if (effectiveModesFromBackend && Object.keys(effectiveModesFromBackend).length > 0) {
                                 setFillModeValues((prev) => ({ ...prev, ...effectiveModesFromBackend }));
                             }
-                            // Block navigation when the backend reports unresolved field/ownership
-                            // issues (e.g. a structural field coerced away from runtime_ai still has
-                            // no value) instead of silently committing a workflow that will fail to save.
-                            const iv = inputsResult?.validation;
-                            if (iv && iv.valid === false && Array.isArray(iv.errors) && iv.errors.length > 0) {
-                                console.warn('?? Attach inputs validation failed:', iv.errors);
+                            // Editor-open readiness is intentionally narrower than execution readiness.
+                            // Missing config, ownership, credentials, and runtime-deferred values belong
+                            // in the editor checklist/properties/run gates, not as a pre-open dead end.
+                            const editorOpenReadiness = inputsResult?.editorOpenReadiness;
+                            if (
+                                editorOpenReadiness &&
+                                editorOpenReadiness.ready === false &&
+                                Array.isArray(editorOpenReadiness.errors) &&
+                                editorOpenReadiness.errors.length > 0
+                            ) {
+                                console.warn('Attach inputs editor-open readiness failed:', editorOpenReadiness.errors);
                                 toast({
-                                    title: 'Workflow needs attention before it can be opened',
-                                    description: iv.errors.slice(0, 3).join(' • ').slice(0, 500),
+                                    title: 'Workflow graph needs repair before it can be opened',
+                                    description: editorOpenReadiness.errors.slice(0, 3).join(' • ').slice(0, 500),
                                     variant: 'destructive',
                                 });
-                                return; // isNavigating stays false — button re-enabled for retry after fixing ownership modes
+                                return; // isNavigating stays false — button re-enabled for retry after graph repair
                             }
                         }
                     } else {

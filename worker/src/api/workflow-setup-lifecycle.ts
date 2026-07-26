@@ -1,6 +1,10 @@
 import { Request, Response } from 'express';
 import { getDbClient } from '../core/database/aws-db-client';
-import { normalizeWorkflowForSave, validateWorkflowForSave } from '../core/validation/workflow-save-validator';
+import {
+  normalizeWorkflowForSave,
+  validateEditorOpenReadiness,
+  validateWorkflowForSave,
+} from '../core/validation/workflow-save-validator';
 import { buildSyncedGraphPayload, resolveWorkflowGraphState } from './workflow-graph-state';
 import { workflowLifecycleManager } from '../services/workflow-lifecycle-manager';
 import { subscriptionService } from '../services/subscription-service';
@@ -37,7 +41,12 @@ async function requireUserId(req: Request): Promise<string> {
   return requireAuthenticatedUser(req);
 }
 
-function metadataWithPendingMarker(metadata: unknown, pending: boolean): Record<string, unknown> {
+function metadataWithAiSetupState(
+  metadata: unknown,
+  pending: boolean,
+  stage?: string,
+  readiness?: Record<string, unknown>
+): Record<string, unknown> {
   const base = metadata && typeof metadata === 'object' && !Array.isArray(metadata)
     ? { ...(metadata as Record<string, unknown>) }
     : {};
@@ -47,10 +56,15 @@ function metadataWithPendingMarker(metadata: unknown, pending: boolean): Record<
   base.aiSetup = {
     ...aiSetup,
     pending,
-    stage: pending ? 'ai_setup_pending' : 'complete',
+    stage: stage || (pending ? 'ai_setup_pending' : 'complete'),
+    ...(readiness ? { readiness } : {}),
     updatedAt: new Date().toISOString(),
   };
   return base;
+}
+
+function metadataWithPendingMarker(metadata: unknown, pending: boolean): Record<string, unknown> {
+  return metadataWithAiSetupState(metadata, pending);
 }
 
 export async function setupDraftWorkflowHandler(req: Request, res: Response) {
@@ -72,16 +86,24 @@ export async function setupDraftWorkflowHandler(req: Request, res: Response) {
   }
 
   const normalized = normalizeWorkflowForSave(nodes, edges);
+  const editorOpenReadiness = validateEditorOpenReadiness(normalized.nodes, normalized.edges);
   const validation = validateWorkflowForSave(normalized.nodes, normalized.edges, {
     freezeBoundary: { frozen: false },
   });
 
-  if (!validation.canSave) {
+  if (!editorOpenReadiness.ready) {
     return res.status(400).json({
       code: 'WORKFLOW_SETUP_DRAFT_INVALID',
-      error: 'Workflow validation failed',
-      message: `Cannot create setup draft: ${validation.errors.join('; ')}`,
-      details: { errors: validation.errors, warnings: validation.warnings },
+      error: 'Workflow graph is not safe to open',
+      message: `Cannot create setup draft: ${editorOpenReadiness.errors.join('; ')}`,
+      details: {
+        editorOpenReadiness,
+        legacyValidation: {
+          valid: validation.valid,
+          errors: validation.errors,
+          warnings: validation.warnings,
+        },
+      },
     });
   }
 
@@ -121,7 +143,24 @@ export async function setupDraftWorkflowHandler(req: Request, res: Response) {
         return res.status(500).json({ error: 'Failed to create setup draft', message: error.message });
       }
 
-      return res.json({ success: true, workflowId: data.id, workflow: data, validation });
+      return res.json({
+        success: true,
+        workflowId: data.id,
+        workflow: data,
+        validation: {
+          valid: editorOpenReadiness.ready,
+          errors: editorOpenReadiness.errors,
+          warnings: [
+            ...editorOpenReadiness.warnings,
+            ...validation.errors,
+            ...validation.warnings,
+          ],
+        },
+        editorOpenReadiness,
+        diagnostics: {
+          legacyValidation: validation,
+        },
+      });
     }
     if ((existing as any).user_id !== userId) {
       return res.status(403).json({ error: 'Forbidden', workflowId });
@@ -145,7 +184,24 @@ export async function setupDraftWorkflowHandler(req: Request, res: Response) {
       return res.status(500).json({ error: 'Failed to update setup draft', message: error.message });
     }
 
-    return res.json({ success: true, workflowId: data.id, workflow: data, validation });
+    return res.json({
+      success: true,
+      workflowId: data.id,
+      workflow: data,
+      validation: {
+        valid: editorOpenReadiness.ready,
+        errors: editorOpenReadiness.errors,
+        warnings: [
+          ...editorOpenReadiness.warnings,
+          ...validation.errors,
+          ...validation.warnings,
+        ],
+      },
+      editorOpenReadiness,
+      diagnostics: {
+        legacyValidation: validation,
+      },
+    });
   }
 
   const { data, error } = await db
@@ -158,7 +214,24 @@ export async function setupDraftWorkflowHandler(req: Request, res: Response) {
     return res.status(500).json({ error: 'Failed to create setup draft', message: error.message });
   }
 
-  return res.json({ success: true, workflowId: data.id, workflow: data, validation });
+  return res.json({
+    success: true,
+    workflowId: data.id,
+    workflow: data,
+    validation: {
+      valid: editorOpenReadiness.ready,
+      errors: editorOpenReadiness.errors,
+      warnings: [
+        ...editorOpenReadiness.warnings,
+        ...validation.errors,
+        ...validation.warnings,
+      ],
+    },
+    editorOpenReadiness,
+    diagnostics: {
+      legacyValidation: validation,
+    },
+  });
 }
 
 // Deduplicate concurrent commit-setup calls for the same workflow.
@@ -167,7 +240,7 @@ export async function setupDraftWorkflowHandler(req: Request, res: Response) {
 // all racing to write conflicting DB snapshots.
 const commitSetupInFlight = new Map<string, Promise<{ statusCode: number; body: unknown }>>();
 
-async function runCommitSetupWorkflow(
+export async function runCommitSetupWorkflow(
   req: Request
 ): Promise<{ statusCode: number; body: unknown }> {
   const db = getDbClient();
@@ -198,26 +271,33 @@ async function runCommitSetupWorkflow(
     edges: Array.isArray(graph.edges) ? graph.edges : [],
     metadata: (workflow as any).metadata || {},
   };
+  const editorOpenReadiness = validateEditorOpenReadiness(candidate.nodes as any, candidate.edges as any);
+  if (!editorOpenReadiness.ready) {
+    const errorSummary = editorOpenReadiness.errors.length
+      ? editorOpenReadiness.errors.join(' | ')
+      : 'Workflow graph is not safe to open in the editor';
+    return { statusCode: 409, body: {
+      code: 'WORKFLOW_EDITOR_OPEN_BLOCKED',
+      error: 'Workflow graph is not safe to open',
+      message: errorSummary,
+      workflowId,
+      details: { editorOpenReadiness },
+    }};
+  }
+
   const readiness = await workflowLifecycleManager.validateExecutionReady(candidate as any, userId);
+  const missingInputs = workflowLifecycleManager.discoverNodeInputs(candidate as any).inputs;
+  const existingMigrationsForCommit: string[] = (workflow as any)?.metadata?.appliedMigrations ?? [];
+  const normalizedForCommit = normalizeWorkflowForSave(candidate.nodes, candidate.edges, {
+    structuralMode: 'configOnly',
+    alreadyApplied: existingMigrationsForCommit,
+  });
+  const allMigrationsAfterCommit = Array.from(new Set([
+    ...existingMigrationsForCommit,
+    ...normalizedForCommit.migrationsApplied,
+  ]));
 
   if (!readiness.ready) {
-    const credentialOnlyFailure =
-      readiness.structurallyValid === true &&
-      (readiness.missingCredentials?.length ?? 0) > 0;
-
-    if (!credentialOnlyFailure) {
-      const errorSummary = readiness.errors?.length
-        ? readiness.errors.join(' | ')
-        : 'Workflow setup is incomplete';
-      return { statusCode: 409, body: {
-        code: 'WORKFLOW_SETUP_INCOMPLETE',
-        error: 'Workflow setup is incomplete',
-        message: errorSummary,
-        workflowId,
-        details: readiness,
-      }};
-    }
-
     const wasSetupPendingSoft = isSetupPending(workflow);
     const walletActiveSoft = await geminiWalletService.isActive(userId).catch(() => false);
     if (wasSetupPendingSoft) {
@@ -234,17 +314,39 @@ async function runCommitSetupWorkflow(
       }
     }
 
-    const softMetadata = metadataWithPendingMarker((workflow as any).metadata, false);
+    const missingCredentialCount = readiness.missingCredentials?.length ?? 0;
+    const setupStage =
+      missingInputs.length > 0 && missingCredentialCount > 0
+        ? 'setup_pending'
+        : missingInputs.length > 0
+          ? 'inputs_pending'
+          : 'credentials_pending';
+    const softPhase = missingInputs.length > 0 ? 'configuring_inputs' : 'ready_for_ownership';
+    const softMetadata = {
+      ...metadataWithAiSetupState((workflow as any).metadata, false, setupStage, {
+        editorOpenReadiness,
+        setupReadiness: {
+          ready: false,
+          missingInputs,
+          missingCredentials: readiness.missingCredentials || [],
+        },
+        executionReadiness: readiness,
+      }),
+      appliedMigrations: allMigrationsAfterCommit,
+    };
     const { error: softUpdateError } = await db
       .from('workflows')
       .update({
         status: 'active',
-        phase: 'ready_for_ownership',
+        phase: softPhase,
         confirmed: true,
         setup_completed: true,
-        setup_stage: 'credentials_pending',
+        setup_stage: setupStage,
         setup_completed_at: new Date().toISOString(),
         metadata: softMetadata,
+        graph: buildSyncedGraphPayload(normalizedForCommit.nodes, normalizedForCommit.edges, softMetadata),
+        nodes: normalizedForCommit.nodes,
+        edges: normalizedForCommit.edges,
         quota_source: walletActiveSoft ? 'gemini_wallet' : 'subscription',
         updated_at: new Date().toISOString(),
       } as any)
@@ -266,9 +368,15 @@ async function runCommitSetupWorkflow(
     return { statusCode: 200, body: {
       success: true,
       workflowId,
-      credentialsPending: true,
+      ready: false,
+      setupPending: true,
+      credentialsPending: missingCredentialCount > 0,
+      inputsPending: missingInputs.length > 0,
+      missingInputs,
       missingCredentials: readiness.missingCredentials,
-      phase: 'ready_for_ownership',
+      editorOpenReadiness,
+      executionReadiness: readiness,
+      phase: softPhase,
     }};
   }
 
@@ -289,17 +397,16 @@ async function runCommitSetupWorkflow(
     }
   }
 
-  const existingMigrationsForCommit: string[] = (workflow as any)?.metadata?.appliedMigrations ?? [];
-  const normalizedForCommit = normalizeWorkflowForSave(candidate.nodes, candidate.edges, {
-    structuralMode: 'configOnly',
-    alreadyApplied: existingMigrationsForCommit,
-  });
-  const allMigrationsAfterCommit = Array.from(new Set([
-    ...existingMigrationsForCommit,
-    ...normalizedForCommit.migrationsApplied,
-  ]));
   const metadata = {
-    ...metadataWithPendingMarker((workflow as any).metadata, false),
+    ...metadataWithAiSetupState((workflow as any).metadata, false, 'complete', {
+      editorOpenReadiness,
+      setupReadiness: {
+        ready: true,
+        missingInputs: [],
+        missingCredentials: [],
+      },
+      executionReadiness: readiness,
+    }),
     appliedMigrations: allMigrationsAfterCommit,
   };
   const { data: updated, error: updateError } = await db

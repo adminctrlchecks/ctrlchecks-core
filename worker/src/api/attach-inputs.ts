@@ -50,7 +50,10 @@ import {
   isMeaningfulStaticValue,
 } from '../core/utils/fill-mode-resolver';
 import { unifiedGraphOrchestrator } from '../core/orchestration/unified-graph-orchestrator';
-import { validateStructuralReadiness } from '../core/validation/workflow-save-validator';
+import {
+  validateEditorOpenReadiness,
+  validateStructuralReadiness,
+} from '../core/validation/workflow-save-validator';
 import { getStructuralDiagnostics, materializeStructuralFields } from '../services/ai/structure-materializer';
 import { applyStructuralIntentAlignment } from '../services/ai/intent-structural-projection';
 import { hydrateRequiredConfigFromRegistryDefaults } from '../core/validation/workflow-config-hydrator';
@@ -1950,6 +1953,19 @@ async function runAttachInputsPipeline(req: Request, res: Response): Promise<{ s
       attachInputsPositionSnapshot
     );
     const edgesToSave = finalNormalizedGraph.edges;
+    const editorOpenReadiness = validateEditorOpenReadiness(nodesToSave as any, edgesToSave as any);
+    if (!editorOpenReadiness.ready) {
+      return { statusCode: 400, body: (
+        createError(
+          ErrorCode.WORKFLOW_VALIDATION_FAILED,
+          'Workflow graph is not safe to open in the editor after input attachment',
+          {
+            workflowId,
+            editorOpenReadiness,
+          }
+        )
+      ) };
+    }
     let connectionReadiness: WorkflowConnectionReadinessResponse | undefined;
     if (userId) {
       try {
@@ -2370,6 +2386,23 @@ async function runAttachInputsPipeline(req: Request, res: Response): Promise<{ s
     });
 
     const effectiveFillModes = collectEffectiveFillModesForWizard(finalNormalizedGraph.nodes as any[]);
+    const missingSetupInputs = workflowLifecycleManager.discoverNodeInputs({
+      nodes: nodesToSave,
+      edges: edgesToSave,
+    } as any).inputs;
+    const setupReadiness = {
+      ready: missingSetupInputs.length === 0 && missingCredentialsCount === 0,
+      missingInputs: missingSetupInputs,
+      missingCredentialsCount,
+      requiredCredentialsCount,
+    };
+    const executionReadiness = {
+      ready: nextPhase === 'ready_for_execution',
+      errors: readiness.errors || [],
+      missingCredentials: readiness.missingCredentials || [],
+      structurallyValid: readiness.structurallyValid,
+      validationIssues: readiness.validationIssues || [],
+    };
 
     return { statusCode: 200, body: ({
       success: true,
@@ -2377,10 +2410,17 @@ async function runAttachInputsPipeline(req: Request, res: Response): Promise<{ s
       nodes: nodesToSave,
       edges: edgesToSave,
       validation: {
-        valid: validation.valid,
-        errors: validation.errors.map(e => e.message),
-        warnings: validation.warnings.map(w => w.message),
+        valid: editorOpenReadiness.ready,
+        errors: editorOpenReadiness.errors,
+        warnings: [
+          ...editorOpenReadiness.warnings,
+          ...validation.errors.map(e => e.message),
+          ...validation.warnings.map(w => w.message),
+        ],
       },
+      editorOpenReadiness,
+      setupReadiness,
+      executionReadiness,
       status: nextStatus,
       phase: nextPhase,
       ready: nextPhase === 'ready_for_execution',
@@ -2396,6 +2436,11 @@ async function runAttachInputsPipeline(req: Request, res: Response): Promise<{ s
         postFreezeReadonly: isPostFreezeReadonly,
         protectedConfigFingerprint: finalProtectedConfigFingerprint.fingerprint,
         invalidBareNodeIdInputKeys,
+        legacyValidation: {
+          valid: validation.valid,
+          errors: validation.errors.map(e => e.message),
+          warnings: validation.warnings.map(w => w.message),
+        },
       },
       buildAiUsage: snapshotBuildAiUsage(),
     }) };

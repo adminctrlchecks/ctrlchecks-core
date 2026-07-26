@@ -1,11 +1,80 @@
 import { describe, expect, it } from '@jest/globals';
-import { normalizeWorkflowForSave, validateStructuralReadiness, validateWorkflowForSave } from '../workflow-save-validator';
+import {
+  normalizeWorkflowForSave,
+  validateEditorOpenReadiness,
+  validateStructuralReadiness,
+  validateWorkflowForSave,
+} from '../workflow-save-validator';
 import {
   diffWorkflowProtectedConfig,
   fingerprintWorkflowProtectedConfig,
 } from '../../utils/workflow-topology-fingerprint';
 
 describe('workflow-save-validator', () => {
+  it('allows editor open for unresolved setup fields while strict execution readiness still fails', () => {
+    const nodes: any[] = [
+      {
+        id: 'f1',
+        type: 'form',
+        data: {
+          label: 'Form',
+          type: 'form',
+          category: 'trigger',
+          config: { _fillMode: { fields: 'runtime_ai' } },
+        },
+      },
+    ];
+    const edges: any[] = [];
+
+    const editorOpen = validateEditorOpenReadiness(nodes as any, edges as any);
+    const executionReady = validateStructuralReadiness(nodes as any, { strict: true });
+
+    expect(editorOpen.ready).toBe(true);
+    expect(editorOpen.errors).toEqual([]);
+    expect(executionReady.errors.length).toBeGreaterThan(0);
+    expect(executionReady.errors.some((e) => e.includes('missing required structural field "fields"'))).toBe(true);
+  });
+
+  it('blocks editor open for graph corruption instead of setup incompleteness', () => {
+    const nodes: any[] = [
+      {
+        id: 't1',
+        type: 'manual_trigger',
+        data: { label: 'Trigger', type: 'manual_trigger', category: 'trigger', config: {} },
+      },
+    ];
+    const edges: any[] = [{ id: 'e1', source: 't1', target: 'missing-node' }];
+
+    const editorOpen = validateEditorOpenReadiness(nodes as any, edges as any);
+
+    expect(editorOpen.ready).toBe(false);
+    expect(editorOpen.errors.some((e) => e.includes('references a missing node'))).toBe(true);
+  });
+
+  it('blocks editor open for cyclic graphs', () => {
+    const nodes: any[] = [
+      {
+        id: 't1',
+        type: 'manual_trigger',
+        data: { label: 'Trigger', type: 'manual_trigger', category: 'trigger', config: {} },
+      },
+      {
+        id: 'n1',
+        type: 'javascript',
+        data: { label: 'Code', type: 'javascript', category: 'transformation', config: {} },
+      },
+    ];
+    const edges: any[] = [
+      { id: 'e1', source: 't1', target: 'n1' },
+      { id: 'e2', source: 'n1', target: 't1' },
+    ];
+
+    const editorOpen = validateEditorOpenReadiness(nodes as any, edges as any);
+
+    expect(editorOpen.ready).toBe(false);
+    expect(editorOpen.errors.some((e) => e.includes('contains a cycle'))).toBe(true);
+  });
+
   it('flags structural required fields deferred to runtime_ai', () => {
     const nodes: any[] = [
       {

@@ -147,6 +147,94 @@ export interface SaveValidationResult {
   canSave: boolean; // Whether save should be allowed
 }
 
+export interface EditorOpenReadinessResult {
+  ready: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+/**
+ * Validate only the contract required to open a workflow in the editor.
+ *
+ * This intentionally does not check required node configuration, credentials,
+ * ownership choices, or execution readiness. Those belong in the checklist,
+ * properties panel, connection readiness, and run workflow gates after the user
+ * can access the editor.
+ */
+export function validateEditorOpenReadiness(
+  nodes: WorkflowNode[],
+  edges: WorkflowEdge[]
+): EditorOpenReadinessResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  if (!Array.isArray(nodes) || !Array.isArray(edges)) {
+    return {
+      ready: false,
+      errors: ['Workflow graph payload is corrupt: nodes and edges must be arrays'],
+      warnings,
+    };
+  }
+
+  if (nodes.length === 0) {
+    errors.push('Workflow graph has no nodes');
+  }
+
+  const nodeIds = new Set<string>();
+  nodes.forEach((node, index) => {
+    const id = String(node?.id || '').trim();
+    const nodeType = String(node?.data?.type || node?.type || '').trim();
+    if (!id) {
+      errors.push(`Node at index ${index} is missing an id`);
+      return;
+    }
+    if (nodeIds.has(id)) {
+      errors.push(`Workflow graph has duplicate node id "${id}"`);
+    }
+    nodeIds.add(id);
+    if (!nodeType) {
+      errors.push(`Node "${id}" is missing a type`);
+    }
+  });
+
+  const triggerNodes = nodes.filter(n => isTriggerNode(n));
+  if (nodes.length > 0 && triggerNodes.length === 0) {
+    errors.push('Workflow graph must include a trigger node');
+  } else if (triggerNodes.length > 1) {
+    errors.push(`Workflow graph has ${triggerNodes.length} trigger nodes; editor-open setup requires one trigger`);
+  }
+
+  const edgeIds = new Set<string>();
+  edges.forEach((edge, index) => {
+    const edgeId = String(edge?.id || '').trim();
+    const source = String(edge?.source || '').trim();
+    const target = String(edge?.target || '').trim();
+    if (edgeId) {
+      if (edgeIds.has(edgeId)) {
+        errors.push(`Workflow graph has duplicate edge id "${edgeId}"`);
+      }
+      edgeIds.add(edgeId);
+    }
+    if (!source || !target) {
+      errors.push(`Edge at index ${index} is missing source or target`);
+      return;
+    }
+    if (!nodeIds.has(source) || !nodeIds.has(target)) {
+      errors.push(`Edge "${edgeId || `${source}->${target}`}" references a missing node`);
+    }
+  });
+
+  if (hasDirectedCycle(nodes, edges)) {
+    errors.push('Workflow graph contains a cycle. Keep DAG structure and use loop node semantics for repetition.');
+  }
+
+  return {
+    ready: errors.length === 0,
+    errors,
+    warnings,
+  };
+}
+
 export function validateStructuralReadiness(
   nodes: WorkflowNode[],
   options?: { strict?: boolean }
