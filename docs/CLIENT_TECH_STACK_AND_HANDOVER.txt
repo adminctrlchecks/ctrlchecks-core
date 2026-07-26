@@ -1,0 +1,149 @@
+CtrlChecks Client Handover Notes
+Prepared: 2026-07-26
+
+Project Summary
+CtrlChecks is an AI workflow automation platform. It allows users to create workflows, connect external applications, generate workflow logic using AI, execute workflows, and monitor execution results.
+
+Main Deliverables To Share With Client
+1. Architecture Document
+   File: docs/CLIENT_ARCHITECTURE.md
+   Purpose: Explains frontend, backend, services, database, queue, deployment, security, and data flow.
+
+2. Tech Stack Document
+   This file can be shared as the simple notepad/plain-text summary.
+   Purpose: Gives the client a quick understanding of technologies used.
+
+3. SDK/API Handover Document
+   File: docs/SDK_API_HANDOVER_TEMPLATE.md
+   Purpose: Gives API groups, integration requirements, authentication notes, webhook notes, and sample format.
+
+4. Deployment and Environment Guide
+   Suggested source files:
+   - README.md
+   - QUICK_START.md
+   - RUN_APPLICATION.md
+   - infrastructure/terraform/README.md
+   Purpose: Explains how to run, deploy, configure, and verify the system.
+
+5. Security and Credentials Sheet
+   Purpose: Lists required environment variables and secret owners. Do not include actual secret values in a client document unless the sharing channel is approved and secure.
+
+6. Testing and QA Evidence
+   Suggested source files:
+   - testing/TESTING_GUIDE.md
+   - tests/load/README.md
+   - Service-specific test commands from package.json files
+   Purpose: Shows what has been verified and how future QA should be run.
+
+7. Maintenance and Operations Guide
+   Purpose: Explains health checks, metrics, logs, backups, monitoring, rollback, and incident handling.
+
+
+Technology Stack
+
+Frontend
+- React 18
+- TypeScript
+- Vite
+- Tailwind CSS
+- Radix UI / shadcn-style components
+- React Router
+- TanStack Query
+- Zustand
+- XYFlow / React Flow
+- Vitest
+- Playwright
+
+Backend
+- Node.js
+- Express.js
+- TypeScript
+- Prisma
+- PostgreSQL
+- Redis
+- Kafka
+- WebSocket
+- Prometheus metrics
+- Sentry monitoring
+
+Microservices
+- Workflow CRUD Service
+- Trigger Service
+- Credential Service
+- Execution Engine
+- Notification Service
+- AI Generator Service
+
+Database and Storage
+- PostgreSQL / AWS RDS
+- PgBouncer for connection pooling
+- Redis for cache, queues, and execution event coordination
+- S3 is referenced in Terraform infrastructure for file storage
+
+AI Layer
+- AI workflow generation pipeline in backend worker and ai-generator service
+- Ollama/FastAPI style external AI service support
+- OpenAI-compatible package support in backend
+
+Infrastructure
+- Docker Compose for production-style local/server orchestration
+- Nginx for load balancing
+- Kafka and Zookeeper for async request queues
+- Redis for runtime state
+- AWS Terraform modules for VPC, EC2, ALB, CloudFront, S3, Route53, IAM, and CloudWatch
+- Vercel-related frontend deployment files are present
+
+Security
+- Environment-based secrets
+- OAuth connection flows
+- Protected backend APIs
+- Rate limiting
+- CORS configuration
+- Helmet security headers
+- Audit/security event endpoints
+- Server-side service role key usage
+
+Operational Endpoints
+- /health
+- /health/live
+- /health/ready
+- /metrics
+
+
+Client Presentation Structure
+
+Use this order when presenting to client:
+1. What the platform does
+2. High-level architecture diagram
+3. Main components and responsibilities
+4. Data flow: workflow creation, credential connection, workflow execution
+5. Tech stack
+6. Deployment model
+7. Security approach
+8. Integration and API/SDK approach
+9. Testing and QA status
+10. Operations, monitoring, and handover requirements
+
+
+Documents Still Needed Before Final Client Delivery
+
+Fill these details before final sign-off:
+- Production domain names
+- Production API base URL
+- Frontend deployment URL
+- Database hosting details
+- Secret ownership list
+- OAuth app ownership details
+- Backup policy
+- Monitoring dashboard URL
+- Error alerting channel
+- Current known limitations
+- Client acceptance criteria
+- Support and maintenance contact process
+
+
+Client-Safe Sharing Rule
+
+Share architecture, tech stack, API format, deployment steps, and environment variable names.
+Do not share actual passwords, private keys, service role keys, OAuth client secrets, database passwords, JWT secrets, or cloud access keys in normal documents.
+
