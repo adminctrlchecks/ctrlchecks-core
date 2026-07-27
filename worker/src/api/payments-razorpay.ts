@@ -3,6 +3,7 @@ import { paymentService } from '../services/payment-service';
 import { subscriptionService } from '../services/subscription-service';
 import { AuthenticatedRequest } from '../core/middleware/subscription-auth';
 import { getDbClient } from '../core/database/aws-db-client';
+import { isUnlimitedModeEnabled } from '../services/system-settings-service';
 import { logger } from '../core/logger';
 
 /**
@@ -22,9 +23,11 @@ async function ensureUserExists(userId: string, email: string): Promise<void> {
 export async function getSubscriptionPlans(req: Request, res: Response) {
   try {
     const plans = await subscriptionService.getAvailablePlans();
+    const unlimitedModeEnabled = await isUnlimitedModeEnabled();
 
     return res.json({
       success: true,
+      unlimitedModeEnabled,
       plans: plans.map(plan => ({
         id: plan.id,
         name: plan.name,

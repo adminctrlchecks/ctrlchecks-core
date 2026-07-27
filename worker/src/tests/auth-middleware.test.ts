@@ -25,6 +25,11 @@ jest.mock('../core/config', () => ({
   }
 }));
 
+// System-wide unlimited mode is off unless a test says otherwise
+jest.mock('../services/system-settings-service', () => ({
+  isUnlimitedModeEnabled: jest.fn().mockResolvedValue(false)
+}));
+
 describe('Authentication Middleware', () => {
   let mockReq: Partial<AuthenticatedRequest>;
   let mockRes: Partial<Response>;
@@ -172,7 +177,7 @@ describe('Authentication Middleware', () => {
   });
 
   describe('requireSubscriptionPlan', () => {
-    it('should allow access when user has required subscription plan', () => {
+    it('should allow access when user has required subscription plan', async () => {
       mockReq.user = {
         id: 'user-123',
         email: 'user@example.com',
@@ -181,13 +186,13 @@ describe('Authentication Middleware', () => {
       };
 
       const middleware = requireSubscriptionPlan(['Pro', 'Enterprise']);
-      middleware(mockReq as AuthenticatedRequest, mockRes as Response, mockNext);
+      await middleware(mockReq as AuthenticatedRequest, mockRes as Response, mockNext);
 
       expect(mockNext).toHaveBeenCalled();
       expect(mockRes.status).not.toHaveBeenCalled();
     });
 
-    it('should deny access when user lacks required subscription plan', () => {
+    it('should deny access when user lacks required subscription plan', async () => {
       mockReq.user = {
         id: 'user-123',
         email: 'user@example.com',
@@ -196,7 +201,7 @@ describe('Authentication Middleware', () => {
       };
 
       const middleware = requireSubscriptionPlan(['Pro', 'Enterprise']);
-      middleware(mockReq as AuthenticatedRequest, mockRes as Response, mockNext);
+      await middleware(mockReq as AuthenticatedRequest, mockRes as Response, mockNext);
 
       expect(mockRes.status).toHaveBeenCalledWith(403);
       expect(mockRes.json).toHaveBeenCalledWith({

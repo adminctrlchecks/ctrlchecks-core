@@ -9,6 +9,7 @@ import { WorkflowAuthGate } from "@/components/WorkflowAuthGate";
 import { WorkflowActionButton } from "@/components/WorkflowActionButton";
 import { WorkflowCreationOptions } from "@/components/workflow/WorkflowCreationOptions";
 import { useWorkflowAuth } from "@/contexts/WorkflowAuthContext";
+import { useSubscription } from "@/hooks/useSubscription";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +35,7 @@ type WorkflowRecord = Tables<'workflows'> & {
 export default function Dashboard() {
   const { user, loading } = useAuth();
   const { authStatus } = useWorkflowAuth();
+  const { unlimitedModeEnabled } = useSubscription();
   const navigate = useNavigate();
   const [workflows, setWorkflows] = useState<WorkflowRecord[]>([]);
   const [workflowsLoading, setWorkflowsLoading] = useState(true);
@@ -457,15 +459,18 @@ export default function Dashboard() {
               <p className="text-muted-foreground mt-1">Here's what's happening with your workflows</p>
             </div>
             <div className="flex items-center gap-3">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navigate('/subscriptions')}
-                className="hidden sm:flex items-center gap-1.5"
-              >
-                <CreditCard className="h-4 w-4" />
-                Upgrade Plan
-              </Button>
+              {/* No upsell while the admin has unlimited access switched on. */}
+              {!unlimitedModeEnabled && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate('/subscriptions')}
+                  className="hidden sm:flex items-center gap-1.5"
+                >
+                  <CreditCard className="h-4 w-4" />
+                  Upgrade Plan
+                </Button>
+              )}
               <WorkflowActionButton
                 className="gradient-primary text-primary-foreground"
                 onClick={() => setShowCreateOptions(true)}

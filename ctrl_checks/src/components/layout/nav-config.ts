@@ -13,6 +13,7 @@ import {
   CreditCard,
   Sparkles,
   MonitorPlay,
+  SlidersHorizontal,
 } from 'lucide-react';
 
 export interface UserNavItem {
@@ -43,6 +44,7 @@ export const ADMIN_SECTION_NAV: AdminNavItem[] = [
   { title: 'Landing Demo', path: '/admin/landing-demo', icon: MonitorPlay },
   { title: 'Users', path: '/admin/users', icon: Users },
   { title: 'Subscriptions', path: '/admin/subscriptions', icon: CreditCard },
+  { title: 'Plans & Access', path: '/admin/settings', icon: SlidersHorizontal },
   { title: 'Documentation', path: '/docs', icon: BookOpen },
 ];
 

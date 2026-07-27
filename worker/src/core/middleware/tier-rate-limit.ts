@@ -16,6 +16,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import type { AuthenticatedRequest } from './subscription-auth';
+import { isUnlimitedModeEnabled } from '../../services/system-settings-service';
 
 // ─── Tier limits ─────────────────────────────────────────────────────────────
 
@@ -125,6 +126,15 @@ export function tierRateLimit(endpoint: EndpointType) {
 
   return async (req: Request, res: Response, next: NextFunction) => {
     const authReq = req as AuthenticatedRequest;
+
+    // System-wide unlimited mode: skip plan-tier throttling entirely. The
+    // non-plan-based infra limiters (distributed-rate-limit, token bucket)
+    // still apply, so this cannot be used to overwhelm the service.
+    if (await isUnlimitedModeEnabled()) {
+      res.setHeader('X-RateLimit-Tier', 'unlimited');
+      return next();
+    }
+
     const tier = resolveTier(authReq.user?.subscriptionPlan);
     const limits = TIER_LIMITS[tier];
     const limit = endpoint === 'execute' ? limits.executePerMin : limits.generatePerMin;

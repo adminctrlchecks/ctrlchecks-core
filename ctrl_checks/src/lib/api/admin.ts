@@ -15,6 +15,8 @@ type AppRole = Database['public']['Enums']['app_role'];
 const ADMIN_API_BASE = `${ENDPOINTS.itemBackend}/admin-templates`;
 const ADMIN_USERS_API_BASE = `${ENDPOINTS.itemBackend}/admin-users`;
 const ADMIN_LANDING_DEMO_API_BASE = `${ENDPOINTS.itemBackend}/api/admin-landing-demo`;
+const ADMIN_PLANS_API_BASE = `${ENDPOINTS.itemBackend}/api/admin/subscriptions/plans`;
+const ADMIN_UNLIMITED_MODE_API = `${ENDPOINTS.itemBackend}/api/admin/settings/unlimited-mode`;
 
 export interface AdminUser {
   id: string;
@@ -486,4 +488,142 @@ export async function deleteLandingDemoScenario(id: string): Promise<{ success: 
   }
 
   return response.json();
+}
+
+// ─── Subscription plans + system-wide unlimited mode ─────────────────────────
+
+export interface AdminSubscriptionPlan {
+  id: string;
+  /** Immutable: 'Free' | 'Pro' | 'Enterprise' */
+  name: string;
+  workflowLimit: number;
+  /** Raw DB value, in paise */
+  priceInr: number;
+  /** priceInr / 100 — what the admin edits */
+  priceRupees: number;
+  features: string[];
+  isActive: boolean;
+  updatedAt: string | null;
+}
+
+export interface AdminPlansResponse {
+  plans: AdminSubscriptionPlan[];
+  /** DEVELOPMENT_PRICING env flag — when true the worker forces paid plans to ₹1 */
+  developmentPricing: boolean;
+  unlimitedModeEnabled: boolean;
+}
+
+export type AdminSubscriptionPlanUpdate = Partial<{
+  workflowLimit: number;
+  priceRupees: number;
+  features: string[];
+  isActive: boolean;
+}>;
+
+export interface UnlimitedModeSetting {
+  enabled: boolean;
+  updatedAt: string | null;
+  updatedBy: string | null;
+}
+
+/**
+ * List every subscription plan, including deactivated ones (admin only).
+ */
+export async function getAdminSubscriptionPlans(): Promise<AdminPlansResponse> {
+  const token = await getAuthToken();
+
+  const response = await fetch(ADMIN_PLANS_API_BASE, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.message || error.error || 'Failed to fetch subscription plans');
+  }
+
+  const data = await response.json();
+  return {
+    plans: data.plans || [],
+    developmentPricing: Boolean(data.developmentPricing),
+    unlimitedModeEnabled: Boolean(data.unlimitedModeEnabled),
+  };
+}
+
+/**
+ * Update a plan's price, workflow allowance, features, or active state.
+ * Plan names are immutable server-side.
+ */
+export async function updateSubscriptionPlan(
+  planId: string,
+  updates: AdminSubscriptionPlanUpdate
+): Promise<AdminSubscriptionPlan> {
+  const token = await getAuthToken();
+
+  const response = await fetch(`${ADMIN_PLANS_API_BASE}/${planId}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(updates),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.message || error.error || 'Failed to update subscription plan');
+  }
+
+  const data = await response.json();
+  return data.plan;
+}
+
+/**
+ * Read the system-wide unlimited-access flag (admin only).
+ */
+export async function getUnlimitedMode(): Promise<UnlimitedModeSetting> {
+  const token = await getAuthToken();
+
+  const response = await fetch(ADMIN_UNLIMITED_MODE_API, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.message || error.error || 'Failed to fetch unlimited mode setting');
+  }
+
+  const data = await response.json();
+  return data.unlimitedMode;
+}
+
+/**
+ * Turn system-wide unlimited access on or off. Affects every user immediately.
+ */
+export async function setUnlimitedMode(enabled: boolean): Promise<UnlimitedModeSetting> {
+  const token = await getAuthToken();
+
+  const response = await fetch(ADMIN_UNLIMITED_MODE_API, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ enabled }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.message || error.error || 'Failed to update unlimited mode setting');
+  }
+
+  const data = await response.json();
+  return data.unlimitedMode;
 }

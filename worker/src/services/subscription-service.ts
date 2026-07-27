@@ -3,6 +3,13 @@ import { getDbPool } from '../core/database/db-pool';
 import { config } from '../core/config';
 import type { PoolClient } from 'pg';
 import { geminiWalletService } from './ai/gemini-wallet-service';
+import { isUnlimitedModeEnabled } from './system-settings-service';
+
+/**
+ * Effective workflow limit reported while system-wide unlimited mode is on.
+ * Mirrors the sentinel the Gemini-wallet bypass already uses.
+ */
+export const UNLIMITED_WORKFLOW_LIMIT = Number.MAX_SAFE_INTEGER;
 
 export interface SubscriptionPlan {
   id: string;
@@ -545,6 +552,18 @@ export class SubscriptionService {
    */
   async getSubscriptionUsage(userId: string): Promise<SubscriptionUsage> {
     try {
+      // System-wide unlimited mode: report an effectively infinite allowance so
+      // every downstream gate (middleware, save paths, UI) sees free capacity.
+      if (await isUnlimitedModeEnabled()) {
+        const workflowsUsed = await this.syncWorkflowCount(userId).catch(() => 0);
+        return {
+          workflowsUsed,
+          workflowLimit: UNLIMITED_WORKFLOW_LIMIT,
+          remainingWorkflows: UNLIMITED_WORKFLOW_LIMIT,
+          utilizationPercentage: 0
+        };
+      }
+
       const subscription = await this.getUserSubscription(userId);
       const workflowsUsed = await this.syncWorkflowCount(userId);
       const workflowLimit = await this.getEffectiveWorkflowLimit(userId).catch(() => subscription?.workflowLimit || 2);
@@ -587,6 +606,9 @@ export class SubscriptionService {
    */
   async canCreateWorkflow(userId: string): Promise<boolean> {
     try {
+      if (await isUnlimitedModeEnabled()) {
+        return true;
+      }
       if (await geminiWalletService.isActive(userId)) {
         return true;
       }

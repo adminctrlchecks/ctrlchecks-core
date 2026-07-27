@@ -4,6 +4,8 @@ import { AuthenticatedRequest } from '../core/middleware/subscription-auth';
 import { getDbClient } from '../core/database/aws-db-client';
 import { queryAsService } from '../core/database/db-pool';
 import { geminiWalletService } from '../services/ai/gemini-wallet-service';
+import { getUnlimitedMode, isUnlimitedModeEnabled, setUnlimitedMode } from '../services/system-settings-service';
+import { config } from '../core/config';
 import { logger } from '../core/logger';
 
 async function ensureUserExists(userId: string, email: string): Promise<void> {
@@ -32,6 +34,7 @@ export async function getCurrentSubscription(req: AuthenticatedRequest, res: Res
     const wallet = await geminiWalletService.getState(req.user.id).catch(() => null);
     const subscriptionFrozen = Boolean(wallet?.subscriptionFrozen);
     const walletNeedsAttention = Boolean(wallet?.enabled && wallet.hasKey && ['invalid', 'quota_exceeded', 'error'].includes(wallet.status));
+    const unlimitedModeEnabled = await isUnlimitedModeEnabled();
 
     if (!subscription) {
       return res.status(404).json({
@@ -59,9 +62,10 @@ export async function getCurrentSubscription(req: AuthenticatedRequest, res: Res
         workflowLimit: usage.workflowLimit,
         remainingWorkflows: usage.remainingWorkflows,
         utilizationPercentage: usage.utilizationPercentage,
-        canCreateWorkflow: subscriptionFrozen || usage.remainingWorkflows > 0
+        canCreateWorkflow: unlimitedModeEnabled || subscriptionFrozen || usage.remainingWorkflows > 0
       },
-      billingMode: subscriptionFrozen ? 'gemini_wallet' : 'subscription',
+      unlimitedModeEnabled,
+      billingMode: unlimitedModeEnabled ? 'unlimited' : subscriptionFrozen ? 'gemini_wallet' : 'subscription',
       subscriptionFrozen,
       walletStatus: wallet?.status || 'empty',
       freezeMessage: subscriptionFrozen
@@ -416,6 +420,268 @@ export async function adminUpgradeUser(req: AuthenticatedRequest, res: Response)
       error: 'Admin Upgrade Error',
       message: error?.message || 'Failed to upgrade user subscription',
       code: 'ADMIN_UPGRADE_ERROR'
+    });
+  }
+}
+
+// ─── Admin: system-wide unlimited mode ───────────────────────────────────────
+
+async function logAdminAction(
+  req: AuthenticatedRequest,
+  action: string,
+  details: Record<string, any>,
+  targetUserId: string | null = null
+): Promise<void> {
+  try {
+    const db = getDbClient();
+    await db.from('admin_actions').insert({
+      admin_user_id: req.user!.id,
+      target_user_id: targetUserId,
+      action,
+      details,
+      ip_address: req.ip,
+      user_agent: req.get('User-Agent')
+    });
+  } catch (error: any) {
+    // Audit logging must never block the action itself.
+    logger.error(`[SubscriptionAPI] Failed to log admin action '${action}':`, error);
+  }
+}
+
+/**
+ * GET /api/admin/settings/unlimited-mode  (admin only)
+ */
+export async function adminGetUnlimitedMode(req: AuthenticatedRequest, res: Response) {
+  try {
+    const setting = await getUnlimitedMode();
+    return res.json({ success: true, unlimitedMode: setting });
+  } catch (error: any) {
+    logger.error('[SubscriptionAPI] adminGetUnlimitedMode error:', error);
+    return res.status(500).json({
+      error: 'Unlimited Mode Fetch Error',
+      message: error?.message || 'Failed to read unlimited mode setting',
+      code: 'UNLIMITED_MODE_FETCH_ERROR'
+    });
+  }
+}
+
+/**
+ * PUT /api/admin/settings/unlimited-mode  (admin only)
+ * Body: { enabled: boolean }
+ */
+export async function adminSetUnlimitedMode(req: AuthenticatedRequest, res: Response) {
+  try {
+    const { enabled } = req.body ?? {};
+
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'enabled must be a boolean',
+        code: 'INVALID_ENABLED_FLAG'
+      });
+    }
+
+    const setting = await setUnlimitedMode(enabled, req.user!.id);
+    await logAdminAction(req, 'unlimited_mode_toggled', { enabled });
+
+    logger.warn(`[SubscriptionAPI] Unlimited mode ${enabled ? 'ENABLED' : 'DISABLED'} by admin ${req.user!.id}`);
+
+    return res.json({
+      success: true,
+      message: enabled
+        ? 'Unlimited access is now active for every user. Subscription limits are bypassed.'
+        : 'Unlimited access is off. Subscription plans and limits are enforced again.',
+      unlimitedMode: setting
+    });
+  } catch (error: any) {
+    logger.error('[SubscriptionAPI] adminSetUnlimitedMode error:', error);
+    return res.status(500).json({
+      error: 'Unlimited Mode Update Error',
+      message: error?.message || 'Failed to update unlimited mode setting',
+      code: 'UNLIMITED_MODE_UPDATE_ERROR'
+    });
+  }
+}
+
+// ─── Admin: subscription plan management ─────────────────────────────────────
+
+function mapAdminPlanRow(row: any) {
+  return {
+    id: row.id,
+    name: row.name,
+    workflowLimit: Number(row.workflow_limit),
+    // price_inr is stored in paise; expose both so the UI can edit whole rupees.
+    priceInr: Number(row.price_inr),
+    priceRupees: Number(row.price_inr) / 100,
+    features: Array.isArray(row.features) ? row.features : (row.features ? JSON.parse(row.features) : []),
+    isActive: Boolean(row.is_active),
+    updatedAt: row.updated_at || null
+  };
+}
+
+/**
+ * GET /api/admin/subscriptions/plans  (admin only)
+ * Unlike the public endpoint this returns inactive plans too.
+ */
+export async function adminGetPlans(req: AuthenticatedRequest, res: Response) {
+  try {
+    const rows = await queryAsService(
+      `SELECT id, name, workflow_limit, price_inr, features, is_active, updated_at
+       FROM public.subscription_plans
+       ORDER BY workflow_limit ASC`
+    );
+
+    return res.json({
+      success: true,
+      plans: (rows || []).map(mapAdminPlanRow),
+      // When DEVELOPMENT_PRICING is on the worker overrides paid-plan prices to
+      // ₹1 at read time, so edited prices will not show on the pricing page.
+      developmentPricing: Boolean(config.developmentPricing),
+      unlimitedModeEnabled: await isUnlimitedModeEnabled()
+    });
+  } catch (error: any) {
+    logger.error('[SubscriptionAPI] adminGetPlans error:', error);
+    return res.status(500).json({
+      error: 'Admin Plans Fetch Error',
+      message: error?.message || 'Failed to fetch subscription plans',
+      code: 'ADMIN_PLANS_FETCH_ERROR'
+    });
+  }
+}
+
+/**
+ * PATCH /api/admin/subscriptions/plans/:id  (admin only)
+ * Body: { workflowLimit?, priceRupees?, features?, isActive? }
+ *
+ * `name` is intentionally immutable — the value is constrained by a DB CHECK
+ * and assumed to be one of Free/Pro/Enterprise by tier resolution and pricing
+ * lookups elsewhere in the worker.
+ */
+export async function adminUpdatePlan(req: AuthenticatedRequest, res: Response) {
+  try {
+    const { id } = req.params;
+    const { workflowLimit, priceRupees, features, isActive, name } = req.body ?? {};
+
+    if (name !== undefined) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Plan name is immutable and cannot be changed',
+        code: 'PLAN_NAME_IMMUTABLE'
+      });
+    }
+
+    const existingRows = await queryAsService(
+      `SELECT id, name, workflow_limit, price_inr, features, is_active, updated_at
+       FROM public.subscription_plans
+       WHERE id = $1
+       LIMIT 1`,
+      [id]
+    );
+    const existing = existingRows[0];
+
+    if (!existing) {
+      return res.status(404).json({
+        error: 'Plan Not Found',
+        message: `No subscription plan with id '${id}'`,
+        code: 'PLAN_NOT_FOUND'
+      });
+    }
+
+    const updates: string[] = [];
+    const params: any[] = [id];
+
+    if (workflowLimit !== undefined) {
+      const limit = Number(workflowLimit);
+      if (!Number.isInteger(limit) || limit < 0) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'workflowLimit must be a non-negative integer',
+          code: 'INVALID_WORKFLOW_LIMIT'
+        });
+      }
+      params.push(limit);
+      updates.push(`workflow_limit = $${params.length}`);
+    }
+
+    if (priceRupees !== undefined) {
+      const rupees = Number(priceRupees);
+      if (!Number.isFinite(rupees) || rupees < 0) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'priceRupees must be a non-negative number',
+          code: 'INVALID_PRICE'
+        });
+      }
+      params.push(Math.round(rupees * 100));
+      updates.push(`price_inr = $${params.length}`);
+    }
+
+    if (features !== undefined) {
+      if (!Array.isArray(features) || features.some((f: any) => typeof f !== 'string')) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'features must be an array of strings',
+          code: 'INVALID_FEATURES'
+        });
+      }
+      params.push(JSON.stringify(features));
+      updates.push(`features = $${params.length}::jsonb`);
+    }
+
+    if (isActive !== undefined) {
+      if (typeof isActive !== 'boolean') {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'isActive must be a boolean',
+          code: 'INVALID_IS_ACTIVE'
+        });
+      }
+      if (existing.name === 'Free' && isActive === false) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'The Free plan cannot be deactivated — it is the baseline allowance for every user',
+          code: 'FREE_PLAN_REQUIRED'
+        });
+      }
+      params.push(isActive);
+      updates.push(`is_active = $${params.length}`);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'No editable fields supplied',
+        code: 'NO_PLAN_UPDATES'
+      });
+    }
+
+    const updatedRows = await queryAsService(
+      `UPDATE public.subscription_plans
+       SET ${updates.join(', ')}, updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, name, workflow_limit, price_inr, features, is_active, updated_at`,
+      params
+    );
+
+    // Plans are cached in-process for 5 minutes — drop it so the edit is live.
+    subscriptionService.clearCache();
+
+    const updated = mapAdminPlanRow(updatedRows[0]);
+
+    await logAdminAction(req, 'subscription_plan_updated', {
+      planId: id,
+      planName: existing.name,
+      before: mapAdminPlanRow(existing),
+      after: updated
+    });
+
+    return res.json({ success: true, plan: updated });
+  } catch (error: any) {
+    logger.error('[SubscriptionAPI] adminUpdatePlan error:', error);
+    return res.status(500).json({
+      error: 'Admin Plan Update Error',
+      message: error?.message || 'Failed to update subscription plan',
+      code: 'ADMIN_PLAN_UPDATE_ERROR'
     });
   }
 }

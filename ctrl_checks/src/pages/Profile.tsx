@@ -56,8 +56,10 @@ interface SubscriptionInfo {
   workflowsUsed: number;
   remainingWorkflows: number;
   utilizationPercentage: number;
-  billingMode?: "subscription" | "gemini_wallet";
+  billingMode?: "subscription" | "gemini_wallet" | "unlimited";
   subscriptionFrozen?: boolean;
+  /** Admin switched off subscription enforcement platform-wide */
+  unlimitedModeEnabled?: boolean;
   walletStatus?: string;
   freezeMessage?: string | null;
 }
@@ -167,6 +169,7 @@ export default function Profile() {
           utilizationPercentage: data.usage.utilizationPercentage,
           billingMode: data.billingMode,
           subscriptionFrozen: data.subscriptionFrozen,
+          unlimitedModeEnabled: Boolean(data.unlimitedModeEnabled),
           walletStatus: data.walletStatus,
           freezeMessage: data.freezeMessage,
         });
@@ -410,6 +413,13 @@ export default function Profile() {
                       Loading subscription...
                     </div>
                   ) : subscription ? (
+                    subscription.unlimitedModeEnabled ? (
+                      <div className="flex items-start gap-2 rounded-lg border border-primary/30 bg-primary/10 p-3 text-xs text-primary">
+                        <CheckCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                        Unlimited access is active — you can create as many workflows as you need, and
+                        no plan limits apply.
+                      </div>
+                    ) : (
                     <>
                       {subscription.subscriptionFrozen && (
                         <div className="flex items-start gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-700">
@@ -441,6 +451,7 @@ export default function Profile() {
                         </Link>
                       </Button>
                     </>
+                    )
                   ) : (
                     <Button asChild className="h-9 w-full text-sm">
                       <Link to="/subscriptions"><Zap className="mr-2 h-3.5 w-3.5" />View Plans</Link>

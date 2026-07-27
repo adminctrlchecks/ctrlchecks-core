@@ -71,6 +71,8 @@ export default function Subscriptions() {
   const [processing, setProcessing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [userName, setUserName] = useState<string>("");
+  /** Admin-controlled: when on, plans are not enforced and nothing is for sale. */
+  const [unlimitedMode, setUnlimitedMode] = useState(false);
 
   // Load Razorpay script once
   useEffect(() => {
@@ -101,6 +103,7 @@ export default function Subscriptions() {
       if (!res.ok) throw new Error("Failed to load plans");
       const data = await res.json();
       setPlans(data.plans || []);
+      setUnlimitedMode(Boolean(data.unlimitedModeEnabled));
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -249,8 +252,8 @@ export default function Subscriptions() {
             </div>
           )}
 
-          {/* Current plan + usage */}
-          {currentSub && (
+          {/* Current plan + usage — meaningless while unlimited access is on */}
+          {currentSub && !unlimitedMode && (
             <div className="mt-4 inline-flex flex-col items-center gap-2">
               <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1.5 text-sm font-medium text-primary">
                 <Check className="h-3.5 w-3.5" />
@@ -268,7 +271,7 @@ export default function Subscriptions() {
           )}
 
           {/* Dev mode badge */}
-          {plans[0]?.developmentMode && (
+          {plans[0]?.developmentMode && !unlimitedMode && (
             <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-amber-100 dark:bg-amber-900/30 px-3 py-1 text-xs font-medium text-amber-700 dark:text-amber-400">
               <AlertCircle className="h-3 w-3" />
               Test mode — ₹1 pricing active
@@ -286,7 +289,22 @@ export default function Subscriptions() {
           </div>
         )}
 
-        {/* Plans */}
+        {/* Unlimited access replaces the pricing grid entirely */}
+        {unlimitedMode ? (
+          <div className="rounded-2xl border border-primary/30 bg-primary/5 p-8 text-center">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+              <Check className="h-6 w-6 text-primary" />
+            </div>
+            <h2 className="text-xl font-semibold">Unlimited access is active</h2>
+            <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+              Every feature is currently open to all accounts — you can build and run as many
+              workflows as you like. There is nothing to buy and no plan to choose right now.
+            </p>
+            <Button className="mt-6" onClick={() => navigate("/dashboard")}>
+              Back to dashboard
+            </Button>
+          </div>
+        ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {plans.map((plan) => {
             const meta = PLAN_META[plan.name];
@@ -383,10 +401,13 @@ export default function Subscriptions() {
             );
           })}
         </div>
+        )}
 
-        <p className="text-center text-xs text-muted-foreground mt-8">
-          Secure payments via Razorpay · Cancel anytime · No hidden fees
-        </p>
+        {!unlimitedMode && (
+          <p className="text-center text-xs text-muted-foreground mt-8">
+            Secure payments via Razorpay · Cancel anytime · No hidden fees
+          </p>
+        )}
       </main>
     </div>
   );

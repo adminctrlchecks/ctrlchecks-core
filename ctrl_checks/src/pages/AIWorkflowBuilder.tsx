@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 const AutonomousAgentWizard = lazy(() => import('@/components/workflow/AutonomousAgentWizard'));
 
 export default function AIWorkflowBuilder() {
-  const { usage, loading } = useSubscriptionUsage();
+  const { usage, loading, outOfWorkflows } = useSubscriptionUsage();
 
   if (loading) {
     return (
@@ -20,7 +20,7 @@ export default function AIWorkflowBuilder() {
     );
   }
 
-  if (usage && usage.remainingWorkflows <= 0) {
+  if (usage && outOfWorkflows) {
     return (
       <div className="fixed inset-0 z-50 flex flex-col bg-background">
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-card px-4">

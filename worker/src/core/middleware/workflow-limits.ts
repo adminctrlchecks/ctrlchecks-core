@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { subscriptionService } from '../../services/subscription-service';
 import { AuthenticatedRequest } from './subscription-auth';
 import { geminiWalletService } from '../../services/ai/gemini-wallet-service';
+import { isUnlimitedModeEnabled } from '../../services/system-settings-service';
 
 export interface WorkflowLimitRequest extends AuthenticatedRequest {
   workflowLimitCheck?: {
@@ -195,7 +196,7 @@ export const getWorkflowUsage = async (req: WorkflowLimitRequest, res: Response,
  * Middleware for subscription plan-based feature access
  */
 export const requirePlan = (allowedPlans: string[]) => {
-  return (req: WorkflowLimitRequest, res: Response, next: NextFunction) => {
+  return async (req: WorkflowLimitRequest, res: Response, next: NextFunction) => {
     if (!req.user) {
       return res.status(401).json({
         error: 'Unauthorized',
@@ -203,7 +204,12 @@ export const requirePlan = (allowedPlans: string[]) => {
         code: 'AUTH_REQUIRED'
       });
     }
-    
+
+    // System-wide unlimited mode grants every plan-gated feature.
+    if (await isUnlimitedModeEnabled()) {
+      return next();
+    }
+
     const userPlan = req.user.subscriptionPlan || 'Free';
     
     if (!allowedPlans.includes(userPlan)) {

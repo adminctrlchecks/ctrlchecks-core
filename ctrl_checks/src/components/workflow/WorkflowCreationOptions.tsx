@@ -1,8 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertCircle, ArrowRight, CreditCard, Hammer, Loader2, Sparkles } from 'lucide-react';
-import { awsClient } from '@/integrations/aws/client';
-import { getBackendUrl } from '@/lib/api/getBackendUrl';
+import { useSubscription } from '@/hooks/useSubscription';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -11,47 +9,27 @@ interface SubscriptionUsage {
   workflowLimit: number;
   remainingWorkflows: number;
   planName: string;
+  unlimitedModeEnabled: boolean;
 }
 
+/**
+ * Thin adapter over {@link useSubscription} kept for existing callers.
+ * `outOfWorkflows` already accounts for system-wide unlimited mode.
+ */
 export function useSubscriptionUsage() {
-  const [usage, setUsage] = useState<SubscriptionUsage | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { subscription, loading, refresh, isOutOfWorkflows, unlimitedModeEnabled } = useSubscription();
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    try {
-      const token = (await awsClient.auth.getSession()).data.session?.access_token;
-      if (!token) {
-        setUsage(null);
-        return;
+  const usage: SubscriptionUsage | null = subscription
+    ? {
+        workflowsUsed: subscription.workflowsUsed,
+        workflowLimit: subscription.workflowLimit,
+        remainingWorkflows: subscription.remainingWorkflows,
+        planName: subscription.planName,
+        unlimitedModeEnabled: subscription.unlimitedModeEnabled,
       }
+    : null;
 
-      const res = await fetch(`${getBackendUrl()}/api/subscriptions/current`, {
-        cache: 'no-store',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        setUsage(null);
-        return;
-      }
-
-      const data = await res.json();
-      setUsage({
-        workflowsUsed: Number(data.usage?.workflowsUsed ?? data.subscription?.workflowsUsed ?? 0),
-        workflowLimit: Number(data.usage?.workflowLimit ?? data.subscription?.workflowLimit ?? 2),
-        remainingWorkflows: Number(data.usage?.remainingWorkflows ?? 0),
-        planName: String(data.subscription?.planName ?? 'Free'),
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  return { usage, loading, refresh };
+  return { usage, loading, refresh, outOfWorkflows: isOutOfWorkflows, unlimitedModeEnabled };
 }
 
 interface WorkflowCreationOptionsProps {
@@ -60,8 +38,8 @@ interface WorkflowCreationOptionsProps {
 
 export function WorkflowCreationOptions({ onNavigate }: WorkflowCreationOptionsProps) {
   const navigate = useNavigate();
-  const { usage, loading } = useSubscriptionUsage();
-  const aiLocked = !!usage && usage.remainingWorkflows <= 0;
+  const { usage, loading, outOfWorkflows } = useSubscriptionUsage();
+  const aiLocked = !!usage && outOfWorkflows;
 
   const go = (path: string) => {
     onNavigate?.();

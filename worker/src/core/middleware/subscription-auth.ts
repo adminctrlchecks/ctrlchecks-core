@@ -6,6 +6,7 @@ import { config } from '../config';
 import { queryAsService } from '../database/db-pool';
 import { ensureUserRows } from '../database/ensure-user';
 import { resolveCanonicalUserId } from '../database/identity-resolver';
+import { isUnlimitedModeEnabled } from '../../services/system-settings-service';
 
 // Cognito JWT verifier — verifies access tokens issued by our User Pool
 const cognitoVerifier = config.cognitoUserPoolId
@@ -442,15 +443,20 @@ export const requireRole = (allowedRoles: string[]) => {
  * Subscription plan-based access control middleware
  */
 export const requireSubscriptionPlan = (allowedPlans: string[]) => {
-  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  return async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     if (!req.user) {
-      return res.status(401).json({ 
-        error: 'Unauthorized', 
+      return res.status(401).json({
+        error: 'Unauthorized',
         message: 'Authentication required',
         code: 'AUTH_REQUIRED'
       });
     }
-    
+
+    // System-wide unlimited mode grants every plan-gated feature.
+    if (await isUnlimitedModeEnabled()) {
+      return next();
+    }
+
     const userPlan = req.user.subscriptionPlan || 'Free';
     
     if (!allowedPlans.includes(userPlan)) {

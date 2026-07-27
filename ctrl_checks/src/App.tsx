@@ -37,6 +37,7 @@ const UsersManager = lazy(() => import("./pages/admin/UsersManager"));
 const UserDetails = lazy(() => import("./pages/admin/UserDetails"));
 const AdminPlaceholder = lazy(() => import("./pages/admin/AdminPlaceholder"));
 const AdminSubscriptions = lazy(() => import("./pages/admin/AdminSubscriptions"));
+const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
 const SettingsApiKeys = lazy(() => import("./pages/settings/ApiKeys"));
 const SettingsTeams = lazy(() => import("./pages/settings/Teams"));
 const SettingsNotifications = lazy(() => import("./pages/settings/Notifications"));
@@ -221,7 +222,7 @@ const App = () => (
                     path="/admin/settings"
                     element={
                       <AdminRoute>
-                        <AdminPlaceholder />
+                        <AdminSettings />
                       </AdminRoute>
                     }
                   />

@@ -371,7 +371,7 @@ import {
 import { salesforceAuthorizeHandler, salesforceCallbackHandler } from './api/oauth-salesforce';
 import { isOAuthProviderMigrated, proxyToCredentialService } from './middleware/credential-oauth-proxy';
 import { createRazorpayOrder, verifyRazorpayPayment, getSubscriptionPlans } from './api/payments-razorpay';
-import { getCurrentSubscription, cancelSubscription, getSubscriptionHistory, adminGetUsers, adminUpgradeUser } from './api/subscriptions';
+import { getCurrentSubscription, cancelSubscription, getSubscriptionHistory, adminGetUsers, adminUpgradeUser, adminGetPlans, adminUpdatePlan, adminGetUnlimitedMode, adminSetUnlimitedMode } from './api/subscriptions';
 import {
   activateGeminiWalletHandler,
   deactivateGeminiWalletHandler,
@@ -1193,6 +1193,32 @@ app.post('/api/admin/subscriptions/upgrade/:userId',
   asyncHandler(authenticateUser),
   requireAdmin,
   asyncHandler(adminUpgradeUser)
+);
+app.get('/api/admin/subscriptions/plans',
+  adminLogger('admin-get-plans'),
+  asyncHandler(authenticateUser),
+  requireAdmin,
+  asyncHandler(adminGetPlans)
+);
+app.patch('/api/admin/subscriptions/plans/:id',
+  adminLogger('admin-update-plan'),
+  asyncHandler(authenticateUser),
+  requireAdmin,
+  asyncHandler(adminUpdatePlan)
+);
+
+// Admin system settings — system-wide unlimited access toggle
+app.get('/api/admin/settings/unlimited-mode',
+  adminLogger('admin-get-unlimited-mode'),
+  asyncHandler(authenticateUser),
+  requireAdmin,
+  asyncHandler(adminGetUnlimitedMode)
+);
+app.put('/api/admin/settings/unlimited-mode',
+  adminLogger('admin-set-unlimited-mode'),
+  asyncHandler(authenticateUser),
+  requireAdmin,
+  asyncHandler(adminSetUnlimitedMode)
 );
 
 // Workflow ownership transfer
