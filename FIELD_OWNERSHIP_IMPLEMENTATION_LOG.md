@@ -846,3 +846,70 @@ Also verified:
 The classification **is** the specification, so no test can catch a mis-classified operation — only review can. The default-to-`write` design means errors fail safe in one direction only: an unclassified or under-classified operation is over-protected, never under-protected. The place to look hardest is `FIRST_RUN_CLASS_OVERRIDES`, where an override could wrongly *downgrade* something.
 
 **Commit:** *Phase 6: firstRunClass safety layer and fan-out sampler*
+
+---
+
+# ⛔ SESSION END — handoff for the next run
+
+Stopped after Phase 6 at the user's request (context budget). This coincides with the plan's own **mandatory pause before Phase 7b**.
+
+## State
+
+**7 phases complete and committed, one commit each**, on `master`:
+
+```
+7559d95 Phase 6: firstRunClass safety layer and fan-out sampler
+0508813 Phase 5: delete the configuration and credentials steps
+9514598 Phase 4: inline field editing honouring the question-ID key contract
+42c957d Phase 3: field-plan API, grouped accordions, upstream attribution
+599379d Phase 2: inline connect at node selection with scope-aware readiness
+5846cf1 Phase 1: remove Intent Context from field-ownership, add two-column layout
+5a5c781 Phase 0c: characterization tests for extracted field-ownership components
+815cbda Phase 0b: extract field-ownership block into presentational components
+b980178 Phase 0a: capture structural baseline of the field-ownership block
+bf926be Baseline: node-selection UI redesign WIP + field-ownership build plan
+```
+
+**Remaining: 7a, 7b, 8.** Working tree clean except `worker/public/node-library.json` (pre-existing generated artifact, deliberately untouched).
+
+## Verification standard (do not use the plan's version — it is wrong)
+
+- ❌ `npx tsc --noEmit` in `ctrl_checks/` **checks zero files** (`"files": []` + project references).
+- ✅ Use `npx tsc --noEmit -p tsconfig.app.json`. **444 pre-existing errors is the baseline.** Require: total stays 444, and zero errors in files you touch.
+- ✅ `npm run lint` in `ctrl_checks/`: 0 errors, **57 warnings** is the baseline.
+- ✅ `npm run type-check` in `worker/`: clean.
+- ✅ **Single-file test runs are approved** (user confirmed this session): `npx vitest run <path>` and `npx jest <path> --coverage=false`. **Never** `npm test` or an unfiltered run.
+
+Non-regression suite — must pass **unmodified** after every phase:
+```
+npx vitest run \
+  src/components/connections/__tests__/connectionAvailability.test.ts \
+  src/components/connections/__tests__/credential-guidance.test.tsx \
+  src/components/workflow/__tests__/WorkflowConnectionGate.setup.test.tsx \
+  src/components/workflow/__tests__/WorkflowHeader.setup.test.tsx \
+  src/hooks/__tests__/useWorkflowConnectionStatus.test.ts
+```
+
+Two **pre-existing** failures, both verified by stashing — do not chase them:
+- `workflow-generation-state.capability-stage.test.ts` (`capability-selection` state mapping)
+- `property-population-stage.test.ts` (fixture missing `fieldOwnershipPolicyMap`)
+
+## ⚠️ Outstanding empirical checks — none of these have been run
+
+1. **Phase 5 acceptance (most important).** Build a workflow end to end, enter values **only** on field-ownership, save, and confirm in the DB that the values landed on the nodes. The configuration step is deleted, so this is the only remaining path; the proof it works is analytical, not empirical. If it fails, revert `0508813`.
+2. **Phase 2 manual E2E.** `/connections` connect/disconnect, the canvas connection gate on a manually-built workflow, the per-node connection selector, and a real OAuth round trip from node selection.
+3. **Phase 3 measurements (§6c-B).** On ~10 real generated workflows: `{{$json.*}}` resolution rate, whether the five-group taxonomy partitions usefully, and `field-plan` latency.
+4. No browser rendering of anything built this session.
+
+## Findings later phases depend on
+
+- **`resolveCredentialDryRun` is not dry.** `resolveCredential` ignores its `dryRun` flag and calls `refreshCredential()` when a token is near expiry — a real OAuth refresh plus a DB write. Phase 7b executes nodes for real; budget for this and keep credential resolution scoped to explicit node lists.
+- **OAuth is popup-based** (`useOAuthFlow` → `window.open` + `BroadcastChannel`). The wizard never unmounts, so no redirect-state snapshot is needed anywhere.
+- **`configure` is a live step** with a real render block. Only `credentials` and `configuration` were removed.
+- `POST /api/capability-selection/connection-readiness` and `POST /api/workflow-build/field-plan` exist; `field-plan` is deliberately side-effect-free and must stay that way.
+- `resolveUpstreamFields` (`core/graph/upstream-field-resolver.ts`) is shared — Phase 8 can reuse it for threading outputs.
+- `firstRunClass` is already wired end to end as `null` through `field-plan` → the client; Phase 7b just populates it.
+
+## Phase 6 status for the mandatory pause
+
+The pause asks for confirmation that the safety layer is **unit-tested and passing**. It is: **43/43 executed and green**, covering all three mandated proofs. No execution path exists yet — verified by grep.
