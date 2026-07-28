@@ -5731,12 +5731,23 @@ export function AutonomousAgentWizard() {
         step !== 'building' &&
         step !== 'complete' &&
         hasPostAnalysisContext;
+    const isCapabilitySelectionFlow = step === 'capability-node-selection' || step === 'capability-review';
     const intentContextSummary =
         (planSummary && String(planSummary).trim()) ||
         (refinement?.systemPrompt && String(refinement.systemPrompt).trim()) ||
         (analysis?.summary && String(analysis.summary).trim()) ||
         (prompt && String(prompt).trim()) ||
         '';
+    const handleEditIntent = () => {
+        setStep('idle');
+        setPrompt((prev) => {
+            if (prev && String(prev).trim().length > 0) return prev;
+            if (originalPrompt && String(originalPrompt).trim().length > 0) {
+                return originalPrompt;
+            }
+            return intentContextSummary;
+        });
+    };
     const requiredSectionStyles = {
         fieldOwnership: {
             cardClass: 'border-blue-500/30 shadow-lg',
@@ -5781,7 +5792,7 @@ export function AutonomousAgentWizard() {
             <div className="flex-1 overflow-y-auto p-6 bg-background/50">
                 {/* Steps 1-4: Single page view */}
                 {step !== 'building' && step !== 'complete' && (
-                <div className="max-w-5xl mx-auto space-y-8 pb-20">
+                <div className={`mx-auto space-y-8 pb-20 ${step === 'capability-node-selection' ? 'max-w-7xl' : 'max-w-5xl'}`}>
                     {showPromptComposer && (
                         <div ref={step1Ref} className="scroll-mt-6">
                             <motion.div
@@ -5839,49 +5850,57 @@ export function AutonomousAgentWizard() {
                         <div className="scroll-mt-6">
                             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
                                 <Card className="border-indigo-500/25 bg-indigo-500/5">
-                                    <CardHeader className="pb-3">
-                                        <CardTitle className="text-sm text-indigo-300">Intent Context</CardTitle>
-                                        <CardDescription>
-                                            Workflow intent is locked in. Continue with ownership and configuration.
-                                        </CardDescription>
-                                    </CardHeader>
-                                    <CardContent className="space-y-3">
-                                        {originalPrompt && (
-                                            <p className="text-xs text-muted-foreground">
-                                                <span className="font-semibold text-foreground/80">Original prompt:</span> {originalPrompt}
-                                            </p>
-                                        )}
-                                        {intentContextSummary ? (
-                                            <StructuredPlanDisplay summary={intentContextSummary} compact />
-                                        ) : null}
-                                        <div className="flex flex-wrap gap-2 pt-1">
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => {
-                                                    setStep('idle');
-                                                    setPrompt((prev) => {
-                                                        if (prev && String(prev).trim().length > 0) return prev;
-                                                        if (originalPrompt && String(originalPrompt).trim().length > 0) {
-                                                            return originalPrompt;
-                                                        }
-                                                        return intentContextSummary;
-                                                    });
-                                                }}
-                                            >
-                                                Edit intent
-                                            </Button>
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={reset}
-                                            >
-                                                Restart
-                                            </Button>
-                                        </div>
-                                    </CardContent>
+                                    {isCapabilitySelectionFlow ? (
+                                        <>
+                                            <CardHeader className="pb-1">
+                                                <CardTitle className="text-xs font-medium uppercase tracking-wide text-indigo-400/70">
+                                                    Intent Context
+                                                </CardTitle>
+                                            </CardHeader>
+                                            <CardContent className="space-y-3">
+                                                {originalPrompt && (
+                                                    <p className="text-base sm:text-lg font-medium leading-relaxed text-foreground">
+                                                        {originalPrompt}
+                                                    </p>
+                                                )}
+                                                <div className="flex flex-wrap gap-2 pt-1">
+                                                    <Button type="button" variant="outline" size="sm" onClick={handleEditIntent}>
+                                                        Edit intent
+                                                    </Button>
+                                                    <Button type="button" variant="ghost" size="sm" onClick={reset}>
+                                                        Restart
+                                                    </Button>
+                                                </div>
+                                            </CardContent>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <CardHeader className="pb-3">
+                                                <CardTitle className="text-sm text-indigo-300">Intent Context</CardTitle>
+                                                <CardDescription>
+                                                    Workflow intent is locked in. Continue with ownership and configuration.
+                                                </CardDescription>
+                                            </CardHeader>
+                                            <CardContent className="space-y-3">
+                                                {originalPrompt && (
+                                                    <p className="text-xs text-muted-foreground">
+                                                        <span className="font-semibold text-foreground/80">Original prompt:</span> {originalPrompt}
+                                                    </p>
+                                                )}
+                                                {intentContextSummary ? (
+                                                    <StructuredPlanDisplay summary={intentContextSummary} compact />
+                                                ) : null}
+                                                <div className="flex flex-wrap gap-2 pt-1">
+                                                    <Button type="button" variant="outline" size="sm" onClick={handleEditIntent}>
+                                                        Edit intent
+                                                    </Button>
+                                                    <Button type="button" variant="ghost" size="sm" onClick={reset}>
+                                                        Restart
+                                                    </Button>
+                                                </div>
+                                            </CardContent>
+                                        </>
+                                    )}
                                 </Card>
                             </motion.div>
                         </div>

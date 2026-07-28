@@ -4,6 +4,10 @@
  * Displays all Capability_Containers simultaneously and collects exactly one
  * Node_Selection per container before enabling Continue.
  *
+ * Layout: a sticky left-hand checklist (per-container status + why it's needed)
+ * next to a right-hand pane with the actual candidate cards, so the user never
+ * has to scroll back up to see overall selection progress.
+ *
  * Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 8.6
  */
 
@@ -11,7 +15,6 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { CheckCircle2, ArrowLeft, ArrowRight, Wifi, WifiOff, AlertCircle, Info } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { NODE_LAYMAN_DESCRIPTIONS } from './nodeLaymanDescriptions';
@@ -33,6 +36,17 @@ interface CapabilityStageProps {
   onBack?: () => void;
   validationIssue?: CapabilitySelectionValidationResult | null;
   initialSelections?: NodeSelectionMap;
+}
+
+function containerAnchorId(containerId: string) {
+  return `capability-container-${containerId}`;
+}
+
+function scrollToContainer(containerId: string) {
+  document.getElementById(containerAnchorId(containerId))?.scrollIntoView({
+    behavior: 'smooth',
+    block: 'start',
+  });
 }
 
 // ─── Credential Badge ─────────────────────────────────────────────────────────
@@ -124,7 +138,7 @@ function CandidateOption({ candidate, isSelected, onSelect }: CandidateOptionPro
   );
 }
 
-// ─── Container Card ───────────────────────────────────────────────────────────
+// ─── Container Card (right pane) ───────────────────────────────────────────────
 
 interface ContainerCardProps {
   container: CapabilityContainer;
@@ -136,9 +150,11 @@ interface ContainerCardProps {
 function ContainerCard({ container, selectedNodeType, onSelect, index }: ContainerCardProps) {
   return (
     <motion.div
+      id={containerAnchorId(container.containerId)}
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.06, duration: 0.3 }}
+      className="scroll-mt-6"
     >
       <Card className="border-border/80">
         <CardHeader className="pb-3">
@@ -168,6 +184,65 @@ function ContainerCard({ container, selectedNodeType, onSelect, index }: Contain
         </CardContent>
       </Card>
     </motion.div>
+  );
+}
+
+// ─── Step Row (left checklist) ─────────────────────────────────────────────────
+
+interface StepRowProps {
+  container: CapabilityContainer;
+  isSelected: boolean;
+  isTriggerRequired: boolean;
+  onJump: () => void;
+}
+
+function StepRow({ container, isSelected, isTriggerRequired, onJump }: StepRowProps) {
+  const isTrigger = container.useCaseUnit.semanticRole === 'trigger';
+  const showRequiredState = isTrigger && !isSelected && isTriggerRequired;
+
+  return (
+    <button
+      type="button"
+      onClick={onJump}
+      className={[
+        'w-full text-left rounded-lg border px-3 py-2.5 transition-colors',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
+        isSelected
+          ? 'border-primary/40 bg-primary/5'
+          : showRequiredState
+            ? 'border-blue-300 bg-blue-50/60 dark:border-blue-900/60 dark:bg-blue-950/20'
+            : 'border-border/60 bg-background hover:bg-accent/5',
+      ].join(' ')}
+    >
+      <div className="flex items-start gap-2.5">
+        {isSelected ? (
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-primary mt-0.5" aria-hidden="true" />
+        ) : (
+          <div
+            className={[
+              'mt-0.5 h-4 w-4 shrink-0 rounded-full border-2',
+              showRequiredState ? 'border-blue-400' : 'border-muted-foreground/30',
+            ].join(' ')}
+            aria-hidden="true"
+          />
+        )}
+        <div className="min-w-0 flex-1 space-y-0.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-sm font-medium leading-tight">{container.label}</span>
+            {isTrigger && (
+              <Badge variant="outline" className="h-4 px-1.5 py-0 text-[10px]">
+                Trigger
+              </Badge>
+            )}
+          </div>
+          <p className="text-xs leading-snug text-muted-foreground">
+            {showRequiredState
+              ? 'Required — every workflow needs a starting point.'
+              : container.useCaseUnit.description}
+          </p>
+        </div>
+      </div>
+    </button>
   );
 }
 
@@ -209,8 +284,10 @@ export function CapabilityStage({
   const totalCount = containers.length;
   const validation = validateCapabilitySelections(containers, selections);
   const isComplete = totalCount > 0 && validation.valid && validation.invalidSelections.length === 0;
-  const missingTriggerIssue = !validation.valid ? validation : null;
+  const isTriggerRequired = validation.code === 'MISSING_TRIGGER_SELECTION';
   const missingIntentSteps = validation.missingIntentSteps;
+  const statusTitle = validationIssue?.title || validation.title;
+  const statusMessage = validationIssue?.message || validation.message;
 
   function handleSelect(containerId: string, nodeType: string) {
     setSelections((prev) => {
@@ -232,79 +309,70 @@ export function CapabilityStage({
 
   // Req 3.1 — render containers in useCaseUnit.orderIndex order
   return (
-    <div className="w-full max-w-3xl mx-auto flex flex-col gap-4 pb-24">
+    <div className="w-full flex flex-col gap-4 pb-24">
       {/* Header */}
       <div className="space-y-1">
         <h2 className="text-xl font-semibold">Choose your integrations</h2>
         <p className="text-sm text-muted-foreground">
-          Select the integrations you need for your workflow.{' '}
-          <span className="font-medium text-foreground">
-            {selectedCount} of {totalCount}
-          </span>{' '}
-          selected.
+          Select the integrations you need for your workflow.
         </p>
       </div>
 
-      {missingTriggerIssue && (
-        <Alert className="border-blue-200 bg-blue-50 text-blue-950 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-100">
-          <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-300" />
-          <AlertTitle>{validationIssue?.title || missingTriggerIssue.title || 'Workflow needs a trigger'}</AlertTitle>
-          <AlertDescription className="space-y-3">
-            <p>{validationIssue?.message || missingTriggerIssue.message}</p>
-            {missingTriggerIssue.triggerContainers.length > 0 && (
-              <div className="space-y-2">
-                <p className="font-medium">Select one of these trigger steps:</p>
-                <div className="space-y-2">
-                  {missingTriggerIssue.triggerContainers.map((container) => (
-                    <div
-                      key={container.containerId}
-                      className="rounded-md border border-blue-200/80 bg-white/70 p-3 dark:border-blue-900/60 dark:bg-background/50"
-                    >
-                      <p className="text-sm font-medium">{container.label}</p>
-                      <p className="text-xs text-blue-900/80 dark:text-blue-100/75">{container.description}</p>
-                    </div>
-                  ))}
+      <div className="grid grid-cols-1 gap-6 items-start lg:grid-cols-[320px_1fr]">
+        {/* Left: sticky status checklist */}
+        <div className="space-y-3 lg:sticky lg:top-6">
+          <div className="space-y-2 rounded-lg border border-border/70 bg-card/50 p-4">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold">Workflow steps</h3>
+              <span className="text-xs font-medium text-muted-foreground">
+                {selectedCount} of {totalCount} selected
+              </span>
+            </div>
+            {!validation.valid && (
+              <div className="flex items-start gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-2 dark:border-blue-900/60 dark:bg-blue-950/30">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0 text-blue-600 dark:text-blue-300 mt-0.5" />
+                <div>
+                  <p className="text-xs font-medium text-blue-950 dark:text-blue-100">{statusTitle}</p>
+                  <p className="text-xs text-blue-900/80 dark:text-blue-100/75">{statusMessage}</p>
                 </div>
               </div>
             )}
-          </AlertDescription>
-        </Alert>
-      )}
+          </div>
 
-      {isComplete && missingIntentSteps.length > 0 && (
-        <Alert className="border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
-          <Info className="h-4 w-4 text-amber-600 dark:text-amber-300" />
-          <AlertTitle>Some intent steps are not selected</AlertTitle>
-          <AlertDescription className="space-y-3">
-            <p>
-              You can continue with the selected trigger, but this workflow may not fully match the original request until these steps are added.
-            </p>
-            <div className="space-y-2">
-              {missingIntentSteps.map((container) => (
-                <div
-                  key={container.containerId}
-                  className="rounded-md border border-amber-200/80 bg-white/70 p-3 dark:border-amber-900/60 dark:bg-background/50"
-                >
-                  <p className="text-sm font-medium">{container.label}</p>
-                  <p className="text-xs text-amber-900/80 dark:text-amber-100/75">{container.description}</p>
-                </div>
-              ))}
+          <div className="space-y-2">
+            {sortedContainers.map((container) => (
+              <StepRow
+                key={container.containerId}
+                container={container}
+                isSelected={Boolean(selections[container.containerId])}
+                isTriggerRequired={isTriggerRequired}
+                onJump={() => scrollToContainer(container.containerId)}
+              />
+            ))}
+          </div>
+
+          {isComplete && missingIntentSteps.length > 0 && (
+            <div className="flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 dark:border-amber-900/60 dark:bg-amber-950/30">
+              <Info className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-300 mt-0.5" />
+              <p className="text-xs text-amber-900/90 dark:text-amber-100/80">
+                You can continue, but {missingIntentSteps.length === 1 ? "1 step from your original request isn't" : `${missingIntentSteps.length} steps from your original request aren't`} selected yet.
+              </p>
             </div>
-          </AlertDescription>
-        </Alert>
-      )}
+          )}
+        </div>
 
-      {/* Container list — Req 3.1, 3.2, 3.3 — natural flow, no inner scroll */}
-      <div className="space-y-4">
-        {sortedContainers.map((container, index) => (
-          <ContainerCard
-            key={container.containerId}
-            container={container}
-            selectedNodeType={selections[container.containerId]}
-            onSelect={(nodeType) => handleSelect(container.containerId, nodeType)}
-            index={index}
-          />
-        ))}
+        {/* Right: candidate cards */}
+        <div className="min-w-0 space-y-4">
+          {sortedContainers.map((container, index) => (
+            <ContainerCard
+              key={container.containerId}
+              container={container}
+              selectedNodeType={selections[container.containerId]}
+              onSelect={(nodeType) => handleSelect(container.containerId, nodeType)}
+              index={index}
+            />
+          ))}
+        </div>
       </div>
 
       {/* Sticky action bar — always visible at bottom of viewport */}
