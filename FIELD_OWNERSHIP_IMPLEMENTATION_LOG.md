@@ -24,7 +24,7 @@ Baseline commit: *Baseline: node-selection UI redesign WIP + field-ownership bui
 - [x] **4** — Inline editing + parity report (gates Phase 5)
 - [x] **5** — Delete `configuration` + `credentials` steps
 - [x] **6** — `firstRunClass` safety layer + fan-out sampler (backend only)
-- [ ] **7a** — Provider-error → field guidance layer
+- [x] **7a** — Provider-error → field guidance layer
 - [ ] **7b** — `/api/workflow-build/run-node` (⚠ MANDATORY PAUSE BEFORE THIS PHASE)
 - [ ] **8** — `/api/workflow-build/run` chained orchestration + seeded execution #1
 
@@ -846,6 +846,54 @@ Also verified:
 The classification **is** the specification, so no test can catch a mis-classified operation — only review can. The default-to-`write` design means errors fail safe in one direction only: an unclassified or under-classified operation is over-protected, never under-protected. The place to look hardest is `FIRST_RUN_CLASS_OVERRIDES`, where an override could wrongly *downgrade* something.
 
 **Commit:** *Phase 6: firstRunClass safety layer and fan-out sampler*
+
+---
+
+## Phase 7a — Provider-error → field guidance layer
+
+### What actually happened ✅ DONE
+
+- **New `core/guidance/types.ts`** — the `Guidance` shape enforcing §2.2's contract: `headline` (what happened) → `why` → `nextSteps[]` → `field` (editable inline), with raw provider text confined to `technicalDetail` for a collapsed disclosure. `severity` is `needs_attention`, never `failed`.
+- **New `core/guidance/provider-error-interpreter.ts`** (200 lines) — layered resolution: input-validation guidance → structured `_errorCode` → HTTP status → substring on the message → node-level fallback. **Never throws**, even on a bad interpreter.
+- **Interpreters** for the settled priority providers (§7 Q7): `google.ts` (Sheets/Gmail/Drive/Calendar — 8 mappings), `slack.ts` (9), `notion.ts` (5).
+
+**Design points worth recording:**
+
+- **Scope errors are attributed to the connection, not a field.** A user cannot fix "insufficient authentication scopes" by editing a spreadsheet ID; `isConnectionProblem: true` and no `fieldName`, so the UI offers *reconnect* rather than focusing a control they cannot fix with.
+- **The fallback attributes nothing to any field** — only to the node. Guessing would put the cursor in the wrong box, which is worse than admitting we do not know.
+- **Input validation outranks the provider.** *"You haven't filled in the channel yet"* beats *"channel_not_found"* when both are true.
+- **Notion's "not found" copy leads with sharing**, not with a typo — the integration must be added to each page, and that is the far more common cause.
+
+### ⚠️ The override audit could not be done as written — and does not need to be
+
+§8 says to *"audit Google/Slack/Notion to populate `error.code`"*. Traced where those errors actually originate:
+
+- `slack-message.ts`, `google-sheets`, `google-gmail` overrides are **metadata-only** — they delegate execution.
+- The real Slack call site is **`execute-workflow.ts:13235-13236`**, which throws:
+  ```ts
+  throw new Error(`Slack API error: ${response.status} ${response.statusText} - ${slackResult?.error || responseBody}`);
+  ```
+
+`execute-workflow.ts` is on §2.5's **do-not-modify** list. So populating structured codes there is forbidden by the non-regression contract.
+
+**It is also unnecessary.** The machine-readable code (`channel_not_found`, `missing_scope`) is already *inside* that message string, which is exactly the case §3.10's substring fallback exists for. Rather than edit a forbidden file, I added three tests pinning the **real engine-thrown format**, including that an embedded `404` does not hijack a Slack mapping. The audit's goal — priority-provider errors resolve to useful guidance — is met without touching live execution code.
+
+### Verification
+
+- ✅ **29/29 tests passing**, executed.
+- ✅ Vocabulary tests assert user-facing copy contains no "failed"/"exception"/"stack" and **no bare HTTP status codes**, across all three providers plus the fallback.
+- ✅ A test asserts raw text (`SlackAPIError: … at Object.<anonymous> (/app/x.js:1:1)`) stays out of the headline and appears only in `technicalDetail`.
+- ✅ Never-throws test over `undefined`, `null`, `0`, `''`, `[]`, and an object containing a `Symbol`.
+- ✅ `worker/` `type-check` clean.
+- ✅ `git diff --stat` over `execute-workflow.ts` and `core/registry/overrides/` — **empty**. No live execution path touched.
+
+**A real bug the tests caught:** the Google 404 mapping originally listed `'unable to parse range'` in its `messageIncludes`, so it claimed range errors and sent the user to `spreadsheetId` instead of `range`. Fixed by ordering the specific rule first, with a comment on why order matters.
+
+### Could not verify
+
+The mappings are only as good as my reading of each provider's error catalogue — a wrong mapping sends the user to the wrong field, which is worse than the fallback. **They get their real test in 7b**, the first phase that produces genuine provider errors.
+
+**Commit:** *Phase 7a: provider-error to field guidance layer*
 
 ---
 
