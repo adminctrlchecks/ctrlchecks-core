@@ -21,7 +21,7 @@ Baseline commit: *Baseline: node-selection UI redesign WIP + field-ownership bui
 - [x] **1** — Intent Context off this step + two-column layout
 - [x] **2** — Inline connect at node selection
 - [x] **3** — `/api/workflow-build/field-plan` + four-group accordions
-- [ ] **4** — Inline editing + parity report (gates Phase 5)
+- [x] **4** — Inline editing + parity report (gates Phase 5)
 - [ ] **5** — Delete `configuration` + `credentials` steps
 - [ ] **6** — `firstRunClass` safety layer + fan-out sampler (backend only)
 - [ ] **7a** — Provider-error → field guidance layer
@@ -613,3 +613,128 @@ No browser verification of the accordions.
 - `resolveUpstreamFields` is now shared, so Phase 8's chained run can reuse it for threading outputs.
 
 **Commit:** *Phase 3: field-plan API, grouped accordions, upstream attribution*
+
+---
+
+## Phase 4 — Inline editing + parity report
+
+### Plan
+
+Read the configuration step's control rendering first and mirror it exactly, rather than
+building from `convertSchemaToConfigField` in the abstract — parity is judged against
+what that step *actually does*, not against a schema converter.
+
+The configuration step's contract, read from source before writing anything:
+
+```ts
+const questionKey = question.id;                                  // the map key, verbatim
+const isCredVaultQ = question.category === 'credential' && question.isVaultCredential;
+// select   when question.type === 'select' || options.length > 0
+// textarea when type === 'textarea' || fieldType === 'textarea' || type === 'json'
+// else Input type={number | password | text}
+// value: stored answer ?? question.defaultValue ?? ''
+```
+
+**Correction to the plan's approach:** §8 says to wire `convertSchemaToConfigField()` into
+`FieldRow`. That function returns a **`ConfigField` descriptor, not a control** — it is a
+metadata converter for the canvas properties panel, keyed off `InputFieldSchema`, whereas
+field-ownership rows are *questions* from the field plane with their own `type` / `options`
+/ `defaultValue`. Routing through it would have translated between two shapes and risked
+diverging from the step being replaced. Mirrored the configuration step's own branching
+instead. **The code wins.**
+
+### What actually happened ✅ DONE
+
+- **`lib/wizard-field-ownership.ts`** (+95 lines) — the contract, in one place, under a
+  banner comment explaining the risk: `resolveFieldValueKey`, `resolveFieldValueTarget`,
+  `resolveFieldControlValue`, `resolveFieldControlKind`, `jsonFieldParseError`.
+- **New `field-ownership/FieldValueControl.tsx`** (117 lines) — renders the control and
+  contains **the single write path**:
+
+  ```ts
+  function writeValue(next: string) {
+      const key = resolveFieldValueKey(question);            // = String(question.id)
+      if (!key) return;
+      if (resolveFieldValueTarget(question) === 'credential') ctx.setCredentialValues(...)
+      else                                                    ctx.setInputValues(...)
+  }
+  ```
+
+  One function, one key format, one routing decision — so there is exactly one line that
+  could be wrong, and it is asserted from three directions.
+- **`FieldOwnershipRow.tsx`** — a `manual_static` row now renders the live control inline.
+  An AI-owned row shows its value read-only with **"Set it myself"**, which flips
+  `_fillMode` to `manual_static` via the *existing* `setFillModeValues` under the existing
+  `mode_*` key; the row then re-derives into "You provide" through the existing
+  `ownershipEffectiveModes` memo. **No new state was introduced for this.**
+- The old copy pointing users at the Configuration step is gone from both branches.
+
+**`inputValues` / `credentialValues` are now read, not only written.** Phase 0a found the
+block never read them; inline editing must display current values, so both maps join the
+context. The underlying rule is unchanged and restated at both the type and the call site:
+**they remain owned by the wizard and must never be relocated**, because `handleBuild`
+forwards them to `attach-inputs` / `attach-credentials`.
+
+### ⚠️ PARITY REPORT — the gate on Phase 5
+
+Compared against every control the configuration step renders. Each row is backed by an
+executed assertion in `fieldRowKeyContract.test.tsx`, not an inspection.
+
+| Field type | Configuration step | Inline (Phase 4) | Parity |
+|---|---|---|---|
+| text | `<Input type="text">` | `<Input type="text">` | ✅ |
+| number | `<Input type="number">` | `<Input type="number">` — asserted via `role="spinbutton"` | ✅ |
+| **password** | `<Input type="password">` | `<Input type="password">`; asserted **not** exposed as a textbox | ✅ |
+| textarea (`type`) | `<Textarea>` | `<Textarea>` | ✅ |
+| textarea (`fieldType`) | `<Textarea>` | `<Textarea>` | ✅ |
+| JSON | `<Textarea>` | `<Textarea>` + parse feedback | ✅ |
+| select (typed) | `<Select>` | `<Select>` | ✅ |
+| select (implied by `options`) | `<Select>` | `<Select>` | ✅ |
+| empty-string options | filtered (Radix forbids) | filtered, same guard | ✅ |
+| credential (vault) | writes `credentialValues` | writes `credentialValues` | ✅ |
+| value fallback | stored ?? default ?? `''` | identical | ✅ |
+
+**Result: GREEN — 11 of 11 behaviours at parity. Phase 5 is unblocked.**
+
+Two intentional differences, neither a parity loss:
+1. JSON validates **on blur** rather than on submit — there is no submit step any more.
+   The write is never blocked; the message is advisory.
+2. All rows are editable at once rather than one question at a time. That is the redesign.
+
+### Verification
+
+- ✅ **`fieldRowKeyContract.test.tsx` — 19/19 passing, executed.** §6a-2 calls key drift the
+  single highest-risk detail in the project; it is now guarded by executed assertions:
+  - the key equals `question.id` verbatim for `config_*`, `op_*`, `cred_*`;
+  - **negative assertions** — the key never contains `::`, is never `node1::spreadsheetId`
+    and never `node1_spreadsheetId`, i.e. the exact failure mode §6a-2 warns about;
+  - a text edit writes `{ config_node1_spreadsheetId: 'sheet-abc' }` into `inputValues`
+    and **nothing** into `credentialValues`;
+  - a vault credential writes into `credentialValues` and **nothing** into `inputValues`;
+  - a non-vault `credential` question routes to `inputValues`, matching the old
+    `category === 'credential' && isVaultCredential` condition exactly;
+  - an id-less question writes **nothing** rather than under a key of `''`.
+- ✅ `tsc -p tsconfig.app.json`: **444 — baseline**, none in my files.
+- ✅ `npm run lint`: 0 errors, 57 warnings.
+- ✅ **104 tests across 8 files, all passing** — field-ownership (51), key contract (19),
+  CapabilityStage (8), and the 26 non-regression tests unmodified.
+
+**tsc did real work here.** Adding `inputValues` / `credentialValues` to
+`FieldOwnershipContext` broke the `buildCtx` fixture, which failed the build until updated
+— the "a fixture that no longer matches the interface fails the build" property predicted
+in Phase 0c, actually paying off.
+
+### Could not verify
+
+- ⚠️ **No end-to-end save.** The tests prove the key *format*; they do not prove that a
+  value entered in the browser survives `handleBuild` → `attach-inputs` → the database.
+  That is **Phase 5's acceptance test**, and it needs a running stack.
+- No browser rendering of the controls.
+
+### What this changes for Phase 5
+
+The parity gate is **green**, so Phase 5 may proceed. Per §6a-2 no `handleBuild` rewiring
+is needed: this phase wrote into the same maps under the same keys, so deleting the
+configuration step removes a second way to enter values, not the only way.
+
+**Commit:** *Phase 4: inline field editing honouring the question-ID key contract*

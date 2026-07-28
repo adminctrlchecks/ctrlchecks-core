@@ -113,6 +113,8 @@ function buildCtx(overrides: Partial<FieldOwnershipContext> = {}): FieldOwnershi
         secretsByNode: [],
         ownershipEffectiveModes: { byModeKey: {} },
         fillModeValues: {},
+        inputValues: {},
+        credentialValues: {},
         fieldPlaneRows: [],
         fieldEnabledOverrides: {},
         nodeDescriptions: {},

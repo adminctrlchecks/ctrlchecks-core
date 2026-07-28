@@ -20,6 +20,7 @@ import {
 import type { FieldPlanProducer } from '@/lib/api/workflowBuildFieldPlan';
 import { FieldOwnershipHelpPanel } from '../FieldOwnershipHelpPanel';
 import { CredentialHelpDisclosure } from './CredentialHelpDisclosure';
+import { FieldValueControl } from './FieldValueControl';
 import type { FieldOwnershipContext, NodeQuestionGroup, OwnershipQuestion } from './types';
 
 /**
@@ -126,6 +127,8 @@ export function FieldOwnershipRow({ question, group, ctx, producedBy }: FieldOwn
         planeRowForPreview?.valueSnapshot,
         question
     );
+    /** "You provide" — the user owns this value, so it is directly editable. */
+    const isUserOwned = selectedMode === 'manual_static';
 
     return (
         <div
@@ -332,21 +335,58 @@ export function FieldOwnershipRow({ question, group, ctx, producedBy }: FieldOwn
                     ) : null}
                 </div>
             ) : null}
-            {!locked && workflowPreviewText ? (
-                <div className="mt-2 rounded border border-emerald-500/25 bg-emerald-500/5 p-2">
-                    <p className="text-[11px] text-muted-foreground mb-1">Current value in workflow (edit on Configuration step)</p>
-                    <pre className="text-[11px] whitespace-pre-wrap break-words max-h-40 overflow-auto font-mono text-left">{workflowPreviewText}</pre>
+            {/*
+              * Inline editing (Phase 4).
+              *
+              * Fields the user owns are editable right here. AI-owned fields show their
+              * value read-only with an Edit action that flips `_fillMode` to
+              * manual_static — which moves the row into "You provide" through the
+              * existing ownershipEffectiveModes memo, no new state.
+              *
+              * This replaces the old copy pointing at the Configuration step, which
+              * Phase 5 deletes.
+              */}
+            {!locked && isUserOwned ? (
+                <div className="mt-2 space-y-1">
+                    <FieldValueControl question={question} ctx={ctx} />
                 </div>
             ) : null}
-            {!locked && !workflowPreviewText && question.aiFilledAtBuildTime && (
-                <div className="mt-2 rounded border border-emerald-500/20 bg-emerald-500/5 p-2">
-                    <p className="text-[11px] text-muted-foreground">
-                        AI prefilled this field, but the value is not shown here (e.g. complex JSON). Open the{' '}
-                        <span className="font-medium text-foreground/80">Configuration</span>{' '}
-                        step to view or edit it.
-                    </p>
+
+            {!locked && !isUserOwned ? (
+                <div className="mt-2 rounded border border-emerald-500/25 bg-emerald-500/5 p-2 space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                        <p className="text-[11px] text-muted-foreground">
+                            {selectedMode === 'runtime_ai'
+                                ? 'AI generates this on every run.'
+                                : 'AI filled this when the workflow was generated.'}
+                        </p>
+                        <button
+                            type="button"
+                            className="text-[10px] text-primary underline underline-offset-2 hover:text-primary/90"
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                ctx.setFillModeValues((prev) => ({
+                                    ...prev,
+                                    [modeKey]: 'manual_static',
+                                }));
+                                ctx.setFieldEnabledOverrides((prev) => ({
+                                    ...prev,
+                                    [fieldEnabledKey]: true,
+                                }));
+                            }}
+                        >
+                            Set it myself
+                        </button>
+                    </div>
+                    {workflowPreviewText ? (
+                        <pre className="text-[11px] whitespace-pre-wrap break-words max-h-40 overflow-auto font-mono text-left">{workflowPreviewText}</pre>
+                    ) : (
+                        <p className="text-[11px] text-muted-foreground/70 italic">
+                            No value to preview yet.
+                        </p>
+                    )}
                 </div>
-            )}
+            ) : null}
             {(question.ownershipClass === 'credential' || question.isVaultCredential) && (
                 <CredentialHelpDisclosure question={question} ctx={ctx} />
             )}

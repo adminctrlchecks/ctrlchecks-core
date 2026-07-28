@@ -5724,6 +5724,10 @@ export function AutonomousAgentWizard() {
     const fieldOwnershipContext: FieldOwnershipContext = {
         fieldPlan: fieldOwnershipPlan,
         nodeConnections: fieldOwnershipConnections,
+        // Read by inline editing (Phase 4) to display current values. Still owned here —
+        // handleBuild forwards these exact maps to attach-inputs / attach-credentials.
+        inputValues,
+        credentialValues,
         pendingWorkflowData,
         sectionStyles: requiredSectionStyles.fieldOwnership,
         globalWalkActive,

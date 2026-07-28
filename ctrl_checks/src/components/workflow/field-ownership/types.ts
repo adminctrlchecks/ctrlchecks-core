@@ -56,9 +56,12 @@ export interface AppliedGuidanceExample {
  * Deliberately a prop and NOT a React context: context would change re-render semantics,
  * which breaks the zero-behaviour-change guarantee this extraction is built on.
  *
- * Note on `setInputValues` / `setCredentialValues` / `setAppliedFieldGuidanceExamples`:
- * the step only ever *writes* these — it never reads the maps. They stay owned by the
- * wizard because `handleBuild` reads them to save the workflow; only the setters travel.
+ * Note on `setAppliedFieldGuidanceExamples`: the step only *writes* it, never reads it.
+ *
+ * `inputValues` / `credentialValues` were setter-only until Phase 4 — the step wrote them
+ * but never displayed them. Inline editing has to render the current value, so the maps
+ * themselves are now passed too. **They are still owned by the wizard and must never be
+ * relocated:** `handleBuild` reads them to save the workflow.
  */
 export interface FieldOwnershipContext {
     // -- values --
@@ -69,6 +72,10 @@ export interface FieldOwnershipContext {
     secretsByNode: NodeQuestionGroup[];
     ownershipEffectiveModes: { byModeKey: Record<string, FillMode> };
     fillModeValues: Record<string, string>;
+    /** Read for display by inline editing (Phase 4). Owned by the wizard — never relocate. */
+    inputValues: Record<string, string>;
+    /** Read for display by inline editing (Phase 4). Owned by the wizard — never relocate. */
+    credentialValues: Record<string, string>;
     fieldPlaneRows: any[];
     fieldEnabledOverrides: Record<string, boolean>;
     nodeDescriptions: Record<string, NodeDescriptionState>;

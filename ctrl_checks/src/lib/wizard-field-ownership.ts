@@ -118,6 +118,91 @@ export function resolveWorkflowPreviewText(
 }
 
 /* -------------------------------------------------------------------------- */
+/* Inline value editing (Phase 4)                                              */
+/*                                                                             */
+/* ⚠️ THE KEY CONTRACT — plan §6a-2 calls this the single highest-risk detail   */
+/* in the project. Inline editing MUST write into `inputValues` /              */
+/* `credentialValues` under the SAME question-ID keys the (now-deleted)        */
+/* configuration step used, because `handleBuild` forwards those maps verbatim */
+/* to /attach-inputs and /attach-credentials.                                  */
+/*                                                                             */
+/* A different scheme (e.g. `nodeId::fieldName`) still type-checks and the UI  */
+/* still looks correct, but the workflow saves with NONE of the user's values. */
+/* Every write goes through resolveFieldValueKey + resolveFieldValueTarget so  */
+/* there is exactly one place this can be wrong, and it is asserted by         */
+/* fieldRowKeyContract.test.tsx.                                               */
+/* -------------------------------------------------------------------------- */
+
+/** The map key for a question's value. Mirrors `const questionKey = question.id`. */
+export function resolveFieldValueKey(question: QuestionLike): string {
+    return String(question?.id ?? '');
+}
+
+/**
+ * Which map a question's value belongs in. Mirrors the configuration step's
+ * `isCredVaultQ = question.category === 'credential' && question.isVaultCredential`.
+ */
+export function resolveFieldValueTarget(question: QuestionLike): 'credential' | 'input' {
+    return question?.category === 'credential' && question?.isVaultCredential
+        ? 'credential'
+        : 'input';
+}
+
+/**
+ * The control's displayed value: the stored answer, else the question default, else ''.
+ * Mirrors the configuration step's `textControlledValue`.
+ */
+export function resolveFieldControlValue(
+    question: QuestionLike,
+    inputValues: Record<string, string>,
+    credentialValues: Record<string, string>
+): string {
+    const key = resolveFieldValueKey(question);
+    const raw =
+        resolveFieldValueTarget(question) === 'credential'
+            ? credentialValues[key]
+            : inputValues[key];
+    if (raw !== undefined && raw !== null) return String(raw);
+    if (question?.defaultValue !== undefined && question?.defaultValue !== null) {
+        return String(question.defaultValue);
+    }
+    return '';
+}
+
+export type FieldControlKind = 'select' | 'textarea' | 'number' | 'password' | 'text';
+
+/**
+ * Which control a question renders. Mirrors the configuration step's branching exactly:
+ * select when typed select or options exist; textarea for textarea/json; otherwise an
+ * input whose HTML type is number / password / text.
+ */
+export function resolveFieldControlKind(question: QuestionLike): FieldControlKind {
+    const options = question?.options as unknown[] | undefined;
+    if (question?.type === 'select' || (Array.isArray(options) && options.length > 0)) {
+        return 'select';
+    }
+    if (question?.type === 'textarea' || question?.fieldType === 'textarea' || question?.type === 'json') {
+        return 'textarea';
+    }
+    if (question?.type === 'number') return 'number';
+    if (question?.type === 'password') return 'password';
+    return 'text';
+}
+
+/** True when a JSON-typed field's current text does not parse. */
+export function jsonFieldParseError(question: QuestionLike, value: string): string | null {
+    if (question?.type !== 'json') return null;
+    const trimmed = String(value ?? '').trim();
+    if (trimmed === '') return null;
+    try {
+        JSON.parse(trimmed);
+        return null;
+    } catch {
+        return 'This needs to be valid JSON.';
+    }
+}
+
+/* -------------------------------------------------------------------------- */
 /* Node checklist rail (Phase 1)                                               */
 /* -------------------------------------------------------------------------- */
 
