@@ -14,7 +14,7 @@ Baseline commit: `bf926be` — *Baseline: node-selection UI redesign WIP + field
 ## Phase checklist
 
 - [x] **0a** — Baseline capture
-- [ ] **0b** — Extraction, zero behaviour change
+- [x] **0b** — Extraction, zero behaviour change
 - [ ] **0c** — Characterization tests on the extracted unit
 - [ ] **1** — Intent Context off this step + two-column layout
 - [ ] **2** — Inline connect at node selection
@@ -160,4 +160,115 @@ Also confirmed absent from the block's read-set despite appearing in §3.6's der
 
 **Could not verify:** no visual/pixel baseline exists, by design. If 0b introduces drift that is purely visual (CSS cascade or ordering effects that leave the tree identical), this method will not catch it.
 
-**Commit:** *(recorded below after committing)*
+**Commit:** `b980178` — *Phase 0a: capture structural baseline of the field-ownership block*
+
+---
+
+## Phase 0b — Extraction, zero behaviour change
+
+### Plan
+
+Read the full 633-line block before planning. The real structure is:
+
+```
+block
+├── blueprint panel                    (IIFE, reads pendingWorkflowData.update)
+├── walk-through button + progress bar (single use)
+├── sections.map ['structural','secrets']
+│   └── section.groups.map             → one card per node
+│       ├── totals reduce              ← DEAD (see below)
+│       ├── node header
+│       ├── node description           (IIFE)
+│       └── group.fields.map           → one row per field
+│           ├── header (label, AI badges, field-help button, enable Switch)
+│           ├── OFF collapsed preview
+│           ├── ON compact ownership hint
+│           ├── <FieldOwnershipHelpPanel/>
+│           └── ON full controls
+│               ├── unlock Switch
+│               ├── locked / current-value previews
+│               └── credential help    (IIFE)
+└── Proceed button
+```
+
+**Component split — deviates from the plan's four names, matching the real structure:**
+
+| Plan named | Building | Why |
+|---|---|---|
+| `FieldOwnershipStage` | `FieldOwnershipStage.tsx` | same |
+| — | `BlueprintPanel.tsx` | the blueprint IIFE is self-contained and ~65 lines |
+| `FieldGroup` | `OwnershipSection.tsx` | the real grouping unit is a *section* (structure vs secrets), not a "field group". Renamed for accuracy; Phase 3's accordions will introduce a genuine `FieldGroup` inside the card. |
+| `NodeOwnershipCard` | `NodeOwnershipCard.tsx` | same |
+| `FieldRow` | `FieldOwnershipRow.tsx` | same role |
+| — | `CredentialHelpDisclosure.tsx` | the credential-help IIFE, ~55 lines, only renders for credential rows |
+
+**`FieldOwnershipContext` — built from the 0a read-set, not §3.6.** Per the 0a finding, `inputValues` / `credentialValues` / `appliedFieldGuidanceExamples` are passed as **setters only** (never read). Full membership:
+
+- values: `pendingWorkflowData`, `requiredSectionStyles`, `globalWalkActive`, `ownershipStructuralByNode`, `ownershipSecretsByNode`, `ownershipEffectiveModes`, `fillModeValues`, `fieldPlaneRows`, `fieldEnabledOverrides`, `nodeDescriptions`, `fieldDescriptions`, `appliedExampleKeys`, `fieldHelpExpanded`, `credHelpExpanded`, `credHelpViewMode`, `fieldDescFetchedRef`
+- callbacks: `isCredentialUnlocked`, `startGlobalWalkThrough`, `fetchNodeDescription`, `fetchFieldDescriptions`, `proceedFromOwnershipStage`
+- setters: `setFieldEnabledOverrides`, `setCredentialUnlockOverrides`, `setFieldHelpExpanded`, `setAppliedExampleKeys`, `setGuideSelectedField`, `setCredHelpExpanded`, `setCredHelpViewMode`, `setFillModeValues`, `setInputValues`, `setCredentialValues`, `setAppliedFieldGuidanceExamples`
+
+**One intentional deletion — `totals`.** The per-card `totals` reduce (block lines 159-189, 31 lines) computes `{you, aiBuild, aiRun, locked}` and **is never read** — `grep -c '\btotals\b'` over the block returns exactly 1, the declaration. It is dead code. Its only call is `isCredentialUnlocked(question)`, a pure `useCallback`, so dropping it has no observable effect. Dropping it rather than transcribing dead code into a new file.
+
+**Rules held:** no React context (changes re-render semantics); shared state passed, never relocated; `FieldOwnershipHelpPanel.tsx` reused unmodified; `lib/wizard-field-ownership.ts` extended, not replaced.
+
+**Verification:** regenerate the inventory over the new component files and compare per the criteria 0a's generated doc states — text/string sets identical, classNames a superset, handler bindings identical, no host element lost. Plus `tsc --noEmit` and `lint` at the 58-warning baseline.
+
+### What actually happened ✅ DONE
+
+Executed as planned, with one correction to my own plan.
+
+**Correction — plain object, not `useMemo`.** My plan said to assemble `fieldOwnershipContext` in a `useMemo` with the full read-set as deps. That is wrong for this phase's contract: the code being replaced was **inline JSX, re-evaluated on every render**. A memo would re-render the step *less* often than before — a behaviour change, in the one phase whose entire promise is zero behaviour change. Shipped a plain object literal, which matches the original's re-render semantics exactly. Noted in a comment at the declaration site.
+
+**Files created** (`ctrl_checks/src/components/workflow/field-ownership/`):
+
+| File | Lines |
+|---|---|
+| `FieldOwnershipStage.tsx` | 100 |
+| `FieldOwnershipRow.tsx` | 336 |
+| `BlueprintPanel.tsx` | 96 |
+| `NodeOwnershipCard.tsx` | 72 |
+| `CredentialHelpDisclosure.tsx` | 68 |
+| `OwnershipSection.tsx` | 47 |
+| `types.ts` | 117 |
+| `index.ts` | 17 |
+
+**`lib/wizard-field-ownership.ts` extended** 209 → 298 lines with pure helpers lifted out of the JSX, bodies unchanged: `resolveFieldModeKey`, `resolveFieldUnlockKey`, `resolveFieldEnabledKey`, `resolveFieldHelpKey`, `resolveAppliedExampleKey`, `isOwnershipRowLocked`, `isOwnershipRowEnabled`, `resolveOwnerLabel`, `resolveWorkflowPreviewText`. The `mode_*` / `unlock_*` key formats now live in one place — they are attach-inputs keys, so that matters beyond tidiness.
+
+**`AutonomousAgentWizard.tsx`:** 8,876 → **8,292** lines (−584). The 634-line block is now three lines guarding `<FieldOwnershipStage ctx={fieldOwnershipContext} />`. The now-unused `FieldOwnershipHelpPanel` import was removed (it is imported by `FieldOwnershipRow` instead).
+
+**Dead code dropped as planned:** the 31-line per-card `totals` reduce. Re-confirmed unused before deleting (`grep -c '\btotals\b'` over the block = 1, the declaration).
+
+### Verification — the structural comparison
+
+Regenerated the inventory over the six new files and diffed against `0a-structure.md` (`docs/field-ownership-baseline/0b-structure.md`):
+
+| Category | 0a | 0b | Verdict |
+|---|---|---|---|
+| Element tags | 99 | 104 | ✅ **+5 exactly** — the five new component tags. **No host element lost.** |
+| classNames | 90 (75 distinct) | 90 (75 distinct) | ✅ only difference is the access path `requiredSectionStyles.fieldOwnership.*` → `ctx.sectionStyles.*`, same values |
+| JSX text literals | 31 | 31 | ✅ **IDENTICAL set** — no user-visible copy lost |
+| Handler bindings | 13 | 13 | ✅ **all 13 present, one-to-one**, each the same expression with `ctx.` prefixing |
+| JSX string copy | 48 | 58 | ⚠️ investigated — see below |
+
+**The string-copy delta is fully accounted for, no loss:**
+- *Added (21):* all import module specifiers (`'@/lib/fillMode'`, `'./types'`, …). The inline block had no imports; the script counts them. A script artifact, not drift.
+- *Missing (8):* every one verified present elsewhere — `'You'`/`'AI Build'`/`'AI Runtime'` and the reduced counts of `'locked'` / `'manual_static'` / `'runtime_ai'` / `'buildtime_ai_once'` moved into the new lib helpers (confirmed by grep: `AI Build`×6, `AI Runtime`×5, `'You'`×5, `'locked'`×1, … in `wizard-field-ownership.ts`); `'field-ownership'` is the step guard, which correctly stayed in the wizard.
+
+**Also verified:**
+- ✅ `npx tsc --noEmit` — clean, exit 0.
+- ✅ `npm run lint` — 0 errors, **58 warnings, exactly the baseline**. (It first read 65: seven `eslint-disable @typescript-eslint/no-explicit-any` directives I added were unnecessary, since that rule is not enabled in this config. Removed them.)
+- ✅ `FieldOwnershipHelpPanel.tsx` reused **unmodified** — `git diff` shows no change to it.
+- ✅ No React context introduced.
+
+**Surprise — `tsc` caught nothing.** The plan predicted tsc would be the primary net for prop-wiring errors in this phase, and I expected several. It passed first try. That is *not* reassurance: `OwnershipQuestion` is `any` and `pendingWorkflowData` is `any`, so much of the surface tsc would have policed is untyped by construction. **The structural inventory, not tsc, is what actually verified this phase.** Worth knowing before Phase 4, where the plan again leans on tsc.
+
+**Could not verify:** no runtime render, and no pixel comparison. The inventory proves the JSX tree, its copy, and its handler bindings survived; it cannot prove CSS resolves identically or that the plain-object choice reproduces re-render timing in practice.
+
+**What this changes for later phases:**
+- Phase 1 edits `FieldOwnershipStage.tsx` (100 lines), not a 634-line inline block.
+- Phase 3's accordions land in `NodeOwnershipCard.tsx`/a new `FieldGroup`; Phase 4's inline editing lands in `FieldOwnershipRow.tsx`.
+- `FieldOwnershipContext` in `types.ts` is the single choke point for every later phase's new inputs: one field on the interface, one line in the wizard's object literal.
+- The `0b-structure.md` inventory is the new "before" reference for Phase 1.
+
+**Commit:** `bf0c6e6` — *Phase 0b: extract field-ownership block into presentational components*

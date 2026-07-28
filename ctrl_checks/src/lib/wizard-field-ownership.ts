@@ -1,4 +1,5 @@
 import { findFieldDocField } from '@/lib/field-doc-resolver';
+import { snapshotConfigFieldToString } from '@/lib/wizard-config-snapshot';
 
 export type FieldDesc = {
     what: string;
@@ -27,6 +28,94 @@ export type FieldDesc = {
     warnings?: string[];
     safeValueSuggestion?: string;
 };
+
+/* -------------------------------------------------------------------------- */
+/* Row key + state helpers                                                     */
+/*                                                                             */
+/* Lifted out of the field-ownership JSX in Phase 0b. These were inline        */
+/* expressions repeated across the block; the bodies are unchanged, so naming  */
+/* them changes nothing about what renders. Keeping the key formats in one     */
+/* place matters because they are the same keys `handleBuild` forwards to      */
+/* attach-inputs (`mode_*`, `unlock_*`).                                       */
+/* -------------------------------------------------------------------------- */
+
+type QuestionLike = Record<string, unknown>;
+
+const idPart = (question: QuestionLike, key: 'nodeId' | 'fieldName') => String(question?.[key] ?? '');
+
+/** `mode_<nodeId>_<fieldName>` — the fill-mode key, also an attach-inputs key. */
+export function resolveFieldModeKey(question: QuestionLike): string {
+    return `mode_${idPart(question, 'nodeId')}_${idPart(question, 'fieldName')}`;
+}
+
+/** `unlock_<nodeId>_<fieldName>` — credential unlock key, also an attach-inputs key. */
+export function resolveFieldUnlockKey(question: QuestionLike): string {
+    return `unlock_${idPart(question, 'nodeId')}_${idPart(question, 'fieldName')}`;
+}
+
+/** `fieldEnabled_<nodeId>_<fieldName>` — UI-only per-row on/off toggle. */
+export function resolveFieldEnabledKey(question: QuestionLike): string {
+    return `fieldEnabled_${idPart(question, 'nodeId')}_${idPart(question, 'fieldName')}`;
+}
+
+/** `fieldhelp_<nodeId>_<fieldName>` — UI-only help-panel expansion key. */
+export function resolveFieldHelpKey(question: QuestionLike): string {
+    return `fieldhelp_${idPart(question, 'nodeId')}_${idPart(question, 'fieldName')}`;
+}
+
+/** `<nodeId>_<fieldName>` — key for applied-example bookkeeping. */
+export function resolveAppliedExampleKey(question: QuestionLike): string {
+    return `${idPart(question, 'nodeId')}_${idPart(question, 'fieldName')}`;
+}
+
+/**
+ * A row is locked when the question says so and the user has not unlocked it
+ * (only unlockable credentials can be unlocked).
+ */
+export function isOwnershipRowLocked(
+    question: QuestionLike,
+    isCredentialUnlocked: (q: QuestionLike) => boolean
+): boolean {
+    return (
+        question?.ownershipUiMode === 'locked' &&
+        !(question?.isUnlockableCredential && isCredentialUnlocked(question))
+    );
+}
+
+/** Whether a row's on/off toggle reads as on, honouring the user's override. */
+export function isOwnershipRowEnabled(
+    question: QuestionLike,
+    fieldEnabledOverrides: Record<string, boolean>
+): boolean {
+    const key = resolveFieldEnabledKey(question);
+    if (fieldEnabledOverrides[key] !== undefined) return fieldEnabledOverrides[key];
+    return !!(question?.aiFilledAtBuildTime || question?.aiUsesRuntime);
+}
+
+/** Owner chip text for a resolved fill mode. */
+export function resolveOwnerLabel(selectedMode: string): 'You' | 'AI Build' | 'AI Runtime' {
+    if (selectedMode === 'manual_static') return 'You';
+    if (selectedMode === 'buildtime_ai_once') return 'AI Build';
+    return 'AI Runtime';
+}
+
+/**
+ * The value preview for a row: the live workflow snapshot if there is one,
+ * otherwise the question's default, otherwise empty.
+ */
+export function resolveWorkflowPreviewText(
+    valueSnapshot: unknown,
+    question: QuestionLike
+): string {
+    const fromNodeSnapshot = snapshotConfigFieldToString(valueSnapshot);
+    if (fromNodeSnapshot && String(fromNodeSnapshot).trim() !== '') return fromNodeSnapshot;
+    const fromQuestionDefault =
+        question?.defaultValue !== undefined && question?.defaultValue !== null
+            ? snapshotConfigFieldToString(question.defaultValue)
+            : '';
+    if (fromQuestionDefault && String(fromQuestionDefault).trim() !== '') return fromQuestionDefault;
+    return '';
+}
 
 export function humanizeFieldName(fieldName: string): string {
     return String(fieldName || 'this field')
