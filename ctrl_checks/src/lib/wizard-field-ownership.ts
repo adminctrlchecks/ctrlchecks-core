@@ -117,6 +117,82 @@ export function resolveWorkflowPreviewText(
     return '';
 }
 
+/* -------------------------------------------------------------------------- */
+/* Node checklist rail (Phase 1)                                               */
+/* -------------------------------------------------------------------------- */
+
+export type RailNodeStatus = 'waiting' | 'needs-input' | 'ready';
+
+export interface RailEntry {
+    key: string;
+    nodeId: string;
+    nodeLabel: string;
+    nodeType: string;
+    status: RailNodeStatus;
+    /** Fields still needing a value; 0 when the node is ready. */
+    outstanding: number;
+}
+
+interface RailNodeGroup {
+    nodeId: string;
+    nodeLabel: string;
+    nodeType: string;
+    fields: QuestionLike[];
+}
+
+export interface BuildRailEntriesInput {
+    sections: Array<{ key: string; groups: RailNodeGroup[] }>;
+    fieldEnabledOverrides: Record<string, boolean>;
+    effectiveModesByKey: Record<string, string>;
+    fillModeValues: Record<string, string>;
+    isCredentialUnlocked: (question: QuestionLike) => boolean;
+    /** Resolves the live workflow value for a row, or '' when there is none. */
+    resolveRowValue: (question: QuestionLike) => string;
+}
+
+/**
+ * A row is satisfied when it is locked (nothing for the user to do), switched off
+ * (deliberately skipped), owned by AI, or already carries a value.
+ */
+function isRailRowSatisfied(question: QuestionLike, input: BuildRailEntriesInput): boolean {
+    if (isOwnershipRowLocked(question, input.isCredentialUnlocked)) return true;
+    if (!isOwnershipRowEnabled(question, input.fieldEnabledOverrides)) return true;
+
+    const modeKey = resolveFieldModeKey(question);
+    const mode = input.effectiveModesByKey[modeKey] || input.fillModeValues[modeKey];
+    if (mode === 'runtime_ai' || mode === 'buildtime_ai_once') return true;
+
+    return input.resolveRowValue(question).trim() !== '';
+}
+
+/**
+ * Per-node status for the field-ownership left rail.
+ *
+ * Per plan §6a/G9 this returns node identity and status only — no per-group counts.
+ * Grouping arrives in Phase 3; building counts before then means building them twice.
+ * The vocabulary is a placeholder that Phase 7b replaces with real run status.
+ */
+export function buildRailEntries(input: BuildRailEntriesInput): RailEntry[] {
+    return input.sections.flatMap((section) =>
+        section.groups.map((group) => {
+            const outstanding = group.fields.filter((q) => !isRailRowSatisfied(q, input)).length;
+            const anyEnabled = group.fields.some((q) =>
+                isOwnershipRowEnabled(q, input.fieldEnabledOverrides)
+            );
+            const status: RailNodeStatus =
+                outstanding > 0 ? 'needs-input' : anyEnabled ? 'ready' : 'waiting';
+            return {
+                key: `${section.key}_${group.nodeId}`,
+                nodeId: group.nodeId,
+                nodeLabel: group.nodeLabel,
+                nodeType: group.nodeType,
+                status,
+                outstanding,
+            };
+        })
+    );
+}
+
 export function humanizeFieldName(fieldName: string): string {
     return String(fieldName || 'this field')
         .replace(/_/g, ' ')

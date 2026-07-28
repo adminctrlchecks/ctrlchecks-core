@@ -38,7 +38,9 @@ function parseArgs(argv) {
     else if (a === '--out') out.out = next();
     else if (a === '--block') out.block = next();
     else if (a === '--label') out.label = next();
+    else if (a === '--compare') out.compare = [next(), next()];
   }
+  if (out.compare) return out;
   if (out.sources.length === 0 || !out.out) {
     throw new Error('Required: at least one --source, and --out');
   }
@@ -46,6 +48,69 @@ function parseArgs(argv) {
     throw new Error('--start/--end only apply to a single --source');
   }
   return out;
+}
+
+/**
+ * Compare two generated inventories.
+ *
+ * Compares by *name* with counts alongside, never by the rendered "name ×N" line -- an
+ * earlier version did the latter and reported every count change as both a loss and an
+ * addition, which buries a real removal in noise. A dropped name is the finding that
+ * matters; a changed count is usually just a helper being reused more often.
+ */
+function compareInventories(pathA, pathB) {
+  const parse = (p) => {
+    const txt = readFileSync(p, 'utf8');
+    const sections = {};
+    const re = /^## (.+?)\n[\s\S]*?```\n([\s\S]*?)```/gm;
+    let m;
+    while ((m = re.exec(txt))) {
+      const counts = new Map();
+      for (const line of m[2].split('\n')) {
+        if (!line.trim()) continue;
+        const hit = /^(.*?)\s+×(\d+)$/.exec(line);
+        if (hit) counts.set(hit[1].trim(), Number(hit[2]));
+        else counts.set(line.trim(), 1);
+      }
+      sections[m[1]] = counts;
+    }
+    return sections;
+  };
+
+  const A = parse(pathA);
+  const B = parse(pathB);
+  let removals = 0;
+
+  for (const name of Object.keys(A)) {
+    if (name.startsWith('How to compare')) continue;
+    const a = A[name];
+    const b = B[name] ?? new Map();
+    const removed = [...a.keys()].filter((k) => !b.has(k));
+    const added = [...b.keys()].filter((k) => !a.has(k));
+    const changed = [...a.keys()].filter((k) => b.has(k) && b.get(k) !== a.get(k));
+
+    console.log(`\n### ${name}  (${a.size} → ${b.size} distinct)`);
+    if (removed.length) {
+      removals += removed.length;
+      console.log(`  ❌ REMOVED (${removed.length}) — investigate each:`);
+      removed.forEach((k) => console.log(`     - ${k}  (was ×${a.get(k)})`));
+    }
+    if (added.length) {
+      console.log(`  + added (${added.length}):`);
+      added.forEach((k) => console.log(`     + ${k}${b.get(k) > 1 ? `  ×${b.get(k)}` : ''}`));
+    }
+    if (changed.length) {
+      console.log(`  ~ count changed (${changed.length}, not a loss):`);
+      changed.forEach((k) => console.log(`     ~ ${k}  ×${a.get(k)} → ×${b.get(k)}`));
+    }
+    if (!removed.length && !added.length && !changed.length) console.log('  ✓ identical');
+  }
+
+  console.log(
+    removals === 0
+      ? '\n==> No names removed in any category.'
+      : `\n==> ${removals} name(s) removed — each must be accounted for.`
+  );
 }
 
 /** Attribute names treated as event handlers. */
@@ -140,6 +205,11 @@ function section(title, note, entries) {
 function main() {
   const args = parseArgs(process.argv.slice(2));
   const root = resolve(process.cwd());
+
+  if (args.compare) {
+    compareInventories(resolve(root, args.compare[0]), resolve(root, args.compare[1]));
+    return;
+  }
   const acc = {
     files: [],
     elements: [],

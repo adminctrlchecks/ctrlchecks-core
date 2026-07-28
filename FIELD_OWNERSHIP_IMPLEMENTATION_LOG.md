@@ -5,8 +5,10 @@ Durable record for the phased implementation of `FIELD_OWNERSHIP_VERIFIED_BUILD_
 
 **Rule for this file: it records only work that has actually been done.** Plans are marked as plans. Anything unverified is stated as unverified.
 
+**Convention:** commits are referenced by their **subject line**, not by hash — a hash written into the log before committing is a guess, and one written after can be invalidated by an amend. `git log --oneline` is the source of truth for hashes.
+
 Started: 2026-07-28
-Baseline commit: `bf926be` — *Baseline: node-selection UI redesign WIP + field-ownership build plan*
+Baseline commit: *Baseline: node-selection UI redesign WIP + field-ownership build plan*
 (That commit contains the prior session's uncommitted node-selection work, committed first so each phase lands as a clean single-purpose commit.)
 
 ---
@@ -16,7 +18,7 @@ Baseline commit: `bf926be` — *Baseline: node-selection UI redesign WIP + field
 - [x] **0a** — Baseline capture
 - [x] **0b** — Extraction, zero behaviour change
 - [x] **0c** — Characterization tests on the extracted unit
-- [ ] **1** — Intent Context off this step + two-column layout
+- [x] **1** — Intent Context off this step + two-column layout
 - [ ] **2** — Inline connect at node selection
 - [ ] **3** — `/api/workflow-build/field-plan` + four-group accordions
 - [ ] **4** — Inline editing + parity report (gates Phase 5)
@@ -72,7 +74,7 @@ Everything else the plan asserted was accurate.
 
 ### Standing constraints for every phase
 
-- **Never run `npm test` locally** — it has crashed this machine (memory `feedback_testing_strategy`). Tests get written here and run in CI/live. **Consequence: every test this project produces is unexecuted until someone runs CI. That must be stated in each phase's record, never glossed as "tested".**
+- **Never run `npm test` / any full suite locally** — it has crashed this machine (memory `feedback_testing_strategy`). ~~Consequence: every test this project produces is unexecuted.~~ **SUPERSEDED during Phase 0c** — the user approved single-file `npx vitest run <path>`, so tests written here are actually executed. See the "Standing constraint CHANGED" note below Phase 0b.
 - `components/connections/*` — compose, never modify.
 - `executeNode()` (`worker/src/api/execute-workflow.ts`) — never modify.
 - `GET /api/workflows/:id/missing-items` — additive only.
@@ -160,7 +162,7 @@ Also confirmed absent from the block's read-set despite appearing in §3.6's der
 
 **Could not verify:** no visual/pixel baseline exists, by design. If 0b introduces drift that is purely visual (CSS cascade or ordering effects that leave the tree identical), this method will not catch it.
 
-**Commit:** `b980178` — *Phase 0a: capture structural baseline of the field-ownership block*
+**Commit:** *Phase 0a: capture structural baseline of the field-ownership block*
 
 ---
 
@@ -271,7 +273,7 @@ Regenerated the inventory over the six new files and diffed against `0a-structur
 - `FieldOwnershipContext` in `types.ts` is the single choke point for every later phase's new inputs: one field on the interface, one line in the wizard's object literal.
 - The `0b-structure.md` inventory is the new "before" reference for Phase 1.
 
-**Commit:** `815cbda` — *Phase 0b: extract field-ownership block into presentational components*
+**Commit:** *Phase 0b: extract field-ownership block into presentational components*
 
 ---
 
@@ -357,4 +359,63 @@ expect(updater({})).toEqual({ mode_node1_spreadsheetId: 'buildtime_ai_once' });
 
 **What this changes for later phases:** `buildCtx()` is the extension point. Phase 1 adds rail assertions, Phase 3 group/accordion assertions, Phase 4 the key-shape contract test.
 
-**Commit:** *(added after commit)*
+**Commit:** *Phase 0c: characterization tests for extracted field-ownership components*
+
+---
+
+## Phase 1 — Intent Context removal + two-column layout
+
+### Plan
+
+1. `AutonomousAgentWizard.tsx` — add `step !== 'field-ownership'` to `showIntentContextCard` (now at `:5729`). Add no replacement button: `handleWizardClose` is already the escape hatch (§3.4).
+2. Extend the wrapper conditional (now `:5842`) so `field-ownership` also gets `max-w-7xl`. Per Step 0, this is already a conditional — extend, do not replace.
+3. `FieldOwnershipStage.tsx` — two-column shell: sticky rail ~340px + right column.
+4. New `NodeChecklistRail.tsx`. **Node name + status only, no group counts** (§6a/G9).
+5. Rail status derived from data available today; explicitly a placeholder for 7b's real run status.
+
+**Verification:** tsc; lint at the 58-warning baseline; the 33 existing tests must still pass (they are now a real net); new rail tests; structural comparison showing additions only.
+
+### What actually happened ✅ DONE
+
+All five items done, plus one architectural correction found by lint.
+
+- **Intent Context off this step.** One added clause on `showIntentContextCard`, with a comment on why (field ownership is a working surface, not a review screen; "Edit intent"/"Restart" there only invite losing work). No new button.
+- **Wrapper widened:** `step === 'capability-node-selection' || step === 'field-ownership'` → `max-w-7xl`.
+- **Two-column shell** in `FieldOwnershipStage.tsx`: `flex flex-col lg:flex-row gap-6 items-start`, rail then `w-full lg:flex-1 min-w-0`. The proceed button moved inside the right column so it tracks the cards rather than spanning under the rail.
+- **`NodeChecklistRail.tsx` (105 lines)** — numbered nodes in order, status dot, name, status text, header reading "N of M ready". Clicking an entry scrolls its card into view via a new `id={fo-card-<section>_<nodeId>}` on `NodeOwnershipCard`.
+- **Responsive:** collapses to one column below `lg`, matching node-selection. §6c-D flagged responsive behaviour as unspecified; this is the choice made.
+
+**Correction found by lint — rail logic moved to `lib/`.** My first version exported `buildRailEntries` from the component file, which tripped `react-refresh/only-export-components` (warnings 58→59). That warning was pointing at a real violation of CLAUDE.md's rule that wizard business logic lives in `lib/wizard-*.ts`. Moved `buildRailEntries`, `RailEntry`, `RailNodeStatus` and the satisfied-row predicate into `lib/wizard-field-ownership.ts` (now 401 lines), taking an explicit input object rather than the whole `ctx` so `lib` does not depend on a component type. Warnings back to 58. The lint rule caught an architecture problem, not a style nit.
+
+**Status vocabulary shipped** (placeholder, replaced in 7b): `waiting` / `needs input` / `ready`. A row counts as satisfied when it is locked, switched off, AI-owned, or already has a value — so "needs input" means specifically *"you turned this on and it is still empty"*.
+
+### Verification
+
+- ✅ **42/42 tests pass.** The 33 from Phase 0c still pass unchanged — that is the first time this project's safety net has actually done its job, confirming the layout change altered nothing about behaviour. 9 new rail tests: node listing order across both sections, empty rail, needs-input vs ready vs waiting, AI-owned counts as satisfied, locked counts as satisfied, "N of M ready", the scroll-target id exists, and an explicit assertion that **no group counts appear** (guarding G9).
+- ✅ `npx tsc --noEmit` clean.
+- ✅ `npm run lint` — 0 errors, **58 warnings** (baseline restored).
+- ✅ Non-regression suite: **26/26 passing, unmodified.**
+- ✅ Structural comparison vs the 0a baseline — additive as intended: elements 99→119, classNames 90→102, text literals 27→30 distinct (`Steps`, `of`, `ready`), handler bindings 13→**14** (the 13 originals plus the rail scroll button).
+
+**Comparison tooling improved.** The first pass reported 37 "removals" that were mostly count changes, because it compared the rendered `name ×N` lines as a set. Added a proper `--compare` mode to `scripts/field-ownership-baseline.mjs` that compares by **name** and reports count changes separately. With it, every genuine removal is explainable:
+
+| Removed | Why |
+|---|---|
+| 2 classNames (`requiredSectionStyles.fieldOwnership.*`) | renamed to `ctx.sectionStyles.*`, same values |
+| `rounded border border-border/60 p-3 space-y-3`, `space-y-8` | gained `scroll-mt-6` and the layout classes — deliberate Phase 1 edits |
+| `You` / `AI Build` / `AI Runtime` | moved to `resolveOwnerLabel()` in lib (0b) |
+| `field-ownership`, `step` | the step guard, correctly still in the wizard |
+| `acc`, `aiBuild`, `aiRun`, `you`, `reduce`, `totals`, `rowLocked` | the dead `totals` reduce deleted in 0b |
+| `hasAiPrefilledValue`, `fromNodeSnapshot`, `fromQuestionDefaultPreview`, `snapshotConfigFieldToString` | moved into `isOwnershipRowEnabled()` / `resolveWorkflowPreviewText()` in lib |
+| `ownershipStructuralByNode`, `ownershipSecretsByNode`, `requiredSectionStyles`, `fieldOwnership` | now reached through `ctx` |
+
+**Could not verify:** the visual result in a browser. The tests prove structure and status logic; they cannot prove the sticky rail behaves well at every viewport, or that 340px is the right width against real node names.
+
+**Surprise:** the Intent Context removal was genuinely one line with no fallout, because 0b had already severed this block's coupling to the surrounding layout. Doing Phase 1 before the extraction would have been materially messier.
+
+**What this changes for later phases:**
+- The rail is where Phase 7b's run status renders — `RailNodeStatus` is the type to extend, in `lib`, not the component.
+- Phase 3 adds group counts to rail entries; `buildRailEntries`' input object is the extension point.
+- `lib/wizard-field-ownership.ts` is now the home for this step's logic (401 lines). Keep new logic there — lint enforces it.
+
+**Commit:** *Phase 1: remove Intent Context from field-ownership, add two-column layout*

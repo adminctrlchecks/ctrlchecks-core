@@ -20,7 +20,8 @@ export function NodeOwnershipCard({ group, sectionKey, ctx }: NodeOwnershipCardP
     const descState = ctx.nodeDescriptions[descKey];
 
     return (
-        <div className="rounded border border-border/60 p-3 space-y-3">
+        // id is the scroll target for the matching NodeChecklistRail entry
+        <div id={`fo-card-${sectionKey}_${group.nodeId}`} className="rounded border border-border/60 p-3 space-y-3 scroll-mt-6">
             <div className="flex items-center justify-between gap-3">
                 <div>
                     <p className="text-sm font-semibold">{group.nodeLabel}</p>

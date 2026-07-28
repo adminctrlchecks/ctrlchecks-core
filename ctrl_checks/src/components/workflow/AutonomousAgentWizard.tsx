@@ -5730,6 +5730,10 @@ export function AutonomousAgentWizard() {
         !showPromptComposer &&
         step !== 'building' &&
         step !== 'complete' &&
+        // Field ownership is a working surface, not a review screen: the intent is already
+        // settled by the time the user is assigning fields, and "Edit intent" / "Restart"
+        // here only invite losing work. `handleWizardClose` remains the escape hatch.
+        step !== 'field-ownership' &&
         hasPostAnalysisContext;
     const isCapabilitySelectionFlow = step === 'capability-node-selection' || step === 'capability-review';
     const intentContextSummary =
@@ -5839,7 +5843,7 @@ export function AutonomousAgentWizard() {
             <div className="flex-1 overflow-y-auto p-6 bg-background/50">
                 {/* Steps 1-4: Single page view */}
                 {step !== 'building' && step !== 'complete' && (
-                <div className={`mx-auto space-y-8 pb-20 ${step === 'capability-node-selection' ? 'max-w-7xl' : 'max-w-5xl'}`}>
+                <div className={`mx-auto space-y-8 pb-20 ${step === 'capability-node-selection' || step === 'field-ownership' ? 'max-w-7xl' : 'max-w-5xl'}`}>
                     {showPromptComposer && (
                         <div ref={step1Ref} className="scroll-mt-6">
                             <motion.div

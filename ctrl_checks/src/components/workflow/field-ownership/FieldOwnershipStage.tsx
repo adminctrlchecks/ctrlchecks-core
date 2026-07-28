@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { motion } from 'framer-motion';
 import { AlertCircle, Loader2, Sparkles } from 'lucide-react';
 import { BlueprintPanel } from './BlueprintPanel';
+import { NodeChecklistRail } from './NodeChecklistRail';
 import { OwnershipSection } from './OwnershipSection';
 import type { FieldOwnershipContext } from './types';
 
@@ -51,7 +52,7 @@ export function FieldOwnershipStage({ ctx }: FieldOwnershipStageProps) {
                     <CardContent className="space-y-4">
                         <BlueprintPanel pendingWorkflowData={ctx.pendingWorkflowData} />
                         {/* Walk Me Through All Fields — single button for the entire ownership stage */}
-                        <div className="flex items-center gap-3 py-1">
+                        <div className="flex items-center gap-3 py-1" data-testid="walkthrough-bar">
                             <button
                                 type="button"
                                 onClick={() =>
@@ -77,21 +78,29 @@ export function FieldOwnershipStage({ ctx }: FieldOwnershipStageProps) {
                                 </div>
                             )}
                         </div>
-                        <div className="space-y-8">
-                            {sections.map((section) => (
-                                <OwnershipSection
-                                    key={section.key}
-                                    sectionKey={section.key}
-                                    title={section.title}
-                                    description={section.description}
-                                    groups={section.groups}
-                                    ctx={ctx}
-                                />
-                            ))}
+                        {/*
+                          * Two-column working surface (§4.3): sticky rail of steps on the left,
+                          * the node cards taking the remaining width. Collapses to one column
+                          * below `lg`, matching how node-selection already behaves.
+                          */}
+                        <div className="flex flex-col lg:flex-row gap-6 items-start">
+                            <NodeChecklistRail ctx={ctx} />
+                            <div className="w-full lg:flex-1 min-w-0 space-y-8">
+                                {sections.map((section) => (
+                                    <OwnershipSection
+                                        key={section.key}
+                                        sectionKey={section.key}
+                                        title={section.title}
+                                        description={section.description}
+                                        groups={section.groups}
+                                        ctx={ctx}
+                                    />
+                                ))}
+                                <Button type="button" className="w-full" onClick={ctx.proceedFromOwnershipStage}>
+                                    Proceed To Credentials
+                                </Button>
+                            </div>
                         </div>
-                        <Button type="button" className="w-full" onClick={ctx.proceedFromOwnershipStage}>
-                            Proceed To Credentials
-                        </Button>
                     </CardContent>
                 </Card>
             </motion.div>

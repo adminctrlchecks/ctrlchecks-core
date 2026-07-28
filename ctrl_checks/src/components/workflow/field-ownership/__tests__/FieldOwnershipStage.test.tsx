@@ -501,6 +501,106 @@ describe('CredentialHelpDisclosure', () => {
     });
 });
 
+describe('NodeChecklistRail (Phase 1)', () => {
+    it('lists every node from both sections, in order', () => {
+        const ctx = buildCtx({
+            structuralByNode: [makeGroup({ nodeId: 'node1', nodeLabel: 'Google Sheets' })],
+            secretsByNode: [
+                makeGroup({
+                    nodeId: 'node2',
+                    nodeLabel: 'Slack',
+                    fields: [makeQuestion({ id: 'q2', nodeId: 'node2' })],
+                }),
+            ],
+        });
+        render(<FieldOwnershipStage ctx={ctx} />);
+        const rail = screen.getByLabelText('Workflow steps');
+        const items = within(rail).getAllByRole('listitem');
+        expect(items.length).toBe(2);
+        expect(within(items[0]).getByText('Google Sheets')).toBeTruthy();
+        expect(within(items[1]).getByText('Slack')).toBeTruthy();
+    });
+
+    it('renders nothing when there are no nodes', () => {
+        render(<FieldOwnershipStage ctx={buildCtx({ structuralByNode: [], secretsByNode: [] })} />);
+        expect(screen.queryByLabelText('Workflow steps')).toBeNull();
+    });
+
+    it('reports a node with an enabled but empty required field as needing input', () => {
+        const ctx = buildCtx({
+            fieldEnabledOverrides: { fieldEnabled_node1_spreadsheetId: true },
+        });
+        render(<FieldOwnershipStage ctx={ctx} />);
+        const rail = screen.getByLabelText('Workflow steps');
+        expect(within(rail).getByText(/Needs input/)).toBeTruthy();
+        expect(within(rail).getByText('0 of 1 ready')).toBeTruthy();
+    });
+
+    it('counts a node as ready once its enabled field has a value', () => {
+        const ctx = buildCtx({
+            fieldEnabledOverrides: { fieldEnabled_node1_spreadsheetId: true },
+            structuralByNode: [
+                makeGroup({ fields: [makeQuestion({ defaultValue: 'sheet-abc' })] }),
+            ],
+        });
+        render(<FieldOwnershipStage ctx={ctx} />);
+        const rail = screen.getByLabelText('Workflow steps');
+        expect(within(rail).getByText('Ready')).toBeTruthy();
+        expect(within(rail).getByText('1 of 1 ready')).toBeTruthy();
+    });
+
+    it('treats an AI-owned field as satisfied without a value', () => {
+        const ctx = buildCtx({
+            fieldEnabledOverrides: { fieldEnabled_node1_spreadsheetId: true },
+            ownershipEffectiveModes: { byModeKey: { mode_node1_spreadsheetId: 'runtime_ai' } },
+        });
+        render(<FieldOwnershipStage ctx={ctx} />);
+        expect(within(screen.getByLabelText('Workflow steps')).getByText('Ready')).toBeTruthy();
+    });
+
+    it('treats a locked row as satisfied', () => {
+        const ctx = buildCtx({
+            fieldEnabledOverrides: { fieldEnabled_node1_spreadsheetId: true },
+            structuralByNode: [
+                makeGroup({ fields: [makeQuestion({ ownershipUiMode: 'locked' })] }),
+            ],
+        });
+        render(<FieldOwnershipStage ctx={ctx} />);
+        expect(within(screen.getByLabelText('Workflow steps')).getByText('Ready')).toBeTruthy();
+    });
+
+    it('shows a node with everything switched off as waiting, not ready', () => {
+        render(<FieldOwnershipStage ctx={buildCtx()} />);
+        const rail = screen.getByLabelText('Workflow steps');
+        expect(within(rail).getByText('Waiting')).toBeTruthy();
+        expect(within(rail).getByText('0 of 1 ready')).toBeTruthy();
+    });
+
+    it('carries no group counts yet (deferred to Phase 3 per G9)', () => {
+        const ctx = buildCtx({
+            structuralByNode: [
+                makeGroup({
+                    fields: [
+                        makeQuestion({ id: 'q1' }),
+                        makeQuestion({ id: 'q2', fieldName: 'sheetName' }),
+                        makeQuestion({ id: 'q3', fieldName: 'range' }),
+                    ],
+                }),
+            ],
+        });
+        render(<FieldOwnershipStage ctx={ctx} />);
+        const rail = screen.getByLabelText('Workflow steps');
+        // Only the node name and its status appear -- no required/optional breakdown.
+        expect(within(rail).queryByText(/required/i)).toBeNull();
+        expect(within(rail).queryByText(/optional/i)).toBeNull();
+    });
+
+    it('gives each node card the id its rail entry scrolls to', () => {
+        const { container } = render(<FieldOwnershipStage ctx={buildCtx()} />);
+        expect(container.querySelector('#fo-card-structural_node1')).toBeTruthy();
+    });
+});
+
 describe('BlueprintPanel', () => {
     it('renders nothing without blueprint or diagnostics', () => {
         render(<FieldOwnershipStage ctx={buildCtx()} />);
