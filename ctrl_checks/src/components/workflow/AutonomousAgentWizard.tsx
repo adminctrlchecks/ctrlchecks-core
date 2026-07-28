@@ -238,7 +238,10 @@ function credentialWizardFriendlyStatus(status: string): string {
     }
 }
 
-type WizardStep = 'idle' | 'analyzing' | 'summarize' | 'questioning' | 'capability-selection' | 'refining' | 'confirmation' | 'workflow-confirmation' | 'field-ownership' | 'credentials' | 'configure' | 'configuration' | 'building' | 'executing' | 'complete'
+// 'credentials' and 'configuration' were removed in Phase 5: neither had a render block
+// any more, so setting either showed a blank screen. 'configure' is kept — unlike those
+// two it DOES have a live render block (the missing-credentials/inputs collector).
+type WizardStep = 'idle' | 'analyzing' | 'summarize' | 'questioning' | 'capability-selection' | 'refining' | 'confirmation' | 'workflow-confirmation' | 'field-ownership' | 'configure' | 'building' | 'executing' | 'complete'
     // New capability-node-selection-flow steps (tasks 10.1, 10.2)
     | 'capability-node-selection'   // CapabilityStage: user selects one node per container
     | 'capability-review';          // CapabilityReviewStep: user reviews structural prompt before Backend_Generation
@@ -635,7 +638,6 @@ export function AutonomousAgentWizard() {
     const [configureGuidance, setConfigureGuidance] = useState<GuidedStatusContent | null>(null);
     const [workflowReady, setWorkflowReady] = useState(false);
     // ? STEP-BY-STEP: Track current question index for wizard flow
-    const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [credentialQuestionIndex, setCredentialQuestionIndex] = useState(0);
     const [allQuestions, setAllQuestions] = useState<any[]>([]);
     const [nodeDefinitionsByType, setNodeDefinitionsByType] = useState<Record<string, NodeDefinition>>({});
@@ -925,22 +927,6 @@ export function AutonomousAgentWizard() {
         }
     }, [step, refinement?.requirements]);
 
-    // ? Auto-scroll to current question when question index changes
-    useEffect(() => {
-        if (allQuestions.length > 0 && currentQuestionIndex < allQuestions.length) {
-            // Small delay to ensure DOM is updated
-            setTimeout(() => {
-                const questionElement = document.getElementById(`question-container-${currentQuestionIndex}`);
-                if (questionElement) {
-                    questionElement.scrollIntoView({ 
-                        behavior: 'smooth', 
-                        block: 'center',
-                        inline: 'nearest' 
-                    });
-                }
-            }, 150);
-        }
-    }, [currentQuestionIndex, allQuestions.length]);
 
     /** Single derived field plane: one row per question + live node config snapshot. */
     const fieldPlaneRows = useMemo(
@@ -1405,22 +1391,28 @@ export function AutonomousAgentWizard() {
         executionOrderRank,
     ]);
 
-    const manualConfigurationQuestionIdsKey = useMemo(
-        () => manualConfigurationQuestions.map((q: any) => String(q.id ?? '')).join('|'),
-        [manualConfigurationQuestions]
+    /**
+     * Phase 5 (§6a-2 item 4): `manualConfigurationQuestions` is no longer a render source
+     * — it is the **completeness signal**. It lists the questions the user marked
+     * "You provide", so anything here still lacking a value is what stops Continue.
+     *
+     * This is what catches the residual risk §6a-2 names: a manual_static field whose
+     * field-ownership row is toggled off would otherwise slip through with no value.
+     */
+    const outstandingManualQuestions = useMemo(
+        () =>
+            manualConfigurationQuestions.filter((q: any) => {
+                const key = String(q?.id ?? '');
+                if (!key) return false;
+                const isCredVault = q?.category === 'credential' && q?.isVaultCredential;
+                const raw = isCredVault ? credentialValues[key] : inputValues[key];
+                if (raw !== undefined && raw !== null && String(raw).trim() !== '') return false;
+                return !(q?.defaultValue !== undefined && q?.defaultValue !== null && String(q.defaultValue).trim() !== '');
+            }),
+        [manualConfigurationQuestions, inputValues, credentialValues]
     );
 
-    useEffect(() => {
-        setCurrentQuestionIndex((i) => {
-            const n = manualConfigurationQuestions.length;
-            if (n === 0) return 0;
-            return Math.min(Math.max(0, i), n - 1);
-        });
-    }, [manualConfigurationQuestionIdsKey, manualConfigurationQuestions.length]);
-
-    // Always allow proceeding — workbench opens regardless of credential/input state.
-    // Missing credentials are shown as a friendly panel inside the workbench.
-    const configurationGateReady = true;
+    const fieldOwnershipComplete = outstandingManualQuestions.length === 0;
 
     const ownershipStructuralByNode = useMemo(
         () => groupQuestionsByNode(ownershipQuestions.filter((q: any) => q.ownershipClass === 'structural')),
@@ -1648,15 +1640,6 @@ export function AutonomousAgentWizard() {
         });
     }, [configSeedKey, questionSeedSignature, pendingWorkflowData?.nodes?.length]);
 
-    /** Allow configuration step while workflow is still being finalized (not only phase === ready). */
-    const configurationPhaseUnlocked = useMemo(() => {
-        const u = pendingWorkflowData?.update;
-        if (!u) return true;
-        const p = String(u.phase || '').toLowerCase();
-        const s = String(u.status || '').toLowerCase();
-        if (p === 'ready' || s === 'ready') return true;
-        return ['configuring_inputs', 'configuring_credentials', 'ready_for_execution', 'draft'].includes(p);
-    }, [pendingWorkflowData?.update]);
 
     // Timer for building step
     useEffect(() => {
@@ -3037,7 +3020,9 @@ export function AutonomousAgentWizard() {
                 ].filter(Boolean);
                 setExecutionError(`Workflow is not ready for execution. Missing ${parts.join('; ')}.`);
                 setExecutionStatus('failed');
-                setStep(missingCredentialLabels.length > 0 ? 'credentials' : 'configuration');
+                // Both former targets ('credentials', 'configuration') had no render
+                // block and showed a blank screen. 'configure' collects exactly this.
+                setStep('configure');
                 return;
             }
             
@@ -3250,7 +3235,12 @@ export function AutonomousAgentWizard() {
 
     const handleBuild = async (explicitPrompt?: string) => {
         // ? PRODUCTION FLOW: Unified configuration submission (inputs + credentials)
-        if (pendingWorkflowData && step === 'configuration') {
+        //
+        // Phase 5: this guard read `step === 'configuration'`. That step is gone, and
+        // proceedFromOwnershipStage now calls handleBuild directly from field-ownership.
+        // If this were not updated the submission branch would never run and the workflow
+        // would save with none of the user's values — the exact failure §6a-2 warns about.
+        if (pendingWorkflowData && step === 'field-ownership') {
             console.log('? Submitting unified configuration (inputs + credentials)');
             let savedWorkflow: any = null; // Declare outside try block for catch access
             try {
@@ -4168,7 +4158,6 @@ export function AutonomousAgentWizard() {
                         console.log('[Wizard] Skipping duplicate or empty attach-inputs payload');
                     }
                     setAllQuestions(combinedQuestions);
-                    setCurrentQuestionIndex(0);
                     setCredentialQuestionIndex(0);
                 }
 
@@ -4853,7 +4842,7 @@ export function AutonomousAgentWizard() {
             
             // Don't go back to confirmation if we're already past that step
             // Instead, show error but stay on current step or go to a safe state
-            if (!errorToastShown && (step === 'building' || step === 'credentials')) {
+            if (!errorToastShown && step === 'building') {
                 toast({ 
                     title: 'Build Failed', 
                     description: uiErrorMessage || 'Failed to generate workflow. Please try again.', 
@@ -5055,44 +5044,6 @@ export function AutonomousAgentWizard() {
         [fieldDescriptions, pendingWorkflowData, prompt, readBackendErrorMessage, toast]
     );
 
-    useEffect(() => {
-        if (step !== 'configuration') return;
-        const question = manualConfigurationQuestions[currentQuestionIndex];
-        if (!question) return;
-        const nodeId = String(question.nodeId || '').trim();
-        const fieldName = String(question.fieldName || '').trim();
-        if (!nodeId || !fieldName) return;
-        const existing = fieldDescriptions[nodeId];
-        if (existing?.loading || existing?.data?.[fieldName]) return;
-        const requestKey = `${nodeId}:${fieldName}`;
-        if (fieldDescFetchedRef.current.has(requestKey)) return;
-        fieldDescFetchedRef.current.add(requestKey);
-        fetchFieldDescriptions(
-            nodeId,
-            String(question.nodeType || ''),
-            String(question.nodeLabel || question.nodeType || 'Node'),
-            [{
-                ...question,
-                selectedMode:
-                    ownershipEffectiveModes.byModeKey[`mode_${question.nodeId}_${question.fieldName}`] ||
-                    resolveWizardFieldFillMode(
-                        fillModeValues[`mode_${question.nodeId}_${question.fieldName}`],
-                        question.fillModeDefault as 'manual_static' | 'runtime_ai' | 'buildtime_ai_once' | undefined
-                    ),
-                fieldEnabled: true,
-                currentValue: question.defaultValue || null,
-            }],
-            requestKey
-        );
-    }, [
-        step,
-        manualConfigurationQuestions,
-        currentQuestionIndex,
-        fieldDescriptions,
-        fetchFieldDescriptions,
-        ownershipEffectiveModes.byModeKey,
-        fillModeValues,
-    ]);
 
     /**
      * Walks through every field across ALL nodes in the entire Field Ownership stage,
@@ -5259,9 +5210,9 @@ export function AutonomousAgentWizard() {
         // Now that pipelineReady is also true, it is safe to advance past the questions gate.
         setQuestionsAnswered(true);
         // Credentials are collected inline during the field-ownership step.
-        // Skip the redundant 'credentials' step and go directly to 'configuration'.
-        setCurrentQuestionIndex(0);
-        setStep('configuration');
+        // Values are entered inline on this step (Phase 4), so there is no second
+        // configuration pass to visit — build directly.
+        handleBuild();
     };
 
     // -- Capability-Node-Selection-Flow handlers (tasks 10.1, 10.2, 10.3) -----
@@ -5723,6 +5674,7 @@ export function AutonomousAgentWizard() {
      */
     const fieldOwnershipContext: FieldOwnershipContext = {
         fieldPlan: fieldOwnershipPlan,
+        outstandingCount: outstandingManualQuestions.length,
         nodeConnections: fieldOwnershipConnections,
         // Read by inline editing (Phase 4) to display current values. Still owned here —
         // handleBuild forwards these exact maps to attach-inputs / attach-credentials.
@@ -6588,606 +6540,6 @@ export function AutonomousAgentWizard() {
                     )}
 
                     {/* Unified configuration: show during setup phases (e.g. configuring_inputs) and when ready */}
-                    {step === 'configuration' && 
-                     pendingWorkflowData && 
-                     pendingWorkflowData.nodes?.length > 0 &&
-                     configurationPhaseUnlocked && (
-                        <div className="scroll-mt-6">
-                            <motion.div
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                            >
-                                <Card className={requiredSectionStyles.configuration.cardClass}>
-                                    <CardHeader>
-                                        <CardTitle className={requiredSectionStyles.configuration.titleClass}>
-                                            <AlertCircle className="h-5 w-5" /> Configuration Details Required
-                                        </CardTitle>
-                                        <CardDescription>
-                                            Please provide the following configuration values to complete the workflow setup.
-                                        </CardDescription>
-                                    </CardHeader>
-                                    <CardContent className="space-y-6">
-                                        {/* ? STEP-BY-STEP: Show one question at a time */}
-                                        {manualConfigurationQuestions.length > 0 && currentQuestionIndex < manualConfigurationQuestions.length ? (
-                                            <div className="space-y-4" id={`question-container-${currentQuestionIndex}`}>
-                                                {/* Progress indicator */}
-                                                <div className="flex items-center justify-between text-sm text-muted-foreground mb-4">
-                                                    <span>Question {currentQuestionIndex + 1} of {manualConfigurationQuestions.length}</span>
-                                                    <div className="flex gap-1">
-                                                        {manualConfigurationQuestions.map((_, idx) => (
-                                                            <div
-                                                                key={idx}
-                                                                className={`h-2 w-2 rounded-full ${
-                                                                    idx === currentQuestionIndex
-                                                                        ? 'bg-amber-400'
-                                                                        : idx < currentQuestionIndex
-                                                                        ? 'bg-green-500'
-                                                                        : 'bg-gray-600'
-                                                                }`}
-                                                            />
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                                
-                                                {/* Current Question */}
-                                                {(() => {
-                                                    const question = manualConfigurationQuestions[currentQuestionIndex];
-                                                    const questionKey = question.id;
-                                                    const questionLabel = question.label || `${question.nodeLabel} - ${question.fieldName}`;
-                                                    const isInputDisabled = false;
-                                                    const isManualRequired = question.required;
-                                                    const runtimeValueMeta = lastResolvedInputs?.[question.nodeId]?.[question.fieldName];
-                                                    const isCredVaultQ =
-                                                        question.category === 'credential' && (question as any).isVaultCredential;
-                                                    const rawSelectAnswer = isCredVaultQ ? credentialValues[questionKey] : inputValues[questionKey];
-                                                    const selectControlledValue =
-                                                        question.options && question.options.length > 0
-                                                            ? normalizeSelectValue(
-                                                                  rawSelectAnswer,
-                                                                  question.defaultValue,
-                                                                  question.options
-                                                              )
-                                                            : (() => {
-                                                                  if (rawSelectAnswer !== undefined && rawSelectAnswer !== null && String(rawSelectAnswer) !== '') {
-                                                                      return String(rawSelectAnswer);
-                                                                  }
-                                                                  if (
-                                                                      question.defaultValue !== undefined &&
-                                                                      question.defaultValue !== null &&
-                                                                      String(question.defaultValue) !== ''
-                                                                  ) {
-                                                                      return String(question.defaultValue);
-                                                                  }
-                                                                  return '';
-                                                              })();
-                                                    const rawTextAnswer = isCredVaultQ
-                                                        ? credentialValues[questionKey]
-                                                        : inputValues[questionKey];
-                                                    const textControlledValue =
-                                                        rawTextAnswer !== undefined && rawTextAnswer !== null
-                                                            ? String(rawTextAnswer)
-                                                            : question.defaultValue !== undefined && question.defaultValue !== null
-                                                              ? String(question.defaultValue)
-                                                              : '';
-                                                    const configFieldDesc = fieldDescriptions[String(question.nodeId || '')]?.data?.[String(question.fieldName || '')] ?? null;
-                                                    const preparedExample = prepareActionableFieldExample(question, configFieldDesc?.actionableExample || null);
-                                                    const appliedKey = `${question.nodeId}_${question.fieldName}`;
-                                                    const modeKey = `mode_${question.nodeId}_${question.fieldName}`;
-                                                    const fieldEnabledKey = `fieldEnabled_${question.nodeId}_${question.fieldName}`;
-                                                    const exampleApplied = appliedExampleKeys[appliedKey] === true;
-                                                    const applyPreparedExample = () => {
-                                                        if (!preparedExample?.canApply) return;
-                                                        if (isCredVaultQ) {
-                                                            setCredentialValues({
-                                                                ...credentialValues,
-                                                                [questionKey]: preparedExample.valueForInput,
-                                                            });
-                                                        } else {
-                                                            setInputValues({
-                                                                ...inputValues,
-                                                                [questionKey]: preparedExample.valueForInput,
-                                                            });
-                                                        }
-                                                        setFillModeValues((prev) => ({
-                                                            ...prev,
-                                                            [modeKey]: 'buildtime_ai_once',
-                                                        }));
-                                                        setFieldEnabledOverrides((prev) => ({
-                                                            ...prev,
-                                                            [fieldEnabledKey]: true,
-                                                        }));
-                                                        setAppliedExampleKeys((prev) => ({
-                                                            ...prev,
-                                                            [appliedKey]: true,
-                                                        }));
-                                                        setAppliedFieldGuidanceExamples((prev) => ({
-                                                            ...prev,
-                                                            [appliedKey]: {
-                                                                nodeId: String(question.nodeId || ''),
-                                                                fieldName: String(question.fieldName || ''),
-                                                                mode: 'buildtime_ai_once',
-                                                                source: preparedExample.source || 'ai_field_guidance',
-                                                            },
-                                                        }));
-                                                    };
-                                                    return (
-                                                        <div className="space-y-4">
-                                                            <div>
-                                                                <div className="flex items-center justify-between gap-2">
-                                                                    <Label htmlFor={`question-${currentQuestionIndex}`} className="text-base font-semibold">
-                                                                        {questionLabel}
-                                                                        {question.required && <span className={requiredSectionStyles.configuration.requiredIndicatorClass}>*</span>}
-                                                                    </Label>
-                                                                    {(() => {
-                                                                        const fieldHelp = resolveFieldHelpContent({
-                                                                            nodeType: String(question.nodeType || ''),
-                                                                            fieldName: String(question.fieldName || ''),
-                                                                            fieldLabel: questionLabel,
-                                                                            fieldType: String(question.type || 'text'),
-                                                                            placeholder: question.placeholder ? String(question.placeholder) : undefined,
-                                                                            description: question.description ? String(question.description) : undefined,
-                                                                            helpText: (question as any).helpText ? String((question as any).helpText) : undefined,
-                                                                            helpCategory: (question as any).helpCategory ? String((question as any).helpCategory) : undefined,
-                                                                            docsUrl: (question as any).docsUrl ? String((question as any).docsUrl) : undefined,
-                                                                            exampleValue: (question as any).exampleValue ? String((question as any).exampleValue) : undefined,
-                                                                            example: question.example,
-                                                                            options: question.options,
-                                                                            nodeLabel: question.nodeLabel ? String(question.nodeLabel) : undefined,
-                                                                            config: (question as any).config || (question as any).nodeConfig || {
-                                                                                operation: (question as any).operation || (question as any).action || (question as any).operationValue,
-                                                                                resource: (question as any).resource,
-                                                                            },
-                                                                            operation: (question as any).operation || (question as any).action || (question as any).operationValue,
-                                                                            resource: (question as any).resource,
-                                                                        });
-                                                                        return fieldHelp ? (
-                                                                            <HelpTooltip
-                                                                                helpText={fieldHelp}
-                                                                                ariaLabel={`Help for ${questionLabel}`}
-                                                                                side="top"
-                                                                            />
-                                                                        ) : null;
-                                                                    })()}
-                                                                </div>
-                                                                {question.description && (
-                                                                    <p className="text-sm text-muted-foreground mt-1">{question.description}</p>
-                                                                )}
-                                                            </div>
-                                                            
-                                                            {/* Render input based on type */}
-                                                            {question.type === 'select' || (question.options && question.options.length > 0) ? (
-                                                                <Select
-                                                                    value={selectControlledValue}
-                                                                    onValueChange={(value) => {
-                                                                        if (isInputDisabled) {
-                                                                            return;
-                                                                        }
-                                                                        if (isCredVaultQ) {
-                                                                            setCredentialValues({
-                                                                                ...credentialValues,
-                                                                                [questionKey]: value,
-                                                                            });
-                                                                        } else {
-                                                                        setInputValues({
-                                                                            ...inputValues,
-                                                                            [questionKey]: value,
-                                                                        });
-                                                                        }
-                                                                        console.log(`[Frontend] Selected ${question.fieldName} = ${value} (key: ${questionKey}, category: ${question.category})`);
-                                                                    }}
-                                                                >
-                                                                    <SelectTrigger id={`question-${currentQuestionIndex}`} className="w-full">
-                                                                        <SelectValue placeholder={question.placeholder || `Select ${question.fieldName}`} />
-                                                                    </SelectTrigger>
-                                                                    <SelectContent>
-                                                                        {question.options && question.options.length > 0 ? (
-                                                                            question.options.map((option: any, optIdx: number) => {
-                                                                                const optionValue = typeof option === 'string' ? option : option.value;
-                                                                                const optionLabel = typeof option === 'string' ? option : (option.label || option.value);
-                                                                                // ? Radix Select forbids empty-string item values
-                                                                                if (String(optionValue ?? '').trim().length === 0) {
-                                                                                    return null;
-                                                                                }
-                                                                                return (
-                                                                                    <SelectItem key={optIdx} value={String(optionValue)}>
-                                                                                        {optionLabel}
-                                                                                    </SelectItem>
-                                                                                );
-                                                                            })
-                                                                        ) : (
-                                                                            <div className="px-2 py-1 text-sm text-muted-foreground">
-                                                                                No options available
-                                                                            </div>
-                                                                        )}
-                                                                    </SelectContent>
-                                                                </Select>
-                                                            ) : question.type === 'textarea' || question.fieldType === 'textarea' || question.type === 'json' ? (
-                                                                <Textarea
-                                                                    id={`question-${currentQuestionIndex}`}
-                                                                    placeholder={
-                                                                        isInputDisabled
-                                                                            ? 'This value will be filled automatically at runtime by AI.'
-                                                                            : (question.description || question.placeholder || `Enter ${question.fieldName}`)
-                                                                    }
-                                                                    className="w-full font-mono text-sm min-h-[120px]"
-                                                                    value={textControlledValue}
-                                                                    onChange={(e) => {
-                                                                        if (isInputDisabled) {
-                                                                            return;
-                                                                        }
-                                                                        if (isCredVaultQ) {
-                                                                            setCredentialValues({
-                                                                                ...credentialValues,
-                                                                                [questionKey]: e.target.value,
-                                                                            });
-                                                                        } else {
-                                                                            setInputValues({
-                                                                        ...inputValues,
-                                                                        [questionKey]: e.target.value,
-                                                                            });
-                                                                        }
-                                                                    }}
-                                                                />
-                                                            ) : (
-                                                                <Input
-                                                                    id={`question-${currentQuestionIndex}`}
-                                                                    type={question.type === 'number' ? 'number' : (question.type === 'password' ? 'password' : 'text')}
-                                                                    placeholder={
-                                                                        isInputDisabled
-                                                                            ? 'This value will be filled automatically at runtime by AI.'
-                                                                            : (question.description || question.placeholder || `Enter ${question.fieldName}`)
-                                                                    }
-                                                                    className="w-full"
-                                                                    value={textControlledValue}
-                                                                    onChange={(e) => {
-                                                                        if (isInputDisabled) {
-                                                                            return;
-                                                                        }
-                                                                        if (isCredVaultQ) {
-                                                                            setCredentialValues({
-                                                                                ...credentialValues,
-                                                                                [questionKey]: e.target.value,
-                                                                            });
-                                                                        } else {
-                                                                            setInputValues({
-                                                                        ...inputValues,
-                                                                        [questionKey]: e.target.value,
-                                                                            });
-                                                                        }
-                                                                    }}
-                                                                />
-                                                            )}
-
-                                                            {preparedExample && preparedExample.displayValue && (
-                                                                <div className="rounded border border-sky-500/25 bg-sky-500/5 p-3">
-                                                                    <div className="flex flex-wrap items-start justify-between gap-3">
-                                                                        <div className="min-w-0 flex-1">
-                                                                            <p className="text-xs font-medium text-foreground/85">AI suggested example</p>
-                                                                            <pre className="mt-1 max-h-28 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] text-muted-foreground">
-                                                                                {preparedExample.displayValue}
-                                                                            </pre>
-                                                                            {!preparedExample.canApply && preparedExample.reason ? (
-                                                                                <p className="mt-1 text-[10px] text-muted-foreground/70">{preparedExample.reason}</p>
-                                                                            ) : null}
-                                                                            {exampleApplied && (
-                                                                                <p className="mt-1 text-[10px] font-medium text-sky-600 dark:text-sky-300">
-                                                                                    Applied as AI Build
-                                                                                </p>
-                                                                            )}
-                                                                        </div>
-                                                                        {preparedExample.canApply && (
-                                                                            <Button
-                                                                                type="button"
-                                                                                size="sm"
-                                                                                variant={exampleApplied ? 'secondary' : 'outline'}
-                                                                                className="shrink-0"
-                                                                                onClick={applyPreparedExample}
-                                                                            >
-                                                                                {exampleApplied ? 'Use again' : 'Use this example'}
-                                                                            </Button>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            )}
-                                                            
-                                                            {runtimeValueMeta && (
-                                                                <div className="rounded border border-border/60 bg-muted/30 p-2">
-                                                                    <p className="text-xs font-medium text-foreground/80">Last runtime value (read-only)</p>
-                                                                    <pre className="mt-1 max-h-24 overflow-auto text-[10px] font-mono whitespace-pre-wrap break-words">
-                                                                        {typeof runtimeValueMeta.value === 'string'
-                                                                            ? runtimeValueMeta.value
-                                                                            : JSON.stringify(runtimeValueMeta.value, null, 2)}
-                                                                    </pre>
-                                                                </div>
-                                                            )}
-
-                                                            {question.example && (
-                                                                <p className="text-xs text-muted-foreground italic">
-                                                                    Example: {typeof question.example === 'string' ? question.example : JSON.stringify(question.example)}
-                                                                </p>
-                                                            )}
-                                                            
-                                                            {/* Navigation Buttons */}
-                                                            <div className="flex justify-between gap-2 pt-4">
-                                                                <Button
-                                                                    type="button"
-                                                                    variant="outline"
-                                                                    onClick={() => {
-                                                                        if (currentQuestionIndex > 0) {
-                                                                            const prevIndex = currentQuestionIndex - 1;
-                                                                            setCurrentQuestionIndex(prevIndex);
-                                                                            // Smooth scroll to previous question
-                                                                            setTimeout(() => {
-                                                                                const questionElement = document.getElementById(`question-container-${prevIndex}`);
-                                                                                if (questionElement) {
-                                                                                    questionElement.scrollIntoView({ 
-                                                                                        behavior: 'smooth', 
-                                                                                        block: 'center',
-                                                                                        inline: 'nearest' 
-                                                                                    });
-                                                                                } else {
-                                                                                    // Fallback: scroll up a bit
-                                                                                    window.scrollBy({ top: -200, behavior: 'smooth' });
-                                                                                }
-                                                                            }, 100);
-                                                                        }
-                                                                    }}
-                                                                    disabled={currentQuestionIndex === 0}
-                                                                >
-                                                                    Previous
-                                                                </Button>
-                                                                <Button
-                                                                    type="button"
-                                                                    onClick={() => {
-                                                                        // Validate required field (only when manual input is required)
-                                                                        const currentValue = (question.category === 'credential' && (question as any).isVaultCredential
-                                                                            ? credentialValues[questionKey]
-                                                                            : inputValues[questionKey]
-                                                                        ) || '';
-                                                                        if (isManualRequired && !String(currentValue).trim()) {
-                                                                            toast({
-                                                                                title: 'Required Field',
-                                                                                description: `Please provide a value for ${questionLabel}`,
-                                                                                variant: 'destructive',
-                                                                            });
-                                                                            return;
-                                                                        }
-                                                                        
-                                                                        // Move to next question with smooth scroll
-                                                                        if (currentQuestionIndex < manualConfigurationQuestions.length - 1) {
-                                                                            const nextIndex = currentQuestionIndex + 1;
-                                                                            setCurrentQuestionIndex(nextIndex);
-                                                                            // Smooth scroll to next question
-                                                                            setTimeout(() => {
-                                                                                const questionElement = document.getElementById(`question-container-${nextIndex}`);
-                                                                                if (questionElement) {
-                                                                                    questionElement.scrollIntoView({ 
-                                                                                        behavior: 'smooth', 
-                                                                                        block: 'center',
-                                                                                        inline: 'nearest' 
-                                                                                    });
-                                                                                } else {
-                                                                                    // Fallback: scroll down a bit
-                                                                                    window.scrollBy({ top: 200, behavior: 'smooth' });
-                                                                                }
-                                                                            }, 100);
-                                                                        } else {
-                                                                            // Last question - move to completion screen
-                                                                            setCurrentQuestionIndex(manualConfigurationQuestions.length);
-                                                                            // Scroll to completion screen
-                                                                            setTimeout(() => {
-                                                                                window.scrollTo({ top: 0, behavior: 'smooth' });
-                                                                            }, 100);
-                                                                        }
-                                                                    }}
-                                                                    disabled={(() => {
-                                                                        if (!isManualRequired) return false;
-                                                                        const currentValue = (question.category === 'credential' && (question as any).isVaultCredential
-                                                                            ? credentialValues[questionKey]
-                                                                            : inputValues[questionKey]
-                                                                        ) || '';
-                                                                        return !String(currentValue).trim();
-                                                                    })()}
-                                                                >
-                                                                    {currentQuestionIndex < manualConfigurationQuestions.length - 1 ? 'Next' : 'Continue Building'}
-                                                                </Button>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })()}
-                                            </div>
-                                        ) : manualConfigurationQuestions.length > 0 && currentQuestionIndex >= manualConfigurationQuestions.length ? (
-                                            /* Always ready ? workbench opens at any cost */
-                                            <div className="space-y-4 text-center">
-                                                <CheckCircle2 className="h-12 w-12 mx-auto text-green-500" />
-                                                <h3 className="text-lg font-semibold">Ready to open workflow</h3>
-                                                <p className="text-sm text-muted-foreground">
-                                                    Your workflow is saved and ready to open. Any missing credentials can be connected from the Connections page inside the workflow editor.
-                                                </p>
-                                            </div>
-                                        ) : (
-                                            /* Fallback: Show all questions at once if allQuestions is empty */
-                                            <>
-                                                {/* Node Inputs Section */}
-                                                {pendingWorkflowData.discoveredInputs && pendingWorkflowData.discoveredInputs.length > 0 && (
-                                                    <div className="space-y-4">
-                                                        <h3 className="text-sm font-semibold text-foreground">Node Configuration</h3>
-                                                        {pendingWorkflowData.discoveredInputs.map((input: any, i: number) => {
-                                                    // ? COMPREHENSIVE: Use question ID if available (cred_*, op_*, config_*, resource_*), otherwise fall back to nodeId_fieldName
-                                                    const inputKey = input.id || `${input.nodeId}_${input.fieldName}`;
-                                                    const inputLabel = input.label || `${input.nodeLabel} - ${input.fieldName}`;
-                                                    const isJsonOption = (opt: any) => {
-                                                        const v = typeof opt === 'string' ? opt : opt?.value;
-                                                        return typeof v === 'string' && v.includes('{{$json.');
-                                                    };
-                                                    // ? CORE ARCH REFACTOR:
-                                                    // Filter out JSON/template options ({{$json.*}}) from dropdowns.
-                                                    // AI Input Resolver will handle JSON-based mapping at runtime.
-                                                    const nonJsonOptions = Array.isArray(input.options)
-                                                        ? input.options.filter((opt: any) => !isJsonOption(opt))
-                                                        : [];
-                                                    const hasNonJsonOptions = nonJsonOptions.length > 0;
-                                                    const isAIManagedField =
-                                                        !hasNonJsonOptions &&
-                                                        (input.type === 'select' ||
-                                                            ['to', 'subject', 'body'].includes(
-                                                                String(input.fieldName || '').toLowerCase()
-                                                            ));
-                                                    
-                                                    return (
-                                                        <div key={i} className="space-y-2">
-                                                            <Label htmlFor={`input-${i}`} className="text-sm font-medium">
-                                                                {inputLabel}
-                                                                {input.required && <span className="text-red-400 ml-1">*</span>}
-                                                            </Label>
-                                                            {/* ? CORE ARCH REFACTOR:
-                                                                 - If this field is AI-managed (only JSON/template options), do NOT show dropdown.
-                                                                 - Show read-only message instead: AI will generate this dynamically.
-                                                               */}
-                                                            {isAIManagedField ? (
-                                                                <div className="text-xs text-muted-foreground border border-dashed border-border/60 rounded px-3 py-2 bg-muted/40">
-                                                                    <p className="font-medium text-foreground/80">
-                                                                        Filled automatically by AI
-                                                                    </p>
-                                                                    <p className="mt-1">
-                                                                        This field will be generated dynamically at runtime based on
-                                                                        previous node output and your workflow intent. No manual
-                                                                        selection is required.
-                                                                    </p>
-                                                                </div>
-                                                            ) : (input.type === 'select' || (input.options && input.options.length > 0)) ? (
-                                                                <Select
-                                                                    value={
-                                                                        nonJsonOptions.length > 0
-                                                                            ? normalizeSelectValue(
-                                                                                  inputValues[inputKey],
-                                                                                  input.defaultValue,
-                                                                                  nonJsonOptions
-                                                                              )
-                                                                            : String(inputValues[inputKey] ?? input.defaultValue ?? '')
-                                                                    }
-                                                                    onValueChange={(value) => {
-                                                                        setInputValues({
-                                                                            ...inputValues,
-                                                                            [inputKey]: value,
-                                                                        });
-                                                                        console.log(`[Frontend] Selected ${input.fieldName} = ${value} for node ${input.nodeId} (key: ${inputKey})`);
-                                                                    }}
-                                                                    >
-                                                                    <SelectTrigger id={`input-${i}`} className="w-full">
-                                                                        <SelectValue placeholder={input.placeholder || `Select ${input.fieldName}`} />
-                                                                    </SelectTrigger>
-                                                                    <SelectContent>
-                                                                        {nonJsonOptions.length > 0 ? (
-                                                                            nonJsonOptions.map((option: any, optIdx: number) => {
-                                                                                const optionValue = typeof option === 'string' ? option : option.value;
-                                                                                const optionLabel = typeof option === 'string' ? option : (option.label || option.value);
-                                                                                // ? Radix Select forbids empty-string item values
-                                                                                if (String(optionValue ?? '').trim().length === 0) {
-                                                                                    return null;
-                                                                                }
-                                                                                return (
-                                                                                    <SelectItem key={optIdx} value={String(optionValue)}>
-                                                                                        {optionLabel}
-                                                                                    </SelectItem>
-                                                                                );
-                                                                            })
-                                                                        ) : (
-                                                                            <div className="px-2 py-1 text-sm text-muted-foreground">
-                                                                                No options available
-                                                                            </div>
-                                                                        )}
-                                                                    </SelectContent>
-                                                                </Select>
-                                                            ) : input.type === 'textarea' || input.fieldType === 'textarea' || input.type === 'json' ? (
-                                                                <Textarea
-                                                                    id={`input-${i}`}
-                                                                    placeholder={input.description || input.placeholder || `Enter ${input.fieldName}`}
-                                                                    className="w-full font-mono text-sm"
-                                                                    value={inputValues[inputKey] || input.defaultValue || ''}
-                                                                    onChange={(e) => setInputValues({
-                                                                        ...inputValues,
-                                                                        [inputKey]: e.target.value,
-                                                                    })}
-                                                                />
-                                                            ) : (
-                                                                <Input
-                                                                    id={`input-${i}`}
-                                                                    type={input.type === 'number' ? 'number' : 'text'}
-                                                                    placeholder={input.description || input.placeholder || `Enter ${input.fieldName}`}
-                                                                    className="w-full"
-                                                                    value={inputValues[inputKey] || input.defaultValue || ''}
-                                                                    onChange={(e) => setInputValues({
-                                                                        ...inputValues,
-                                                                        [inputKey]: e.target.value,
-                                                                    })}
-                                                                />
-                                                            )}
-                                                            {input.description && (
-                                                                <p className="text-xs text-muted-foreground">{input.description}</p>
-                                                            )}
-                                                            {input.example && (
-                                                                <p className="text-xs text-muted-foreground italic">
-                                                                    Example: {typeof input.example === 'string' ? input.example : JSON.stringify(input.example)}
-                                                                </p>
-                                                            )}
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        )}
-                                        
-                                        {/*
-                                          * Account connections, resolved inline.
-                                          *
-                                          * This used to read "handled on the Credentials step" with a button
-                                          * calling setStep('credentials') — but no render block exists for that
-                                          * step, so the button navigated to a blank screen (plan §3.11).
-                                          * Connecting happens here instead, via the same NodeConnectPopover
-                                          * used on node selection.
-                                          */}
-                                        {pendingWorkflowData.discoveredCredentials &&
-                                            pendingWorkflowData.discoveredCredentials.length > 0 && (
-                                                <div className="space-y-2 pt-4 border-t border-border/60">
-                                                    <p className="text-sm text-muted-foreground">
-                                                        Account connections for this workflow:
-                                                    </p>
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {pendingWorkflowData.discoveredCredentials.map((cred: any, idx: number) => (
-                                                            <NodeConnectPopover
-                                                                key={`wizard_cred_${cred.provider || cred.vaultKey || idx}`}
-                                                                provider={String(cred.provider || cred.vaultKey || '')}
-                                                                serviceLabel={String(cred.displayName || cred.provider || cred.vaultKey || 'account')}
-                                                            />
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            </>
-                                        )}
-
-                                        {(manualConfigurationQuestions.length === 0 ||
-                                            currentQuestionIndex >= manualConfigurationQuestions.length) && (
-                                            <div className="flex gap-3 pt-4 border-t border-border/60">
-                                                <Button
-                                                    type="button"
-                                                    onClick={() => { void handleBuild(); }}
-                                                    className="w-full"
-                                                    disabled={isNavigating}
-                                                >
-                                                    {isNavigating
-                                                        ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                                        : <Check className="h-4 w-4 mr-2" />}
-                                                    {isNavigating ? 'Opening workflow…' : 'Continue Building Workflow'}
-                                                </Button>
-                                            </div>
-                                        )}
-                                    </CardContent>
-                                </Card>
-                            </motion.div>
-                        </div>
-                    )}
 
                     {/* Ready to Build Section - Only show when workflow confirmed and no credentials needed */}
                     {step === 'confirmation' && refinement && workflowUnderstandingConfirmed && requiredCredentials.length === 0 && (

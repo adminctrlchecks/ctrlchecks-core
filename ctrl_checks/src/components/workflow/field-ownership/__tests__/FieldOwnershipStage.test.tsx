@@ -113,6 +113,7 @@ function buildCtx(overrides: Partial<FieldOwnershipContext> = {}): FieldOwnershi
         secretsByNode: [],
         ownershipEffectiveModes: { byModeKey: {} },
         fillModeValues: {},
+        outstandingCount: 0,
         inputValues: {},
         credentialValues: {},
         fieldPlaneRows: [],
@@ -225,12 +226,41 @@ describe('FieldOwnershipStage — structure', () => {
     });
 });
 
-describe('FieldOwnershipStage — proceed action', () => {
-    it('invokes proceedFromOwnershipStage when the proceed button is clicked', () => {
+describe('FieldOwnershipStage — build action (Phase 5)', () => {
+    it('invokes proceedFromOwnershipStage when the build button is clicked', () => {
         const ctx = buildCtx();
         render(<FieldOwnershipStage ctx={ctx} />);
-        fireEvent.click(screen.getByText('Proceed To Credentials'));
+        // Was "Proceed To Credentials" until Phase 5 deleted that step; the step now
+        // builds directly because values are entered here.
+        fireEvent.click(screen.getByText('Build Workflow'));
         expect(ctx.proceedFromOwnershipStage).toHaveBeenCalledTimes(1);
+    });
+
+    it('blocks the build while fields the user owns still have no value', () => {
+        const ctx = buildCtx({ outstandingCount: 2 });
+        render(<FieldOwnershipStage ctx={ctx} />);
+        const button = screen.getByRole('button', { name: 'Build Workflow' });
+        expect(button.hasAttribute('disabled')).toBe(true);
+        expect(screen.getByTestId('ownership-outstanding-notice').textContent).toContain(
+            '2 fields still need a value.'
+        );
+        fireEvent.click(button);
+        expect(ctx.proceedFromOwnershipStage).not.toHaveBeenCalled();
+    });
+
+    it('singularises the outstanding notice', () => {
+        render(<FieldOwnershipStage ctx={buildCtx({ outstandingCount: 1 })} />);
+        expect(screen.getByTestId('ownership-outstanding-notice').textContent).toContain(
+            '1 field still needs a value.'
+        );
+    });
+
+    it('shows no notice and enables the build when nothing is outstanding', () => {
+        render(<FieldOwnershipStage ctx={buildCtx({ outstandingCount: 0 })} />);
+        expect(screen.queryByTestId('ownership-outstanding-notice')).toBeNull();
+        expect(
+            screen.getByRole('button', { name: 'Build Workflow' }).hasAttribute('disabled')
+        ).toBe(false);
     });
 });
 

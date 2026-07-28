@@ -96,8 +96,30 @@ export function FieldOwnershipStage({ ctx }: FieldOwnershipStageProps) {
                                         ctx={ctx}
                                     />
                                 ))}
-                                <Button type="button" className="w-full" onClick={ctx.proceedFromOwnershipStage}>
-                                    Proceed To Credentials
+                                {/*
+                                  * Phase 5: this used to read "Proceed To Credentials" and
+                                  * advance to the configuration step. Values are entered
+                                  * here now, so it builds directly. The gate is the
+                                  * repurposed completeness signal (§6a-2 item 4): fields the
+                                  * user owns that still have no value.
+                                  */}
+                                {ctx.outstandingCount > 0 && (
+                                    <p
+                                        className="text-xs text-amber-500"
+                                        data-testid="ownership-outstanding-notice"
+                                    >
+                                        {ctx.outstandingCount === 1
+                                            ? '1 field still needs a value.'
+                                            : `${ctx.outstandingCount} fields still need a value.`}
+                                    </p>
+                                )}
+                                <Button
+                                    type="button"
+                                    className="w-full"
+                                    disabled={ctx.outstandingCount > 0}
+                                    onClick={ctx.proceedFromOwnershipStage}
+                                >
+                                    Build Workflow
                                 </Button>
                             </div>
                         </div>

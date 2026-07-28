@@ -91,6 +91,8 @@ export interface FieldOwnershipContext {
      * layout rather than breaking.
      */
     fieldPlan?: FieldPlan | null;
+    /** Fields the user owns that still lack a value — gates the build button (§6a-2 item 4). */
+    outstandingCount: number;
     /**
      * Connection state per node type, from the same bounded readiness endpoint the
      * capability stage uses. Drives the connect fallback on cards for nodes the

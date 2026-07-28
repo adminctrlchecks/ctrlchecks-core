@@ -22,7 +22,7 @@ Baseline commit: *Baseline: node-selection UI redesign WIP + field-ownership bui
 - [x] **2** — Inline connect at node selection
 - [x] **3** — `/api/workflow-build/field-plan` + four-group accordions
 - [x] **4** — Inline editing + parity report (gates Phase 5)
-- [ ] **5** — Delete `configuration` + `credentials` steps
+- [x] **5** — Delete `configuration` + `credentials` steps
 - [ ] **6** — `firstRunClass` safety layer + fan-out sampler (backend only)
 - [ ] **7a** — Provider-error → field guidance layer
 - [ ] **7b** — `/api/workflow-build/run-node` (⚠ MANDATORY PAUSE BEFORE THIS PHASE)
@@ -738,3 +738,62 @@ is needed: this phase wrote into the same maps under the same keys, so deleting 
 configuration step removes a second way to enter values, not the only way.
 
 **Commit:** *Phase 4: inline field editing honouring the question-ID key contract*
+
+---
+
+## Phase 5 — Delete `configuration` + `credentials`
+
+Proceeded: the Phase 4 parity report is green (11/11).
+
+### What actually happened ✅ DONE
+
+**The configuration render block is gone** — 600 lines. `AutonomousAgentWizard.tsx`:
+8,187 → **7,616** lines (cumulative **−1,260** from the 8,876 baseline).
+
+**Two findings that changed the work:**
+
+**1. ⚠️ `handleBuild`'s guard was `step === 'configuration'` — the one thing that would have silently broken saving.**
+
+```ts
+if (pendingWorkflowData && step === 'configuration') {   // the unified submission branch
+```
+
+`proceedFromOwnershipStage` now calls `handleBuild()` while the step is `'field-ownership'`. Had this guard not been updated, the branch that POSTs to `attach-inputs` / `attach-credentials` would simply never run: no error, no type failure, workflow saved with **none of the user's values** — precisely the §6a-2 failure mode. Changed to `step === 'field-ownership'` with a comment recording why.
+
+§6a-2 predicted "no `handleBuild` rewiring needed". That was right about the *maps* — the keys and payload construction needed nothing — but wrong that `handleBuild` was untouched: it was gated on the step being deleted. **One line, and the whole phase's acceptance rests on it.**
+
+**2. `'configure'` is a live step and must NOT be deleted.** I initially removed `'credentials'`, `'configuration'` **and** `'configure'` from the `WizardStep` union. `tsc` then flagged a comparison at what is now `:7165` — and inspecting it showed **`configure` has a real render block** (the missing-credentials/inputs collector), reached from two live `setStep('configure')` calls. Unlike the other two it was never broken. Restored it, with a comment on the union explaining the distinction.
+
+§3.11 only ever claimed `'credentials'` had no render block; it said nothing about `'configure'`. I over-generalised, and tsc caught it.
+
+**Everything else, per §6a-2's work items:**
+- `proceedFromOwnershipStage` → `handleBuild()` directly.
+- `WizardStep` union: `'credentials'` and `'configuration'` removed; `'configure'` kept.
+- `workflow-generation-state.ts`: `mapWizardStepToState` drops both dead steps and maps `'configure'` instead; `mapStateToWizardStep` returns `'configure'` for `STATE_4_CREDENTIAL_COLLECTION` (it returned `'credentials'`, so **a session resuming from a persisted FSM state would have landed on a blank screen**).
+- The pre-execution readiness failure no longer routes to a dead step — it goes to `'configure'`, which collects exactly those missing items.
+- **`manualConfigurationQuestions` kept and repurposed** (§6a-2 item 4) as `outstandingManualQuestions` → `outstandingCount` on the context. Fields the user owns that still have no value now **disable the build button** and render *"N fields still need a value."* This is what catches §6a-2's residual risk: a `manual_static` field whose row is toggled off.
+- Deleted: `currentQuestionIndex` + its scroll effect + the stale `setCurrentQuestionIndex(0)` call, `manualConfigurationQuestionIdsKey`, the configuration-only field-description prefetch effect, `configurationPhaseUnlocked`, and `configurationGateReady` (already hardcoded `true`, so **no guard was lost**).
+- Button relabelled *"Proceed To Credentials"* → **"Build Workflow"**.
+
+**Step 0's note about `:5675` was wrong.** I recorded it as a possible duplicate `setStep('field-ownership')`. Reading it in context, the two calls are on **different branches** of the same handler (one when questions exist, one when synthesized questions exist). Both are live and correct. Nothing to remove.
+
+### Verification
+
+- ✅ `tsc -p tsconfig.app.json`: **444 — baseline**, and it did the heavy lifting here. Removing union members surfaced **9 stale references** (`'configure'` comparisons ×3, `setStep('configure')` ×2, the `'credentials' : 'configuration'` ternary, `step === 'configuration'` ×2, a `'credentials'` disjunct) plus the orphaned `setCurrentQuestionIndex` call. Every one was found by the compiler, not by reading.
+- ✅ `npm run lint`: 0 errors, 57 warnings.
+- ✅ **131/132 tests passing across 10 files.** Field-ownership now 58 (4 new: build-button label, the disabled gate, singular/plural notice copy, and the enabled case). Non-regression 26/26 unmodified. Both `workflow-generation-state` suites run.
+- ⚠️ The one failure — `workflow-generation-state.capability-stage.test.ts`, `'capability-selection'` expected to map to `STATE_3` but mapping to `STATE_2` — is **pre-existing**, verified by stashing and re-running. It concerns a mapping this phase did not touch.
+
+### ❌ Could not verify — THE PHASE 5 ACCEPTANCE TEST WAS NOT PERFORMED
+
+The plan's acceptance is: *build a workflow end to end, enter values only in field-ownership, save, and confirm in the DB that the values persisted.* That needs a running frontend, worker, Cognito session and RDS. **I did not run it.**
+
+This is the most important unverified claim in the project. The reasoning is layered and each layer is checked — both steps read one `ownershipQuestions` source; Phase 4's single `writeValue` path with 19 executed key assertions; the green parity report; the `handleBuild` guard updated and type-checked — **but the only other way to enter values is now deleted, and the proof that the remaining way persists them is analytical, not empirical.**
+
+**Action for the user, before this ships:** generate a workflow, fill values only on field-ownership, save, confirm the values are on the nodes in the DB. If they are not, reverting this phase's commit restores the configuration step intact.
+
+### What this changes for later phases
+
+The wizard is now `… → capability-node-selection → capability-review → field-ownership → building → complete`, with `configure` as a post-build collector. Phase 7b's Test action and Phase 8's chained run mount into field-ownership with no competing step. `outstandingCount` is the gate Phase 8 extends with "no node in `needs_attention`".
+
+**Commit:** *Phase 5: delete the configuration and credentials steps*
