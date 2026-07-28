@@ -29,7 +29,6 @@ import { InputGuideLink } from './InputGuideLink';
 import { GlassBlurLoader } from '@/components/ui/glass-blur-loader';
 import { ThemedBorderGlow } from '@/components/ui/themed-border-glow';
 import { WorkflowConfirmationStep } from './WorkflowConfirmationStep';
-import { CredentialStatusPanel } from './CredentialStatusPanel';
 import { fetchRuntimeCredentialStatus } from '@/lib/api/credentialStatus';
 import { CapabilityStage } from './CapabilityStage';
 import { CapabilityReviewStep } from './CapabilityReviewStep';
@@ -38,6 +37,7 @@ import type { CapabilityContainer, NodeSelectionMap } from '../../types/capabili
 import { HelpTooltip } from '@/components/ui/help-tooltip';
 import { generateFieldGuide } from './guideGenerator';
 import { resolveFieldHelpContent } from '@/lib/resolve-field-help-content';
+import { NodeConnectPopover } from './NodeConnectPopover';
 import { FieldOwnershipStage, type FieldOwnershipContext } from './field-ownership';
 import {
     resolveEffectiveFieldFillMode,
@@ -863,72 +863,6 @@ export function AutonomousAgentWizard() {
         loadLastResolvedInputs();
     }, [generatedWorkflowId]);
 
-    // ? Handle OAuth callback return - restore workflow state after OAuth connection
-    useEffect(() => {
-        const checkOAuthReturn = async () => {
-            // Check if we're returning from OAuth callback
-            const urlParams = new URLSearchParams(window.location.search);
-            const returnTo = urlParams.get('returnTo');
-            const oauthState = sessionStorage.getItem('pendingWorkflowAfterOAuth');
-            
-            if (oauthState && returnTo) {
-                try {
-                    const state = JSON.parse(oauthState);
-                    
-                    // Check if Google OAuth is now connected
-                    const { data: { user } } = await awsClient.auth.getUser();
-                    if (user) {
-                        const credentialStatus = await fetchRuntimeCredentialStatus('google');
-
-                        if (credentialStatus.connected) {
-                            // OAuth connected successfully - refresh credential check
-                            toast({
-                                title: 'Google Connected',
-                                description: 'Google account connected successfully! Refreshing credentials...',
-                            });
-                            
-                            // Remove returnTo from URL
-                            window.history.replaceState({}, '', window.location.pathname);
-                            
-                            // If we have pending workflow data, refresh credentials
-                            if (state.pendingWorkflowData && state.pendingWorkflowData.discoveredCredentials) {
-                                // Filter out Google OAuth from discovered credentials (now connected)
-                                const updatedCredentials = state.pendingWorkflowData.discoveredCredentials.filter(
-                                    (cred: any) => !(cred.provider === 'google' && cred.type === 'oauth')
-                                );
-                                
-                                // Update pending workflow data
-                                setPendingWorkflowData({
-                                    ...state.pendingWorkflowData,
-                                    discoveredCredentials: updatedCredentials,
-                                });
-                                
-                                // Update required credentials list
-                                setRequiredCredentials(
-                                    updatedCredentials.map((c: any) => c.vaultKey || c.credentialId)
-                                );
-                                
-                                // If no more credentials needed, allow proceeding
-                                if (updatedCredentials.length === 0) {
-                                    toast({
-                                        title: 'All Credentials Connected',
-                                        description: 'You can now continue building your workflow.',
-                                    });
-                                }
-                            }
-                            
-                            // Clear OAuth state
-                            sessionStorage.removeItem('pendingWorkflowAfterOAuth');
-                        }
-                    }
-                } catch (error) {
-                    console.error('Error handling OAuth return:', error);
-                }
-            }
-        };
-        
-        checkOAuthReturn();
-    }, []);
 
     // Immediate scroll function for instant scrolling on submit
     const scrollImmediately = (stepRef: React.RefObject<HTMLDivElement>, fallbackScroll: number = 500) => {
@@ -3074,7 +3008,9 @@ export function AutonomousAgentWizard() {
             if (localMissingLabels.length > 0) {
                 setExecutionError(`Missing credentials before execution: ${localMissingLabels.join(', ')}.`);
                 setExecutionStatus('failed');
-                setStep('credentials');
+                // Deliberately no setStep('credentials') here: that step has no render block,
+                // so navigating there showed the user a blank screen instead of the error
+                // just set above (plan §3.11). Stay put and surface the message.
                 return;
             }
 
@@ -3309,47 +3245,6 @@ export function AutonomousAgentWizard() {
         return () => window.removeEventListener('beforeunload', handleBeforeUnload);
     }, [generatedWorkflowId, step]);
 
-    const handleConnectGoogleOAuth = useCallback(async () => {
-        try {
-            const {
-                data: { user },
-                error: userError,
-            } = await awsClient.auth.getUser();
-            if (userError || !user) {
-                toast({
-                    title: 'Authentication required',
-                    description: 'Please sign in first to connect Google.',
-                    variant: 'destructive',
-                });
-                return;
-            }
-            if (pendingWorkflowData) {
-                sessionStorage.setItem(
-                    'pendingWorkflowAfterOAuth',
-                    JSON.stringify({
-                        workflowId: generatedWorkflowId,
-                        step,
-                        pendingWorkflowData,
-                    })
-                );
-            }
-            const { data: { session } } = await awsClient.auth.getSession();
-            const userId = session?.user?.id;
-            if (!userId) throw new Error('Please sign in first to connect Google.');
-            const returnTo = getCurrentPathWithQuery();
-            toast({
-                title: 'Redirecting to Google?',
-                description: 'Authorize access; you will return here afterward.',
-            });
-            startGoogleConnectorOAuth(userId, returnTo);
-        } catch (e: unknown) {
-            toast({
-                title: 'Google sign-in failed',
-                description: e instanceof Error ? e.message : 'Could not start OAuth',
-                variant: 'destructive',
-            });
-        }
-    }, [pendingWorkflowData, generatedWorkflowId, step, toast]);
 
     const handleBuild = async (explicitPrompt?: string) => {
         // ? PRODUCTION FLOW: Unified configuration submission (inputs + credentials)
@@ -7186,21 +7081,30 @@ export function AutonomousAgentWizard() {
                                             </div>
                                         )}
                                         
-                                        {/* Vault/OAuth: single path is the Credentials step (avoid duplicating discoveredCredentials here). */}
+                                        {/*
+                                          * Account connections, resolved inline.
+                                          *
+                                          * This used to read "handled on the Credentials step" with a button
+                                          * calling setStep('credentials') — but no render block exists for that
+                                          * step, so the button navigated to a blank screen (plan §3.11).
+                                          * Connecting happens here instead, via the same NodeConnectPopover
+                                          * used on node selection.
+                                          */}
                                         {pendingWorkflowData.discoveredCredentials &&
                                             pendingWorkflowData.discoveredCredentials.length > 0 && (
                                                 <div className="space-y-2 pt-4 border-t border-border/60">
                                                     <p className="text-sm text-muted-foreground">
-                                                        Secrets and account connections are handled on the{' '}
-                                                        <button
-                                                            type="button"
-                                                            className="text-primary underline underline-offset-2 hover:text-primary/90"
-                                                            onClick={() => setStep('credentials')}
-                                                        >
-                                                            Credentials
-                                                        </button>{' '}
-                                                        step so you do not enter the same values twice.
+                                                        Account connections for this workflow:
                                                     </p>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {pendingWorkflowData.discoveredCredentials.map((cred: any, idx: number) => (
+                                                            <NodeConnectPopover
+                                                                key={`wizard_cred_${cred.provider || cred.vaultKey || idx}`}
+                                                                provider={String(cred.provider || cred.vaultKey || '')}
+                                                                serviceLabel={String(cred.displayName || cred.provider || cred.vaultKey || 'account')}
+                                                            />
+                                                        ))}
+                                                    </div>
                                                 </div>
                                             )}
 

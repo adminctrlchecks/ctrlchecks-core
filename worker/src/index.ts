@@ -290,6 +290,7 @@ import generateWorkflowRoute from './api/generate-workflow';
 import analyzeCapabilitySelection from './api/capability-selection/analyze';
 import generateCapabilityWorkflow from './api/capability-selection/generate';
 import confirmCapabilityWorkflow from './api/capability-selection/confirm';
+import capabilityConnectionReadiness from './api/capability-selection/connection-readiness';
 import executeAgentRoute from './api/execute-agent';
 import chatbotRoute from './api/chatbot';
 import analyzeWorkflowRequirementsRoute from './api/analyze-workflow-requirements';
@@ -1511,7 +1512,9 @@ app.post(
 app.post('/api/capability-selection/analyze', asyncHandler(authenticateUser), asyncHandler(geminiWalletContextMiddleware), asyncHandler(requireWorkflowCapacityForAi), asyncHandler(analyzeCapabilitySelection));
 app.post('/api/capability-selection/generate', asyncHandler(authenticateUser), asyncHandler(geminiWalletContextMiddleware), asyncHandler(requireWorkflowCapacityForAi), asyncHandler(generateCapabilityWorkflow));
 app.post('/api/capability-selection/confirm', asyncHandler(authenticateUser), asyncHandler(geminiWalletContextMiddleware), asyncHandler(requireWorkflowCapacityForAi), asyncHandler(confirmCapabilityWorkflow));
-console.log('🎯 Capability Selection API available at /api/capability-selection/{analyze,generate,confirm}');
+// No AI capacity gate: this only reads connection state, it makes no LLM calls.
+app.post('/api/capability-selection/connection-readiness', asyncHandler(authenticateUser), asyncHandler(capabilityConnectionReadiness));
+console.log('🎯 Capability Selection API available at /api/capability-selection/{analyze,generate,confirm,connection-readiness}');
 
 // Adaptive UI Engine — personalizes existing screens from intent + existing product data.
 // Uses the same intent-analysis/capability-grouping calls as capability-selection/analyze,

@@ -24,6 +24,16 @@ export interface CandidateNode {
   label: string;
   description: string;
   credentialRequirements: string[];
+  /**
+   * Providers this node needs, so the UI can name the service on a connect action
+   * ("Google Sheets — connect"). Mirrors CandidateNode in the worker's capability-types.ts.
+   */
+  credentialProviders?: string[];
+  /**
+   * Provider-level vault check: true only when EVERY requirement is present. Cheap and
+   * not scope-aware — the authoritative answer comes from
+   * POST /api/capability-selection/connection-readiness for selected nodes only.
+   */
   hasCredentials: boolean;
 }
 

@@ -27,10 +27,14 @@ vi.mock('framer-motion', () => ({
     motion: new Proxy(
         {},
         {
-            get: () => ({ children, ...rest }: never) => <div {...(rest as object)}>{children}</div>,
+            get:
+                () =>
+                ({ children, ...rest }: { children?: React.ReactNode } & Record<string, unknown>) => (
+                    <div {...(rest as Record<string, never>)}>{children}</div>
+                ),
         }
     ),
-    AnimatePresence: ({ children }: { children?: unknown }) => <>{children}</>,
+    AnimatePresence: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
 }));
 
 // The help panel has its own test (FieldOwnershipHelpPanel.test.tsx). Here it is stubbed

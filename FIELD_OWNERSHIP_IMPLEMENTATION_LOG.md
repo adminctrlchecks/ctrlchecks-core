@@ -19,7 +19,7 @@ Baseline commit: *Baseline: node-selection UI redesign WIP + field-ownership bui
 - [x] **0b** — Extraction, zero behaviour change
 - [x] **0c** — Characterization tests on the extracted unit
 - [x] **1** — Intent Context off this step + two-column layout
-- [ ] **2** — Inline connect at node selection
+- [x] **2** — Inline connect at node selection
 - [ ] **3** — `/api/workflow-build/field-plan` + four-group accordions
 - [ ] **4** — Inline editing + parity report (gates Phase 5)
 - [ ] **5** — Delete `configuration` + `credentials` steps
@@ -419,3 +419,136 @@ All five items done, plus one architectural correction found by lint.
 - `lib/wizard-field-ownership.ts` is now the home for this step's logic (401 lines). Keep new logic there — lint enforces it.
 
 **Commit:** *Phase 1: remove Intent Context from field-ownership, add two-column layout*
+
+---
+
+## Phase 2 — Inline connect at node selection
+
+### Reconnaissance findings (before planning — two change the design)
+
+**Finding 1 — the readiness service is already workflow-free. The plan was wrong to think otherwise.**
+
+§3.11's "Note on data source" says `/api/workflows/:id/missing-items` *"cannot drive this screen"* because there is no `workflowId` at node-selection time, and concludes the badge must therefore rely on the weaker `hasCredentials`. Checked the actual service:
+
+```ts
+// worker/src/services/workflow-connection-readiness.ts:484
+export async function getWorkflowConnectionReadiness(input: {
+  workflowId: string; userId: string; nodes: ReadinessNode[]; includeSatisfied?: boolean;
+})
+```
+
+It takes **nodes inline** and never loads a workflow from the DB — `workflowId` is only stamped onto the returned rows. The *route* needs an id; the *service* does not. So scope-aware readiness can be obtained for synthetic candidate nodes with no new abstraction and no DB write. **The plan's stated blocker does not exist.**
+
+**Finding 2 — ⚠️ but the readiness path is NOT side-effect free, which bounds how it may be used.**
+
+`getWorkflowConnectionReadiness` calls `dryRunCredential` → `resolveCredentialDryRun` → `resolveCredential({...input, dryRun: true})`. Traced `dryRun` through `credential-resolver.ts`: it is **declared on the input type (`:30`) and passed at `:300`, but never read inside `resolveCredential`.** The function's body does:
+
+```ts
+if (isExpiring) return refreshCredential(row, requiredScopes, input.action);
+```
+
+**So a "dry run" performs a real OAuth token refresh — a network call plus a DB write — whenever a token is near expiry.** It is not a read-only check despite the name.
+
+**Consequence for this phase:** running readiness across *every candidate* on screen load would trigger token refreshes for providers the user never selected, on a screen that should be inert. That is a side effect, a latency cost, and an abuse surface. The plan's instruction to "route the badge through the scope-aware readiness service" is therefore only safe **for selected nodes**, not for all candidates.
+
+### Plan (adapted to the findings — the code wins)
+
+**Backend**
+1. `capability-grouper-stage.ts` — `checks.some(Boolean)` → `checks.every(Boolean)`. Pure fix, no added cost; closes the "needs two credentials, one connected, reads Connected" bug on its own. This stays the cheap first-pass badge.
+2. **New** `POST /api/capability-selection/connection-readiness` — takes the *selected* node types, builds synthetic `ReadinessNode`s, and calls `getWorkflowConnectionReadiness` with a synthetic `workflowId`. Authoritative and scope-aware, and bounded to nodes the user actually chose, so Finding 2's refresh side effect stays proportionate. Returns per-node `{ provider, providerLabel, authType, status, action, requiredScopes, missingScopes }`.
+3. Do **not** modify `getWorkflowConnectionReadiness` or `/missing-items` — both stay exactly as they are (§2.5).
+
+**Frontend**
+4. `CapabilityStage.tsx` — `CredentialBadge` becomes actionable when disconnected; new `NodeConnectPopover` composing `components/connections/*` **unmodified**.
+5. `Continue` gated on every *selected* node being connected (unselected candidates irrelevant, §2.4.4).
+6. Persist capability-stage state before any OAuth redirect; restore on return.
+7. Generalise `checkOAuthReturn` beyond its hardcoded `'google'`.
+8. Delete dead `handleConnectGoogleOAuth` + unused `CredentialStatusPanel` import; fix the blank-screen `setStep('credentials')` navigation.
+
+**Verification:** tsc + lint both packages; the 42 field-ownership tests; non-regression 26/26 **unmodified**; new tests for the readiness endpoint and the gating logic.
+
+### 🛑 CORRECTION affecting Phases 0b, 0c and 1 — `npx tsc --noEmit` was checking nothing
+
+Discovered while type-checking this phase. `ctrl_checks/tsconfig.json` is:
+
+```json
+{ "files": [], "references": [{ "path": "./tsconfig.app.json" }, { "path": "./tsconfig.node.json" }] }
+```
+
+`"files": []` with project references means plain `tsc --noEmit` compiles **zero files** — confirmed with `npx tsc --noEmit --listFiles | wc -l` → **0**. The plan prescribes this exact command as *"your primary safety net for prop wiring in 0b"*, and I ran it and reported "clean" in Phases 0b, 0c and 1.
+
+**Those tsc claims were vacuous.** The correct command is `npx tsc --noEmit -p tsconfig.app.json` (or `tsc -b`).
+
+This also explains the "surprise" recorded in Phase 0b — that tsc caught nothing despite the plan expecting it to catch wiring errors. The real reason was not that `any` types blunted it; it is that **it never ran**. The `any`-blunting point still stands as a secondary factor, but the primary cause was a no-op command.
+
+**What the real check reveals:** `tsc -p tsconfig.app.json` reports **444 pre-existing errors** on the pre-project baseline commit `bf926be` — measured directly by checking out that commit and running it. So "tsc clean" was never achievable in this package, and the plan's stop condition of "tsc clean in `ctrl_checks/`" is unmeetable as written.
+
+**Revised verification standard for every remaining phase:** run `tsc -p tsconfig.app.json`, and require **(a) the total stays at the 444 baseline, and (b) zero errors in files this project touches.** Phases 0b/0c/1 were retro-checked under this standard while validating Phase 2 — the total is 444 with none in `field-ownership/`, so those phases are in fact clean; the claim was unfounded at the time but turns out to be true.
+
+Retro-check also confirmed the 5 `AutonomousAgentWizard.tsx` errors present today (`3352`, `3420`, `4164`×2, `7767`) are in the 444 baseline, i.e. pre-existing and not mine.
+
+**Also noted:** in `ctrl_checks`, `npm test` maps to a *single* file (`guideGenerator.registry.test.ts`); the full suite is `test:vitest`. The machine-crashing suite referenced in memory is the **worker's** Jest run.
+
+### What actually happened ✅ DONE
+
+Implemented per the adapted plan. **Two of the plan's three §2.4 gaps turned out not to exist**, for a reason worth recording.
+
+**⚠️ Gaps 2 and 3 are void: OAuth here is popup-based, not a redirect.** `useOAuthFlow.connect()` (`hooks/useOAuthFlow.ts`) does `window.open(...)` and awaits a `BroadcastChannel('oauth_callback')` / `postMessage` result — **the host page never navigates away**. So when the connect affordance composes `OAuthConnectButton`, the wizard stays mounted with all its state for the entire round trip.
+
+That means:
+- **Gap 2 ("OAuth return loses node selections") cannot occur.** No snapshot/restore of `capNodeContainers` / `capNodeSelections` / … is needed, and I deliberately did **not** build the `wizard-oauth-snapshot.ts` my earlier plan called for — it would have been ~170 lines of machinery guarding an impossible failure.
+- **Gap 3 ("generalise the Google-only return handler") is moot.** `checkOAuthReturn` served the *redirect* path, whose only writer of `pendingWorkflowAfterOAuth` was the dead `handleConnectGoogleOAuth`. Verified by grep: writer at one site inside dead code, reader in the effect, nothing else. Both deleted rather than generalised.
+
+The plan's gap analysis was accurate for the **legacy redirect flow**; it just didn't account for §2.5's instruction to compose `components/connections/*`, which uses a different mechanism entirely.
+
+**Backend**
+- `capability-grouper-stage.ts` — `checks.some(Boolean)` → **`checks.every(Boolean)`**, with a comment explaining why this check stays cheap and provider-level.
+- `capability-types.ts` — `CandidateNode` gained optional `credentialProviders?: string[]`, and `hasCredentials` documented as non-authoritative. Purely additive.
+- **New** `worker/src/api/capability-selection/connection-readiness.ts` (163 lines) + route. Builds synthetic `ReadinessNode`s from the selected node types and calls the existing `getWorkflowConnectionReadiness`. **No DB write.** Capped at 40 node types. On failure it **degrades open** (reports ready) rather than trapping the user — the workflow-page gate still catches anything missed.
+- Registered without the AI capacity middleware, since it makes no LLM calls.
+
+**Frontend**
+- `lib/api/capabilityConnectionReadiness.ts` (69 lines) — client that degrades to "ready" on any error, so a flaky check never blocks the wizard.
+- `components/workflow/NodeConnectPopover.tsx` (147 lines) — composes `OAuthConnectButton`, `CredentialFormRenderer`, `ProviderLogo` **unmodified**; picks OAuth vs API-key form off `credentialType.authType`; falls back to a link to `/connections` when no credential type matches.
+- `CapabilityStage.tsx` (400 → 520 lines) — badge is inert when connected, an actionable *"<Service> — connect"* affordance when not. Continue gates on selected-and-unconnected being empty, with a rail notice naming the specific services.
+- **Accessibility fix required by the design:** the candidate row was a `<button>`, and a connect control cannot legally nest inside one. Converted to `role="button"` + `tabIndex` + Enter/Space handling, with the key handler ignoring events bubbling from children so activating the connect control does not also toggle selection.
+
+**Dead code removed from the wizard** (8,292 → 8,187 lines): the `checkOAuthReturn` effect (66 lines), `handleConnectGoogleOAuth` (41 lines), the unused `CredentialStatusPanel` import.
+
+**Both blank-screen navigations fixed** (§3.11 named one; there were two):
+- the configuration-step button now renders inline `NodeConnectPopover`s instead of `setStep('credentials')`;
+- a second site in the pre-execution credential check also called `setStep('credentials')` after setting an error message — so the user was shown a blank screen *instead of* the error. Now stays put and surfaces the message.
+
+**Caught by checking rather than assuming:** my first version of the configuration-step fix called `refreshMissingItems?.()`, a function that does not exist in the file. Grep found it before it ever compiled.
+
+### Verification
+
+- ✅ `tsc -p tsconfig.app.json`: **444 errors — exactly the pre-existing baseline**, with **zero** in any file this phase created or modified.
+- ✅ `worker/` `npm run type-check`: clean.
+- ✅ `npm run lint`: 0 errors, **57 warnings** (down from 58 — the deleted dead code carried one).
+- ✅ **New:** `CapabilityStage.connections.test.tsx` — **8/8 passing**. Covers: connect affordance offered when unconnected; inert badge when nothing is needed; **no readiness call before any selection**; readiness called with *only* the selected node types (explicitly asserting unselected `slack` is never sent — this is the Finding-2 side-effect guard); Continue blocked with the service named; Continue enabled once connected; an unconnected *unselected* candidate does not block; and **authoritative readiness overriding an optimistic candidate badge**.
+- ✅ Field-ownership suite: **42/42** still passing.
+- ✅ Non-regression suite: **26/26 passing, unmodified**.
+- ✅ `git diff --stat` over `components/connections/` — **empty**, composed not modified (§2.5).
+- ✅ `git diff --stat` over `workflows-missing-items.ts`, `workflow-connection-readiness.ts`, `execute-workflow.ts` — **empty**, all untouched.
+
+### Could not verify
+
+- ⚠️ **No browser E2E.** The plan's §6 manual checks — `/connections` connect/disconnect, the canvas gate on a manually-built workflow, the properties-panel selector, and a real OAuth round trip — have **not** been performed. The unit tests mock `NodeConnectPopover`, so the actual composition of `OAuthConnectButton` / `CredentialFormRenderer` has never been rendered.
+- ⚠️ The new endpoint has **no test** and has never been called against a live worker.
+
+### Deferred to Phase 3 (recorded, not dropped)
+
+Mounting `NodeConnectPopover` inside **field-ownership cards** for pipeline-injected nodes. It needs per-node connection state, which Phase 3's `field-plan` endpoint supplies; building it now would mean a throwaway second data path. The component is already proven at two mount points (candidate row, configuration step).
+
+### Still open from the plan
+
+`'credentials'` / `'configure'` / `'configuration'` remain in the `WizardStep` union. Removing them means editing `workflow-generation-state.ts`'s FSM, which **Phase 5 already does** — splitting that across two phases would be worse. The user-visible bug is fixed regardless. Carried to Phase 5.
+
+### What this changes for later phases
+
+- `POST /api/capability-selection/connection-readiness` exists and is the pattern for Phase 3's `field-plan`: inline nodes, no workflow id, no DB write.
+- **The `dryRun`-is-not-dry finding matters for Phase 7b**, which will execute nodes for real: anything calling the credential resolver may refresh tokens. Budget for that rather than assuming reads are free.
+- Phase 5's scope now includes removing three step values from the `WizardStep` union and the FSM.
+
+**Commit:** *Phase 2: inline connect at node selection with scope-aware readiness*
