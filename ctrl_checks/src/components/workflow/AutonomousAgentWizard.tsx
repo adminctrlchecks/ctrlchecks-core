@@ -38,6 +38,8 @@ import { HelpTooltip } from '@/components/ui/help-tooltip';
 import { generateFieldGuide } from './guideGenerator';
 import { resolveFieldHelpContent } from '@/lib/resolve-field-help-content';
 import { NodeConnectPopover } from './NodeConnectPopover';
+import { fetchFieldPlan, type FieldPlan } from '@/lib/api/workflowBuildFieldPlan';
+import { fetchCapabilityConnectionReadiness, type CapabilityConnectionReadinessNode } from '@/lib/api/capabilityConnectionReadiness';
 import { FieldOwnershipStage, type FieldOwnershipContext } from './field-ownership';
 import {
     resolveEffectiveFieldFillMode,
@@ -5647,6 +5649,54 @@ export function AutonomousAgentWizard() {
             return intentContextSummary;
         });
     };
+    /**
+     * Field grouping for the field-ownership step, plus connection state for nodes the
+     * generation pipeline injected (which were never gated at node selection).
+     *
+     * Both are fetched only while this step is showing. The connection call is the same
+     * bounded endpoint the capability stage uses — it is given an explicit node-type list
+     * rather than being allowed to fan out, because the credential resolver behind it can
+     * refresh OAuth tokens.
+     */
+    const [fieldOwnershipPlan, setFieldOwnershipPlan] = useState<FieldPlan | null>(null);
+    const [fieldOwnershipConnections, setFieldOwnershipConnections] = useState<
+        CapabilityConnectionReadinessNode[] | undefined
+    >(undefined);
+
+    const fieldOwnershipGraphKey = useMemo(() => {
+        if (step !== 'field-ownership') return '';
+        const nodes = (pendingWorkflowData?.nodes || []) as any[];
+        if (nodes.length === 0) return '';
+        return nodes.map((n: any) => `${n.id}:${n.type || n.data?.type || ''}`).join('|');
+    }, [step, pendingWorkflowData?.nodes]);
+
+    useEffect(() => {
+        if (!fieldOwnershipGraphKey) {
+            setFieldOwnershipPlan(null);
+            setFieldOwnershipConnections(undefined);
+            return;
+        }
+        let cancelled = false;
+        const nodes = (pendingWorkflowData?.nodes || []) as any[];
+        const edges = (pendingWorkflowData?.edges || []) as any[];
+
+        fetchFieldPlan(nodes as any, edges as any).then((plan) => {
+            if (!cancelled) setFieldOwnershipPlan(plan);
+        });
+
+        const nodeTypes = Array.from(
+            new Set(nodes.map((n: any) => String(n.type || n.data?.type || '')).filter(Boolean))
+        );
+        fetchCapabilityConnectionReadiness(nodeTypes).then((result) => {
+            if (!cancelled) setFieldOwnershipConnections(result.nodes);
+        });
+
+        return () => {
+            cancelled = true;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [fieldOwnershipGraphKey]);
+
     const requiredSectionStyles = {
         fieldOwnership: {
             cardClass: 'border-blue-500/30 shadow-lg',
@@ -5672,6 +5722,8 @@ export function AutonomousAgentWizard() {
      * here because `handleBuild` reads it to save the workflow.
      */
     const fieldOwnershipContext: FieldOwnershipContext = {
+        fieldPlan: fieldOwnershipPlan,
+        nodeConnections: fieldOwnershipConnections,
         pendingWorkflowData,
         sectionStyles: requiredSectionStyles.fieldOwnership,
         globalWalkActive,

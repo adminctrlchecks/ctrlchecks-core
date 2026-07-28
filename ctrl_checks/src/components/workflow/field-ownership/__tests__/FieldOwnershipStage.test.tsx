@@ -47,6 +47,16 @@ vi.mock('../../FieldOwnershipHelpPanel', () => ({
     },
 }));
 
+// The connect affordance pulls in TanStack Query and the OAuth flow; it has its own
+// coverage in CapabilityStage.connections.test.tsx. Here we only assert it is offered.
+vi.mock('../../NodeConnectPopover', () => ({
+    NodeConnectPopover: ({ serviceLabel }: { serviceLabel: string }) => (
+        <button type="button" data-testid="connect-affordance">
+            {serviceLabel} — connect
+        </button>
+    ),
+}));
+
 // Radix components reach for ResizeObserver, which jsdom does not provide.
 class ResizeObserverStub {
     observe() {}
@@ -602,6 +612,177 @@ describe('NodeChecklistRail (Phase 1)', () => {
     it('gives each node card the id its rail entry scrolls to', () => {
         const { container } = render(<FieldOwnershipStage ctx={buildCtx()} />);
         expect(container.querySelector('#fo-card-structural_node1')).toBeTruthy();
+    });
+});
+
+describe('Field grouping (Phase 3)', () => {
+    const threeFieldGroup = makeGroup({
+        fields: [
+            makeQuestion({ id: 'q1', fieldName: 'spreadsheetId', text: 'Spreadsheet ID' }),
+            makeQuestion({ id: 'q2', fieldName: 'range', text: 'Range' }),
+            makeQuestion({ id: 'q3', fieldName: 'apiKey', text: 'API Key' }),
+        ],
+    });
+
+    const planWith = (groups: Record<string, Array<Record<string, unknown>>>) => ({
+        nodes: [
+            {
+                nodeId: 'node1',
+                nodeType: 'google_sheets',
+                nodeLabel: 'Google Sheets',
+                firstRunClass: null,
+                diagnostics: [],
+                groups: {
+                    required: [],
+                    aiFilled: [],
+                    aiRuntime: [],
+                    optional: [],
+                    credential: [],
+                    ...groups,
+                },
+            },
+        ],
+        summary: { nodeCount: 1, requiredCount: 0, unresolvedReferenceCount: 0 },
+    });
+
+    const field = (fieldName: string, label: string) => ({
+        fieldName,
+        label,
+        required: true,
+        hasValue: false,
+        fillMode: 'manual_static',
+    });
+
+    it('renders rows flat when no plan has loaded', () => {
+        render(<FieldOwnershipStage ctx={buildCtx({ structuralByNode: [threeFieldGroup] })} />);
+        expect(screen.getByText('Spreadsheet ID')).toBeTruthy();
+        expect(screen.queryByText('You provide')).toBeNull();
+    });
+
+    it('renders accordions once the plan partitions the fields', () => {
+        const ctx = buildCtx({
+            structuralByNode: [threeFieldGroup],
+            fieldPlan: planWith({
+                required: [field('spreadsheetId', 'Spreadsheet ID'), field('range', 'Range')],
+                credential: [field('apiKey', 'API Key')],
+            }) as never,
+        });
+        render(<FieldOwnershipStage ctx={ctx} />);
+        expect(screen.getByText('You provide')).toBeTruthy();
+        expect(screen.getByText('Connection')).toBeTruthy();
+    });
+
+    it('expands exactly one group by default and collapses the rest', () => {
+        const ctx = buildCtx({
+            structuralByNode: [threeFieldGroup],
+            fieldPlan: planWith({
+                required: [field('spreadsheetId', 'Spreadsheet ID'), field('range', 'Range')],
+                credential: [field('apiKey', 'API Key')],
+            }) as never,
+        });
+        render(<FieldOwnershipStage ctx={ctx} />);
+        // 'required' -> "You provide" is first in priority order, so it opens.
+        expect(screen.getByText('Spreadsheet ID')).toBeTruthy();
+        expect(screen.queryByText('API Key')).toBeNull();
+    });
+
+    it('opens a collapsed group when its header is clicked', () => {
+        const ctx = buildCtx({
+            structuralByNode: [threeFieldGroup],
+            fieldPlan: planWith({
+                required: [field('spreadsheetId', 'Spreadsheet ID')],
+                credential: [field('apiKey', 'API Key')],
+            }) as never,
+        });
+        render(<FieldOwnershipStage ctx={ctx} />);
+        expect(screen.queryByText('API Key')).toBeNull();
+        fireEvent.click(screen.getByText('Connection'));
+        expect(screen.getByText('API Key')).toBeTruthy();
+    });
+
+    it('skips accordion chrome when every field lands in one group', () => {
+        // Measured failure mode: http_request / code put everything in `required`,
+        // where an accordion is a click with no clarity.
+        const ctx = buildCtx({
+            structuralByNode: [threeFieldGroup],
+            fieldPlan: planWith({
+                required: [
+                    field('spreadsheetId', 'Spreadsheet ID'),
+                    field('range', 'Range'),
+                    field('apiKey', 'API Key'),
+                ],
+            }) as never,
+        });
+        render(<FieldOwnershipStage ctx={ctx} />);
+        expect(screen.queryByText('You provide')).toBeNull();
+        expect(screen.getByText('Spreadsheet ID')).toBeTruthy();
+        expect(screen.getByText('API Key')).toBeTruthy();
+    });
+
+    it('still renders a question the plan did not classify', () => {
+        const ctx = buildCtx({
+            structuralByNode: [threeFieldGroup],
+            fieldPlan: planWith({
+                required: [field('spreadsheetId', 'Spreadsheet ID')],
+                optional: [field('range', 'Range')],
+            }) as never,
+        });
+        render(<FieldOwnershipStage ctx={ctx} />);
+        // apiKey is absent from every group but must not vanish from the UI.
+        expect(screen.getByText('API Key')).toBeTruthy();
+    });
+
+    it('explains where a templated value comes from', () => {
+        const ctx = buildCtx({
+            structuralByNode: [threeFieldGroup],
+            fieldPlan: planWith({
+                required: [
+                    {
+                        ...field('spreadsheetId', 'Spreadsheet ID'),
+                        producedBy: [
+                            {
+                                fieldName: 'sheetId',
+                                nodeId: 'trigger1',
+                                nodeLabel: 'Manual Trigger',
+                                nodeType: 'manual_trigger',
+                            },
+                        ],
+                    },
+                ],
+                optional: [field('range', 'Range')],
+            }) as never,
+        });
+        render(<FieldOwnershipStage ctx={ctx} />);
+        expect(screen.getByText(/uses/)).toBeTruthy();
+        expect(screen.getByText('Manual Trigger')).toBeTruthy();
+    });
+
+    it('offers a connect action for a pipeline-injected node that is unconnected', () => {
+        const ctx = buildCtx({
+            structuralByNode: [threeFieldGroup],
+            nodeConnections: [
+                {
+                    nodeType: 'google_sheets',
+                    nodeLabel: 'Google Sheets',
+                    connected: false,
+                    provider: 'google',
+                    providerLabel: 'Google',
+                },
+            ] as never,
+        });
+        render(<FieldOwnershipStage ctx={ctx} />);
+        expect(screen.getByText(/Google — connect/)).toBeTruthy();
+    });
+
+    it('shows no connect action when the injected node is connected', () => {
+        const ctx = buildCtx({
+            structuralByNode: [threeFieldGroup],
+            nodeConnections: [
+                { nodeType: 'google_sheets', nodeLabel: 'Google Sheets', connected: true },
+            ] as never,
+        });
+        render(<FieldOwnershipStage ctx={ctx} />);
+        expect(screen.queryByText(/— connect/)).toBeNull();
     });
 });
 

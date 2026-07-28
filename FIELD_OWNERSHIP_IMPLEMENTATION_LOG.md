@@ -20,7 +20,7 @@ Baseline commit: *Baseline: node-selection UI redesign WIP + field-ownership bui
 - [x] **0c** — Characterization tests on the extracted unit
 - [x] **1** — Intent Context off this step + two-column layout
 - [x] **2** — Inline connect at node selection
-- [ ] **3** — `/api/workflow-build/field-plan` + four-group accordions
+- [x] **3** — `/api/workflow-build/field-plan` + four-group accordions
 - [ ] **4** — Inline editing + parity report (gates Phase 5)
 - [ ] **5** — Delete `configuration` + `credentials` steps
 - [ ] **6** — `firstRunClass` safety layer + fan-out sampler (backend only)
@@ -68,8 +68,8 @@ Everything else the plan asserted was accurate.
 
 ### Baseline verification state (before any phase)
 
-- `ctrl_checks/` `npx tsc --noEmit` → **clean, 0 errors**
-- `ctrl_checks/` `npm run lint` → **0 errors, 58 warnings** — all pre-existing. **58 is the regression baseline.**
+- ~~`ctrl_checks/` `npx tsc --noEmit` → clean, 0 errors~~ **WRONG — this command checks zero files.** See the correction under Phase 2. The real baseline is `npx tsc --noEmit -p tsconfig.app.json` → **444 pre-existing errors**, measured on commit `bf926be`. Standard for every phase: total stays 444, and **zero** errors in files this project touches.
+- `ctrl_checks/` `npm run lint` → **0 errors, 58 warnings** — all pre-existing. **58 is the regression baseline** (57 after Phase 2 deleted dead code carrying one).
 - Working tree: only `worker/public/node-library.json` dirty — a regenerated export artifact (drops `credentialType: null` / `capabilities: []`), unrelated to this project. Left uncommitted deliberately.
 
 ### Standing constraints for every phase
@@ -552,3 +552,64 @@ Mounting `NodeConnectPopover` inside **field-ownership cards** for pipeline-inje
 - Phase 5's scope now includes removing three step values from the `WizardStep` union and the FSM.
 
 **Commit:** *Phase 2: inline connect at node selection with scope-aware readiness*
+
+---
+
+## Phase 3 — field-plan API + grouped accordions
+
+### Plan
+
+1. **New** `POST /api/workflow-build/field-plan` taking `{ nodes, edges }` inline — no DB write, no LLM call, nothing executes. Assemble groups from `resolveFieldPolicyForNode()`, which already computes `requiredFields` / `optionalFields` / `credentialFields` / per-field `runtimeAiAllowed`.
+2. **Factor out, don't duplicate** the upstream walk. `property-population-stage.ts` has private `resolveGroundedUpstreamFields()` + `extractJsonFieldRefs()`; move both to a shared module and have the stage import them.
+3. Frontend client + accordion grouping in the node card, one group expanded by default.
+4. Cross-node explanation copy.
+5. **Carried from Phase 2:** connect fallback inside field-ownership cards for pipeline-injected nodes.
+
+### What actually happened ✅ DONE
+
+**Backend**
+- **New** `core/graph/upstream-field-resolver.ts` (127 lines) — the walk moved **verbatim**, plus per-field node attribution (`producedByNodeId` / `Label` / `Type`), which is the genuinely new part. `property-population-stage.ts` now imports it; its local copies and the `GroundedUpstreamField` type are gone, with `GroundedUpstreamContext` kept as an alias so the stage body was otherwise untouched.
+- **New** `api/workflow-build/field-plan.ts` (233 lines) + route. Returns per node `groups {required, aiFilled, aiRuntime, optional, credential}`, `producedBy` per field, `diagnostics`, and `firstRunClass: null`.
+  - **`firstRunClass` is deliberately present and null now** so the client shape does not change when Phase 6 adds it.
+  - Verified read-only: no `.from(`, no `getDbClient`, no LLM call, capped at 60 nodes.
+  - **Grouping is exclusive** — one group per field, priority credential → AI → required → optional — so counts sum to the node's active field count rather than double-counting.
+
+**Frontend**
+- `lib/api/workflowBuildFieldPlan.ts` (122 lines) — client plus the group ordering/titles and two exported predicates (`defaultExpandedGroup`, `hasSinglePopulatedGroup`) kept in `lib/` per CLAUDE.md.
+- **New** `field-ownership/FieldGroupAccordion.tsx` (55 lines).
+- `NodeOwnershipCard.tsx` — groups its rows through the plan, one accordion expanded by default.
+- `FieldOwnershipRow.tsx` — renders *"uses `sheetId` from **Manual Trigger**"* under a row when the plan resolved its references.
+- **Carried item done:** `NodeConnectPopover` now mounts on a card whose node type is unconnected — the third mount point of the same component.
+
+**Three deliberate robustness choices, each test-pinned:**
+1. **No plan → flat rendering.** If `field-plan` fails or is still loading, the step renders exactly as it did after Phase 1 rather than breaking.
+2. **Single-group cards skip accordion chrome.** A card whose fields all land in one bucket renders them directly — an accordion there is a click with no clarity.
+3. **Unclassified questions still render.** Anything the plan omits falls through to an ungrouped list, so a field can never silently vanish because the backend and the question set disagree.
+
+**Design change vs. my own plan — connection state does *not* come from `field-plan`.** I first wired the card's connect fallback to a `connection` field on the field-plan response, then removed it: resolving connections runs the credential resolver, which (per Phase 2's Finding 2) can refresh OAuth tokens. Putting that behind a *read-only field-plan* call would have reintroduced exactly the side effect Phase 2 was careful to bound. The card now uses the existing bounded `capability-selection/connection-readiness` endpoint with an explicit node-type list. **`field-plan` stays genuinely free of side effects.**
+
+### Verification
+
+- ✅ `tsc -p tsconfig.app.json`: **444 — baseline**, zero in files this phase touched.
+- ✅ `worker/` `type-check`: clean.
+- ✅ `npm run lint`: 0 errors, 57 warnings (baseline).
+- ✅ **New** `upstream-field-resolver.test.ts` — **9/9 passing** (jest, single file). Pins the extracted walk: attribution to the declaring node, walking *through* a shape-less non-dynamic node (`if_else`), **stopping at a `dynamic` node rather than guessing past it**, nearest-declarer-wins on a duplicate field name, no upstream edges, and cycle termination.
+- ✅ Field-ownership suite: **51/51** (42 prior + 9 new grouping tests). The 42 still pass because with no plan the flat fallback renders — the compatibility guarantee, demonstrated rather than asserted.
+- ✅ Non-regression + CapabilityStage: **34/34 across 6 files**, all unmodified.
+- ✅ `property-population-stage.test.ts` fails **identically before and after** my change — verified by stashing. Pre-existing (`fieldOwnershipPolicyMap` missing from a fixture), unrelated.
+
+### Could not verify — §6c-B's measurement questions
+
+The plan asks Phase 3 to **measure** three things on ~10 real generated workflows: whether `upstreamContext` resolves cleanly, whether the taxonomy partitions usefully, and `field-plan` latency. **I did not measure any of them** — that needs a running worker, real Cognito auth, and real generated workflows, none of which I have here.
+
+The design anticipates the two failure modes those measurements would expose (unresolvable references render nothing; single-group cards skip the accordion), and both are test-pinned. But the *rates* are unknown, and the thresholds in those mitigations are judgement, not data. **Action for the user: run the endpoint against ~10 real workflows before trusting the accordion UX.**
+
+No browser verification of the accordions.
+
+### What this changes for later phases
+
+- Phase 4's `FieldRow` editing lands inside these accordions; `defaultExpandedGroup` decides which group is open when the user arrives.
+- `field-plan` is the shape Phase 7b extends with real `firstRunClass` — the field already exists and is wired through to the client.
+- `resolveUpstreamFields` is now shared, so Phase 8's chained run can reuse it for threading outputs.
+
+**Commit:** *Phase 3: field-plan API, grouped accordions, upstream attribution*

@@ -1,5 +1,7 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { FieldDesc } from '@/lib/wizard-field-ownership';
+import type { FieldPlan } from '@/lib/api/workflowBuildFieldPlan';
+import type { CapabilityConnectionReadinessNode } from '@/lib/api/capabilityConnectionReadiness';
 
 /**
  * Questions arrive from the field plane as loosely-typed records. The wizard has always
@@ -76,6 +78,19 @@ export interface FieldOwnershipContext {
     credHelpExpanded: Record<string, boolean>;
     credHelpViewMode: Record<string, 'simple' | 'technical'>;
     fieldDescFetchedRef: MutableRefObject<Set<string>>;
+    /**
+     * Field grouping + upstream attribution from POST /api/workflow-build/field-plan.
+     * Null while loading or unavailable — the step then renders its pre-Phase-3 flat
+     * layout rather than breaking.
+     */
+    fieldPlan?: FieldPlan | null;
+    /**
+     * Connection state per node type, from the same bounded readiness endpoint the
+     * capability stage uses. Drives the connect fallback on cards for nodes the
+     * generation pipeline injected, which the user never gated at node selection
+     * (plan §2.4, "safety net, not a second step").
+     */
+    nodeConnections?: CapabilityConnectionReadinessNode[];
 
     // -- callbacks --
     isCredentialUnlocked: (question: OwnershipQuestion) => boolean;

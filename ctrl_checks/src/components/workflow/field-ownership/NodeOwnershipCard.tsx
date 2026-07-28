@@ -1,4 +1,15 @@
+import { useState } from 'react';
 import { Sparkles } from 'lucide-react';
+import {
+    FIELD_GROUP_ORDER,
+    FIELD_GROUP_TITLES,
+    defaultExpandedGroup,
+    hasSinglePopulatedGroup,
+    type FieldGroupKey,
+    type FieldPlanProducer,
+} from '@/lib/api/workflowBuildFieldPlan';
+import { NodeConnectPopover } from '../NodeConnectPopover';
+import { FieldGroupAccordion } from './FieldGroupAccordion';
 import { FieldOwnershipRow } from './FieldOwnershipRow';
 import type { FieldOwnershipContext, NodeQuestionGroup, OwnershipQuestion } from './types';
 
@@ -18,6 +29,34 @@ export interface NodeOwnershipCardProps {
 export function NodeOwnershipCard({ group, sectionKey, ctx }: NodeOwnershipCardProps) {
     const descKey = `desc_${sectionKey}_${group.nodeId}`;
     const descState = ctx.nodeDescriptions[descKey];
+
+    const planNode = ctx.fieldPlan?.nodes.find((n) => n.nodeId === group.nodeId);
+    const nodeConnection = ctx.nodeConnections?.find((c) => c.nodeType === group.nodeType);
+    const [expandedGroup, setExpandedGroup] = useState<FieldGroupKey | null>(() =>
+        defaultExpandedGroup(planNode?.groups)
+    );
+
+    // Grouping only when the plan has arrived AND it actually partitions this node's
+    // fields. Measured on real workflows: http_request and code drop every field into
+    // one bucket, where an accordion is pure friction. Without a plan the step falls
+    // back to the flat rendering it had before Phase 3.
+    const grouped = Boolean(planNode) && !hasSinglePopulatedGroup(planNode?.groups);
+
+    // Field name -> where its {{$json.x}} references come from, for the row's explanation.
+    const producedByField = new Map<string, FieldPlanProducer[]>();
+    for (const key of FIELD_GROUP_ORDER) {
+        for (const field of planNode?.groups?.[key] ?? []) {
+            if (field.producedBy?.length) producedByField.set(field.fieldName, field.producedBy);
+        }
+    }
+
+    // Any question the plan did not classify still renders — never silently dropped.
+    const plannedFieldNames = new Set(
+        FIELD_GROUP_ORDER.flatMap((key) => (planNode?.groups?.[key] ?? []).map((f) => f.fieldName))
+    );
+    const ungroupedQuestions = grouped
+        ? group.fields.filter((q: OwnershipQuestion) => !plannedFieldNames.has(String(q.fieldName ?? '')))
+        : [];
 
     return (
         // id is the scroll target for the matching NodeChecklistRail entry
@@ -58,16 +97,78 @@ export function NodeOwnershipCard({ group, sectionKey, ctx }: NodeOwnershipCardP
                     </div>
                 )}
             </div>
-            <div className="grid grid-cols-1 gap-3">
-                {group.fields.map((question: OwnershipQuestion, idx: number) => (
-                    <FieldOwnershipRow
-                        key={`${sectionKey}_${question.id || idx}`}
-                        question={question}
-                        group={group}
-                        ctx={ctx}
-                    />
-                ))}
-            </div>
+            {/*
+              * Connect affordance for a node whose credential the pipeline injected —
+              * the user never chose it at node selection, so it was never gated there
+              * (plan §2.4 "safety net, not a second step"). Same component, second
+              * mount point.
+              */}
+            {nodeConnection && !nodeConnection.connected && nodeConnection.provider && (
+                <NodeConnectPopover
+                    provider={nodeConnection.provider}
+                    serviceLabel={nodeConnection.providerLabel ?? group.nodeLabel}
+                    credentialTypeId={nodeConnection.credentialTypeId}
+                />
+            )}
+            {grouped ? (
+                <div className="space-y-2">
+                    {FIELD_GROUP_ORDER.map((groupKey) => {
+                        const planFields = planNode?.groups?.[groupKey] ?? [];
+                        if (planFields.length === 0) return null;
+                        const names = new Set(planFields.map((f) => f.fieldName));
+                        const questions = group.fields.filter((q: OwnershipQuestion) =>
+                            names.has(String(q.fieldName ?? ''))
+                        );
+                        if (questions.length === 0) return null;
+                        return (
+                            <FieldGroupAccordion
+                                key={groupKey}
+                                title={FIELD_GROUP_TITLES[groupKey]}
+                                count={questions.length}
+                                expanded={expandedGroup === groupKey}
+                                onToggle={() =>
+                                    setExpandedGroup((current) => (current === groupKey ? null : groupKey))
+                                }
+                            >
+                                {questions.map((question: OwnershipQuestion, idx: number) => (
+                                    <FieldOwnershipRow
+                                        key={`${sectionKey}_${question.id || idx}`}
+                                        question={question}
+                                        group={group}
+                                        ctx={ctx}
+                                        producedBy={producedByField.get(String(question.fieldName ?? ''))}
+                                    />
+                                ))}
+                            </FieldGroupAccordion>
+                        );
+                    })}
+                    {ungroupedQuestions.length > 0 && (
+                        <div className="grid grid-cols-1 gap-3">
+                            {ungroupedQuestions.map((question: OwnershipQuestion, idx: number) => (
+                                <FieldOwnershipRow
+                                    key={`${sectionKey}_ungrouped_${question.id || idx}`}
+                                    question={question}
+                                    group={group}
+                                    ctx={ctx}
+                                    producedBy={producedByField.get(String(question.fieldName ?? ''))}
+                                />
+                            ))}
+                        </div>
+                    )}
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 gap-3">
+                    {group.fields.map((question: OwnershipQuestion, idx: number) => (
+                        <FieldOwnershipRow
+                            key={`${sectionKey}_${question.id || idx}`}
+                            question={question}
+                            group={group}
+                            ctx={ctx}
+                            producedBy={producedByField.get(String(question.fieldName ?? ''))}
+                        />
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
