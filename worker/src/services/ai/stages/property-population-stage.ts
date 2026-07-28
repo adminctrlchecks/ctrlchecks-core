@@ -23,6 +23,11 @@ import {
 } from './property-population-stage-client';
 import { logger } from '../../../core/logger';
 import { unifiedNodeRegistry } from '../../../core/registry/unified-node-registry';
+import {
+  extractJsonFieldRefs,
+  resolveUpstreamFields,
+  type UpstreamFieldContext,
+} from '../../../core/graph/upstream-field-resolver';
 import type { Workflow } from '../../../core/types/ai-types';
 import type { NodeInputField } from '../../../core/types/unified-node-contract';
 
@@ -66,92 +71,13 @@ function buildCompactGraphDigest(workflow: Workflow): string {
 
 // ─── Grounded Upstream Field Resolution ─────────────────────────────────────
 
-interface GroundedUpstreamField {
-  name: string;
-  type: string;
-  description?: string;
-}
-
-interface GroundedUpstreamContext {
-  fields: GroundedUpstreamField[];
-  names: Set<string>;
-}
-
 /**
- * Walks the workflow graph backward from nodeId to find the REAL data shape
- * flowing into this node — not a per-type guess.
- *
- * At each upstream hop, asks the registry for that node's effective output
- * schema (which is grounded in the node's actual instance config for dynamic
- * nodes like `form`, e.g. its real configured fields — see
- * unifiedNodeRegistry.getEffectiveOutputSchema). When a node declares no
- * properties and isn't marked `dynamic` (e.g. switch/if_else, which don't
- * transform the payload and declare no output schema of their own), the walk
- * continues further upstream through it. When a node IS marked `dynamic`
- * (e.g. a code node whose output shape can't be known statically), the walk
- * stops there and contributes no fields from that branch — attributing
- * whatever fed the code node would be a guess, not grounding.
- *
- * No node-type checks live here — only the registry's declarative schema.
+ * Upstream data-shape resolution moved to core/graph/upstream-field-resolver.ts in
+ * Phase 3 so the field-plan API shares one implementation with this stage. The walk
+ * itself is unchanged; the shared version additionally records which node produced
+ * each field, which this stage ignores.
  */
-function resolveGroundedUpstreamFields(workflow: Workflow, nodeId: string): GroundedUpstreamContext {
-  const fields: GroundedUpstreamField[] = [];
-  const names = new Set<string>();
-  const visited = new Set<string>();
-  const queue: string[] = [nodeId];
-
-  while (queue.length > 0) {
-    const currentId = queue.shift()!;
-    if (visited.has(currentId)) continue;
-    visited.add(currentId);
-
-    for (const edge of workflow.edges) {
-      if (edge.target !== currentId || visited.has(edge.source)) continue;
-      const upNode = workflow.nodes.find((n) => n.id === edge.source);
-      if (!upNode) continue;
-      const upType = String(upNode.type ?? upNode.data?.type ?? '');
-      const effective = unifiedNodeRegistry.getEffectiveOutputSchema(
-        upType,
-        upNode.data?.config as Record<string, any> | undefined,
-      );
-
-      if (effective?.properties && Object.keys(effective.properties).length > 0) {
-        for (const [name, meta] of Object.entries(effective.properties)) {
-          if (!names.has(name)) {
-            names.add(name);
-            fields.push({ name, type: meta.type, description: meta.description });
-          }
-        }
-        continue; // Real shape found here — don't attribute it to nodes further back.
-      }
-
-      if (effective?.dynamic === true) {
-        continue; // Shape is unknowable statically (e.g. code) — don't guess past it.
-      }
-
-      queue.push(edge.source); // No declared shape at all (passthrough/routing) — keep walking.
-    }
-  }
-
-  return { fields, names };
-}
-
-/** Recursively collects every `$json.<name>` reference (bare or `{{...}}`) inside a JSON value. */
-function extractJsonFieldRefs(value: unknown): string[] {
-  const refs: string[] = [];
-  const visit = (v: unknown): void => {
-    if (typeof v === 'string') {
-      const matches = v.matchAll(/\$json\.([A-Za-z_][A-Za-z0-9_]*)/g);
-      for (const m of matches) refs.push(m[1]);
-    } else if (Array.isArray(v)) {
-      for (const item of v) visit(item);
-    } else if (v && typeof v === 'object') {
-      for (const val of Object.values(v)) visit(val);
-    }
-  };
-  visit(value);
-  return refs;
-}
+type GroundedUpstreamContext = UpstreamFieldContext;
 
 const RESERVED_EXAMPLE_EMAIL_DOMAIN = /@(example\.(com|net|org|edu)|test\.com)\b/i;
 
@@ -483,7 +409,7 @@ export async function runPropertyPopulationStage(
       }
 
       // ── Resolve the REAL upstream data shape by walking the graph (not a per-type guess) ──
-      const groundedUpstream = resolveGroundedUpstreamFields(workflow, nodeId);
+      const groundedUpstream = resolveUpstreamFields(workflow, nodeId);
 
       // ── Get build value context from registry ────────────────────────────
       const buildCtx = unifiedNodeRegistry.getBuildValueContext(nodeType, upstreamNodeType, groundedUpstream.fields);

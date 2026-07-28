@@ -68,7 +68,17 @@ export interface CandidateNode {
   description: string;
   /** From unifiedNodeRegistry.getRequiredCredentials(nodeType) */
   credentialRequirements: string[];
-  /** Derived from credential vault check at request time. */
+  /**
+   * Providers this node needs, so the UI can name the service on a connect action
+   * ("Google Sheets — connect"). Derived from the same registry requirements.
+   */
+  credentialProviders?: string[];
+  /**
+   * Provider-level vault check at request time: true only when EVERY requirement is
+   * present. Cheap and non-authoritative — it is not scope-aware. The authoritative
+   * answer comes from POST /api/capability-selection/connection-readiness for the
+   * nodes the user actually selected.
+   */
   hasCredentials: boolean;
 }
 

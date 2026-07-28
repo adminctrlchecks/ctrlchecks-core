@@ -857,8 +857,10 @@ export function mapWizardStepToState(step: string): WorkflowGenerationState {
     'refining': WorkflowGenerationState.STATE_2_CLARIFICATION_ACTIVE,
     'confirmation': WorkflowGenerationState.STATE_3_UNDERSTANDING_CONFIRMED,
     'field-ownership': WorkflowGenerationState.STATE_3_UNDERSTANDING_CONFIRMED,
-    'credentials': WorkflowGenerationState.STATE_4_CREDENTIAL_COLLECTION,
-    'configuration': WorkflowGenerationState.STATE_4_CREDENTIAL_COLLECTION,
+    // Phase 5 removed the 'credentials' and 'configuration' wizard steps; values and
+    // connections are both collected on field-ownership now. 'configure' is the
+    // remaining post-build collector for anything still missing.
+    'configure': WorkflowGenerationState.STATE_4_CREDENTIAL_COLLECTION,
     'building': WorkflowGenerationState.STATE_5_WORKFLOW_BUILDING,
     'complete': WorkflowGenerationState.STATE_7_WORKFLOW_READY,
   };
@@ -874,7 +876,9 @@ export function mapStateToWizardStep(state: WorkflowGenerationState): string {
     [WorkflowGenerationState.STATE_1_USER_PROMPT_RECEIVED]: 'analyzing',
     [WorkflowGenerationState.STATE_2_CLARIFICATION_ACTIVE]: 'questioning',
     [WorkflowGenerationState.STATE_3_UNDERSTANDING_CONFIRMED]: 'confirmation',
-    [WorkflowGenerationState.STATE_4_CREDENTIAL_COLLECTION]: 'credentials',
+    // Was 'credentials', which no longer exists as a step — a session resuming from a
+    // persisted FSM state would have landed on a blank screen.
+    [WorkflowGenerationState.STATE_4_CREDENTIAL_COLLECTION]: 'configure',
     [WorkflowGenerationState.STATE_5_WORKFLOW_BUILDING]: 'building',
     [WorkflowGenerationState.STATE_WORKFLOW_BUILT]: 'building', // Workflow built, waiting for confirmation
     [WorkflowGenerationState.STATE_WAITING_CONFIRMATION]: 'confirmation', // Waiting for user confirmation

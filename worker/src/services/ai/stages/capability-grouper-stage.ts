@@ -273,24 +273,36 @@ async function hydrateCandidateNode(
   } else {
     try {
       const vault = getCredentialVault();
-      // A user "has credentials" if at least one required credential key exists in the vault.
       // We check the provider as the vault key (consistent with credential-resolver.ts pattern).
       const checks = await Promise.all(
         requirements.map((req) =>
           vault.exists({ userId } as any, req.provider).catch(() => false),
         ),
       );
-      hasCredentials = checks.some(Boolean);
+      // EVERY requirement must be satisfied, not just one. The previous `.some()` reported
+      // a node needing two credentials as "Connected" when only one was present, which the
+      // downstream readiness gate would then reject.
+      //
+      // This remains a *provider-level* check and is deliberately cheap: it runs for every
+      // candidate on screen, including ones the user never picks. The authoritative,
+      // scope-aware answer comes from POST /api/capability-selection/connection-readiness,
+      // which is called only for nodes the user actually selected — because that path can
+      // refresh OAuth tokens as a side effect and must not run across the whole catalogue.
+      hasCredentials = checks.every(Boolean);
     } catch {
       hasCredentials = false;
     }
   }
+
+  // Providers are surfaced so the UI can offer a connect affordance naming the service.
+  const credentialProviders = Array.from(new Set(requirements.map((req) => req.provider)));
 
   return {
     nodeType,
     label,
     description,
     credentialRequirements,
+    credentialProviders,
     hasCredentials,
   };
 }

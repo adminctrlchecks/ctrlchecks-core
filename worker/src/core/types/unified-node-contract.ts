@@ -403,6 +403,22 @@ export interface NodeOperationContract {
   outputFields: string[];
   legacyAliases?: string[];
   status: 'implemented' | 'unsupported' | 'deprecated';
+  /**
+   * What performing this operation does to the outside world, used to decide whether the
+   * wizard's first run may execute it automatically.
+   *
+   * - `none`        — nothing leaves the system (triggers, logic, transforms)
+   * - `read`        — fetches data only (sheets read, HTTP GET, list/query)
+   * - `write`       — creates or changes something (send, append, create, POST/PUT/PATCH)
+   * - `destructive` — deletes/archives, payments/refunds, bulk overwrite or truncate
+   *
+   * **Optional, and absence means `'write'`** — never `'none'`. An operation nobody has
+   * classified is treated as consequential and never auto-runs, so the failure mode of
+   * forgetting to classify something is over-protection, not an unwanted side effect.
+   *
+   * Purely additive: existing contracts compile unchanged (plan §2.5).
+   */
+  firstRunClass?: 'none' | 'read' | 'write' | 'destructive';
 }
 
 export interface NodeExecutionContext {
