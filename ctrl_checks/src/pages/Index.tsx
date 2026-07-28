@@ -21,9 +21,9 @@ const Index = () => {
         <Header />
         <main className="bg-transparent">
           <Hero />
+          <WorkflowDemoSection />
           <IntegrationsMarqueeSection />
           <HowItWorks />
-          <WorkflowDemoSection />
           <OpenCoreSection />
           <PluginsApiSection />
           <IndustryVerticalsSection />

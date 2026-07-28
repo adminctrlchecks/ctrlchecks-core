@@ -83,7 +83,7 @@ export function CTA() {
               <motion.div {...(reduceMotion ? {} : { whileHover: { scale: 1.04 }, whileTap: { scale: 0.98 } })}>
                 <Button size="lg" asChild className="bg-white text-primary hover:bg-white/90 shadow-lg">
                   <Link to="/signup">
-                    Join the beta
+                    Sign Up
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>

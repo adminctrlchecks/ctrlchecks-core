@@ -21,7 +21,6 @@ export function Header() {
     { name: "Integrations", href: "#plugins-api" },
     { name: "Verticals", href: "#verticals" },
     { name: "Why us", href: "#why-ctrlchecks" },
-    { name: "Beta", href: "#features" },
     { name: "Docs", href: "/docs", isRoute: true },
     { name: "Plans", href: "/subscriptions", isRoute: true },
   ];
@@ -79,7 +78,7 @@ export function Header() {
                   <Link to="/signin">Sign In</Link>
                 </Button>
                 <Button asChild className="gradient-primary text-primary-foreground hover:opacity-90">
-                  <Link to="/signup">Join beta</Link>
+                  <Link to="/signup">Sign Up</Link>
                 </Button>
               </>
             )}
@@ -152,7 +151,7 @@ export function Header() {
                         <Link to="/signin">Sign In</Link>
                       </Button>
                       <Button asChild className="gradient-primary text-primary-foreground">
-                        <Link to="/signup">Join beta</Link>
+                        <Link to="/signup">Sign Up</Link>
                       </Button>
                     </>
                   )}

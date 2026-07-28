@@ -10,7 +10,6 @@ const footerLinks = {
     { name: "Integrations", href: "#plugins-api" },
     { name: "Industries", href: "#verticals" },
     { name: "Why CtrlChecks", href: "#why-ctrlchecks" },
-    { name: "Beta focus", href: "#features" },
     { name: "Subscription", href: "/subscriptions", isRoute: true },
     { name: "FAQ", href: "#faq" },
   ],
@@ -59,7 +58,7 @@ export function Footer() {
               </span>
             </Link>
             <p className="mt-5 max-w-sm text-sm leading-relaxed text-muted-foreground">
-              AI automation OS: intent, intelligence, execution.{" "}
+              Turn a plain-English request into a running, connected workflow.{" "}
               <a
                 href="https://ctrlchecks.ai"
                 className="font-medium text-primary underline-offset-4 hover:underline"
