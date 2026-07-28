@@ -15,7 +15,7 @@ Baseline commit: `bf926be` — *Baseline: node-selection UI redesign WIP + field
 
 - [x] **0a** — Baseline capture
 - [x] **0b** — Extraction, zero behaviour change
-- [ ] **0c** — Characterization tests on the extracted unit
+- [x] **0c** — Characterization tests on the extracted unit
 - [ ] **1** — Intent Context off this step + two-column layout
 - [ ] **2** — Inline connect at node selection
 - [ ] **3** — `/api/workflow-build/field-plan` + four-group accordions
@@ -271,4 +271,90 @@ Regenerated the inventory over the six new files and diffed against `0a-structur
 - `FieldOwnershipContext` in `types.ts` is the single choke point for every later phase's new inputs: one field on the interface, one line in the wizard's object literal.
 - The `0b-structure.md` inventory is the new "before" reference for Phase 1.
 
-**Commit:** `bf0c6e6` — *Phase 0b: extract field-ownership block into presentational components*
+**Commit:** `815cbda` — *Phase 0b: extract field-ownership block into presentational components*
+
+---
+
+## 🔄 Standing constraint CHANGED during Phase 0c — tests can now actually be run
+
+The log's Step 0 constraint said every test this project produces would ship unexecuted. **That is no longer true.**
+
+Asked the user whether the "never run `npm test`" rule (memory `feedback_testing_strategy`) covers single-file runs, since `CLAUDE.md` documents `npx vitest run <path>` as the single-file command and the recorded crash was the full 468-file suite. **Answer: single-file runs are approved; `npm test` is still forbidden.**
+
+Measured: a 33-case component file runs in **4.65s** with no memory pressure. The memory file and `MEMORY.md` index have been updated to record the scoped exception.
+
+**Consequence for every remaining phase:** tests get **written and run**. "Written but unexecuted" is no longer an acceptable phase outcome, and the Phase 6 safety layer — the gate on 7b — can be genuinely proven rather than asserted.
+
+**Non-regression baseline established (all pass, unmodified):**
+
+```
+npx vitest run \
+  src/components/connections/__tests__/connectionAvailability.test.ts \
+  src/components/connections/__tests__/credential-guidance.test.tsx \
+  src/components/workflow/__tests__/WorkflowConnectionGate.setup.test.tsx \
+  src/components/workflow/__tests__/WorkflowHeader.setup.test.tsx \
+  src/hooks/__tests__/useWorkflowConnectionStatus.test.ts
+→ 5 files, 26 tests, all passing (2.65s)
+```
+
+Run this after every phase from here on.
+
+---
+
+## Phase 0c — Characterization tests
+
+### Plan
+
+Render the extracted components for real and lock in their behaviour, following `PropertiesPanel.inspector.test.tsx` (the proven pattern for a store-coupled component in this repo).
+
+Constraints observed from the repo, not assumed: `vite.config.ts` has **no `setupFiles`**, and `@testing-library/jest-dom` is **not a dependency** — so assertions use `.toBeTruthy()` / `.toBe()`, never jest-dom matchers. `@testing-library/user-event` is also absent, so interaction goes through `fireEvent`.
+
+**Mocking strategy — mock the heavy leaves, keep the logic under test real:**
+- `@/lib/field-doc-resolver` → stub. It pulls the entire `@/docs-content` bundle in for what is, in a test, always a "no doc" answer.
+- `framer-motion` → `motion` Proxy returning a plain `div`.
+- `../FieldOwnershipHelpPanel` → recording stub, so the row's prop contract to it can be asserted (that panel has its own genuine test already).
+- `ResizeObserver` stub for Radix.
+- **Not mocked:** `lib/wizard-field-ownership` (including the nine helpers Phase 0b added), `lib/wizard-field-plane`, `lib/fillMode`, `lib/actionable-field-example`. Mocking those would test the mocks.
+
+Shared `buildCtx(overrides)` factory producing a valid `FieldOwnershipContext`, so later phases extend one function instead of many literals.
+
+### What actually happened ✅ DONE
+
+`field-ownership/__tests__/FieldOwnershipStage.test.tsx` — **33 tests, all passing** (4.65s).
+
+Coverage by area:
+
+| Area | Cases | What is locked in |
+|---|---|---|
+| Structure | 5 | both section headings; step heading; per-section empty state; one card per node with fields under the right node; structural vs secret separation |
+| Proceed action | 1 | button invokes `proceedFromOwnershipStage` |
+| Walk-through | 2 | passes **both** groupings to `startGlobalWalkThrough`; active walk shows `Node · Field (2/4)` and hides the idle label |
+| Node description | 2 | requests with the section-namespaced key `desc_structural_node1`; renders text and flips to "Hide description" |
+| Enable toggle | 3 | off by default, **on** when AI-prefilled; explicit override wins; writes under `fieldEnabled_<nodeId>_<fieldName>` |
+| Ownership label | 4 | `manual_static`→You, `buildtime_ai_once`→AI Build, `runtime_ai`→AI Runtime; hidden while the row is off |
+| Locked rows | 3 | locked row hides the ownership hint; an *unlocked* unlockable credential is not locked; unlock switch appears on a locked unlockable row |
+| Field help | 4 | first open sets `fieldhelp_*` **and** fetches with request key `node1:spreadsheetId`; already-fetched keys are not re-requested; help panel receives the right open/mode/enabled/locked props; mode change routes to `mode_<nodeId>_<fieldName>` |
+| Selection | 1 | clicking a row reports `{nodeId, fieldName}` to the guide |
+| Credential disclosure | 5 | present only for credential rows; simple by default; technical view; AI guidance from `discoveredCredentials` wins over the fallback copy |
+| Blueprint | 3 | absent without data; overview + node narratives; structural errors and warnings |
+
+**The key-format assertions matter beyond this phase.** Several tests call the captured state-updater and assert the resulting object, e.g.:
+
+```ts
+expect(updater({})).toEqual({ fieldEnabled_node1_spreadsheetId: true });
+expect(updater({})).toEqual({ mode_node1_spreadsheetId: 'buildtime_ai_once' });
+```
+
+`mode_*` and `unlock_*` are **attach-inputs keys**. §6a-2 calls key-format drift the single highest-risk detail in the project; these now fail loudly if it happens. Phase 4 extends this to `config_*` / `cred_*`.
+
+**Verified:**
+- ✅ **33/33 passing** — actually executed, not merely written.
+- ✅ `npx tsc --noEmit` clean.
+- ✅ `npm run lint` — 0 errors, 58 warnings (baseline).
+- ✅ Non-regression suite: 26/26 passing, unmodified.
+
+**Surprise:** every test passed on the first run. Given that Phase 0b's `tsc` also passed first try, the honest read is that the extraction was genuinely mechanical — but it is worth recording that these 33 tests were written *after* the refactor, so they characterize the extracted code, not the original. They protect phases 1-8; they were never capable of catching a 0b mistake. The structural inventory was the only thing that could, and did.
+
+**What this changes for later phases:** `buildCtx()` is the extension point. Phase 1 adds rail assertions, Phase 3 group/accordion assertions, Phase 4 the key-shape contract test.
+
+**Commit:** *(added after commit)*
