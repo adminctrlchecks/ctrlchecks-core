@@ -23,7 +23,7 @@ Baseline commit: *Baseline: node-selection UI redesign WIP + field-ownership bui
 - [x] **3** — `/api/workflow-build/field-plan` + four-group accordions
 - [x] **4** — Inline editing + parity report (gates Phase 5)
 - [x] **5** — Delete `configuration` + `credentials` steps
-- [ ] **6** — `firstRunClass` safety layer + fan-out sampler (backend only)
+- [x] **6** — `firstRunClass` safety layer + fan-out sampler (backend only)
 - [ ] **7a** — Provider-error → field guidance layer
 - [ ] **7b** — `/api/workflow-build/run-node` (⚠ MANDATORY PAUSE BEFORE THIS PHASE)
 - [ ] **8** — `/api/workflow-build/run` chained orchestration + seeded execution #1
@@ -797,3 +797,52 @@ This is the most important unverified claim in the project. The reasoning is lay
 The wizard is now `… → capability-node-selection → capability-review → field-ownership → building → complete`, with `configure` as a post-build collector. Phase 7b's Test action and Phase 8's chained run mount into field-ownership with no competing step. `outstandingCount` is the gate Phase 8 extends with "no node in `needs_attention`".
 
 **Commit:** *Phase 5: delete the configuration and credentials steps*
+
+---
+
+## Phase 6 — `firstRunClass` safety layer + fan-out sampler
+
+Backend only. **Nothing executes in this phase**, by design: the layer that decides whether a run is permitted lands before any code that could run something.
+
+### Correction to the plan — the classification has no per-operation home to live in
+
+§8 and §2.1 say to "populate per-node values in `generated-node-operation-contracts.ts` (hand-maintained despite its name)". Opened it: it is
+
+```ts
+export const GENERATED_NODE_OPERATION_VALUES: Record<string, string[]> = {
+  google_sheets: ['append', 'read', 'update', 'write'], …
+```
+
+a **nodeType → operation-name list**, not a map of `NodeOperationContract` objects. There is nowhere in it to hang a per-operation `firstRunClass`. **The code wins:** added `firstRunClass?` to the `NodeOperationContract` *type* as specified (so any contract that wants to set it can), and put the actual classification in a new declarative table.
+
+### What actually happened ✅ DONE
+
+- **`core/types/unified-node-contract.ts`** — `firstRunClass?: 'none' | 'read' | 'write' | 'destructive'` added to `NodeOperationContract`, **optional**, documented as defaulting to `'write'` when absent. Purely additive; every existing contract compiles unchanged (§2.5).
+- **New `core/registry/first-run-classification.ts`** (232 lines) — the classification as **data, not branching**: verb lists (`DESTRUCTIVE_VERBS`, `READ_VERBS`, `NONE_VERBS`), `NODE_DEFAULT_FIRST_RUN_CLASS` for the 30 node types that never act externally (triggers, logic, transforms), and `FIRST_RUN_CLASS_OVERRIDES` for the cases where the verb misleads. Table lookups only — **no `switch (node.type)`**, so CLAUDE.md's rule holds.
+- **New `core/execution/first-run-policy.ts`** (118 lines) — `resolveFirstRunClass`, `canAutoRun`, `requiresConsent`, `requiresStrongConfirmation`, `assertConsent`, `isRunPermitted`, and `ConsentRequiredError`.
+
+**Resolution order, first hit wins:** the node's own operation contract → a per-node override → the node-level default → the operation verb → **`'write'`**.
+
+**Design choice worth recording — verb table over 118 hand-written entries.** The plan implies enumerating every operation. Most operation names in this registry are generic verbs (`create`/`delete`/`read`/`send`/`list`), so a verb table plus targeted overrides covers them with far less to get wrong, and a *new* node inherits sane classification without anyone remembering to add it. Overrides carry the judgement calls: `jenkins.cancel` is `write` not `destructive` (stopping a build is not data loss); `mailchimp.unsubscribe` **is** `destructive` (irreversible for the recipient); `http_request` takes its class from the HTTP verb; `langchain` runs are `read` (they cost money but nothing leaves the workspace).
+
+- **New `core/execution/fanout-sampler.ts`** (98 lines) — `sampleCollectionForFirstRun`, `isCollectionOutput`, `describeSampling`. Handles a bare array and a collection nested under a conventional key (`rows`, `items`, `records`, …); **anything else is returned untouched**, because a scalar or plain record is not a fan-out and guessing would corrupt it.
+
+### Verification — the three mandated proofs, executed
+
+**`npx jest` on the two files: 43/43 passing.**
+
+1. **Unclassified → `write`, never auto-runs.** Asserted for an unknown node with an unknown operation, a *known* node with an unrecognised operation, and a node with no operation at all — plus a loop asserting an unknown operation never resolves to `'none'`.
+2. **Destructive never runs without `consented === true`.** `assertConsent` throws for `undefined` and `false`, and — deliberately — for **truthy-but-not-true** values (`'true'`, `'yes'`, `1`, `{}`, `[]`, `'on'`), so a loosely-typed request body cannot authorise a real side effect. Only exactly `true` passes.
+3. **A 500-row read feeds exactly ONE record.** Asserted for a bare 500-item array and for 500 rows nested under `rows`, including that the surrounding payload survives intact and that the **first** record is the one kept.
+
+Also verified:
+- ✅ **No execution path added** — grep for `executeNode` / `dynamicNodeExecutor` / `.execute(` across all three new files: **0 hits**. They are pure policy with no callers yet, which is exactly the intent.
+- ✅ **No `switch (node.type)`** — the single grep hit is a comment stating there isn't one.
+- ✅ `executeNode()` untouched — `git diff --stat` on `execute-workflow.ts` is empty.
+- ✅ `worker/` `npm run type-check`: clean.
+
+### Residual risk
+
+The classification **is** the specification, so no test can catch a mis-classified operation — only review can. The default-to-`write` design means errors fail safe in one direction only: an unclassified or under-classified operation is over-protected, never under-protected. The place to look hardest is `FIRST_RUN_CLASS_OVERRIDES`, where an override could wrongly *downgrade* something.
+
+**Commit:** *Phase 6: firstRunClass safety layer and fan-out sampler*
