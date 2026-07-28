@@ -25,7 +25,7 @@ Baseline commit: *Baseline: node-selection UI redesign WIP + field-ownership bui
 - [x] **5** — Delete `configuration` + `credentials` steps
 - [x] **6** — `firstRunClass` safety layer + fan-out sampler (backend only)
 - [x] **7a** — Provider-error → field guidance layer
-- [ ] **7b** — `/api/workflow-build/run-node` (⚠ MANDATORY PAUSE BEFORE THIS PHASE)
+- [x] **7b** — `/api/workflow-build/run-node` (⚠ MANDATORY PAUSE BEFORE THIS PHASE)
 - [ ] **8** — `/api/workflow-build/run` chained orchestration + seeded execution #1
 
 ---
@@ -894,6 +894,61 @@ The classification **is** the specification, so no test can catch a mis-classifi
 The mappings are only as good as my reading of each provider's error catalogue — a wrong mapping sends the user to the wrong field, which is worse than the fallback. **They get their real test in 7b**, the first phase that produces genuine provider errors.
 
 **Commit:** *Phase 7a: provider-error to field guidance layer*
+
+---
+
+## Phase 7b — `/api/workflow-build/run-node` (⚠️ first real external operations)
+
+### What actually happened ✅ DONE
+
+**Backend**
+- **New `core/execution/build-run-state.ts`** (270 lines) — the §6a model. Redis-backed at `wfbuild:{buildId}` with a **2h TTL refreshed on every write**, so an active build never expires under the user. Falls back to an in-memory store when `REDIS_URL` is absent, so a missing Redis degrades to single-process rather than 500s. Includes stable order-independent hashing, `computeIdempotencyKey`, `descendantsOf` (cycle-safe BFS), `invalidateFrom`, and `assertOwnership`.
+- **New `api/workflow-build/run-node.ts`** (330 lines) + route.
+
+**Guards, in the order they apply:**
+
+| # | Guard | Gap |
+|---|---|---|
+| 1 | authenticated user required | G5 |
+| 2 | build ownership — 403 on `userId` mismatch | G5 |
+| 3 | idempotency — unchanged + already `passed` returns the stored result, no re-execution | G3 |
+| 4 | **`firstRunClass` consent gate** — `write`/`destructive` need `consented === true` | §2.1 |
+| 5 | per-build ceiling (50) → 429 **with guidance**, never an error dialog | G5 |
+| 6 | fan-out cap — a collection is sampled to 1 record before it feeds downstream | §2.3 |
+
+**Order matters and is deliberate:** consent is checked *before* the ceiling, so a user who has hit the cap still sees the honest "this would send an email" prompt rather than a confusing quota message about an action they never authorised.
+
+- `executeNode()` is **called, never modified** (§2.5) — verified by an empty `git diff --stat`. All policy lives in the caller.
+- Failures never surface raw: output runs through Phase 7a's `guidanceFromOutput`, and a *thrown* exception is caught and converted to guidance rather than becoming a 500.
+- A synthetic `workflowId` (`wfbuild-{buildId}`) is safe because `dynamic-node-executor` performs zero DB writes — the plan's "Resolved while checking" note, relied on here.
+
+**Frontend**
+- `lib/api/workflowBuildRunNode.ts` — client plus `badgeForNode`, which implements **G8**: a `schedule` trigger reads *"Configured — fires on schedule"*, **never "Verified"**, because synthesising a timestamp proves nothing about it firing later.
+- **New `field-ownership/NodeTestAction.tsx`** — one right-aligned button in the card header (§4.3). First click sends `consented: false`; the server answers `awaiting_consent` with copy naming the effect; only the second click carries `true`. Guidance renders **in place** — headline, why, next steps — with raw provider text behind a collapsed "Technical detail" disclosure. No toasts, no red alerts.
+- Wizard holds `buildRunId` / `runResults` / `runningNodeId` and passes `onRunNode` through the context.
+
+### Verification
+
+- ✅ **`run-node.test.ts` — 19/19**, and the critical assertions are negative:
+  - `executeNode` is **never called** for a `write` without consent;
+  - **never called** for a `destructive` node without consent;
+  - **never called** for truthy-but-not-true consent (`'true'`, `'yes'`, `1`, `{}`);
+  - called exactly once when consent is exactly `true`;
+  - auto-runs a `read` with no consent at all.
+- ✅ Idempotency proven by call count: two identical requests → **one** `executeNode` call, second returns `deduped: true`. Editing the config → a second call happens (G2 cascade).
+- ✅ Fan-out proven end to end through the endpoint: a 500-row output returns `rows.length === 1` plus the settled copy.
+- ✅ 403 proven by a second user targeting an existing `buildId`.
+- ✅ **`build-run-state.test.ts` — 20/20**: hashing is order-independent; the idempotency key changes on config, upstream **and** buildId; invalidation resets the node *and* descendants and **drops stored output**, leaving upstream untouched.
+- ✅ **`NodeTestAction.test.tsx` — 16/16**: first click sends `false`; consent copy shows the target; destructive styling; disabled while running; **schedule never badged "Verified"**; technical detail hidden until expanded; the rendered card contains no "failed".
+- ✅ Field-ownership suite **85/85**; non-regression **34/34 across 6 files, unmodified**.
+- ✅ `tsc -p tsconfig.app.json` 444 (baseline), lint 0 errors / 57 warnings, worker `type-check` clean.
+
+### ❌ Not done in this phase — stated, not skipped silently
+
+1. **Trigger input panels (§4.4)** — `form` / `webhook` / `chat` / `schedule` / `manual` payload editors. The run path treats a trigger like any other node and uses its configured input. Sized as its own piece of work; **deferred to Phase 8 or a follow-up**.
+2. **No real E2E.** `executeNode` is mocked in every test here, so what is proven is **the gate, not the side effect**. Nothing has actually been sent to Slack or Gmail from this code path. The plan's four E2E scenarios (one message, one email from a 50-row sheet, a guidance card from a bad spreadsheet ID, one branch of an `if_else`) all remain **unrun** — they need a running stack and throwaway targets.
+
+**Commit:** *Phase 7b: consented single-node first run*
 
 ---
 

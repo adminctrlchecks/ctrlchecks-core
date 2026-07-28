@@ -39,6 +39,7 @@ import { generateFieldGuide } from './guideGenerator';
 import { resolveFieldHelpContent } from '@/lib/resolve-field-help-content';
 import { NodeConnectPopover } from './NodeConnectPopover';
 import { fetchFieldPlan, type FieldPlan } from '@/lib/api/workflowBuildFieldPlan';
+import { runBuildNode, type RunNodeResult } from '@/lib/api/workflowBuildRunNode';
 import { fetchCapabilityConnectionReadiness, type CapabilityConnectionReadinessNode } from '@/lib/api/capabilityConnectionReadiness';
 import { FieldOwnershipStage, type FieldOwnershipContext } from './field-ownership';
 import {
@@ -5648,6 +5649,40 @@ export function AutonomousAgentWizard() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [fieldOwnershipGraphKey]);
 
+    /**
+     * First-run state (Phase 7b).
+     *
+     * ⚠️ `handleRunNode` executes a node **for real**. The server refuses a write or
+     * destructive node without `consented: true` and returns `awaiting_consent` with copy
+     * naming the effect, so the first click never sends anything — it asks.
+     */
+    const [buildRunId, setBuildRunId] = useState<string | null>(null);
+    const [runResults, setRunResults] = useState<Record<string, RunNodeResult>>({});
+    const [runningNodeId, setRunningNodeId] = useState<string | null>(null);
+
+    const handleRunNode = useCallback(
+        async (nodeId: string, consented: boolean) => {
+            if (runningNodeId) return; // client half of the double-click guard (G3)
+            setRunningNodeId(nodeId);
+            try {
+                const result = await runBuildNode({
+                    buildId: buildRunId ?? undefined,
+                    nodes: (pendingWorkflowData?.nodes || []) as unknown[],
+                    edges: (pendingWorkflowData?.edges || []) as unknown[],
+                    nodeId,
+                    consented,
+                });
+                if (result) {
+                    if (result.buildId) setBuildRunId(result.buildId);
+                    setRunResults((prev) => ({ ...prev, [nodeId]: result }));
+                }
+            } finally {
+                setRunningNodeId(null);
+            }
+        },
+        [buildRunId, pendingWorkflowData?.nodes, pendingWorkflowData?.edges, runningNodeId]
+    );
+
     const requiredSectionStyles = {
         fieldOwnership: {
             cardClass: 'border-blue-500/30 shadow-lg',
@@ -5675,6 +5710,9 @@ export function AutonomousAgentWizard() {
     const fieldOwnershipContext: FieldOwnershipContext = {
         fieldPlan: fieldOwnershipPlan,
         outstandingCount: outstandingManualQuestions.length,
+        runResults,
+        runningNodeId,
+        onRunNode: handleRunNode,
         nodeConnections: fieldOwnershipConnections,
         // Read by inline editing (Phase 4) to display current values. Still owned here —
         // handleBuild forwards these exact maps to attach-inputs / attach-credentials.

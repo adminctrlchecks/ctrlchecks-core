@@ -292,6 +292,7 @@ import generateCapabilityWorkflow from './api/capability-selection/generate';
 import confirmCapabilityWorkflow from './api/capability-selection/confirm';
 import capabilityConnectionReadiness from './api/capability-selection/connection-readiness';
 import workflowBuildFieldPlan from './api/workflow-build/field-plan';
+import workflowBuildRunNode from './api/workflow-build/run-node';
 import executeAgentRoute from './api/execute-agent';
 import chatbotRoute from './api/chatbot';
 import analyzeWorkflowRequirementsRoute from './api/analyze-workflow-requirements';
@@ -1519,7 +1520,10 @@ console.log('🎯 Capability Selection API available at /api/capability-selectio
 
 // Workflow build (field-ownership step). Read-only: no DB write, no LLM call, nothing executes.
 app.post('/api/workflow-build/field-plan', asyncHandler(authenticateUser), asyncHandler(workflowBuildFieldPlan));
-console.log('🧩 Workflow Build API available at /api/workflow-build/{field-plan}');
+// ⚠️ run-node performs REAL external operations. Consent, ceiling and fan-out cap are
+// enforced inside the handler (Phase 6 safety layer).
+app.post('/api/workflow-build/run-node', asyncHandler(authenticateUser), asyncHandler(workflowBuildRunNode));
+console.log('🧩 Workflow Build API available at /api/workflow-build/{field-plan,run-node}');
 
 // Adaptive UI Engine — personalizes existing screens from intent + existing product data.
 // Uses the same intent-analysis/capability-grouping calls as capability-selection/analyze,

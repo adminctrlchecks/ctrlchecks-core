@@ -11,6 +11,7 @@ import {
 import { NodeConnectPopover } from '../NodeConnectPopover';
 import { FieldGroupAccordion } from './FieldGroupAccordion';
 import { FieldOwnershipRow } from './FieldOwnershipRow';
+import { NodeTestAction } from './NodeTestAction';
 import type { FieldOwnershipContext, NodeQuestionGroup, OwnershipQuestion } from './types';
 
 /**
@@ -61,11 +62,20 @@ export function NodeOwnershipCard({ group, sectionKey, ctx }: NodeOwnershipCardP
     return (
         // id is the scroll target for the matching NodeChecklistRail entry
         <div id={`fo-card-${sectionKey}_${group.nodeId}`} className="rounded border border-border/60 p-3 space-y-3 scroll-mt-6">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex items-start justify-between gap-3">
                 <div>
                     <p className="text-sm font-semibold">{group.nodeLabel}</p>
                     <p className="text-xs text-muted-foreground">{group.nodeType}</p>
                 </div>
+                {/* Test action: one button, right-aligned in the card header (§4.3) */}
+                {ctx.onRunNode && (
+                    <NodeTestAction
+                        nodeType={group.nodeType}
+                        running={ctx.runningNodeId === group.nodeId}
+                        result={ctx.runResults?.[group.nodeId]}
+                        onRun={(consented) => ctx.onRunNode?.(group.nodeId, consented)}
+                    />
+                )}
             </div>
             {/* On-demand AI node description */}
             <div className="space-y-2">

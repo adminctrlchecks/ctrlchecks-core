@@ -2,6 +2,7 @@ import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { FieldDesc } from '@/lib/wizard-field-ownership';
 import type { FieldPlan } from '@/lib/api/workflowBuildFieldPlan';
 import type { CapabilityConnectionReadinessNode } from '@/lib/api/capabilityConnectionReadiness';
+import type { RunNodeResult } from '@/lib/api/workflowBuildRunNode';
 
 /**
  * Questions arrive from the field plane as loosely-typed records. The wizard has always
@@ -100,8 +101,16 @@ export interface FieldOwnershipContext {
      * (plan §2.4, "safety net, not a second step").
      */
     nodeConnections?: CapabilityConnectionReadinessNode[];
+    /**
+     * Per-node first-run results (Phase 7b).
+     * ⚠️ A `passed` write node really sent the email / posted the message.
+     */
+    runResults?: Record<string, RunNodeResult>;
+    runningNodeId?: string | null;
 
     // -- callbacks --
+    /** Runs one node for real. `consented` must be true for write/destructive. */
+    onRunNode?: (nodeId: string, consented: boolean) => void;
     isCredentialUnlocked: (question: OwnershipQuestion) => boolean;
     startGlobalWalkThrough: (
         structural: NodeQuestionGroup[],
