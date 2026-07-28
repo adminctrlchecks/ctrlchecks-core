@@ -1002,6 +1002,42 @@ The tests cover: topological ordering and cycle retention; **only the taken `if_
 
 ---
 
+## Post-implementation — CI coverage audit
+
+### 🛑 Finding: none of this project's tests ran anywhere
+
+Priority item 2 was "run the committed test suites in CI (they have never run there)". Audited `.github/workflows/ci.yml` before doing so, and the reason they had never run is worse than "nobody triggered it":
+
+1. **All 7 new worker test files were invisible to CI.** The three worker test jobs select by `--testPathPattern`:
+   - `worker-test-contracts` → `unified-node-registry-contract.test.ts` only
+   - `worker-test-delegation` → the four service clients only
+   - `worker-test-fix-regressions` → `form-trigger|dispatch-execution-notifications|email-service|if_else`
+
+   Checked each new file against every pattern: **zero matches.** `first-run-policy`, `fanout-sampler`, `build-run-state`, `upstream-field-resolver`, `provider-error-interpreter`, `run-node`, `run` — roughly 150 tests, including the three mandated Phase 6 safety proofs, committed and executed nowhere.
+
+2. **There was no frontend test job at all.** `frontend-lint` runs lint + tsc; `frontend-build` runs build. No vitest anywhere in CI. Every frontend suite in the repo — including the four non-regression suites this project leaned on as its trustworthy net — ran only on a developer machine.
+
+3. **⚠️ `frontend-lint`'s type-check gate is a no-op.** Line 115 runs `npx tsc --noEmit`, which (per the Phase 2 correction) compiles **zero files** because `tsconfig.json` is `"files": []` plus project references. **This is almost certainly how 444 type errors accumulated unnoticed** — the gate that should have caught them has never checked anything.
+
+### What was done
+
+Added two jobs to `ci.yml`:
+
+- **`worker-test-workflow-build`** — runs all 7 new worker test files by **explicit path**, `--runInBand --no-coverage`, 4GB heap, 15-min timeout. Explicit paths rather than a broad pattern, deliberately: the file's own comments record that the full 453-file suite OOMs on runners.
+- **`frontend-tests`** — two steps, field-ownership suites and the non-regression suites, each scoped to specific paths. Not a bare `vitest run`: the full frontend suite has never been validated on a runner, and this job exists to protect known-good tests, not to surface unrelated failures.
+
+Both verified locally before committing: **93 tests** (field-ownership + CapabilityStage) and **26 tests** (non-regression), all passing.
+
+### ❌ Deliberately NOT fixed — needs a decision
+
+**`frontend-lint` still runs the no-op `npx tsc --noEmit`.** Changing it to `-p tsconfig.app.json` would turn CI **red immediately** on 444 pre-existing errors that have nothing to do with this project. That is a judgement call about the repo's error budget, not a change to make silently mid-project.
+
+**Recommended:** fix it as its own piece of work — either burn the 444 down first, or land the correct command with a temporary allowance and ratchet it. Leaving it as-is means the frontend type gate stays fake.
+
+**Commit:** *CI: run the field-ownership test suites that were never executed*
+
+---
+
 # ⛔ SESSION END — handoff for the next run
 
 Stopped after Phase 6 at the user's request (context budget). This coincides with the plan's own **mandatory pause before Phase 7b**.
