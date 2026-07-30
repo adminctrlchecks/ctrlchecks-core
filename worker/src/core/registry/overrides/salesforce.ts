@@ -75,7 +75,7 @@ export function overrideSalesforce(
     operation: {
       ...def.inputSchema.operation,
       ownership: 'structural' as const,
-      role: 'config' as const,
+      role: 'operation_selector' as const,
       fillMode: structuralBuildtime,
       ui: {
         ...(def.inputSchema.operation?.ui || {}),

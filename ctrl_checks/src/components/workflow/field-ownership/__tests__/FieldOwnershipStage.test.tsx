@@ -109,8 +109,7 @@ function buildCtx(overrides: Partial<FieldOwnershipContext> = {}): FieldOwnershi
         pendingWorkflowData: { nodes: [], discoveredCredentials: [] },
         sectionStyles: { cardClass: 'card-class', titleClass: 'title-class' },
         globalWalkActive: null,
-        structuralByNode: [makeGroup()],
-        secretsByNode: [],
+        nodesInOrder: [makeGroup()],
         ownershipEffectiveModes: { byModeKey: {} },
         fillModeValues: {},
         outstandingCount: 0,
@@ -153,25 +152,30 @@ beforeEach(() => {
 /* -------------------------------------------------------------------------- */
 
 describe('FieldOwnershipStage — structure', () => {
-    it('renders both section headings', () => {
-        render(<FieldOwnershipStage ctx={buildCtx()} />);
-        expect(screen.getByText('Workflow structure')).toBeTruthy();
-        expect(screen.getByText('Secrets & fill mode')).toBeTruthy();
-    });
-
     it('renders the step heading', () => {
         render(<FieldOwnershipStage ctx={buildCtx()} />);
         expect(screen.getByText('Field Ownership Required')).toBeTruthy();
     });
 
-    it('shows the empty state for a section with no groups', () => {
-        render(<FieldOwnershipStage ctx={buildCtx({ structuralByNode: [], secretsByNode: [] })} />);
-        expect(screen.getAllByText('No fields in this category for this workflow.').length).toBe(2);
+    it('no longer splits the step into structural and secrets sections (Phase A)', () => {
+        render(<FieldOwnershipStage ctx={buildCtx()} />);
+        expect(screen.queryByText('Workflow structure')).toBeNull();
+        expect(screen.queryByText('Secrets & fill mode')).toBeNull();
     });
 
-    it('renders one card per node, with each field under its own node', () => {
-        const ctx = buildCtx({
-            structuralByNode: [
+    it('shows one empty state when there are no nodes', () => {
+        render(<FieldOwnershipStage ctx={buildCtx({ nodesInOrder: [] })} />);
+        expect(screen.getAllByText('No fields to review for this workflow.').length).toBe(1);
+    });
+
+    /**
+     * Phase B. Every node used to render at once, so reaching the last step meant scrolling
+     * past every field of every earlier one. The detail pane shows the selected node only;
+     * the rail keeps the whole workflow visible so nothing is hidden by the selection.
+     */
+    const twoNodeCtx = () =>
+        buildCtx({
+            nodesInOrder: [
                 makeGroup({
                     nodeId: 'node1',
                     nodeLabel: 'Google Sheets',
@@ -194,25 +198,59 @@ describe('FieldOwnershipStage — structure', () => {
                 }),
             ],
         });
-        render(<FieldOwnershipStage ctx={ctx} />);
+
+    it('shows one node at a time, not every node at once', () => {
+        const { container } = render(<FieldOwnershipStage ctx={twoNodeCtx()} />);
+        expect(container.querySelectorAll('[id^="fo-card-"]').length).toBe(1);
         expect(screen.getByText('Spreadsheet ID')).toBeTruthy();
-        expect(screen.getByText('Channel')).toBeTruthy();
-        // node type subtitle appears on each card
-        expect(screen.getByText('google_sheets')).toBeTruthy();
-        expect(screen.getByText('slack')).toBeTruthy();
+        expect(screen.queryByText('Channel')).toBeNull();
     });
 
-    it('keeps structural and secret questions in their own sections', () => {
+    it('swaps the detail pane when another step is selected in the rail', () => {
+        render(<FieldOwnershipStage ctx={twoNodeCtx()} />);
+        const rail = screen.getByLabelText('Workflow steps');
+        fireEvent.click(within(rail).getByText('Slack'));
+
+        expect(screen.getByText('Channel')).toBeTruthy();
+        expect(screen.queryByText('Spreadsheet ID')).toBeNull();
+    });
+
+    it('lets the user reach any step directly, in any order', () => {
+        // Free navigation, deliberately: forcing the sequence blocks someone who only wants
+        // to correct a later step.
+        render(<FieldOwnershipStage ctx={twoNodeCtx()} />);
+        const rail = screen.getByLabelText('Workflow steps');
+
+        fireEvent.click(within(rail).getByText('Slack'));
+        expect(screen.getByText('Channel')).toBeTruthy();
+        fireEvent.click(within(rail).getByText('Google Sheets'));
+        expect(screen.getByText('Spreadsheet ID')).toBeTruthy();
+    });
+
+    it('marks the selected step in the rail for assistive tech', () => {
+        render(<FieldOwnershipStage ctx={twoNodeCtx()} />);
+        const rail = screen.getByLabelText('Workflow steps');
+        const [first, second] = within(rail).getAllByRole('button');
+        expect(first.getAttribute('aria-current')).toBe('step');
+        expect(second.getAttribute('aria-current')).toBeNull();
+    });
+
+    /**
+     * Phase A acceptance (plan RC-1). Before the collapse, a node holding both a
+     * structural field and a secret was filtered into `structuralByNode` AND
+     * `secretsByNode`, so it rendered as two cards and two rail entries — the observed
+     * "Form Trigger #1 … Form Trigger #6", 13 entries for 7 nodes. The whole point of
+     * the phase is that this node now appears exactly once.
+     */
+    it('renders one card holding both the structural and the secret field of a node', () => {
         const ctx = buildCtx({
-            structuralByNode: [makeGroup({ fields: [makeQuestion({ id: 'q1', text: 'Structural Field' })] })],
-            secretsByNode: [
+            nodesInOrder: [
                 makeGroup({
-                    nodeId: 'node9',
-                    nodeLabel: 'Api Node',
                     fields: [
+                        makeQuestion({ id: 'q1', text: 'Structural Field' }),
                         makeQuestion({
-                            id: 'q9',
-                            nodeId: 'node9',
+                            id: 'q2',
+                            fieldName: 'apiKey',
                             text: 'Secret Field',
                             ownershipClass: 'credential',
                         }),
@@ -220,9 +258,149 @@ describe('FieldOwnershipStage — structure', () => {
                 }),
             ],
         });
-        render(<FieldOwnershipStage ctx={ctx} />);
-        expect(screen.getByText('Structural Field')).toBeTruthy();
-        expect(screen.getByText('Secret Field')).toBeTruthy();
+        const { container } = render(<FieldOwnershipStage ctx={ctx} />);
+
+        // One card, carrying both fields.
+        const cards = container.querySelectorAll('[id^="fo-card-"]');
+        expect(cards.length).toBe(1);
+        expect(within(cards[0] as HTMLElement).getByText('Structural Field')).toBeTruthy();
+        expect(within(cards[0] as HTMLElement).getByText('Secret Field')).toBeTruthy();
+
+        // ...and one rail entry for it. `getByText` throws on multiple matches, so this also
+        // asserts the label is not listed twice.
+        const rail = screen.getByLabelText('Workflow steps');
+        expect(within(rail).getAllByRole('listitem').length).toBe(1);
+        expect(within(rail).getByText('Google Sheets')).toBeTruthy();
+    });
+
+    it('lists the rail in execution order, and opens on the first step', () => {
+        const ctx = buildCtx({
+            nodesInOrder: [
+                makeGroup({ nodeId: 'trigger1', nodeLabel: 'Form Trigger', nodeType: 'form_trigger' }),
+                makeGroup({ nodeId: 'switch1', nodeLabel: 'Switch', nodeType: 'switch' }),
+                makeGroup({ nodeId: 'gmail1', nodeLabel: 'Gmail', nodeType: 'gmail' }),
+            ],
+        });
+        const { container } = render(<FieldOwnershipStage ctx={ctx} />);
+
+        const rail = screen.getByLabelText('Workflow steps');
+        const railLabels = within(rail)
+            .getAllByRole('listitem')
+            .map((li) => within(li).getByText(/Form Trigger|Switch|Gmail/).textContent);
+        expect(railLabels).toEqual(['Form Trigger', 'Switch', 'Gmail']);
+
+        expect(container.querySelector('#fo-card-trigger1')).toBeTruthy();
+        expect(container.querySelectorAll('[id^="fo-card-"]').length).toBe(1);
+    });
+
+    it('opens on the first step that is still missing something', () => {
+        const ctx = buildCtx({
+            nodesInOrder: [
+                makeGroup({ nodeId: 'trigger1', nodeLabel: 'Form Trigger', nodeType: 'form_trigger' }),
+                makeGroup({ nodeId: 'gmail1', nodeLabel: 'Gmail', nodeType: 'gmail' }),
+            ],
+            incompleteNodes: [
+                { nodeId: 'gmail1', nodeLabel: 'Gmail', missingLabels: ['Recipient Emails'] },
+            ],
+        });
+        const { container } = render(<FieldOwnershipStage ctx={ctx} />);
+        // Opens on work, not on whatever happens to be first in the graph.
+        expect(container.querySelector('#fo-card-gmail1')).toBeTruthy();
+    });
+});
+
+/**
+ * Phase E (plan RC-7). The reported symptom was the step heading being clipped by the
+ * wizard's fixed header once the user scrolled down to reach a later node: the step was
+ * ordinary paged content, so everything above the current node scrolled away with it.
+ *
+ * The fix hands the step a definite height and gives each pane its own scrollport, copying
+ * `CapabilityStage`. These assert the class chain that produces that, because it is the
+ * whole mechanism — jsdom computes no layout, so there is nothing else to measure here.
+ */
+describe('FieldOwnershipStage — layout (Phase E)', () => {
+    const rootOf = (container: HTMLElement) => container.firstElementChild as HTMLElement;
+
+    it('claims the full content height instead of scrolling as a page', () => {
+        const { container } = render(<FieldOwnershipStage ctx={buildCtx()} />);
+        const root = rootOf(container);
+        expect(root.className).toContain('lg:h-full');
+        expect(root.className).toContain('lg:min-h-0');
+        // Reserves the pinned action bar's footprint so the last card never sits under it.
+        expect(root.className).toContain('pb-20');
+    });
+
+    it('gives the rail and the card list each their own scrollport', () => {
+        const { container } = render(<FieldOwnershipStage ctx={buildCtx()} />);
+        const rail = screen.getByLabelText('Workflow steps');
+        expect(rail.className).toContain('lg:overflow-y-auto');
+        expect(rail.className).toContain('lg:min-h-0');
+        // `lg:sticky` only works while the page itself scrolls — the wrong mechanism now.
+        expect(rail.className).not.toContain('lg:sticky');
+
+        const cardPane = screen.getByTestId('ownership-cards-pane');
+        expect(cardPane.className).toContain('lg:overflow-y-auto');
+        expect(cardPane.className).toContain('lg:min-h-0');
+        expect(cardPane.contains(container.querySelector('[id^="fo-card-"]'))).toBe(true);
+    });
+
+    it('never sizes a pane from a viewport guess or a min-height floor', () => {
+        // Both were tried on the node-selection screen and both failed; height must come
+        // from the parent flex chain. A regression here reintroduces a second scrollbar.
+        const { container } = render(<FieldOwnershipStage ctx={buildCtx()} />);
+        expect(container.innerHTML).not.toContain('calc(100vh');
+        expect(container.querySelector('[class*="lg:min-h-["]')).toBeNull();
+    });
+
+    it('pins the build action to the viewport so it is reachable from either pane', () => {
+        const { container } = render(<FieldOwnershipStage ctx={buildCtx()} />);
+        const bar = container.querySelector('.fixed.bottom-0') as HTMLElement;
+        expect(bar).toBeTruthy();
+        expect(within(bar).getByRole('button', { name: 'Build Workflow' })).toBeTruthy();
+    });
+
+    /**
+     * Reported regression: hovering the step made the action bar jump from the bottom of the
+     * window into the middle of the card.
+     *
+     * Cause: `position: fixed` resolves against the viewport only while no ancestor is
+     * transformed — a transformed ancestor becomes the containing block instead. The step was
+     * wrapped in the shared `Card`, which carries `motion-safe:hover:scale-[1.02]`
+     * (ui/card.tsx), so hovering anywhere in it re-anchored the nested bar to the card's own
+     * bottom edge. The wrapper is gone; this guards the invariant that outlived it.
+     */
+    it('keeps the pinned bar clear of any ancestor that hover-transforms', () => {
+        const { container } = render(<FieldOwnershipStage ctx={buildCtx()} />);
+        const root = container.firstElementChild as HTMLElement;
+        const bar = container.querySelector('.fixed.bottom-0') as HTMLElement;
+
+        expect(bar.parentElement).toBe(root);
+        for (let el = bar.parentElement; el && el !== container; el = el.parentElement) {
+            expect(String(el.className)).not.toMatch(/hover:scale-/);
+        }
+    });
+
+    /**
+     * The step is a full-height working surface, so it is built from a plain flex column like
+     * node selection. A `Card` wrapper costs a `p-6` header plus a `p-6` content box inside
+     * the wizard's own `p-6` — roughly a third of the working height in chrome — and its
+     * hover zoom is what re-anchored the pinned bar above.
+     */
+    it('uses no Card wrapper, matching the node-selection screen', () => {
+        const { container } = render(<FieldOwnershipStage ctx={buildCtx()} />);
+        expect(container.querySelector('.card-class')).toBeNull();
+
+        const root = container.firstElementChild as HTMLElement;
+        expect(root.className).toContain('flex');
+        expect(root.className).toContain('flex-col');
+    });
+
+    it('lays the panes out on the same grid track as node selection', () => {
+        const { container } = render(<FieldOwnershipStage ctx={buildCtx()} />);
+        const grid = screen.getByTestId('ownership-cards-pane').parentElement as HTMLElement;
+        expect(grid.className).toContain('lg:grid-cols-[340px_1fr]');
+        // The rail takes its width from that track, never from its own `w-[…]`.
+        expect(String(screen.getByLabelText('Workflow steps').className)).not.toMatch(/w-\[/);
     });
 });
 
@@ -264,12 +442,113 @@ describe('FieldOwnershipStage — build action (Phase 5)', () => {
     });
 });
 
+/**
+ * Completeness gate. "Ready" means every field required by the operation a node is actually
+ * set to has a value — resolved server-side from the node's live config, so it follows the
+ * operation and needs no per-node-type knowledge here.
+ *
+ * Deliberately NOT a test-run gate: the user asked for "is everything filled in?", and a
+ * hard test-run requirement traps workflows containing nodes that cannot be safely run.
+ */
+describe('FieldOwnershipStage — completeness gate', () => {
+    const incompleteCtx = () =>
+        buildCtx({
+            nodesInOrder: [
+                makeGroup({ nodeId: 'gmail1', nodeLabel: 'Gmail', nodeType: 'gmail' }),
+                makeGroup({ nodeId: 'slack1', nodeLabel: 'Slack', nodeType: 'slack' }),
+            ],
+            outstandingByNodeId: { gmail1: 2, slack1: 0 },
+            incompleteNodes: [
+                { nodeId: 'gmail1', nodeLabel: 'Gmail', missingLabels: ['Subject', 'Body'] },
+            ],
+        });
+
+    it('blocks the build while any step is missing a required value', () => {
+        render(<FieldOwnershipStage ctx={incompleteCtx()} />);
+        const build = screen.getByRole('button', { name: 'Build Workflow' });
+        expect(build.hasAttribute('disabled')).toBe(true);
+        // Never a dead button — it names the step responsible.
+        expect(build.getAttribute('title')).toContain('Gmail');
+    });
+
+    it('allows the build once every step has what its operation needs', () => {
+        const ctx = buildCtx({
+            nodesInOrder: [makeGroup({ nodeId: 'gmail1', nodeLabel: 'Gmail' })],
+            outstandingByNodeId: { gmail1: 0 },
+            incompleteNodes: [],
+        });
+        render(<FieldOwnershipStage ctx={ctx} />);
+        expect(
+            screen.getByRole('button', { name: 'Build Workflow' }).hasAttribute('disabled')
+        ).toBe(false);
+        expect(screen.getByTestId('ownership-ready-notice')).toBeTruthy();
+    });
+
+    it('keeps the build blocked when the wizard still reports outstanding fields', () => {
+        // Both signals gate. Claiming "every step has what it needs" beside a dead button
+        // would be worse than saying nothing.
+        const ctx = buildCtx({ incompleteNodes: [], outstandingCount: 2 });
+        render(<FieldOwnershipStage ctx={ctx} />);
+        expect(
+            screen.getByRole('button', { name: 'Build Workflow' }).hasAttribute('disabled')
+        ).toBe(true);
+        expect(screen.queryByTestId('ownership-ready-notice')).toBeNull();
+        expect(screen.getByTestId('ownership-outstanding-notice').textContent).toContain(
+            '2 fields still need a value.'
+        );
+    });
+
+    it('reports what is missing, per step, when the user checks', () => {
+        render(<FieldOwnershipStage ctx={incompleteCtx()} />);
+        fireEvent.click(screen.getByTestId('ownership-check-button'));
+
+        const report = screen.getByTestId('check-report');
+        expect(within(report).getByText(/2 values are still missing/)).toBeTruthy();
+        expect(within(report).getByText(/Needs Subject, Body/)).toBeTruthy();
+    });
+
+    it('jumps to the step named in the check report', () => {
+        const { container } = render(<FieldOwnershipStage ctx={incompleteCtx()} />);
+        fireEvent.click(screen.getByTestId('ownership-check-button'));
+        fireEvent.click(within(screen.getByTestId('check-report')).getByText('Gmail'));
+
+        expect(screen.queryByTestId('check-report')).toBeNull();
+        expect(container.querySelector('#fo-card-gmail1')).toBeTruthy();
+    });
+
+    it('confirms completeness when the user checks and nothing is missing', () => {
+        const ctx = buildCtx({ incompleteNodes: [], outstandingCount: 0 });
+        render(<FieldOwnershipStage ctx={ctx} />);
+        fireEvent.click(screen.getByTestId('ownership-check-button'));
+        expect(
+            within(screen.getByTestId('check-report')).getByText('Every step has what it needs')
+        ).toBeTruthy();
+    });
+
+    it('counts a step ready from the plan, not from which rows are switched on', () => {
+        // The old heuristic treated a switched-off row as satisfied, so a node could report
+        // Ready with a required field off and empty. The plan is the authority now.
+        const ctx = buildCtx({
+            nodesInOrder: [makeGroup({ nodeId: 'node1', nodeLabel: 'Google Sheets' })],
+            outstandingByNodeId: { node1: 1 },
+            incompleteNodes: [
+                { nodeId: 'node1', nodeLabel: 'Google Sheets', missingLabels: ['Spreadsheet ID'] },
+            ],
+        });
+        render(<FieldOwnershipStage ctx={ctx} />);
+        const rail = screen.getByLabelText('Workflow steps');
+        expect(within(rail).getByText(/Needs input/)).toBeTruthy();
+        expect(within(rail).getByText(/1 to fill/)).toBeTruthy();
+        expect(within(rail).getByText('0 of 1 ready')).toBeTruthy();
+    });
+});
+
 describe('FieldOwnershipStage — walk-through control', () => {
-    it('passes both section groupings to startGlobalWalkThrough', () => {
+    it('walks the one node-ordered list, so the walk order matches the cards', () => {
         const ctx = buildCtx();
         render(<FieldOwnershipStage ctx={ctx} />);
         fireEvent.click(screen.getByText('Walk me through all fields'));
-        expect(ctx.startGlobalWalkThrough).toHaveBeenCalledWith(ctx.structuralByNode, ctx.secretsByNode);
+        expect(ctx.startGlobalWalkThrough).toHaveBeenCalledWith(ctx.nodesInOrder);
     });
 
     it('shows walk progress instead of the idle label while a walk is active', () => {
@@ -288,12 +567,15 @@ describe('FieldOwnershipStage — walk-through control', () => {
 });
 
 describe('NodeOwnershipCard — node description', () => {
-    it('requests the node description with a section-namespaced key', () => {
+    // Phase A dropped the section prefix: one card per node means the node id alone is
+    // already unique, and `desc_structural_x` / `desc_secrets_x` were two cache entries
+    // fetching the same description for the same node.
+    it('requests the node description keyed by node id alone', () => {
         const ctx = buildCtx();
         render(<FieldOwnershipStage ctx={ctx} />);
         fireEvent.click(screen.getByText('What does this node do?'));
         expect(ctx.fetchNodeDescription).toHaveBeenCalledWith(
-            'desc_structural_node1',
+            'desc_node1',
             'google_sheets',
             'Google Sheets',
             'node1'
@@ -303,7 +585,7 @@ describe('NodeOwnershipCard — node description', () => {
     it('renders the description text once it is open', () => {
         const ctx = buildCtx({
             nodeDescriptions: {
-                desc_structural_node1: { loading: false, open: true, text: 'Reads rows from a sheet.' },
+                desc_node1: { loading: false, open: true, text: 'Reads rows from a sheet.' },
             },
         });
         render(<FieldOwnershipStage ctx={ctx} />);
@@ -315,7 +597,7 @@ describe('NodeOwnershipCard — node description', () => {
 describe('FieldOwnershipRow — enable toggle', () => {
     it('defaults to off for a plain field and on for an AI-prefilled one', () => {
         const ctx = buildCtx({
-            structuralByNode: [
+            nodesInOrder: [
                 makeGroup({
                     fields: [
                         makeQuestion({ id: 'q1', text: 'Plain Field' }),
@@ -384,7 +666,7 @@ describe('FieldOwnershipRow — locked rows', () => {
     it('hides the ownership hint on a locked row', () => {
         const ctx = buildCtx({
             fieldEnabledOverrides: { fieldEnabled_node1_spreadsheetId: true },
-            structuralByNode: [
+            nodesInOrder: [
                 makeGroup({ fields: [makeQuestion({ ownershipUiMode: 'locked' })] }),
             ],
         });
@@ -397,7 +679,7 @@ describe('FieldOwnershipRow — locked rows', () => {
         const ctx = buildCtx({
             isCredentialUnlocked: vi.fn(() => true),
             fieldEnabledOverrides: { fieldEnabled_node1_spreadsheetId: true },
-            structuralByNode: [
+            nodesInOrder: [
                 makeGroup({
                     fields: [
                         makeQuestion({ ownershipUiMode: 'locked', isUnlockableCredential: true }),
@@ -412,7 +694,7 @@ describe('FieldOwnershipRow — locked rows', () => {
     it('offers the unlock switch on a locked unlockable credential row', () => {
         const ctx = buildCtx({
             fieldEnabledOverrides: { fieldEnabled_node1_spreadsheetId: true },
-            structuralByNode: [
+            nodesInOrder: [
                 makeGroup({
                     fields: [
                         makeQuestion({ ownershipUiMode: 'locked', isUnlockableCredential: true }),
@@ -493,7 +775,7 @@ describe('CredentialHelpDisclosure', () => {
     const credentialCtx = (overrides: Partial<FieldOwnershipContext> = {}) =>
         buildCtx({
             fieldEnabledOverrides: { fieldEnabled_node1_apiKey: true },
-            structuralByNode: [
+            nodesInOrder: [
                 makeGroup({
                     fields: [
                         makeQuestion({
@@ -548,10 +830,10 @@ describe('CredentialHelpDisclosure', () => {
 });
 
 describe('NodeChecklistRail (Phase 1)', () => {
-    it('lists every node from both sections, in order', () => {
+    it('lists every node once, in order', () => {
         const ctx = buildCtx({
-            structuralByNode: [makeGroup({ nodeId: 'node1', nodeLabel: 'Google Sheets' })],
-            secretsByNode: [
+            nodesInOrder: [
+                makeGroup({ nodeId: 'node1', nodeLabel: 'Google Sheets' }),
                 makeGroup({
                     nodeId: 'node2',
                     nodeLabel: 'Slack',
@@ -568,7 +850,7 @@ describe('NodeChecklistRail (Phase 1)', () => {
     });
 
     it('renders nothing when there are no nodes', () => {
-        render(<FieldOwnershipStage ctx={buildCtx({ structuralByNode: [], secretsByNode: [] })} />);
+        render(<FieldOwnershipStage ctx={buildCtx({ nodesInOrder: [] })} />);
         expect(screen.queryByLabelText('Workflow steps')).toBeNull();
     });
 
@@ -585,7 +867,7 @@ describe('NodeChecklistRail (Phase 1)', () => {
     it('counts a node as ready once its enabled field has a value', () => {
         const ctx = buildCtx({
             fieldEnabledOverrides: { fieldEnabled_node1_spreadsheetId: true },
-            structuralByNode: [
+            nodesInOrder: [
                 makeGroup({ fields: [makeQuestion({ defaultValue: 'sheet-abc' })] }),
             ],
         });
@@ -607,7 +889,7 @@ describe('NodeChecklistRail (Phase 1)', () => {
     it('treats a locked row as satisfied', () => {
         const ctx = buildCtx({
             fieldEnabledOverrides: { fieldEnabled_node1_spreadsheetId: true },
-            structuralByNode: [
+            nodesInOrder: [
                 makeGroup({ fields: [makeQuestion({ ownershipUiMode: 'locked' })] }),
             ],
         });
@@ -618,13 +900,13 @@ describe('NodeChecklistRail (Phase 1)', () => {
     it('shows a node with everything switched off as waiting, not ready', () => {
         render(<FieldOwnershipStage ctx={buildCtx()} />);
         const rail = screen.getByLabelText('Workflow steps');
-        expect(within(rail).getByText('Waiting')).toBeTruthy();
+        expect(within(rail).getByText('Not started')).toBeTruthy();
         expect(within(rail).getByText('0 of 1 ready')).toBeTruthy();
     });
 
     it('carries no group counts yet (deferred to Phase 3 per G9)', () => {
         const ctx = buildCtx({
-            structuralByNode: [
+            nodesInOrder: [
                 makeGroup({
                     fields: [
                         makeQuestion({ id: 'q1' }),
@@ -643,7 +925,7 @@ describe('NodeChecklistRail (Phase 1)', () => {
 
     it('gives each node card the id its rail entry scrolls to', () => {
         const { container } = render(<FieldOwnershipStage ctx={buildCtx()} />);
-        expect(container.querySelector('#fo-card-structural_node1')).toBeTruthy();
+        expect(container.querySelector('#fo-card-node1')).toBeTruthy();
     });
 });
 
@@ -686,57 +968,40 @@ describe('Field grouping (Phase 3)', () => {
     });
 
     it('renders rows flat when no plan has loaded', () => {
-        render(<FieldOwnershipStage ctx={buildCtx({ structuralByNode: [threeFieldGroup] })} />);
+        render(<FieldOwnershipStage ctx={buildCtx({ nodesInOrder: [threeFieldGroup] })} />);
         expect(screen.getByText('Spreadsheet ID')).toBeTruthy();
         expect(screen.queryByText('You provide')).toBeNull();
     });
 
-    it('renders accordions once the plan partitions the fields', () => {
-        const ctx = buildCtx({
-            structuralByNode: [threeFieldGroup],
-            fieldPlan: planWith({
-                required: [field('spreadsheetId', 'Spreadsheet ID'), field('range', 'Range')],
-                credential: [field('apiKey', 'API Key')],
-            }) as never,
-        });
-        render(<FieldOwnershipStage ctx={ctx} />);
-        expect(screen.getByText('You provide')).toBeTruthy();
-        expect(screen.getByText('Connection')).toBeTruthy();
-    });
+    /**
+     * Three sections, always all three, in a fixed order.
+     *
+     * The server returns five buckets; five headings per node is more taxonomy than someone
+     * reviewing a workflow needs. These three are the three questions actually being asked:
+     * did the AI get this right, what must I provide, and what can I ignore.
+     */
+    const SECTIONS = ['AI built — review these', 'Recommended — you provide these', 'Optional'];
 
-    it('expands exactly one group by default and collapses the rest', () => {
+    it('renders the same three sections, in the same order, on every node', () => {
         const ctx = buildCtx({
-            structuralByNode: [threeFieldGroup],
-            fieldPlan: planWith({
-                required: [field('spreadsheetId', 'Spreadsheet ID'), field('range', 'Range')],
-                credential: [field('apiKey', 'API Key')],
-            }) as never,
-        });
-        render(<FieldOwnershipStage ctx={ctx} />);
-        // 'required' -> "You provide" is first in priority order, so it opens.
-        expect(screen.getByText('Spreadsheet ID')).toBeTruthy();
-        expect(screen.queryByText('API Key')).toBeNull();
-    });
-
-    it('opens a collapsed group when its header is clicked', () => {
-        const ctx = buildCtx({
-            structuralByNode: [threeFieldGroup],
+            nodesInOrder: [threeFieldGroup],
             fieldPlan: planWith({
                 required: [field('spreadsheetId', 'Spreadsheet ID')],
                 credential: [field('apiKey', 'API Key')],
             }) as never,
         });
         render(<FieldOwnershipStage ctx={ctx} />);
-        expect(screen.queryByText('API Key')).toBeNull();
-        fireEvent.click(screen.getByText('Connection'));
-        expect(screen.getByText('API Key')).toBeTruthy();
+        const headings = screen
+            .getAllByText(new RegExp(SECTIONS.join('|')))
+            .map((el) => el.textContent);
+        expect(headings).toEqual(SECTIONS);
     });
 
-    it('skips accordion chrome when every field lands in one group', () => {
-        // Measured failure mode: http_request / code put everything in `required`,
-        // where an accordion is a click with no clarity.
+    it('keeps all three sections even when one has nothing in it', () => {
+        // A node card must be the same shape on every step, so the user learns one layout
+        // instead of re-reading each node's structure.
         const ctx = buildCtx({
-            structuralByNode: [threeFieldGroup],
+            nodesInOrder: [threeFieldGroup],
             fieldPlan: planWith({
                 required: [
                     field('spreadsheetId', 'Spreadsheet ID'),
@@ -746,27 +1011,192 @@ describe('Field grouping (Phase 3)', () => {
             }) as never,
         });
         render(<FieldOwnershipStage ctx={ctx} />);
-        expect(screen.queryByText('You provide')).toBeNull();
-        expect(screen.getByText('Spreadsheet ID')).toBeTruthy();
+        for (const heading of SECTIONS) expect(screen.getByText(heading)).toBeTruthy();
+    });
+
+    it('folds connections into "You provide" rather than a section of their own', () => {
+        // Connecting an account is something the user must do for the step to run — the same
+        // question that section asks.
+        const ctx = buildCtx({
+            nodesInOrder: [threeFieldGroup],
+            fieldPlan: planWith({
+                credential: [field('apiKey', 'API Key')],
+            }) as never,
+        });
+        render(<FieldOwnershipStage ctx={ctx} />);
+        expect(screen.queryByText('Connection')).toBeNull();
         expect(screen.getByText('API Key')).toBeTruthy();
     });
 
-    it('still renders a question the plan did not classify', () => {
+    /** Which section is open, read off the headers rather than guessed from content. */
+    const openSection = () =>
+        screen
+            .getAllByRole('button')
+            .filter((b) => b.getAttribute('aria-expanded') === 'true')
+            .map((b) => b.textContent?.replace(/\d+$/, '').trim())
+            .find((label) => SECTIONS.some((s) => label?.startsWith(s)));
+
+    it('opens on what the user must provide when something is missing', () => {
         const ctx = buildCtx({
-            structuralByNode: [threeFieldGroup],
+            nodesInOrder: [threeFieldGroup],
+            fieldPlan: planWith({
+                aiFilled: [{ ...field('range', 'Range'), hasValue: true }],
+                required: [field('spreadsheetId', 'Spreadsheet ID')],
+            }) as never,
+        });
+        render(<FieldOwnershipStage ctx={ctx} />);
+        expect(openSection()).toBe('Recommended — you provide these');
+    });
+
+    it('opens on the AI’s work to review when nothing is missing', () => {
+        const ctx = buildCtx({
+            nodesInOrder: [threeFieldGroup],
+            fieldPlan: planWith({
+                aiFilled: [{ ...field('range', 'Range'), hasValue: true }],
+                required: [{ ...field('spreadsheetId', 'Spreadsheet ID'), hasValue: true }],
+            }) as never,
+        });
+        render(<FieldOwnershipStage ctx={ctx} />);
+        expect(openSection()).toBe('AI built — review these');
+    });
+
+    it('opens a collapsed section when its header is clicked', () => {
+        const ctx = buildCtx({
+            nodesInOrder: [threeFieldGroup],
+            fieldPlan: planWith({
+                required: [field('spreadsheetId', 'Spreadsheet ID')],
+                // `required: false` is what makes it genuinely optional — a field flagged
+                // required is Recommended whichever bucket the server filed it under.
+                optional: [{ ...field('apiKey', 'API Key'), required: false }],
+            }) as never,
+        });
+        render(<FieldOwnershipStage ctx={ctx} />);
+        expect(screen.queryByText('API Key')).toBeNull();
+        fireEvent.click(screen.getByText('Optional'));
+        expect(screen.getByText('API Key')).toBeTruthy();
+    });
+
+    /**
+     * A question the plan did not classify is a field the node's chosen operation does not
+     * use — the server returns `activeFields` only. Those belong in Optional: available, not
+     * needed. They used to get a fourth section of their own, which made the card's shape
+     * depend on the operation and, when a plan came back empty, became the bucket that
+     * quietly swallowed every field on the node.
+     */
+    it('puts a field the operation does not use into Optional, not a section of its own', () => {
+        const ctx = buildCtx({
+            nodesInOrder: [threeFieldGroup],
             fieldPlan: planWith({
                 required: [field('spreadsheetId', 'Spreadsheet ID')],
                 optional: [field('range', 'Range')],
             }) as never,
         });
         render(<FieldOwnershipStage ctx={ctx} />);
-        // apiKey is absent from every group but must not vanish from the UI.
+
+        expect(screen.queryByText('Not used by this operation')).toBeNull();
+        expect(screen.queryByText('API Key')).toBeNull();
+        fireEvent.click(screen.getByText('Optional'));
+        // apiKey is in no plan group at all, yet it is reachable under Optional.
         expect(screen.getByText('API Key')).toBeTruthy();
+    });
+
+    /**
+     * The grouping rule, stated as a test.
+     *
+     * Sections follow whether a field HAS a value, not how it was meant to be filled. A field
+     * build-time AI was supposed to fill but left empty is exactly the one a user would
+     * otherwise miss, so it belongs under Recommended where they will act on it — not under
+     * "AI built" beside values that really were produced.
+     */
+    it('files an AI field the AI actually filled under AI built', () => {
+        const ctx = buildCtx({
+            nodesInOrder: [threeFieldGroup],
+            fieldPlan: planWith({
+                aiFilled: [
+                    { ...field('range', 'Range'), hasValue: true, fillMode: 'buildtime_ai_once' },
+                ],
+            }) as never,
+        });
+        render(<FieldOwnershipStage ctx={ctx} />);
+        expect(openSection()).toBe('AI built — review these');
+        expect(screen.getByText('Range')).toBeTruthy();
+    });
+
+    it('files an AI field the AI left empty under Recommended', () => {
+        const ctx = buildCtx({
+            nodesInOrder: [threeFieldGroup],
+            fieldPlan: planWith({
+                aiFilled: [
+                    { ...field('range', 'Range'), hasValue: false, fillMode: 'buildtime_ai_once' },
+                ],
+            }) as never,
+        });
+        render(<FieldOwnershipStage ctx={ctx} />);
+        // Asserted via the open section: the label also appears in the card's
+        // "still needed" banner, which is the same fact stated twice.
+        expect(openSection()).toBe('Recommended — you provide these');
+    });
+
+    it('leaves a runtime-AI field under AI built even with no value yet', () => {
+        // Empty by design — the value arrives at run time, so it is not the user's to supply.
+        const ctx = buildCtx({
+            nodesInOrder: [threeFieldGroup],
+            fieldPlan: planWith({
+                aiRuntime: [
+                    { ...field('range', 'Range'), hasValue: false, fillMode: 'runtime_ai' },
+                ],
+            }) as never,
+        });
+        render(<FieldOwnershipStage ctx={ctx} />);
+        expect(openSection()).toBe('AI built — review these');
+    });
+
+    /**
+     * The defect that produced "0, 0, 0 plus a fourth bucket holding everything": the plan
+     * could not resolve the node, returned empty groups, and the card said nothing about it
+     * while the endpoint had returned a diagnostic naming the cause.
+     */
+    it('reports a node the plan could not analyse instead of showing empty sections', () => {
+        const plan = planWith({}) as never as { nodes: Array<Record<string, unknown>> };
+        plan.nodes[0].unresolvedNodeType = 'custom';
+        plan.nodes[0].diagnostics = ['Unknown node type "custom" — not in the registry.'];
+
+        const ctx = buildCtx({ nodesInOrder: [threeFieldGroup], fieldPlan: plan as never });
+        render(<FieldOwnershipStage ctx={ctx} />);
+
+        const notice = screen.getByTestId('node-plan-diagnostic');
+        expect(notice.textContent).toContain('custom');
+        // No confident empty headings above an error that contradicts them.
+        expect(screen.queryByText('AI built — review these')).toBeNull();
+        // The fields are still listed, so the step is not a dead end.
+        expect(screen.getByText('Spreadsheet ID')).toBeTruthy();
+    });
+
+    /**
+     * The regression that cost the three sections in the field.
+     *
+     * `diagnostics` also carries informational notes — `generated_runtime_contract` means the
+     * node declared no explicit operation contract so one was derived, which describes a
+     * perfectly healthy node. Gating the error state on `diagnostics.length` made those nodes
+     * render as failures and fall back to a flat list, so a working Form Trigger showed
+     * "This step could not be analysed" and lost its categories.
+     */
+    it('keeps the three sections for a healthy node that carries an informational diagnostic', () => {
+        const plan = planWith({
+            required: [field('spreadsheetId', 'Spreadsheet ID')],
+        }) as never as { nodes: Array<Record<string, unknown>> };
+        plan.nodes[0].diagnostics = ['generated_runtime_contract'];
+
+        const ctx = buildCtx({ nodesInOrder: [threeFieldGroup], fieldPlan: plan as never });
+        render(<FieldOwnershipStage ctx={ctx} />);
+
+        expect(screen.queryByTestId('node-plan-diagnostic')).toBeNull();
+        for (const heading of SECTIONS) expect(screen.getByText(heading)).toBeTruthy();
     });
 
     it('explains where a templated value comes from', () => {
         const ctx = buildCtx({
-            structuralByNode: [threeFieldGroup],
+            nodesInOrder: [threeFieldGroup],
             fieldPlan: planWith({
                 required: [
                     {
@@ -791,7 +1221,7 @@ describe('Field grouping (Phase 3)', () => {
 
     it('offers a connect action for a pipeline-injected node that is unconnected', () => {
         const ctx = buildCtx({
-            structuralByNode: [threeFieldGroup],
+            nodesInOrder: [threeFieldGroup],
             nodeConnections: [
                 {
                     nodeType: 'google_sheets',
@@ -808,13 +1238,118 @@ describe('Field grouping (Phase 3)', () => {
 
     it('shows no connect action when the injected node is connected', () => {
         const ctx = buildCtx({
-            structuralByNode: [threeFieldGroup],
+            nodesInOrder: [threeFieldGroup],
             nodeConnections: [
                 { nodeType: 'google_sheets', nodeLabel: 'Google Sheets', connected: true },
             ] as never,
         });
         render(<FieldOwnershipStage ctx={ctx} />);
         expect(screen.queryByText(/— connect/)).toBeNull();
+    });
+});
+
+describe('NodeOwnershipCard — operation-driven status', () => {
+    const planFor = (
+        groups: Record<string, Array<Record<string, unknown>>>,
+        operation = 'send',
+    ) => ({
+        nodes: [
+            {
+                nodeId: 'node1',
+                nodeType: 'google_sheets',
+                nodeLabel: 'Google Sheets',
+                operation,
+                firstRunClass: null,
+                diagnostics: [],
+                groups: {
+                    required: [],
+                    aiFilled: [],
+                    aiRuntime: [],
+                    optional: [],
+                    credential: [],
+                    ...groups,
+                },
+            },
+        ],
+        summary: { nodeCount: 1, requiredCount: 0, unresolvedReferenceCount: 0 },
+    });
+
+    const req = (fieldName: string, label: string, hasValue: boolean) => ({
+        fieldName,
+        label,
+        required: true,
+        hasValue,
+        fillMode: 'manual_static',
+    });
+
+    it('names the step and the operation it is set to', () => {
+        const ctx = buildCtx({ fieldPlan: planFor({}, 'appendRow') as never });
+        const { container } = render(<FieldOwnershipStage ctx={ctx} />);
+        // The label also appears in the rail and as each row's node prefix, so this asserts
+        // the card's heading specifically — with one node on screen it is the user's sole
+        // "where am I".
+        const card = container.querySelector('#fo-card-node1') as HTMLElement;
+        expect(card.querySelector('p.text-base')?.textContent).toBe('Google Sheets');
+        expect(within(card).getByText(/google_sheets · appendRow/)).toBeTruthy();
+    });
+
+    it('names the fields the chosen operation still needs', () => {
+        const ctx = buildCtx({
+            nodesInOrder: [
+                makeGroup({
+                    fields: [
+                        makeQuestion({ id: 'q1', fieldName: 'spreadsheetId', text: 'Spreadsheet ID' }),
+                        makeQuestion({ id: 'q2', fieldName: 'range', text: 'Range' }),
+                    ],
+                }),
+            ],
+            fieldPlan: planFor({
+                required: [
+                    req('spreadsheetId', 'Spreadsheet ID', false),
+                    req('range', 'Range', true),
+                ],
+            }) as never,
+        });
+        render(<FieldOwnershipStage ctx={ctx} />);
+        const notice = screen.getByTestId('node-missing-required');
+        expect(notice.textContent).toContain('Spreadsheet ID');
+        expect(notice.textContent).not.toContain('Range');
+    });
+
+    it('confirms a step that has everything its operation needs', () => {
+        const ctx = buildCtx({
+            fieldPlan: planFor({
+                required: [req('spreadsheetId', 'Spreadsheet ID', true)],
+            }) as never,
+        });
+        render(<FieldOwnershipStage ctx={ctx} />);
+        expect(screen.getByTestId('node-ready-notice')).toBeTruthy();
+        expect(screen.queryByTestId('node-missing-required')).toBeNull();
+    });
+
+    it('does not hold a step back for a credential or a runtime-AI field', () => {
+        // Secrets are injected at execution time and never live in the workflow JSON, so a
+        // credential's `hasValue` is false even when the account is connected. Runtime-AI
+        // fields are empty by design. Counting either would make the node permanently unready.
+        const ctx = buildCtx({
+            fieldPlan: planFor({
+                credential: [req('apiKey', 'API Key', false)],
+                aiRuntime: [req('range', 'Range', false)],
+            }) as never,
+        });
+        render(<FieldOwnershipStage ctx={ctx} />);
+        expect(screen.getByTestId('node-ready-notice')).toBeTruthy();
+    });
+
+    it('counts a required field the AI failed to fill as still missing', () => {
+        // Routed to `aiFilled` by fill mode, but required and empty is required and empty.
+        const ctx = buildCtx({
+            fieldPlan: planFor({
+                aiFilled: [{ ...req('spreadsheetId', 'Spreadsheet ID', false), fillMode: 'buildtime_ai_once' }],
+            }) as never,
+        });
+        render(<FieldOwnershipStage ctx={ctx} />);
+        expect(screen.getByTestId('node-missing-required').textContent).toContain('Spreadsheet ID');
     });
 });
 

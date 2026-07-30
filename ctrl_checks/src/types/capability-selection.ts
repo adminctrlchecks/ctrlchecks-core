@@ -23,7 +23,18 @@ export interface CandidateNode {
   nodeType: string;
   label: string;
   description: string;
+  /**
+   * Descriptive credential categories. NOT a reliable signal for "does this node need a
+   * credential" — it is empty for many nodes that definitely do (google_sheets, airtable
+   * and slack_message all report `[]`). Use `credentialRequired`.
+   */
   credentialRequirements: string[];
+  /**
+   * Whether this node needs a credential at all, resolved by the same function the
+   * readiness gate uses. Optional so a frontend deployed ahead of the worker still parses;
+   * callers fall back to the presence of a provider.
+   */
+  credentialRequired?: boolean;
   /**
    * Providers this node needs, so the UI can name the service on a connect action
    * ("Google Sheets — connect"). Mirrors CandidateNode in the worker's capability-types.ts.

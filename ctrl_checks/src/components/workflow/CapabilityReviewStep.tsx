@@ -43,8 +43,12 @@ function NodeRow({ node, index }: NodeRowProps) {
     <motion.div
       initial={{ opacity: 0, x: -8 }}
       animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.05, duration: 0.25 }}
-      className="flex items-start gap-3 py-3 border-b last:border-b-0"
+      // Cap the stagger: at 25 nodes a per-index delay would leave the last row blank for
+      // over a second, which reads as the page having failed to load.
+      transition={{ delay: Math.min(index, 8) * 0.04, duration: 0.25 }}
+      // Self-contained bordered row rather than a `border-b` divider list: the steps flow
+      // into multiple columns on wide screens, where a shared bottom border would misalign.
+      className="flex items-start gap-3 rounded-lg border border-border/60 bg-background/60 p-3"
     >
       {/* Step number */}
       <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-semibold mt-0.5">
@@ -117,7 +121,11 @@ export function CapabilityReviewStep({
     });
 
   return (
-    <div className="w-full max-w-3xl mx-auto space-y-4 pb-24">
+    // Full width rather than a centred column, and stacked rather than split: the summary
+    // is prose, and squeezing it into half the width made it a narrow ribbon that had to be
+    // scrolled inside its own box to read. Full-bleed it fits in a few lines, and the step
+    // list — which is short rows, not prose — reads fine underneath it.
+    <div className="w-full space-y-4 pb-24">
       {/* Header */}
       <div className="space-y-1">
         <h2 className="text-xl font-semibold">Review your workflow</h2>
@@ -129,7 +137,9 @@ export function CapabilityReviewStep({
         </p>
       </div>
 
-      {/* Workflow summary — structured AI-generated blueprint */}
+      {/* Workflow summary — structured AI-generated blueprint. Full width, above the steps.
+          No height cap or inner scroll: at this width it is short enough to read in place,
+          and a nested scrollbar only hid the end of it. */}
       <Card className="border-border/80">
         <CardHeader className="pb-2">
           <div className="flex items-center gap-2">
@@ -181,13 +191,33 @@ export function CapabilityReviewStep({
       {nodes.length > 0 && (
         <Card className="border-border/80">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Execution steps</CardTitle>
-            <CardDescription className="text-sm">Nodes will run in this order.</CardDescription>
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <CardTitle className="text-base">Execution steps</CardTitle>
+                <CardDescription className="text-sm">Nodes will run in this order.</CardDescription>
+              </div>
+              <Badge variant="outline" className="shrink-0 text-xs">
+                {nodes.length} {nodes.length === 1 ? 'step' : 'steps'}
+              </Badge>
+            </div>
           </CardHeader>
           <CardContent className="pt-0">
-            {nodes.map((node, index) => (
-              <NodeRow key={node?.id ?? index} node={node} index={index} />
-            ))}
+            {/* Now that the card spans the full width, split into columns much sooner —
+                otherwise a handful of short rows would leave most of the width blank.
+                Rows fill left-to-right then wrap; the step numbers carry the order.
+                Short workflows stay in one column rather than being stretched into a
+                sparse grid. */}
+            <div
+              className={[
+                'grid gap-2',
+                nodes.length > 3 ? 'md:grid-cols-2' : '',
+                nodes.length > 8 ? 'xl:grid-cols-3' : '',
+              ].join(' ')}
+            >
+              {nodes.map((node, index) => (
+                <NodeRow key={node?.id ?? index} node={node} index={index} />
+              ))}
+            </div>
           </CardContent>
         </Card>
       )}

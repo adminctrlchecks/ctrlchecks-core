@@ -105,7 +105,10 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H "$SERVER_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          # Best-effort only: the scp/ssh steps below pass -o StrictHostKeyChecking=no,
+          # so known_hosts is not required. Without `|| true` a keyscan timeout (5s
+          # default) aborts this step under `bash -e` and masks the real failure.
+          ssh-keyscan -T 10 -H "$SERVER_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Upload package to server
         run: |

@@ -4,9 +4,11 @@
  */
 export interface BlueprintPanelProps {
     pendingWorkflowData: any;
+    /** Layout classes from the caller — the panel does not know its own height budget. */
+    className?: string;
 }
 
-export function BlueprintPanel({ pendingWorkflowData }: BlueprintPanelProps) {
+export function BlueprintPanel({ pendingWorkflowData, className = '' }: BlueprintPanelProps) {
     const update = pendingWorkflowData?.update;
     const blueprint = update?.structuralBlueprint;
     const structuralDiagnostics = update?.structuralDiagnostics;
@@ -29,7 +31,7 @@ export function BlueprintPanel({ pendingWorkflowData }: BlueprintPanelProps) {
             : [];
 
     return (
-        <div className="rounded border border-indigo-400/30 bg-indigo-500/5 p-4 space-y-3">
+        <div className={`rounded border border-indigo-400/30 bg-indigo-500/5 p-4 space-y-3 ${className}`}>
             <p className="text-sm font-semibold text-indigo-300">
                 Workflow Blueprint
             </p>

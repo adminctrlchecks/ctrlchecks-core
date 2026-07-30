@@ -84,7 +84,7 @@ export function overrideInstagram(
     },
     inputSchema: {
       resource: field({ type: 'string', description: 'Instagram resource', required: true, default: 'message', examples: ['message', 'media', 'comment', 'user', 'insights', 'hashtag'] }, structuralBuildtime, 'config', 'structural'),
-      operation: field({ type: 'string', description: 'Instagram operation', required: true, default: 'sendText', examples: operationOptions.map((option) => option.value), ui: { options: operationOptions } }, structuralBuildtime, 'config', 'structural'),
+      operation: field({ type: 'string', description: 'Instagram operation', required: true, default: 'sendText', examples: operationOptions.map((option) => option.value), ui: { options: operationOptions } }, structuralBuildtime, 'operation_selector', 'structural'),
       instagramBusinessAccountId: field({ type: 'string', description: 'Instagram Business Account ID (auto-resolved if absent)', required: false }, manualStatic, 'id'),
       recipientId: field({ type: 'string', description: 'Recipient user ID for DMs', required: false }, buildtime, 'recipient'),
       text: field({ type: 'string', description: 'Message text', required: false }, buildtime, 'long_body'),

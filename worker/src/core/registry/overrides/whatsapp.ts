@@ -79,7 +79,7 @@ export function overrideWhatsapp(
     },
     inputSchema: {
       resource: field({ type: 'string', description: 'WhatsApp resource', required: true, default: 'message', examples: ['message', 'contact', 'conversation', 'template', 'campaign', 'aiAgent'] }, structuralBuildtime, 'config', 'structural'),
-      operation: field({ type: 'string', description: 'WhatsApp operation', required: true, default: 'sendText', examples: operationOptions.map((option) => option.value), ui: { options: operationOptions } }, structuralBuildtime, 'config', 'structural'),
+      operation: field({ type: 'string', description: 'WhatsApp operation', required: true, default: 'sendText', examples: operationOptions.map((option) => option.value), ui: { options: operationOptions } }, structuralBuildtime, 'operation_selector', 'structural'),
       phoneNumberId: field({ type: 'string', description: 'WhatsApp Phone Number ID (auto-resolved if absent)', required: false }, manualStatic, 'id'),
       businessAccountId: field({ type: 'string', description: 'WhatsApp Business Account ID (auto-resolved if absent)', required: false }, manualStatic, 'id'),
       to: field({ type: 'string', description: 'Recipient phone number in E.164 format', required: false }, buildtime, 'recipient'),

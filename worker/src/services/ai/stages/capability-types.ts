@@ -66,11 +66,27 @@ export interface CandidateNode {
   label: string;
   /** From unifiedNodeRegistry.get(nodeType).description */
   description: string;
-  /** From unifiedNodeRegistry.getRequiredCredentials(nodeType) */
+  /**
+   * Descriptive credential categories from unifiedNodeRegistry.getRequiredCredentials().
+   *
+   * NOT a reliable signal for "does this node need a credential" — it is empty for many
+   * nodes that definitely do (google_sheets, airtable, slack_message all report `[]`).
+   * Use `credentialRequired` for that question.
+   */
   credentialRequirements: string[];
   /**
+   * Whether this node needs a credential at all, from `credentialRequirementForNode` —
+   * the same resolver the authoritative readiness gate uses.
+   *
+   * Exists because `credentialRequirements.length` cannot answer it: Google Sheets and
+   * Manual Trigger both report an empty array, so measuring it rendered Google Sheets as
+   * "No setup needed".
+   */
+  credentialRequired: boolean;
+  /**
    * Providers this node needs, so the UI can name the service on a connect action
-   * ("Google Sheets — connect"). Derived from the same registry requirements.
+   * ("Google Sheets — connect"). From the same resolver as `credentialRequired`, so a
+   * connection made against it actually satisfies the gate.
    */
   credentialProviders?: string[];
   /**

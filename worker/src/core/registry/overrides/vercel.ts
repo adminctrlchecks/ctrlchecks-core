@@ -21,11 +21,14 @@ export function overrideVercel(
           ...def.inputSchema.operation,
           ownership: 'structural' as const,
           fillMode: {
-            default: 'manual_static' as const,
+            // Build-time AI, not manual: the operation follows from the user's intent and
+            // decides which fields below are required. The user revalidates it on the
+            // field-ownership step.
+            default: 'buildtime_ai_once' as const,
             supportsRuntimeAI: false,
             supportsBuildtimeAI: true,
           },
-          role: 'config' as const,
+          role: 'operation_selector' as const,
         }
       : def.inputSchema.operation,
     // ProjectName: required for deploy operation, optional for list_deployments

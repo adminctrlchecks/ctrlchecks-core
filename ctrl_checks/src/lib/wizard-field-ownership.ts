@@ -226,18 +226,39 @@ interface RailNodeGroup {
 }
 
 export interface BuildRailEntriesInput {
-    sections: Array<{ key: string; groups: RailNodeGroup[] }>;
+    /**
+     * One group per node, in execution order.
+     *
+     * Phase A: this was `sections: [{ key: 'structural' }, { key: 'secrets' }]`, flat-mapped
+     * into entries. A node with both structural fields and secrets therefore produced TWO
+     * entries and two cards — the "11 of 13 for 7 nodes" defect (plan RC-1). Ownership class
+     * is a within-card concern now, so the rail takes a single node-ordered list.
+     */
+    groups: RailNodeGroup[];
     fieldEnabledOverrides: Record<string, boolean>;
     effectiveModesByKey: Record<string, string>;
     fillModeValues: Record<string, string>;
     isCredentialUnlocked: (question: QuestionLike) => boolean;
     /** Resolves the live workflow value for a row, or '' when there is none. */
     resolveRowValue: (question: QuestionLike) => string;
+    /**
+     * Fields still required for each node's **chosen operation**, from the field plan.
+     *
+     * When present this is the authority: the server recomputes what an operation requires
+     * from the node's live config, so it knows things the rows cannot — that Gmail's `subject`
+     * matters for `send` but not for `addLabel`, and that a field the user switched off is
+     * still required. Absent (plan loading or unavailable) the row heuristic below stands in.
+     */
+    outstandingByNodeId?: Record<string, number>;
 }
 
 /**
  * A row is satisfied when it is locked (nothing for the user to do), switched off
  * (deliberately skipped), owned by AI, or already carries a value.
+ *
+ * Fallback only — used while the field plan has not arrived. Note the "switched off counts
+ * as satisfied" rule, which is exactly why this cannot be the authority: it let a node report
+ * Ready with a required field toggled off and empty.
  */
 function isRailRowSatisfied(question: QuestionLike, input: BuildRailEntriesInput): boolean {
     if (isOwnershipRowLocked(question, input.isCredentialUnlocked)) return true;
@@ -253,29 +274,36 @@ function isRailRowSatisfied(question: QuestionLike, input: BuildRailEntriesInput
 /**
  * Per-node status for the field-ownership left rail.
  *
- * Per plan §6a/G9 this returns node identity and status only — no per-group counts.
- * Grouping arrives in Phase 3; building counts before then means building them twice.
- * The vocabulary is a placeholder that Phase 7b replaces with real run status.
+ * Exactly one entry per node — the key is the node id alone, so it is also the card's
+ * DOM id.
+ *
+ * "Ready" means every field required for that node's chosen operation has a value. It is
+ * driven by the field plan when one is loaded, so it tracks the operation: switch a Gmail
+ * node from `send` to `addLabel` and the set of fields it is waiting on changes with it.
  */
 export function buildRailEntries(input: BuildRailEntriesInput): RailEntry[] {
-    return input.sections.flatMap((section) =>
-        section.groups.map((group) => {
-            const outstanding = group.fields.filter((q) => !isRailRowSatisfied(q, input)).length;
-            const anyEnabled = group.fields.some((q) =>
-                isOwnershipRowEnabled(q, input.fieldEnabledOverrides)
-            );
-            const status: RailNodeStatus =
-                outstanding > 0 ? 'needs-input' : anyEnabled ? 'ready' : 'waiting';
-            return {
-                key: `${section.key}_${group.nodeId}`,
-                nodeId: group.nodeId,
-                nodeLabel: group.nodeLabel,
-                nodeType: group.nodeType,
-                status,
-                outstanding,
-            };
-        })
-    );
+    return input.groups.map((group) => {
+        const planned = input.outstandingByNodeId?.[group.nodeId];
+        const outstanding =
+            planned !== undefined
+                ? planned
+                : group.fields.filter((q) => !isRailRowSatisfied(q, input)).length;
+        const anyEnabled = group.fields.some((q) =>
+            isOwnershipRowEnabled(q, input.fieldEnabledOverrides)
+        );
+        // With a plan, "nothing outstanding" IS ready — the server has confirmed the
+        // operation's requirements are met, which the enabled-toggle heuristic cannot know.
+        const status: RailNodeStatus =
+            outstanding > 0 ? 'needs-input' : planned !== undefined || anyEnabled ? 'ready' : 'waiting';
+        return {
+            key: group.nodeId,
+            nodeId: group.nodeId,
+            nodeLabel: group.nodeLabel,
+            nodeType: group.nodeType,
+            status,
+            outstanding,
+        };
+    });
 }
 
 export function humanizeFieldName(fieldName: string): string {

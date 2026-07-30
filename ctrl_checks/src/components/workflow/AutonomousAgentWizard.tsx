@@ -38,7 +38,12 @@ import { HelpTooltip } from '@/components/ui/help-tooltip';
 import { generateFieldGuide } from './guideGenerator';
 import { resolveFieldHelpContent } from '@/lib/resolve-field-help-content';
 import { NodeConnectPopover } from './NodeConnectPopover';
-import { fetchFieldPlan, type FieldPlan } from '@/lib/api/workflowBuildFieldPlan';
+import {
+    fetchFieldPlan,
+    incompletePlanNodes,
+    outstandingRequiredFields,
+    type FieldPlan,
+} from '@/lib/api/workflowBuildFieldPlan';
 import { runBuildNode, type RunNodeResult } from '@/lib/api/workflowBuildRunNode';
 import { fetchCapabilityConnectionReadiness, type CapabilityConnectionReadinessNode } from '@/lib/api/capabilityConnectionReadiness';
 import { FieldOwnershipStage, type FieldOwnershipContext } from './field-ownership';
@@ -1415,15 +1420,32 @@ export function AutonomousAgentWizard() {
 
     const fieldOwnershipComplete = outstandingManualQuestions.length === 0;
 
-    const ownershipStructuralByNode = useMemo(
-        () => groupQuestionsByNode(ownershipQuestions.filter((q: any) => q.ownershipClass === 'structural')),
-        [ownershipQuestions]
-    );
-
-    const ownershipSecretsByNode = useMemo(
-        () => groupQuestionsByNode(ownershipQuestions.filter((q: any) => q.ownershipClass !== 'structural')),
-        [ownershipQuestions]
-    );
+    /**
+     * One group per node, in workflow execution order — the field-ownership step's single
+     * render source (plan Phase A).
+     *
+     * This replaced a pair of memos that filtered the same questions by `ownershipClass`
+     * into `structural` and everything-else. Because the step rendered both as top-level
+     * sections, any node holding both kinds of field produced two cards and two rail
+     * entries (plan RC-1: "Form Trigger #1 … Form Trigger #6", 13 entries for 7 nodes).
+     * `ownershipClass` still travels on each question; it orders rows inside a card now.
+     *
+     * Ordering reuses `executionOrderRank` — the same topological rank
+     * `manualConfigurationQuestions` already sorts by — so the rail, the cards, and the
+     * question order agree. Unranked nodes keep their appearance order behind ranked ones.
+     */
+    const ownershipNodesInOrder = useMemo(() => {
+        const groups = groupQuestionsByNode(ownershipQuestions);
+        return groups
+            .map((group, index) => ({ group, index }))
+            .sort((a, b) => {
+                const ra = executionOrderRank.get(String(a.group.nodeId)) ?? 9999;
+                const rb = executionOrderRank.get(String(b.group.nodeId)) ?? 9999;
+                if (ra !== rb) return ra - rb;
+                return a.index - b.index;
+            })
+            .map(({ group }) => group);
+    }, [ownershipQuestions, executionOrderRank]);
 
     const credentialWizardDisplay = useMemo(() => {
         const raw = pendingWorkflowData?.credentialWizardView as
@@ -5053,8 +5075,7 @@ export function AutonomousAgentWizard() {
      */
     const startGlobalWalkThrough = useCallback(
         async (
-            structuralGroups: Array<{ nodeId: string; nodeType: string; nodeLabel: string; fields: any[] }>,
-            secretGroups: Array<{ nodeId: string; nodeType: string; nodeLabel: string; fields: any[] }>
+            nodeGroups: Array<{ nodeId: string; nodeType: string; nodeLabel: string; fields: any[] }>
         ) => {
             if (globalWalkActive) {
                 globalWalkAbortRef.current = true;
@@ -5062,10 +5083,12 @@ export function AutonomousAgentWizard() {
                 return;
             }
 
-            // Flatten: all fields from all node groups, in display order
+            // Flatten: all fields from all node groups, in display order. Phase A made that
+            // one node-ordered list, so the walk now follows the cards exactly rather than
+            // sweeping all structural fields before any secret.
             type FlatField = { nodeId: string; nodeType: string; nodeLabel: string; question: any };
             const allFields: FlatField[] = [];
-            for (const group of [...structuralGroups, ...secretGroups]) {
+            for (const group of nodeGroups) {
                 for (const question of group.fields) {
                     if (String(question.fieldName || '').trim()) {
                         allFields.push({ nodeId: group.nodeId, nodeType: group.nodeType, nodeLabel: group.nodeLabel, question });
@@ -5585,6 +5608,23 @@ export function AutonomousAgentWizard() {
         step !== 'field-ownership' &&
         hasPostAnalysisContext;
     const isCapabilitySelectionFlow = step === 'capability-node-selection' || step === 'capability-review';
+    /**
+     * Node selection owns the whole content area on wide screens: it lays itself out as a
+     * full-height column whose two panes scroll individually, so the page must not scroll
+     * too. Only this step — the review step is ordinary stacked content that pages normally.
+     */
+    const isCapabilityNodeSelection = step === 'capability-node-selection';
+    /**
+     * Steps that own the whole content area and manage their own scrolling.
+     *
+     * Field ownership joined node selection in Phase E for the same measured reason: as
+     * ordinary paged content its step header ("Field Ownership Required") scrolls up and is
+     * clipped by the wizard's fixed header the moment the user scrolls to reach a later node.
+     * Handing the step a definite height lets its rail and card list scroll internally while
+     * the heading stays put. The review step is deliberately excluded — it is stacked content
+     * that pages normally.
+     */
+    const isFullHeightStage = isCapabilityNodeSelection || step === 'field-ownership';
     const intentContextSummary =
         (planSummary && String(planSummary).trim()) ||
         (refinement?.systemPrompt && String(refinement.systemPrompt).trim()) ||
@@ -5622,6 +5662,60 @@ export function AutonomousAgentWizard() {
         return nodes.map((n: any) => `${n.id}:${n.type || n.data?.type || ''}`).join('|');
     }, [step, pendingWorkflowData?.nodes]);
 
+    /**
+     * The graph as the user has actually configured it — each node's config overlaid with the
+     * values typed on this step.
+     *
+     * This is what makes the field plan operation-aware *in practice*. The server already
+     * recomputes required fields from the config it is handed
+     * (`resolveFieldPolicyForNode`), but inline edits live in `inputValues`, keyed by
+     * `question.id`, and never touched `node.data.config` — so the request carried the AI's
+     * original operation and the returned "what's required" never moved.
+     *
+     * ⚠️ A derived VIEW, never a relocation. `inputValues` stays owned by the wizard and keeps
+     * flowing to /attach-inputs under its own keys; breaking that saves a workflow with none
+     * of the user's values (see the contract note in lib/wizard-field-ownership.ts).
+     */
+    const fieldOwnershipLiveNodes = useMemo(() => {
+        const nodes = (pendingWorkflowData?.nodes || []) as any[];
+        if (nodes.length === 0) return [];
+
+        const overridesByNode = new Map<string, Record<string, unknown>>();
+        for (const question of ownershipQuestions as any[]) {
+            const nodeId = String(question?.nodeId || '');
+            const fieldName = String(question?.fieldName || '');
+            const key = String(question?.id || '');
+            if (!nodeId || !fieldName || !key) continue;
+            const raw = inputValues[key];
+            if (raw === undefined || raw === null || String(raw).trim() === '') continue;
+            if (!overridesByNode.has(nodeId)) overridesByNode.set(nodeId, {});
+            overridesByNode.get(nodeId)![fieldName] = raw;
+        }
+
+        if (overridesByNode.size === 0) return nodes;
+        return nodes.map((node: any) => {
+            const overrides = overridesByNode.get(String(node?.id || ''));
+            if (!overrides) return node;
+            return {
+                ...node,
+                data: { ...(node.data || {}), config: { ...(node.data?.config || {}), ...overrides } },
+            };
+        });
+    }, [pendingWorkflowData?.nodes, ownershipQuestions, inputValues]);
+
+    /**
+     * Refetch key. Includes the merged config, so choosing a different operation asks the
+     * server for that operation's required fields. Debounced below — the endpoint makes no
+     * LLM call, no DB write and executes nothing, but typing should still not fire per
+     * keystroke.
+     */
+    const fieldOwnershipConfigKey = useMemo(() => {
+        if (!fieldOwnershipGraphKey) return '';
+        return JSON.stringify(
+            fieldOwnershipLiveNodes.map((n: any) => [String(n?.id || ''), n?.data?.config ?? {}])
+        );
+    }, [fieldOwnershipGraphKey, fieldOwnershipLiveNodes]);
+
     useEffect(() => {
         if (!fieldOwnershipGraphKey) {
             setFieldOwnershipPlan(null);
@@ -5629,20 +5723,63 @@ export function AutonomousAgentWizard() {
             return;
         }
         let cancelled = false;
-        const nodes = (pendingWorkflowData?.nodes || []) as any[];
         const edges = (pendingWorkflowData?.edges || []) as any[];
 
-        fetchFieldPlan(nodes as any, edges as any).then((plan) => {
-            if (!cancelled) setFieldOwnershipPlan(plan);
-        });
+        const timer = window.setTimeout(() => {
+            fetchFieldPlan(fieldOwnershipLiveNodes as any, edges as any).then((plan) => {
+                if (!cancelled) setFieldOwnershipPlan(plan);
+            });
+        }, 400);
 
+        return () => {
+            cancelled = true;
+            window.clearTimeout(timer);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [fieldOwnershipGraphKey, fieldOwnershipConfigKey]);
+
+    /**
+     * Completeness per node, from the field plan: what each node still needs for the
+     * operation it is set to, and the labels to name it with.
+     *
+     * Undefined while no plan has loaded — the rail then falls back to its row heuristic
+     * rather than reporting a workflow ready on no evidence.
+     */
+    const fieldOwnershipCompleteness = useMemo(() => {
+        if (!fieldOwnershipPlan) {
+            return {
+                outstandingByNodeId: undefined as Record<string, number> | undefined,
+                incompleteNodes: [] as Array<{
+                    nodeId: string;
+                    nodeLabel: string;
+                    missingLabels: string[];
+                }>,
+            };
+        }
+        const outstandingByNodeId: Record<string, number> = {};
+        for (const node of fieldOwnershipPlan.nodes) {
+            outstandingByNodeId[node.nodeId] = outstandingRequiredFields(node).length;
+        }
+        const incompleteNodes = incompletePlanNodes(fieldOwnershipPlan).map(({ node, missing }) => ({
+            nodeId: node.nodeId,
+            nodeLabel: node.nodeLabel,
+            missingLabels: missing.map((f) => f.label || f.fieldName),
+        }));
+        return { outstandingByNodeId, incompleteNodes };
+    }, [fieldOwnershipPlan]);
+
+    // Connections depend on node types alone, so this stays keyed to graph shape and does not
+    // re-run while the user types.
+    useEffect(() => {
+        if (!fieldOwnershipGraphKey) return;
+        let cancelled = false;
+        const nodes = (pendingWorkflowData?.nodes || []) as any[];
         const nodeTypes = Array.from(
             new Set(nodes.map((n: any) => String(n.type || n.data?.type || '')).filter(Boolean))
         );
         fetchCapabilityConnectionReadiness(nodeTypes).then((result) => {
             if (!cancelled) setFieldOwnershipConnections(result.nodes);
         });
-
         return () => {
             cancelled = true;
         };
@@ -5710,6 +5847,8 @@ export function AutonomousAgentWizard() {
     const fieldOwnershipContext: FieldOwnershipContext = {
         fieldPlan: fieldOwnershipPlan,
         outstandingCount: outstandingManualQuestions.length,
+        outstandingByNodeId: fieldOwnershipCompleteness.outstandingByNodeId,
+        incompleteNodes: fieldOwnershipCompleteness.incompleteNodes,
         runResults,
         runningNodeId,
         onRunNode: handleRunNode,
@@ -5721,8 +5860,7 @@ export function AutonomousAgentWizard() {
         pendingWorkflowData,
         sectionStyles: requiredSectionStyles.fieldOwnership,
         globalWalkActive,
-        structuralByNode: ownershipStructuralByNode,
-        secretsByNode: ownershipSecretsByNode,
+        nodesInOrder: ownershipNodesInOrder,
         ownershipEffectiveModes,
         fillModeValues,
         fieldPlaneRows,
@@ -5781,10 +5919,18 @@ export function AutonomousAgentWizard() {
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto p-6 bg-background/50">
-                {/* Steps 1-4: Single page view */}
+            <div className="flex-1 min-h-0 overflow-y-auto p-6 bg-background/50">
+                {/* Steps 1-4: Single page view.
+
+                    On node selection this wrapper is exactly as tall as the content area, and
+                    the stage below it claims that same full height. The intent card therefore
+                    pushes the stage down by its own height and nothing more, so the page
+                    scrolls by precisely that much: scroll to the bottom and the intent card
+                    and step heading have travelled off, leaving the two panes the whole
+                    window instead of the strip left under them. That is the "scroll the
+                    middle completely" behaviour — not a page that runs on forever. */}
                 {step !== 'building' && step !== 'complete' && (
-                <div className={`mx-auto space-y-8 pb-20 ${step === 'capability-node-selection' || step === 'field-ownership' ? 'max-w-7xl' : 'max-w-5xl'}`}>
+                <div className={`mx-auto space-y-8 pb-20 ${step === 'capability-node-selection' || step === 'field-ownership' || step === 'capability-review' ? 'max-w-7xl' : 'max-w-5xl'} ${isFullHeightStage ? 'lg:block lg:h-full lg:space-y-4 lg:pb-0' : ''}`}>
                     {showPromptComposer && (
                         <div ref={step1Ref} className="scroll-mt-6">
                             <motion.div
@@ -5843,19 +5989,19 @@ export function AutonomousAgentWizard() {
                             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
                                 <Card className="border-indigo-500/25 bg-indigo-500/5">
                                     {isCapabilitySelectionFlow ? (
-                                        <>
-                                            <CardHeader className="pb-1">
-                                                <CardTitle className="text-xs font-medium uppercase tracking-wide text-indigo-400/70">
+                                        /* Deliberately compact. Node selection sizes its two scrolling panes
+                                           from whatever height is left after this card, and at full Card
+                                           padding — label row, prose row, button row, each with its own
+                                           block — this was eating ~200px of an ~880px window, leaving the
+                                           panes a ~260px letterbox. Label and actions share one row, the
+                                           padding is tightened, and the prompt is clamped on the step that
+                                           needs the room. `title` and Edit intent still give the full text. */
+                                        <CardContent className="flex flex-col gap-2 px-4 py-3">
+                                            <div className="flex items-center justify-between gap-3">
+                                                <span className="text-xs font-medium uppercase tracking-wide text-indigo-400/70">
                                                     Intent Context
-                                                </CardTitle>
-                                            </CardHeader>
-                                            <CardContent className="space-y-3">
-                                                {originalPrompt && (
-                                                    <p className="text-base sm:text-lg font-medium leading-relaxed text-foreground">
-                                                        {originalPrompt}
-                                                    </p>
-                                                )}
-                                                <div className="flex flex-wrap gap-2 pt-1">
+                                                </span>
+                                                <div className="flex shrink-0 flex-wrap justify-end gap-2">
                                                     <Button type="button" variant="outline" size="sm" onClick={handleEditIntent}>
                                                         Edit intent
                                                     </Button>
@@ -5863,8 +6009,20 @@ export function AutonomousAgentWizard() {
                                                         Restart
                                                     </Button>
                                                 </div>
-                                            </CardContent>
-                                        </>
+                                            </div>
+                                            {originalPrompt && (
+                                                <p
+                                                    className={`font-medium leading-relaxed text-foreground ${
+                                                        isCapabilityNodeSelection
+                                                            ? 'text-sm line-clamp-2'
+                                                            : 'text-base sm:text-lg'
+                                                    }`}
+                                                    title={isCapabilityNodeSelection ? originalPrompt : undefined}
+                                                >
+                                                    {originalPrompt}
+                                                </p>
+                                            )}
+                                        </CardContent>
                                     ) : (
                                         <>
                                             <CardHeader className="pb-3">
@@ -6211,9 +6369,16 @@ export function AutonomousAgentWizard() {
 
                     {/* -- Capability-Node-Selection-Flow: CapabilityStage (task 10.1) -- */}
                     {/* Req 3.1–3.8, 7.1, 7.3: shown after Phase 1 analyze; legacy structural prompt NOT called here */}
+                    {/* `lg:h-full` at every level of this chain, resolving against the content
+                        area's definite height, so the stage is exactly one screen tall wherever
+                        the intent card above has pushed it to. */}
                     {step === 'capability-node-selection' && capNodeContainers.length > 0 && (
-                        <div className="scroll-mt-6 py-4">
-                            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+                        <div className="scroll-mt-6 py-4 lg:h-full lg:py-0">
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="lg:h-full"
+                            >
                                 <CapabilityStage
                                     containers={capNodeContainers}
                                     validationIssue={capNodeSelectionIssue}
@@ -6261,7 +6426,14 @@ export function AutonomousAgentWizard() {
                     )}
 
                     {/* STEP 3: Show Final Understood System Prompt - Confirmation Required */}
-                    {step !== 'idle' && step !== 'analyzing' && refinement && refinement.systemPrompt && (
+                    {/* Excluded from field ownership for the same reason as the Intent Context
+                        card above (see `showIntentContextCard`): by then the understanding is
+                        settled, and the step shows the same material as its own BlueprintPanel.
+                        It also has to go for the step's layout to work — the step claims the full
+                        content height, so any sibling above it is height the page must scroll
+                        through, and scrolling through it is what dragged the step heading up
+                        under the wizard's fixed header (plan RC-7). */}
+                    {step !== 'idle' && step !== 'analyzing' && step !== 'field-ownership' && refinement && refinement.systemPrompt && (
                         <div ref={step3Ref} className="scroll-mt-6">
                             <motion.div
                                 initial={{ opacity: 0, y: 20 }} 

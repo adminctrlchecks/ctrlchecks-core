@@ -223,9 +223,74 @@ export function credentialRequirementForNode(
   // truth for node->provider mapping — instead of hand-duplicating another
   // 30-40 node type entries here that would drift out of sync over time.
   const connector = connectorRegistry.getConnectorByNodeType(key);
-  if (!connector) return null;
-  return {
-    provider: connector.credentialContract.provider,
-    requiredScopes: connector.credentialContract.scopes ?? [],
-  };
+  if (connector) {
+    return {
+      provider: connector.credentialContract.provider,
+      requiredScopes: connector.credentialContract.scopes ?? [],
+    };
+  }
+
+  // Final fallback: the node registry's own credentialSchema.
+  //
+  // A node can declare `credentialSchema.requirements` without having a connector entry
+  // (connectors model provider disambiguation for intent matching, which not every node
+  // participates in). Those nodes previously resolved to `null` here, produced no
+  // readiness row, and were therefore reported as connected — so they reached execution
+  // with no credential and failed at runtime instead of at the gate.
+  //
+  // Consulting the registry closes that hole universally: any node that declares a
+  // credential requirement is gated, including nodes added in the future, with no
+  // per-node entries to maintain in this file.
+  //
+  // Required via lazy import: this module sits underneath the readiness path, while the
+  // registry self-registers ~180 nodes at import time. A top-level import would couple
+  // their load order for no benefit.
+  const registryRequirements = requirementsFromNodeRegistry(key);
+  if (registryRequirements) return registryRequirements;
+
+  return null;
+}
+
+/**
+ * Provider + scopes derived from `unifiedNodeRegistry`'s credentialSchema.
+ *
+ * Returns null when the node declares no required credential, which is the correct
+ * "nothing to connect" answer rather than a missing-data answer.
+ */
+function requirementsFromNodeRegistry(
+  nodeType: string,
+): { provider: string; requiredScopes: string[] } | null {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { unifiedNodeRegistry } = require('../core/registry/unified-node-registry');
+    const requirements = unifiedNodeRegistry.getRequiredCredentials(nodeType) ?? [];
+    if (requirements.length === 0) return null;
+
+    // A node needing several credentials still resolves to one requirement row here,
+    // matching what the rest of the readiness path models. Take the first declared
+    // provider deterministically rather than guessing a "primary" one.
+    const primary = requirements.find((req: { provider?: string }) => req.provider);
+    if (!primary?.provider) return null;
+
+    const requiredScopes: string[] = Array.from(
+      new Set<string>(
+        requirements
+          .filter((req: { provider?: string }) => req.provider === primary.provider)
+          .flatMap((req: { requiredScopes?: string[]; scopes?: string[] }) =>
+            req.requiredScopes ?? req.scopes ?? [],
+          ),
+      ),
+    );
+
+    return {
+      provider: primary.provider,
+      requiredScopes: requiredScopes.length > 0
+        ? requiredScopes
+        : requiredScopesForProvider(primary.provider),
+    };
+  } catch {
+    // Never let a registry load failure turn into a silently-open gate; callers treat
+    // null as "no requirement", so failing closed is handled by the caller's own error path.
+    return null;
+  }
 }

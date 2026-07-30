@@ -60,6 +60,14 @@ export interface FieldPlanNode {
    */
   firstRunClass: string | null;
   groups: Record<FieldGroupKey, FieldPlanField[]>;
+  /**
+   * Set ONLY when the node type could not be resolved, carrying the type as it arrived.
+   *
+   * The one condition under which `groups` is meaningless. Everything in `diagnostics` is
+   * informational by comparison — `generated_runtime_contract` describes a healthy node —
+   * so callers must gate "could not be analysed" on this, never on `diagnostics.length`.
+   */
+  unresolvedNodeType?: string;
   diagnostics: string[];
 }
 
@@ -141,8 +149,47 @@ export default async function fieldPlan(
     let unresolvedReferenceCount = 0;
 
     for (const node of graph.nodes) {
-      const nodeType = String(node.type ?? node.data?.type ?? '').trim();
-      const def = nodeType ? unifiedNodeRegistry.get(nodeType) : undefined;
+      /*
+       * Work out which node this actually is.
+       *
+       * Two things had to be got right here, and the original code got both wrong:
+       *
+       * 1. **`node.type` is the React Flow RENDERER type, not the business type.** Saved
+       *    workflows carry `type: 'custom'` with the real type in `data.type`. Reading
+       *    `node.type ?? node.data?.type` therefore resolved to `'custom'` for every node in
+       *    a stored workflow — a type no registry will ever know.
+       *
+       * 2. **`unifiedNodeRegistry.get()` is deliberately strict** — canonical names only, no
+       *    translation — while workflows legitimately carry nicknames (`gmail` for
+       *    `google_gmail`, `mail`, `ai`, …), so the alias has to be resolved first.
+       *
+       * Either failure landed in the `!def` branch below, which returns an entry with five
+       * EMPTY groups. That was not visible as an error: the card rendered its sections, found
+       * nothing to put in them, and swept every field into its leftover bucket — so a
+       * perfectly valid node reported "0, 0, 0" and read as a grouping bug.
+       *
+       * Both candidates are tried, business type first, and the first that actually resolves
+       * wins. That covers stored workflows (`data.type`), backend-generated graphs (`type`),
+       * and aliases in either position, without assuming a shape.
+       */
+      const typeCandidates = [node.data?.type, node.type]
+        .map((candidate) => String(candidate ?? '').trim())
+        .filter(Boolean);
+
+      let nodeType = '';
+      let def: ReturnType<typeof unifiedNodeRegistry.get>;
+      for (const candidate of typeCandidates) {
+        const resolved = unifiedNodeRegistry.resolveAlias(candidate) ?? candidate;
+        const candidateDef = unifiedNodeRegistry.get(resolved);
+        if (candidateDef) {
+          nodeType = resolved;
+          def = candidateDef;
+          break;
+        }
+      }
+      // Nothing resolved — report the type as it arrived, which is what a reader can act on.
+      const rawNodeType = typeCandidates[0] ?? '';
+      if (!def) nodeType = rawNodeType;
       const nodeLabel = String(node.data?.label ?? def?.label ?? nodeType ?? node.id);
       if (!def) {
         planNodes.push({
@@ -151,7 +198,19 @@ export default async function fieldPlan(
           nodeLabel,
           firstRunClass: null,
           groups: { required: [], aiFilled: [], aiRuntime: [], optional: [], credential: [] },
-          diagnostics: [`Unknown node type "${nodeType}" — not in the registry.`],
+          /*
+           * An explicit flag, not a string for the UI to pattern-match.
+           *
+           * `diagnostics` also carries INFORMATIONAL notes from the policy resolver —
+           * `generated_runtime_contract` simply means the node declared no explicit operation
+           * contract so a default one was derived, which is normal and describes a perfectly
+           * analysed node. Treating "has diagnostics" as "failed" made healthy nodes render
+           * as errors and lose their three sections.
+           */
+          unresolvedNodeType: rawNodeType,
+          // Names the type as it ARRIVED, not as resolved — "unknown node type
+          // google_gmail" would be nonsense when what was actually sent was `gmail`.
+          diagnostics: [`Unknown node type "${rawNodeType}" — not in the registry.`],
         });
         continue;
       }

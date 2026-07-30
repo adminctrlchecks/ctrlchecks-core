@@ -2,14 +2,15 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 /**
- * One collapsible field group inside a node card (plan §4.3).
+ * One collapsible section inside a node card (plan §4.3).
  *
- * Exactly one group per card is expanded by default — the actionable one. The rest
+ * Exactly one section per card is expanded by default — the actionable one. The rest
  * collapse to a header with a count.
  *
- * When a card's fields all land in a single group (measured: `http_request` and `code`
- * put everything in one bucket), the accordion adds a click and no clarity, so the
- * caller renders the rows without chrome instead. See `hasSinglePopulatedGroup`.
+ * Renders even at `count === 0`. It used to return null, which is why a node with nothing
+ * optional simply had no Optional heading: the card's shape changed from step to step and
+ * there was no fixed place to look for "what must I provide". Whether an empty section is
+ * worth showing is the caller's call, not this component's.
  */
 export interface FieldGroupAccordionProps {
     title: string;
@@ -26,8 +27,6 @@ export function FieldGroupAccordion({
     onToggle,
     children,
 }: FieldGroupAccordionProps) {
-    if (count === 0) return null;
-
     return (
         <div className="rounded border border-border/40">
             <button

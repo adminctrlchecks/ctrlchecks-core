@@ -291,6 +291,7 @@ import analyzeCapabilitySelection from './api/capability-selection/analyze';
 import generateCapabilityWorkflow from './api/capability-selection/generate';
 import confirmCapabilityWorkflow from './api/capability-selection/confirm';
 import capabilityConnectionReadiness from './api/capability-selection/connection-readiness';
+import capabilityConnectionStatus from './api/capability-selection/connection-status';
 import workflowBuildFieldPlan from './api/workflow-build/field-plan';
 import workflowBuildRunNode from './api/workflow-build/run-node';
 import workflowBuildRun from './api/workflow-build/run';
@@ -1517,7 +1518,10 @@ app.post('/api/capability-selection/generate', asyncHandler(authenticateUser), a
 app.post('/api/capability-selection/confirm', asyncHandler(authenticateUser), asyncHandler(geminiWalletContextMiddleware), asyncHandler(requireWorkflowCapacityForAi), asyncHandler(confirmCapabilityWorkflow));
 // No AI capacity gate: this only reads connection state, it makes no LLM calls.
 app.post('/api/capability-selection/connection-readiness', asyncHandler(authenticateUser), asyncHandler(capabilityConnectionReadiness));
-console.log('🎯 Capability Selection API available at /api/capability-selection/{analyze,generate,confirm,connection-readiness}');
+// Presence-only check for every candidate on screen. Safe to call across the whole list:
+// unlike connection-readiness it never resolves or refreshes a token.
+app.post('/api/capability-selection/connection-status', asyncHandler(authenticateUser), asyncHandler(capabilityConnectionStatus));
+console.log('🎯 Capability Selection API available at /api/capability-selection/{analyze,generate,confirm,connection-readiness,connection-status}');
 
 // Workflow build (field-ownership step). Read-only: no DB write, no LLM call, nothing executes.
 app.post('/api/workflow-build/field-plan', asyncHandler(authenticateUser), asyncHandler(workflowBuildFieldPlan));

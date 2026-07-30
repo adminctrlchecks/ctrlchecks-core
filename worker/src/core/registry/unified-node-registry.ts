@@ -688,6 +688,17 @@ export class UnifiedNodeRegistry implements INodeRegistry {
     // Extract input schema from configSchema
     const inputSchema: NodeInputSchema = {};
     const requiredInputs: string[] = [];
+
+    /**
+     * Is this field the one that selects what action the node performs?
+     *
+     * Exact names only. A substring test would catch `operationMode`, `actionUrl` and
+     * similar, and wrongly hand the AI authority over fields that merely mention the word.
+     */
+    const isOperationSelectorField = (fieldName: string): boolean => {
+      const f = (fieldName || '').toLowerCase().trim();
+      return f === 'operation' || f === 'action' || f === 'method';
+    };
     
     // Helper to derive universal, registry-driven default fill mode metadata
     const getDefaultFillMode = (fieldName: string, fieldType: string): {
@@ -738,6 +749,25 @@ export class UnifiedNodeRegistry implements INodeRegistry {
         field.includes('endpoint') ||
         field.includes('method');
 
+      // An operation selector decides WHICH action a node performs, and therefore which of
+      // its other fields are required at all. It has to be chosen from the user's intent —
+      // "email the receipt" means `send`, not whatever the schema happens to default to —
+      // and it has to be chosen BEFORE the rest of the node can be judged complete.
+      //
+      // Matched by field name so it holds for every node, including ones added later, with
+      // no per-node list. This is the same rule `selected-workflow-intelligence.ts` already
+      // uses to infer the `operation_selector` role, applied one layer earlier.
+      //
+      // Placed above the type branches deliberately: these fields are usually enum-ish
+      // scalars, which would otherwise fall through to the "scalars are manual only" default
+      // and leave the AI unable to pick an operation at all.
+      if (isOperationSelectorField(field)) {
+        return {
+          default: 'buildtime_ai_once',
+          supportsRuntimeAI: false,
+          supportsBuildtimeAI: true,
+        };
+      }
       // Structural shape fields are finalized before runtime; runtime_ai must not own schema keys.
       if (isStructureSemanticField) {
         return {
@@ -772,9 +802,13 @@ export class UnifiedNodeRegistry implements INodeRegistry {
       };
     };
 
-    const inferRole = (fieldName: string, fieldType: string): 'title_like' | 'long_body' | 'short_summary' | 'raw_json' | 'id' | 'config' | 'prompt' | 'recipient' | 'content' => {
+    const inferRole = (fieldName: string, fieldType: string): 'title_like' | 'long_body' | 'short_summary' | 'raw_json' | 'id' | 'config' | 'prompt' | 'recipient' | 'content' | 'operation_selector' => {
       const f = (fieldName || '').toLowerCase();
       const t = (fieldType || '').toLowerCase();
+      // Must come first: `operation` is a plain string on most nodes, so the `t === 'string'`
+      // fallback below would otherwise label it 'content' and the AI would treat the field
+      // that decides the node's behaviour as ordinary copy. (That is exactly what Gmail did.)
+      if (isOperationSelectorField(f)) return 'operation_selector';
       if (f.includes('subject') || f.includes('title') || f.includes('heading')) return 'title_like';
       if (f.includes('body') || f.includes('message') || f.includes('content')) return 'long_body';
       if (f.includes('summary')) return 'short_summary';

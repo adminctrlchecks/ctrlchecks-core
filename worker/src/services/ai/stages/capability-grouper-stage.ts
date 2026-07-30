@@ -13,6 +13,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { geminiOrchestrator } from '../gemini-orchestrator';
 import { unifiedNodeRegistry } from '../../../core/registry/unified-node-registry';
 import { getCredentialVault } from '../../credential-vault';
+import { credentialRequirementForNode } from '../../credential-scope-registry';
 import { logger } from '../../../core/logger';
 import type { NodeCatalogText } from '../node-catalog-builder';
 import type {
@@ -261,47 +262,60 @@ async function hydrateCandidateNode(
   const label = def?.label ?? nodeType;
   const description = def?.description ?? '';
 
-  // credentialRequirements: read from registry (Req 8.1, 8.6)
-  const requirements = unifiedNodeRegistry.getRequiredCredentials(nodeType);
-  const credentialRequirements = requirements.map((req) => req.category);
+  // Whether this node needs a credential is answered by `credentialRequirementForNode` —
+  // the SAME resolver the authoritative readiness gate uses
+  // (workflow-connection-readiness -> getWorkflowConnectionReadiness).
+  //
+  // This previously read `unifiedNodeRegistry.getRequiredCredentials()` directly, which is a
+  // different resolver with different coverage. The two disagreed on 73 of 178 node types:
+  // 58 where this screen showed a green "Connected" with no connect action while the gate
+  // demanded a credential, 11 that reached execution with no credential at all, and 4 where
+  // the connect action named a different provider than the gate required (so connecting could
+  // never satisfy it). Sharing one resolver makes those classes unrepresentable rather than
+  // fixing them node by node.
+  const requirement = credentialRequirementForNode(nodeType);
 
-  // hasCredentials: check vault for each required credential (Req 8.6)
+  // Descriptive categories only. Deliberately NOT the signal for "needs a credential":
+  // this array is empty for google_sheets, airtable and slack_message, which all clearly
+  // do need one — `credentialRequired` below is the answer to that question.
+  const credentialRequirements = unifiedNodeRegistry
+    .getRequiredCredentials(nodeType)
+    .map((req) => req.category);
+
+  // hasCredentials: check vault for the required provider (Req 8.6)
   let hasCredentials = false;
-  if (requirements.length === 0) {
+  if (!requirement) {
     // No credentials required — always satisfied
     hasCredentials = true;
   } else {
     try {
       const vault = getCredentialVault();
       // We check the provider as the vault key (consistent with credential-resolver.ts pattern).
-      const checks = await Promise.all(
-        requirements.map((req) =>
-          vault.exists({ userId } as any, req.provider).catch(() => false),
-        ),
-      );
-      // EVERY requirement must be satisfied, not just one. The previous `.some()` reported
-      // a node needing two credentials as "Connected" when only one was present, which the
-      // downstream readiness gate would then reject.
       //
       // This remains a *provider-level* check and is deliberately cheap: it runs for every
-      // candidate on screen, including ones the user never picks. The authoritative,
+      // candidate on screen, including ones the user never picks. It is also NOT scope-aware,
+      // so it can still report a connection the gate will reject on scopes. The authoritative,
       // scope-aware answer comes from POST /api/capability-selection/connection-readiness,
       // which is called only for nodes the user actually selected — because that path can
       // refresh OAuth tokens as a side effect and must not run across the whole catalogue.
-      hasCredentials = checks.every(Boolean);
+      hasCredentials = await vault
+        .exists({ userId } as any, requirement.provider)
+        .catch(() => false);
     } catch {
       hasCredentials = false;
     }
   }
 
-  // Providers are surfaced so the UI can offer a connect affordance naming the service.
-  const credentialProviders = Array.from(new Set(requirements.map((req) => req.provider)));
+  // Provider is surfaced so the UI can offer a connect affordance naming the service — and
+  // it is the gate's provider, so completing that connection actually satisfies the gate.
+  const credentialProviders = requirement ? [requirement.provider] : [];
 
   return {
     nodeType,
     label,
     description,
     credentialRequirements,
+    credentialRequired: requirement !== null,
     credentialProviders,
     hasCredentials,
   };

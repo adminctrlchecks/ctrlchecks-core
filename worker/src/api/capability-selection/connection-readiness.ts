@@ -31,6 +31,7 @@ import {
   type ConnectionReadinessRow,
   type ReadinessNode,
 } from '../../services/workflow-connection-readiness';
+import { credentialRequirementForNode } from '../../services/credential-scope-registry';
 import type { AuthenticatedRequest } from '../../core/middleware/subscription-auth';
 import { logger } from '../../core/logger';
 
@@ -44,6 +45,15 @@ export interface CapabilityConnectionReadinessNode {
   nodeType: string;
   nodeLabel: string;
   connected: boolean;
+  /**
+   * Whether this node needs a credential at all.
+   *
+   * `connected: true` alone is ambiguous — it means both "verified against the user's vault"
+   * and "there was nothing to verify". The UI has to tell those apart, or a credential-free
+   * node like manual_trigger renders the same green "Connected" as a genuinely connected
+   * Slack, claiming an account link that does not exist.
+   */
+  credentialRequired: boolean;
   provider?: string;
   providerLabel?: string;
   credentialTypeId?: string;
@@ -123,12 +133,14 @@ export default async function capabilityConnectionReadiness(
           nodeType,
           nodeLabel: unifiedNodeRegistry.get(nodeType)?.label ?? nodeType,
           connected: true,
+          credentialRequired: false,
         };
       }
       return {
         nodeType,
         nodeLabel: row.nodeLabel,
         connected: row.status === 'ready',
+        credentialRequired: true,
         provider: row.provider,
         providerLabel: row.providerLabel,
         credentialTypeId: row.credentialTypeId,
@@ -153,17 +165,33 @@ export default async function capabilityConnectionReadiness(
       error: error instanceof Error ? error.message : String(error),
       nodeTypeCount: nodeTypes.length,
     });
-    // Never block the wizard on this check failing — the downstream readiness gate on
-    // the workflow page still catches anything missed here.
+    // Fail CLOSED. This previously returned `connected: true` for every node so as not to
+    // block the wizard, but these rows override the cheap per-candidate check on the client,
+    // so any exception here silently turned the gate off and let un-connected nodes through
+    // to execution. A check that did not complete is not evidence of a working connection.
+    //
+    // Only nodes that actually require a credential are reported blocking — a transport
+    // failure must not invent a requirement for credential-free nodes like manual_trigger.
     const degraded: CapabilityConnectionReadinessResponse = {
-      ready: true,
-      nodes: nodeTypes.map((nodeType) => ({
-        nodeType,
-        nodeLabel: unifiedNodeRegistry.get(nodeType)?.label ?? nodeType,
-        connected: true,
-      })),
+      nodes: nodeTypes.map((nodeType) => {
+        const credentialRequired = !!credentialRequirementForNode(nodeType);
+        return {
+          nodeType,
+          nodeLabel: unifiedNodeRegistry.get(nodeType)?.label ?? nodeType,
+          connected: !credentialRequired,
+          credentialRequired,
+          status: credentialRequired ? 'error' : undefined,
+          action: credentialRequired ? 'repair' : undefined,
+          reason: credentialRequired
+            ? 'Could not verify this connection. Retry before continuing.'
+            : undefined,
+        };
+      }),
+      ready: false,
       blocking: [],
     };
+    degraded.blocking = degraded.nodes.filter((n) => !n.connected).map((n) => n.nodeType);
+    degraded.ready = degraded.blocking.length === 0;
     res.json(degraded);
   }
 }

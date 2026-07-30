@@ -68,8 +68,16 @@ app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
   res.status(500).json({ error: 'Internal server error', ref: rid });
 });
 
-app.listen(PORT, () => {
-  console.log(`[ai-generator] Listening on port ${PORT}`);
+// Bind to loopback, matching every sibling service (credential-service, execution-engine,
+// trigger-service, … all pass '127.0.0.1'). Omitting the host makes Express listen on
+// 0.0.0.0, and production was verified doing exactly that: `ss -ltnp` showed 3002 on `*`
+// while every other internal service sat on 127.0.0.1.
+//
+// This service executes arbitrary prompts against Gemini and carries no auth middleware, so
+// an external binding is an unauthenticated, billable endpoint. The only caller is the
+// worker, which reaches it at http://localhost:3002 — loopback is sufficient.
+app.listen(PORT, '127.0.0.1', () => {
+  console.log(`[ai-generator] Listening on 127.0.0.1:${PORT}`);
   // Pre-warm the node catalog cache so the first request doesn't pay the fetch cost
   warmCatalog().catch(() => {});
 });

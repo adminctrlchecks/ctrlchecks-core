@@ -445,16 +445,16 @@ export function overrideGoogleGmail(def: UnifiedNodeDefinition, schema: NodeSche
           },
         }
       : baseSchema.credentialId,
+    // `operation` deliberately carries NO fillMode override. The base schema's universal
+    // operation-selector rule owns it, so the AI picks `send` / `list` / `search` / `get`
+    // from the user's intent and the user revalidates it.
+    //
+    // This used to force `supportsBuildtimeAI: false`, which contradicted the field's own
+    // metadata (`dependsOnUseCase: true`, `dangerousIfWrong: true`) and left every generated
+    // Gmail node on a default nobody chose — while the fields that depend on the operation
+    // were AI-filled around it.
     operation: baseSchema.operation
-      ? {
-          ...baseSchema.operation,
-          ownership: 'structural',
-          fillMode: {
-            default: 'manual_static',
-            supportsRuntimeAI: false,
-            supportsBuildtimeAI: false,
-          },
-        }
+      ? { ...baseSchema.operation, ownership: 'structural' }
       : baseSchema.operation,
     recipientSource: baseSchema.recipientSource
       ? {

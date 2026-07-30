@@ -382,7 +382,15 @@ export function overrideYoutube(
         default: 'list_my_channels',
         role: 'operation_selector',
         ownership: 'structural',
-        fillMode: manualStatic,
+        // Build-time AI, not `manualStatic`: which YouTube action to run follows from the
+        // user's intent ("find videos about X" → search_videos), and the operation decides
+        // which of the fields below are required at all. The user revalidates the choice on
+        // the field-ownership step.
+        fillMode: {
+          default: 'buildtime_ai_once',
+          supportsRuntimeAI: false,
+          supportsBuildtimeAI: true,
+        },
         ui: { options: operationOptions },
       },
       channelId: {

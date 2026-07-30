@@ -4,7 +4,7 @@ import { getCredentialType } from '../credentials-system/credential-type-registr
 import { authInjectionEngine } from '../credentials-system/execution-auth';
 import type { CredentialAuthRequest } from '../credentials-system/execution-auth-middleware';
 import { nodeRegistryService } from '../credentials-system/node-registry-service';
-import { oauthService } from '../credentials-system/oauth-service';
+import { oauthService, returnToFromError } from '../credentials-system/oauth-service';
 import { getCacheRedisClient, invalidateMissingItemsCache, invalidateAllMissingItemsCaches } from '../middleware/redisGetCache';
 import { logger } from '../core/logger';
 import { listCanonicalConnections } from '../services/canonical-credential-lookup';
@@ -258,9 +258,14 @@ export async function oauthCallbackHandler(req: Request, res: Response) {
   } catch (error) {
     if (req.method === 'GET') {
       const raw = error instanceof Error ? error.message : 'OAuth connection failed';
-      logger.error('[OAuthCallback] callback error:', raw, error);
+      // Deliver the failure to the window that started the flow. Without this the relay falls
+      // back to FRONTEND_URL, so anyone connecting from a different origin — a local dev server,
+      // or any provider whose redirect URI points at another deployment — never learns the
+      // attempt failed and just watches a spinner until it times out.
+      const returnTo = returnToFromError(error);
+      logger.error('[OAuthCallback] callback error:', raw, { returnTo, error });
       const message = mapOAuthErrorToUserMessage(raw);
-      return res.status(200).send(oauthCallbackHtml({ type: 'oauth-error', message }));
+      return res.status(200).send(oauthCallbackHtml({ type: 'oauth-error', message, returnTo }));
     }
     throw error;
   }

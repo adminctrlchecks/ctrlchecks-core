@@ -69,8 +69,16 @@ export interface FieldOwnershipContext {
     pendingWorkflowData: any;
     sectionStyles: OwnershipSectionStyles;
     globalWalkActive: GlobalWalkState | null;
-    structuralByNode: NodeQuestionGroup[];
-    secretsByNode: NodeQuestionGroup[];
+    /**
+     * One group per node, in workflow execution order, merging that node's structural and
+     * secret questions (plan Phase A).
+     *
+     * Replaces the `structuralByNode` / `secretsByNode` pair. Those split every node across
+     * two top-level sections, so a node with both kinds of field rendered twice and appeared
+     * twice in the rail (RC-1). `ownershipClass` still rides on each question — it is a
+     * within-card concern now, not a section.
+     */
+    nodesInOrder: NodeQuestionGroup[];
     ownershipEffectiveModes: { byModeKey: Record<string, FillMode> };
     fillModeValues: Record<string, string>;
     /** Read for display by inline editing (Phase 4). Owned by the wizard — never relocate. */
@@ -95,6 +103,18 @@ export interface FieldOwnershipContext {
     /** Fields the user owns that still lack a value — gates the build button (§6a-2 item 4). */
     outstandingCount: number;
     /**
+     * Per node: how many fields are still required for that node's **chosen operation** and
+     * still empty, derived from the field plan.
+     *
+     * The operation-awareness is the server's — `resolveFieldPolicyForNode` recomputes the
+     * requirement set from each node's live config — so this moves when the user changes an
+     * operation. Undefined while the plan is loading; the rail then falls back to its row
+     * heuristic rather than claiming everything is ready.
+     */
+    outstandingByNodeId?: Record<string, number>;
+    /** Nodes still missing required fields, with the field labels, for the check report. */
+    incompleteNodes?: Array<{ nodeId: string; nodeLabel: string; missingLabels: string[] }>;
+    /**
      * Connection state per node type, from the same bounded readiness endpoint the
      * capability stage uses. Drives the connect fallback on cards for nodes the
      * generation pipeline injected, which the user never gated at node selection
@@ -112,10 +132,8 @@ export interface FieldOwnershipContext {
     /** Runs one node for real. `consented` must be true for write/destructive. */
     onRunNode?: (nodeId: string, consented: boolean) => void;
     isCredentialUnlocked: (question: OwnershipQuestion) => boolean;
-    startGlobalWalkThrough: (
-        structural: NodeQuestionGroup[],
-        secrets: NodeQuestionGroup[]
-    ) => void;
+    /** Walks every field of every node, in the order the cards render. */
+    startGlobalWalkThrough: (groups: NodeQuestionGroup[]) => void;
     fetchNodeDescription: (
         descKey: string,
         nodeType: string,

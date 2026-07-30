@@ -9,6 +9,22 @@ function base64Url(bytes = 32): string {
   return crypto.randomBytes(bytes).toString('base64url');
 }
 
+/**
+ * An OAuth callback failure that knows where the flow was started from.
+ *
+ * The popup has to be redirected back to the origin that opened it, otherwise the caller sits
+ * on a spinner while the failure is delivered to a different origin entirely. `returnTo` is
+ * null only when the OAuth state row could not be resolved, which is the one case where the
+ * origin is genuinely unknowable.
+ */
+export type OAuthCallbackError = Error & { returnTo?: string | null };
+
+/** Reads the origin hint off a thrown value without assuming its shape. */
+export function returnToFromError(error: unknown): string | null {
+  const value = (error as OAuthCallbackError | undefined)?.returnTo;
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
 function oauthClient(definition: CredentialTypeDefinition): { clientId: string; clientSecret: string; redirectUri: string } {
   if (!definition.oauth2) throw new Error('Credential type is not OAuth2');
   const clientId = process.env[definition.oauth2.clientIdEnv];
@@ -94,8 +110,29 @@ export class OAuthService {
       [stateHash],
     );
     const state = rows[0];
+    // Genuinely unknowable origin: without the state row there is no return_to to recover, so
+    // the caller's FRONTEND_URL fallback is the only option for this one case.
     if (!state) throw new Error('Invalid or expired OAuth state');
 
+    // Everything below this point knows where the flow started. Any failure here must carry
+    // `return_to` back to the caller, or the popup is redirected to FRONTEND_URL and whoever
+    // started the flow is never told it failed — they just watch a spinner until it times out.
+    // That silently swallowed every OAuth failure, for every provider, including in production.
+    try {
+      return await this.completeCallback(input, state);
+    } catch (error) {
+      if (error instanceof Error) {
+        (error as OAuthCallbackError).returnTo = state.return_to ?? null;
+      }
+      throw error;
+    }
+  }
+
+  /** Callback work that happens once the OAuth state row has been resolved. */
+  private async completeCallback(
+    input: { code: string; state: string },
+    state: any,
+  ): Promise<{ connectionId: string; returnTo?: string | null }> {
     const definition = getCredentialType(state.credential_type_id);
     if (!definition?.oauth2) throw new Error('OAuth state references an unknown credential type');
 

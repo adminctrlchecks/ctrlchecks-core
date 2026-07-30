@@ -15,6 +15,15 @@ export interface CapabilityConnectionReadinessNode {
   nodeType: string;
   nodeLabel: string;
   connected: boolean;
+  /**
+   * Whether this node needs a credential at all. `connected: true` alone is ambiguous —
+   * it means both "verified" and "nothing to verify", which would render a credential-free
+   * node like manual_trigger as green "Connected".
+   *
+   * Optional so a frontend deployed ahead of the worker still parses: callers treat an
+   * absent value as "required" only when a provider is present.
+   */
+  credentialRequired?: boolean;
   provider?: string;
   providerLabel?: string;
   credentialTypeId?: string;
