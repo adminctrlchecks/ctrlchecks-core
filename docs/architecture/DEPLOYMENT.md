@@ -37,6 +37,29 @@ not the other, check which processes are actually up before assuming the code ch
 
 ## 2. Production — Hostinger
 
+### Two ways to deploy — and one of them was broken
+
+There are **two independent deploy paths**, and they had drifted apart:
+
+| Path | Trigger | Status |
+|---|---|---|
+| `.github/workflows/deploy-*.yml` | push to `master`, path-filtered | targets Hostinger ✅ |
+| `scripts/deploy-*.sh` | run by hand from a laptop | **7 of 8 targeted a dead AWS EC2 host** |
+
+Only `scripts/deploy-worker.sh` had been migrated to Hostinger
+(`root@187.127.185.105`, key `~/.ssh/id_ed25519`). The other seven still pointed at
+`ubuntu@3.7.115.58` with a PEM key — an EC2 box that no longer answers, so every one of them
+failed with `ssh: connect to host 3.7.115.58 port 22: Connection timed out`.
+
+The six backend service scripts have been repointed to match the worker's working
+configuration. **`scripts/deploy-frontend.sh` was deliberately left alone** — it also targets
+EC2 *and* `/var/www/ctrlchecks-frontend`, but the frontend actually deploys to **Vercel** on
+push to master. Repointing it would aim at a path that may not exist on Hostinger; the script
+appears superseded and should probably be deleted rather than fixed.
+
+**Lesson worth keeping:** when a host changes, both paths need updating. The CI path was
+fixed and the manual path silently rotted, which is invisible until someone deploys by hand.
+
 ### Pipeline
 
 Each service has its own workflow in `.github/workflows/`, all with the same shape:
