@@ -22,15 +22,15 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SERVICE_DIR="$REPO_ROOT/services/credential-service"
-SERVER_USER="ubuntu"
-SERVER_HOST="3.7.115.58"
+SERVER_USER="root"
+SERVER_HOST="187.127.185.105"
 SERVER_PATH="/opt/ctrlchecks-credential-service"
-PEM_KEY="$REPO_ROOT/Guide/Worker/ctrlchecks-backend.pem"
-SSH_OPTS="-i $PEM_KEY -o StrictHostKeyChecking=no"
+SSH_KEY="${DEPLOY_KEY:-$HOME/.ssh/id_ed25519}"
+SSH_OPTS="-i $SSH_KEY -o StrictHostKeyChecking=no -o ConnectTimeout=15"
 
 # ── 1. Prerequisites check ────────────────────────────────────────────────────
-if [[ ! -f "$PEM_KEY" ]]; then
-  echo "❌ PEM key not found: $PEM_KEY" >&2
+if [[ ! -f "$SSH_KEY" ]]; then
+  echo "❌ SSH key not found at $SSH_KEY" >&2
   exit 1
 fi
 
