@@ -1,0 +1,403 @@
+{
+  "id": "c0164dcb-4c8e-4be8-a806-4d00d2a969b7",
+  "name": "Submission Package Builder",
+  "description": "Once a client's readiness score clears the bar, this workflow automatically gathers the homepage/policy screenshots, live policy text, and already-uploaded documents a verification submission needs, and emails you all the pieces. Simplification: since this platform has no PDF-merge node, the pieces are delivered as individual links rather than one combined PDF.",
+  "category": "Business Verification & Compliance",
+  "nodes": [
+    {
+      "id": "schedule_poll_ready",
+      "data": {
+        "icon": "Clock",
+        "type": "schedule",
+        "label": "Poll for Ready Clients",
+        "config": {
+          "cron": "*/15 * * * *",
+          "timezone": "UTC"
+        },
+        "category": "triggers",
+        "notes": {
+          "family": "Triggers",
+          "what": "Works like an alarm clock — runs your workflow automatically at a specific time you set each day",
+          "overview": "Runs your workflow automatically on a schedule using a simple time picker. Select your time (HH:MM format) and timezone, and the workflow will execute daily at that time. Great for daily reports, periodic checks, or recurring tasks.",
+          "tips": [
+            "Use 24-hour format (e.g., 09:00 for 9 AM, 14:30 for 2:30 PM)",
+            "Select your timezone from the dropdown (IST, UTC, etc.)",
+            "Workflow runs daily at the specified time",
+            "Test with manual trigger first",
+            "Timezone conversion is handled automatically"
+          ],
+          "docsHref": "/docs/nodes/schedule",
+          "why": "Polls for clients who have cleared the readiness bar. One client per run."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      }
+    },
+    {
+      "id": "airtable_read_ready_status",
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Read Clients With Status = Ready",
+        "config": {
+          "baseId": "",
+          "tableId": "Clients",
+          "operation": "read",
+          "filterByFormula": "AND({Status}='Ready', {PackageSentAt}='')",
+          "maxRecords": 1
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Picks up one ready client whose package has not been built yet."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      }
+    },
+    {
+      "id": "js_detect_newly_ready_status",
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Select Ready Client",
+        "config": {
+          "code": "const rec = (input.records || [])[0];\nif (!rec) return { ...input, hasClient: false };\nconst f = rec.fields || {};\nreturn {\n  ...input,\n  hasClient: true,\n  recordId: rec.id,\n  businessName: f.Name || \"\",\n  website: f.Website || \"\",\n  contactEmail: f.Email || \"\",\n  sentAt: new Date().toISOString()\n};"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Lifts the client's website, name and email to the top level for the steps below."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      }
+    },
+    {
+      "id": "http_screenshot_pages",
+      "data": {
+        "icon": "Globe",
+        "type": "http_request",
+        "label": "Screenshot Homepage & Policy Pages",
+        "config": {
+          "url": "https://api.screenshotone.com/take?url={{input.website}}&access_key=REPLACE_WITH_YOUR_SCREENSHOTONE_ACCESS_KEY",
+          "method": "GET",
+          "headers": {},
+          "timeout": 15000
+        },
+        "category": "http_api",
+        "notes": {
+          "family": "HTTP & API",
+          "what": "Calls any web URL and gets data back — your universal connector to the internet",
+          "overview": "Call an external API or webhook, optionally adding headers, query parameters, body data, and a timeout.",
+          "tips": [],
+          "docsHref": "/docs/nodes/http_request",
+          "why": "Captures the homepage and policy pages as images, which verification submissions usually require as evidence. Needs your own screenshot API key — replace the placeholder."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 205
+      }
+    },
+    {
+      "id": "http_fetch_policy_text",
+      "data": {
+        "icon": "Globe",
+        "type": "http_request",
+        "label": "Fetch Privacy Policy / Terms Text",
+        "config": {
+          "url": "{{input.website}}/privacy-policy",
+          "method": "GET",
+          "headers": {},
+          "timeout": 10000
+        },
+        "category": "http_api",
+        "notes": {
+          "family": "HTTP & API",
+          "what": "Calls any web URL and gets data back — your universal connector to the internet",
+          "overview": "Call an external API or webhook, optionally adding headers, query parameters, body data, and a timeout.",
+          "tips": [],
+          "docsHref": "/docs/nodes/http_request",
+          "why": "Pulls the live privacy policy and terms text so the submission quotes what is actually published today."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 395
+      }
+    },
+    {
+      "id": "drive_list_existing_docs",
+      "data": {
+        "icon": "HardDrive",
+        "type": "google_drive",
+        "label": "List Client Documents in Drive",
+        "config": {
+          "operation": "list"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Upload, download, list, or delete files in your Google Drive",
+          "overview": "List, upload, or download files in Google Drive. The Delete option is shown in the dropdown but is not implemented by the runtime executor â€” selecting it always fails.",
+          "tips": [
+            "Leave Folder ID empty to list/upload across the whole Drive, not just the root",
+            "File IDs are in the URL: /file/d/FILE_ID/view",
+            "Upload requires base64, plain text, or a data URL for File Data",
+            "Download returns dataBase64 for binary files (PDFs, images), or content for text/JSON files",
+            "Delete is not implemented â€” it always fails with \"Unsupported Google Drive operation: delete\""
+          ],
+          "docsHref": "/docs/nodes/google_drive",
+          "why": "Collects the documents already on file so the package is complete rather than partial."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2020,
+        "y": 300
+      }
+    },
+    {
+      "id": "gmail_send_package",
+      "data": {
+        "icon": "Mail",
+        "type": "google_gmail",
+        "label": "Email the Submission Package",
+        "config": {
+          "body": "Everything needed to submit {{input.businessName}} for verification:\n\nHomepage screenshot: {{input.screenshotUrl}}\nPrivacy Policy / Terms text: {{input.policyText}}\nExisting documents on file: {{input.files}}\n\nReview and submit whenever ready.",
+          "subject": "Submission package ready for {{input.businessName}}",
+          "operation": "send",
+          "recipientEmails": "{{input.contactEmail}}",
+          "recipientSource": "manual_entry"
+        },
+        "category": "output",
+        "notes": {
+          "family": "Communication",
+          "what": "Send emails from your Gmail account or read and search messages in your inbox",
+          "overview": "Send, list, get, or search Gmail messages. Send recipients can be typed manually or extracted from upstream/fallback Google Sheets rows.",
+          "tips": [
+            "Connect Google OAuth in Connections; do not paste tokens into workflow fields",
+            "Gmail search syntax: from:, subject:, is:unread, has:attachment",
+            "List/Search only return {id, threadId} per message â€” use a Get step with that id for full content",
+            "Body is plain text only",
+            "Get returns Gmail's raw API message; the body text is base64url-encoded inside message.payload.body.data",
+            "Use search to filter messages before getting details"
+          ],
+          "docsHref": "/docs/nodes/google_gmail",
+          "why": "Delivers every piece needed for the submission in one email. Pieces are sent as separate links because the platform has no PDF-merge step."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2660,
+        "y": 300
+      }
+    },
+    {
+      "id": "merge_package",
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 300
+      },
+      "data": {
+        "icon": "GitMerge",
+        "type": "merge",
+        "label": "Combine Package Pieces",
+        "category": "logic",
+        "config": {},
+        "notes": {
+          "family": "Logic",
+          "what": "Combines results coming from two paths into one",
+          "overview": "Rejoins multiple workflow branches and combines their data into one payload for the next step.",
+          "tips": [
+            "Use overwrite for simple flat objects when duplicate keys can be replaced.",
+            "Use append when the next node should receive a list at {{$json.items}}.",
+            "Use deep_merge when branches add different nested details that should survive together.",
+            "Connect every branch that should rejoin into Merge, then connect Merge output to the final action."
+          ],
+          "docsHref": "/docs/nodes/merge",
+          "why": "Joins the screenshot and policy-text branches. Without this join the email could only ever see one of the two."
+        }
+      }
+    },
+    {
+      "id": "airtable_mark_package_sent",
+      "type": "custom",
+      "position": {
+        "x": 2340,
+        "y": 300
+      },
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Mark Package as Sent",
+        "category": "data",
+        "config": {
+          "baseId": "",
+          "tableId": "Clients",
+          "operation": "update",
+          "recordId": "{{input.recordId}}",
+          "fields": {
+            "PackageSentAt": "{{input.sentAt}}"
+          }
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Stamps the client as packaged so the same package is not rebuilt and re-emailed every 15 minutes."
+        }
+      }
+    },
+    {
+      "id": "if_hasclient",
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      },
+      "data": {
+        "icon": "GitBranch",
+        "type": "if_else",
+        "label": "Any Ready Client?",
+        "category": "logic",
+        "config": {
+          "conditions": [
+            {
+              "field": "$json.hasClient",
+              "operator": "equals",
+              "value": true
+            }
+          ],
+          "combineOperation": "AND"
+        },
+        "notes": {
+          "family": "Logic",
+          "what": "Makes a yes/no decision: if something is true, go one way; otherwise go another",
+          "overview": "Makes a yes/no decision from previous-step data and routes matching work through TRUE and non-matching work through FALSE.",
+          "tips": [
+            "Use the builder for normal setup; use JSON mode only when pasting prepared condition objects.",
+            "Choose AND when every row must match; choose OR when any row can match.",
+            "Use equals for statuses and categories, greater-than operators for numeric thresholds, and contains for text or lists.",
+            "Connect both TRUE and FALSE outputs so no business case silently disappears."
+          ],
+          "docsHref": "/docs/nodes/if_else",
+          "why": "Most polls find nothing. Without this the workflow screenshotted a blank URL and emailed an empty package every 15 minutes."
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "schedule_poll_ready",
+      "target": "airtable_read_ready_status"
+    },
+    {
+      "id": "e2",
+      "source": "airtable_read_ready_status",
+      "target": "js_detect_newly_ready_status"
+    },
+    {
+      "id": "e3",
+      "source": "if_hasclient",
+      "target": "http_screenshot_pages",
+      "sourceHandle": "true"
+    },
+    {
+      "id": "e4",
+      "source": "if_hasclient",
+      "target": "http_fetch_policy_text",
+      "sourceHandle": "true"
+    },
+    {
+      "id": "e5",
+      "source": "http_screenshot_pages",
+      "target": "merge_package"
+    },
+    {
+      "id": "e6",
+      "source": "http_fetch_policy_text",
+      "target": "merge_package"
+    },
+    {
+      "id": "e7",
+      "source": "drive_list_existing_docs",
+      "target": "airtable_mark_package_sent"
+    },
+    {
+      "id": "e_merge_package_drive",
+      "source": "merge_package",
+      "target": "drive_list_existing_docs"
+    },
+    {
+      "id": "e_airtable_mark_package_sent_gmail_send_package",
+      "source": "airtable_mark_package_sent",
+      "target": "gmail_send_package"
+    },
+    {
+      "id": "e_js_detect_newly_ready_status_if_hasclient",
+      "source": "js_detect_newly_ready_status",
+      "target": "if_hasclient"
+    }
+  ],
+  "difficulty": "Intermediate",
+  "estimated_setup_time": 21,
+  "tags": [
+    "verification",
+    "compliance",
+    "google-drive",
+    "automation",
+    "documents"
+  ],
+  "preview_image": null,
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2,
+  "created_by": null,
+  "updated_by": null,
+  "created_at": "2026-07-14T11:20:27.820Z",
+  "updated_at": "2026-07-14T11:20:27.820Z"
+}

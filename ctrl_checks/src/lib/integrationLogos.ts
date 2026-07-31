@@ -114,6 +114,9 @@ export const INTEGRATION_LOGO_MAP: Record<string, string> = {
   slack:            '/integrations-logos/Slack.svg',
   slack_message:    '/integrations-logos/Slack.svg',
   slack_trigger:    '/integrations-logos/Slack.svg',
+  // An incoming webhook is a different credential from the Slack OAuth app, but
+  // it is still Slack to the person looking at it.
+  slack_webhook:    '/integrations-logos/Slack.svg',
   zoom:             '/integrations-logos/Zoom.svg',
   zoom_video:       '/integrations-logos/Zoom.svg',
   twilio:           '/integrations-logos/Twilio.svg',

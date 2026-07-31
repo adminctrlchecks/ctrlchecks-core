@@ -1,0 +1,204 @@
+{
+  "id": "ca1c8a37-6786-4dce-a785-a3288283e794",
+  "name": "Client Priority Ranker",
+  "description": "With limited account-management time, this workflow runs every week, reviews every client’s history of delays and issues, estimates who is likely to need help, and sends your team a ranked list so attention goes to the accounts that need it most.",
+  "category": "Business Verification & Compliance",
+  "nodes": [
+    {
+      "id": "schedule_weekly_rank",
+      "data": {
+        "icon": "Clock",
+        "type": "schedule",
+        "label": "Run Weekly",
+        "config": {
+          "cron": "0 9 * * 1",
+          "timezone": "UTC"
+        },
+        "category": "triggers",
+        "notes": {
+          "family": "Triggers",
+          "what": "Works like an alarm clock — runs your workflow automatically at a specific time you set each day",
+          "overview": "Runs your workflow automatically on a schedule using a simple time picker. Select your time (HH:MM format) and timezone, and the workflow will execute daily at that time. Great for daily reports, periodic checks, or recurring tasks.",
+          "tips": [
+            "Use 24-hour format (e.g., 09:00 for 9 AM, 14:30 for 2:30 PM)",
+            "Select your timezone from the dropdown (IST, UTC, etc.)",
+            "Workflow runs daily at the specified time",
+            "Test with manual trigger first",
+            "Timezone conversion is handled automatically"
+          ],
+          "docsHref": "/docs/nodes/schedule",
+          "why": "Weekly is deliberate: this ranking is for planning the week's account-management time, not for reacting to events."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      }
+    },
+    {
+      "id": "airtable_read_client_history",
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Read Every Client's History",
+        "config": {
+          "baseId": "",
+          "tableId": "Clients",
+          "operation": "read",
+          "maxRecords": 200
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Reads every client's delay and issue history — the ranking needs the whole set to rank them against each other. Capped at 200 rows so a large table cannot overflow the prompt."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      }
+    },
+    {
+      "id": "ai_estimate_outcomes",
+      "data": {
+        "icon": "Brain",
+        "type": "openai_gpt",
+        "label": "Estimate Success Likelihood",
+        "config": {
+          "model": "gpt-4o-mini",
+          "prompt": "For each client in this list: {{input.records}}, estimate how likely they are to succeed vs. need help, based on their delay history, issue count, and past outcomes. For each client, output a line: \"ClientName | needsHelp: true/false | priority: 1-10\".",
+          "temperature": 0.3
+        },
+        "category": "ai",
+        "notes": {
+          "family": "AI",
+          "what": "Sends your prompt to OpenAI's ChatGPT and gets back an AI-written response",
+          "overview": "Calls OpenAI through the legacy LLM adapter. Prompt is the main input; Messages is only a fallback when Prompt is blank. Temperature and Memory are visible legacy fields ignored by the current executor.",
+          "tips": [],
+          "docsHref": "/docs/nodes/openai_gpt",
+          "why": "Judges which clients are drifting, using patterns a fixed rule would miss. Output format is one line per client so the next step can sort it."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      }
+    },
+    {
+      "id": "js_sort_by_priority",
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Sort by Priority",
+        "config": {
+          "code": "const text = input.response || input.text || input.content || \"\";\nconst ranked = text.split(\"\\n\")\n  .filter(l => l.includes(\"|\"))\n  .map(l => {\n    const parts = l.split(\"|\").map(p => p.trim());\n    const priorityPart = parts.find(p => p.toLowerCase().startsWith(\"priority\"));\n    const priority = priorityPart ? parseInt(priorityPart.split(\":\")[1], 10) : 5;\n    return { client: parts[0], line: l, priority: isNaN(priority) ? 5 : priority };\n  })\n  .sort((a, b) => b.priority - a.priority);\n// Slack renders a string, not an object array.\nconst rankedText = ranked.map((r, i) => (i + 1) + \". \" + r.client + \"  (priority \" + r.priority + \")\").join(\"\\n\");\nreturn { ...input, ranked, rankedText, rankedCount: ranked.length };"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Sorts the AI's lines into a ranked list and formats it as text. Slack renders raw objects as unreadable JSON, so the formatting matters."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      }
+    },
+    {
+      "id": "slack_send_ranked_list",
+      "data": {
+        "icon": "MessageCircle",
+        "type": "slack_message",
+        "label": "Send Ranked List to Team",
+        "config": {
+          "channel": "#account-management",
+          "message": ":clipboard: This week's client priority ranking ({{input.rankedCount}} clients, highest first):\n{{input.rankedText}}"
+        },
+        "category": "output",
+        "notes": {
+          "family": "Communication",
+          "what": "Sends messages using a Slack app or bot connection",
+          "overview": "Send Slack bot messages to channels, direct messages, or existing threads through a saved Slack OAuth2 connection. Use it for workplace alerts, support replies, incident updates, approvals, report summaries, and deployment notifications.",
+          "tips": [
+            "Select a Slack OAuth2 connection; do not paste bot tokens into message fields",
+            "The Slack app needs chat:write, and the bot must be invited before it can post in private channels",
+            "Use {{$json.channelId}} and {{$json.threadTs}} from Slack Trigger to reply in the same conversation",
+            "Keep Message filled as readable fallback text even when Blocks contains a rich Block Kit layout",
+            "Connect downstream service accounts separately; Slack OAuth2 only authorizes the Slack send"
+          ],
+          "docsHref": "/docs/nodes/slack_message",
+          "why": "Puts the ranked list where the team already works. This is the whole output of the workflow."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 300
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "schedule_weekly_rank",
+      "target": "airtable_read_client_history"
+    },
+    {
+      "id": "e2",
+      "source": "airtable_read_client_history",
+      "target": "ai_estimate_outcomes"
+    },
+    {
+      "id": "e3",
+      "source": "ai_estimate_outcomes",
+      "target": "js_sort_by_priority"
+    },
+    {
+      "id": "e4",
+      "source": "js_sort_by_priority",
+      "target": "slack_send_ranked_list"
+    }
+  ],
+  "difficulty": "Intermediate",
+  "estimated_setup_time": 15,
+  "tags": [
+    "account-management",
+    "ai",
+    "slack",
+    "prioritization",
+    "airtable"
+  ],
+  "preview_image": null,
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 2,
+  "version": 2,
+  "created_by": null,
+  "updated_by": null,
+  "created_at": "2026-07-14T11:20:27.820Z",
+  "updated_at": "2026-07-27T05:47:46.251Z"
+}

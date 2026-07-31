@@ -1,0 +1,345 @@
+{
+  "id": "8431165d-7466-4579-8940-8b0724b28db2",
+  "name": "Overdue Task Tracker",
+  "description": "Requests shouldn't sit untouched until a client complains. This workflow checks open items every hour, flags anything past its expected turnaround, alerts the responsible person, and escalates to their manager once it's gone very overdue.",
+  "category": "Business Verification & Compliance",
+  "nodes": [
+    {
+      "id": "schedule_hourly_check",
+      "data": {
+        "icon": "Clock",
+        "type": "schedule",
+        "label": "Check Every 5 Minutes",
+        "config": {
+          "cron": "*/5 * * * *",
+          "timezone": "UTC"
+        },
+        "category": "triggers",
+        "notes": {
+          "family": "Triggers",
+          "what": "Works like an alarm clock — runs your workflow automatically at a specific time you set each day",
+          "overview": "Runs your workflow automatically on a schedule using a simple time picker. Select your time (HH:MM format) and timezone, and the workflow will execute daily at that time. Great for daily reports, periodic checks, or recurring tasks.",
+          "tips": [
+            "Use 24-hour format (e.g., 09:00 for 9 AM, 14:30 for 2:30 PM)",
+            "Select your timezone from the dropdown (IST, UTC, etc.)",
+            "Workflow runs daily at the specified time",
+            "Test with manual trigger first",
+            "Timezone conversion is handled automatically"
+          ],
+          "docsHref": "/docs/nodes/schedule",
+          "why": "Runs every 5 minutes, handling one overdue request per run so a backlog clears quickly."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      }
+    },
+    {
+      "id": "airtable_read_open_requests",
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Read Open Requests",
+        "config": {
+          "baseId": "",
+          "tableId": "Requests",
+          "operation": "read",
+          "filterByFormula": "AND({Status}!='Closed', OR({LastAlertedAt}='', DATETIME_DIFF(NOW(), {LastAlertedAt}, 'hours') >= 4))",
+          "maxRecords": 1,
+          "sort": [
+            {
+              "field": "OpenedAt",
+              "direction": "asc"
+            }
+          ]
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Picks up one open request that is either unalerted or last alerted more than 4 hours ago — that window is what stops the same request pinging someone hourly forever."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      }
+    },
+    {
+      "id": "js_flag_overdue",
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Select Overdue Request",
+        "config": {
+          "code": "const rec = (input.records || [])[0];\nif (!rec) return { ...input, isOverdue: false };\nconst f = rec.fields || {};\nconst HOUR = 3600000;\nconst hoursOpen = Math.round((Date.now() - new Date(f.OpenedAt).getTime()) / HOUR);\nconst slaHours = f.SlaHours || 24;\nreturn {\n  ...input,\n  recordId: rec.id,\n  title: f.Title || f.Name || \"Untitled request\",\n  hoursOpen,\n  slaHours,\n  isOverdue: hoursOpen > slaHours,\n  isVeryOverdue: hoursOpen > slaHours * 2,\n  ownerSlackChannel: f.OwnerSlackChannel || \"#operations\",\n  managerSlackChannel: f.ManagerSlackChannel || \"#operations-escalations\",\n  alertedAt: new Date().toISOString()\n};"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Compares how long the request has been open against its SLA and works out whether it is overdue or very overdue. Owner and manager channels come from the request row."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      }
+    },
+    {
+      "id": "slack_alert_owner",
+      "data": {
+        "icon": "MessageCircle",
+        "type": "slack_message",
+        "label": "Alert Responsible Person",
+        "config": {
+          "channel": "{{input.ownerSlackChannel}}",
+          "message": ":clock3: Request *{{input.title}}* is overdue ({{input.hoursOpen}}h open, SLA {{input.slaHours}}h). Please action it."
+        },
+        "category": "output",
+        "notes": {
+          "family": "Communication",
+          "what": "Sends messages using a Slack app or bot connection",
+          "overview": "Send Slack bot messages to channels, direct messages, or existing threads through a saved Slack OAuth2 connection. Use it for workplace alerts, support replies, incident updates, approvals, report summaries, and deployment notifications.",
+          "tips": [
+            "Select a Slack OAuth2 connection; do not paste bot tokens into message fields",
+            "The Slack app needs chat:write, and the bot must be invited before it can post in private channels",
+            "Use {{$json.channelId}} and {{$json.threadTs}} from Slack Trigger to reply in the same conversation",
+            "Keep Message filled as readable fallback text even when Blocks contains a rich Block Kit layout",
+            "Connect downstream service accounts separately; Slack OAuth2 only authorizes the Slack send"
+          ],
+          "docsHref": "/docs/nodes/slack_message",
+          "why": "Tells the person responsible, in their own channel, before the client notices."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 205
+      }
+    },
+    {
+      "id": "if_very_overdue",
+      "data": {
+        "icon": "GitBranch",
+        "type": "if_else",
+        "label": "Is It Very Overdue?",
+        "config": {
+          "conditions": [
+            {
+              "field": "$json.isVeryOverdue",
+              "operator": "equals",
+              "value": true
+            }
+          ],
+          "combineOperation": "AND"
+        },
+        "category": "logic",
+        "notes": {
+          "family": "Logic",
+          "what": "Makes a yes/no decision: if something is true, go one way; otherwise go another",
+          "overview": "Makes a yes/no decision from previous-step data and routes matching work through TRUE and non-matching work through FALSE.",
+          "tips": [
+            "Use the builder for normal setup; use JSON mode only when pasting prepared condition objects.",
+            "Choose AND when every row must match; choose OR when any row can match.",
+            "Use equals for statuses and categories, greater-than operators for numeric thresholds, and contains for text or lists.",
+            "Connect both TRUE and FALSE outputs so no business case silently disappears."
+          ],
+          "docsHref": "/docs/nodes/if_else",
+          "why": "Separates 'late' from 'badly late'. Only the second one involves a manager."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 395
+      }
+    },
+    {
+      "id": "slack_escalate_manager",
+      "data": {
+        "icon": "MessageCircle",
+        "type": "slack_message",
+        "label": "Escalate to Manager",
+        "config": {
+          "channel": "{{input.managerSlackChannel}}",
+          "message": ":rotating_light: Escalation: *{{input.title}}* is very overdue ({{input.hoursOpen}}h open, SLA {{input.slaHours}}h) and still unresolved."
+        },
+        "category": "output",
+        "notes": {
+          "family": "Communication",
+          "what": "Sends messages using a Slack app or bot connection",
+          "overview": "Send Slack bot messages to channels, direct messages, or existing threads through a saved Slack OAuth2 connection. Use it for workplace alerts, support replies, incident updates, approvals, report summaries, and deployment notifications.",
+          "tips": [
+            "Select a Slack OAuth2 connection; do not paste bot tokens into message fields",
+            "The Slack app needs chat:write, and the bot must be invited before it can post in private channels",
+            "Use {{$json.channelId}} and {{$json.threadTs}} from Slack Trigger to reply in the same conversation",
+            "Keep Message filled as readable fallback text even when Blocks contains a rich Block Kit layout",
+            "Connect downstream service accounts separately; Slack OAuth2 only authorizes the Slack send"
+          ],
+          "docsHref": "/docs/nodes/slack_message",
+          "why": "Escalates when something has gone past twice its SLA and still nobody has acted."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 205
+      }
+    },
+    {
+      "id": "airtable_mark_alerted",
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 395
+      },
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Record Alert Sent",
+        "category": "data",
+        "config": {
+          "baseId": "",
+          "tableId": "Requests",
+          "operation": "update",
+          "recordId": "{{input.recordId}}",
+          "fields": {
+            "LastAlertedAt": "{{input.alertedAt}}"
+          }
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Stamps the alert time, which is what makes the 4-hour re-alert window work."
+        }
+      }
+    },
+    {
+      "id": "if_isoverdue",
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      },
+      "data": {
+        "icon": "GitBranch",
+        "type": "if_else",
+        "label": "Anything Actually Overdue?",
+        "category": "logic",
+        "config": {
+          "conditions": [
+            {
+              "field": "$json.isOverdue",
+              "operator": "equals",
+              "value": true
+            }
+          ],
+          "combineOperation": "AND"
+        },
+        "notes": {
+          "family": "Logic",
+          "what": "Makes a yes/no decision: if something is true, go one way; otherwise go another",
+          "overview": "Makes a yes/no decision from previous-step data and routes matching work through TRUE and non-matching work through FALSE.",
+          "tips": [
+            "Use the builder for normal setup; use JSON mode only when pasting prepared condition objects.",
+            "Choose AND when every row must match; choose OR when any row can match.",
+            "Use equals for statuses and categories, greater-than operators for numeric thresholds, and contains for text or lists.",
+            "Connect both TRUE and FALSE outputs so no business case silently disappears."
+          ],
+          "docsHref": "/docs/nodes/if_else",
+          "why": "Most polls find nothing overdue. Without this the workflow posted a blank Slack alert every 5 minutes."
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "schedule_hourly_check",
+      "target": "airtable_read_open_requests"
+    },
+    {
+      "id": "e2",
+      "source": "airtable_read_open_requests",
+      "target": "js_flag_overdue"
+    },
+    {
+      "id": "e3",
+      "source": "if_isoverdue",
+      "target": "slack_alert_owner",
+      "sourceHandle": "true"
+    },
+    {
+      "id": "e4",
+      "source": "if_isoverdue",
+      "target": "if_very_overdue",
+      "sourceHandle": "true"
+    },
+    {
+      "id": "e5",
+      "source": "if_very_overdue",
+      "target": "slack_escalate_manager",
+      "sourceHandle": "true"
+    },
+    {
+      "id": "e_slack_alert_owner_airtable_mark_alerted",
+      "source": "slack_alert_owner",
+      "target": "airtable_mark_alerted"
+    },
+    {
+      "id": "e_js_flag_overdue_if_isoverdue",
+      "source": "js_flag_overdue",
+      "target": "if_isoverdue"
+    }
+  ],
+  "difficulty": "Beginner",
+  "estimated_setup_time": 15,
+  "tags": [
+    "sla",
+    "slack",
+    "operations",
+    "monitoring",
+    "airtable"
+  ],
+  "preview_image": null,
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2,
+  "created_by": null,
+  "updated_by": null,
+  "created_at": "2026-07-14T11:20:27.820Z",
+  "updated_at": "2026-07-14T11:20:27.820Z"
+}

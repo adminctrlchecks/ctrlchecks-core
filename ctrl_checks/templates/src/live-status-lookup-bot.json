@@ -1,0 +1,206 @@
+{
+  "id": "1773b93e-cd04-42a9-914e-96e93dfe4bd6",
+  "name": "Live Status Lookup Bot",
+  "description": "The simplest way to check where a client stands without opening Airtable or asking someone else to look it up. Type a client name or order number in chat and get back a clean, formatted status straight from the live record.",
+  "category": "Business Verification & Compliance",
+  "nodes": [
+    {
+      "id": "chat_trigger_status",
+      "data": {
+        "icon": "MessageSquare",
+        "type": "chat_trigger",
+        "label": "Status Question",
+        "config": {},
+        "category": "triggers",
+        "notes": {
+          "family": "Triggers",
+          "what": "Starts your workflow when someone types a message in a chat interface",
+          "overview": "Starting node that runs when someone sends a message through the CtrlChecks chat interface for an active workflow. The node panel has no setup fields today; the chat page supplies the message and session details at runtime.",
+          "tips": [
+            "Use as the first node in chatbot, assistant, support intake, or guided request workflows",
+            "Map {{$json.message}} into AI Agent or HTTP Request when the next step needs the visitor question",
+            "Use Chat Send after the answer is prepared; it can read {{$json.sessionId}} from the connected Chat Trigger output",
+            "The workflow must be active before the public chat URL accepts messages",
+            "Downstream app nodes such as Slack, Gmail, CRM, or database actions still need their own account connection"
+          ],
+          "docsHref": "/docs/nodes/chat_trigger",
+          "why": "Lets anyone check a client's status without opening Airtable or asking a colleague."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      }
+    },
+    {
+      "id": "js_parse_lookup",
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Parse Client Name / Order Number",
+        "config": {
+          "code": "const raw = (typeof input === 'string') ? input : (input && (input.message || input.query || input.text)) || '';\nreturn { ...(typeof input === \"object\" && input ? input : {}), lookupValue: raw.trim() };"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Takes the raw chat message as the search term. Written to work whether the chat trigger hands over a string or an object."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      }
+    },
+    {
+      "id": "airtable_lookup_status",
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Lookup Live Record",
+        "config": {
+          "baseId": "",
+          "tableId": "Clients",
+          "operation": "read",
+          "filterByFormula": "SEARCH(LOWER('{{input.lookupValue}}'), LOWER({Name}))",
+          "maxRecords": 1
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Finds the matching client. The name filter is essential — without it the bot returns the same first row no matter what was asked."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      }
+    },
+    {
+      "id": "js_format_reply",
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Format Clean Reply",
+        "config": {
+          "code": "const rec = (input.records || [])[0];\nif (!rec) {\n  return { ...input, reply: \"I could not find a client matching \\\"\" + input.lookupValue + \"\\\". Check the spelling, or try part of the name.\" };\n}\nconst f = rec.fields || {};\nconst reply = \"Status for \" + (f.Name || input.lookupValue) + \": \" + (f.Status || \"unknown\") +\n  \". Score: \" + (f.Score != null ? f.Score : \"n/a\") +\n  \". Missing docs: \" + (f.Missing || \"none on file\") + \".\";\nreturn { ...input, reply };"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Turns the record into a readable sentence, and says so plainly when nothing matched instead of returning a half-empty status line."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      }
+    },
+    {
+      "id": "slack_send_status_reply",
+      "data": {
+        "icon": "MessageCircle",
+        "type": "slack_message",
+        "label": "Send Status Reply",
+        "config": {
+          "channel": "{{input.channel}}",
+          "message": "{{input.reply}}"
+        },
+        "category": "output",
+        "notes": {
+          "family": "Communication",
+          "what": "Sends messages using a Slack app or bot connection",
+          "overview": "Send Slack bot messages to channels, direct messages, or existing threads through a saved Slack OAuth2 connection. Use it for workplace alerts, support replies, incident updates, approvals, report summaries, and deployment notifications.",
+          "tips": [
+            "Select a Slack OAuth2 connection; do not paste bot tokens into message fields",
+            "The Slack app needs chat:write, and the bot must be invited before it can post in private channels",
+            "Use {{$json.channelId}} and {{$json.threadTs}} from Slack Trigger to reply in the same conversation",
+            "Keep Message filled as readable fallback text even when Blocks contains a rich Block Kit layout",
+            "Connect downstream service accounts separately; Slack OAuth2 only authorizes the Slack send"
+          ],
+          "docsHref": "/docs/nodes/slack_message",
+          "why": "Replies in the channel where the question was asked."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 300
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "chat_trigger_status",
+      "target": "js_parse_lookup"
+    },
+    {
+      "id": "e2",
+      "source": "js_parse_lookup",
+      "target": "airtable_lookup_status"
+    },
+    {
+      "id": "e3",
+      "source": "airtable_lookup_status",
+      "target": "js_format_reply"
+    },
+    {
+      "id": "e4",
+      "source": "js_format_reply",
+      "target": "slack_send_status_reply"
+    }
+  ],
+  "difficulty": "Beginner",
+  "estimated_setup_time": 12,
+  "tags": [
+    "chatbot",
+    "lookup",
+    "airtable",
+    "slack",
+    "status"
+  ],
+  "preview_image": null,
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2,
+  "created_by": null,
+  "updated_by": null,
+  "created_at": "2026-07-14T11:20:27.820Z",
+  "updated_at": "2026-07-14T11:20:27.820Z"
+}

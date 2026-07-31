@@ -1,0 +1,202 @@
+{
+  "id": "b7f3c1d2-4e58-4a91-9c06-2d8e5f0a7b34",
+  "name": "Document Vault — Smart Search",
+  "description": "Ask for any stored client document in plain English over chat and get the file link back. Reads the tagged vault built by \"Document Vault — Intake & Auto-Tagging\".",
+  "category": "Business Verification & Compliance",
+  "nodes": [
+    {
+      "id": "chat_trigger_search",
+      "data": {
+        "icon": "MessageSquare",
+        "type": "chat_trigger",
+        "label": "Search Request",
+        "config": {},
+        "category": "triggers",
+        "notes": {
+          "family": "Triggers",
+          "what": "Starts your workflow when someone types a message in a chat interface",
+          "overview": "Starting node that runs when someone sends a message through the CtrlChecks chat interface for an active workflow. The node panel has no setup fields today; the chat page supplies the message and session details at runtime.",
+          "tips": [
+            "Use as the first node in chatbot, assistant, support intake, or guided request workflows",
+            "Map {{$json.message}} into AI Agent or HTTP Request when the next step needs the visitor question",
+            "Use Chat Send after the answer is prepared; it can read {{$json.sessionId}} from the connected Chat Trigger output",
+            "The workflow must be active before the public chat URL accepts messages",
+            "Downstream app nodes such as Slack, Gmail, CRM, or database actions still need their own account connection"
+          ],
+          "docsHref": "/docs/nodes/chat_trigger",
+          "why": "Lets anyone ask for a document in plain English instead of digging through folders."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      }
+    },
+    {
+      "id": "js_parse_search_query",
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Parse Search Terms",
+        "config": {
+          "code": "const raw = (typeof input === 'string') ? input : (input && (input.message || input.query || input.text)) || '';\nreturn { ...(typeof input === \"object\" && input ? input : {}), searchQuery: raw };"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Takes the raw chat message and prepares it as a search term. Written to work whether the chat trigger hands over a string or an object."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      }
+    },
+    {
+      "id": "airtable_search_vault",
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Search Document Vault",
+        "config": {
+          "baseId": "",
+          "tableId": "DocumentVault",
+          "operation": "read",
+          "maxRecords": 200
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Reads the tagged vault built by the Intake template. Capped so a large vault cannot overflow the agent's prompt."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      }
+    },
+    {
+      "id": "ai_agent_find_match",
+      "data": {
+        "icon": "Bot",
+        "type": "ai_agent",
+        "label": "Find the Matching File",
+        "config": {
+          "model": "gemini-3.5-flash",
+          "userInput": "Search query: {{input.searchQuery}}\nAvailable documents: {{input.records}}",
+          "temperature": 0.2,
+          "systemPrompt": "You are a document vault search assistant. You are given a search query and a list of tagged documents (client, type, date, link). Find the single best match and reply with a short sentence containing its file link. If nothing matches well, say so and suggest what to search instead."
+        },
+        "category": "ai",
+        "notes": {
+          "family": "AI",
+          "what": "An autonomous AI brain that reasons, makes decisions, and uses tools on your behalf",
+          "overview": "Runs one prompt-driven AI step. The runtime extracts userInput from this node or upstream message-like fields, infers the provider from Model, calls the LLM adapter, and packages response_text plus optional structured fields.",
+          "tips": [],
+          "docsHref": "/docs/nodes/ai_agent",
+          "why": "Matches a loose human request ('that PAN card from March') against the tagged records and picks the best one."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      }
+    },
+    {
+      "id": "whatsapp_reply_search",
+      "data": {
+        "icon": "MessageCircle",
+        "type": "whatsapp",
+        "label": "Reply With File Link",
+        "config": {
+          "to": "{{input.senderPhone}}",
+          "text": "{{input.response}}",
+          "resource": "message",
+          "operation": "sendText"
+        },
+        "category": "output",
+        "notes": {
+          "family": "Communication",
+          "what": "Sends WhatsApp messages to customers via the official WhatsApp Business API",
+          "overview": "Send WhatsApp messages, media, locations, contact cards, approved templates, and interactive buttons/lists through the WhatsApp Business Cloud API. Connect a WhatsApp/Facebook account under Connections â€” credentials are resolved automatically. The visual panel exposes the Message resource; Contact, Conversation, Template, Campaign, and AI Agent resources are runtime-supported for advanced or AI-generated workflows.",
+          "tips": [
+            "Connect a WhatsApp account under Connections â€” no access tokens entered on the node itself",
+            "Phone numbers should be in E.164 format, e.g. +12345678900",
+            "First message to a new contact must use Send Template; free-form Send Text only works inside the 24-hour customer service window"
+          ],
+          "docsHref": "/docs/nodes/whatsapp",
+          "why": "Sends the file link straight back to whoever asked."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 300
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e3",
+      "source": "chat_trigger_search",
+      "target": "js_parse_search_query"
+    },
+    {
+      "id": "e4",
+      "source": "js_parse_search_query",
+      "target": "airtable_search_vault"
+    },
+    {
+      "id": "e5",
+      "source": "airtable_search_vault",
+      "target": "ai_agent_find_match"
+    },
+    {
+      "id": "e6",
+      "source": "ai_agent_find_match",
+      "target": "whatsapp_reply_search"
+    }
+  ],
+  "difficulty": "Advanced",
+  "estimated_setup_time": 12,
+  "tags": [
+    "ai-agent",
+    "document-management",
+    "search",
+    "airtable",
+    "chatbot"
+  ],
+  "preview_image": null,
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2,
+  "created_by": null,
+  "updated_by": null,
+  "created_at": "2026-07-14T11:20:27.820Z",
+  "updated_at": "2026-07-14T11:20:27.820Z"
+}

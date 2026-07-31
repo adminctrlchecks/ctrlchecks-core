@@ -1,0 +1,620 @@
+{
+  "id": "17edfa66-2567-413c-9ac5-74f92765d510",
+  "name": "Customer Support Agent",
+  "description": "Intelligent customer support agent that handles FAQs, checks order status, and escalates complex issues to human agents. Fully working with intent detection, data fetching, and confidence-based routing.",
+  "category": "Customer Support",
+  "nodes": [
+    {
+      "id": "chat_trigger_1",
+      "data": {
+        "icon": "MessageSquare",
+        "type": "chat_trigger",
+        "label": "Chat Trigger",
+        "config": {},
+        "category": "triggers",
+        "notes": {
+          "family": "Triggers",
+          "what": "Starts your workflow when someone types a message in a chat interface",
+          "overview": "Starting node that runs when someone sends a message through the CtrlChecks chat interface for an active workflow. The node panel has no setup fields today; the chat page supplies the message and session details at runtime.",
+          "tips": [
+            "Use as the first node in chatbot, assistant, support intake, or guided request workflows",
+            "Map {{$json.message}} into AI Agent or HTTP Request when the next step needs the visitor question",
+            "Use Chat Send after the answer is prepared; it can read {{$json.sessionId}} from the connected Chat Trigger output",
+            "The workflow must be active before the public chat URL accepts messages",
+            "Downstream app nodes such as Slack, Gmail, CRM, or database actions still need their own account connection"
+          ],
+          "docsHref": "/docs/nodes/chat_trigger",
+          "why": "The customer's entry point. Everything downstream reads the message this produces."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      }
+    },
+    {
+      "id": "memory_retrieve_1",
+      "data": {
+        "icon": "Brain",
+        "type": "memory",
+        "label": "Retrieve Context",
+        "config": {
+          "operation": "retrieve",
+          "memoryType": "hybrid",
+          "maxMessages": 10
+        },
+        "category": "ai",
+        "notes": {
+          "family": "AI",
+          "what": "Saves conversation history so your AI can remember things across multiple steps",
+          "overview": "Passes sessionId, context, and incoming messages forward for AI workflows. The current runtime does not store, retrieve, clear, search, expire, or limit memory; those visible controls are legacy no-ops.",
+          "tips": [
+            "Use Session ID and Context as the real data passed to downstream AI steps.",
+            "Store, Retrieve, Clear, and Search currently behave the same.",
+            "TTL, Memory Type, and Max Messages are ignored by the current executor.",
+            "No memory or searchResults field is produced."
+          ],
+          "docsHref": "/docs/nodes/memory",
+          "why": "Loads the last 10 messages so the customer is not asked to repeat themselves mid-conversation."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      }
+    },
+    {
+      "id": "js_intent_1",
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Classify Intent",
+        "config": {
+          "code": "const raw = (typeof input === 'string') ? input : (input && (input.message || input.query || input.text)) || '';\nconst query = raw.toLowerCase(); const orderKeywords = ['order', 'status', 'tracking', 'shipment', 'delivery', 'when will', 'where is']; const complaintKeywords = ['complaint', 'problem', 'issue', 'wrong', 'broken', 'refund', 'cancel']; const faqKeywords = ['what', 'how', 'why', 'when', 'where', 'can i', 'do you']; let intent = 'faq'; let confidence = 0.7; if (orderKeywords.some(kw => query.includes(kw))) { intent = 'order'; confidence = 0.85; } else if (complaintKeywords.some(kw => query.includes(kw))) { intent = 'complaint'; confidence = 0.9; } else if (faqKeywords.some(kw => query.includes(kw))) { intent = 'faq'; confidence = 0.8; } return { intent, confidence, originalQuery: raw, orderId: query.match(/order[\\s#]*([A-Z0-9-]+)/i)?.[1] || null };"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Sorts the question into order / complaint / FAQ and pulls out an order ID if one is mentioned. Cheap keyword matching on purpose — an AI call per message would be slower and more expensive for no benefit."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      }
+    },
+    {
+      "id": "switch_intent_1",
+      "data": {
+        "icon": "GitBranch",
+        "type": "switch",
+        "label": "Route by Intent",
+        "config": {
+          "cases": [
+            {
+              "value": "order",
+              "label": "Order"
+            },
+            {
+              "value": "complaint",
+              "label": "Complaint"
+            },
+            {
+              "value": "faq",
+              "label": "FAQ"
+            }
+          ],
+          "expression": "{{input.intent}}"
+        },
+        "category": "logic",
+        "notes": {
+          "family": "Logic",
+          "what": "Routes your data down different paths depending on a value — like a multi-way traffic signal",
+          "overview": "Routes a run into one of several named branches by matching one incoming value against configured case values.",
+          "tips": [
+            "Use Switch for three or more outcomes; use If/Else for a yes/no decision.",
+            "The case value is the real branch handle, so keep values unique and stable.",
+            "Make case values exactly match the expression result, including spelling.",
+            "Add a fallback or review path for unexpected values when the business process needs one."
+          ],
+          "docsHref": "/docs/nodes/switch",
+          "why": "Routes to one of three handlers. Only the matching branch runs."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      }
+    },
+    {
+      "id": "db_order_lookup",
+      "data": {
+        "icon": "Database",
+        "type": "postgresql",
+        "label": "Look Up Order",
+        "config": {
+          "query": "SELECT * FROM orders WHERE order_id = '{{input.orderId}}' LIMIT 1"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Connects to a PostgreSQL database to run queries or insert data",
+          "overview": "Run PostgreSQL executeQuery, insert, update, or delete through the real database executor. The visual panel now uses runtime operation values and Parameters maps to the executor parameter array.",
+          "tips": [
+            "Use executeQuery for raw SQL with $1, $2 placeholders and Parameters as a JSON array.",
+            "Insert returns inserted/count; update and delete return rows/rowsAffected because PostgreSQL uses RETURNING *.",
+            "The backend schema still lists connectionString, but the executor validates host, username, password, database, port, and ssl.",
+            "Update and delete require Where; the executor refuses missing where clauses.",
+            "Store database passwords in Connections rather than ordinary workflow fields."
+          ],
+          "docsHref": "/docs/nodes/postgresql",
+          "why": "Fetches the real order from your database so the reply quotes actual status and delivery dates rather than an AI guess."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 110
+      }
+    },
+    {
+      "id": "js_format_order",
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Format Order Info",
+        "config": {
+          "code": "// The PostgreSQL node returns { rows, rowsAffected }.\nconst order = (input.rows || [])[0];\nif (!order) { return { ...input, found: false, message: 'Order not found' }; }\nreturn {\n  ...input,\n  found: true,\n  orderStatus: order.status || 'Unknown',\n  orderDate: order.created_at || 'Unknown',\n  estimatedDelivery: order.estimated_delivery || 'Not available',\n  items: order.items || []\n};"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Reduces the order row to the few fields the reply needs, and flags when nothing was found."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 300
+      }
+    },
+    {
+      "id": "ai_order_response",
+      "data": {
+        "icon": "Brain",
+        "type": "openai_gpt",
+        "label": "Generate Order Response",
+        "config": {
+          "model": "gpt-4o-mini",
+          "memory": 10,
+          "prompt": "You are a helpful customer support agent. The user asked about their order. Order details: Status: {{input.orderStatus}}, Order Date: {{input.orderDate}}, Estimated Delivery: {{input.estimatedDelivery}}. User query: {{input.originalQuery}}. Provide a clear, friendly response about their order status. If order not found, apologize and ask them to verify their order ID.",
+          "temperature": 0.7
+        },
+        "category": "ai",
+        "notes": {
+          "family": "AI",
+          "what": "Sends your prompt to OpenAI's ChatGPT and gets back an AI-written response",
+          "overview": "Calls OpenAI through the legacy LLM adapter. Prompt is the main input; Messages is only a fallback when Prompt is blank. Temperature and Memory are visible legacy fields ignored by the current executor.",
+          "tips": [],
+          "docsHref": "/docs/nodes/openai_gpt",
+          "why": "Writes the customer-facing answer using the real order data supplied above."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2020,
+        "y": 300
+      }
+    },
+    {
+      "id": "ai_complaint_response",
+      "data": {
+        "icon": "Brain",
+        "type": "openai_gpt",
+        "label": "Handle Complaint",
+        "config": {
+          "model": "gpt-4o-mini",
+          "memory": 10,
+          "prompt": "You are a helpful customer support agent. A customer has a complaint. User query: {{input.originalQuery}}. Acknowledge their concern, apologize if appropriate, and explain that you will help resolve this. Be empathetic and professional.",
+          "temperature": 0.7
+        },
+        "category": "ai",
+        "notes": {
+          "family": "AI",
+          "what": "Sends your prompt to OpenAI's ChatGPT and gets back an AI-written response",
+          "overview": "Calls OpenAI through the legacy LLM adapter. Prompt is the main input; Messages is only a fallback when Prompt is blank. Temperature and Memory are visible legacy fields ignored by the current executor.",
+          "tips": [],
+          "docsHref": "/docs/nodes/openai_gpt",
+          "why": "Handles complaints with an apology and a commitment, separately from factual queries — tone matters more than data here."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 300
+      }
+    },
+    {
+      "id": "ai_faq_response",
+      "data": {
+        "icon": "Brain",
+        "type": "openai_gpt",
+        "label": "Answer FAQ",
+        "config": {
+          "model": "gpt-4o-mini",
+          "memory": 10,
+          "prompt": "You are a helpful customer support agent. Answer the following question clearly and concisely: {{input.originalQuery}}. If you do not know the answer, politely say so and offer to connect them with a human agent.",
+          "temperature": 0.7
+        },
+        "category": "ai",
+        "notes": {
+          "family": "AI",
+          "what": "Sends your prompt to OpenAI's ChatGPT and gets back an AI-written response",
+          "overview": "Calls OpenAI through the legacy LLM adapter. Prompt is the main input; Messages is only a fallback when Prompt is blank. Temperature and Memory are visible legacy fields ignored by the current executor.",
+          "tips": [],
+          "docsHref": "/docs/nodes/openai_gpt",
+          "why": "Answers general questions and offers a human when it does not know."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 490
+      }
+    },
+    {
+      "id": "merge_responses",
+      "data": {
+        "icon": "GitMerge",
+        "type": "merge",
+        "label": "Merge Responses",
+        "config": {},
+        "category": "logic",
+        "notes": {
+          "family": "Logic",
+          "what": "Combines results coming from two paths into one",
+          "overview": "Rejoins multiple workflow branches and combines their data into one payload for the next step.",
+          "tips": [
+            "Use overwrite for simple flat objects when duplicate keys can be replaced.",
+            "Use append when the next node should receive a list at {{$json.items}}.",
+            "Use deep_merge when branches add different nested details that should survive together.",
+            "Connect every branch that should rejoin into Merge, then connect Merge output to the final action."
+          ],
+          "docsHref": "/docs/nodes/merge",
+          "why": "Brings the three branches back to one path so the confidence check and logging exist once rather than three times."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2340,
+        "y": 300
+      }
+    },
+    {
+      "id": "if_confidence_check",
+      "data": {
+        "icon": "GitBranch",
+        "type": "if_else",
+        "label": "Check Confidence",
+        "config": {
+          "conditions": [
+            {
+              "field": "$json.confidence",
+              "operator": "greater_than_or_equal",
+              "value": 0.75
+            }
+          ],
+          "combineOperation": "AND"
+        },
+        "category": "logic",
+        "notes": {
+          "family": "Logic",
+          "what": "Makes a yes/no decision: if something is true, go one way; otherwise go another",
+          "overview": "Makes a yes/no decision from previous-step data and routes matching work through TRUE and non-matching work through FALSE.",
+          "tips": [
+            "Use the builder for normal setup; use JSON mode only when pasting prepared condition objects.",
+            "Choose AND when every row must match; choose OR when any row can match.",
+            "Use equals for statuses and categories, greater-than operators for numeric thresholds, and contains for text or lists.",
+            "Connect both TRUE and FALSE outputs so no business case silently disappears."
+          ],
+          "docsHref": "/docs/nodes/if_else",
+          "why": "The safety gate. Confident answers go to the customer; anything below 0.75 goes to a human instead of guessing at them."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2660,
+        "y": 300
+      }
+    },
+    {
+      "id": "memory_store_1",
+      "data": {
+        "icon": "Brain",
+        "type": "memory",
+        "label": "Store Response",
+        "config": {
+          "operation": "store",
+          "memoryType": "hybrid"
+        },
+        "category": "ai",
+        "notes": {
+          "family": "AI",
+          "what": "Saves conversation history so your AI can remember things across multiple steps",
+          "overview": "Passes sessionId, context, and incoming messages forward for AI workflows. The current runtime does not store, retrieve, clear, search, expire, or limit memory; those visible controls are legacy no-ops.",
+          "tips": [
+            "Use Session ID and Context as the real data passed to downstream AI steps.",
+            "Store, Retrieve, Clear, and Search currently behave the same.",
+            "TTL, Memory Type, and Max Messages are ignored by the current executor.",
+            "No memory or searchResults field is produced."
+          ],
+          "docsHref": "/docs/nodes/memory",
+          "why": "Saves the exchange so the next message in the conversation has context."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2980,
+        "y": 205
+      }
+    },
+    {
+      "id": "log_output_1",
+      "data": {
+        "icon": "FileOutput",
+        "type": "log_output",
+        "label": "Return Response",
+        "config": {
+          "level": "info",
+          "message": "{{input.response || input.content || input.text}}"
+        },
+        "category": "utility",
+        "notes": {
+          "family": "Utility",
+          "what": "Writes a message to your workflow's log for debugging or auditing",
+          "overview": "Log data for debugging and monitoring. View logs in the execution history. This is a terminal node â€” it cannot connect to further downstream nodes.",
+          "tips": [
+            "Use different levels for filtering",
+            "This node is terminal â€” it does not forward data to further nodes",
+            "Check execution history for logs"
+          ],
+          "docsHref": "/docs/nodes/log_output",
+          "why": "Returns the final answer to the chat session."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 3300,
+        "y": 205
+      }
+    },
+    {
+      "id": "db_escalate",
+      "data": {
+        "icon": "Database",
+        "type": "postgresql",
+        "label": "Create Escalation Ticket",
+        "config": {
+          "query": "INSERT INTO support_tickets (query, intent, confidence, status, priority, created_at) VALUES ('{{input.originalQuery}}', '{{input.intent}}', {{input.confidence}}, 'pending', 'high', now())"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Connects to a PostgreSQL database to run queries or insert data",
+          "overview": "Run PostgreSQL executeQuery, insert, update, or delete through the real database executor. The visual panel now uses runtime operation values and Parameters maps to the executor parameter array.",
+          "tips": [
+            "Use executeQuery for raw SQL with $1, $2 placeholders and Parameters as a JSON array.",
+            "Insert returns inserted/count; update and delete return rows/rowsAffected because PostgreSQL uses RETURNING *.",
+            "The backend schema still lists connectionString, but the executor validates host, username, password, database, port, and ssl.",
+            "Update and delete require Where; the executor refuses missing where clauses.",
+            "Store database passwords in Connections rather than ordinary workflow fields."
+          ],
+          "docsHref": "/docs/nodes/postgresql",
+          "why": "Creates a support ticket so a low-confidence question is tracked and worked, rather than only pinged into Slack and lost."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2980,
+        "y": 395
+      }
+    },
+    {
+      "id": "slack_escalate",
+      "data": {
+        "icon": "MessageCircle",
+        "type": "slack_webhook",
+        "label": "Notify Human Agent",
+        "config": {
+          "message": "🚨 Escalation Required\\nQuery: {{input.originalQuery}}\\nIntent: {{input.intent}}\\nConfidence: {{input.confidence}}\\nA human agent needs to handle this request.",
+          "username": "Support Bot",
+          "webhookUrl": "REPLACE_WITH_YOUR_SLACK_INCOMING_WEBHOOK_URL"
+        },
+        "category": "output",
+        "notes": {
+          "family": "Communication",
+          "what": "Posts simple messages through a saved Slack Incoming Webhook",
+          "overview": "Send a simple Slack message through a saved Slack Incoming Webhook connection.",
+          "tips": [
+            "Save the Incoming Webhook URL as a Connection",
+            "The target channel is chosen when the webhook is created in Slack",
+            "Use Slack Message for OAuth bot sending, dynamic channels, and Block Kit",
+            "This node's output replaces $json entirely â€” fields from before this node do not survive past it, so capture anything needed later first",
+            "Failures set status to \"failed\" and add a plain error field (no underscore), unlike most nodes' _error convention"
+          ],
+          "docsHref": "/docs/nodes/slack_webhook",
+          "why": "Pages a human with the original question and why the bot was unsure."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 3300,
+        "y": 395
+      }
+    },
+    {
+      "id": "log_escalated",
+      "data": {
+        "icon": "FileOutput",
+        "type": "log_output",
+        "label": "Log Escalation",
+        "config": {
+          "level": "warn",
+          "message": "Escalated to human agent. Ticket created."
+        },
+        "category": "utility",
+        "notes": {
+          "family": "Utility",
+          "what": "Writes a message to your workflow's log for debugging or auditing",
+          "overview": "Log data for debugging and monitoring. View logs in the execution history. This is a terminal node â€” it cannot connect to further downstream nodes.",
+          "tips": [
+            "Use different levels for filtering",
+            "This node is terminal â€” it does not forward data to further nodes",
+            "Check execution history for logs"
+          ],
+          "docsHref": "/docs/nodes/log_output",
+          "why": "Records that this conversation went to a human — useful for measuring how often the bot defers."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 3620,
+        "y": 300
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "chat_trigger_1",
+      "target": "memory_retrieve_1"
+    },
+    {
+      "id": "e2",
+      "source": "memory_retrieve_1",
+      "target": "js_intent_1"
+    },
+    {
+      "id": "e3",
+      "source": "js_intent_1",
+      "target": "switch_intent_1"
+    },
+    {
+      "id": "e4",
+      "source": "switch_intent_1",
+      "target": "db_order_lookup",
+      "sourceHandle": "order"
+    },
+    {
+      "id": "e5",
+      "source": "switch_intent_1",
+      "target": "ai_complaint_response",
+      "sourceHandle": "complaint"
+    },
+    {
+      "id": "e6",
+      "source": "switch_intent_1",
+      "target": "ai_faq_response",
+      "sourceHandle": "faq"
+    },
+    {
+      "id": "e7",
+      "source": "db_order_lookup",
+      "target": "js_format_order"
+    },
+    {
+      "id": "e8",
+      "source": "js_format_order",
+      "target": "ai_order_response"
+    },
+    {
+      "id": "e9",
+      "source": "ai_order_response",
+      "target": "merge_responses"
+    },
+    {
+      "id": "e10",
+      "source": "ai_complaint_response",
+      "target": "merge_responses"
+    },
+    {
+      "id": "e11",
+      "source": "ai_faq_response",
+      "target": "merge_responses"
+    },
+    {
+      "id": "e12",
+      "source": "merge_responses",
+      "target": "if_confidence_check"
+    },
+    {
+      "id": "e13",
+      "source": "if_confidence_check",
+      "target": "memory_store_1",
+      "sourceHandle": "true"
+    },
+    {
+      "id": "e14",
+      "source": "if_confidence_check",
+      "target": "db_escalate",
+      "sourceHandle": "false"
+    },
+    {
+      "id": "e15",
+      "source": "memory_store_1",
+      "target": "log_output_1"
+    },
+    {
+      "id": "e16",
+      "source": "db_escalate",
+      "target": "slack_escalate"
+    },
+    {
+      "id": "e17",
+      "source": "slack_escalate",
+      "target": "log_escalated"
+    }
+  ],
+  "difficulty": "Advanced",
+  "estimated_setup_time": 15,
+  "tags": [
+    "customer-support",
+    "ai-agent",
+    "intent-detection",
+    "escalation",
+    "chatbot"
+  ],
+  "preview_image": null,
+  "is_featured": true,
+  "is_active": true,
+  "use_count": 2,
+  "version": 2,
+  "created_by": null,
+  "updated_by": null,
+  "created_at": "2026-04-24T14:32:25.195Z",
+  "updated_at": "2026-07-26T05:53:02.804Z"
+}

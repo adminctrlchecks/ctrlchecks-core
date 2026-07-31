@@ -1,0 +1,237 @@
+{
+  "_readme": [
+    "Per-instance node notes: why THIS node exists in THIS workflow.",
+    "",
+    "The note registry (docs-content, nodeLaymanDescriptions, nodeUsageGuides) already",
+    "explains what every node type does in general — that content is pulled in",
+    "automatically by extract-registry-notes.cjs and must NOT be duplicated here.",
+    "What the registry cannot know is why a particular node was placed in a particular",
+    "workflow, and what breaks if someone deletes it. That is what this file holds.",
+    "",
+    "Keyed by template slug -> node id. Every node in ctrl_checks/templates/src must",
+    "have an entry; the contract test fails if one is missing."
+  ],
+  "approval-chance-predictor": {
+    "form_details": "Collects the exact details a verification reviewer checks, so the prediction is based on the same inputs a real reviewer would see.",
+    "airtable_lookup_readiness": "Pulls this client's existing readiness record so the prediction builds on the earlier Readiness Checker result instead of starting from nothing. Filtered to one client — without the filter the AI would receive every client in your table.",
+    "ai_predict_chance": "Compares the business against the reasons applications actually get rejected. It outputs one 'RISK:' line per problem found, which the next step counts.",
+    "js_percentage": "Turns the AI's risk lines into a single number a client understands. Each risk costs 12 points off a 95% base — change those numbers here to make the estimate stricter or softer.",
+    "airtable_save_prediction": "Writes the score back onto the same client row so the prediction is on file next time anyone opens the record.",
+    "slack_notify_team": "Gives your verification team a heads-up on weak applications before the client chases them.",
+    "gmail_send_prediction": "Sends the client their number. This is the deliverable — everything above exists to make this email accurate."
+  },
+  "business-details-matcher": {
+    "schedule_poll_clients": "Runs the check on a timer because the platform has no 'Airtable row changed' trigger yet. Each run handles one client, so a 15-minute cycle clears a normal queue easily.",
+    "airtable_read_ready_clients": "Picks up one client whose documents are complete and who has not been checked yet. The MatchCheckedAt filter is what stops the same client being re-reported forever.",
+    "js_detect_newly_ready": "Lifts the selected client's name, website and email to the top level so the steps below can reference them directly.",
+    "if_hasclient": "Most polls find nothing. Without this gate the workflow would fetch a blank URL and email an empty report every 15 minutes.",
+    "http_fetch_website_details": "Fetches the live website so the AI can read the business details as they are published today, not as they were when the client signed up.",
+    "ai_extract_details": "Reads the name, address and phone out of the website and each document, and returns them as JSON so the comparison below can be exact rather than a guess.",
+    "js_compare_versions": "Compares every source field by field. This is where a mismatch is actually detected — the AI only extracts, it does not judge.",
+    "js_stamp_checked": "Supplies the timestamp for the marker below. Needed because the platform has no {{$now}} built-in.",
+    "airtable_write_match_results": "Records what matched and what did not, so the mismatch history lives on the client record rather than only in an email.",
+    "airtable_mark_checked": "Stamps the client as checked. Delete this node and the same client is re-checked and re-emailed every 15 minutes, forever.",
+    "gmail_send_match_report": "Tells the client exactly which detail is inconsistent and where — the specific thing that gets applications silently rejected."
+  },
+  "client-priority-ranker": {
+    "schedule_weekly_rank": "Weekly is deliberate: this ranking is for planning the week's account-management time, not for reacting to events.",
+    "airtable_read_client_history": "Reads every client's delay and issue history — the ranking needs the whole set to rank them against each other. Capped at 200 rows so a large table cannot overflow the prompt.",
+    "ai_estimate_outcomes": "Judges which clients are drifting, using patterns a fixed rule would miss. Output format is one line per client so the next step can sort it.",
+    "js_sort_by_priority": "Sorts the AI's lines into a ranked list and formats it as text. Slack renders raw objects as unreadable JSON, so the formatting matters.",
+    "slack_send_ranked_list": "Puts the ranked list where the team already works. This is the whole output of the workflow."
+  },
+  "cross-platform-sync-engine": {
+    "schedule_poll_changes": "Polls because there is no 'Airtable row changed' trigger. One record per run keeps the sync safe and rate-limit friendly.",
+    "airtable_read_all_clients": "Picks up one record modified since it was last synced. The LastSyncedAt filter is the safety mechanism — without it every record looks changed on every run.",
+    "js_diff_changed_fields": "Maps the Airtable row onto the shapes HubSpot and Sheets each expect. Your Airtable table needs a HubSpotId column for the CRM push to find the right contact.",
+    "if_hasrecord": "Stops an empty poll from pushing a blank contact into your CRM and a blank row into your spreadsheet.",
+    "hubspot_push_changes": "Updates the matching CRM contact. This is a write into your real CRM — test it against a sandbox contact before switching the template on.",
+    "sheets_update_shared_copy": "Keeps the shared spreadsheet in step for people who do not have CRM access.",
+    "airtable_mark_synced": "Stamps the row as synced. This is the single most important node here — remove it and the workflow re-pushes every client to HubSpot and Sheets every 15 minutes indefinitely.",
+    "slack_log_sync": "A quiet audit trail so you can tell whether a sync ran without opening three systems."
+  },
+  "customer-support-agent": {
+    "chat_trigger_1": "The customer's entry point. Everything downstream reads the message this produces.",
+    "memory_retrieve_1": "Loads the last 10 messages so the customer is not asked to repeat themselves mid-conversation.",
+    "js_intent_1": "Sorts the question into order / complaint / FAQ and pulls out an order ID if one is mentioned. Cheap keyword matching on purpose — an AI call per message would be slower and more expensive for no benefit.",
+    "switch_intent_1": "Routes to one of three handlers. Only the matching branch runs.",
+    "db_order_lookup": "Fetches the real order from your database so the reply quotes actual status and delivery dates rather than an AI guess.",
+    "js_format_order": "Reduces the order row to the few fields the reply needs, and flags when nothing was found.",
+    "ai_order_response": "Writes the customer-facing answer using the real order data supplied above.",
+    "ai_complaint_response": "Handles complaints with an apology and a commitment, separately from factual queries — tone matters more than data here.",
+    "ai_faq_response": "Answers general questions and offers a human when it does not know.",
+    "merge_responses": "Brings the three branches back to one path so the confidence check and logging exist once rather than three times.",
+    "if_confidence_check": "The safety gate. Confident answers go to the customer; anything below 0.75 goes to a human instead of guessing at them.",
+    "memory_store_1": "Saves the exchange so the next message in the conversation has context.",
+    "log_output_1": "Returns the final answer to the chat session.",
+    "db_escalate": "Creates a support ticket so a low-confidence question is tracked and worked, rather than only pinged into Slack and lost.",
+    "slack_escalate": "Pages a human with the original question and why the bot was unsure.",
+    "log_escalated": "Records that this conversation went to a human — useful for measuring how often the bot defers."
+  },
+  "document-vault-intake-auto-tagging": {
+    "form_vault_upload": "The intake point. A form is used rather than a watched Drive folder because the platform has no file-watch trigger yet.",
+    "ai_tag_document": "Reads the file and identifies what it is and what date it carries, so nobody has to tag documents by hand.",
+    "js_parse_doc_tags": "Turns the AI's JSON reply into real fields. Without this step the tags are written to Airtable blank.",
+    "airtable_store_tagged_doc": "Stores the file link with its tags. This table is what the Smart Search template reads — the two templates are a pair."
+  },
+  "document-vault-smart-search": {
+    "chat_trigger_search": "Lets anyone ask for a document in plain English instead of digging through folders.",
+    "js_parse_search_query": "Takes the raw chat message and prepares it as a search term. Written to work whether the chat trigger hands over a string or an object.",
+    "airtable_search_vault": "Reads the tagged vault built by the Intake template. Capped so a large vault cannot overflow the agent's prompt.",
+    "ai_agent_find_match": "Matches a loose human request ('that PAN card from March') against the tagged records and picks the best one.",
+    "whatsapp_reply_search": "Sends the file link straight back to whoever asked."
+  },
+  "faq-answering-assistant": {
+    "chat_trigger_faq": "Lets clients ask their own questions instead of messaging your team.",
+    "airtable_read_faq": "Loads your FAQ records. The AI answers only from these, which is what stops it inventing policy. Capped at 50 rows.",
+    "ai_answer_from_faq": "Answers strictly from the supplied FAQ records and rates its own confidence, so the workflow can tell a solid answer from a guess.",
+    "js_parse_faq_answer": "Extracts the answer and the confidence score from the AI's JSON. Without this the gate below has no confidence value to read and every question escalates.",
+    "if_confidence_check": "Decides whether the client hears from the bot or from a person. 0.75 is the dial — lower it to answer more questions automatically, raise it to be more cautious.",
+    "whatsapp_reply_client": "Sends a confident answer straight to the client.",
+    "slack_escalate_human": "Hands an uncertain question to your team with the AI's draft attached, so the human starts from something rather than nothing."
+  },
+  "finance-compliance-agent": {
+    "webhook_finance_1": "Receives transactions from your accounting or expense system. This endpoint is currently open — put a shared secret in front of it before using real financial data.",
+    "js_extract_transaction": "Normalises the many field names different finance systems use into one shape the rest of the workflow can rely on.",
+    "ai_categorize": "Assigns a spend category. Doing this with AI rather than keyword rules is what handles vendors nobody has seen before.",
+    "js_parse_category": "Extracts the category and confidence from the AI's JSON reply.",
+    "js_compliance_check": "Applies your actual policy rules — amount ceiling, missing vendor, uncategorised spend. The approval threshold lives here; change it to match your policy.",
+    "if_compliant_check": "Splits clean transactions from ones needing a human. Everything below exists on one side of this decision.",
+    "db_save_transaction": "Records the approved transaction with its category, in your own finance database.",
+    "log_approved": "A quiet trail of what passed, for reconciliation.",
+    "db_save_flag": "Saves the flagged transaction with its violations attached, so the review queue is a real queue and not just a Slack message.",
+    "js_format_alert": "Builds the human-readable alert and the machine-readable violations list used by the step above.",
+    "slack_finance_alert": "Notifies the finance channel immediately.",
+    "email_finance_alert": "Emails the finance manager as well, because a Slack message at 6pm on Friday gets missed.",
+    "log_flagged": "Records the flag for audit."
+  },
+  "hr-hiring-workflow-agent": {
+    "webhook_resume_1": "Receives applications from your careers page or job board.",
+    "js_extract_resume_data": "Normalises the varying field names applicant sources use.",
+    "ai_extract_skills": "Pulls structured skills, years and education out of free-form resume text — the step that makes automated matching possible at all.",
+    "js_parse_skills": "Converts the AI's JSON into real fields for the matching step.",
+    "ai_match_job": "Scores the candidate against the role and explains its reasoning, so a human reviewing the decision can see why.",
+    "js_extract_match": "Extracts the score and shortlist decision from the AI reply.",
+    "if_shortlist_check": "The hiring decision point. 70 is the threshold, set in the matching prompt above.",
+    "db_shortlist": "Records the shortlisted candidate. The candidates table must already exist with matching columns.",
+    "js_generate_calendar": "Builds a personalised booking link. Replace the placeholder URL with your own scheduling link.",
+    "email_interview": "Invites the candidate to book directly, removing the back-and-forth from scheduling.",
+    "db_reject": "Records the decision and the reasoning behind it — needed if a rejection is ever questioned.",
+    "email_rejection": "Sends a DRAFT rejection to your recruiter, not to the candidate. Automated rejections going straight out is a legal and brand risk; a person makes the final call here.",
+    "log_processing": "Records every application processed, whatever the outcome."
+  },
+  "internal-knowledge-ops-agent": {
+    "chat_trigger_kb_1": "Where employees ask their question.",
+    "js_prepare_query": "Prepares the question and captures who asked. Written to work whether the chat trigger hands over a string or an object.",
+    "db_search_kb": "Searches your knowledge base for articles matching the question. The ILIKE search on title and content is what makes the answer relevant — the previous version returned five arbitrary rows regardless of what was asked.",
+    "js_format_kb_results": "Assembles the retrieved articles into one block for the AI and reports how much content was found, which the gate below tests.",
+    "if_kb_found": "Decides whether there is enough material to answer from. Two separate conditions, because the runtime evaluates one comparison per row — a combined 'a && b' expression silently never matches.",
+    "ai_answer_with_sources": "Answers from the retrieved articles and cites them, so an employee can verify rather than trust.",
+    "js_format_response": "Appends the source list to the answer.",
+    "db_log_query": "Records answered questions — the log that tells you what your team actually needs documented.",
+    "ai_fallback_answer": "Says 'not in the knowledge base' politely and points elsewhere, instead of the AI inventing an answer.",
+    "db_log_not_found": "Records the gap. Over time this becomes your documentation backlog.",
+    "slack_escalate_kb": "Tells the knowledge team a question could not be answered so the gap gets filled.",
+    "merge_responses_kb": "Brings both branches back together so the reply is returned once.",
+    "log_output_kb": "Returns the final answer to the employee."
+  },
+  "license-renewal-reminder": {
+    "schedule_daily_check": "Runs every 10 minutes and handles one licence per run, which clears any realistic renewal queue within the day.",
+    "airtable_read_expiry_dates": "Picks up one licence approaching expiry that has not been reminded at its current milestone.",
+    "js_flag_expiring": "Works out how many days remain and which milestone band the licence is in. The 90 / 30 / 7 day bands are set here.",
+    "if_shouldremind": "Most runs find nothing. Without this the workflow would send a blank WhatsApp and email on every empty poll.",
+    "airtable_mark_reminded": "Records which milestone was sent. Delete this and the client receives the same reminder every 10 minutes until the licence expires.",
+    "whatsapp_send_reminder": "WhatsApp first, because renewal reminders sent only by email get missed.",
+    "gmail_send_backup_reminder": "Email as a second channel — a lapsed licence is expensive enough to justify telling someone twice."
+  },
+  "live-status-lookup-bot": {
+    "chat_trigger_status": "Lets anyone check a client's status without opening Airtable or asking a colleague.",
+    "js_parse_lookup": "Takes the raw chat message as the search term. Written to work whether the chat trigger hands over a string or an object.",
+    "airtable_lookup_status": "Finds the matching client. The name filter is essential — without it the bot returns the same first row no matter what was asked.",
+    "js_format_reply": "Turns the record into a readable sentence, and says so plainly when nothing matched instead of returning a half-empty status line.",
+    "slack_send_status_reply": "Replies in the channel where the question was asked."
+  },
+  "missing-document-finder": {
+    "form_doc_upload": "Lets a client upload whatever they have, in any order. The client type chosen here decides which checklist applies.",
+    "ai_classify_document": "Identifies what each uploaded file actually is, so clients do not have to label anything correctly.",
+    "airtable_log_document": "Records the document against the client, building the running history the check below depends on.",
+    "airtable_read_prior_docs": "Reads everything this client has ever sent. Without this the checklist only sees the file just uploaded and reports almost everything as missing.",
+    "js_check_missing": "Compares the full set received against the required checklist. The two checklists — Individual and Business — are defined here.",
+    "ai_write_missing_message": "Writes a short, friendly chase message rather than a blunt system list.",
+    "whatsapp_send_missing": "Sends the client exactly what is still outstanding, which is what stops the back-and-forth."
+  },
+  "new-client-risk-checker": {
+    "form_new_client": "The signup point, and the source of the domain that gets checked below.",
+    "http_domain_age_lookup": "Looks up how long the domain has existed. A domain registered last week is one of the strongest fraud signals available. Needs your own WHOIS API key — replace the placeholder.",
+    "ai_risk_summary": "Weighs the domain age together with the business name and site, and ends with a clear risk level.",
+    "js_risk_score": "Converts the risk level to a number and applies your threshold. 80 is where compliance gets involved — change it here.",
+    "airtable_log_risk": "Records the assessment on the client record so onboarding decisions are auditable.",
+    "if_high_risk": "Only high-risk signups interrupt anyone. Everything else onboards silently.",
+    "slack_alert_compliance": "Puts a risky signup in front of compliance before onboarding continues."
+  },
+  "overdue-task-tracker": {
+    "schedule_hourly_check": "Runs every 5 minutes, handling one overdue request per run so a backlog clears quickly.",
+    "airtable_read_open_requests": "Picks up one open request that is either unalerted or last alerted more than 4 hours ago — that window is what stops the same request pinging someone hourly forever.",
+    "js_flag_overdue": "Compares how long the request has been open against its SLA and works out whether it is overdue or very overdue. Owner and manager channels come from the request row.",
+    "if_isoverdue": "Most polls find nothing overdue. Without this the workflow posted a blank Slack alert every 5 minutes.",
+    "slack_alert_owner": "Tells the person responsible, in their own channel, before the client notices.",
+    "airtable_mark_alerted": "Stamps the alert time, which is what makes the 4-hour re-alert window work.",
+    "if_very_overdue": "Separates 'late' from 'badly late'. Only the second one involves a manager.",
+    "slack_escalate_manager": "Escalates when something has gone past twice its SLA and still nobody has acted."
+  },
+  "sales-lead-qualification-agent": {
+    "webhook_lead_1": "Receives leads from your website forms or ad landing pages.",
+    "js_extract_lead": "Normalises the different field names lead sources use into one shape.",
+    "ai_score_lead": "Scores fit and intent from the lead's own details. The lead data is interpolated into the prompt — without that the model would be scoring nothing.",
+    "js_extract_score": "Extracts the score and qualified flag from the AI's JSON.",
+    "if_qualified_check": "Splits leads worth a salesperson's time from ones that get nurtured. 60 is the threshold, set in the scoring prompt.",
+    "db_create_crm": "Creates the contact in HubSpot so a qualified lead lands in your real CRM pipeline, not in a side table nobody works from.",
+    "js_generate_booking": "Builds a personalised booking link. Replace the placeholder URL with your own scheduling link.",
+    "email_qualified": "Invites a qualified lead to book while their interest is still fresh — the speed here is most of the value.",
+    "email_followup": "Keeps unqualified leads warm rather than dropping them.",
+    "log_result": "Records every lead and its score, which is how you tune the threshold over time."
+  },
+  "smart-alert-co-pilot": {
+    "schedule_poll_alerts": "Polls every 10 minutes because there is no 'row changed' trigger. One record per run.",
+    "airtable_read_all_records": "Picks up one record modified since it was last examined.",
+    "js_diff_for_alerts": "Prepares the changed record for the AI to judge.",
+    "if_hasrecord": "Stops an empty poll from burning an AI call and sending a blank alert.",
+    "ai_agent_judge_alert": "The judgment layer, and the reason this template exists: it decides whether a change is worth interrupting a person for, rather than alerting on everything.",
+    "js_parse_alert_decision": "Extracts the verdict, reason and severity from the agent's reply.",
+    "airtable_mark_alert_checked": "Stamps the record as examined — deliberately BEFORE the gate below, so records judged not worth alerting are not re-judged and re-billed on every subsequent poll.",
+    "if_alert_worthy": "Enforces the agent's verdict. Without this node the workflow alerts on every change and becomes a noisier version of a dumb alert.",
+    "js_route_notification": "Sends high-severity alerts to the compliance lead and everything else to the account manager. Set both numbers here.",
+    "whatsapp_send_smart_alert": "Delivers the alert to the one person who needs it."
+  },
+  "submission-package-builder": {
+    "schedule_poll_ready": "Polls for clients who have cleared the readiness bar. One client per run.",
+    "airtable_read_ready_status": "Picks up one ready client whose package has not been built yet.",
+    "js_detect_newly_ready_status": "Lifts the client's website, name and email to the top level for the steps below.",
+    "if_hasclient": "Most polls find nothing. Without this the workflow screenshotted a blank URL and emailed an empty package every 15 minutes.",
+    "http_screenshot_pages": "Captures the homepage and policy pages as images, which verification submissions usually require as evidence. Needs your own screenshot API key — replace the placeholder.",
+    "http_fetch_policy_text": "Pulls the live privacy policy and terms text so the submission quotes what is actually published today.",
+    "merge_package": "Joins the screenshot and policy-text branches. Without this join the email could only ever see one of the two.",
+    "drive_list_existing_docs": "Collects the documents already on file so the package is complete rather than partial.",
+    "airtable_mark_package_sent": "Stamps the client as packaged so the same package is not rebuilt and re-emailed every 15 minutes.",
+    "gmail_send_package": "Delivers every piece needed for the submission in one email. Pieces are sent as separate links because the platform has no PDF-merge step."
+  },
+  "verification-co-pilot-chat": {
+    "chat_trigger_copilot": "Lets staff or clients ask about a client's status in plain English, from the chat tool they already use.",
+    "js_parse_query": "Pulls the client name out of a conversational question. The pattern matching is deliberately simple — adjust it to your naming conventions.",
+    "airtable_lookup_client_record": "Fetches the live record. Filtered by name so the agent receives the relevant client rather than your whole table.",
+    "ai_agent_answer": "Answers only from the record it was handed, and says so when the data does not cover the question. That grounding is what makes the answer trustworthy.",
+    "whatsapp_reply_copilot": "Returns the answer in chat, so nobody has to open Airtable."
+  },
+  "verification-readiness-checker": {
+    "form_intake": "Collects everything the readiness check needs in one pass — details and documents together, so the client is not chased twice.",
+    "airtable_create_client": "Creates the client record up front, so the score written later attaches to a row that already exists.",
+    "http_fetch_website": "Fetches the client's live site so the AI can look for the pages verifiers check. If a site blocks automated requests this returns empty and the score will be misleadingly low — check the execution log before trusting a bad score.",
+    "ai_analyze_readiness": "Checks the site and documents against what verifiers actually look for: privacy policy, terms, matching business details, working contact page. One 'ISSUE:' line per problem.",
+    "js_score": "Turns the issue list into a 0-100 score. Each issue costs 15 points — change that here to make the score stricter.",
+    "airtable_update_score": "Writes the score back onto the client record so it is on file for the next check.",
+    "ai_fix_list": "Converts the technical issues into two or three plain-English actions the client can actually carry out.",
+    "js_compose_results": "Assembles the score, fix list and contact details into one payload so both the email and the WhatsApp message have everything they need.",
+    "gmail_send_results": "Sends the score and the fix list. This is the deliverable the client came for.",
+    "whatsapp_send_results": "A short WhatsApp nudge pointing at the email, for clients who will not open it otherwise."
+  }
+}

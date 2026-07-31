@@ -1,0 +1,284 @@
+{
+  "id": "97432e3a-fb6e-4b90-9364-10fbe77c7371",
+  "name": "FAQ Answering Assistant",
+  "description": "Let clients ask their own questions instead of pinging your team every time. This chat assistant answers strictly from your own FAQ records and automatically hands the question to a human in Slack whenever it isn't confident in the answer.",
+  "category": "Business Verification & Compliance",
+  "nodes": [
+    {
+      "id": "chat_trigger_faq",
+      "data": {
+        "icon": "MessageSquare",
+        "type": "chat_trigger",
+        "label": "Client Question",
+        "config": {},
+        "category": "triggers",
+        "notes": {
+          "family": "Triggers",
+          "what": "Starts your workflow when someone types a message in a chat interface",
+          "overview": "Starting node that runs when someone sends a message through the CtrlChecks chat interface for an active workflow. The node panel has no setup fields today; the chat page supplies the message and session details at runtime.",
+          "tips": [
+            "Use as the first node in chatbot, assistant, support intake, or guided request workflows",
+            "Map {{$json.message}} into AI Agent or HTTP Request when the next step needs the visitor question",
+            "Use Chat Send after the answer is prepared; it can read {{$json.sessionId}} from the connected Chat Trigger output",
+            "The workflow must be active before the public chat URL accepts messages",
+            "Downstream app nodes such as Slack, Gmail, CRM, or database actions still need their own account connection"
+          ],
+          "docsHref": "/docs/nodes/chat_trigger",
+          "why": "Lets clients ask their own questions instead of messaging your team."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      }
+    },
+    {
+      "id": "airtable_read_faq",
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Search FAQ Knowledge Base",
+        "config": {
+          "baseId": "",
+          "tableId": "FAQ",
+          "operation": "read",
+          "maxRecords": 50
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Loads your FAQ records. The AI answers only from these, which is what stops it inventing policy. Capped at 50 rows."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      }
+    },
+    {
+      "id": "ai_answer_from_faq",
+      "data": {
+        "icon": "Brain",
+        "type": "openai_gpt",
+        "label": "Answer Using Only FAQ Docs",
+        "config": {
+          "model": "gpt-4o-mini",
+          "prompt": "You are a support assistant. Using ONLY the information in these FAQ records: {{input.records}}, answer this client question: \"{{input.message}}\". If the FAQ records do not contain a confident answer, say \"I am not fully sure\" and set your confidence low. Respond with a JSON object: {\"answer\": \"...\", \"confidence\": 0.0-1.0}.",
+          "temperature": 0.2
+        },
+        "category": "ai",
+        "notes": {
+          "family": "AI",
+          "what": "Sends your prompt to OpenAI's ChatGPT and gets back an AI-written response",
+          "overview": "Calls OpenAI through the legacy LLM adapter. Prompt is the main input; Messages is only a fallback when Prompt is blank. Temperature and Memory are visible legacy fields ignored by the current executor.",
+          "tips": [],
+          "docsHref": "/docs/nodes/openai_gpt",
+          "why": "Answers strictly from the supplied FAQ records and rates its own confidence, so the workflow can tell a solid answer from a guess."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      }
+    },
+    {
+      "id": "if_confidence_check",
+      "data": {
+        "icon": "GitBranch",
+        "type": "if_else",
+        "label": "Check AI Confidence",
+        "config": {
+          "conditions": [
+            {
+              "field": "$json.confidence",
+              "value": 0.75,
+              "operator": "greater_than_or_equal"
+            }
+          ],
+          "combineOperation": "AND"
+        },
+        "category": "logic",
+        "notes": {
+          "family": "Logic",
+          "what": "Makes a yes/no decision: if something is true, go one way; otherwise go another",
+          "overview": "Makes a yes/no decision from previous-step data and routes matching work through TRUE and non-matching work through FALSE.",
+          "tips": [
+            "Use the builder for normal setup; use JSON mode only when pasting prepared condition objects.",
+            "Choose AND when every row must match; choose OR when any row can match.",
+            "Use equals for statuses and categories, greater-than operators for numeric thresholds, and contains for text or lists.",
+            "Connect both TRUE and FALSE outputs so no business case silently disappears."
+          ],
+          "docsHref": "/docs/nodes/if_else",
+          "why": "Decides whether the client hears from the bot or from a person. 0.75 is the dial — lower it to answer more questions automatically, raise it to be more cautious."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 300
+      }
+    },
+    {
+      "id": "whatsapp_reply_client",
+      "data": {
+        "icon": "MessageCircle",
+        "type": "whatsapp",
+        "label": "Reply to Client",
+        "config": {
+          "to": "{{input.senderPhone}}",
+          "text": "{{input.answer}}",
+          "resource": "message",
+          "operation": "sendText"
+        },
+        "category": "output",
+        "notes": {
+          "family": "Communication",
+          "what": "Sends WhatsApp messages to customers via the official WhatsApp Business API",
+          "overview": "Send WhatsApp messages, media, locations, contact cards, approved templates, and interactive buttons/lists through the WhatsApp Business Cloud API. Connect a WhatsApp/Facebook account under Connections â€” credentials are resolved automatically. The visual panel exposes the Message resource; Contact, Conversation, Template, Campaign, and AI Agent resources are runtime-supported for advanced or AI-generated workflows.",
+          "tips": [
+            "Connect a WhatsApp account under Connections â€” no access tokens entered on the node itself",
+            "Phone numbers should be in E.164 format, e.g. +12345678900",
+            "First message to a new contact must use Send Template; free-form Send Text only works inside the 24-hour customer service window"
+          ],
+          "docsHref": "/docs/nodes/whatsapp",
+          "why": "Sends a confident answer straight to the client."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 205
+      }
+    },
+    {
+      "id": "slack_escalate_human",
+      "data": {
+        "icon": "MessageCircle",
+        "type": "slack_message",
+        "label": "Escalate to Human",
+        "config": {
+          "channel": "#support",
+          "message": ":warning: Low-confidence AI answer for: \"{{input.message}}\"\nDraft answer: {{input.answer}}\nPlease review and reply directly."
+        },
+        "category": "output",
+        "notes": {
+          "family": "Communication",
+          "what": "Sends messages using a Slack app or bot connection",
+          "overview": "Send Slack bot messages to channels, direct messages, or existing threads through a saved Slack OAuth2 connection. Use it for workplace alerts, support replies, incident updates, approvals, report summaries, and deployment notifications.",
+          "tips": [
+            "Select a Slack OAuth2 connection; do not paste bot tokens into message fields",
+            "The Slack app needs chat:write, and the bot must be invited before it can post in private channels",
+            "Use {{$json.channelId}} and {{$json.threadTs}} from Slack Trigger to reply in the same conversation",
+            "Keep Message filled as readable fallback text even when Blocks contains a rich Block Kit layout",
+            "Connect downstream service accounts separately; Slack OAuth2 only authorizes the Slack send"
+          ],
+          "docsHref": "/docs/nodes/slack_message",
+          "why": "Hands an uncertain question to your team with the AI's draft attached, so the human starts from something rather than nothing."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 395
+      }
+    },
+    {
+      "id": "js_parse_faq_answer",
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      },
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Parse AI Answer",
+        "category": "data",
+        "config": {
+          "code": "let parsed = {};\ntry {\n  const text = input.response || input.text || input.content || \"{}\";\n  const m = text.match(/\\{[\\s\\S]*\\}/);\n  parsed = m ? JSON.parse(m[0]) : {};\n} catch (e) { parsed = {}; }\nreturn {\n  ...input,\n  answer: parsed.answer || input.response || input.text || \"\",\n  confidence: typeof parsed.confidence === \"number\" ? parsed.confidence : 0\n};",
+          "timeout": 5000
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Extracts the answer and the confidence score from the AI's JSON. Without this the gate below has no confidence value to read and every question escalates."
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "chat_trigger_faq",
+      "target": "airtable_read_faq"
+    },
+    {
+      "id": "e2",
+      "source": "airtable_read_faq",
+      "target": "ai_answer_from_faq"
+    },
+    {
+      "id": "e3",
+      "source": "ai_answer_from_faq",
+      "target": "js_parse_faq_answer"
+    },
+    {
+      "id": "e4",
+      "source": "if_confidence_check",
+      "target": "whatsapp_reply_client",
+      "sourceHandle": "true"
+    },
+    {
+      "id": "e5",
+      "source": "if_confidence_check",
+      "target": "slack_escalate_human",
+      "sourceHandle": "false"
+    },
+    {
+      "id": "e_js_parse_faq_answer_if_confidence_check",
+      "source": "js_parse_faq_answer",
+      "target": "if_confidence_check"
+    }
+  ],
+  "difficulty": "Beginner",
+  "estimated_setup_time": 15,
+  "tags": [
+    "support",
+    "ai",
+    "chatbot",
+    "whatsapp",
+    "slack",
+    "faq"
+  ],
+  "preview_image": null,
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2,
+  "created_by": null,
+  "updated_by": null,
+  "created_at": "2026-07-14T11:20:27.820Z",
+  "updated_at": "2026-07-14T11:20:27.820Z"
+}

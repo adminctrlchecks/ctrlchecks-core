@@ -1,0 +1,499 @@
+{
+  "id": "2f520baf-ce2b-4cdc-bd8c-d46d7f61c747",
+  "name": "HR / Hiring Workflow Agent",
+  "description": "Automated resume processing agent that extracts skills, matches candidates against job requirements, scores applications, and automatically schedules interviews for shortlisted candidates.",
+  "category": "Human Resources",
+  "nodes": [
+    {
+      "id": "webhook_resume_1",
+      "data": {
+        "icon": "Webhook",
+        "type": "webhook",
+        "label": "Resume Webhook",
+        "config": {
+          "method": "POST"
+        },
+        "category": "triggers",
+        "notes": {
+          "family": "Triggers",
+          "what": "Starts your workflow the moment another app sends it data — like a doorbell for your automation",
+          "overview": "Starts a workflow when an external app, website form, payment system, or internal service sends data to the generated CtrlChecks webhook URL. Captures the request body, headers, query values, and method for the next node.",
+          "tips": [],
+          "docsHref": "/docs/nodes/webhook",
+          "why": "Receives applications from your careers page or job board."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      }
+    },
+    {
+      "id": "js_extract_resume_data",
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Extract Resume Data",
+        "config": {
+          "code": "return { name: input.name || input.candidate_name || 'Unknown', email: input.email || input.candidate_email || '', resume_text: input.resume_text || input.resume || input.text || '', job_role: input.job_role || input.position || '', resume_file_url: input.resume_file_url || input.file_url || '', timestamp: new Date().toISOString() };"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Normalises the varying field names applicant sources use."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      }
+    },
+    {
+      "id": "ai_extract_skills",
+      "data": {
+        "icon": "Brain",
+        "type": "openai_gpt",
+        "label": "Extract Skills",
+        "config": {
+          "model": "gpt-4o-mini",
+          "memory": 3,
+          "prompt": "Extract skills, experience, education, and qualifications from this resume. Return a JSON object: { skills: [\"skill1\", \"skill2\"], experience_years: number, education: string, certifications: [\"cert1\"], summary: string }\\n\\nResume text: {{input.resume_text}}",
+          "temperature": 0.3
+        },
+        "category": "ai",
+        "notes": {
+          "family": "AI",
+          "what": "Sends your prompt to OpenAI's ChatGPT and gets back an AI-written response",
+          "overview": "Calls OpenAI through the legacy LLM adapter. Prompt is the main input; Messages is only a fallback when Prompt is blank. Temperature and Memory are visible legacy fields ignored by the current executor.",
+          "tips": [],
+          "docsHref": "/docs/nodes/openai_gpt",
+          "why": "Pulls structured skills, years and education out of free-form resume text — the step that makes automated matching possible at all."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      }
+    },
+    {
+      "id": "js_parse_skills",
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Parse Skills",
+        "config": {
+          "code": "try { const content = input.content || input.text || input.response || '{}'; const jsonMatch = content.match(/\\{[\\s\\S]*\\}/); if (jsonMatch) { const parsed = JSON.parse(jsonMatch[0]); return { skills: parsed.skills || [], experience_years: parsed.experience_years || 0, education: parsed.education || '', certifications: parsed.certifications || [], summary: parsed.summary || '', originalData: input }; } return { skills: [], experience_years: 0, education: '', certifications: [], summary: '', originalData: input }; } catch (e) { return { skills: [], experience_years: 0, education: '', certifications: [], summary: '', originalData: input }; }"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Converts the AI's JSON into real fields for the matching step."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      }
+    },
+    {
+      "id": "ai_match_job",
+      "data": {
+        "icon": "Brain",
+        "type": "openai_gpt",
+        "label": "Match Against Job Role",
+        "config": {
+          "model": "gpt-4o-mini",
+          "memory": 3,
+          "prompt": "Match this candidate against the job role: {{input.job_role}}. Candidate skills: {{input.skills}}, Experience: {{input.experience_years}} years, Education: {{input.education}}. Return JSON: { match_score: number (0-100), shortlisted: boolean (score >= 70), strengths: [\"strength1\"], gaps: [\"gap1\"], recommendation: string }",
+          "temperature": 0.3
+        },
+        "category": "ai",
+        "notes": {
+          "family": "AI",
+          "what": "Sends your prompt to OpenAI's ChatGPT and gets back an AI-written response",
+          "overview": "Calls OpenAI through the legacy LLM adapter. Prompt is the main input; Messages is only a fallback when Prompt is blank. Temperature and Memory are visible legacy fields ignored by the current executor.",
+          "tips": [],
+          "docsHref": "/docs/nodes/openai_gpt",
+          "why": "Scores the candidate against the role and explains its reasoning, so a human reviewing the decision can see why."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 300
+      }
+    },
+    {
+      "id": "js_extract_match",
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Extract Match Result",
+        "config": {
+          "code": "try { const content = input.content || input.text || input.response || '{}'; const jsonMatch = content.match(/\\{[\\s\\S]*\\}/); if (jsonMatch) { const parsed = JSON.parse(jsonMatch[0]); return { match_score: parsed.match_score || 0, shortlisted: parsed.shortlisted !== undefined ? parsed.shortlisted : (parsed.match_score >= 70), strengths: parsed.strengths || [], gaps: parsed.gaps || [], recommendation: parsed.recommendation || 'No recommendation', candidateData: input.originalData }; } return { match_score: 0, shortlisted: false, strengths: [], gaps: [], recommendation: 'Could not parse match result', candidateData: input.originalData }; } catch (e) { return { match_score: 0, shortlisted: false, strengths: [], gaps: [], recommendation: 'Error: ' + e.message, candidateData: input.originalData }; }"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Extracts the score and shortlist decision from the AI reply."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 300
+      }
+    },
+    {
+      "id": "if_shortlist_check",
+      "data": {
+        "icon": "GitBranch",
+        "type": "if_else",
+        "label": "Check Shortlist",
+        "config": {
+          "conditions": [
+            {
+              "field": "$json.shortlisted",
+              "operator": "equals",
+              "value": true
+            }
+          ],
+          "combineOperation": "AND"
+        },
+        "category": "logic",
+        "notes": {
+          "family": "Logic",
+          "what": "Makes a yes/no decision: if something is true, go one way; otherwise go another",
+          "overview": "Makes a yes/no decision from previous-step data and routes matching work through TRUE and non-matching work through FALSE.",
+          "tips": [
+            "Use the builder for normal setup; use JSON mode only when pasting prepared condition objects.",
+            "Choose AND when every row must match; choose OR when any row can match.",
+            "Use equals for statuses and categories, greater-than operators for numeric thresholds, and contains for text or lists.",
+            "Connect both TRUE and FALSE outputs so no business case silently disappears."
+          ],
+          "docsHref": "/docs/nodes/if_else",
+          "why": "The hiring decision point. 70 is the threshold, set in the matching prompt above."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2020,
+        "y": 300
+      }
+    },
+    {
+      "id": "db_shortlist",
+      "data": {
+        "icon": "Database",
+        "type": "postgresql",
+        "label": "Save to Shortlist",
+        "config": {
+          "query": "INSERT INTO candidates (name, email, job_role, match_score, status, skills, experience_years, created_at) VALUES ('{{input.candidateData.name}}', '{{input.candidateData.email}}', '{{input.candidateData.job_role}}', {{input.match_score}}, 'shortlisted', '{{input.candidateData.skills}}', {{input.candidateData.experience_years}}, now())"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Connects to a PostgreSQL database to run queries or insert data",
+          "overview": "Run PostgreSQL executeQuery, insert, update, or delete through the real database executor. The visual panel now uses runtime operation values and Parameters maps to the executor parameter array.",
+          "tips": [
+            "Use executeQuery for raw SQL with $1, $2 placeholders and Parameters as a JSON array.",
+            "Insert returns inserted/count; update and delete return rows/rowsAffected because PostgreSQL uses RETURNING *.",
+            "The backend schema still lists connectionString, but the executor validates host, username, password, database, port, and ssl.",
+            "Update and delete require Where; the executor refuses missing where clauses.",
+            "Store database passwords in Connections rather than ordinary workflow fields."
+          ],
+          "docsHref": "/docs/nodes/postgresql",
+          "why": "Records the shortlisted candidate. The candidates table must already exist with matching columns."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2340,
+        "y": 205
+      }
+    },
+    {
+      "id": "js_generate_calendar",
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Generate Calendar Link",
+        "config": {
+          "code": "// Set this to your own interview scheduling link when you set up the template.\nconst baseUrl = input.interviewBookingUrl || \"REPLACE_WITH_YOUR_INTERVIEW_BOOKING_LINK\";\nconst params = new URLSearchParams({ name: input.candidateData.name || \"\", email: input.candidateData.email || \"\", job: input.candidateData.job_role || \"\" });\nreturn {\n  ...input,\n  calendarLink: baseUrl + \"?\" + params.toString(),\n  email: input.candidateData.email,\n  name: input.candidateData.name,\n  jobRole: input.candidateData.job_role\n};"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Builds a personalised booking link. Replace the placeholder URL with your own scheduling link."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2660,
+        "y": 205
+      }
+    },
+    {
+      "id": "email_interview",
+      "data": {
+        "icon": "Mail",
+        "type": "google_gmail",
+        "label": "Send Interview Invite",
+        "config": {
+          "to": "{{input.email}}",
+          "body": "Hi {{input.name}},\\n\\nCongratulations! We were impressed with your application for the {{input.jobRole}} position. We'd like to invite you for an interview.\\n\\nSchedule your interview: {{input.calendarLink}}\\n\\nLooking forward to meeting you!\\n\\nBest regards,\\nHR Team",
+          "subject": "Interview Invitation - {{input.jobRole}}",
+          "operation": "send"
+        },
+        "category": "output",
+        "notes": {
+          "family": "Communication",
+          "what": "Send emails from your Gmail account or read and search messages in your inbox",
+          "overview": "Send, list, get, or search Gmail messages. Send recipients can be typed manually or extracted from upstream/fallback Google Sheets rows.",
+          "tips": [
+            "Connect Google OAuth in Connections; do not paste tokens into workflow fields",
+            "Gmail search syntax: from:, subject:, is:unread, has:attachment",
+            "List/Search only return {id, threadId} per message â€” use a Get step with that id for full content",
+            "Body is plain text only",
+            "Get returns Gmail's raw API message; the body text is base64url-encoded inside message.payload.body.data",
+            "Use search to filter messages before getting details"
+          ],
+          "docsHref": "/docs/nodes/google_gmail",
+          "why": "Invites the candidate to book directly, removing the back-and-forth from scheduling."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2980,
+        "y": 300
+      }
+    },
+    {
+      "id": "db_reject",
+      "data": {
+        "icon": "Database",
+        "type": "postgresql",
+        "label": "Record Rejection",
+        "config": {
+          "query": "INSERT INTO candidates (name, email, job_role, match_score, status, reason, created_at) VALUES ('{{input.candidateData.name}}', '{{input.candidateData.email}}', '{{input.candidateData.job_role}}', {{input.match_score}}, 'rejected', '{{input.recommendation}}', now())"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Connects to a PostgreSQL database to run queries or insert data",
+          "overview": "Run PostgreSQL executeQuery, insert, update, or delete through the real database executor. The visual panel now uses runtime operation values and Parameters maps to the executor parameter array.",
+          "tips": [
+            "Use executeQuery for raw SQL with $1, $2 placeholders and Parameters as a JSON array.",
+            "Insert returns inserted/count; update and delete return rows/rowsAffected because PostgreSQL uses RETURNING *.",
+            "The backend schema still lists connectionString, but the executor validates host, username, password, database, port, and ssl.",
+            "Update and delete require Where; the executor refuses missing where clauses.",
+            "Store database passwords in Connections rather than ordinary workflow fields."
+          ],
+          "docsHref": "/docs/nodes/postgresql",
+          "why": "Records the decision and the reasoning behind it — needed if a rejection is ever questioned."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2340,
+        "y": 395
+      }
+    },
+    {
+      "id": "email_rejection",
+      "data": {
+        "icon": "Mail",
+        "type": "google_gmail",
+        "label": "Send Rejection Draft to Recruiter",
+        "config": {
+          "to": "REPLACE_WITH_YOUR_RECRUITER_EMAIL",
+          "body": "A candidate scored below the shortlist threshold. Review and send this yourself if you agree.\n\nCandidate: {{input.candidateData.name}} <{{input.candidateData.email}}>\nRole: {{input.candidateData.job_role}}\nMatch score: {{input.match_score}}\nAI reasoning: {{input.recommendation}}\n\n--- Draft message ---\nHi {{input.candidateData.name}},\n\nThank you for your interest in the {{input.candidateData.job_role}} position. After careful consideration, we have decided to move forward with other candidates at this time.\n\nWe appreciate your interest and wish you the best in your job search.\n\nBest regards,\nHR Team",
+          "subject": "[REVIEW BEFORE SENDING] Draft rejection — {{input.candidateData.name}} ({{input.candidateData.job_role}})",
+          "operation": "send"
+        },
+        "category": "output",
+        "notes": {
+          "family": "Communication",
+          "what": "Send emails from your Gmail account or read and search messages in your inbox",
+          "overview": "Send, list, get, or search Gmail messages. Send recipients can be typed manually or extracted from upstream/fallback Google Sheets rows.",
+          "tips": [
+            "Connect Google OAuth in Connections; do not paste tokens into workflow fields",
+            "Gmail search syntax: from:, subject:, is:unread, has:attachment",
+            "List/Search only return {id, threadId} per message â€” use a Get step with that id for full content",
+            "Body is plain text only",
+            "Get returns Gmail's raw API message; the body text is base64url-encoded inside message.payload.body.data",
+            "Use search to filter messages before getting details"
+          ],
+          "docsHref": "/docs/nodes/google_gmail",
+          "why": "Sends a DRAFT rejection to your recruiter, not to the candidate. Automated rejections going straight out is a legal and brand risk; a person makes the final call here."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2660,
+        "y": 395
+      }
+    },
+    {
+      "id": "log_processing",
+      "data": {
+        "icon": "FileOutput",
+        "type": "log_output",
+        "label": "Log Processing Result",
+        "config": {
+          "level": "info",
+          "message": "Candidate processed: {{input.candidateData.name}} ({{input.candidateData.email}}) - Match Score: {{input.match_score}}, Shortlisted: {{input.shortlisted}}"
+        },
+        "category": "utility",
+        "notes": {
+          "family": "Utility",
+          "what": "Writes a message to your workflow's log for debugging or auditing",
+          "overview": "Log data for debugging and monitoring. View logs in the execution history. This is a terminal node â€” it cannot connect to further downstream nodes.",
+          "tips": [
+            "Use different levels for filtering",
+            "This node is terminal â€” it does not forward data to further nodes",
+            "Check execution history for logs"
+          ],
+          "docsHref": "/docs/nodes/log_output",
+          "why": "Records every application processed, whatever the outcome."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 3300,
+        "y": 300
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "webhook_resume_1",
+      "target": "js_extract_resume_data"
+    },
+    {
+      "id": "e2",
+      "source": "js_extract_resume_data",
+      "target": "ai_extract_skills"
+    },
+    {
+      "id": "e3",
+      "source": "ai_extract_skills",
+      "target": "js_parse_skills"
+    },
+    {
+      "id": "e4",
+      "source": "js_parse_skills",
+      "target": "ai_match_job"
+    },
+    {
+      "id": "e5",
+      "source": "ai_match_job",
+      "target": "js_extract_match"
+    },
+    {
+      "id": "e6",
+      "source": "js_extract_match",
+      "target": "if_shortlist_check"
+    },
+    {
+      "id": "e7",
+      "source": "if_shortlist_check",
+      "target": "db_shortlist",
+      "sourceHandle": "true"
+    },
+    {
+      "id": "e8",
+      "source": "if_shortlist_check",
+      "target": "db_reject",
+      "sourceHandle": "false"
+    },
+    {
+      "id": "e9",
+      "source": "db_shortlist",
+      "target": "js_generate_calendar"
+    },
+    {
+      "id": "e10",
+      "source": "js_generate_calendar",
+      "target": "email_interview"
+    },
+    {
+      "id": "e11",
+      "source": "email_interview",
+      "target": "log_processing"
+    },
+    {
+      "id": "e12",
+      "source": "db_reject",
+      "target": "email_rejection"
+    },
+    {
+      "id": "e13",
+      "source": "email_rejection",
+      "target": "log_processing"
+    }
+  ],
+  "difficulty": "Advanced",
+  "estimated_setup_time": 15,
+  "tags": [
+    "hr",
+    "hiring",
+    "resume",
+    "recruitment",
+    "interview-scheduling"
+  ],
+  "preview_image": null,
+  "is_featured": true,
+  "is_active": true,
+  "use_count": 2,
+  "version": 2,
+  "created_by": null,
+  "updated_by": null,
+  "created_at": "2026-04-24T14:32:25.195Z",
+  "updated_at": "2026-07-14T11:58:35.000Z"
+}

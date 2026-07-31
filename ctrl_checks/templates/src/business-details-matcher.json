@@ -1,0 +1,449 @@
+{
+  "id": "47f2cdd4-2ccd-43e6-915b-4a2a5b184293",
+  "name": "Business Details Matcher",
+  "description": "Catches the silent rejection cause: a business name or address that's written slightly differently on the website vs. the GST filing vs. the bank account. Checks every client every 15 minutes, cross-references every version of the business identity, and emails a match/mismatch report. (No instant Airtable-update trigger exists yet, so this polls every 15 minutes and checks one client per run, marking each as checked so it is never re-reported.)",
+  "category": "Business Verification & Compliance",
+  "nodes": [
+    {
+      "id": "schedule_poll_clients",
+      "data": {
+        "icon": "Clock",
+        "type": "schedule",
+        "label": "Poll for Doc-Complete Clients",
+        "config": {
+          "cron": "*/15 * * * *",
+          "timezone": "UTC"
+        },
+        "category": "triggers",
+        "notes": {
+          "family": "Triggers",
+          "what": "Works like an alarm clock — runs your workflow automatically at a specific time you set each day",
+          "overview": "Runs your workflow automatically on a schedule using a simple time picker. Select your time (HH:MM format) and timezone, and the workflow will execute daily at that time. Great for daily reports, periodic checks, or recurring tasks.",
+          "tips": [
+            "Use 24-hour format (e.g., 09:00 for 9 AM, 14:30 for 2:30 PM)",
+            "Select your timezone from the dropdown (IST, UTC, etc.)",
+            "Workflow runs daily at the specified time",
+            "Test with manual trigger first",
+            "Timezone conversion is handled automatically"
+          ],
+          "docsHref": "/docs/nodes/schedule",
+          "why": "Runs the check on a timer because the platform has no 'Airtable row changed' trigger yet. Each run handles one client, so a 15-minute cycle clears a normal queue easily."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      }
+    },
+    {
+      "id": "airtable_read_ready_clients",
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Read Clients With All Docs",
+        "config": {
+          "baseId": "",
+          "tableId": "Clients",
+          "operation": "read",
+          "filterByFormula": "AND({Status}='DocsComplete', {MatchCheckedAt}='')",
+          "maxRecords": 1,
+          "sort": [
+            {
+              "field": "Name",
+              "direction": "asc"
+            }
+          ]
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Picks up one client whose documents are complete and who has not been checked yet. The MatchCheckedAt filter is what stops the same client being re-reported forever."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      }
+    },
+    {
+      "id": "js_detect_newly_ready",
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Select Client to Check",
+        "config": {
+          "code": "const rec = (input.records || [])[0];\nif (!rec) return { ...input, hasClient: false };\nconst f = rec.fields || {};\nreturn {\n  ...input,\n  hasClient: true,\n  recordId: rec.id,\n  businessName: f.Name || \"\",\n  website: f.Website || \"\",\n  contactEmail: f.Email || \"\"\n};"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Lifts the selected client's name, website and email to the top level so the steps below can reference them directly."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      }
+    },
+    {
+      "id": "http_fetch_website_details",
+      "data": {
+        "icon": "Globe",
+        "type": "http_request",
+        "label": "Fetch Website Business Details",
+        "config": {
+          "url": "{{input.website}}",
+          "method": "GET",
+          "headers": {},
+          "timeout": 10000
+        },
+        "category": "http_api",
+        "notes": {
+          "family": "HTTP & API",
+          "what": "Calls any web URL and gets data back — your universal connector to the internet",
+          "overview": "Call an external API or webhook, optionally adding headers, query parameters, body data, and a timeout.",
+          "tips": [],
+          "docsHref": "/docs/nodes/http_request",
+          "why": "Fetches the live website so the AI can read the business details as they are published today, not as they were when the client signed up."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 300
+      }
+    },
+    {
+      "id": "ai_extract_details",
+      "data": {
+        "icon": "Brain",
+        "type": "openai_gpt",
+        "label": "Extract Name/Address/Phone",
+        "config": {
+          "model": "gpt-4o-mini",
+          "prompt": "Extract the business name, address and phone number as they appear on this website HTML: {{input.body}}. Then extract the same three fields from the client's uploaded documents. Reply ONLY with JSON in this exact shape: {\"website\":{\"name\":\"\",\"address\":\"\",\"phone\":\"\"},\"gst\":{\"name\":\"\",\"address\":\"\",\"phone\":\"\"},\"pan\":{\"name\":\"\",\"address\":\"\",\"phone\":\"\"},\"bank\":{\"name\":\"\",\"address\":\"\",\"phone\":\"\"}}. Use an empty string where a value is not present.",
+          "temperature": 0.2
+        },
+        "category": "ai",
+        "notes": {
+          "family": "AI",
+          "what": "Sends your prompt to OpenAI's ChatGPT and gets back an AI-written response",
+          "overview": "Calls OpenAI through the legacy LLM adapter. Prompt is the main input; Messages is only a fallback when Prompt is blank. Temperature and Memory are visible legacy fields ignored by the current executor.",
+          "tips": [],
+          "docsHref": "/docs/nodes/openai_gpt",
+          "why": "Reads the name, address and phone out of the website and each document, and returns them as JSON so the comparison below can be exact rather than a guess."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 300
+      }
+    },
+    {
+      "id": "js_compare_versions",
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Compare All Versions",
+        "config": {
+          "code": "let parsed = {};\ntry {\n  const text = input.response || input.text || input.content || \"{}\";\n  const m = text.match(/\\{[\\s\\S]*\\}/);\n  parsed = m ? JSON.parse(m[0]) : {};\n} catch (e) { parsed = {}; }\nconst sources = Object.keys(parsed);\nconst mismatches = [];\nfor (const field of [\"name\", \"address\", \"phone\"]) {\n  const values = sources\n    .map(s => ({ source: s, value: (parsed[s] && parsed[s][field] || \"\").trim().toLowerCase() }))\n    .filter(v => v.value);\n  const distinct = [...new Set(values.map(v => v.value))];\n  if (distinct.length > 1) {\n    mismatches.push(field + \": \" + values.map(v => v.source + \"=\" + v.value).join(\" | \"));\n  }\n}\nreturn { ...input, mismatches, isMatch: mismatches.length === 0 };"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Compares every source field by field. This is where a mismatch is actually detected — the AI only extracts, it does not judge."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2020,
+        "y": 300
+      }
+    },
+    {
+      "id": "airtable_write_match_results",
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Write Match Results",
+        "config": {
+          "baseId": "",
+          "fields": {
+            "Mismatches": "{{input.mismatches}}",
+            "MatchStatus": "{{input.isMatch}}"
+          },
+          "tableId": "Clients",
+          "recordId": "{{input.recordId}}",
+          "operation": "update"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Records what matched and what did not, so the mismatch history lives on the client record rather than only in an email."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2660,
+        "y": 300
+      }
+    },
+    {
+      "id": "gmail_send_match_report",
+      "data": {
+        "icon": "Mail",
+        "type": "google_gmail",
+        "label": "Email Match Report",
+        "config": {
+          "body": "Here's what matches and what doesn't across your website, GST, PAN, and bank statement:\n\n{{input.mismatches}}",
+          "subject": "Business details check for {{input.businessName}}",
+          "operation": "send",
+          "recipientEmails": "{{input.contactEmail}}",
+          "recipientSource": "manual_entry"
+        },
+        "category": "output",
+        "notes": {
+          "family": "Communication",
+          "what": "Send emails from your Gmail account or read and search messages in your inbox",
+          "overview": "Send, list, get, or search Gmail messages. Send recipients can be typed manually or extracted from upstream/fallback Google Sheets rows.",
+          "tips": [
+            "Connect Google OAuth in Connections; do not paste tokens into workflow fields",
+            "Gmail search syntax: from:, subject:, is:unread, has:attachment",
+            "List/Search only return {id, threadId} per message â€” use a Get step with that id for full content",
+            "Body is plain text only",
+            "Get returns Gmail's raw API message; the body text is base64url-encoded inside message.payload.body.data",
+            "Use search to filter messages before getting details"
+          ],
+          "docsHref": "/docs/nodes/google_gmail",
+          "why": "Tells the client exactly which detail is inconsistent and where — the specific thing that gets applications silently rejected."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 3300,
+        "y": 300
+      }
+    },
+    {
+      "id": "airtable_mark_checked",
+      "type": "custom",
+      "position": {
+        "x": 2980,
+        "y": 300
+      },
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Mark Client as Checked",
+        "category": "data",
+        "config": {
+          "baseId": "",
+          "tableId": "Clients",
+          "operation": "update",
+          "recordId": "{{input.recordId}}",
+          "fields": {
+            "MatchCheckedAt": "{{input.checkedAt}}"
+          }
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Stamps the client as checked. Delete this node and the same client is re-checked and re-emailed every 15 minutes, forever."
+        }
+      }
+    },
+    {
+      "id": "js_stamp_checked",
+      "type": "custom",
+      "position": {
+        "x": 2340,
+        "y": 300
+      },
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Stamp Check Time",
+        "category": "data",
+        "config": {
+          "code": "return { ...input, checkedAt: new Date().toISOString() };",
+          "timeout": 5000
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Supplies the timestamp for the marker below. Needed because the platform has no {{$now}} built-in."
+        }
+      }
+    },
+    {
+      "id": "if_hasclient",
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      },
+      "data": {
+        "icon": "GitBranch",
+        "type": "if_else",
+        "label": "Any Client to Check?",
+        "category": "logic",
+        "config": {
+          "conditions": [
+            {
+              "field": "$json.hasClient",
+              "operator": "equals",
+              "value": true
+            }
+          ],
+          "combineOperation": "AND"
+        },
+        "notes": {
+          "family": "Logic",
+          "what": "Makes a yes/no decision: if something is true, go one way; otherwise go another",
+          "overview": "Makes a yes/no decision from previous-step data and routes matching work through TRUE and non-matching work through FALSE.",
+          "tips": [
+            "Use the builder for normal setup; use JSON mode only when pasting prepared condition objects.",
+            "Choose AND when every row must match; choose OR when any row can match.",
+            "Use equals for statuses and categories, greater-than operators for numeric thresholds, and contains for text or lists.",
+            "Connect both TRUE and FALSE outputs so no business case silently disappears."
+          ],
+          "docsHref": "/docs/nodes/if_else",
+          "why": "Most polls find nothing. Without this gate the workflow would fetch a blank URL and email an empty report every 15 minutes."
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "schedule_poll_clients",
+      "target": "airtable_read_ready_clients"
+    },
+    {
+      "id": "e2",
+      "source": "airtable_read_ready_clients",
+      "target": "js_detect_newly_ready"
+    },
+    {
+      "id": "e3",
+      "source": "if_hasclient",
+      "target": "http_fetch_website_details",
+      "sourceHandle": "true"
+    },
+    {
+      "id": "e4",
+      "source": "http_fetch_website_details",
+      "target": "ai_extract_details"
+    },
+    {
+      "id": "e5",
+      "source": "ai_extract_details",
+      "target": "js_compare_versions"
+    },
+    {
+      "id": "e6",
+      "source": "js_compare_versions",
+      "target": "js_stamp_checked"
+    },
+    {
+      "id": "e7",
+      "source": "airtable_write_match_results",
+      "target": "airtable_mark_checked"
+    },
+    {
+      "id": "e_airtable_mark_checked_gmail_send_match_report",
+      "source": "airtable_mark_checked",
+      "target": "gmail_send_match_report"
+    },
+    {
+      "id": "e_js_stamp_checked_airtable_write_match_results",
+      "source": "js_stamp_checked",
+      "target": "airtable_write_match_results"
+    },
+    {
+      "id": "e_js_detect_newly_ready_if_hasclient",
+      "source": "js_detect_newly_ready",
+      "target": "if_hasclient"
+    }
+  ],
+  "difficulty": "Intermediate",
+  "estimated_setup_time": 24,
+  "tags": [
+    "verification",
+    "compliance",
+    "ai",
+    "airtable",
+    "data-matching"
+  ],
+  "preview_image": null,
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2,
+  "created_by": null,
+  "updated_by": null,
+  "created_at": "2026-07-14T11:20:27.820Z",
+  "updated_at": "2026-07-14T11:20:27.820Z"
+}

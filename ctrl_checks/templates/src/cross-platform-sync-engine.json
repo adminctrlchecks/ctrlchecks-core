@@ -1,0 +1,333 @@
+{
+  "id": "85e90794-5759-4cda-9738-6c045e5e1c6c",
+  "name": "Cross-Platform Sync Engine",
+  "description": "Keep client data in Airtable, your CRM and a shared spreadsheet from drifting apart. Every 15 minutes this workflow picks up one client record that has changed since it was last synced, pushes it to HubSpot and Google Sheets, then stamps it as synced so it is never pushed twice. Requires a HubSpotId column on your Airtable table. (No instant Airtable-update trigger exists yet, so this polls.)",
+  "category": "Business Verification & Compliance",
+  "nodes": [
+    {
+      "id": "schedule_poll_changes",
+      "data": {
+        "icon": "Clock",
+        "type": "schedule",
+        "label": "Poll for Client Record Changes",
+        "config": {
+          "cron": "*/15 * * * *",
+          "timezone": "UTC"
+        },
+        "category": "triggers",
+        "notes": {
+          "family": "Triggers",
+          "what": "Works like an alarm clock — runs your workflow automatically at a specific time you set each day",
+          "overview": "Runs your workflow automatically on a schedule using a simple time picker. Select your time (HH:MM format) and timezone, and the workflow will execute daily at that time. Great for daily reports, periodic checks, or recurring tasks.",
+          "tips": [
+            "Use 24-hour format (e.g., 09:00 for 9 AM, 14:30 for 2:30 PM)",
+            "Select your timezone from the dropdown (IST, UTC, etc.)",
+            "Workflow runs daily at the specified time",
+            "Test with manual trigger first",
+            "Timezone conversion is handled automatically"
+          ],
+          "docsHref": "/docs/nodes/schedule",
+          "why": "Polls because there is no 'Airtable row changed' trigger. One record per run keeps the sync safe and rate-limit friendly."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      }
+    },
+    {
+      "id": "airtable_read_all_clients",
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Read All Client Records",
+        "config": {
+          "baseId": "",
+          "tableId": "Clients",
+          "operation": "read",
+          "filterByFormula": "OR({LastSyncedAt}='', IS_AFTER(LAST_MODIFIED_TIME(), {LastSyncedAt}))",
+          "maxRecords": 1
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Picks up one record modified since it was last synced. The LastSyncedAt filter is the safety mechanism — without it every record looks changed on every run."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      }
+    },
+    {
+      "id": "js_diff_changed_fields",
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Select Record to Sync",
+        "config": {
+          "code": "const rec = (input.records || [])[0];\nif (!rec) return { ...input, hasRecord: false };\nconst f = rec.fields || {};\n// HubSpot needs its own contact id; store it on the Airtable row as HubSpotId.\nreturn {\n  ...input,\n  hasRecord: true,\n  recordId: rec.id,\n  hubspotContactId: f.HubSpotId || \"\",\n  diffFields: { firstname: f.Name || \"\", email: f.Email || \"\", website: f.Website || \"\" },\n  sheetRow: [[f.Name || \"\", f.Email || \"\", f.Website || \"\", f.Status || \"\"]],\n  syncedAt: new Date().toISOString()\n};"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Maps the Airtable row onto the shapes HubSpot and Sheets each expect. Your Airtable table needs a HubSpotId column for the CRM push to find the right contact."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      }
+    },
+    {
+      "id": "hubspot_push_changes",
+      "data": {
+        "icon": "Database",
+        "type": "hubspot",
+        "label": "Push Changed Fields to HubSpot",
+        "config": {
+          "id": "{{input.hubspotContactId}}",
+          "resource": "contact",
+          "operation": "update",
+          "properties": "{{input.diffFields}}"
+        },
+        "category": "crm",
+        "notes": {
+          "family": "CRM",
+          "what": "Create, update, or find contacts, deals, and companies in HubSpot CRM",
+          "overview": "Connects to HubSpot CRM to get, list, create, update, delete, search, or bulk-create contacts, companies, deals, and tickets. Only Access Token is vault-backed - Api Key and Credential Id are legacy/unused. Perfect for automating sales, marketing, and support workflows.",
+          "tips": [],
+          "docsHref": "/docs/nodes/hubspot",
+          "why": "Updates the matching CRM contact. This is a write into your real CRM — test it against a sandbox contact before switching the template on."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 300
+      }
+    },
+    {
+      "id": "sheets_update_shared_copy",
+      "data": {
+        "icon": "Database",
+        "type": "google_sheets",
+        "label": "Update Shared Spreadsheet",
+        "config": {
+          "range": "Clients!A:D",
+          "values": "{{input.sheetRow}}",
+          "operation": "update",
+          "sheetName": "Clients",
+          "spreadsheetId": "REPLACE_WITH_YOUR_GOOGLE_SHEET_ID"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Read rows from a Google Sheet or write new data into one — like Excel, but automated",
+          "overview": "Read, write, append, or update data in Google Sheets. Connect your spreadsheets to workflows for data extraction, logging, and automation.",
+          "tips": [
+            "Get Spreadsheet ID from URL: /d/SPREADSHEET_ID/edit",
+            "Leave range empty to read all used cells",
+            "Use key-value or text Output Format for easier AI processing",
+            "Allow Write Access has no runtime effect â€” write/append/update run regardless of this checkbox",
+            "Data is checked before Values when both are filled",
+            "Authenticate with Google account first"
+          ],
+          "docsHref": "/docs/nodes/google_sheets",
+          "why": "Keeps the shared spreadsheet in step for people who do not have CRM access."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 300
+      }
+    },
+    {
+      "id": "slack_log_sync",
+      "data": {
+        "icon": "MessageCircle",
+        "type": "slack_message",
+        "label": "Log Sync Confirmation",
+        "config": {
+          "channel": "#data-sync-log",
+          "message": ":white_check_mark: Synced client record {{input.recordId}} to HubSpot and Google Sheets."
+        },
+        "category": "output",
+        "notes": {
+          "family": "Communication",
+          "what": "Sends messages using a Slack app or bot connection",
+          "overview": "Send Slack bot messages to channels, direct messages, or existing threads through a saved Slack OAuth2 connection. Use it for workplace alerts, support replies, incident updates, approvals, report summaries, and deployment notifications.",
+          "tips": [
+            "Select a Slack OAuth2 connection; do not paste bot tokens into message fields",
+            "The Slack app needs chat:write, and the bot must be invited before it can post in private channels",
+            "Use {{$json.channelId}} and {{$json.threadTs}} from Slack Trigger to reply in the same conversation",
+            "Keep Message filled as readable fallback text even when Blocks contains a rich Block Kit layout",
+            "Connect downstream service accounts separately; Slack OAuth2 only authorizes the Slack send"
+          ],
+          "docsHref": "/docs/nodes/slack_message",
+          "why": "A quiet audit trail so you can tell whether a sync ran without opening three systems."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2340,
+        "y": 300
+      }
+    },
+    {
+      "id": "airtable_mark_synced",
+      "type": "custom",
+      "position": {
+        "x": 2020,
+        "y": 300
+      },
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Record Sync Time",
+        "category": "data",
+        "config": {
+          "baseId": "",
+          "tableId": "Clients",
+          "operation": "update",
+          "recordId": "{{input.recordId}}",
+          "fields": {
+            "LastSyncedAt": "{{input.syncedAt}}"
+          }
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Stamps the row as synced. This is the single most important node here — remove it and the workflow re-pushes every client to HubSpot and Sheets every 15 minutes indefinitely."
+        }
+      }
+    },
+    {
+      "id": "if_hasrecord",
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      },
+      "data": {
+        "icon": "GitBranch",
+        "type": "if_else",
+        "label": "Anything Changed?",
+        "category": "logic",
+        "config": {
+          "conditions": [
+            {
+              "field": "$json.hasRecord",
+              "operator": "equals",
+              "value": true
+            }
+          ],
+          "combineOperation": "AND"
+        },
+        "notes": {
+          "family": "Logic",
+          "what": "Makes a yes/no decision: if something is true, go one way; otherwise go another",
+          "overview": "Makes a yes/no decision from previous-step data and routes matching work through TRUE and non-matching work through FALSE.",
+          "tips": [
+            "Use the builder for normal setup; use JSON mode only when pasting prepared condition objects.",
+            "Choose AND when every row must match; choose OR when any row can match.",
+            "Use equals for statuses and categories, greater-than operators for numeric thresholds, and contains for text or lists.",
+            "Connect both TRUE and FALSE outputs so no business case silently disappears."
+          ],
+          "docsHref": "/docs/nodes/if_else",
+          "why": "Stops an empty poll from pushing a blank contact into your CRM and a blank row into your spreadsheet."
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "schedule_poll_changes",
+      "target": "airtable_read_all_clients"
+    },
+    {
+      "id": "e2",
+      "source": "airtable_read_all_clients",
+      "target": "js_diff_changed_fields"
+    },
+    {
+      "id": "e3",
+      "source": "if_hasrecord",
+      "target": "hubspot_push_changes",
+      "sourceHandle": "true"
+    },
+    {
+      "id": "e4",
+      "source": "hubspot_push_changes",
+      "target": "sheets_update_shared_copy"
+    },
+    {
+      "id": "e5",
+      "source": "sheets_update_shared_copy",
+      "target": "airtable_mark_synced"
+    },
+    {
+      "id": "e_airtable_mark_synced_slack_log_sync",
+      "source": "airtable_mark_synced",
+      "target": "slack_log_sync"
+    },
+    {
+      "id": "e_js_diff_changed_fields_if_hasrecord",
+      "source": "js_diff_changed_fields",
+      "target": "if_hasrecord"
+    }
+  ],
+  "difficulty": "Intermediate",
+  "estimated_setup_time": 18,
+  "tags": [
+    "sync",
+    "hubspot",
+    "google-sheets",
+    "airtable",
+    "crm",
+    "automation"
+  ],
+  "preview_image": null,
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2,
+  "created_by": null,
+  "updated_by": null,
+  "created_at": "2026-07-14T11:20:27.820Z",
+  "updated_at": "2026-07-14T11:20:27.820Z"
+}

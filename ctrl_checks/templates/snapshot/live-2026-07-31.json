@@ -1,0 +1,4574 @@
+[
+  {
+    "id": "ea499f25-1616-40d7-9d64-8f827805e79e",
+    "name": "Approval Chance Predictor",
+    "description": "Get a realistic percentage chance of approval before you submit a verification application, based on the same details reviewers use to reject applications. Built for businesses applying for verification and for agencies managing many client applications at once.",
+    "category": "Business Verification & Compliance",
+    "nodes": [
+      {
+        "id": "form_details",
+        "data": {
+          "icon": "FileText",
+          "type": "form",
+          "label": "Application Details Form",
+          "config": {
+            "fields": [
+              {
+                "key": "businessName",
+                "type": "text",
+                "label": "Business Name",
+                "required": true
+              },
+              {
+                "key": "address",
+                "type": "text",
+                "label": "Business Address",
+                "required": true
+              },
+              {
+                "key": "website",
+                "type": "url",
+                "label": "Website URL",
+                "required": true
+              },
+              {
+                "key": "contactEmail",
+                "type": "email",
+                "label": "Contact Email",
+                "required": true
+              },
+              {
+                "key": "documents",
+                "type": "file",
+                "label": "Supporting Documents",
+                "required": false
+              }
+            ],
+            "formTitle": "Approval Chance Check",
+            "submitButtonText": "Predict My Chances"
+          },
+          "category": "triggers"
+        },
+        "type": "custom",
+        "position": {
+          "x": 100,
+          "y": 300
+        }
+      },
+      {
+        "id": "airtable_lookup_readiness",
+        "data": {
+          "icon": "Database",
+          "type": "airtable",
+          "label": "Lookup Existing Readiness Record",
+          "config": {
+            "baseId": "",
+            "tableId": "Clients",
+            "operation": "read"
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 400,
+          "y": 300
+        }
+      },
+      {
+        "id": "ai_predict_chance",
+        "data": {
+          "icon": "Brain",
+          "type": "openai_gpt",
+          "label": "Compare Against Rejection Reasons",
+          "config": {
+            "model": "gpt-4o-mini",
+            "prompt": "Compare this business against the most common reasons Meta/Google verification applications get rejected (mismatched business details, missing privacy policy, unverifiable address, inconsistent documents). Business: {{input.businessName}}, address {{input.address}}, website {{input.website}}. Existing readiness data: {{input.record}}. List every risk factor found, one per line starting with \"RISK:\".",
+            "temperature": 0.3
+          },
+          "category": "ai"
+        },
+        "type": "custom",
+        "position": {
+          "x": 700,
+          "y": 300
+        }
+      },
+      {
+        "id": "js_percentage",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Convert to Approval Percentage",
+          "config": {
+            "code": "const text = input.response || input.text || '';\nconst risks = text.split('\\n').map(l => l.trim()).filter(l => l.toUpperCase().startsWith('RISK:'));\nconst percentage = Math.max(5, 95 - risks.length * 12);\nreturn { ...input, approvalPercentage: percentage, risks };"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1000,
+          "y": 300
+        }
+      },
+      {
+        "id": "airtable_save_prediction",
+        "data": {
+          "icon": "Database",
+          "type": "airtable",
+          "label": "Save Prediction",
+          "config": {
+            "baseId": "",
+            "fields": {
+              "Risks": "{{input.risks}}",
+              "ApprovalChance": "{{input.approvalPercentage}}"
+            },
+            "tableId": "Clients",
+            "recordId": "{{input.recordId}}",
+            "operation": "update"
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1300,
+          "y": 300
+        }
+      },
+      {
+        "id": "slack_notify_team",
+        "data": {
+          "icon": "MessageCircle",
+          "type": "slack_message",
+          "label": "Notify Verification Team",
+          "config": {
+            "channel": "#verifications",
+            "message": ":bar_chart: Approval prediction for *{{input.businessName}}*: {{input.approvalPercentage}}% likely to pass.\nRisks: {{input.risks}}"
+          },
+          "category": "output"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1600,
+          "y": 200
+        }
+      },
+      {
+        "id": "gmail_send_prediction",
+        "data": {
+          "icon": "Mail",
+          "type": "google_gmail",
+          "label": "Email Client the Result",
+          "config": {
+            "body": "Hi {{input.businessName}},\n\nBased on your current details, we estimate a {{input.approvalPercentage}}% chance of passing verification on your next attempt.\n\nWe will follow up with next steps shortly.",
+            "subject": "Your estimated approval chance: {{input.approvalPercentage}}%",
+            "operation": "send",
+            "recipientEmails": "{{input.contactEmail}}",
+            "recipientSource": "manual_entry"
+          },
+          "category": "output"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1600,
+          "y": 400
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "source": "form_details",
+        "target": "airtable_lookup_readiness"
+      },
+      {
+        "id": "e2",
+        "source": "airtable_lookup_readiness",
+        "target": "ai_predict_chance"
+      },
+      {
+        "id": "e3",
+        "source": "ai_predict_chance",
+        "target": "js_percentage"
+      },
+      {
+        "id": "e4",
+        "source": "js_percentage",
+        "target": "airtable_save_prediction"
+      },
+      {
+        "id": "e5",
+        "source": "airtable_save_prediction",
+        "target": "slack_notify_team"
+      },
+      {
+        "id": "e6",
+        "source": "airtable_save_prediction",
+        "target": "gmail_send_prediction"
+      }
+    ],
+    "difficulty": "Beginner",
+    "estimated_setup_time": 21,
+    "tags": [
+      "verification",
+      "compliance",
+      "ai",
+      "airtable",
+      "slack",
+      "prediction"
+    ],
+    "preview_image": null,
+    "is_featured": false,
+    "is_active": true,
+    "use_count": 0,
+    "version": 1,
+    "created_by": null,
+    "updated_by": null,
+    "created_at": "2026-07-14T11:20:27.820Z",
+    "updated_at": "2026-07-14T11:20:27.820Z"
+  },
+  {
+    "id": "47f2cdd4-2ccd-43e6-915b-4a2a5b184293",
+    "name": "Business Details Matcher",
+    "description": "Catches the silent rejection cause: a business name or address that's written slightly differently on the website vs. the GST filing vs. the bank account. Checks every client every 15 minutes, cross-references every version of the business identity, and emails a match/mismatch report. (No instant Airtable-update trigger exists yet, so this polls on a schedule instead of firing immediately.)",
+    "category": "Business Verification & Compliance",
+    "nodes": [
+      {
+        "id": "schedule_poll_clients",
+        "data": {
+          "icon": "Clock",
+          "type": "schedule",
+          "label": "Poll for Doc-Complete Clients",
+          "config": {
+            "cron": "*/15 * * * *",
+            "timezone": "UTC"
+          },
+          "category": "triggers"
+        },
+        "type": "custom",
+        "position": {
+          "x": 100,
+          "y": 300
+        }
+      },
+      {
+        "id": "airtable_read_ready_clients",
+        "data": {
+          "icon": "Database",
+          "type": "airtable",
+          "label": "Read Clients With All Docs",
+          "config": {
+            "baseId": "",
+            "tableId": "Clients",
+            "operation": "read"
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 400,
+          "y": 300
+        }
+      },
+      {
+        "id": "js_detect_newly_ready",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Detect Newly Completed Clients",
+          "config": {
+            "code": "const rows = input.records || input.rows || [];\nconst lastSeenIds = input.lastSeenIds || [];\nconst readyNow = rows.filter(r => r.fields && r.fields.Status === 'DocsComplete');\nconst newlyReady = readyNow.filter(r => !lastSeenIds.includes(r.id));\nreturn { ...input, newlyReady, lastSeenIds: readyNow.map(r => r.id) };"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 700,
+          "y": 300
+        }
+      },
+      {
+        "id": "http_fetch_website_details",
+        "data": {
+          "icon": "Globe",
+          "type": "http_request",
+          "label": "Fetch Website Business Details",
+          "config": {
+            "url": "{{input.website}}",
+            "method": "GET",
+            "headers": {},
+            "timeout": 10000
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1000,
+          "y": 300
+        }
+      },
+      {
+        "id": "ai_extract_details",
+        "data": {
+          "icon": "Brain",
+          "type": "openai_gpt",
+          "label": "Extract Name/Address/Phone",
+          "config": {
+            "model": "gpt-4o-mini",
+            "prompt": "Extract the business name, address, and phone number as they appear on the website HTML: {{input.body}}. Then extract the same three fields from each uploaded document for this client: {{input.newlyReady}}. Return each version clearly labeled by source (Website, GST, PAN, Bank Statement).",
+            "temperature": 0.2
+          },
+          "category": "ai"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1300,
+          "y": 300
+        }
+      },
+      {
+        "id": "js_compare_versions",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Compare All Versions",
+          "config": {
+            "code": "const text = input.response || input.text || '';\n// Naive flag: any mismatch keyword in AI output\nconst mismatches = text.split('\\n').filter(l => /mismatch|does not match|differ/i.test(l));\nreturn { ...input, mismatches, isMatch: mismatches.length === 0 };"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1600,
+          "y": 300
+        }
+      },
+      {
+        "id": "airtable_write_match_results",
+        "data": {
+          "icon": "Database",
+          "type": "airtable",
+          "label": "Write Match Results",
+          "config": {
+            "baseId": "",
+            "fields": {
+              "Mismatches": "{{input.mismatches}}",
+              "MatchStatus": "{{input.isMatch}}"
+            },
+            "tableId": "Clients",
+            "recordId": "{{input.recordId}}",
+            "operation": "update"
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1900,
+          "y": 300
+        }
+      },
+      {
+        "id": "gmail_send_match_report",
+        "data": {
+          "icon": "Mail",
+          "type": "google_gmail",
+          "label": "Email Match Report",
+          "config": {
+            "body": "Here's what matches and what doesn't across your website, GST, PAN, and bank statement:\n\n{{input.mismatches}}",
+            "subject": "Business details check for {{input.businessName}}",
+            "operation": "send",
+            "recipientEmails": "{{input.contactEmail}}",
+            "recipientSource": "manual_entry"
+          },
+          "category": "output"
+        },
+        "type": "custom",
+        "position": {
+          "x": 2200,
+          "y": 300
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "source": "schedule_poll_clients",
+        "target": "airtable_read_ready_clients"
+      },
+      {
+        "id": "e2",
+        "source": "airtable_read_ready_clients",
+        "target": "js_detect_newly_ready"
+      },
+      {
+        "id": "e3",
+        "source": "js_detect_newly_ready",
+        "target": "http_fetch_website_details"
+      },
+      {
+        "id": "e4",
+        "source": "http_fetch_website_details",
+        "target": "ai_extract_details"
+      },
+      {
+        "id": "e5",
+        "source": "ai_extract_details",
+        "target": "js_compare_versions"
+      },
+      {
+        "id": "e6",
+        "source": "js_compare_versions",
+        "target": "airtable_write_match_results"
+      },
+      {
+        "id": "e7",
+        "source": "airtable_write_match_results",
+        "target": "gmail_send_match_report"
+      }
+    ],
+    "difficulty": "Intermediate",
+    "estimated_setup_time": 24,
+    "tags": [
+      "verification",
+      "compliance",
+      "ai",
+      "airtable",
+      "data-matching"
+    ],
+    "preview_image": null,
+    "is_featured": false,
+    "is_active": true,
+    "use_count": 0,
+    "version": 1,
+    "created_by": null,
+    "updated_by": null,
+    "created_at": "2026-07-14T11:20:27.820Z",
+    "updated_at": "2026-07-14T11:20:27.820Z"
+  },
+  {
+    "id": "ca1c8a37-6786-4dce-a785-a3288283e794",
+    "name": "Client Priority Ranker",
+    "description": "With limited account-management time, this workflow runs every week, reviews every client’s history of delays and issues, estimates who is likely to need help, and sends your team a ranked list so attention goes to the accounts that need it most.",
+    "category": "Business Verification & Compliance",
+    "nodes": [
+      {
+        "id": "schedule_weekly_rank",
+        "data": {
+          "icon": "Clock",
+          "type": "schedule",
+          "label": "Run Weekly",
+          "config": {
+            "cron": "0 9 * * 1",
+            "timezone": "UTC"
+          },
+          "category": "triggers"
+        },
+        "type": "custom",
+        "position": {
+          "x": 100,
+          "y": 300
+        }
+      },
+      {
+        "id": "airtable_read_client_history",
+        "data": {
+          "icon": "Database",
+          "type": "airtable",
+          "label": "Read Every Client's History",
+          "config": {
+            "baseId": "",
+            "tableId": "Clients",
+            "operation": "read"
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 400,
+          "y": 300
+        }
+      },
+      {
+        "id": "ai_estimate_outcomes",
+        "data": {
+          "icon": "Brain",
+          "type": "openai_gpt",
+          "label": "Estimate Success Likelihood",
+          "config": {
+            "model": "gpt-4o-mini",
+            "prompt": "For each client in this list: {{input.records}}, estimate how likely they are to succeed vs. need help, based on their delay history, issue count, and past outcomes. For each client, output a line: \"ClientName | needsHelp: true/false | priority: 1-10\".",
+            "temperature": 0.3
+          },
+          "category": "ai"
+        },
+        "type": "custom",
+        "position": {
+          "x": 700,
+          "y": 300
+        }
+      },
+      {
+        "id": "js_sort_by_priority",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Sort by Priority",
+          "config": {
+            "code": "const text = input.response || input.text || '';\nconst lines = text.split('\\n').filter(l => l.includes('|'));\nconst ranked = lines.map(l => {\n  const parts = l.split('|').map(p => p.trim());\n  const priorityPart = parts.find(p => p.toLowerCase().startsWith('priority'));\n  const priority = priorityPart ? parseInt(priorityPart.split(':')[1]) : 5;\n  return { client: parts[0], line: l, priority };\n}).sort((a, b) => b.priority - a.priority);\nreturn { ...input, ranked };"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1000,
+          "y": 300
+        }
+      },
+      {
+        "id": "slack_send_ranked_list",
+        "data": {
+          "icon": "MessageCircle",
+          "type": "slack_message",
+          "label": "Send Ranked List to Team",
+          "config": {
+            "channel": "#account-management",
+            "message": ":clipboard: This week's client priority ranking (highest priority first):\n{{input.ranked}}"
+          },
+          "category": "output"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1300,
+          "y": 300
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "source": "schedule_weekly_rank",
+        "target": "airtable_read_client_history"
+      },
+      {
+        "id": "e2",
+        "source": "airtable_read_client_history",
+        "target": "ai_estimate_outcomes"
+      },
+      {
+        "id": "e3",
+        "source": "ai_estimate_outcomes",
+        "target": "js_sort_by_priority"
+      },
+      {
+        "id": "e4",
+        "source": "js_sort_by_priority",
+        "target": "slack_send_ranked_list"
+      }
+    ],
+    "difficulty": "Intermediate",
+    "estimated_setup_time": 15,
+    "tags": [
+      "account-management",
+      "ai",
+      "slack",
+      "prioritization",
+      "airtable"
+    ],
+    "preview_image": null,
+    "is_featured": false,
+    "is_active": true,
+    "use_count": 2,
+    "version": 1,
+    "created_by": null,
+    "updated_by": null,
+    "created_at": "2026-07-14T11:20:27.820Z",
+    "updated_at": "2026-07-27T05:47:46.251Z"
+  },
+  {
+    "id": "85e90794-5759-4cda-9738-6c045e5e1c6c",
+    "name": "Cross-Platform Sync Engine",
+    "description": "Keep client data in Airtable, your CRM, and a shared spreadsheet from drifting apart. This workflow polls for changes, figures out exactly which fields moved so nothing gets oversynced, and pushes just those updates out to HubSpot and Google Sheets, with a quiet Slack log for troubleshooting. (No instant Airtable-update trigger exists yet, so this polls every 15 minutes instead of firing immediately.)",
+    "category": "Business Verification & Compliance",
+    "nodes": [
+      {
+        "id": "schedule_poll_changes",
+        "data": {
+          "icon": "Clock",
+          "type": "schedule",
+          "label": "Poll for Client Record Changes",
+          "config": {
+            "cron": "*/15 * * * *",
+            "timezone": "UTC"
+          },
+          "category": "triggers"
+        },
+        "type": "custom",
+        "position": {
+          "x": 100,
+          "y": 300
+        }
+      },
+      {
+        "id": "airtable_read_all_clients",
+        "data": {
+          "icon": "Database",
+          "type": "airtable",
+          "label": "Read All Client Records",
+          "config": {
+            "baseId": "",
+            "tableId": "Clients",
+            "operation": "read"
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 400,
+          "y": 300
+        }
+      },
+      {
+        "id": "js_diff_changed_fields",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Diff Against Last Sync",
+          "config": {
+            "code": "const rows = input.records || input.rows || [];\nconst lastSnapshot = input.lastSnapshot || {};\nconst changed = [];\nfor (const r of rows) {\n  const prev = lastSnapshot[r.id] || {};\n  const diffFields = {};\n  for (const key of Object.keys(r.fields)) {\n    if (JSON.stringify(prev[key]) !== JSON.stringify(r.fields[key])) diffFields[key] = r.fields[key];\n  }\n  if (Object.keys(diffFields).length > 0) changed.push({ id: r.id, diffFields, fields: r.fields });\n}\nconst newSnapshot = {}; rows.forEach(r => newSnapshot[r.id] = r.fields);\nreturn { ...input, changed, lastSnapshot: newSnapshot };"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 700,
+          "y": 300
+        }
+      },
+      {
+        "id": "hubspot_push_changes",
+        "data": {
+          "icon": "Database",
+          "type": "hubspot",
+          "label": "Push Changed Fields to HubSpot",
+          "config": {
+            "id": "{{input.hubspotContactId}}",
+            "resource": "contact",
+            "operation": "update",
+            "properties": "{{input.diffFields}}"
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1000,
+          "y": 300
+        }
+      },
+      {
+        "id": "sheets_update_shared_copy",
+        "data": {
+          "icon": "Database",
+          "type": "google_sheets",
+          "label": "Update Shared Spreadsheet",
+          "config": {
+            "range": "",
+            "values": "{{input.changed}}",
+            "operation": "update",
+            "sheetName": "Clients",
+            "spreadsheetId": ""
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1300,
+          "y": 300
+        }
+      },
+      {
+        "id": "slack_log_sync",
+        "data": {
+          "icon": "MessageCircle",
+          "type": "slack_message",
+          "label": "Log Sync Confirmation",
+          "config": {
+            "channel": "#data-sync-log",
+            "message": ":white_check_mark: Synced {{input.changed.length}} changed client record(s) to HubSpot and Google Sheets."
+          },
+          "category": "output"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1600,
+          "y": 300
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "source": "schedule_poll_changes",
+        "target": "airtable_read_all_clients"
+      },
+      {
+        "id": "e2",
+        "source": "airtable_read_all_clients",
+        "target": "js_diff_changed_fields"
+      },
+      {
+        "id": "e3",
+        "source": "js_diff_changed_fields",
+        "target": "hubspot_push_changes"
+      },
+      {
+        "id": "e4",
+        "source": "hubspot_push_changes",
+        "target": "sheets_update_shared_copy"
+      },
+      {
+        "id": "e5",
+        "source": "sheets_update_shared_copy",
+        "target": "slack_log_sync"
+      }
+    ],
+    "difficulty": "Intermediate",
+    "estimated_setup_time": 18,
+    "tags": [
+      "sync",
+      "hubspot",
+      "google-sheets",
+      "airtable",
+      "crm",
+      "automation"
+    ],
+    "preview_image": null,
+    "is_featured": false,
+    "is_active": true,
+    "use_count": 0,
+    "version": 1,
+    "created_by": null,
+    "updated_by": null,
+    "created_at": "2026-07-14T11:20:27.820Z",
+    "updated_at": "2026-07-14T11:20:27.820Z"
+  },
+  {
+    "id": "17edfa66-2567-413c-9ac5-74f92765d510",
+    "name": "Customer Support Agent",
+    "description": "Intelligent customer support agent that handles FAQs, checks order status, and escalates complex issues to human agents. Fully working with intent detection, data fetching, and confidence-based routing.",
+    "category": "Customer Support",
+    "nodes": [
+      {
+        "id": "chat_trigger_1",
+        "data": {
+          "icon": "MessageSquare",
+          "type": "chat_trigger",
+          "label": "Chat Trigger",
+          "config": {},
+          "category": "triggers"
+        },
+        "type": "custom",
+        "position": {
+          "x": 100,
+          "y": 300
+        }
+      },
+      {
+        "id": "memory_retrieve_1",
+        "data": {
+          "icon": "Brain",
+          "type": "memory",
+          "label": "Retrieve Context",
+          "config": {
+            "operation": "retrieve",
+            "memoryType": "hybrid",
+            "maxMessages": 10
+          },
+          "category": "ai"
+        },
+        "type": "custom",
+        "position": {
+          "x": 400,
+          "y": 300
+        }
+      },
+      {
+        "id": "js_intent_1",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Classify Intent",
+          "config": {
+            "code": "const query = (input.message || input.query || '').toLowerCase(); const orderKeywords = ['order', 'status', 'tracking', 'shipment', 'delivery', 'when will', 'where is']; const complaintKeywords = ['complaint', 'problem', 'issue', 'wrong', 'broken', 'refund', 'cancel']; const faqKeywords = ['what', 'how', 'why', 'when', 'where', 'can i', 'do you']; let intent = 'faq'; let confidence = 0.7; if (orderKeywords.some(kw => query.includes(kw))) { intent = 'order'; confidence = 0.85; } else if (complaintKeywords.some(kw => query.includes(kw))) { intent = 'complaint'; confidence = 0.9; } else if (faqKeywords.some(kw => query.includes(kw))) { intent = 'faq'; confidence = 0.8; } return { intent, confidence, originalQuery: input.message || input.query, orderId: query.match(/order[\\s#]*([A-Z0-9-]+)/i)?.[1] || null };"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 700,
+          "y": 300
+        }
+      },
+      {
+        "id": "switch_intent_1",
+        "data": {
+          "icon": "GitBranch",
+          "type": "switch",
+          "label": "Route by Intent",
+          "config": {
+            "cases": [
+              "order",
+              "complaint",
+              "faq"
+            ],
+            "value": "{{input.intent}}"
+          },
+          "category": "logic"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1000,
+          "y": 300
+        }
+      },
+      {
+        "id": "db_order_lookup",
+        "data": {
+          "icon": "Database",
+          "type": "database_read",
+          "label": "Lookup Order",
+          "config": {
+            "limit": 1,
+            "table": "orders",
+            "columns": "*",
+            "filters": "{\"order_id\": \"{{input.orderId}}\"}"
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1300,
+          "y": 200
+        }
+      },
+      {
+        "id": "js_format_order",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Format Order Info",
+          "config": {
+            "code": "const order = input.data && input.data[0]; if (!order) { return { found: false, message: 'Order not found' }; } return { found: true, orderStatus: order.status || 'Unknown', orderDate: order.created_at || 'Unknown', estimatedDelivery: order.estimated_delivery || 'Not available', items: order.items || [] };"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1600,
+          "y": 200
+        }
+      },
+      {
+        "id": "ai_order_response",
+        "data": {
+          "icon": "Brain",
+          "type": "openai_gpt",
+          "label": "Generate Order Response",
+          "config": {
+            "model": "gpt-4o-mini",
+            "memory": 10,
+            "prompt": "You are a helpful customer support agent. The user asked about their order. Order details: Status: {{input.orderStatus}}, Order Date: {{input.orderDate}}, Estimated Delivery: {{input.estimatedDelivery}}. User query: {{input.originalQuery}}. Provide a clear, friendly response about their order status. If order not found, apologize and ask them to verify their order ID.",
+            "temperature": 0.7
+          },
+          "category": "ai"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1900,
+          "y": 200
+        }
+      },
+      {
+        "id": "ai_complaint_response",
+        "data": {
+          "icon": "Brain",
+          "type": "openai_gpt",
+          "label": "Handle Complaint",
+          "config": {
+            "model": "gpt-4o-mini",
+            "memory": 10,
+            "prompt": "You are a helpful customer support agent. A customer has a complaint. User query: {{input.originalQuery}}. Acknowledge their concern, apologize if appropriate, and explain that you will help resolve this. Be empathetic and professional.",
+            "temperature": 0.7
+          },
+          "category": "ai"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1300,
+          "y": 300
+        }
+      },
+      {
+        "id": "ai_faq_response",
+        "data": {
+          "icon": "Brain",
+          "type": "openai_gpt",
+          "label": "Answer FAQ",
+          "config": {
+            "model": "gpt-4o-mini",
+            "memory": 10,
+            "prompt": "You are a helpful customer support agent. Answer the following question clearly and concisely: {{input.originalQuery}}. If you do not know the answer, politely say so and offer to connect them with a human agent.",
+            "temperature": 0.7
+          },
+          "category": "ai"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1300,
+          "y": 400
+        }
+      },
+      {
+        "id": "merge_responses",
+        "data": {
+          "icon": "GitMerge",
+          "type": "merge",
+          "label": "Merge Responses",
+          "config": {},
+          "category": "logic"
+        },
+        "type": "custom",
+        "position": {
+          "x": 2200,
+          "y": 300
+        }
+      },
+      {
+        "id": "if_confidence_check",
+        "data": {
+          "icon": "GitBranch",
+          "type": "if_else",
+          "label": "Check Confidence",
+          "config": {
+            "condition": "{{input.confidence}} >= 0.75"
+          },
+          "category": "logic"
+        },
+        "type": "custom",
+        "position": {
+          "x": 2500,
+          "y": 300
+        }
+      },
+      {
+        "id": "memory_store_1",
+        "data": {
+          "icon": "Brain",
+          "type": "memory",
+          "label": "Store Response",
+          "config": {
+            "operation": "store",
+            "memoryType": "hybrid"
+          },
+          "category": "ai"
+        },
+        "type": "custom",
+        "position": {
+          "x": 2800,
+          "y": 200
+        }
+      },
+      {
+        "id": "log_output_1",
+        "data": {
+          "icon": "FileOutput",
+          "type": "log_output",
+          "label": "Return Response",
+          "config": {
+            "level": "info",
+            "message": "{{input.response || input.content || input.text}}"
+          },
+          "category": "output"
+        },
+        "type": "custom",
+        "position": {
+          "x": 3100,
+          "y": 200
+        }
+      },
+      {
+        "id": "db_escalate",
+        "data": {
+          "icon": "DatabaseZap",
+          "type": "database_write",
+          "label": "Create Escalation Ticket",
+          "config": {
+            "table": "support_tickets",
+            "operation": "insert",
+            "dataTemplate": "{\"query\": \"{{input.originalQuery}}\", \"intent\": \"{{input.intent}}\", \"confidence\": {{input.confidence}}, \"status\": \"pending\", \"priority\": \"high\", \"created_at\": \"now()\"}"
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 2800,
+          "y": 400
+        }
+      },
+      {
+        "id": "slack_escalate",
+        "data": {
+          "icon": "MessageCircle",
+          "type": "slack_webhook",
+          "label": "Notify Human Agent",
+          "config": {
+            "message": "🚨 Escalation Required\\nQuery: {{input.originalQuery}}\\nIntent: {{input.intent}}\\nConfidence: {{input.confidence}}\\nA human agent needs to handle this request.",
+            "username": "Support Bot",
+            "webhookUrl": ""
+          },
+          "category": "output"
+        },
+        "type": "custom",
+        "position": {
+          "x": 3100,
+          "y": 400
+        }
+      },
+      {
+        "id": "log_escalated",
+        "data": {
+          "icon": "FileOutput",
+          "type": "log_output",
+          "label": "Log Escalation",
+          "config": {
+            "level": "warn",
+            "message": "Escalated to human agent. Ticket created."
+          },
+          "category": "output"
+        },
+        "type": "custom",
+        "position": {
+          "x": 3400,
+          "y": 400
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "source": "chat_trigger_1",
+        "target": "memory_retrieve_1"
+      },
+      {
+        "id": "e2",
+        "source": "memory_retrieve_1",
+        "target": "js_intent_1"
+      },
+      {
+        "id": "e3",
+        "source": "js_intent_1",
+        "target": "switch_intent_1"
+      },
+      {
+        "id": "e4",
+        "source": "switch_intent_1",
+        "target": "db_order_lookup",
+        "sourceHandle": "order"
+      },
+      {
+        "id": "e5",
+        "source": "switch_intent_1",
+        "target": "ai_complaint_response",
+        "sourceHandle": "complaint"
+      },
+      {
+        "id": "e6",
+        "source": "switch_intent_1",
+        "target": "ai_faq_response",
+        "sourceHandle": "faq"
+      },
+      {
+        "id": "e7",
+        "source": "db_order_lookup",
+        "target": "js_format_order"
+      },
+      {
+        "id": "e8",
+        "source": "js_format_order",
+        "target": "ai_order_response"
+      },
+      {
+        "id": "e9",
+        "source": "ai_order_response",
+        "target": "merge_responses"
+      },
+      {
+        "id": "e10",
+        "source": "ai_complaint_response",
+        "target": "merge_responses"
+      },
+      {
+        "id": "e11",
+        "source": "ai_faq_response",
+        "target": "merge_responses"
+      },
+      {
+        "id": "e12",
+        "source": "merge_responses",
+        "target": "if_confidence_check"
+      },
+      {
+        "id": "e13",
+        "source": "if_confidence_check",
+        "target": "memory_store_1",
+        "sourceHandle": "true"
+      },
+      {
+        "id": "e14",
+        "source": "if_confidence_check",
+        "target": "db_escalate",
+        "sourceHandle": "false"
+      },
+      {
+        "id": "e15",
+        "source": "memory_store_1",
+        "target": "log_output_1"
+      },
+      {
+        "id": "e16",
+        "source": "db_escalate",
+        "target": "slack_escalate"
+      },
+      {
+        "id": "e17",
+        "source": "slack_escalate",
+        "target": "log_escalated"
+      }
+    ],
+    "difficulty": "Advanced",
+    "estimated_setup_time": 15,
+    "tags": [
+      "customer-support",
+      "ai-agent",
+      "intent-detection",
+      "escalation",
+      "chatbot",
+      "production-ready"
+    ],
+    "preview_image": null,
+    "is_featured": true,
+    "is_active": true,
+    "use_count": 2,
+    "version": 1,
+    "created_by": null,
+    "updated_by": null,
+    "created_at": "2026-04-24T14:32:25.195Z",
+    "updated_at": "2026-07-26T05:53:02.804Z"
+  },
+  {
+    "id": "0537e8d3-31d1-4f93-b2fb-7ae96cbb9dc1",
+    "name": "Document Vault with Smart Search",
+    "description": "Client documents scattered across email, WhatsApp, and Drive make 'find that PAN card from March' take forever. This workflow tags every document the moment it comes in through a simple upload form, then lets anyone search for it later in plain English over chat. (No native Drive file-watch trigger exists yet, so intake happens via the upload form rather than a watched folder.)",
+    "category": "Business Verification & Compliance",
+    "nodes": [
+      {
+        "id": "form_vault_upload",
+        "data": {
+          "icon": "FileText",
+          "type": "form",
+          "label": "Document Intake",
+          "config": {
+            "fields": [
+              {
+                "key": "clientName",
+                "type": "text",
+                "label": "Client Name",
+                "required": true
+              },
+              {
+                "key": "document",
+                "type": "file",
+                "label": "Document",
+                "required": true
+              }
+            ],
+            "formTitle": "Upload a Client Document",
+            "submitButtonText": "Upload"
+          },
+          "category": "triggers"
+        },
+        "type": "custom",
+        "position": {
+          "x": 100,
+          "y": 200
+        }
+      },
+      {
+        "id": "ai_tag_document",
+        "data": {
+          "icon": "Brain",
+          "type": "google_gemini",
+          "label": "Tag Document (Client / Type / Date)",
+          "config": {
+            "model": "gemini-3.5-flash",
+            "prompt": "Read this uploaded file: {{input.document}}, for client {{input.clientName}}. Identify: document type (GST/PAN/Bank Statement/Address Proof/Other), and the date on the document if visible. Reply as JSON: {\"documentType\": \"...\", \"documentDate\": \"...\"}."
+          },
+          "category": "ai"
+        },
+        "type": "custom",
+        "position": {
+          "x": 400,
+          "y": 200
+        }
+      },
+      {
+        "id": "airtable_store_tagged_doc",
+        "data": {
+          "icon": "Database",
+          "type": "airtable",
+          "label": "Store File Link + Tags",
+          "config": {
+            "baseId": "",
+            "fields": {
+              "Client": "{{input.clientName}}",
+              "FileLink": "{{input.fileUrl}}",
+              "DocumentDate": "{{input.documentDate}}",
+              "DocumentType": "{{input.documentType}}"
+            },
+            "tableId": "DocumentVault",
+            "operation": "create"
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 700,
+          "y": 200
+        }
+      },
+      {
+        "id": "chat_trigger_search",
+        "data": {
+          "icon": "MessageSquare",
+          "type": "chat_trigger",
+          "label": "Search Request",
+          "config": {},
+          "category": "triggers"
+        },
+        "type": "custom",
+        "position": {
+          "x": 100,
+          "y": 500
+        }
+      },
+      {
+        "id": "js_parse_search_query",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Parse Search Terms",
+          "config": {
+            "code": "const msg = input.message || '';\nreturn { ...input, searchQuery: msg };"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 400,
+          "y": 500
+        }
+      },
+      {
+        "id": "airtable_search_vault",
+        "data": {
+          "icon": "Database",
+          "type": "airtable",
+          "label": "Search Document Vault",
+          "config": {
+            "baseId": "",
+            "tableId": "DocumentVault",
+            "operation": "read"
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 700,
+          "y": 500
+        }
+      },
+      {
+        "id": "ai_agent_find_match",
+        "data": {
+          "icon": "Bot",
+          "type": "ai_agent",
+          "label": "Find the Matching File",
+          "config": {
+            "model": "gemini-3.5-flash",
+            "userInput": "Search query: {{input.searchQuery}}\nAvailable documents: {{input.records}}",
+            "temperature": 0.2,
+            "systemPrompt": "You are a document vault search assistant. You are given a search query and a list of tagged documents (client, type, date, link). Find the single best match and reply with a short sentence containing its file link. If nothing matches well, say so and suggest what to search instead."
+          },
+          "category": "ai"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1000,
+          "y": 500
+        }
+      },
+      {
+        "id": "whatsapp_reply_search",
+        "data": {
+          "icon": "MessageCircle",
+          "type": "whatsapp",
+          "label": "Reply With File Link",
+          "config": {
+            "to": "{{input.senderPhone}}",
+            "text": "{{input.response}}",
+            "resource": "message",
+            "operation": "sendText"
+          },
+          "category": "output"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1300,
+          "y": 500
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "source": "form_vault_upload",
+        "target": "ai_tag_document"
+      },
+      {
+        "id": "e2",
+        "source": "ai_tag_document",
+        "target": "airtable_store_tagged_doc"
+      },
+      {
+        "id": "e3",
+        "source": "chat_trigger_search",
+        "target": "js_parse_search_query"
+      },
+      {
+        "id": "e4",
+        "source": "js_parse_search_query",
+        "target": "airtable_search_vault"
+      },
+      {
+        "id": "e5",
+        "source": "airtable_search_vault",
+        "target": "ai_agent_find_match"
+      },
+      {
+        "id": "e6",
+        "source": "ai_agent_find_match",
+        "target": "whatsapp_reply_search"
+      }
+    ],
+    "difficulty": "Advanced",
+    "estimated_setup_time": 24,
+    "tags": [
+      "ai-agent",
+      "document-management",
+      "search",
+      "airtable",
+      "whatsapp"
+    ],
+    "preview_image": null,
+    "is_featured": false,
+    "is_active": true,
+    "use_count": 0,
+    "version": 1,
+    "created_by": null,
+    "updated_by": null,
+    "created_at": "2026-07-14T11:20:27.820Z",
+    "updated_at": "2026-07-14T11:20:27.820Z"
+  },
+  {
+    "id": "97432e3a-fb6e-4b90-9364-10fbe77c7371",
+    "name": "FAQ Answering Assistant",
+    "description": "Let clients ask their own questions instead of pinging your team every time. This chat assistant answers strictly from your own FAQ records and automatically hands the question to a human in Slack whenever it isn't confident in the answer.",
+    "category": "Business Verification & Compliance",
+    "nodes": [
+      {
+        "id": "chat_trigger_faq",
+        "data": {
+          "icon": "MessageSquare",
+          "type": "chat_trigger",
+          "label": "Client Question",
+          "config": {},
+          "category": "triggers"
+        },
+        "type": "custom",
+        "position": {
+          "x": 100,
+          "y": 300
+        }
+      },
+      {
+        "id": "airtable_read_faq",
+        "data": {
+          "icon": "Database",
+          "type": "airtable",
+          "label": "Search FAQ Knowledge Base",
+          "config": {
+            "baseId": "",
+            "tableId": "FAQ",
+            "operation": "read"
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 400,
+          "y": 300
+        }
+      },
+      {
+        "id": "ai_answer_from_faq",
+        "data": {
+          "icon": "Brain",
+          "type": "openai_gpt",
+          "label": "Answer Using Only FAQ Docs",
+          "config": {
+            "model": "gpt-4o-mini",
+            "prompt": "You are a support assistant. Using ONLY the information in these FAQ records: {{input.records}}, answer this client question: \"{{input.message}}\". If the FAQ records do not contain a confident answer, say \"I am not fully sure\" and set your confidence low. Respond with a JSON object: {\"answer\": \"...\", \"confidence\": 0.0-1.0}.",
+            "temperature": 0.2
+          },
+          "category": "ai"
+        },
+        "type": "custom",
+        "position": {
+          "x": 700,
+          "y": 300
+        }
+      },
+      {
+        "id": "if_confidence_check",
+        "data": {
+          "icon": "GitBranch",
+          "type": "if_else",
+          "label": "Check AI Confidence",
+          "config": {
+            "conditions": [
+              {
+                "field": "$json.confidence",
+                "value": 0.75,
+                "operator": "greater_than_or_equal"
+              }
+            ],
+            "combineOperation": "AND"
+          },
+          "category": "logic"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1000,
+          "y": 300
+        }
+      },
+      {
+        "id": "whatsapp_reply_client",
+        "data": {
+          "icon": "MessageCircle",
+          "type": "whatsapp",
+          "label": "Reply to Client",
+          "config": {
+            "to": "{{input.senderPhone}}",
+            "text": "{{input.answer}}",
+            "resource": "message",
+            "operation": "sendText"
+          },
+          "category": "output"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1300,
+          "y": 200
+        }
+      },
+      {
+        "id": "slack_escalate_human",
+        "data": {
+          "icon": "MessageCircle",
+          "type": "slack_message",
+          "label": "Escalate to Human",
+          "config": {
+            "channel": "#support",
+            "message": ":warning: Low-confidence AI answer for: \"{{input.message}}\"\nDraft answer: {{input.answer}}\nPlease review and reply directly."
+          },
+          "category": "output"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1300,
+          "y": 400
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "source": "chat_trigger_faq",
+        "target": "airtable_read_faq"
+      },
+      {
+        "id": "e2",
+        "source": "airtable_read_faq",
+        "target": "ai_answer_from_faq"
+      },
+      {
+        "id": "e3",
+        "source": "ai_answer_from_faq",
+        "target": "if_confidence_check"
+      },
+      {
+        "id": "e4",
+        "source": "if_confidence_check",
+        "target": "whatsapp_reply_client",
+        "sourceHandle": "true"
+      },
+      {
+        "id": "e5",
+        "source": "if_confidence_check",
+        "target": "slack_escalate_human",
+        "sourceHandle": "false"
+      }
+    ],
+    "difficulty": "Beginner",
+    "estimated_setup_time": 15,
+    "tags": [
+      "support",
+      "ai",
+      "chatbot",
+      "whatsapp",
+      "slack",
+      "faq"
+    ],
+    "preview_image": null,
+    "is_featured": false,
+    "is_active": true,
+    "use_count": 0,
+    "version": 1,
+    "created_by": null,
+    "updated_by": null,
+    "created_at": "2026-07-14T11:20:27.820Z",
+    "updated_at": "2026-07-14T11:20:27.820Z"
+  },
+  {
+    "id": "9fff0187-8a5b-4f12-bf80-0d3b88737190",
+    "name": "Finance / Compliance Agent",
+    "description": "Automated finance operations agent that processes invoices and expenses, categorizes transactions, performs compliance checks, and triggers alerts for anomalies. Reduces manual finance workload.",
+    "category": "Finance & Accounting",
+    "nodes": [
+      {
+        "id": "webhook_finance_1",
+        "data": {
+          "icon": "Webhook",
+          "type": "webhook",
+          "label": "Finance Webhook",
+          "config": {
+            "method": "POST"
+          },
+          "category": "triggers"
+        },
+        "type": "custom",
+        "position": {
+          "x": 100,
+          "y": 300
+        }
+      },
+      {
+        "id": "js_extract_transaction",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Extract Transaction Data",
+          "config": {
+            "code": "return { type: input.type || input.transaction_type || 'expense', amount: parseFloat(input.amount || 0), vendor: input.vendor || input.supplier || '', description: input.description || input.notes || '', date: input.date || input.transaction_date || new Date().toISOString().split('T')[0], category: input.category || '', invoice_number: input.invoice_number || input.invoice_id || '', employee_id: input.employee_id || input.employee || '', receipt_url: input.receipt_url || input.file_url || '', timestamp: new Date().toISOString() };"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 400,
+          "y": 300
+        }
+      },
+      {
+        "id": "ai_categorize",
+        "data": {
+          "icon": "Brain",
+          "type": "openai_gpt",
+          "label": "Categorize Transaction",
+          "config": {
+            "model": "gpt-4o-mini",
+            "memory": 3,
+            "prompt": "Categorize this financial transaction. Return JSON: { category: string (one of: Travel, Meals, Software, Hardware, Office Supplies, Marketing, Professional Services, Utilities, Other), confidence: number (0-1), reasoning: string }\\n\\nTransaction: Vendor: {{input.vendor}}, Description: {{input.description}}, Amount: ${{input.amount}}",
+            "temperature": 0.3
+          },
+          "category": "ai"
+        },
+        "type": "custom",
+        "position": {
+          "x": 700,
+          "y": 300
+        }
+      },
+      {
+        "id": "js_parse_category",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Parse Category",
+          "config": {
+            "code": "try { const content = input.content || input.text || input.response || '{}'; const jsonMatch = content.match(/\\{[\\s\\S]*\\}/); if (jsonMatch) { const parsed = JSON.parse(jsonMatch[0]); return { category: parsed.category || 'Other', confidence: parsed.confidence || 0.5, reasoning: parsed.reasoning || 'No reasoning', transaction: input }; } return { category: 'Other', confidence: 0.5, reasoning: 'Could not parse', transaction: input }; } catch (e) { return { category: 'Other', confidence: 0.5, reasoning: 'Error: ' + e.message, transaction: input }; }"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1000,
+          "y": 300
+        }
+      },
+      {
+        "id": "js_compliance_check",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Compliance Check",
+          "config": {
+            "code": "const amount = parseFloat(input.transaction.amount || 0); const category = input.category; const violations = []; if (amount > 10000) { violations.push({ type: 'high_amount', message: 'Transaction exceeds $10,000 - requires approval' }); } if (amount < 0) { violations.push({ type: 'negative_amount', message: 'Negative amount detected - possible refund or error' }); } if (!category || category === 'Other') { violations.push({ type: 'uncategorized', message: 'Transaction is uncategorized - needs review' }); } if (!input.transaction.vendor || input.transaction.vendor.trim() === '') { violations.push({ type: 'missing_vendor', message: 'Missing vendor information' }); } return { compliant: violations.length === 0, violations, transaction: input.transaction, category: input.category, confidence: input.confidence };"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1300,
+          "y": 300
+        }
+      },
+      {
+        "id": "if_compliant_check",
+        "data": {
+          "icon": "GitBranch",
+          "type": "if_else",
+          "label": "Check Compliance",
+          "config": {
+            "condition": "{{input.compliant}} === true"
+          },
+          "category": "logic"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1600,
+          "y": 300
+        }
+      },
+      {
+        "id": "db_save_transaction",
+        "data": {
+          "icon": "DatabaseZap",
+          "type": "database_write",
+          "label": "Save Transaction",
+          "config": {
+            "table": "transactions",
+            "operation": "insert",
+            "dataTemplate": "{\"type\": \"{{input.transaction.type}}\", \"amount\": {{input.transaction.amount}}, \"vendor\": \"{{input.transaction.vendor}}\", \"description\": \"{{input.transaction.description}}\", \"category\": \"{{input.category}}\", \"date\": \"{{input.transaction.date}}\", \"invoice_number\": \"{{input.transaction.invoice_number}}\", \"employee_id\": \"{{input.transaction.employee_id}}\", \"status\": \"approved\", \"created_at\": \"now()\"}"
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1900,
+          "y": 200
+        }
+      },
+      {
+        "id": "log_approved",
+        "data": {
+          "icon": "FileOutput",
+          "type": "log_output",
+          "label": "Log Approved",
+          "config": {
+            "level": "info",
+            "message": "Transaction approved: ${{input.transaction.amount}} - {{input.category}} - {{input.transaction.vendor}}"
+          },
+          "category": "output"
+        },
+        "type": "custom",
+        "position": {
+          "x": 2200,
+          "y": 200
+        }
+      },
+      {
+        "id": "db_save_flag",
+        "data": {
+          "icon": "DatabaseZap",
+          "type": "database_write",
+          "label": "Flag for Review",
+          "config": {
+            "table": "transactions",
+            "operation": "insert",
+            "dataTemplate": "{\"type\": \"{{input.transaction.type}}\", \"amount\": {{input.transaction.amount}}, \"vendor\": \"{{input.transaction.vendor}}\", \"description\": \"{{input.transaction.description}}\", \"category\": \"{{input.category}}\", \"date\": \"{{input.transaction.date}}\", \"invoice_number\": \"{{input.transaction.invoice_number}}\", \"employee_id\": \"{{input.transaction.employee_id}}\", \"status\": \"flagged\", \"violations\": \"{{JSON.stringify(input.violations)}}\", \"created_at\": \"now()\"}"
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1900,
+          "y": 400
+        }
+      },
+      {
+        "id": "js_format_alert",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Format Alert",
+          "config": {
+            "code": "const violations = input.violations || []; const violationsText = violations.map(v => `- ${v.type}: ${v.message}`).join('\\n'); return { alert: `⚠️ Compliance Alert\\n\\nTransaction: $${input.transaction.amount}\\nVendor: ${input.transaction.vendor}\\nCategory: ${input.category}\\n\\nViolations:\\n${violationsText}\\n\\nAction Required: Review and approve manually.`, violations, transaction: input.transaction };"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 2200,
+          "y": 400
+        }
+      },
+      {
+        "id": "slack_finance_alert",
+        "data": {
+          "icon": "MessageCircle",
+          "type": "slack_webhook",
+          "label": "Notify Finance Team",
+          "config": {
+            "message": "{{input.alert}}",
+            "username": "Finance Bot",
+            "webhookUrl": ""
+          },
+          "category": "output"
+        },
+        "type": "custom",
+        "position": {
+          "x": 2500,
+          "y": 400
+        }
+      },
+      {
+        "id": "email_finance_alert",
+        "data": {
+          "icon": "Mail",
+          "type": "google_gmail",
+          "label": "Email Finance Manager",
+          "config": {
+            "to": "finance@company.com",
+            "body": "{{input.alert}}",
+            "subject": "Compliance Alert - Transaction Review Required",
+            "operation": "send"
+          },
+          "category": "google"
+        },
+        "type": "custom",
+        "position": {
+          "x": 2800,
+          "y": 400
+        }
+      },
+      {
+        "id": "log_flagged",
+        "data": {
+          "icon": "FileOutput",
+          "type": "log_output",
+          "label": "Log Flagged",
+          "config": {
+            "level": "warn",
+            "message": "Transaction flagged: ${{input.transaction.amount}} - {{input.transaction.vendor}} - Violations: {{input.violations.length}}"
+          },
+          "category": "output"
+        },
+        "type": "custom",
+        "position": {
+          "x": 3100,
+          "y": 400
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "source": "webhook_finance_1",
+        "target": "js_extract_transaction"
+      },
+      {
+        "id": "e2",
+        "source": "js_extract_transaction",
+        "target": "ai_categorize"
+      },
+      {
+        "id": "e3",
+        "source": "ai_categorize",
+        "target": "js_parse_category"
+      },
+      {
+        "id": "e4",
+        "source": "js_parse_category",
+        "target": "js_compliance_check"
+      },
+      {
+        "id": "e5",
+        "source": "js_compliance_check",
+        "target": "if_compliant_check"
+      },
+      {
+        "id": "e6",
+        "source": "if_compliant_check",
+        "target": "db_save_transaction",
+        "sourceHandle": "true"
+      },
+      {
+        "id": "e7",
+        "source": "if_compliant_check",
+        "target": "db_save_flag",
+        "sourceHandle": "false"
+      },
+      {
+        "id": "e8",
+        "source": "db_save_transaction",
+        "target": "log_approved"
+      },
+      {
+        "id": "e9",
+        "source": "db_save_flag",
+        "target": "js_format_alert"
+      },
+      {
+        "id": "e10",
+        "source": "js_format_alert",
+        "target": "slack_finance_alert"
+      },
+      {
+        "id": "e11",
+        "source": "slack_finance_alert",
+        "target": "email_finance_alert"
+      },
+      {
+        "id": "e12",
+        "source": "email_finance_alert",
+        "target": "log_flagged"
+      }
+    ],
+    "difficulty": "Advanced",
+    "estimated_setup_time": 15,
+    "tags": [
+      "finance",
+      "compliance",
+      "invoicing",
+      "expenses",
+      "categorization",
+      "audit",
+      "production-ready"
+    ],
+    "preview_image": null,
+    "is_featured": true,
+    "is_active": true,
+    "use_count": 1,
+    "version": 1,
+    "created_by": null,
+    "updated_by": null,
+    "created_at": "2026-04-24T14:32:25.195Z",
+    "updated_at": "2026-07-26T17:09:36.579Z"
+  },
+  {
+    "id": "2f520baf-ce2b-4cdc-bd8c-d46d7f61c747",
+    "name": "HR / Hiring Workflow Agent",
+    "description": "Automated resume processing agent that extracts skills, matches candidates against job requirements, scores applications, and automatically schedules interviews for shortlisted candidates.",
+    "category": "Human Resources",
+    "nodes": [
+      {
+        "id": "webhook_resume_1",
+        "data": {
+          "icon": "Webhook",
+          "type": "webhook",
+          "label": "Resume Webhook",
+          "config": {
+            "method": "POST"
+          },
+          "category": "triggers"
+        },
+        "type": "custom",
+        "position": {
+          "x": 100,
+          "y": 300
+        }
+      },
+      {
+        "id": "js_extract_resume_data",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Extract Resume Data",
+          "config": {
+            "code": "return { name: input.name || input.candidate_name || 'Unknown', email: input.email || input.candidate_email || '', resume_text: input.resume_text || input.resume || input.text || '', job_role: input.job_role || input.position || '', resume_file_url: input.resume_file_url || input.file_url || '', timestamp: new Date().toISOString() };"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 400,
+          "y": 300
+        }
+      },
+      {
+        "id": "ai_extract_skills",
+        "data": {
+          "icon": "Brain",
+          "type": "openai_gpt",
+          "label": "Extract Skills",
+          "config": {
+            "model": "gpt-4o-mini",
+            "memory": 3,
+            "prompt": "Extract skills, experience, education, and qualifications from this resume. Return a JSON object: { skills: [\"skill1\", \"skill2\"], experience_years: number, education: string, certifications: [\"cert1\"], summary: string }\\n\\nResume text: {{input.resume_text}}",
+            "temperature": 0.3
+          },
+          "category": "ai"
+        },
+        "type": "custom",
+        "position": {
+          "x": 700,
+          "y": 300
+        }
+      },
+      {
+        "id": "js_parse_skills",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Parse Skills",
+          "config": {
+            "code": "try { const content = input.content || input.text || input.response || '{}'; const jsonMatch = content.match(/\\{[\\s\\S]*\\}/); if (jsonMatch) { const parsed = JSON.parse(jsonMatch[0]); return { skills: parsed.skills || [], experience_years: parsed.experience_years || 0, education: parsed.education || '', certifications: parsed.certifications || [], summary: parsed.summary || '', originalData: input }; } return { skills: [], experience_years: 0, education: '', certifications: [], summary: '', originalData: input }; } catch (e) { return { skills: [], experience_years: 0, education: '', certifications: [], summary: '', originalData: input }; }"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1000,
+          "y": 300
+        }
+      },
+      {
+        "id": "ai_match_job",
+        "data": {
+          "icon": "Brain",
+          "type": "openai_gpt",
+          "label": "Match Against Job Role",
+          "config": {
+            "model": "gpt-4o-mini",
+            "memory": 3,
+            "prompt": "Match this candidate against the job role: {{input.job_role}}. Candidate skills: {{input.skills}}, Experience: {{input.experience_years}} years, Education: {{input.education}}. Return JSON: { match_score: number (0-100), shortlisted: boolean (score >= 70), strengths: [\"strength1\"], gaps: [\"gap1\"], recommendation: string }",
+            "temperature": 0.3
+          },
+          "category": "ai"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1300,
+          "y": 300
+        }
+      },
+      {
+        "id": "js_extract_match",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Extract Match Result",
+          "config": {
+            "code": "try { const content = input.content || input.text || input.response || '{}'; const jsonMatch = content.match(/\\{[\\s\\S]*\\}/); if (jsonMatch) { const parsed = JSON.parse(jsonMatch[0]); return { match_score: parsed.match_score || 0, shortlisted: parsed.shortlisted !== undefined ? parsed.shortlisted : (parsed.match_score >= 70), strengths: parsed.strengths || [], gaps: parsed.gaps || [], recommendation: parsed.recommendation || 'No recommendation', candidateData: input.originalData }; } return { match_score: 0, shortlisted: false, strengths: [], gaps: [], recommendation: 'Could not parse match result', candidateData: input.originalData }; } catch (e) { return { match_score: 0, shortlisted: false, strengths: [], gaps: [], recommendation: 'Error: ' + e.message, candidateData: input.originalData }; }"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1600,
+          "y": 300
+        }
+      },
+      {
+        "id": "if_shortlist_check",
+        "data": {
+          "icon": "GitBranch",
+          "type": "if_else",
+          "label": "Check Shortlist",
+          "config": {
+            "condition": "{{input.shortlisted}} === true"
+          },
+          "category": "logic"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1900,
+          "y": 300
+        }
+      },
+      {
+        "id": "db_shortlist",
+        "data": {
+          "icon": "DatabaseZap",
+          "type": "database_write",
+          "label": "Save to Shortlist",
+          "config": {
+            "table": "candidates",
+            "operation": "insert",
+            "dataTemplate": "{\"name\": \"{{input.candidateData.name}}\", \"email\": \"{{input.candidateData.email}}\", \"job_role\": \"{{input.candidateData.job_role}}\", \"match_score\": {{input.match_score}}, \"status\": \"shortlisted\", \"skills\": \"{{input.candidateData.skills}}\", \"experience_years\": {{input.candidateData.experience_years}}, \"created_at\": \"now()\"}"
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 2200,
+          "y": 200
+        }
+      },
+      {
+        "id": "js_generate_calendar",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Generate Calendar Link",
+          "config": {
+            "code": "const baseUrl = 'https://calendly.com/hr-team/interview'; const params = new URLSearchParams({ name: input.candidateData.name, email: input.candidateData.email, job: input.candidateData.job_role }); return { calendarLink: `${baseUrl}?${params.toString()}`, email: input.candidateData.email, name: input.candidateData.name, jobRole: input.candidateData.job_role };"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 2500,
+          "y": 200
+        }
+      },
+      {
+        "id": "email_interview",
+        "data": {
+          "icon": "Mail",
+          "type": "google_gmail",
+          "label": "Send Interview Invite",
+          "config": {
+            "to": "{{input.email}}",
+            "body": "Hi {{input.name}},\\n\\nCongratulations! We were impressed with your application for the {{input.jobRole}} position. We'd like to invite you for an interview.\\n\\nSchedule your interview: {{input.calendarLink}}\\n\\nLooking forward to meeting you!\\n\\nBest regards,\\nHR Team",
+            "subject": "Interview Invitation - {{input.jobRole}}",
+            "operation": "send"
+          },
+          "category": "google"
+        },
+        "type": "custom",
+        "position": {
+          "x": 2800,
+          "y": 200
+        }
+      },
+      {
+        "id": "db_reject",
+        "data": {
+          "icon": "DatabaseZap",
+          "type": "database_write",
+          "label": "Save Rejection",
+          "config": {
+            "table": "candidates",
+            "operation": "insert",
+            "dataTemplate": "{\"name\": \"{{input.candidateData.name}}\", \"email\": \"{{input.candidateData.email}}\", \"job_role\": \"{{input.candidateData.job_role}}\", \"match_score\": {{input.match_score}}, \"status\": \"rejected\", \"reason\": \"{{input.recommendation}}\", \"created_at\": \"now()\"}"
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 2200,
+          "y": 400
+        }
+      },
+      {
+        "id": "email_rejection",
+        "data": {
+          "icon": "Mail",
+          "type": "google_gmail",
+          "label": "Send Rejection Email",
+          "config": {
+            "to": "{{input.candidateData.email}}",
+            "body": "Hi {{input.candidateData.name}},\\n\\nThank you for your interest in the {{input.candidateData.job_role}} position. After careful consideration, we have decided to move forward with other candidates at this time.\\n\\nWe appreciate your interest and wish you the best in your job search.\\n\\nBest regards,\\nHR Team",
+            "subject": "Application Update - {{input.candidateData.job_role}}",
+            "operation": "send"
+          },
+          "category": "google"
+        },
+        "type": "custom",
+        "position": {
+          "x": 2500,
+          "y": 400
+        }
+      },
+      {
+        "id": "log_processing",
+        "data": {
+          "icon": "FileOutput",
+          "type": "log_output",
+          "label": "Log Processing Result",
+          "config": {
+            "level": "info",
+            "message": "Candidate processed: {{input.candidateData.name}} ({{input.candidateData.email}}) - Match Score: {{input.match_score}}, Shortlisted: {{input.shortlisted}}"
+          },
+          "category": "output"
+        },
+        "type": "custom",
+        "position": {
+          "x": 3100,
+          "y": 300
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "source": "webhook_resume_1",
+        "target": "js_extract_resume_data"
+      },
+      {
+        "id": "e2",
+        "source": "js_extract_resume_data",
+        "target": "ai_extract_skills"
+      },
+      {
+        "id": "e3",
+        "source": "ai_extract_skills",
+        "target": "js_parse_skills"
+      },
+      {
+        "id": "e4",
+        "source": "js_parse_skills",
+        "target": "ai_match_job"
+      },
+      {
+        "id": "e5",
+        "source": "ai_match_job",
+        "target": "js_extract_match"
+      },
+      {
+        "id": "e6",
+        "source": "js_extract_match",
+        "target": "if_shortlist_check"
+      },
+      {
+        "id": "e7",
+        "source": "if_shortlist_check",
+        "target": "db_shortlist",
+        "sourceHandle": "true"
+      },
+      {
+        "id": "e8",
+        "source": "if_shortlist_check",
+        "target": "db_reject",
+        "sourceHandle": "false"
+      },
+      {
+        "id": "e9",
+        "source": "db_shortlist",
+        "target": "js_generate_calendar"
+      },
+      {
+        "id": "e10",
+        "source": "js_generate_calendar",
+        "target": "email_interview"
+      },
+      {
+        "id": "e11",
+        "source": "email_interview",
+        "target": "log_processing"
+      },
+      {
+        "id": "e12",
+        "source": "db_reject",
+        "target": "email_rejection"
+      },
+      {
+        "id": "e13",
+        "source": "email_rejection",
+        "target": "log_processing"
+      }
+    ],
+    "difficulty": "Advanced",
+    "estimated_setup_time": 15,
+    "tags": [
+      "hr",
+      "hiring",
+      "resume",
+      "recruitment",
+      "interview-scheduling",
+      "production-ready"
+    ],
+    "preview_image": null,
+    "is_featured": true,
+    "is_active": true,
+    "use_count": 2,
+    "version": 1,
+    "created_by": null,
+    "updated_by": null,
+    "created_at": "2026-04-24T14:32:25.195Z",
+    "updated_at": "2026-07-14T11:58:35.000Z"
+  },
+  {
+    "id": "5b3d400a-0eec-4c09-ac51-921cd6a35a50",
+    "name": "Internal Knowledge / Ops Agent",
+    "description": "Internal knowledge base assistant that searches company documentation, answers employee questions with source citations, and escalates when information is not found. Perfect for employee self-service.",
+    "category": "Internal Operations",
+    "nodes": [
+      {
+        "id": "chat_trigger_kb_1",
+        "data": {
+          "icon": "MessageSquare",
+          "type": "chat_trigger",
+          "label": "Internal Chat Trigger",
+          "config": {},
+          "category": "triggers"
+        },
+        "type": "custom",
+        "position": {
+          "x": 100,
+          "y": 300
+        }
+      },
+      {
+        "id": "js_prepare_query",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Prepare Query",
+          "config": {
+            "code": "return { query: input.message || input.query || '', user: input.user || input.user_id || 'unknown', timestamp: new Date().toISOString(), context: input.context || '' };"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 400,
+          "y": 300
+        }
+      },
+      {
+        "id": "db_search_kb",
+        "data": {
+          "icon": "Database",
+          "type": "database_read",
+          "label": "Search Knowledge Base",
+          "config": {
+            "limit": 5,
+            "table": "knowledge_base",
+            "columns": "*",
+            "filters": "{}",
+            "orderBy": "relevance"
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 700,
+          "y": 300
+        }
+      },
+      {
+        "id": "js_format_kb_results",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Format KB Results",
+          "config": {
+            "code": "const results = input.data || []; if (results.length === 0) { return { found: false, content: '', sources: [] }; } const content = results.map((r, i) => `${i + 1}. ${r.title || 'Untitled'}\\n${r.content || r.body || ''}`).join('\\n\\n---\\n\\n'); const sources = results.map(r => ({ title: r.title || 'Untitled', url: r.url || '', updated_at: r.updated_at || '' })); return { found: true, content, sources, query: input.query };"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1000,
+          "y": 300
+        }
+      },
+      {
+        "id": "if_kb_found",
+        "data": {
+          "icon": "GitBranch",
+          "type": "if_else",
+          "label": "Check if Found",
+          "config": {
+            "condition": "{{input.found}} === true && {{input.content}}.length > 0"
+          },
+          "category": "logic"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1300,
+          "y": 300
+        }
+      },
+      {
+        "id": "ai_answer_with_sources",
+        "data": {
+          "icon": "Brain",
+          "type": "openai_gpt",
+          "label": "Generate Answer with Sources",
+          "config": {
+            "model": "gpt-4o-mini",
+            "memory": 10,
+            "prompt": "You are an internal knowledge assistant. Answer the employee's question based on the knowledge base content provided. Always cite sources.\\n\\nEmployee Question: {{input.query}}\\n\\nKnowledge Base Content:\\n{{input.content}}\\n\\nProvide a clear, helpful answer with source citations. Format: Answer text followed by \\\"Sources: [source1, source2]\\\"",
+            "temperature": 0.5
+          },
+          "category": "ai"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1600,
+          "y": 200
+        }
+      },
+      {
+        "id": "js_format_response",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Format Response",
+          "config": {
+            "code": "const answer = input.content || input.text || input.response || 'I found some information for you.'; const sources = input.sources || []; const sourcesText = sources.length > 0 ? '\\n\\nSources:\\n' + sources.map((s, i) => `${i + 1}. ${s.title}${s.url ? ' (' + s.url + ')' : ''}`).join('\\n') : ''; return { answer: answer + sourcesText, sources, query: input.query };"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1900,
+          "y": 200
+        }
+      },
+      {
+        "id": "db_log_query",
+        "data": {
+          "icon": "DatabaseZap",
+          "type": "database_write",
+          "label": "Log Query",
+          "config": {
+            "table": "kb_queries",
+            "operation": "insert",
+            "dataTemplate": "{\"query\": \"{{input.query}}\", \"answer\": \"{{input.answer}}\", \"sources_count\": {{input.sources.length}}, \"found\": true, \"user\": \"{{input.user}}\", \"created_at\": \"now()\"}"
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 2200,
+          "y": 200
+        }
+      },
+      {
+        "id": "ai_fallback_answer",
+        "data": {
+          "icon": "Brain",
+          "type": "openai_gpt",
+          "label": "Generate Fallback Answer",
+          "config": {
+            "model": "gpt-4o-mini",
+            "memory": 5,
+            "prompt": "An employee asked: \\\"{{input.query}}\\\"\\n\\nNo relevant information was found in the knowledge base. Provide a polite response explaining that the information is not available, and suggest they contact the appropriate team or check back later. Keep it brief and helpful.",
+            "temperature": 0.7
+          },
+          "category": "ai"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1600,
+          "y": 400
+        }
+      },
+      {
+        "id": "db_log_not_found",
+        "data": {
+          "icon": "DatabaseZap",
+          "type": "database_write",
+          "label": "Log Not Found",
+          "config": {
+            "table": "kb_queries",
+            "operation": "insert",
+            "dataTemplate": "{\"query\": \"{{input.query}}\", \"answer\": \"{{input.content || input.text || input.response}}\", \"found\": false, \"user\": \"{{input.user}}\", \"created_at\": \"now()\"}"
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1900,
+          "y": 400
+        }
+      },
+      {
+        "id": "slack_escalate_kb",
+        "data": {
+          "icon": "MessageCircle",
+          "type": "slack_webhook",
+          "label": "Notify Knowledge Team",
+          "config": {
+            "message": "📚 Knowledge Gap Identified\\nQuery: {{input.query}}\\nUser: {{input.user}}\\nConsider adding this to the knowledge base.",
+            "username": "KB Bot",
+            "webhookUrl": ""
+          },
+          "category": "output"
+        },
+        "type": "custom",
+        "position": {
+          "x": 2200,
+          "y": 400
+        }
+      },
+      {
+        "id": "merge_responses_kb",
+        "data": {
+          "icon": "GitMerge",
+          "type": "merge",
+          "label": "Merge Responses",
+          "config": {},
+          "category": "logic"
+        },
+        "type": "custom",
+        "position": {
+          "x": 2500,
+          "y": 300
+        }
+      },
+      {
+        "id": "log_output_kb",
+        "data": {
+          "icon": "FileOutput",
+          "type": "log_output",
+          "label": "Return Answer",
+          "config": {
+            "level": "info",
+            "message": "{{input.answer || input.content || input.text || input.response}}"
+          },
+          "category": "output"
+        },
+        "type": "custom",
+        "position": {
+          "x": 2800,
+          "y": 300
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "source": "chat_trigger_kb_1",
+        "target": "js_prepare_query"
+      },
+      {
+        "id": "e2",
+        "source": "js_prepare_query",
+        "target": "db_search_kb"
+      },
+      {
+        "id": "e3",
+        "source": "db_search_kb",
+        "target": "js_format_kb_results"
+      },
+      {
+        "id": "e4",
+        "source": "js_format_kb_results",
+        "target": "if_kb_found"
+      },
+      {
+        "id": "e5",
+        "source": "if_kb_found",
+        "target": "ai_answer_with_sources",
+        "sourceHandle": "true"
+      },
+      {
+        "id": "e6",
+        "source": "if_kb_found",
+        "target": "ai_fallback_answer",
+        "sourceHandle": "false"
+      },
+      {
+        "id": "e7",
+        "source": "ai_answer_with_sources",
+        "target": "js_format_response"
+      },
+      {
+        "id": "e8",
+        "source": "js_format_response",
+        "target": "db_log_query"
+      },
+      {
+        "id": "e9",
+        "source": "ai_fallback_answer",
+        "target": "db_log_not_found"
+      },
+      {
+        "id": "e10",
+        "source": "db_log_not_found",
+        "target": "slack_escalate_kb"
+      },
+      {
+        "id": "e11",
+        "source": "db_log_query",
+        "target": "merge_responses_kb"
+      },
+      {
+        "id": "e12",
+        "source": "slack_escalate_kb",
+        "target": "merge_responses_kb"
+      },
+      {
+        "id": "e13",
+        "source": "merge_responses_kb",
+        "target": "log_output_kb"
+      }
+    ],
+    "difficulty": "Advanced",
+    "estimated_setup_time": 10,
+    "tags": [
+      "knowledge-base",
+      "internal-ops",
+      "documentation",
+      "qa",
+      "employee-assistant",
+      "production-ready"
+    ],
+    "preview_image": null,
+    "is_featured": true,
+    "is_active": true,
+    "use_count": 0,
+    "version": 1,
+    "created_by": null,
+    "updated_by": null,
+    "created_at": "2026-04-24T14:32:25.195Z",
+    "updated_at": "2026-04-24T14:32:25.195Z"
+  },
+  {
+    "id": "c432444a-1326-42dc-ad12-7c1530d0be68",
+    "name": "License Renewal Reminder",
+    "description": "Licenses and registrations expire quietly — this workflow checks your stored expiry dates every day and sends escalating WhatsApp and email reminders at the 90, 30, and 7-day marks, so nothing lapses without warning.",
+    "category": "Business Verification & Compliance",
+    "nodes": [
+      {
+        "id": "schedule_daily_check",
+        "data": {
+          "icon": "Clock",
+          "type": "schedule",
+          "label": "Run Daily",
+          "config": {
+            "cron": "0 9 * * *",
+            "timezone": "UTC"
+          },
+          "category": "triggers"
+        },
+        "type": "custom",
+        "position": {
+          "x": 100,
+          "y": 300
+        }
+      },
+      {
+        "id": "airtable_read_expiry_dates",
+        "data": {
+          "icon": "Database",
+          "type": "airtable",
+          "label": "Read Stored Expiry Dates",
+          "config": {
+            "baseId": "",
+            "tableId": "Licenses",
+            "operation": "read"
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 400,
+          "y": 300
+        }
+      },
+      {
+        "id": "js_flag_expiring",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Flag Expiring Licenses",
+          "config": {
+            "code": "const rows = input.records || input.rows || [];\nconst now = Date.now();\nconst DAY = 86400000;\nconst flagged = rows.map(r => {\n  const expiry = new Date(r.fields.ExpiryDate).getTime();\n  const daysLeft = Math.round((expiry - now) / DAY);\n  let urgency = null;\n  if (daysLeft <= 7) urgency = 'urgent';\n  else if (daysLeft <= 30) urgency = 'soon';\n  else if (daysLeft <= 90) urgency = 'upcoming';\n  return { ...r.fields, id: r.id, daysLeft, urgency };\n}).filter(r => r.urgency);\nreturn { ...input, flagged };"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 700,
+          "y": 300
+        }
+      },
+      {
+        "id": "whatsapp_send_reminder",
+        "data": {
+          "icon": "MessageCircle",
+          "type": "whatsapp",
+          "label": "Send WhatsApp Reminder",
+          "config": {
+            "to": "{{input.whatsappNumber}}",
+            "text": "Reminder: your {{input.licenseName}} expires in {{input.daysLeft}} days ({{input.urgency}}). Please renew soon to avoid a lapse.",
+            "resource": "message",
+            "operation": "sendText"
+          },
+          "category": "output"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1000,
+          "y": 200
+        }
+      },
+      {
+        "id": "gmail_send_backup_reminder",
+        "data": {
+          "icon": "Mail",
+          "type": "google_gmail",
+          "label": "Send Backup Email Reminder",
+          "config": {
+            "body": "Your {{input.licenseName}} expires on {{input.expiryDate}} — {{input.daysLeft}} days from now. This is a backup reminder in case WhatsApp was missed.",
+            "subject": "License renewal reminder: {{input.licenseName}} ({{input.daysLeft}} days left)",
+            "operation": "send",
+            "recipientEmails": "{{input.contactEmail}}",
+            "recipientSource": "manual_entry"
+          },
+          "category": "output"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1000,
+          "y": 400
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "source": "schedule_daily_check",
+        "target": "airtable_read_expiry_dates"
+      },
+      {
+        "id": "e2",
+        "source": "airtable_read_expiry_dates",
+        "target": "js_flag_expiring"
+      },
+      {
+        "id": "e3",
+        "source": "js_flag_expiring",
+        "target": "whatsapp_send_reminder"
+      },
+      {
+        "id": "e4",
+        "source": "js_flag_expiring",
+        "target": "gmail_send_backup_reminder"
+      }
+    ],
+    "difficulty": "Beginner",
+    "estimated_setup_time": 15,
+    "tags": [
+      "compliance",
+      "reminders",
+      "whatsapp",
+      "airtable",
+      "scheduling"
+    ],
+    "preview_image": null,
+    "is_featured": false,
+    "is_active": true,
+    "use_count": 0,
+    "version": 1,
+    "created_by": null,
+    "updated_by": null,
+    "created_at": "2026-07-14T11:20:27.820Z",
+    "updated_at": "2026-07-14T11:20:27.820Z"
+  },
+  {
+    "id": "1773b93e-cd04-42a9-914e-96e93dfe4bd6",
+    "name": "Live Status Lookup Bot",
+    "description": "The simplest way to check where a client stands without opening Airtable or asking someone else to look it up. Type a client name or order number in chat and get back a clean, formatted status straight from the live record.",
+    "category": "Business Verification & Compliance",
+    "nodes": [
+      {
+        "id": "chat_trigger_status",
+        "data": {
+          "icon": "MessageSquare",
+          "type": "chat_trigger",
+          "label": "Status Question",
+          "config": {},
+          "category": "triggers"
+        },
+        "type": "custom",
+        "position": {
+          "x": 100,
+          "y": 300
+        }
+      },
+      {
+        "id": "js_parse_lookup",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Parse Client Name / Order Number",
+          "config": {
+            "code": "const msg = (input.message || '').trim();\nreturn { ...input, lookupValue: msg };"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 400,
+          "y": 300
+        }
+      },
+      {
+        "id": "airtable_lookup_status",
+        "data": {
+          "icon": "Database",
+          "type": "airtable",
+          "label": "Lookup Live Record",
+          "config": {
+            "baseId": "",
+            "tableId": "Clients",
+            "operation": "read"
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 700,
+          "y": 300
+        }
+      },
+      {
+        "id": "js_format_reply",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Format Clean Reply",
+          "config": {
+            "code": "const record = (input.records && input.records[0] && input.records[0].fields) || {};\nconst reply = `Status for ${record.Name || input.lookupValue}: ${record.Status || 'not found'}. Score: ${record.Score || 'n/a'}. Missing docs: ${record.Missing || 'none on file'}.`;\nreturn { ...input, reply };"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1000,
+          "y": 300
+        }
+      },
+      {
+        "id": "slack_send_status_reply",
+        "data": {
+          "icon": "MessageCircle",
+          "type": "slack_message",
+          "label": "Send Status Reply",
+          "config": {
+            "channel": "{{input.channel}}",
+            "message": "{{input.reply}}"
+          },
+          "category": "output"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1300,
+          "y": 300
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "source": "chat_trigger_status",
+        "target": "js_parse_lookup"
+      },
+      {
+        "id": "e2",
+        "source": "js_parse_lookup",
+        "target": "airtable_lookup_status"
+      },
+      {
+        "id": "e3",
+        "source": "airtable_lookup_status",
+        "target": "js_format_reply"
+      },
+      {
+        "id": "e4",
+        "source": "js_format_reply",
+        "target": "slack_send_status_reply"
+      }
+    ],
+    "difficulty": "Beginner",
+    "estimated_setup_time": 12,
+    "tags": [
+      "chatbot",
+      "lookup",
+      "airtable",
+      "slack",
+      "status"
+    ],
+    "preview_image": null,
+    "is_featured": false,
+    "is_active": true,
+    "use_count": 0,
+    "version": 1,
+    "created_by": null,
+    "updated_by": null,
+    "created_at": "2026-07-14T11:20:27.820Z",
+    "updated_at": "2026-07-14T11:20:27.820Z"
+  },
+  {
+    "id": "58703e5c-2ec9-437f-9b05-264a017e5ce8",
+    "name": "Missing Document Finder",
+    "description": "Stop chasing clients for 'one more document.' Upload whatever paperwork a client has sent so far, in any order, and this workflow figures out exactly which required documents are still missing and messages the client a specific checklist on WhatsApp.",
+    "category": "Business Verification & Compliance",
+    "nodes": [
+      {
+        "id": "form_doc_upload",
+        "data": {
+          "icon": "FileText",
+          "type": "form",
+          "label": "Document Upload Form",
+          "config": {
+            "fields": [
+              {
+                "key": "clientName",
+                "type": "text",
+                "label": "Client / Business Name",
+                "required": true
+              },
+              {
+                "key": "clientType",
+                "type": "select",
+                "label": "Client Type",
+                "required": true
+              },
+              {
+                "key": "document",
+                "type": "file",
+                "label": "Document",
+                "required": true
+              },
+              {
+                "key": "whatsappNumber",
+                "type": "tel",
+                "label": "WhatsApp Number",
+                "required": true
+              }
+            ],
+            "formTitle": "Upload Your Documents",
+            "formDescription": "Upload whatever documents you have — in any order. We will tell you what is still missing.",
+            "submitButtonText": "Upload"
+          },
+          "category": "triggers"
+        },
+        "type": "custom",
+        "position": {
+          "x": 100,
+          "y": 300
+        }
+      },
+      {
+        "id": "ai_classify_document",
+        "data": {
+          "icon": "Brain",
+          "type": "google_gemini",
+          "label": "Identify Document Type",
+          "config": {
+            "model": "gemini-3.5-flash",
+            "prompt": "Look at this uploaded file (name and content provided): {{input.document}}. Identify which document type it most likely is, choosing from: GST Certificate, PAN Card, Bank Statement, Address Proof, Business Registration, Photo ID, Other. Reply with only the document type name."
+          },
+          "category": "ai"
+        },
+        "type": "custom",
+        "position": {
+          "x": 400,
+          "y": 300
+        }
+      },
+      {
+        "id": "airtable_log_document",
+        "data": {
+          "icon": "Database",
+          "type": "airtable",
+          "label": "Log Received Document",
+          "config": {
+            "baseId": "",
+            "fields": {
+              "Client": "{{input.clientName}}",
+              "ReceivedAt": "{{$now}}",
+              "DocumentType": "{{input.response}}"
+            },
+            "tableId": "DocumentsReceived",
+            "operation": "create"
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 700,
+          "y": 300
+        }
+      },
+      {
+        "id": "js_check_missing",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Compare Against Checklist",
+          "config": {
+            "code": "const required = { 'Individual': ['PAN Card','Address Proof','Photo ID'], 'Business': ['GST Certificate','PAN Card','Bank Statement','Business Registration'] };\nconst checklist = required[input.clientType] || required['Business'];\nconst received = input.receivedTypes || [input.response];\nconst missing = checklist.filter(doc => !received.includes(doc));\nreturn { ...input, missing, isComplete: missing.length === 0 };"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1000,
+          "y": 300
+        }
+      },
+      {
+        "id": "ai_write_missing_message",
+        "data": {
+          "icon": "Brain",
+          "type": "openai_gpt",
+          "label": "Write Missing Docs Message",
+          "config": {
+            "model": "gpt-4o-mini",
+            "prompt": "Write a short, friendly WhatsApp message to {{input.clientName}} listing exactly which documents are still missing: {{input.missing}}. If nothing is missing, congratulate them that their file is complete. Keep it under 3 sentences.",
+            "temperature": 0.6
+          },
+          "category": "ai"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1300,
+          "y": 300
+        }
+      },
+      {
+        "id": "whatsapp_send_missing",
+        "data": {
+          "icon": "MessageCircle",
+          "type": "whatsapp",
+          "label": "Send Missing Docs List",
+          "config": {
+            "to": "{{input.whatsappNumber}}",
+            "text": "{{input.response}}",
+            "resource": "message",
+            "operation": "sendText"
+          },
+          "category": "output"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1600,
+          "y": 300
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "source": "form_doc_upload",
+        "target": "ai_classify_document"
+      },
+      {
+        "id": "e2",
+        "source": "ai_classify_document",
+        "target": "airtable_log_document"
+      },
+      {
+        "id": "e3",
+        "source": "airtable_log_document",
+        "target": "js_check_missing"
+      },
+      {
+        "id": "e4",
+        "source": "js_check_missing",
+        "target": "ai_write_missing_message"
+      },
+      {
+        "id": "e5",
+        "source": "ai_write_missing_message",
+        "target": "whatsapp_send_missing"
+      }
+    ],
+    "difficulty": "Beginner",
+    "estimated_setup_time": 18,
+    "tags": [
+      "verification",
+      "onboarding",
+      "documents",
+      "ai",
+      "whatsapp",
+      "airtable"
+    ],
+    "preview_image": null,
+    "is_featured": false,
+    "is_active": true,
+    "use_count": 0,
+    "version": 1,
+    "created_by": null,
+    "updated_by": null,
+    "created_at": "2026-07-14T11:20:27.820Z",
+    "updated_at": "2026-07-14T11:20:27.820Z"
+  },
+  {
+    "id": "08179609-fc6f-44a2-a5ca-ddb9874a7c6b",
+    "name": "New Client Risk Checker",
+    "description": "Judge new business signups on real signals instead of gut feeling. This workflow checks domain age, runs an AI risk read, scores the result, and alerts your compliance team in Slack the moment a new client crosses your risk threshold.",
+    "category": "Business Verification & Compliance",
+    "nodes": [
+      {
+        "id": "form_new_client",
+        "data": {
+          "icon": "FileText",
+          "type": "form",
+          "label": "New Business Signup Form",
+          "config": {
+            "fields": [
+              {
+                "key": "businessName",
+                "type": "text",
+                "label": "Business Name",
+                "required": true
+              },
+              {
+                "key": "website",
+                "type": "url",
+                "label": "Website URL",
+                "required": true
+              },
+              {
+                "key": "contactEmail",
+                "type": "email",
+                "label": "Contact Email",
+                "required": true
+              }
+            ],
+            "formTitle": "New Client Signup",
+            "submitButtonText": "Submit"
+          },
+          "category": "triggers"
+        },
+        "type": "custom",
+        "position": {
+          "x": 100,
+          "y": 300
+        }
+      },
+      {
+        "id": "http_domain_age_lookup",
+        "data": {
+          "icon": "Globe",
+          "type": "http_request",
+          "label": "Check Domain Age",
+          "config": {
+            "url": "https://www.whoisxmlapi.com/whoisserver/WhoisService?domainName={{input.website}}&apiKey={{$credentials.whoisxml.apiKey}}&outputFormat=JSON",
+            "method": "GET",
+            "headers": {},
+            "timeout": 10000
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 400,
+          "y": 300
+        }
+      },
+      {
+        "id": "ai_risk_summary",
+        "data": {
+          "icon": "Brain",
+          "type": "openai_gpt",
+          "label": "Write Risk Summary",
+          "config": {
+            "model": "gpt-4o-mini",
+            "prompt": "Assess fraud/risk signals for this new business signup. Business: {{input.businessName}}, website {{input.website}}, domain age data: {{input.body}}. A domain registered very recently, mismatched business name, or a suspicious website structure are red flags. Write a short risk summary and end with a line \"RISK_LEVEL: low|medium|high\".",
+            "temperature": 0.3
+          },
+          "category": "ai"
+        },
+        "type": "custom",
+        "position": {
+          "x": 700,
+          "y": 300
+        }
+      },
+      {
+        "id": "js_risk_score",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Compute Risk Score & Threshold",
+          "config": {
+            "code": "const text = input.response || input.text || '';\nconst match = text.match(/RISK_LEVEL:\\s*(low|medium|high)/i);\nconst level = match ? match[1].toLowerCase() : 'medium';\nconst scoreMap = { low: 20, medium: 55, high: 85 };\nconst riskScore = scoreMap[level];\nreturn { ...input, riskLevel: level, riskScore, isHighRisk: riskScore >= 80 };"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1000,
+          "y": 300
+        }
+      },
+      {
+        "id": "airtable_log_risk",
+        "data": {
+          "icon": "Database",
+          "type": "airtable",
+          "label": "Log Risk Score",
+          "config": {
+            "baseId": "",
+            "fields": {
+              "Name": "{{input.businessName}}",
+              "Website": "{{input.website}}",
+              "RiskLevel": "{{input.riskLevel}}",
+              "RiskScore": "{{input.riskScore}}"
+            },
+            "tableId": "Clients",
+            "operation": "create"
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1300,
+          "y": 300
+        }
+      },
+      {
+        "id": "if_high_risk",
+        "data": {
+          "icon": "GitBranch",
+          "type": "if_else",
+          "label": "Is Risk High?",
+          "config": {
+            "conditions": [
+              {
+                "field": "$json.isHighRisk",
+                "value": true,
+                "operator": "equals"
+              }
+            ],
+            "combineOperation": "AND"
+          },
+          "category": "logic"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1600,
+          "y": 300
+        }
+      },
+      {
+        "id": "slack_alert_compliance",
+        "data": {
+          "icon": "MessageCircle",
+          "type": "slack_message",
+          "label": "Alert Compliance Team",
+          "config": {
+            "channel": "#compliance-review",
+            "message": ":rotating_light: High-risk signup: *{{input.businessName}}* ({{input.website}}) — risk score {{input.riskScore}}/100. Please review before onboarding."
+          },
+          "category": "output"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1900,
+          "y": 300
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "source": "form_new_client",
+        "target": "http_domain_age_lookup"
+      },
+      {
+        "id": "e2",
+        "source": "http_domain_age_lookup",
+        "target": "ai_risk_summary"
+      },
+      {
+        "id": "e3",
+        "source": "ai_risk_summary",
+        "target": "js_risk_score"
+      },
+      {
+        "id": "e4",
+        "source": "js_risk_score",
+        "target": "airtable_log_risk"
+      },
+      {
+        "id": "e5",
+        "source": "airtable_log_risk",
+        "target": "if_high_risk"
+      },
+      {
+        "id": "e6",
+        "source": "if_high_risk",
+        "target": "slack_alert_compliance",
+        "sourceHandle": "true"
+      }
+    ],
+    "difficulty": "Intermediate",
+    "estimated_setup_time": 21,
+    "tags": [
+      "risk",
+      "fraud-prevention",
+      "ai",
+      "slack",
+      "onboarding",
+      "compliance"
+    ],
+    "preview_image": null,
+    "is_featured": false,
+    "is_active": true,
+    "use_count": 0,
+    "version": 1,
+    "created_by": null,
+    "updated_by": null,
+    "created_at": "2026-07-14T11:20:27.820Z",
+    "updated_at": "2026-07-14T11:20:27.820Z"
+  },
+  {
+    "id": "8431165d-7466-4579-8940-8b0724b28db2",
+    "name": "Overdue Task Tracker",
+    "description": "Requests shouldn't sit untouched until a client complains. This workflow checks open items every hour, flags anything past its expected turnaround, alerts the responsible person, and escalates to their manager once it's gone very overdue.",
+    "category": "Business Verification & Compliance",
+    "nodes": [
+      {
+        "id": "schedule_hourly_check",
+        "data": {
+          "icon": "Clock",
+          "type": "schedule",
+          "label": "Run Hourly",
+          "config": {
+            "cron": "0 * * * *",
+            "timezone": "UTC"
+          },
+          "category": "triggers"
+        },
+        "type": "custom",
+        "position": {
+          "x": 100,
+          "y": 300
+        }
+      },
+      {
+        "id": "airtable_read_open_requests",
+        "data": {
+          "icon": "Database",
+          "type": "airtable",
+          "label": "Read Open Requests",
+          "config": {
+            "baseId": "",
+            "tableId": "Requests",
+            "operation": "read"
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 400,
+          "y": 300
+        }
+      },
+      {
+        "id": "js_flag_overdue",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Flag Overdue Requests",
+          "config": {
+            "code": "const rows = input.records || input.rows || [];\nconst now = Date.now();\nconst HOUR = 3600000;\nconst flagged = rows.map(r => {\n  const opened = new Date(r.fields.OpenedAt).getTime();\n  const hoursOpen = (now - opened) / HOUR;\n  const slaHours = r.fields.SlaHours || 24;\n  return { ...r.fields, id: r.id, hoursOpen, isOverdue: hoursOpen > slaHours, isVeryOverdue: hoursOpen > slaHours * 2 };\n}).filter(r => r.isOverdue);\nreturn { ...input, flagged };"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 700,
+          "y": 300
+        }
+      },
+      {
+        "id": "slack_alert_owner",
+        "data": {
+          "icon": "MessageCircle",
+          "type": "slack_message",
+          "label": "Alert Responsible Person",
+          "config": {
+            "channel": "{{input.ownerSlackChannel}}",
+            "message": ":clock3: Request *{{input.title}}* is overdue ({{input.hoursOpen}}h open, SLA {{input.slaHours}}h). Please action it."
+          },
+          "category": "output"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1000,
+          "y": 300
+        }
+      },
+      {
+        "id": "if_very_overdue",
+        "data": {
+          "icon": "GitBranch",
+          "type": "if_else",
+          "label": "Is It Very Overdue?",
+          "config": {
+            "conditions": [
+              {
+                "field": "$json.isVeryOverdue",
+                "value": true,
+                "operator": "equals"
+              }
+            ],
+            "combineOperation": "AND"
+          },
+          "category": "logic"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1300,
+          "y": 300
+        }
+      },
+      {
+        "id": "slack_escalate_manager",
+        "data": {
+          "icon": "MessageCircle",
+          "type": "slack_message",
+          "label": "Escalate to Manager",
+          "config": {
+            "channel": "{{input.managerSlackChannel}}",
+            "message": ":rotating_light: Escalation: *{{input.title}}* is very overdue ({{input.hoursOpen}}h open, SLA {{input.slaHours}}h) and still unresolved."
+          },
+          "category": "output"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1600,
+          "y": 300
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "source": "schedule_hourly_check",
+        "target": "airtable_read_open_requests"
+      },
+      {
+        "id": "e2",
+        "source": "airtable_read_open_requests",
+        "target": "js_flag_overdue"
+      },
+      {
+        "id": "e3",
+        "source": "js_flag_overdue",
+        "target": "slack_alert_owner"
+      },
+      {
+        "id": "e4",
+        "source": "slack_alert_owner",
+        "target": "if_very_overdue"
+      },
+      {
+        "id": "e5",
+        "source": "if_very_overdue",
+        "target": "slack_escalate_manager",
+        "sourceHandle": "true"
+      }
+    ],
+    "difficulty": "Beginner",
+    "estimated_setup_time": 15,
+    "tags": [
+      "sla",
+      "slack",
+      "operations",
+      "monitoring",
+      "airtable"
+    ],
+    "preview_image": null,
+    "is_featured": false,
+    "is_active": true,
+    "use_count": 0,
+    "version": 1,
+    "created_by": null,
+    "updated_by": null,
+    "created_at": "2026-07-14T11:20:27.820Z",
+    "updated_at": "2026-07-14T11:20:27.820Z"
+  },
+  {
+    "id": "ddd65341-f690-46f8-8436-3df14e283c28",
+    "name": "Sales & Lead Qualification Agent",
+    "description": "Automated lead qualification agent that captures lead information, asks qualifying questions, scores leads, and routes qualified leads to CRM with meeting booking. Unqualified leads receive automated follow-up.",
+    "category": "Sales & Marketing",
+    "nodes": [
+      {
+        "id": "webhook_lead_1",
+        "data": {
+          "icon": "Webhook",
+          "type": "webhook",
+          "label": "Lead Webhook",
+          "config": {
+            "method": "POST"
+          },
+          "category": "triggers"
+        },
+        "type": "custom",
+        "position": {
+          "x": 100,
+          "y": 300
+        }
+      },
+      {
+        "id": "js_extract_lead",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Extract Lead Data",
+          "config": {
+            "code": "return { name: input.name || input.full_name || 'Unknown', email: input.email || '', company: input.company || input.company_name || '', phone: input.phone || input.phone_number || '', source: input.source || 'web', message: input.message || input.notes || '', timestamp: new Date().toISOString() };"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 400,
+          "y": 300
+        }
+      },
+      {
+        "id": "ai_qualify_questions",
+        "data": {
+          "icon": "Brain",
+          "type": "openai_gpt",
+          "label": "Generate Qualifying Questions",
+          "config": {
+            "model": "gpt-4o-mini",
+            "memory": 5,
+            "prompt": "Based on this lead information, generate 3 key qualifying questions: Name: {{input.name}}, Company: {{input.company}}, Message: {{input.message}}. Focus on: 1) Budget range, 2) Specific need/use case, 3) Timeline. Format as a JSON object with questions array.",
+            "temperature": 0.7
+          },
+          "category": "ai"
+        },
+        "type": "custom",
+        "position": {
+          "x": 700,
+          "y": 300
+        }
+      },
+      {
+        "id": "js_parse_questions",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Parse Questions",
+          "config": {
+            "code": "try { const content = input.content || input.text || input.response || ''; const jsonMatch = content.match(/\\{[\\s\\S]*\\}/); if (jsonMatch) { const parsed = JSON.parse(jsonMatch[0]); return { questions: parsed.questions || [], raw: content }; } return { questions: [], raw: content }; } catch (e) { return { questions: [], raw: input.content || input.text || '' }; }"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1000,
+          "y": 300
+        }
+      },
+      {
+        "id": "ai_score_lead",
+        "data": {
+          "icon": "Brain",
+          "type": "openai_gpt",
+          "label": "Score Lead",
+          "config": {
+            "model": "gpt-4o-mini",
+            "memory": 3,
+            "prompt": "Score this lead on a scale of 0-100 based on: Company size (from company name), Message quality, Contact information completeness. Return a JSON object: { score: number (0-100), qualified: boolean (score >= 60), reasoning: string }.",
+            "temperature": 0.3
+          },
+          "category": "ai"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1300,
+          "y": 300
+        }
+      },
+      {
+        "id": "js_extract_score",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Extract Score",
+          "config": {
+            "code": "try { const content = input.content || input.text || input.response || '{}'; const jsonMatch = content.match(/\\{[\\s\\S]*\\}/); if (jsonMatch) { const parsed = JSON.parse(jsonMatch[0]); return { score: parsed.score || 50, qualified: parsed.qualified !== undefined ? parsed.qualified : (parsed.score >= 60), reasoning: parsed.reasoning || 'No reasoning provided' }; } return { score: 50, qualified: false, reasoning: 'Could not parse score' }; } catch (e) { return { score: 50, qualified: false, reasoning: 'Error parsing score: ' + e.message }; }"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1600,
+          "y": 300
+        }
+      },
+      {
+        "id": "if_qualified_check",
+        "data": {
+          "icon": "GitBranch",
+          "type": "if_else",
+          "label": "Check Qualification",
+          "config": {
+            "condition": "{{input.qualified}} === true"
+          },
+          "category": "logic"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1900,
+          "y": 300
+        }
+      },
+      {
+        "id": "db_create_crm",
+        "data": {
+          "icon": "DatabaseZap",
+          "type": "database_write",
+          "label": "Create CRM Entry",
+          "config": {
+            "table": "leads",
+            "operation": "insert",
+            "dataTemplate": "{\"name\": \"{{input.name}}\", \"email\": \"{{input.email}}\", \"company\": \"{{input.company}}\", \"phone\": \"{{input.phone}}\", \"source\": \"{{input.source}}\", \"score\": {{input.score}}, \"status\": \"qualified\", \"message\": \"{{input.message}}\", \"created_at\": \"now()\"}"
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 2200,
+          "y": 200
+        }
+      },
+      {
+        "id": "js_generate_booking",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Generate Booking Link",
+          "config": {
+            "code": "const baseUrl = 'https://calendly.com/your-team/meeting'; const params = new URLSearchParams({ name: input.name, email: input.email, company: input.company }); return { bookingLink: `${baseUrl}?${params.toString()}`, email: input.email, name: input.name };"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 2500,
+          "y": 200
+        }
+      },
+      {
+        "id": "email_qualified",
+        "data": {
+          "icon": "Mail",
+          "type": "google_gmail",
+          "label": "Send Booking Email",
+          "config": {
+            "to": "{{input.email}}",
+            "body": "Hi {{input.name}},\\n\\nThank you for your interest! Based on your needs, we'd love to schedule a consultation with you.\\n\\nBook a meeting: {{input.bookingLink}}\\n\\nLooking forward to speaking with you!\\n\\nBest regards,\\nSales Team",
+            "subject": "Let's Schedule Your Consultation",
+            "operation": "send"
+          },
+          "category": "google"
+        },
+        "type": "custom",
+        "position": {
+          "x": 2800,
+          "y": 200
+        }
+      },
+      {
+        "id": "email_followup",
+        "data": {
+          "icon": "Mail",
+          "type": "google_gmail",
+          "label": "Send Follow-up Email",
+          "config": {
+            "to": "{{input.email}}",
+            "body": "Hi {{input.name}},\\n\\nThank you for reaching out! We've received your inquiry and will keep you updated with relevant information.\\n\\nIf you have any questions, feel free to reply to this email.\\n\\nBest regards,\\nTeam",
+            "subject": "Thank You for Your Interest",
+            "operation": "send"
+          },
+          "category": "google"
+        },
+        "type": "custom",
+        "position": {
+          "x": 2200,
+          "y": 400
+        }
+      },
+      {
+        "id": "log_result",
+        "data": {
+          "icon": "FileOutput",
+          "type": "log_output",
+          "label": "Log Result",
+          "config": {
+            "level": "info",
+            "message": "Lead processed: {{input.name}} ({{input.email}}) - Score: {{input.score}}, Qualified: {{input.qualified}}"
+          },
+          "category": "output"
+        },
+        "type": "custom",
+        "position": {
+          "x": 3100,
+          "y": 300
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "source": "webhook_lead_1",
+        "target": "js_extract_lead"
+      },
+      {
+        "id": "e2",
+        "source": "js_extract_lead",
+        "target": "ai_qualify_questions"
+      },
+      {
+        "id": "e3",
+        "source": "ai_qualify_questions",
+        "target": "js_parse_questions"
+      },
+      {
+        "id": "e4",
+        "source": "js_parse_questions",
+        "target": "ai_score_lead"
+      },
+      {
+        "id": "e5",
+        "source": "ai_score_lead",
+        "target": "js_extract_score"
+      },
+      {
+        "id": "e6",
+        "source": "js_extract_score",
+        "target": "if_qualified_check"
+      },
+      {
+        "id": "e7",
+        "source": "if_qualified_check",
+        "target": "db_create_crm",
+        "sourceHandle": "true"
+      },
+      {
+        "id": "e8",
+        "source": "if_qualified_check",
+        "target": "email_followup",
+        "sourceHandle": "false"
+      },
+      {
+        "id": "e9",
+        "source": "db_create_crm",
+        "target": "js_generate_booking"
+      },
+      {
+        "id": "e10",
+        "source": "js_generate_booking",
+        "target": "email_qualified"
+      },
+      {
+        "id": "e11",
+        "source": "email_qualified",
+        "target": "log_result"
+      },
+      {
+        "id": "e12",
+        "source": "email_followup",
+        "target": "log_result"
+      }
+    ],
+    "difficulty": "Advanced",
+    "estimated_setup_time": 12,
+    "tags": [
+      "sales",
+      "lead-qualification",
+      "crm",
+      "booking",
+      "scoring",
+      "production-ready"
+    ],
+    "preview_image": null,
+    "is_featured": true,
+    "is_active": true,
+    "use_count": 2,
+    "version": 1,
+    "created_by": null,
+    "updated_by": null,
+    "created_at": "2026-04-24T14:32:25.195Z",
+    "updated_at": "2026-07-27T05:48:50.181Z"
+  },
+  {
+    "id": "53bc3b52-0655-4c4e-9cf0-36050463e603",
+    "name": "Smart Alert Co-Pilot",
+    "description": "Move from 'checking on a schedule' to 'getting told the moment something's wrong.' An AI judgment layer watches your client records, pulls related context before deciding, and sends a targeted alert to the right person only when a change is actually worth interrupting someone for. (No instant Airtable-update trigger exists yet, so this polls every 10 minutes instead of firing immediately.)",
+    "category": "Business Verification & Compliance",
+    "nodes": [
+      {
+        "id": "schedule_poll_alerts",
+        "data": {
+          "icon": "Clock",
+          "type": "schedule",
+          "label": "Poll for Record Changes",
+          "config": {
+            "cron": "*/10 * * * *",
+            "timezone": "UTC"
+          },
+          "category": "triggers"
+        },
+        "type": "custom",
+        "position": {
+          "x": 100,
+          "y": 300
+        }
+      },
+      {
+        "id": "airtable_read_all_records",
+        "data": {
+          "icon": "Database",
+          "type": "airtable",
+          "label": "Read All Client Records",
+          "config": {
+            "baseId": "",
+            "tableId": "Clients",
+            "operation": "read"
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 400,
+          "y": 300
+        }
+      },
+      {
+        "id": "js_diff_for_alerts",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Detect Changed Records",
+          "config": {
+            "code": "const rows = input.records || input.rows || [];\nconst lastSnapshot = input.lastSnapshot || {};\nconst changed = [];\nfor (const r of rows) {\n  const prev = lastSnapshot[r.id] || {};\n  if (JSON.stringify(prev) !== JSON.stringify(r.fields)) changed.push({ id: r.id, previous: prev, current: r.fields });\n}\nconst newSnapshot = {}; rows.forEach(r => newSnapshot[r.id] = r.fields);\nreturn { ...input, changed, lastSnapshot: newSnapshot };"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 700,
+          "y": 300
+        }
+      },
+      {
+        "id": "airtable_read_related_context",
+        "data": {
+          "icon": "Database",
+          "type": "airtable",
+          "label": "Pull Related Records for Context",
+          "config": {
+            "baseId": "",
+            "tableId": "Clients",
+            "operation": "read"
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1000,
+          "y": 300
+        }
+      },
+      {
+        "id": "ai_agent_judge_alert",
+        "data": {
+          "icon": "Bot",
+          "type": "ai_agent",
+          "label": "Judge Whether This Is Alert-Worthy",
+          "config": {
+            "model": "gemini-3.5-flash",
+            "userInput": "Changed record(s): {{input.changed}}\nRelated context: {{input.records}}",
+            "temperature": 0.3,
+            "systemPrompt": "You are a compliance monitoring co-pilot. You are given a changed client record plus related context records. Decide whether this change is worth interrupting a person for right now (e.g. a readiness score dropped sharply, a document expired, a risk flag appeared) versus routine (e.g. a timestamp update, a minor note edit). Reply as JSON: {\"alertWorthy\": true/false, \"reason\": \"...\", \"severity\": \"low|medium|high\"}."
+          },
+          "category": "ai"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1300,
+          "y": 300
+        }
+      },
+      {
+        "id": "js_route_notification",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Decide Who to Notify",
+          "config": {
+            "code": "const decision = input.response || {};\nconst severity = decision.severity || 'low';\nconst recipient = severity === 'high' ? input.complianceLeadPhone : input.accountManagerPhone;\nreturn { ...input, alertWorthy: decision.alertWorthy, reason: decision.reason, severity, recipient };"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1600,
+          "y": 300
+        }
+      },
+      {
+        "id": "whatsapp_send_smart_alert",
+        "data": {
+          "icon": "MessageCircle",
+          "type": "whatsapp",
+          "label": "Send Targeted Alert",
+          "config": {
+            "to": "{{input.recipient}}",
+            "text": ":bell: {{input.severity}} priority alert: {{input.reason}}",
+            "resource": "message",
+            "operation": "sendText"
+          },
+          "category": "output"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1900,
+          "y": 300
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "source": "schedule_poll_alerts",
+        "target": "airtable_read_all_records"
+      },
+      {
+        "id": "e2",
+        "source": "airtable_read_all_records",
+        "target": "js_diff_for_alerts"
+      },
+      {
+        "id": "e3",
+        "source": "js_diff_for_alerts",
+        "target": "airtable_read_related_context"
+      },
+      {
+        "id": "e4",
+        "source": "airtable_read_related_context",
+        "target": "ai_agent_judge_alert"
+      },
+      {
+        "id": "e5",
+        "source": "ai_agent_judge_alert",
+        "target": "js_route_notification"
+      },
+      {
+        "id": "e6",
+        "source": "js_route_notification",
+        "target": "whatsapp_send_smart_alert"
+      }
+    ],
+    "difficulty": "Advanced",
+    "estimated_setup_time": 21,
+    "tags": [
+      "ai-agent",
+      "alerts",
+      "monitoring",
+      "airtable",
+      "whatsapp",
+      "co-pilot"
+    ],
+    "preview_image": null,
+    "is_featured": false,
+    "is_active": true,
+    "use_count": 0,
+    "version": 1,
+    "created_by": null,
+    "updated_by": null,
+    "created_at": "2026-07-14T11:20:27.820Z",
+    "updated_at": "2026-07-14T11:20:27.820Z"
+  },
+  {
+    "id": "c0164dcb-4c8e-4be8-a806-4d00d2a969b7",
+    "name": "Submission Package Builder",
+    "description": "Once a client's readiness score clears the bar, this workflow automatically gathers the homepage/policy screenshots, live policy text, and already-uploaded documents a verification submission needs, and emails you all the pieces. Simplification: since this platform has no PDF-merge node, the pieces are delivered as individual links rather than one combined PDF.",
+    "category": "Business Verification & Compliance",
+    "nodes": [
+      {
+        "id": "schedule_poll_ready",
+        "data": {
+          "icon": "Clock",
+          "type": "schedule",
+          "label": "Poll for Ready Clients",
+          "config": {
+            "cron": "*/15 * * * *",
+            "timezone": "UTC"
+          },
+          "category": "triggers"
+        },
+        "type": "custom",
+        "position": {
+          "x": 100,
+          "y": 300
+        }
+      },
+      {
+        "id": "airtable_read_ready_status",
+        "data": {
+          "icon": "Database",
+          "type": "airtable",
+          "label": "Read Clients With Status = Ready",
+          "config": {
+            "baseId": "",
+            "tableId": "Clients",
+            "operation": "read"
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 400,
+          "y": 300
+        }
+      },
+      {
+        "id": "js_detect_newly_ready_status",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Detect Newly-Ready Clients",
+          "config": {
+            "code": "const rows = input.records || input.rows || [];\nconst lastSeenIds = input.lastSeenIds || [];\nconst readyNow = rows.filter(r => r.fields && r.fields.Status === 'Ready');\nconst newlyReady = readyNow.filter(r => !lastSeenIds.includes(r.id));\nreturn { ...input, newlyReady, lastSeenIds: readyNow.map(r => r.id) };"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 700,
+          "y": 300
+        }
+      },
+      {
+        "id": "http_screenshot_pages",
+        "data": {
+          "icon": "Globe",
+          "type": "http_request",
+          "label": "Screenshot Homepage & Policy Pages",
+          "config": {
+            "url": "https://api.screenshotone.com/take?url={{input.website}}&access_key={{$credentials.screenshotone.apiKey}}",
+            "method": "GET",
+            "headers": {},
+            "timeout": 15000
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1000,
+          "y": 200
+        }
+      },
+      {
+        "id": "http_fetch_policy_text",
+        "data": {
+          "icon": "Globe",
+          "type": "http_request",
+          "label": "Fetch Privacy Policy / Terms Text",
+          "config": {
+            "url": "{{input.website}}/privacy-policy",
+            "method": "GET",
+            "headers": {},
+            "timeout": 10000
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1000,
+          "y": 400
+        }
+      },
+      {
+        "id": "drive_list_existing_docs",
+        "data": {
+          "icon": "HardDrive",
+          "type": "google_drive",
+          "label": "List Client Documents in Drive",
+          "config": {
+            "operation": "list"
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1300,
+          "y": 300
+        }
+      },
+      {
+        "id": "gmail_send_package",
+        "data": {
+          "icon": "Mail",
+          "type": "google_gmail",
+          "label": "Email the Submission Package",
+          "config": {
+            "body": "Everything needed to submit {{input.businessName}} for verification:\n\nHomepage screenshot: {{input.screenshotUrl}}\nPrivacy Policy / Terms text: {{input.policyText}}\nExisting documents on file: {{input.files}}\n\nReview and submit whenever ready.",
+            "subject": "Submission package ready for {{input.businessName}}",
+            "operation": "send",
+            "recipientEmails": "{{input.contactEmail}}",
+            "recipientSource": "manual_entry"
+          },
+          "category": "output"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1600,
+          "y": 300
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "source": "schedule_poll_ready",
+        "target": "airtable_read_ready_status"
+      },
+      {
+        "id": "e2",
+        "source": "airtable_read_ready_status",
+        "target": "js_detect_newly_ready_status"
+      },
+      {
+        "id": "e3",
+        "source": "js_detect_newly_ready_status",
+        "target": "http_screenshot_pages"
+      },
+      {
+        "id": "e4",
+        "source": "js_detect_newly_ready_status",
+        "target": "http_fetch_policy_text"
+      },
+      {
+        "id": "e5",
+        "source": "http_screenshot_pages",
+        "target": "drive_list_existing_docs"
+      },
+      {
+        "id": "e6",
+        "source": "http_fetch_policy_text",
+        "target": "drive_list_existing_docs"
+      },
+      {
+        "id": "e7",
+        "source": "drive_list_existing_docs",
+        "target": "gmail_send_package"
+      }
+    ],
+    "difficulty": "Intermediate",
+    "estimated_setup_time": 21,
+    "tags": [
+      "verification",
+      "compliance",
+      "google-drive",
+      "automation",
+      "documents"
+    ],
+    "preview_image": null,
+    "is_featured": false,
+    "is_active": true,
+    "use_count": 0,
+    "version": 1,
+    "created_by": null,
+    "updated_by": null,
+    "created_at": "2026-07-14T11:20:27.820Z",
+    "updated_at": "2026-07-14T11:20:27.820Z"
+  },
+  {
+    "id": "19c9665f-25c5-472f-8c0e-4ed82b6ba249",
+    "name": "Verification Co-Pilot Chat",
+    "description": "Answer 'what's the status of X?' without anyone manually digging through records. Ask in plain English over WhatsApp or Slack and an AI co-pilot pulls the live client record — and optionally a platform status API — to give a grounded, current answer, with no app-switching required.",
+    "category": "Business Verification & Compliance",
+    "nodes": [
+      {
+        "id": "chat_trigger_copilot",
+        "data": {
+          "icon": "MessageSquare",
+          "type": "chat_trigger",
+          "label": "Staff/Client Question",
+          "config": {},
+          "category": "triggers"
+        },
+        "type": "custom",
+        "position": {
+          "x": 100,
+          "y": 300
+        }
+      },
+      {
+        "id": "js_parse_query",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Extract Client Name From Question",
+          "config": {
+            "code": "const msg = input.message || '';\n// Very simple heuristic extraction — refine per your naming conventions\nconst match = msg.match(/for ([A-Z][\\w& ]+)/) || msg.match(/'([^']+)'/);\nconst clientName = match ? match[1].trim() : msg;\nreturn { ...input, clientName, originalQuestion: msg };"
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 400,
+          "y": 300
+        }
+      },
+      {
+        "id": "airtable_lookup_client_record",
+        "data": {
+          "icon": "Database",
+          "type": "airtable",
+          "label": "Query Live Client Record",
+          "config": {
+            "baseId": "",
+            "tableId": "Clients",
+            "operation": "read"
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 700,
+          "y": 300
+        }
+      },
+      {
+        "id": "http_status_api_optional",
+        "data": {
+          "icon": "Globe",
+          "type": "http_request",
+          "label": "Check Platform Status API (Optional)",
+          "config": {
+            "url": "{{input.statusApiUrl}}",
+            "method": "GET",
+            "headers": {},
+            "timeout": 8000
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1000,
+          "y": 300
+        }
+      },
+      {
+        "id": "ai_agent_answer",
+        "data": {
+          "icon": "Bot",
+          "type": "ai_agent",
+          "label": "Compose Grounded Answer",
+          "config": {
+            "model": "gemini-3.5-flash",
+            "userInput": "Question: {{input.originalQuestion}}\nClient record: {{input.records}}\nLive status data (if any): {{input.body}}\n\nWrite a clear, human answer to the question using only this data.",
+            "temperature": 0.3,
+            "systemPrompt": "You are the Verification Co-Pilot. You never guess — you only answer using the client record and status data given to you below. If the data does not cover the question, say so plainly and offer to escalate to a human."
+          },
+          "category": "ai"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1300,
+          "y": 300
+        }
+      },
+      {
+        "id": "whatsapp_reply_copilot",
+        "data": {
+          "icon": "MessageCircle",
+          "type": "whatsapp",
+          "label": "Reply in Chat",
+          "config": {
+            "to": "{{input.senderPhone}}",
+            "text": "{{input.response}}",
+            "resource": "message",
+            "operation": "sendText"
+          },
+          "category": "output"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1600,
+          "y": 300
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "source": "chat_trigger_copilot",
+        "target": "js_parse_query"
+      },
+      {
+        "id": "e2",
+        "source": "js_parse_query",
+        "target": "airtable_lookup_client_record"
+      },
+      {
+        "id": "e3",
+        "source": "airtable_lookup_client_record",
+        "target": "http_status_api_optional"
+      },
+      {
+        "id": "e4",
+        "source": "http_status_api_optional",
+        "target": "ai_agent_answer"
+      },
+      {
+        "id": "e5",
+        "source": "ai_agent_answer",
+        "target": "whatsapp_reply_copilot"
+      }
+    ],
+    "difficulty": "Advanced",
+    "estimated_setup_time": 24,
+    "tags": [
+      "ai-agent",
+      "chatbot",
+      "whatsapp",
+      "airtable",
+      "co-pilot"
+    ],
+    "preview_image": null,
+    "is_featured": false,
+    "is_active": true,
+    "use_count": 0,
+    "version": 1,
+    "created_by": null,
+    "updated_by": null,
+    "created_at": "2026-07-14T11:20:27.820Z",
+    "updated_at": "2026-07-14T11:20:27.820Z"
+  },
+  {
+    "id": "5d82ee6f-2e45-472e-bb4e-94d77b251586",
+    "name": "Verification Readiness Checker",
+    "description": "Know whether your business will pass Meta or Google verification before you apply. This workflow scores your website and documents against the checks verifiers actually run — privacy policy, terms, matching business details — then emails and WhatsApps you a fix list so you can pass on the first try.",
+    "category": "Business Verification & Compliance",
+    "nodes": [
+      {
+        "id": "form_intake",
+        "data": {
+          "icon": "FileText",
+          "type": "form",
+          "label": "Client Intake Form",
+          "config": {
+            "fields": [
+              {
+                "key": "businessName",
+                "type": "text",
+                "label": "Business Name",
+                "required": true
+              },
+              {
+                "key": "website",
+                "type": "url",
+                "label": "Website URL",
+                "required": true
+              },
+              {
+                "key": "contactEmail",
+                "type": "email",
+                "label": "Contact Email",
+                "required": true
+              },
+              {
+                "key": "whatsappNumber",
+                "type": "tel",
+                "label": "WhatsApp Number",
+                "required": false
+              },
+              {
+                "key": "gstDocument",
+                "type": "file",
+                "label": "GST Certificate",
+                "required": true
+              },
+              {
+                "key": "panDocument",
+                "type": "file",
+                "label": "PAN Card",
+                "required": true
+              },
+              {
+                "key": "bankStatement",
+                "type": "file",
+                "label": "Bank Statement",
+                "required": true
+              }
+            ],
+            "formTitle": "Business Verification Intake",
+            "successMessage": "Thanks! We are analyzing your business now.",
+            "formDescription": "Tell us about your business so we can check your verification readiness.",
+            "submitButtonText": "Check My Readiness"
+          },
+          "category": "triggers"
+        },
+        "type": "custom",
+        "position": {
+          "x": 100,
+          "y": 300
+        }
+      },
+      {
+        "id": "airtable_create_client",
+        "data": {
+          "icon": "Database",
+          "type": "airtable",
+          "label": "Create Client Record",
+          "config": {
+            "baseId": "",
+            "fields": {
+              "Name": "{{input.businessName}}",
+              "Email": "{{input.contactEmail}}",
+              "Status": "New",
+              "Website": "{{input.website}}",
+              "WhatsApp": "{{input.whatsappNumber}}"
+            },
+            "tableId": "Clients",
+            "operation": "create"
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 400,
+          "y": 300
+        }
+      },
+      {
+        "id": "http_fetch_website",
+        "data": {
+          "icon": "Globe",
+          "type": "http_request",
+          "label": "Fetch Website HTML",
+          "config": {
+            "url": "{{input.website}}",
+            "method": "GET",
+            "headers": {},
+            "timeout": 10000
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 700,
+          "y": 300
+        }
+      },
+      {
+        "id": "ai_analyze_readiness",
+        "data": {
+          "icon": "Brain",
+          "type": "openai_gpt",
+          "label": "Analyze Readiness",
+          "config": {
+            "model": "gpt-4o-mini",
+            "prompt": "You are a compliance analyst preparing a business for Meta/Google verification. Website HTML: {{input.body}}. Business name on file: {{input.businessName}}. Uploaded documents: GST {{input.gstDocument}}, PAN {{input.panDocument}}, bank statement {{input.bankStatement}}. Check for: a visible Privacy Policy page, a visible Terms & Conditions page, a business name and address that match across the website and the documents, and a working contact page. List every issue you find as one line starting with \"ISSUE:\". If everything looks correct, return \"NO ISSUES FOUND\".",
+            "temperature": 0.3
+          },
+          "category": "ai"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1000,
+          "y": 300
+        }
+      },
+      {
+        "id": "js_score",
+        "data": {
+          "icon": "Code",
+          "type": "javascript",
+          "label": "Calculate Readiness Score",
+          "config": {
+            "code": "const text = input.response || input.text || '';\nconst issues = text.split('\\n').map(l => l.trim()).filter(l => l.toUpperCase().startsWith('ISSUE:'));\nconst deductionPerIssue = 15;\nconst score = Math.max(0, 100 - issues.length * deductionPerIssue);\nreturn { ...input, score, issues, issueCount: issues.length };",
+            "timeout": 5000
+          },
+          "category": "data"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1300,
+          "y": 300
+        }
+      },
+      {
+        "id": "airtable_update_score",
+        "data": {
+          "icon": "Database",
+          "type": "airtable",
+          "label": "Write Score to Record",
+          "config": {
+            "baseId": "",
+            "fields": {
+              "Score": "{{input.score}}",
+              "Issues": "{{input.issues}}",
+              "Status": "Scored"
+            },
+            "tableId": "Clients",
+            "recordId": "{{input.recordId}}",
+            "operation": "update"
+          },
+          "category": "database"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1600,
+          "y": 300
+        }
+      },
+      {
+        "id": "ai_fix_list",
+        "data": {
+          "icon": "Brain",
+          "type": "openai_gpt",
+          "label": "Write Fix List",
+          "config": {
+            "model": "gpt-4o-mini",
+            "prompt": "Based on these readiness issues: {{input.issues}}, write 2-3 short, plain-English fixes the client should make before applying for Meta/Google verification. Keep it friendly, specific, and actionable. No jargon.",
+            "temperature": 0.5
+          },
+          "category": "ai"
+        },
+        "type": "custom",
+        "position": {
+          "x": 1900,
+          "y": 300
+        }
+      },
+      {
+        "id": "gmail_send_results",
+        "data": {
+          "icon": "Mail",
+          "type": "google_gmail",
+          "label": "Email Results",
+          "config": {
+            "body": "Hi {{input.businessName}},\n\nYour verification readiness score is {{input.score}}/100.\n\nHere is what to fix before you apply:\n{{input.fixList}}\n\nWe will keep this record on file for your next check.",
+            "subject": "Your verification readiness score: {{input.score}}/100",
+            "operation": "send",
+            "recipientEmails": "{{input.contactEmail}}",
+            "recipientSource": "manual_entry"
+          },
+          "category": "output"
+        },
+        "type": "custom",
+        "position": {
+          "x": 2200,
+          "y": 200
+        }
+      },
+      {
+        "id": "whatsapp_send_results",
+        "data": {
+          "icon": "MessageCircle",
+          "type": "whatsapp",
+          "label": "WhatsApp Results",
+          "config": {
+            "to": "{{input.whatsappNumber}}",
+            "text": "Hi {{input.businessName}}! Your verification readiness score is {{input.score}}/100. Check your email for the full fix list, or reply here with questions.",
+            "resource": "message",
+            "operation": "sendText"
+          },
+          "category": "output"
+        },
+        "type": "custom",
+        "position": {
+          "x": 2200,
+          "y": 400
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "source": "form_intake",
+        "target": "airtable_create_client"
+      },
+      {
+        "id": "e2",
+        "source": "airtable_create_client",
+        "target": "http_fetch_website"
+      },
+      {
+        "id": "e3",
+        "source": "http_fetch_website",
+        "target": "ai_analyze_readiness"
+      },
+      {
+        "id": "e4",
+        "source": "ai_analyze_readiness",
+        "target": "js_score"
+      },
+      {
+        "id": "e5",
+        "source": "js_score",
+        "target": "airtable_update_score"
+      },
+      {
+        "id": "e6",
+        "source": "airtable_update_score",
+        "target": "ai_fix_list"
+      },
+      {
+        "id": "e7",
+        "source": "ai_fix_list",
+        "target": "gmail_send_results"
+      },
+      {
+        "id": "e8",
+        "source": "ai_fix_list",
+        "target": "whatsapp_send_results"
+      }
+    ],
+    "difficulty": "Beginner",
+    "estimated_setup_time": 27,
+    "tags": [
+      "verification",
+      "compliance",
+      "ai",
+      "airtable",
+      "whatsapp",
+      "onboarding"
+    ],
+    "preview_image": null,
+    "is_featured": false,
+    "is_active": true,
+    "use_count": 0,
+    "version": 1,
+    "created_by": null,
+    "updated_by": null,
+    "created_at": "2026-07-14T11:20:27.820Z",
+    "updated_at": "2026-07-14T11:20:27.820Z"
+  }
+]
