@@ -1,0 +1,396 @@
+{
+  "id": "ddd65341-f690-46f8-8436-3df14e283c28",
+  "name": "Sales & Lead Qualification Agent",
+  "description": "Automated lead qualification agent that captures lead information, asks qualifying questions, scores leads, and routes qualified leads to CRM with meeting booking. Unqualified leads receive automated follow-up.",
+  "category": "Sales & Marketing",
+  "nodes": [
+    {
+      "id": "webhook_lead_1",
+      "data": {
+        "icon": "Webhook",
+        "type": "webhook",
+        "label": "Lead Webhook",
+        "config": {
+          "method": "POST"
+        },
+        "category": "triggers",
+        "notes": {
+          "family": "Triggers",
+          "what": "Starts your workflow the moment another app sends it data — like a doorbell for your automation",
+          "overview": "Starts a workflow when an external app, website form, payment system, or internal service sends data to the generated CtrlChecks webhook URL. Captures the request body, headers, query values, and method for the next node.",
+          "tips": [],
+          "docsHref": "/docs/nodes/webhook",
+          "why": "Receives leads from your website forms or ad landing pages."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      }
+    },
+    {
+      "id": "js_extract_lead",
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Extract Lead Data",
+        "config": {
+          "code": "return { name: input.name || input.full_name || 'Unknown', email: input.email || '', company: input.company || input.company_name || '', phone: input.phone || input.phone_number || '', source: input.source || 'web', message: input.message || input.notes || '', timestamp: new Date().toISOString() };"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Normalises the different field names lead sources use into one shape."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      }
+    },
+    {
+      "id": "ai_score_lead",
+      "data": {
+        "icon": "Brain",
+        "type": "openai_gpt",
+        "label": "Score Lead",
+        "config": {
+          "model": "gpt-4o-mini",
+          "memory": 3,
+          "prompt": "Score this lead from 0-100 on fit and intent.\n\nLead:\n- Name: {{input.name}}\n- Company: {{input.company}}\n- Email: {{input.email}}\n- Phone: {{input.phone}}\n- Source: {{input.source}}\n- Message: {{input.message}}\n\nWeigh company signal, how specific and serious the message is, and how complete the contact details are. Return ONLY JSON: { \"score\": number (0-100), \"qualified\": boolean (score >= 60), \"reasoning\": string }.",
+          "temperature": 0.3
+        },
+        "category": "ai",
+        "notes": {
+          "family": "AI",
+          "what": "Sends your prompt to OpenAI's ChatGPT and gets back an AI-written response",
+          "overview": "Calls OpenAI through the legacy LLM adapter. Prompt is the main input; Messages is only a fallback when Prompt is blank. Temperature and Memory are visible legacy fields ignored by the current executor.",
+          "tips": [],
+          "docsHref": "/docs/nodes/openai_gpt",
+          "why": "Scores fit and intent from the lead's own details. The lead data is interpolated into the prompt — without that the model would be scoring nothing."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      }
+    },
+    {
+      "id": "js_extract_score",
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Extract Score",
+        "config": {
+          "code": "try { const content = input.content || input.text || input.response || '{}'; const jsonMatch = content.match(/\\{[\\s\\S]*\\}/); if (jsonMatch) { const parsed = JSON.parse(jsonMatch[0]); return { score: parsed.score || 50, qualified: parsed.qualified !== undefined ? parsed.qualified : (parsed.score >= 60), reasoning: parsed.reasoning || 'No reasoning provided' }; } return { score: 50, qualified: false, reasoning: 'Could not parse score' }; } catch (e) { return { score: 50, qualified: false, reasoning: 'Error parsing score: ' + e.message }; }"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Extracts the score and qualified flag from the AI's JSON."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      }
+    },
+    {
+      "id": "if_qualified_check",
+      "data": {
+        "icon": "GitBranch",
+        "type": "if_else",
+        "label": "Check Qualification",
+        "config": {
+          "conditions": [
+            {
+              "field": "$json.qualified",
+              "operator": "equals",
+              "value": true
+            }
+          ],
+          "combineOperation": "AND"
+        },
+        "category": "logic",
+        "notes": {
+          "family": "Logic",
+          "what": "Makes a yes/no decision: if something is true, go one way; otherwise go another",
+          "overview": "Makes a yes/no decision from previous-step data and routes matching work through TRUE and non-matching work through FALSE.",
+          "tips": [
+            "Use the builder for normal setup; use JSON mode only when pasting prepared condition objects.",
+            "Choose AND when every row must match; choose OR when any row can match.",
+            "Use equals for statuses and categories, greater-than operators for numeric thresholds, and contains for text or lists.",
+            "Connect both TRUE and FALSE outputs so no business case silently disappears."
+          ],
+          "docsHref": "/docs/nodes/if_else",
+          "why": "Splits leads worth a salesperson's time from ones that get nurtured. 60 is the threshold, set in the scoring prompt."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 300
+      }
+    },
+    {
+      "id": "db_create_crm",
+      "data": {
+        "icon": "Zap",
+        "type": "hubspot",
+        "label": "Create HubSpot Contact",
+        "config": {
+          "resource": "contact",
+          "operation": "create",
+          "properties": {
+            "email": "{{input.email}}",
+            "firstname": "{{input.name}}",
+            "company": "{{input.company}}",
+            "phone": "{{input.phone}}",
+            "hs_lead_status": "QUALIFIED"
+          }
+        },
+        "category": "crm",
+        "notes": {
+          "family": "CRM",
+          "what": "Create, update, or find contacts, deals, and companies in HubSpot CRM",
+          "overview": "Connects to HubSpot CRM to get, list, create, update, delete, search, or bulk-create contacts, companies, deals, and tickets. Only Access Token is vault-backed - Api Key and Credential Id are legacy/unused. Perfect for automating sales, marketing, and support workflows.",
+          "tips": [],
+          "docsHref": "/docs/nodes/hubspot",
+          "why": "Creates the contact in HubSpot so a qualified lead lands in your real CRM pipeline, not in a side table nobody works from."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 205
+      }
+    },
+    {
+      "id": "js_generate_booking",
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Generate Booking Link",
+        "config": {
+          "code": "// Set this to your own scheduling link when you set up the template.\nconst baseUrl = input.bookingBaseUrl || \"REPLACE_WITH_YOUR_BOOKING_LINK\";\nconst params = new URLSearchParams({ name: input.name || \"\", email: input.email || \"\", company: input.company || \"\" });\nreturn { ...input, bookingLink: baseUrl + \"?\" + params.toString(), email: input.email, name: input.name };"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Builds a personalised booking link. Replace the placeholder URL with your own scheduling link."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2020,
+        "y": 300
+      }
+    },
+    {
+      "id": "email_qualified",
+      "data": {
+        "icon": "Mail",
+        "type": "google_gmail",
+        "label": "Send Booking Email",
+        "config": {
+          "to": "{{input.email}}",
+          "body": "Hi {{input.name}},\\n\\nThank you for your interest! Based on your needs, we'd love to schedule a consultation with you.\\n\\nBook a meeting: {{input.bookingLink}}\\n\\nLooking forward to speaking with you!\\n\\nBest regards,\\nSales Team",
+          "subject": "Let's Schedule Your Consultation",
+          "operation": "send"
+        },
+        "category": "output",
+        "notes": {
+          "family": "Communication",
+          "what": "Send emails from your Gmail account or read and search messages in your inbox",
+          "overview": "Send, list, get, or search Gmail messages. Send recipients can be typed manually or extracted from upstream/fallback Google Sheets rows.",
+          "tips": [
+            "Connect Google OAuth in Connections; do not paste tokens into workflow fields",
+            "Gmail search syntax: from:, subject:, is:unread, has:attachment",
+            "List/Search only return {id, threadId} per message â€” use a Get step with that id for full content",
+            "Body is plain text only",
+            "Get returns Gmail's raw API message; the body text is base64url-encoded inside message.payload.body.data",
+            "Use search to filter messages before getting details"
+          ],
+          "docsHref": "/docs/nodes/google_gmail",
+          "why": "Invites a qualified lead to book while their interest is still fresh — the speed here is most of the value."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2340,
+        "y": 300
+      }
+    },
+    {
+      "id": "email_followup",
+      "data": {
+        "icon": "Mail",
+        "type": "google_gmail",
+        "label": "Send Follow-up Email",
+        "config": {
+          "to": "{{input.email}}",
+          "body": "Hi {{input.name}},\\n\\nThank you for reaching out! We've received your inquiry and will keep you updated with relevant information.\\n\\nIf you have any questions, feel free to reply to this email.\\n\\nBest regards,\\nTeam",
+          "subject": "Thank You for Your Interest",
+          "operation": "send"
+        },
+        "category": "output",
+        "notes": {
+          "family": "Communication",
+          "what": "Send emails from your Gmail account or read and search messages in your inbox",
+          "overview": "Send, list, get, or search Gmail messages. Send recipients can be typed manually or extracted from upstream/fallback Google Sheets rows.",
+          "tips": [
+            "Connect Google OAuth in Connections; do not paste tokens into workflow fields",
+            "Gmail search syntax: from:, subject:, is:unread, has:attachment",
+            "List/Search only return {id, threadId} per message â€” use a Get step with that id for full content",
+            "Body is plain text only",
+            "Get returns Gmail's raw API message; the body text is base64url-encoded inside message.payload.body.data",
+            "Use search to filter messages before getting details"
+          ],
+          "docsHref": "/docs/nodes/google_gmail",
+          "why": "Keeps unqualified leads warm rather than dropping them."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 395
+      }
+    },
+    {
+      "id": "log_result",
+      "data": {
+        "icon": "FileOutput",
+        "type": "log_output",
+        "label": "Log Result",
+        "config": {
+          "level": "info",
+          "message": "Lead processed: {{input.name}} ({{input.email}}) - Score: {{input.score}}, Qualified: {{input.qualified}}"
+        },
+        "category": "utility",
+        "notes": {
+          "family": "Utility",
+          "what": "Writes a message to your workflow's log for debugging or auditing",
+          "overview": "Log data for debugging and monitoring. View logs in the execution history. This is a terminal node â€” it cannot connect to further downstream nodes.",
+          "tips": [
+            "Use different levels for filtering",
+            "This node is terminal â€” it does not forward data to further nodes",
+            "Check execution history for logs"
+          ],
+          "docsHref": "/docs/nodes/log_output",
+          "why": "Records every lead and its score, which is how you tune the threshold over time."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2660,
+        "y": 300
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "webhook_lead_1",
+      "target": "js_extract_lead"
+    },
+    {
+      "id": "e5",
+      "source": "ai_score_lead",
+      "target": "js_extract_score"
+    },
+    {
+      "id": "e6",
+      "source": "js_extract_score",
+      "target": "if_qualified_check"
+    },
+    {
+      "id": "e7",
+      "source": "if_qualified_check",
+      "target": "db_create_crm",
+      "sourceHandle": "true"
+    },
+    {
+      "id": "e8",
+      "source": "if_qualified_check",
+      "target": "email_followup",
+      "sourceHandle": "false"
+    },
+    {
+      "id": "e9",
+      "source": "db_create_crm",
+      "target": "js_generate_booking"
+    },
+    {
+      "id": "e10",
+      "source": "js_generate_booking",
+      "target": "email_qualified"
+    },
+    {
+      "id": "e11",
+      "source": "email_qualified",
+      "target": "log_result"
+    },
+    {
+      "id": "e12",
+      "source": "email_followup",
+      "target": "log_result"
+    },
+    {
+      "id": "e_js_extract_lead_ai_score_lead",
+      "source": "js_extract_lead",
+      "target": "ai_score_lead"
+    }
+  ],
+  "difficulty": "Advanced",
+  "estimated_setup_time": 12,
+  "tags": [
+    "sales",
+    "lead-qualification",
+    "crm",
+    "booking",
+    "scoring"
+  ],
+  "preview_image": null,
+  "is_featured": true,
+  "is_active": true,
+  "use_count": 2,
+  "version": 2,
+  "created_by": null,
+  "updated_by": null,
+  "created_at": "2026-04-24T14:32:25.195Z",
+  "updated_at": "2026-07-27T05:48:50.181Z"
+}

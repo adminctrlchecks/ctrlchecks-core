@@ -7023,6 +7023,61 @@ export class NodeLibrary {
             description: 'Field values for create/update',
             examples: [{ Name: 'John Doe', Email: 'test@example.com' }],
           },
+          // ✅ These are read by the executor (execute-workflow.ts, `case 'airtable'`) but were
+          // never declared here, so the UI could not render them and the AI pipeline could not
+          // fill them — every read pulled the entire table. Declared now so read operations can
+          // be scoped server-side.
+          filterByFormula: {
+            type: 'string',
+            description:
+              'Airtable formula that filters rows on Airtable\'s side before they are returned. Leave empty to read every row in the table. Field names go in {curly braces}; text values go in \'single quotes\'.',
+            examples: [
+              "{Status}='Ready'",
+              "AND({Status}='Open', {Owner}='{{input.owner}}')",
+              "SEARCH('{{input.clientName}}', {Name})",
+            ],
+            fillMode: { default: 'manual_static', supportsRuntimeAI: false, supportsBuildtimeAI: true },
+          },
+          maxRecords: {
+            type: 'number',
+            description:
+              'Maximum number of rows to return. Leave 0 or empty for all rows. Use 1 when you are looking up a single record.',
+            examples: [1, 50, 200],
+            default: 0,
+          },
+          view: {
+            type: 'string',
+            description:
+              'Read from a named Airtable view instead of the raw table. The view\'s own filters and sort order are applied.',
+            examples: ['Grid view', 'Ready for review'],
+          },
+          sort: {
+            type: 'array',
+            description: 'Sort order for returned rows, as [{ field, direction }].',
+            examples: [[{ field: 'ExpiryDate', direction: 'asc' }]],
+          },
+          pageSize: {
+            type: 'number',
+            description: 'Rows fetched per Airtable API page. Defaults to 100; rarely needs changing.',
+            default: 100,
+          },
+          typecast: {
+            type: 'boolean',
+            description:
+              'Let Airtable coerce values into the column type on write (e.g. create a missing select option). Off by default.',
+            default: false,
+          },
+          matchField: {
+            type: 'string',
+            description: 'For upsert: the column used to decide whether a row already exists.',
+            examples: ['Email', 'ClientId'],
+          },
+          records: {
+            type: 'array',
+            description:
+              'Explicit batch of records for create/update, as [{ id?, fields }]. Use instead of `fields` when writing more than one row.',
+            examples: [[{ fields: { Name: 'Acme Ltd' } }]],
+          },
         },
       },
       aiSelectionCriteria: {

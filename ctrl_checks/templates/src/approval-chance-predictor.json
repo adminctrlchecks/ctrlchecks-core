@@ -1,0 +1,323 @@
+{
+  "id": "ea499f25-1616-40d7-9d64-8f827805e79e",
+  "name": "Approval Chance Predictor",
+  "description": "Get a realistic percentage chance of approval before you submit a verification application, based on the same details reviewers use to reject applications. Built for businesses applying for verification and for agencies managing many client applications at once.",
+  "category": "Business Verification & Compliance",
+  "nodes": [
+    {
+      "id": "form_details",
+      "data": {
+        "icon": "FileText",
+        "type": "form",
+        "label": "Application Details Form",
+        "config": {
+          "fields": [
+            {
+              "key": "businessName",
+              "type": "text",
+              "label": "Business Name",
+              "required": true
+            },
+            {
+              "key": "address",
+              "type": "text",
+              "label": "Business Address",
+              "required": true
+            },
+            {
+              "key": "website",
+              "type": "url",
+              "label": "Website URL",
+              "required": true
+            },
+            {
+              "key": "contactEmail",
+              "type": "email",
+              "label": "Contact Email",
+              "required": true
+            },
+            {
+              "key": "documents",
+              "type": "file",
+              "label": "Supporting Documents",
+              "required": false
+            }
+          ],
+          "formTitle": "Approval Chance Check",
+          "submitButtonText": "Predict My Chances"
+        },
+        "category": "triggers",
+        "notes": {
+          "family": "Triggers",
+          "what": "Starts your workflow when someone fills out and submits a web form you built",
+          "overview": "Build a public CtrlChecks form and start the workflow when someone submits structured answers, files, or intake details.",
+          "tips": [
+            "Use friendly labels for submitters and stable internal names for workflow mapping.",
+            "Map answers with {{$json.customer_email}} or {{$json.data.customer_email}} after checking a test execution.",
+            "Use select or radio options for values that drive routing, approvals, reporting, or branch conditions.",
+            "Turn CAPTCHA on for public forms that can create tickets, leads, or notifications.",
+            "Require authentication only for internal or sensitive forms.",
+            "Changing an internal name after downstream nodes are mapped requires updating those mappings too."
+          ],
+          "docsHref": "/docs/nodes/form",
+          "why": "Collects the exact details a verification reviewer checks, so the prediction is based on the same inputs a real reviewer would see."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      }
+    },
+    {
+      "id": "airtable_lookup_readiness",
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Lookup Existing Readiness Record",
+        "config": {
+          "baseId": "",
+          "tableId": "Clients",
+          "operation": "read",
+          "filterByFormula": "{Email}='{{input.contactEmail}}'",
+          "maxRecords": 1
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Pulls this client's existing readiness record so the prediction builds on the earlier Readiness Checker result instead of starting from nothing. Filtered to one client — without the filter the AI would receive every client in your table."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      }
+    },
+    {
+      "id": "ai_predict_chance",
+      "data": {
+        "icon": "Brain",
+        "type": "openai_gpt",
+        "label": "Compare Against Rejection Reasons",
+        "config": {
+          "model": "gpt-4o-mini",
+          "prompt": "Compare this business against the most common reasons Meta/Google verification applications get rejected (mismatched business details, missing privacy policy, unverifiable address, inconsistent documents). Business: {{input.businessName}}, address {{input.address}}, website {{input.website}}. Existing readiness data: {{input.records}}. List every risk factor found, one per line starting with \"RISK:\".",
+          "temperature": 0.3
+        },
+        "category": "ai",
+        "notes": {
+          "family": "AI",
+          "what": "Sends your prompt to OpenAI's ChatGPT and gets back an AI-written response",
+          "overview": "Calls OpenAI through the legacy LLM adapter. Prompt is the main input; Messages is only a fallback when Prompt is blank. Temperature and Memory are visible legacy fields ignored by the current executor.",
+          "tips": [],
+          "docsHref": "/docs/nodes/openai_gpt",
+          "why": "Compares the business against the reasons applications actually get rejected. It outputs one 'RISK:' line per problem found, which the next step counts."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      }
+    },
+    {
+      "id": "js_percentage",
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Convert to Approval Percentage",
+        "config": {
+          "code": "const text = input.response || input.text || '';\nconst risks = text.split('\\n').map(l => l.trim()).filter(l => l.toUpperCase().startsWith('RISK:'));\nconst percentage = Math.max(5, 95 - risks.length * 12);\nreturn { ...input, approvalPercentage: percentage, risks };"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Turns the AI's risk lines into a single number a client understands. Each risk costs 12 points off a 95% base — change those numbers here to make the estimate stricter or softer."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      }
+    },
+    {
+      "id": "airtable_save_prediction",
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Save Prediction",
+        "config": {
+          "baseId": "",
+          "fields": {
+            "Risks": "{{input.risks}}",
+            "ApprovalChance": "{{input.approvalPercentage}}"
+          },
+          "tableId": "Clients",
+          "recordId": "{{input.records.0.id}}",
+          "operation": "update"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Writes the score back onto the same client row so the prediction is on file next time anyone opens the record."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 300
+      }
+    },
+    {
+      "id": "slack_notify_team",
+      "data": {
+        "icon": "MessageCircle",
+        "type": "slack_message",
+        "label": "Notify Verification Team",
+        "config": {
+          "channel": "#verifications",
+          "message": ":bar_chart: Approval prediction for *{{input.businessName}}*: {{input.approvalPercentage}}% likely to pass.\nRisks: {{input.risks}}"
+        },
+        "category": "output",
+        "notes": {
+          "family": "Communication",
+          "what": "Sends messages using a Slack app or bot connection",
+          "overview": "Send Slack bot messages to channels, direct messages, or existing threads through a saved Slack OAuth2 connection. Use it for workplace alerts, support replies, incident updates, approvals, report summaries, and deployment notifications.",
+          "tips": [
+            "Select a Slack OAuth2 connection; do not paste bot tokens into message fields",
+            "The Slack app needs chat:write, and the bot must be invited before it can post in private channels",
+            "Use {{$json.channelId}} and {{$json.threadTs}} from Slack Trigger to reply in the same conversation",
+            "Keep Message filled as readable fallback text even when Blocks contains a rich Block Kit layout",
+            "Connect downstream service accounts separately; Slack OAuth2 only authorizes the Slack send"
+          ],
+          "docsHref": "/docs/nodes/slack_message",
+          "why": "Gives your verification team a heads-up on weak applications before the client chases them."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 205
+      }
+    },
+    {
+      "id": "gmail_send_prediction",
+      "data": {
+        "icon": "Mail",
+        "type": "google_gmail",
+        "label": "Email Client the Result",
+        "config": {
+          "body": "Hi {{input.businessName}},\n\nBased on your current details, we estimate a {{input.approvalPercentage}}% chance of passing verification on your next attempt.\n\nWe will follow up with next steps shortly.",
+          "subject": "Your estimated approval chance: {{input.approvalPercentage}}%",
+          "operation": "send",
+          "recipientEmails": "{{input.contactEmail}}",
+          "recipientSource": "manual_entry"
+        },
+        "category": "output",
+        "notes": {
+          "family": "Communication",
+          "what": "Send emails from your Gmail account or read and search messages in your inbox",
+          "overview": "Send, list, get, or search Gmail messages. Send recipients can be typed manually or extracted from upstream/fallback Google Sheets rows.",
+          "tips": [
+            "Connect Google OAuth in Connections; do not paste tokens into workflow fields",
+            "Gmail search syntax: from:, subject:, is:unread, has:attachment",
+            "List/Search only return {id, threadId} per message â€” use a Get step with that id for full content",
+            "Body is plain text only",
+            "Get returns Gmail's raw API message; the body text is base64url-encoded inside message.payload.body.data",
+            "Use search to filter messages before getting details"
+          ],
+          "docsHref": "/docs/nodes/google_gmail",
+          "why": "Sends the client their number. This is the deliverable — everything above exists to make this email accurate."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 395
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "form_details",
+      "target": "airtable_lookup_readiness"
+    },
+    {
+      "id": "e2",
+      "source": "airtable_lookup_readiness",
+      "target": "ai_predict_chance"
+    },
+    {
+      "id": "e3",
+      "source": "ai_predict_chance",
+      "target": "js_percentage"
+    },
+    {
+      "id": "e4",
+      "source": "js_percentage",
+      "target": "airtable_save_prediction"
+    },
+    {
+      "id": "e5",
+      "source": "airtable_save_prediction",
+      "target": "slack_notify_team"
+    },
+    {
+      "id": "e6",
+      "source": "airtable_save_prediction",
+      "target": "gmail_send_prediction"
+    }
+  ],
+  "difficulty": "Beginner",
+  "estimated_setup_time": 21,
+  "tags": [
+    "verification",
+    "compliance",
+    "ai",
+    "airtable",
+    "slack",
+    "prediction"
+  ],
+  "preview_image": null,
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2,
+  "created_by": null,
+  "updated_by": null,
+  "created_at": "2026-07-14T11:20:27.820Z",
+  "updated_at": "2026-07-14T11:20:27.820Z"
+}

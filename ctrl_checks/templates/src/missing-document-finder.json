@@ -1,0 +1,311 @@
+{
+  "id": "58703e5c-2ec9-437f-9b05-264a017e5ce8",
+  "name": "Missing Document Finder",
+  "description": "Stop chasing clients for 'one more document.' Upload whatever paperwork a client has sent so far, in any order, and this workflow figures out exactly which required documents are still missing and messages the client a specific checklist on WhatsApp.",
+  "category": "Business Verification & Compliance",
+  "nodes": [
+    {
+      "id": "form_doc_upload",
+      "data": {
+        "icon": "FileText",
+        "type": "form",
+        "label": "Document Upload Form",
+        "config": {
+          "fields": [
+            {
+              "key": "clientName",
+              "type": "text",
+              "label": "Client / Business Name",
+              "required": true
+            },
+            {
+              "key": "clientType",
+              "type": "select",
+              "label": "Client Type",
+              "required": true,
+              "options": [
+                "Individual",
+                "Business"
+              ]
+            },
+            {
+              "key": "document",
+              "type": "file",
+              "label": "Document",
+              "required": true
+            },
+            {
+              "key": "whatsappNumber",
+              "type": "tel",
+              "label": "WhatsApp Number",
+              "required": true
+            }
+          ],
+          "formTitle": "Upload Your Documents",
+          "formDescription": "Upload whatever documents you have — in any order. We will tell you what is still missing.",
+          "submitButtonText": "Upload"
+        },
+        "category": "triggers",
+        "notes": {
+          "family": "Triggers",
+          "what": "Starts your workflow when someone fills out and submits a web form you built",
+          "overview": "Build a public CtrlChecks form and start the workflow when someone submits structured answers, files, or intake details.",
+          "tips": [
+            "Use friendly labels for submitters and stable internal names for workflow mapping.",
+            "Map answers with {{$json.customer_email}} or {{$json.data.customer_email}} after checking a test execution.",
+            "Use select or radio options for values that drive routing, approvals, reporting, or branch conditions.",
+            "Turn CAPTCHA on for public forms that can create tickets, leads, or notifications.",
+            "Require authentication only for internal or sensitive forms.",
+            "Changing an internal name after downstream nodes are mapped requires updating those mappings too."
+          ],
+          "docsHref": "/docs/nodes/form",
+          "why": "Lets a client upload whatever they have, in any order. The client type chosen here decides which checklist applies."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      }
+    },
+    {
+      "id": "ai_classify_document",
+      "data": {
+        "icon": "Brain",
+        "type": "google_gemini",
+        "label": "Identify Document Type",
+        "config": {
+          "model": "gemini-3.5-flash",
+          "prompt": "Look at this uploaded file (name and content provided): {{input.document}}. Identify which document type it most likely is, choosing from: GST Certificate, PAN Card, Bank Statement, Address Proof, Business Registration, Photo ID, Other. Reply with only the document type name."
+        },
+        "category": "ai",
+        "notes": {
+          "family": "AI",
+          "what": "Uses Google's Gemini AI to generate text, answer questions, or analyze content",
+          "overview": "Calls Google Gemini through the LLM adapter and returns response, model, usage, and finishReason. The current executor resolves Gemini credentials from connection/wallet/key-pool/direct config, and it does not preserve incoming fields on success.",
+          "tips": [],
+          "docsHref": "/docs/nodes/google_gemini",
+          "why": "Identifies what each uploaded file actually is, so clients do not have to label anything correctly."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      }
+    },
+    {
+      "id": "airtable_log_document",
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Log Received Document",
+        "config": {
+          "baseId": "",
+          "fields": {
+            "Client": "{{input.clientName}}",
+            "DocumentType": "{{input.response}}"
+          },
+          "tableId": "DocumentsReceived",
+          "operation": "create"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Records the document against the client, building the running history the check below depends on."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      }
+    },
+    {
+      "id": "js_check_missing",
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Compare Against Checklist",
+        "config": {
+          "code": "const required = { 'Individual': ['PAN Card','Address Proof','Photo ID'], 'Business': ['GST Certificate','PAN Card','Bank Statement','Business Registration'] };\nconst checklist = required[input.clientType] || required['Business'];\n// Every document logged for this client so far, from the Airtable read above.\nconst received = (input.records || []).map(r => (r.fields && r.fields.DocumentType) || \"\").filter(Boolean);\nconst missing = checklist.filter(doc => !received.includes(doc));\nreturn { ...input, received, missing, isComplete: missing.length === 0 };"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Compares the full set received against the required checklist. The two checklists — Individual and Business — are defined here."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 300
+      }
+    },
+    {
+      "id": "ai_write_missing_message",
+      "data": {
+        "icon": "Brain",
+        "type": "openai_gpt",
+        "label": "Write Missing Docs Message",
+        "config": {
+          "model": "gpt-4o-mini",
+          "prompt": "Write a short, friendly WhatsApp message to {{input.clientName}} listing exactly which documents are still missing: {{input.missing}}. If nothing is missing, congratulate them that their file is complete. Keep it under 3 sentences.",
+          "temperature": 0.6
+        },
+        "category": "ai",
+        "notes": {
+          "family": "AI",
+          "what": "Sends your prompt to OpenAI's ChatGPT and gets back an AI-written response",
+          "overview": "Calls OpenAI through the legacy LLM adapter. Prompt is the main input; Messages is only a fallback when Prompt is blank. Temperature and Memory are visible legacy fields ignored by the current executor.",
+          "tips": [],
+          "docsHref": "/docs/nodes/openai_gpt",
+          "why": "Writes a short, friendly chase message rather than a blunt system list."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 300
+      }
+    },
+    {
+      "id": "whatsapp_send_missing",
+      "data": {
+        "icon": "MessageCircle",
+        "type": "whatsapp",
+        "label": "Send Missing Docs List",
+        "config": {
+          "to": "{{input.whatsappNumber}}",
+          "text": "{{input.response}}",
+          "resource": "message",
+          "operation": "sendText"
+        },
+        "category": "output",
+        "notes": {
+          "family": "Communication",
+          "what": "Sends WhatsApp messages to customers via the official WhatsApp Business API",
+          "overview": "Send WhatsApp messages, media, locations, contact cards, approved templates, and interactive buttons/lists through the WhatsApp Business Cloud API. Connect a WhatsApp/Facebook account under Connections â€” credentials are resolved automatically. The visual panel exposes the Message resource; Contact, Conversation, Template, Campaign, and AI Agent resources are runtime-supported for advanced or AI-generated workflows.",
+          "tips": [
+            "Connect a WhatsApp account under Connections â€” no access tokens entered on the node itself",
+            "Phone numbers should be in E.164 format, e.g. +12345678900",
+            "First message to a new contact must use Send Template; free-form Send Text only works inside the 24-hour customer service window"
+          ],
+          "docsHref": "/docs/nodes/whatsapp",
+          "why": "Sends the client exactly what is still outstanding, which is what stops the back-and-forth."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2020,
+        "y": 300
+      }
+    },
+    {
+      "id": "airtable_read_prior_docs",
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      },
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Read All Documents Received So Far",
+        "category": "data",
+        "config": {
+          "baseId": "",
+          "tableId": "DocumentsReceived",
+          "operation": "read",
+          "filterByFormula": "{Client}='{{input.clientName}}'",
+          "maxRecords": 100
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Reads everything this client has ever sent. Without this the checklist only sees the file just uploaded and reports almost everything as missing."
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "form_doc_upload",
+      "target": "ai_classify_document"
+    },
+    {
+      "id": "e2",
+      "source": "ai_classify_document",
+      "target": "airtable_log_document"
+    },
+    {
+      "id": "e3",
+      "source": "airtable_log_document",
+      "target": "airtable_read_prior_docs"
+    },
+    {
+      "id": "e4",
+      "source": "js_check_missing",
+      "target": "ai_write_missing_message"
+    },
+    {
+      "id": "e5",
+      "source": "ai_write_missing_message",
+      "target": "whatsapp_send_missing"
+    },
+    {
+      "id": "e_airtable_read_prior_docs_js_check_missing",
+      "source": "airtable_read_prior_docs",
+      "target": "js_check_missing"
+    }
+  ],
+  "difficulty": "Beginner",
+  "estimated_setup_time": 18,
+  "tags": [
+    "verification",
+    "onboarding",
+    "documents",
+    "ai",
+    "whatsapp",
+    "airtable"
+  ],
+  "preview_image": null,
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2,
+  "created_by": null,
+  "updated_by": null,
+  "created_at": "2026-07-14T11:20:27.820Z",
+  "updated_at": "2026-07-14T11:20:27.820Z"
+}

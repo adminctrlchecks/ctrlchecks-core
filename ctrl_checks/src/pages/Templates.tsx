@@ -14,6 +14,9 @@ import { Input } from '@/components/ui/input';
 import { getActiveTemplates, copyTemplate } from '@/lib/api/templates';
 import { useToast } from '@/hooks/use-toast';
 import { AppChromeHeader } from '@/components/layout/AppChromeHeader';
+import { TemplateConnections } from '@/components/templates/TemplateConnections';
+import { fetchConnectionCatalog, type ConnectionCatalogEntry } from '@/lib/connections-catalog';
+import { getTemplateConnections } from '@/lib/templateConnections';
 import type { Database } from '@/integrations/aws/types';
 
 type Template = Database['public']['Tables']['templates']['Row'] & {
@@ -26,6 +29,8 @@ export default function Templates() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [catalog, setCatalog] = useState<ConnectionCatalogEntry[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -49,6 +54,26 @@ export default function Templates() {
   useEffect(() => {
     loadTemplates();
   }, [loadTemplates]);
+
+  // The connection catalog tells us which node types map to which connectable
+  // service. It is public and static, so a failure here should degrade the cards
+  // quietly rather than block the gallery.
+  useEffect(() => {
+    let cancelled = false;
+    fetchConnectionCatalog()
+      .then((entries) => {
+        if (!cancelled) setCatalog(entries);
+      })
+      .catch((error) => {
+        console.error('Failed to load connection catalog:', error);
+      })
+      .finally(() => {
+        if (!cancelled) setCatalogLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handleCopyTemplate(template: Template) {
     try {
@@ -137,6 +162,15 @@ export default function Templates() {
                       ))}
                     </div>
                   )}
+                  <div className="border-t border-border/50 pt-3">
+                    <TemplateConnections
+                      connections={getTemplateConnections(
+                        template.nodes as Parameters<typeof getTemplateConnections>[0],
+                        catalog,
+                      )}
+                      loading={catalogLoading}
+                    />
+                  </div>
                   <div className="flex items-center justify-between pt-2">
                     <div className="flex items-center gap-1 text-sm text-muted-foreground">
                       <TrendingUp className="h-4 w-4" />

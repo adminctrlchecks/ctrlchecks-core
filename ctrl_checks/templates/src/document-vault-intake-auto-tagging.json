@@ -1,0 +1,187 @@
+{
+  "id": "0537e8d3-31d1-4f93-b2fb-7ae96cbb9dc1",
+  "name": "Document Vault — Intake & Auto-Tagging",
+  "description": "Client documents scattered across email, WhatsApp and Drive make \"find that PAN card from March\" take forever. This workflow tags every document the moment it arrives through a simple upload form, so it can be found later. Pairs with \"Document Vault — Smart Search\". (No native Drive file-watch trigger exists yet, so intake happens via the upload form rather than a watched folder.)",
+  "category": "Business Verification & Compliance",
+  "nodes": [
+    {
+      "id": "form_vault_upload",
+      "data": {
+        "icon": "FileText",
+        "type": "form",
+        "label": "Document Intake",
+        "config": {
+          "fields": [
+            {
+              "key": "clientName",
+              "type": "text",
+              "label": "Client Name",
+              "required": true
+            },
+            {
+              "key": "document",
+              "type": "file",
+              "label": "Document",
+              "required": true
+            }
+          ],
+          "formTitle": "Upload a Client Document",
+          "submitButtonText": "Upload"
+        },
+        "category": "triggers",
+        "notes": {
+          "family": "Triggers",
+          "what": "Starts your workflow when someone fills out and submits a web form you built",
+          "overview": "Build a public CtrlChecks form and start the workflow when someone submits structured answers, files, or intake details.",
+          "tips": [
+            "Use friendly labels for submitters and stable internal names for workflow mapping.",
+            "Map answers with {{$json.customer_email}} or {{$json.data.customer_email}} after checking a test execution.",
+            "Use select or radio options for values that drive routing, approvals, reporting, or branch conditions.",
+            "Turn CAPTCHA on for public forms that can create tickets, leads, or notifications.",
+            "Require authentication only for internal or sensitive forms.",
+            "Changing an internal name after downstream nodes are mapped requires updating those mappings too."
+          ],
+          "docsHref": "/docs/nodes/form",
+          "why": "The intake point. A form is used rather than a watched Drive folder because the platform has no file-watch trigger yet."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      }
+    },
+    {
+      "id": "ai_tag_document",
+      "data": {
+        "icon": "Brain",
+        "type": "google_gemini",
+        "label": "Tag Document (Client / Type / Date)",
+        "config": {
+          "model": "gemini-3.5-flash",
+          "prompt": "Read this uploaded file: {{input.document}}, for client {{input.clientName}}. Identify: document type (GST/PAN/Bank Statement/Address Proof/Other), and the date on the document if visible. Reply as JSON: {\"documentType\": \"...\", \"documentDate\": \"...\"}."
+        },
+        "category": "ai",
+        "notes": {
+          "family": "AI",
+          "what": "Uses Google's Gemini AI to generate text, answer questions, or analyze content",
+          "overview": "Calls Google Gemini through the LLM adapter and returns response, model, usage, and finishReason. The current executor resolves Gemini credentials from connection/wallet/key-pool/direct config, and it does not preserve incoming fields on success.",
+          "tips": [],
+          "docsHref": "/docs/nodes/google_gemini",
+          "why": "Reads the file and identifies what it is and what date it carries, so nobody has to tag documents by hand."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      }
+    },
+    {
+      "id": "airtable_store_tagged_doc",
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Store File Link + Tags",
+        "config": {
+          "baseId": "",
+          "fields": {
+            "Client": "{{input.clientName}}",
+            "FileLink": "{{input.document}}",
+            "DocumentDate": "{{input.documentDate}}",
+            "DocumentType": "{{input.documentType}}"
+          },
+          "tableId": "DocumentVault",
+          "operation": "create"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Stores the file link with its tags. This table is what the Smart Search template reads — the two templates are a pair."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      }
+    },
+    {
+      "id": "js_parse_doc_tags",
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      },
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Parse Document Tags",
+        "category": "data",
+        "config": {
+          "code": "let parsed = {};\ntry {\n  const text = input.response || input.text || input.content || \"{}\";\n  const m = text.match(/\\{[\\s\\S]*\\}/);\n  parsed = m ? JSON.parse(m[0]) : {};\n} catch (e) { parsed = {}; }\nreturn {\n  ...input,\n  documentType: parsed.documentType || \"Other\",\n  documentDate: parsed.documentDate || \"\"\n};",
+          "timeout": 5000
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Turns the AI's JSON reply into real fields. Without this step the tags are written to Airtable blank."
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "form_vault_upload",
+      "target": "ai_tag_document"
+    },
+    {
+      "id": "e2",
+      "source": "ai_tag_document",
+      "target": "js_parse_doc_tags"
+    },
+    {
+      "id": "e_js_parse_doc_tags_airtable_store_tagged_doc",
+      "source": "js_parse_doc_tags",
+      "target": "airtable_store_tagged_doc"
+    }
+  ],
+  "difficulty": "Advanced",
+  "estimated_setup_time": 12,
+  "tags": [
+    "document-management",
+    "airtable",
+    "ai",
+    "intake",
+    "tagging"
+  ],
+  "preview_image": null,
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2,
+  "created_by": null,
+  "updated_by": null,
+  "created_at": "2026-07-14T11:20:27.820Z",
+  "updated_at": "2026-07-14T11:20:27.820Z"
+}

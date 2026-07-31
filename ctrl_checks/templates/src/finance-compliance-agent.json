@@ -1,0 +1,495 @@
+{
+  "id": "9fff0187-8a5b-4f12-bf80-0d3b88737190",
+  "name": "Finance / Compliance Agent",
+  "description": "Automated finance operations agent that processes invoices and expenses, categorizes transactions, performs compliance checks, and triggers alerts for anomalies. Reduces manual finance workload.",
+  "category": "Finance & Accounting",
+  "nodes": [
+    {
+      "id": "webhook_finance_1",
+      "data": {
+        "icon": "Webhook",
+        "type": "webhook",
+        "label": "Finance Webhook",
+        "config": {
+          "method": "POST"
+        },
+        "category": "triggers",
+        "notes": {
+          "family": "Triggers",
+          "what": "Starts your workflow the moment another app sends it data — like a doorbell for your automation",
+          "overview": "Starts a workflow when an external app, website form, payment system, or internal service sends data to the generated CtrlChecks webhook URL. Captures the request body, headers, query values, and method for the next node.",
+          "tips": [],
+          "docsHref": "/docs/nodes/webhook",
+          "why": "Receives transactions from your accounting or expense system. This endpoint is currently open — put a shared secret in front of it before using real financial data."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      }
+    },
+    {
+      "id": "js_extract_transaction",
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Extract Transaction Data",
+        "config": {
+          "code": "return { type: input.type || input.transaction_type || 'expense', amount: parseFloat(input.amount || 0), vendor: input.vendor || input.supplier || '', description: input.description || input.notes || '', date: input.date || input.transaction_date || new Date().toISOString().split('T')[0], category: input.category || '', invoice_number: input.invoice_number || input.invoice_id || '', employee_id: input.employee_id || input.employee || '', receipt_url: input.receipt_url || input.file_url || '', timestamp: new Date().toISOString() };"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Normalises the many field names different finance systems use into one shape the rest of the workflow can rely on."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      }
+    },
+    {
+      "id": "ai_categorize",
+      "data": {
+        "icon": "Brain",
+        "type": "openai_gpt",
+        "label": "Categorize Transaction",
+        "config": {
+          "model": "gpt-4o-mini",
+          "memory": 3,
+          "prompt": "Categorize this financial transaction. Return JSON: { category: string (one of: Travel, Meals, Software, Hardware, Office Supplies, Marketing, Professional Services, Utilities, Other), confidence: number (0-1), reasoning: string }\\n\\nTransaction: Vendor: {{input.vendor}}, Description: {{input.description}}, Amount: ${{input.amount}}",
+          "temperature": 0.3
+        },
+        "category": "ai",
+        "notes": {
+          "family": "AI",
+          "what": "Sends your prompt to OpenAI's ChatGPT and gets back an AI-written response",
+          "overview": "Calls OpenAI through the legacy LLM adapter. Prompt is the main input; Messages is only a fallback when Prompt is blank. Temperature and Memory are visible legacy fields ignored by the current executor.",
+          "tips": [],
+          "docsHref": "/docs/nodes/openai_gpt",
+          "why": "Assigns a spend category. Doing this with AI rather than keyword rules is what handles vendors nobody has seen before."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      }
+    },
+    {
+      "id": "js_parse_category",
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Parse Category",
+        "config": {
+          "code": "try { const content = input.content || input.text || input.response || '{}'; const jsonMatch = content.match(/\\{[\\s\\S]*\\}/); if (jsonMatch) { const parsed = JSON.parse(jsonMatch[0]); return { category: parsed.category || 'Other', confidence: parsed.confidence || 0.5, reasoning: parsed.reasoning || 'No reasoning', transaction: input }; } return { category: 'Other', confidence: 0.5, reasoning: 'Could not parse', transaction: input }; } catch (e) { return { category: 'Other', confidence: 0.5, reasoning: 'Error: ' + e.message, transaction: input }; }"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Extracts the category and confidence from the AI's JSON reply."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      }
+    },
+    {
+      "id": "js_compliance_check",
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Compliance Check",
+        "config": {
+          "code": "// Change this to your own approval threshold when you set up the template.\nconst approvalThreshold = Number(input.approvalThreshold || 10000);\nconst amount = parseFloat(input.transaction.amount || 0); const category = input.category; const violations = []; if (amount > approvalThreshold) { violations.push({ type: 'high_amount', message: 'Transaction exceeds  }); } if (amount < 0) { violations.push({ type: 'negative_amount', message: 'Negative amount detected - possible refund or error' }); } if (!category || category === 'Other') { violations.push({ type: 'uncategorized', message: 'Transaction is uncategorized - needs review' }); } if (!input.transaction.vendor || input.transaction.vendor.trim() === '') { violations.push({ type: 'missing_vendor', message: 'Missing vendor information' }); } return { compliant: violations.length === 0, violations, transaction: input.transaction, category: input.category, confidence: input.confidence }; + approvalThreshold + ' - requires approval' }); } if (amount < 0) { violations.push({ type: 'negative_amount', message: 'Negative amount detected - possible refund or error' }); } if (!category || category === 'Other') { violations.push({ type: 'uncategorized', message: 'Transaction is uncategorized - needs review' }); } if (!input.transaction.vendor || input.transaction.vendor.trim() === '') { violations.push({ type: 'missing_vendor', message: 'Missing vendor information' }); } return { compliant: violations.length === 0, violations, transaction: input.transaction, category: input.category, confidence: input.confidence };"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Applies your actual policy rules — amount ceiling, missing vendor, uncategorised spend. The approval threshold lives here; change it to match your policy."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 300
+      }
+    },
+    {
+      "id": "if_compliant_check",
+      "data": {
+        "icon": "GitBranch",
+        "type": "if_else",
+        "label": "Check Compliance",
+        "config": {
+          "conditions": [
+            {
+              "field": "$json.compliant",
+              "operator": "equals",
+              "value": true
+            }
+          ],
+          "combineOperation": "AND"
+        },
+        "category": "logic",
+        "notes": {
+          "family": "Logic",
+          "what": "Makes a yes/no decision: if something is true, go one way; otherwise go another",
+          "overview": "Makes a yes/no decision from previous-step data and routes matching work through TRUE and non-matching work through FALSE.",
+          "tips": [
+            "Use the builder for normal setup; use JSON mode only when pasting prepared condition objects.",
+            "Choose AND when every row must match; choose OR when any row can match.",
+            "Use equals for statuses and categories, greater-than operators for numeric thresholds, and contains for text or lists.",
+            "Connect both TRUE and FALSE outputs so no business case silently disappears."
+          ],
+          "docsHref": "/docs/nodes/if_else",
+          "why": "Splits clean transactions from ones needing a human. Everything below exists on one side of this decision."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 300
+      }
+    },
+    {
+      "id": "db_save_transaction",
+      "data": {
+        "icon": "Database",
+        "type": "postgresql",
+        "label": "Save Transaction",
+        "config": {
+          "query": "INSERT INTO transactions (type, amount, vendor, description, category, date, invoice_number, employee_id, status, created_at) VALUES ('{{input.transaction.type}}', {{input.transaction.amount}}, '{{input.transaction.vendor}}', '{{input.transaction.description}}', '{{input.category}}', '{{input.transaction.date}}', '{{input.transaction.invoice_number}}', '{{input.transaction.employee_id}}', 'approved', now())"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Connects to a PostgreSQL database to run queries or insert data",
+          "overview": "Run PostgreSQL executeQuery, insert, update, or delete through the real database executor. The visual panel now uses runtime operation values and Parameters maps to the executor parameter array.",
+          "tips": [
+            "Use executeQuery for raw SQL with $1, $2 placeholders and Parameters as a JSON array.",
+            "Insert returns inserted/count; update and delete return rows/rowsAffected because PostgreSQL uses RETURNING *.",
+            "The backend schema still lists connectionString, but the executor validates host, username, password, database, port, and ssl.",
+            "Update and delete require Where; the executor refuses missing where clauses.",
+            "Store database passwords in Connections rather than ordinary workflow fields."
+          ],
+          "docsHref": "/docs/nodes/postgresql",
+          "why": "Records the approved transaction with its category, in your own finance database."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2020,
+        "y": 205
+      }
+    },
+    {
+      "id": "log_approved",
+      "data": {
+        "icon": "FileOutput",
+        "type": "log_output",
+        "label": "Log Approved",
+        "config": {
+          "level": "info",
+          "message": "Transaction approved: ${{input.transaction.amount}} - {{input.category}} - {{input.transaction.vendor}}"
+        },
+        "category": "utility",
+        "notes": {
+          "family": "Utility",
+          "what": "Writes a message to your workflow's log for debugging or auditing",
+          "overview": "Log data for debugging and monitoring. View logs in the execution history. This is a terminal node â€” it cannot connect to further downstream nodes.",
+          "tips": [
+            "Use different levels for filtering",
+            "This node is terminal â€” it does not forward data to further nodes",
+            "Check execution history for logs"
+          ],
+          "docsHref": "/docs/nodes/log_output",
+          "why": "A quiet trail of what passed, for reconciliation."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2340,
+        "y": 205
+      }
+    },
+    {
+      "id": "db_save_flag",
+      "data": {
+        "icon": "Database",
+        "type": "postgresql",
+        "label": "Flag Transaction for Review",
+        "config": {
+          "query": "INSERT INTO transactions (type, amount, vendor, description, category, date, invoice_number, employee_id, status, violations, created_at) VALUES ('{{input.transaction.type}}', {{input.transaction.amount}}, '{{input.transaction.vendor}}', '{{input.transaction.description}}', '{{input.category}}', '{{input.transaction.date}}', '{{input.transaction.invoice_number}}', '{{input.transaction.employee_id}}', 'flagged', '{{input.violationsJson}}', now())"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Connects to a PostgreSQL database to run queries or insert data",
+          "overview": "Run PostgreSQL executeQuery, insert, update, or delete through the real database executor. The visual panel now uses runtime operation values and Parameters maps to the executor parameter array.",
+          "tips": [
+            "Use executeQuery for raw SQL with $1, $2 placeholders and Parameters as a JSON array.",
+            "Insert returns inserted/count; update and delete return rows/rowsAffected because PostgreSQL uses RETURNING *.",
+            "The backend schema still lists connectionString, but the executor validates host, username, password, database, port, and ssl.",
+            "Update and delete require Where; the executor refuses missing where clauses.",
+            "Store database passwords in Connections rather than ordinary workflow fields."
+          ],
+          "docsHref": "/docs/nodes/postgresql",
+          "why": "Saves the flagged transaction with its violations attached, so the review queue is a real queue and not just a Slack message."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2020,
+        "y": 395
+      }
+    },
+    {
+      "id": "js_format_alert",
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Format Alert",
+        "config": {
+          "code": "const violations = input.violations || []; const violationsText = violations.map(v => `- ${v.type}: ${v.message}`).join('\\n'); const violationsJson = JSON.stringify(violations);\nreturn { violationsJson, alert: `⚠️ Compliance Alert\\n\\nTransaction: $${input.transaction.amount}\\nVendor: ${input.transaction.vendor}\\nCategory: ${input.category}\\n\\nViolations:\\n${violationsText}\\n\\nAction Required: Review and approve manually.`, violations, transaction: input.transaction };"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Builds the human-readable alert and the machine-readable violations list used by the step above."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2340,
+        "y": 395
+      }
+    },
+    {
+      "id": "slack_finance_alert",
+      "data": {
+        "icon": "MessageCircle",
+        "type": "slack_webhook",
+        "label": "Notify Finance Team",
+        "config": {
+          "message": "{{input.alert}}",
+          "username": "Finance Bot",
+          "webhookUrl": "REPLACE_WITH_YOUR_SLACK_INCOMING_WEBHOOK_URL"
+        },
+        "category": "output",
+        "notes": {
+          "family": "Communication",
+          "what": "Posts simple messages through a saved Slack Incoming Webhook",
+          "overview": "Send a simple Slack message through a saved Slack Incoming Webhook connection.",
+          "tips": [
+            "Save the Incoming Webhook URL as a Connection",
+            "The target channel is chosen when the webhook is created in Slack",
+            "Use Slack Message for OAuth bot sending, dynamic channels, and Block Kit",
+            "This node's output replaces $json entirely â€” fields from before this node do not survive past it, so capture anything needed later first",
+            "Failures set status to \"failed\" and add a plain error field (no underscore), unlike most nodes' _error convention"
+          ],
+          "docsHref": "/docs/nodes/slack_webhook",
+          "why": "Notifies the finance channel immediately."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2660,
+        "y": 300
+      }
+    },
+    {
+      "id": "email_finance_alert",
+      "data": {
+        "icon": "Mail",
+        "type": "google_gmail",
+        "label": "Email Finance Manager",
+        "config": {
+          "to": "REPLACE_WITH_YOUR_FINANCE_TEAM_EMAIL",
+          "body": "{{input.alert}}",
+          "subject": "Compliance Alert - Transaction Review Required",
+          "operation": "send"
+        },
+        "category": "output",
+        "notes": {
+          "family": "Communication",
+          "what": "Send emails from your Gmail account or read and search messages in your inbox",
+          "overview": "Send, list, get, or search Gmail messages. Send recipients can be typed manually or extracted from upstream/fallback Google Sheets rows.",
+          "tips": [
+            "Connect Google OAuth in Connections; do not paste tokens into workflow fields",
+            "Gmail search syntax: from:, subject:, is:unread, has:attachment",
+            "List/Search only return {id, threadId} per message â€” use a Get step with that id for full content",
+            "Body is plain text only",
+            "Get returns Gmail's raw API message; the body text is base64url-encoded inside message.payload.body.data",
+            "Use search to filter messages before getting details"
+          ],
+          "docsHref": "/docs/nodes/google_gmail",
+          "why": "Emails the finance manager as well, because a Slack message at 6pm on Friday gets missed."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2980,
+        "y": 300
+      }
+    },
+    {
+      "id": "log_flagged",
+      "data": {
+        "icon": "FileOutput",
+        "type": "log_output",
+        "label": "Log Flagged",
+        "config": {
+          "level": "warn",
+          "message": "Transaction flagged: ${{input.transaction.amount}} - {{input.transaction.vendor}} - Violations: {{input.violations.length}}"
+        },
+        "category": "utility",
+        "notes": {
+          "family": "Utility",
+          "what": "Writes a message to your workflow's log for debugging or auditing",
+          "overview": "Log data for debugging and monitoring. View logs in the execution history. This is a terminal node â€” it cannot connect to further downstream nodes.",
+          "tips": [
+            "Use different levels for filtering",
+            "This node is terminal â€” it does not forward data to further nodes",
+            "Check execution history for logs"
+          ],
+          "docsHref": "/docs/nodes/log_output",
+          "why": "Records the flag for audit."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 3300,
+        "y": 300
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "webhook_finance_1",
+      "target": "js_extract_transaction"
+    },
+    {
+      "id": "e2",
+      "source": "js_extract_transaction",
+      "target": "ai_categorize"
+    },
+    {
+      "id": "e3",
+      "source": "ai_categorize",
+      "target": "js_parse_category"
+    },
+    {
+      "id": "e4",
+      "source": "js_parse_category",
+      "target": "js_compliance_check"
+    },
+    {
+      "id": "e5",
+      "source": "js_compliance_check",
+      "target": "if_compliant_check"
+    },
+    {
+      "id": "e6",
+      "source": "if_compliant_check",
+      "target": "db_save_transaction",
+      "sourceHandle": "true"
+    },
+    {
+      "id": "e7",
+      "source": "if_compliant_check",
+      "target": "db_save_flag",
+      "sourceHandle": "false"
+    },
+    {
+      "id": "e8",
+      "source": "db_save_transaction",
+      "target": "log_approved"
+    },
+    {
+      "id": "e9",
+      "source": "db_save_flag",
+      "target": "js_format_alert"
+    },
+    {
+      "id": "e10",
+      "source": "js_format_alert",
+      "target": "slack_finance_alert"
+    },
+    {
+      "id": "e11",
+      "source": "slack_finance_alert",
+      "target": "email_finance_alert"
+    },
+    {
+      "id": "e12",
+      "source": "email_finance_alert",
+      "target": "log_flagged"
+    }
+  ],
+  "difficulty": "Advanced",
+  "estimated_setup_time": 15,
+  "tags": [
+    "finance",
+    "compliance",
+    "invoicing",
+    "expenses",
+    "categorization",
+    "audit"
+  ],
+  "preview_image": null,
+  "is_featured": true,
+  "is_active": true,
+  "use_count": 1,
+  "version": 2,
+  "created_by": null,
+  "updated_by": null,
+  "created_at": "2026-04-24T14:32:25.195Z",
+  "updated_at": "2026-07-26T17:09:36.579Z"
+}

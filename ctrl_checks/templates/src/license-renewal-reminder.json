@@ -1,0 +1,305 @@
+{
+  "id": "c432444a-1326-42dc-ad12-7c1530d0be68",
+  "name": "License Renewal Reminder",
+  "description": "Licenses and registrations expire quietly — this workflow checks your stored expiry dates every day and sends escalating WhatsApp and email reminders at the 90, 30, and 7-day marks, so nothing lapses without warning.",
+  "category": "Business Verification & Compliance",
+  "nodes": [
+    {
+      "id": "schedule_daily_check",
+      "data": {
+        "icon": "Clock",
+        "type": "schedule",
+        "label": "Check Every 10 Minutes",
+        "config": {
+          "cron": "*/10 * * * *",
+          "timezone": "UTC"
+        },
+        "category": "triggers",
+        "notes": {
+          "family": "Triggers",
+          "what": "Works like an alarm clock — runs your workflow automatically at a specific time you set each day",
+          "overview": "Runs your workflow automatically on a schedule using a simple time picker. Select your time (HH:MM format) and timezone, and the workflow will execute daily at that time. Great for daily reports, periodic checks, or recurring tasks.",
+          "tips": [
+            "Use 24-hour format (e.g., 09:00 for 9 AM, 14:30 for 2:30 PM)",
+            "Select your timezone from the dropdown (IST, UTC, etc.)",
+            "Workflow runs daily at the specified time",
+            "Test with manual trigger first",
+            "Timezone conversion is handled automatically"
+          ],
+          "docsHref": "/docs/nodes/schedule",
+          "why": "Runs every 10 minutes and handles one licence per run, which clears any realistic renewal queue within the day."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      }
+    },
+    {
+      "id": "airtable_read_expiry_dates",
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Read Stored Expiry Dates",
+        "config": {
+          "baseId": "",
+          "tableId": "Licenses",
+          "operation": "read",
+          "filterByFormula": "AND({ExpiryDate} <= DATEADD(TODAY(), 90, 'days'), OR({LastRemindedMilestone} = '', {LastRemindedMilestone} != CONCATENATE('', DATETIME_DIFF({ExpiryDate}, TODAY(), 'days'))))",
+          "maxRecords": 1,
+          "sort": [
+            {
+              "field": "ExpiryDate",
+              "direction": "asc"
+            }
+          ]
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Picks up one licence approaching expiry that has not been reminded at its current milestone."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      }
+    },
+    {
+      "id": "js_flag_expiring",
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Select Licence & Milestone",
+        "config": {
+          "code": "const rec = (input.records || [])[0];\nif (!rec) return { ...input, shouldRemind: false };\nconst f = rec.fields || {};\nconst DAY = 86400000;\nconst daysLeft = Math.round((new Date(f.ExpiryDate).getTime() - Date.now()) / DAY);\n// Only the three milestones the template promises — not every day in between.\nlet milestone = null;\nif (daysLeft <= 7) milestone = 7;\nelse if (daysLeft <= 30) milestone = 30;\nelse if (daysLeft <= 90) milestone = 90;\nconst urgency = milestone === 7 ? \"urgent\" : milestone === 30 ? \"soon\" : \"upcoming\";\nreturn {\n  ...input,\n  shouldRemind: milestone !== null,\n  recordId: rec.id,\n  milestone,\n  urgency,\n  daysLeft,\n  licenseName: f.LicenseName || f.Name || \"your licence\",\n  expiryDate: f.ExpiryDate || \"\",\n  whatsappNumber: f.WhatsApp || \"\",\n  contactEmail: f.Email || \"\"\n};"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Works out how many days remain and which milestone band the licence is in. The 90 / 30 / 7 day bands are set here."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      }
+    },
+    {
+      "id": "whatsapp_send_reminder",
+      "data": {
+        "icon": "MessageCircle",
+        "type": "whatsapp",
+        "label": "Send WhatsApp Reminder",
+        "config": {
+          "to": "{{input.whatsappNumber}}",
+          "text": "Reminder: your {{input.licenseName}} expires in {{input.daysLeft}} days ({{input.urgency}}). Please renew soon to avoid a lapse.",
+          "resource": "message",
+          "operation": "sendText"
+        },
+        "category": "output",
+        "notes": {
+          "family": "Communication",
+          "what": "Sends WhatsApp messages to customers via the official WhatsApp Business API",
+          "overview": "Send WhatsApp messages, media, locations, contact cards, approved templates, and interactive buttons/lists through the WhatsApp Business Cloud API. Connect a WhatsApp/Facebook account under Connections â€” credentials are resolved automatically. The visual panel exposes the Message resource; Contact, Conversation, Template, Campaign, and AI Agent resources are runtime-supported for advanced or AI-generated workflows.",
+          "tips": [
+            "Connect a WhatsApp account under Connections â€” no access tokens entered on the node itself",
+            "Phone numbers should be in E.164 format, e.g. +12345678900",
+            "First message to a new contact must use Send Template; free-form Send Text only works inside the 24-hour customer service window"
+          ],
+          "docsHref": "/docs/nodes/whatsapp",
+          "why": "WhatsApp first, because renewal reminders sent only by email get missed."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 205
+      }
+    },
+    {
+      "id": "gmail_send_backup_reminder",
+      "data": {
+        "icon": "Mail",
+        "type": "google_gmail",
+        "label": "Send Backup Email Reminder",
+        "config": {
+          "body": "Your {{input.licenseName}} expires on {{input.expiryDate}} — {{input.daysLeft}} days from now. This is a backup reminder in case WhatsApp was missed.",
+          "subject": "License renewal reminder: {{input.licenseName}} ({{input.daysLeft}} days left)",
+          "operation": "send",
+          "recipientEmails": "{{input.contactEmail}}",
+          "recipientSource": "manual_entry"
+        },
+        "category": "output",
+        "notes": {
+          "family": "Communication",
+          "what": "Send emails from your Gmail account or read and search messages in your inbox",
+          "overview": "Send, list, get, or search Gmail messages. Send recipients can be typed manually or extracted from upstream/fallback Google Sheets rows.",
+          "tips": [
+            "Connect Google OAuth in Connections; do not paste tokens into workflow fields",
+            "Gmail search syntax: from:, subject:, is:unread, has:attachment",
+            "List/Search only return {id, threadId} per message â€” use a Get step with that id for full content",
+            "Body is plain text only",
+            "Get returns Gmail's raw API message; the body text is base64url-encoded inside message.payload.body.data",
+            "Use search to filter messages before getting details"
+          ],
+          "docsHref": "/docs/nodes/google_gmail",
+          "why": "Email as a second channel — a lapsed licence is expensive enough to justify telling someone twice."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 395
+      }
+    },
+    {
+      "id": "airtable_mark_reminded",
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 300
+      },
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Record Reminder Sent",
+        "category": "data",
+        "config": {
+          "baseId": "",
+          "tableId": "Licenses",
+          "operation": "update",
+          "recordId": "{{input.recordId}}",
+          "fields": {
+            "LastRemindedMilestone": "{{input.milestone}}"
+          }
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Records which milestone was sent. Delete this and the client receives the same reminder every 10 minutes until the licence expires."
+        }
+      }
+    },
+    {
+      "id": "if_shouldremind",
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      },
+      "data": {
+        "icon": "GitBranch",
+        "type": "if_else",
+        "label": "Any Licence at a Milestone?",
+        "category": "logic",
+        "config": {
+          "conditions": [
+            {
+              "field": "$json.shouldRemind",
+              "operator": "equals",
+              "value": true
+            }
+          ],
+          "combineOperation": "AND"
+        },
+        "notes": {
+          "family": "Logic",
+          "what": "Makes a yes/no decision: if something is true, go one way; otherwise go another",
+          "overview": "Makes a yes/no decision from previous-step data and routes matching work through TRUE and non-matching work through FALSE.",
+          "tips": [
+            "Use the builder for normal setup; use JSON mode only when pasting prepared condition objects.",
+            "Choose AND when every row must match; choose OR when any row can match.",
+            "Use equals for statuses and categories, greater-than operators for numeric thresholds, and contains for text or lists.",
+            "Connect both TRUE and FALSE outputs so no business case silently disappears."
+          ],
+          "docsHref": "/docs/nodes/if_else",
+          "why": "Most runs find nothing. Without this the workflow would send a blank WhatsApp and email on every empty poll."
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "schedule_daily_check",
+      "target": "airtable_read_expiry_dates"
+    },
+    {
+      "id": "e2",
+      "source": "airtable_read_expiry_dates",
+      "target": "js_flag_expiring"
+    },
+    {
+      "id": "e3",
+      "source": "if_shouldremind",
+      "target": "airtable_mark_reminded",
+      "sourceHandle": "true"
+    },
+    {
+      "id": "e4",
+      "source": "airtable_mark_reminded",
+      "target": "gmail_send_backup_reminder"
+    },
+    {
+      "id": "e_airtable_mark_reminded_whatsapp_send_reminder",
+      "source": "airtable_mark_reminded",
+      "target": "whatsapp_send_reminder"
+    },
+    {
+      "id": "e_js_flag_expiring_if_shouldremind",
+      "source": "js_flag_expiring",
+      "target": "if_shouldremind"
+    }
+  ],
+  "difficulty": "Beginner",
+  "estimated_setup_time": 15,
+  "tags": [
+    "compliance",
+    "reminders",
+    "whatsapp",
+    "airtable",
+    "scheduling"
+  ],
+  "preview_image": null,
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2,
+  "created_by": null,
+  "updated_by": null,
+  "created_at": "2026-07-14T11:20:27.820Z",
+  "updated_at": "2026-07-14T11:20:27.820Z"
+}

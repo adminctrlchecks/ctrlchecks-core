@@ -1,0 +1,446 @@
+{
+  "id": "5d82ee6f-2e45-472e-bb4e-94d77b251586",
+  "name": "Verification Readiness Checker",
+  "description": "Know whether your business will pass Meta or Google verification before you apply. This workflow scores your website and documents against the checks verifiers actually run — privacy policy, terms, matching business details — then emails and WhatsApps you a fix list so you can pass on the first try.",
+  "category": "Business Verification & Compliance",
+  "nodes": [
+    {
+      "id": "form_intake",
+      "data": {
+        "icon": "FileText",
+        "type": "form",
+        "label": "Client Intake Form",
+        "config": {
+          "fields": [
+            {
+              "key": "businessName",
+              "type": "text",
+              "label": "Business Name",
+              "required": true
+            },
+            {
+              "key": "website",
+              "type": "url",
+              "label": "Website URL",
+              "required": true
+            },
+            {
+              "key": "contactEmail",
+              "type": "email",
+              "label": "Contact Email",
+              "required": true
+            },
+            {
+              "key": "whatsappNumber",
+              "type": "tel",
+              "label": "WhatsApp Number",
+              "required": false
+            },
+            {
+              "key": "gstDocument",
+              "type": "file",
+              "label": "GST Certificate",
+              "required": true
+            },
+            {
+              "key": "panDocument",
+              "type": "file",
+              "label": "PAN Card",
+              "required": true
+            },
+            {
+              "key": "bankStatement",
+              "type": "file",
+              "label": "Bank Statement",
+              "required": true
+            }
+          ],
+          "formTitle": "Business Verification Intake",
+          "successMessage": "Thanks! We are analyzing your business now.",
+          "formDescription": "Tell us about your business so we can check your verification readiness.",
+          "submitButtonText": "Check My Readiness"
+        },
+        "category": "triggers",
+        "notes": {
+          "family": "Triggers",
+          "what": "Starts your workflow when someone fills out and submits a web form you built",
+          "overview": "Build a public CtrlChecks form and start the workflow when someone submits structured answers, files, or intake details.",
+          "tips": [
+            "Use friendly labels for submitters and stable internal names for workflow mapping.",
+            "Map answers with {{$json.customer_email}} or {{$json.data.customer_email}} after checking a test execution.",
+            "Use select or radio options for values that drive routing, approvals, reporting, or branch conditions.",
+            "Turn CAPTCHA on for public forms that can create tickets, leads, or notifications.",
+            "Require authentication only for internal or sensitive forms.",
+            "Changing an internal name after downstream nodes are mapped requires updating those mappings too."
+          ],
+          "docsHref": "/docs/nodes/form",
+          "why": "Collects everything the readiness check needs in one pass — details and documents together, so the client is not chased twice."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      }
+    },
+    {
+      "id": "airtable_create_client",
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Create Client Record",
+        "config": {
+          "baseId": "",
+          "fields": {
+            "Name": "{{input.businessName}}",
+            "Email": "{{input.contactEmail}}",
+            "Status": "New",
+            "Website": "{{input.website}}",
+            "WhatsApp": "{{input.whatsappNumber}}"
+          },
+          "tableId": "Clients",
+          "operation": "create"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Creates the client record up front, so the score written later attaches to a row that already exists."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      }
+    },
+    {
+      "id": "http_fetch_website",
+      "data": {
+        "icon": "Globe",
+        "type": "http_request",
+        "label": "Fetch Website HTML",
+        "config": {
+          "url": "{{input.website}}",
+          "method": "GET",
+          "headers": {},
+          "timeout": 10000
+        },
+        "category": "http_api",
+        "notes": {
+          "family": "HTTP & API",
+          "what": "Calls any web URL and gets data back — your universal connector to the internet",
+          "overview": "Call an external API or webhook, optionally adding headers, query parameters, body data, and a timeout.",
+          "tips": [],
+          "docsHref": "/docs/nodes/http_request",
+          "why": "Fetches the client's live site so the AI can look for the pages verifiers check. If a site blocks automated requests this returns empty and the score will be misleadingly low — check the execution log before trusting a bad score."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      }
+    },
+    {
+      "id": "ai_analyze_readiness",
+      "data": {
+        "icon": "Brain",
+        "type": "openai_gpt",
+        "label": "Analyze Readiness",
+        "config": {
+          "model": "gpt-4o-mini",
+          "prompt": "You are a compliance analyst preparing a business for Meta/Google verification. Website HTML: {{input.body}}. Business name on file: {{input.businessName}}. Uploaded documents: GST {{input.gstDocument}}, PAN {{input.panDocument}}, bank statement {{input.bankStatement}}. Check for: a visible Privacy Policy page, a visible Terms & Conditions page, a business name and address that match across the website and the documents, and a working contact page. List every issue you find as one line starting with \"ISSUE:\". If everything looks correct, return \"NO ISSUES FOUND\".",
+          "temperature": 0.3
+        },
+        "category": "ai",
+        "notes": {
+          "family": "AI",
+          "what": "Sends your prompt to OpenAI's ChatGPT and gets back an AI-written response",
+          "overview": "Calls OpenAI through the legacy LLM adapter. Prompt is the main input; Messages is only a fallback when Prompt is blank. Temperature and Memory are visible legacy fields ignored by the current executor.",
+          "tips": [],
+          "docsHref": "/docs/nodes/openai_gpt",
+          "why": "Checks the site and documents against what verifiers actually look for: privacy policy, terms, matching business details, working contact page. One 'ISSUE:' line per problem."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      }
+    },
+    {
+      "id": "js_score",
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Calculate Readiness Score",
+        "config": {
+          "code": "const text = input.response || input.text || '';\nconst issues = text.split('\\n').map(l => l.trim()).filter(l => l.toUpperCase().startsWith('ISSUE:'));\nconst deductionPerIssue = 15;\nconst score = Math.max(0, 100 - issues.length * deductionPerIssue);\nreturn { ...input, score, issues, issueCount: issues.length };",
+          "timeout": 5000
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Turns the issue list into a 0-100 score. Each issue costs 15 points — change that here to make the score stricter."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 300
+      }
+    },
+    {
+      "id": "airtable_update_score",
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Write Score to Record",
+        "config": {
+          "baseId": "",
+          "fields": {
+            "Score": "{{input.score}}",
+            "Issues": "{{input.issues}}",
+            "Status": "Scored"
+          },
+          "tableId": "Clients",
+          "recordId": "{{input.records.0.id}}",
+          "operation": "update"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Writes the score back onto the client record so it is on file for the next check."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 300
+      }
+    },
+    {
+      "id": "ai_fix_list",
+      "data": {
+        "icon": "Brain",
+        "type": "openai_gpt",
+        "label": "Write Fix List",
+        "config": {
+          "model": "gpt-4o-mini",
+          "prompt": "Based on these readiness issues: {{input.issues}}, write 2-3 short, plain-English fixes the client should make before applying for Meta/Google verification. Keep it friendly, specific, and actionable. No jargon.",
+          "temperature": 0.5
+        },
+        "category": "ai",
+        "notes": {
+          "family": "AI",
+          "what": "Sends your prompt to OpenAI's ChatGPT and gets back an AI-written response",
+          "overview": "Calls OpenAI through the legacy LLM adapter. Prompt is the main input; Messages is only a fallback when Prompt is blank. Temperature and Memory are visible legacy fields ignored by the current executor.",
+          "tips": [],
+          "docsHref": "/docs/nodes/openai_gpt",
+          "why": "Converts the technical issues into two or three plain-English actions the client can actually carry out."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2020,
+        "y": 300
+      }
+    },
+    {
+      "id": "gmail_send_results",
+      "data": {
+        "icon": "Mail",
+        "type": "google_gmail",
+        "label": "Email Results",
+        "config": {
+          "body": "Hi {{input.businessName}},\n\nYour verification readiness score is {{input.score}}/100.\n\nHere is what to fix before you apply:\n{{input.fixList}}\n\nWe will keep this record on file for your next check.",
+          "subject": "Your verification readiness score: {{input.score}}/100",
+          "operation": "send",
+          "recipientEmails": "{{input.contactEmail}}",
+          "recipientSource": "manual_entry"
+        },
+        "category": "output",
+        "notes": {
+          "family": "Communication",
+          "what": "Send emails from your Gmail account or read and search messages in your inbox",
+          "overview": "Send, list, get, or search Gmail messages. Send recipients can be typed manually or extracted from upstream/fallback Google Sheets rows.",
+          "tips": [
+            "Connect Google OAuth in Connections; do not paste tokens into workflow fields",
+            "Gmail search syntax: from:, subject:, is:unread, has:attachment",
+            "List/Search only return {id, threadId} per message â€” use a Get step with that id for full content",
+            "Body is plain text only",
+            "Get returns Gmail's raw API message; the body text is base64url-encoded inside message.payload.body.data",
+            "Use search to filter messages before getting details"
+          ],
+          "docsHref": "/docs/nodes/google_gmail",
+          "why": "Sends the score and the fix list. This is the deliverable the client came for."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2660,
+        "y": 205
+      }
+    },
+    {
+      "id": "whatsapp_send_results",
+      "data": {
+        "icon": "MessageCircle",
+        "type": "whatsapp",
+        "label": "WhatsApp Results",
+        "config": {
+          "to": "{{input.whatsappNumber}}",
+          "text": "Hi {{input.businessName}}! Your verification readiness score is {{input.score}}/100. Check your email for the full fix list, or reply here with questions.",
+          "resource": "message",
+          "operation": "sendText"
+        },
+        "category": "output",
+        "notes": {
+          "family": "Communication",
+          "what": "Sends WhatsApp messages to customers via the official WhatsApp Business API",
+          "overview": "Send WhatsApp messages, media, locations, contact cards, approved templates, and interactive buttons/lists through the WhatsApp Business Cloud API. Connect a WhatsApp/Facebook account under Connections â€” credentials are resolved automatically. The visual panel exposes the Message resource; Contact, Conversation, Template, Campaign, and AI Agent resources are runtime-supported for advanced or AI-generated workflows.",
+          "tips": [
+            "Connect a WhatsApp account under Connections â€” no access tokens entered on the node itself",
+            "Phone numbers should be in E.164 format, e.g. +12345678900",
+            "First message to a new contact must use Send Template; free-form Send Text only works inside the 24-hour customer service window"
+          ],
+          "docsHref": "/docs/nodes/whatsapp",
+          "why": "A short WhatsApp nudge pointing at the email, for clients who will not open it otherwise."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2660,
+        "y": 395
+      }
+    },
+    {
+      "id": "js_compose_results",
+      "type": "custom",
+      "position": {
+        "x": 2340,
+        "y": 300
+      },
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Assemble Result Payload",
+        "category": "data",
+        "config": {
+          "code": "const fixList = input.response || input.text || input.content || \"\";\nreturn {\n  ...input,\n  fixList,\n  score: input.score,\n  issueCount: input.issueCount,\n  businessName: input.businessName,\n  contactEmail: input.contactEmail,\n  whatsappNumber: input.whatsappNumber\n};",
+          "timeout": 5000
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Assembles the score, fix list and contact details into one payload so both the email and the WhatsApp message have everything they need."
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "form_intake",
+      "target": "airtable_create_client"
+    },
+    {
+      "id": "e2",
+      "source": "airtable_create_client",
+      "target": "http_fetch_website"
+    },
+    {
+      "id": "e3",
+      "source": "http_fetch_website",
+      "target": "ai_analyze_readiness"
+    },
+    {
+      "id": "e4",
+      "source": "ai_analyze_readiness",
+      "target": "js_score"
+    },
+    {
+      "id": "e5",
+      "source": "js_score",
+      "target": "airtable_update_score"
+    },
+    {
+      "id": "e6",
+      "source": "airtable_update_score",
+      "target": "ai_fix_list"
+    },
+    {
+      "id": "e7",
+      "source": "js_compose_results",
+      "target": "gmail_send_results"
+    },
+    {
+      "id": "e8",
+      "source": "js_compose_results",
+      "target": "whatsapp_send_results"
+    },
+    {
+      "id": "e_ai_fix_list_js_compose_results",
+      "source": "ai_fix_list",
+      "target": "js_compose_results"
+    }
+  ],
+  "difficulty": "Beginner",
+  "estimated_setup_time": 27,
+  "tags": [
+    "verification",
+    "compliance",
+    "ai",
+    "airtable",
+    "whatsapp",
+    "onboarding"
+  ],
+  "preview_image": null,
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2,
+  "created_by": null,
+  "updated_by": null,
+  "created_at": "2026-07-14T11:20:27.820Z",
+  "updated_at": "2026-07-14T11:20:27.820Z"
+}

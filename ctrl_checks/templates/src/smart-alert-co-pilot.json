@@ -1,0 +1,408 @@
+{
+  "id": "53bc3b52-0655-4c4e-9cf0-36050463e603",
+  "name": "Smart Alert Co-Pilot",
+  "description": "Move from 'checking on a schedule' to 'getting told the moment something's wrong.' An AI judgment layer watches your client records, pulls related context before deciding, and sends a targeted alert to the right person only when a change is actually worth interrupting someone for. (No instant Airtable-update trigger exists yet, so this polls every 10 minutes instead of firing immediately.)",
+  "category": "Business Verification & Compliance",
+  "nodes": [
+    {
+      "id": "schedule_poll_alerts",
+      "data": {
+        "icon": "Clock",
+        "type": "schedule",
+        "label": "Poll for Record Changes",
+        "config": {
+          "cron": "*/10 * * * *",
+          "timezone": "UTC"
+        },
+        "category": "triggers",
+        "notes": {
+          "family": "Triggers",
+          "what": "Works like an alarm clock — runs your workflow automatically at a specific time you set each day",
+          "overview": "Runs your workflow automatically on a schedule using a simple time picker. Select your time (HH:MM format) and timezone, and the workflow will execute daily at that time. Great for daily reports, periodic checks, or recurring tasks.",
+          "tips": [
+            "Use 24-hour format (e.g., 09:00 for 9 AM, 14:30 for 2:30 PM)",
+            "Select your timezone from the dropdown (IST, UTC, etc.)",
+            "Workflow runs daily at the specified time",
+            "Test with manual trigger first",
+            "Timezone conversion is handled automatically"
+          ],
+          "docsHref": "/docs/nodes/schedule",
+          "why": "Polls every 10 minutes because there is no 'row changed' trigger. One record per run."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      }
+    },
+    {
+      "id": "airtable_read_all_records",
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Read All Client Records",
+        "config": {
+          "baseId": "",
+          "tableId": "Clients",
+          "operation": "read",
+          "filterByFormula": "OR({AlertCheckedAt}='', IS_AFTER(LAST_MODIFIED_TIME(), {AlertCheckedAt}))",
+          "maxRecords": 1
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Picks up one record modified since it was last examined."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      }
+    },
+    {
+      "id": "js_diff_for_alerts",
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Select Changed Record",
+        "config": {
+          "code": "const rec = (input.records || [])[0];\nif (!rec) return { ...input, hasRecord: false };\nreturn {\n  ...input,\n  hasRecord: true,\n  recordId: rec.id,\n  changed: rec.fields || {},\n  checkedAt: new Date().toISOString()\n};"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Prepares the changed record for the AI to judge."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      }
+    },
+    {
+      "id": "ai_agent_judge_alert",
+      "data": {
+        "icon": "Bot",
+        "type": "ai_agent",
+        "label": "Judge Whether This Is Alert-Worthy",
+        "config": {
+          "model": "gemini-3.5-flash",
+          "userInput": "Changed record(s): {{input.changed}}\nRelated context: {{input.records}}",
+          "temperature": 0.3,
+          "systemPrompt": "You are a compliance monitoring co-pilot. You are given a changed client record plus related context records. Decide whether this change is worth interrupting a person for right now (e.g. a readiness score dropped sharply, a document expired, a risk flag appeared) versus routine (e.g. a timestamp update, a minor note edit). Reply as JSON: {\"alertWorthy\": true/false, \"reason\": \"...\", \"severity\": \"low|medium|high\"}."
+        },
+        "category": "ai",
+        "notes": {
+          "family": "AI",
+          "what": "An autonomous AI brain that reasons, makes decisions, and uses tools on your behalf",
+          "overview": "Runs one prompt-driven AI step. The runtime extracts userInput from this node or upstream message-like fields, infers the provider from Model, calls the LLM adapter, and packages response_text plus optional structured fields.",
+          "tips": [],
+          "docsHref": "/docs/nodes/ai_agent",
+          "why": "The judgment layer, and the reason this template exists: it decides whether a change is worth interrupting a person for, rather than alerting on everything."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 300
+      }
+    },
+    {
+      "id": "js_route_notification",
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Decide Who to Notify",
+        "config": {
+          "code": "// Set these two numbers when you set up the template.\nconst complianceLeadPhone = input.complianceLeadPhone || \"REPLACE_WITH_COMPLIANCE_LEAD_NUMBER\";\nconst accountManagerPhone = input.accountManagerPhone || \"REPLACE_WITH_ACCOUNT_MANAGER_NUMBER\";\nconst recipient = input.severity === \"high\" ? complianceLeadPhone : accountManagerPhone;\nreturn { ...input, recipient };"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Sends high-severity alerts to the compliance lead and everything else to the account manager. Set both numbers here."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2660,
+        "y": 300
+      }
+    },
+    {
+      "id": "whatsapp_send_smart_alert",
+      "data": {
+        "icon": "MessageCircle",
+        "type": "whatsapp",
+        "label": "Send Targeted Alert",
+        "config": {
+          "to": "{{input.recipient}}",
+          "text": ":bell: {{input.severity}} priority alert: {{input.reason}}",
+          "resource": "message",
+          "operation": "sendText"
+        },
+        "category": "output",
+        "notes": {
+          "family": "Communication",
+          "what": "Sends WhatsApp messages to customers via the official WhatsApp Business API",
+          "overview": "Send WhatsApp messages, media, locations, contact cards, approved templates, and interactive buttons/lists through the WhatsApp Business Cloud API. Connect a WhatsApp/Facebook account under Connections â€” credentials are resolved automatically. The visual panel exposes the Message resource; Contact, Conversation, Template, Campaign, and AI Agent resources are runtime-supported for advanced or AI-generated workflows.",
+          "tips": [
+            "Connect a WhatsApp account under Connections â€” no access tokens entered on the node itself",
+            "Phone numbers should be in E.164 format, e.g. +12345678900",
+            "First message to a new contact must use Send Template; free-form Send Text only works inside the 24-hour customer service window"
+          ],
+          "docsHref": "/docs/nodes/whatsapp",
+          "why": "Delivers the alert to the one person who needs it."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2980,
+        "y": 300
+      }
+    },
+    {
+      "id": "js_parse_alert_decision",
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 300
+      },
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Parse Alert Decision",
+        "category": "data",
+        "config": {
+          "code": "let decision = {};\ntry {\n  const text = input.response || input.text || input.content || \"{}\";\n  const m = text.match(/\\{[\\s\\S]*\\}/);\n  decision = m ? JSON.parse(m[0]) : {};\n} catch (e) { decision = {}; }\nreturn {\n  ...input,\n  alertWorthy: decision.alertWorthy === true,\n  reason: decision.reason || \"\",\n  severity: decision.severity || \"low\"\n};",
+          "timeout": 5000
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Extracts the verdict, reason and severity from the agent's reply."
+        }
+      }
+    },
+    {
+      "id": "if_alert_worthy",
+      "type": "custom",
+      "position": {
+        "x": 2340,
+        "y": 300
+      },
+      "data": {
+        "icon": "GitBranch",
+        "type": "if_else",
+        "label": "Is This Worth Interrupting Someone?",
+        "category": "logic",
+        "config": {
+          "conditions": [
+            {
+              "field": "$json.alertWorthy",
+              "operator": "equals",
+              "value": true
+            }
+          ],
+          "combineOperation": "AND"
+        },
+        "notes": {
+          "family": "Logic",
+          "what": "Makes a yes/no decision: if something is true, go one way; otherwise go another",
+          "overview": "Makes a yes/no decision from previous-step data and routes matching work through TRUE and non-matching work through FALSE.",
+          "tips": [
+            "Use the builder for normal setup; use JSON mode only when pasting prepared condition objects.",
+            "Choose AND when every row must match; choose OR when any row can match.",
+            "Use equals for statuses and categories, greater-than operators for numeric thresholds, and contains for text or lists.",
+            "Connect both TRUE and FALSE outputs so no business case silently disappears."
+          ],
+          "docsHref": "/docs/nodes/if_else",
+          "why": "Enforces the agent's verdict. Without this node the workflow alerts on every change and becomes a noisier version of a dumb alert."
+        }
+      }
+    },
+    {
+      "id": "airtable_mark_alert_checked",
+      "type": "custom",
+      "position": {
+        "x": 2020,
+        "y": 300
+      },
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Record Alert Check",
+        "category": "data",
+        "config": {
+          "baseId": "",
+          "tableId": "Clients",
+          "operation": "update",
+          "recordId": "{{input.recordId}}",
+          "fields": {
+            "AlertCheckedAt": "{{input.checkedAt}}"
+          }
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Stamps the record as examined — deliberately BEFORE the gate below, so records judged not worth alerting are not re-judged and re-billed on every subsequent poll."
+        }
+      }
+    },
+    {
+      "id": "if_hasrecord",
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      },
+      "data": {
+        "icon": "GitBranch",
+        "type": "if_else",
+        "label": "Any Record Changed?",
+        "category": "logic",
+        "config": {
+          "conditions": [
+            {
+              "field": "$json.hasRecord",
+              "operator": "equals",
+              "value": true
+            }
+          ],
+          "combineOperation": "AND"
+        },
+        "notes": {
+          "family": "Logic",
+          "what": "Makes a yes/no decision: if something is true, go one way; otherwise go another",
+          "overview": "Makes a yes/no decision from previous-step data and routes matching work through TRUE and non-matching work through FALSE.",
+          "tips": [
+            "Use the builder for normal setup; use JSON mode only when pasting prepared condition objects.",
+            "Choose AND when every row must match; choose OR when any row can match.",
+            "Use equals for statuses and categories, greater-than operators for numeric thresholds, and contains for text or lists.",
+            "Connect both TRUE and FALSE outputs so no business case silently disappears."
+          ],
+          "docsHref": "/docs/nodes/if_else",
+          "why": "Stops an empty poll from burning an AI call and sending a blank alert."
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "schedule_poll_alerts",
+      "target": "airtable_read_all_records"
+    },
+    {
+      "id": "e2",
+      "source": "airtable_read_all_records",
+      "target": "js_diff_for_alerts"
+    },
+    {
+      "id": "e5",
+      "source": "js_parse_alert_decision",
+      "target": "airtable_mark_alert_checked"
+    },
+    {
+      "id": "e6",
+      "source": "js_route_notification",
+      "target": "whatsapp_send_smart_alert"
+    },
+    {
+      "id": "e_js_diff_for_alerts_ai_agent_judge_alert",
+      "source": "if_hasrecord",
+      "target": "ai_agent_judge_alert",
+      "sourceHandle": "true"
+    },
+    {
+      "id": "e_ai_agent_judge_alert_js_parse_alert_decision",
+      "source": "ai_agent_judge_alert",
+      "target": "js_parse_alert_decision"
+    },
+    {
+      "id": "e_if_alert_worthy_js_route_notification",
+      "source": "if_alert_worthy",
+      "target": "js_route_notification",
+      "sourceHandle": "true"
+    },
+    {
+      "id": "e_airtable_mark_alert_checked_if_alert_worthy",
+      "source": "airtable_mark_alert_checked",
+      "target": "if_alert_worthy"
+    },
+    {
+      "id": "e_js_diff_for_alerts_if_hasrecord",
+      "source": "js_diff_for_alerts",
+      "target": "if_hasrecord"
+    }
+  ],
+  "difficulty": "Advanced",
+  "estimated_setup_time": 21,
+  "tags": [
+    "ai-agent",
+    "alerts",
+    "monitoring",
+    "airtable",
+    "whatsapp",
+    "co-pilot"
+  ],
+  "preview_image": null,
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2,
+  "created_by": null,
+  "updated_by": null,
+  "created_at": "2026-07-14T11:20:27.820Z",
+  "updated_at": "2026-07-14T11:20:27.820Z"
+}

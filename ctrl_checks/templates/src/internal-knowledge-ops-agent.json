@@ -1,0 +1,499 @@
+{
+  "id": "5b3d400a-0eec-4c09-ac51-921cd6a35a50",
+  "name": "Internal Knowledge / Ops Agent",
+  "description": "Internal knowledge base assistant that searches company documentation, answers employee questions with source citations, and escalates when information is not found. Perfect for employee self-service.",
+  "category": "Internal Operations",
+  "nodes": [
+    {
+      "id": "chat_trigger_kb_1",
+      "data": {
+        "icon": "MessageSquare",
+        "type": "chat_trigger",
+        "label": "Internal Chat Trigger",
+        "config": {},
+        "category": "triggers",
+        "notes": {
+          "family": "Triggers",
+          "what": "Starts your workflow when someone types a message in a chat interface",
+          "overview": "Starting node that runs when someone sends a message through the CtrlChecks chat interface for an active workflow. The node panel has no setup fields today; the chat page supplies the message and session details at runtime.",
+          "tips": [
+            "Use as the first node in chatbot, assistant, support intake, or guided request workflows",
+            "Map {{$json.message}} into AI Agent or HTTP Request when the next step needs the visitor question",
+            "Use Chat Send after the answer is prepared; it can read {{$json.sessionId}} from the connected Chat Trigger output",
+            "The workflow must be active before the public chat URL accepts messages",
+            "Downstream app nodes such as Slack, Gmail, CRM, or database actions still need their own account connection"
+          ],
+          "docsHref": "/docs/nodes/chat_trigger",
+          "why": "Where employees ask their question."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      }
+    },
+    {
+      "id": "js_prepare_query",
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Prepare Query",
+        "config": {
+          "code": "const raw = (typeof input === 'string') ? input : (input && (input.message || input.query || input.text)) || '';\nconst obj = (typeof input === \"object\" && input) ? input : {};\nreturn {\n  ...obj,\n  query: raw,\n  user: obj.user || obj.user_id || \"unknown\",\n  timestamp: new Date().toISOString(),\n  context: obj.context || \"\"\n};"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Prepares the question and captures who asked. Written to work whether the chat trigger hands over a string or an object."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      }
+    },
+    {
+      "id": "db_search_kb",
+      "data": {
+        "icon": "Database",
+        "type": "postgresql",
+        "label": "Search Knowledge Base",
+        "config": {
+          "query": "SELECT title, content, url, updated_at FROM knowledge_base WHERE title ILIKE '%{{input.query}}%' OR content ILIKE '%{{input.query}}%' ORDER BY updated_at DESC LIMIT 5"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Connects to a PostgreSQL database to run queries or insert data",
+          "overview": "Run PostgreSQL executeQuery, insert, update, or delete through the real database executor. The visual panel now uses runtime operation values and Parameters maps to the executor parameter array.",
+          "tips": [
+            "Use executeQuery for raw SQL with $1, $2 placeholders and Parameters as a JSON array.",
+            "Insert returns inserted/count; update and delete return rows/rowsAffected because PostgreSQL uses RETURNING *.",
+            "The backend schema still lists connectionString, but the executor validates host, username, password, database, port, and ssl.",
+            "Update and delete require Where; the executor refuses missing where clauses.",
+            "Store database passwords in Connections rather than ordinary workflow fields."
+          ],
+          "docsHref": "/docs/nodes/postgresql",
+          "why": "Searches your knowledge base for articles matching the question. The ILIKE search on title and content is what makes the answer relevant — the previous version returned five arbitrary rows regardless of what was asked."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      }
+    },
+    {
+      "id": "js_format_kb_results",
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Format KB Results",
+        "config": {
+          "code": "// The PostgreSQL node returns { rows, rowsAffected }.\nconst results = input.rows || [];\nif (results.length === 0) {\n  return { ...input, found: false, content: \"\", contentLength: 0, sources: [] };\n}\nconst content = results.map((r, i) => (i + 1) + \". \" + (r.title || \"Untitled\") + \"\\n\" + (r.content || r.body || \"\")).join(\"\\n\\n---\\n\\n\");\nconst sources = results.map(r => ({ title: r.title || \"Untitled\", url: r.url || \"\", updated_at: r.updated_at || \"\" }));\n// contentLength is emitted so the gate below can test it as its own condition —\n// the runtime evaluates one comparison per row and cannot parse \"a && b\".\nreturn { ...input, found: true, content, contentLength: content.length, sources, query: input.query };"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Assembles the retrieved articles into one block for the AI and reports how much content was found, which the gate below tests."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      }
+    },
+    {
+      "id": "if_kb_found",
+      "data": {
+        "icon": "GitBranch",
+        "type": "if_else",
+        "label": "Check if Found",
+        "config": {
+          "conditions": [
+            {
+              "field": "$json.found",
+              "operator": "equals",
+              "value": true
+            },
+            {
+              "field": "$json.contentLength",
+              "operator": "greater_than",
+              "value": 0
+            }
+          ],
+          "combineOperation": "AND"
+        },
+        "category": "logic",
+        "notes": {
+          "family": "Logic",
+          "what": "Makes a yes/no decision: if something is true, go one way; otherwise go another",
+          "overview": "Makes a yes/no decision from previous-step data and routes matching work through TRUE and non-matching work through FALSE.",
+          "tips": [
+            "Use the builder for normal setup; use JSON mode only when pasting prepared condition objects.",
+            "Choose AND when every row must match; choose OR when any row can match.",
+            "Use equals for statuses and categories, greater-than operators for numeric thresholds, and contains for text or lists.",
+            "Connect both TRUE and FALSE outputs so no business case silently disappears."
+          ],
+          "docsHref": "/docs/nodes/if_else",
+          "why": "Decides whether there is enough material to answer from. Two separate conditions, because the runtime evaluates one comparison per row — a combined 'a && b' expression silently never matches."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 300
+      }
+    },
+    {
+      "id": "ai_answer_with_sources",
+      "data": {
+        "icon": "Brain",
+        "type": "openai_gpt",
+        "label": "Generate Answer with Sources",
+        "config": {
+          "model": "gpt-4o-mini",
+          "memory": 10,
+          "prompt": "You are an internal knowledge assistant. Answer the employee's question based on the knowledge base content provided. Always cite sources.\\n\\nEmployee Question: {{input.query}}\\n\\nKnowledge Base Content:\\n{{input.content}}\\n\\nProvide a clear, helpful answer with source citations. Format: Answer text followed by \\\"Sources: [source1, source2]\\\"",
+          "temperature": 0.5
+        },
+        "category": "ai",
+        "notes": {
+          "family": "AI",
+          "what": "Sends your prompt to OpenAI's ChatGPT and gets back an AI-written response",
+          "overview": "Calls OpenAI through the legacy LLM adapter. Prompt is the main input; Messages is only a fallback when Prompt is blank. Temperature and Memory are visible legacy fields ignored by the current executor.",
+          "tips": [],
+          "docsHref": "/docs/nodes/openai_gpt",
+          "why": "Answers from the retrieved articles and cites them, so an employee can verify rather than trust."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 205
+      }
+    },
+    {
+      "id": "js_format_response",
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Format Response",
+        "config": {
+          "code": "const answer = input.content || input.text || input.response || 'I found some information for you.'; const sources = input.sources || []; const sourcesText = sources.length > 0 ? '\\n\\nSources:\\n' + sources.map((s, i) => `${i + 1}. ${s.title}${s.url ? ' (' + s.url + ')' : ''}`).join('\\n') : ''; return { answer: answer + sourcesText, sources, query: input.query };"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Appends the source list to the answer."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2020,
+        "y": 205
+      }
+    },
+    {
+      "id": "db_log_query",
+      "data": {
+        "icon": "Database",
+        "type": "postgresql",
+        "label": "Log Answered Question",
+        "config": {
+          "query": "INSERT INTO kb_queries (query, answer, sources_count, found, \"user\", created_at) VALUES ('{{input.query}}', '{{input.answer}}', {{input.sources.length}}, true, '{{input.user}}', now())"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Connects to a PostgreSQL database to run queries or insert data",
+          "overview": "Run PostgreSQL executeQuery, insert, update, or delete through the real database executor. The visual panel now uses runtime operation values and Parameters maps to the executor parameter array.",
+          "tips": [
+            "Use executeQuery for raw SQL with $1, $2 placeholders and Parameters as a JSON array.",
+            "Insert returns inserted/count; update and delete return rows/rowsAffected because PostgreSQL uses RETURNING *.",
+            "The backend schema still lists connectionString, but the executor validates host, username, password, database, port, and ssl.",
+            "Update and delete require Where; the executor refuses missing where clauses.",
+            "Store database passwords in Connections rather than ordinary workflow fields."
+          ],
+          "docsHref": "/docs/nodes/postgresql",
+          "why": "Records answered questions — the log that tells you what your team actually needs documented."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2340,
+        "y": 205
+      }
+    },
+    {
+      "id": "ai_fallback_answer",
+      "data": {
+        "icon": "Brain",
+        "type": "openai_gpt",
+        "label": "Generate Fallback Answer",
+        "config": {
+          "model": "gpt-4o-mini",
+          "memory": 5,
+          "prompt": "An employee asked: \\\"{{input.query}}\\\"\\n\\nNo relevant information was found in the knowledge base. Provide a polite response explaining that the information is not available, and suggest they contact the appropriate team or check back later. Keep it brief and helpful.",
+          "temperature": 0.7
+        },
+        "category": "ai",
+        "notes": {
+          "family": "AI",
+          "what": "Sends your prompt to OpenAI's ChatGPT and gets back an AI-written response",
+          "overview": "Calls OpenAI through the legacy LLM adapter. Prompt is the main input; Messages is only a fallback when Prompt is blank. Temperature and Memory are visible legacy fields ignored by the current executor.",
+          "tips": [],
+          "docsHref": "/docs/nodes/openai_gpt",
+          "why": "Says 'not in the knowledge base' politely and points elsewhere, instead of the AI inventing an answer."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 395
+      }
+    },
+    {
+      "id": "db_log_not_found",
+      "data": {
+        "icon": "Database",
+        "type": "postgresql",
+        "label": "Log Knowledge Gap",
+        "config": {
+          "query": "INSERT INTO kb_queries (query, answer, found, \"user\", created_at) VALUES ('{{input.query}}', '{{input.response}}', false, '{{input.user}}', now())"
+        },
+        "category": "data",
+        "notes": {
+          "family": "Data",
+          "what": "Connects to a PostgreSQL database to run queries or insert data",
+          "overview": "Run PostgreSQL executeQuery, insert, update, or delete through the real database executor. The visual panel now uses runtime operation values and Parameters maps to the executor parameter array.",
+          "tips": [
+            "Use executeQuery for raw SQL with $1, $2 placeholders and Parameters as a JSON array.",
+            "Insert returns inserted/count; update and delete return rows/rowsAffected because PostgreSQL uses RETURNING *.",
+            "The backend schema still lists connectionString, but the executor validates host, username, password, database, port, and ssl.",
+            "Update and delete require Where; the executor refuses missing where clauses.",
+            "Store database passwords in Connections rather than ordinary workflow fields."
+          ],
+          "docsHref": "/docs/nodes/postgresql",
+          "why": "Records the gap. Over time this becomes your documentation backlog."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2020,
+        "y": 395
+      }
+    },
+    {
+      "id": "slack_escalate_kb",
+      "data": {
+        "icon": "MessageCircle",
+        "type": "slack_webhook",
+        "label": "Notify Knowledge Team",
+        "config": {
+          "message": "📚 Knowledge Gap Identified\\nQuery: {{input.query}}\\nUser: {{input.user}}\\nConsider adding this to the knowledge base.",
+          "username": "KB Bot",
+          "webhookUrl": "REPLACE_WITH_YOUR_SLACK_INCOMING_WEBHOOK_URL"
+        },
+        "category": "output",
+        "notes": {
+          "family": "Communication",
+          "what": "Posts simple messages through a saved Slack Incoming Webhook",
+          "overview": "Send a simple Slack message through a saved Slack Incoming Webhook connection.",
+          "tips": [
+            "Save the Incoming Webhook URL as a Connection",
+            "The target channel is chosen when the webhook is created in Slack",
+            "Use Slack Message for OAuth bot sending, dynamic channels, and Block Kit",
+            "This node's output replaces $json entirely â€” fields from before this node do not survive past it, so capture anything needed later first",
+            "Failures set status to \"failed\" and add a plain error field (no underscore), unlike most nodes' _error convention"
+          ],
+          "docsHref": "/docs/nodes/slack_webhook",
+          "why": "Tells the knowledge team a question could not be answered so the gap gets filled."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2340,
+        "y": 395
+      }
+    },
+    {
+      "id": "merge_responses_kb",
+      "data": {
+        "icon": "GitMerge",
+        "type": "merge",
+        "label": "Merge Responses",
+        "config": {},
+        "category": "logic",
+        "notes": {
+          "family": "Logic",
+          "what": "Combines results coming from two paths into one",
+          "overview": "Rejoins multiple workflow branches and combines their data into one payload for the next step.",
+          "tips": [
+            "Use overwrite for simple flat objects when duplicate keys can be replaced.",
+            "Use append when the next node should receive a list at {{$json.items}}.",
+            "Use deep_merge when branches add different nested details that should survive together.",
+            "Connect every branch that should rejoin into Merge, then connect Merge output to the final action."
+          ],
+          "docsHref": "/docs/nodes/merge",
+          "why": "Brings both branches back together so the reply is returned once."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2660,
+        "y": 300
+      }
+    },
+    {
+      "id": "log_output_kb",
+      "data": {
+        "icon": "FileOutput",
+        "type": "log_output",
+        "label": "Return Answer",
+        "config": {
+          "level": "info",
+          "message": "{{input.answer || input.content || input.text || input.response}}"
+        },
+        "category": "utility",
+        "notes": {
+          "family": "Utility",
+          "what": "Writes a message to your workflow's log for debugging or auditing",
+          "overview": "Log data for debugging and monitoring. View logs in the execution history. This is a terminal node â€” it cannot connect to further downstream nodes.",
+          "tips": [
+            "Use different levels for filtering",
+            "This node is terminal â€” it does not forward data to further nodes",
+            "Check execution history for logs"
+          ],
+          "docsHref": "/docs/nodes/log_output",
+          "why": "Returns the final answer to the employee."
+        }
+      },
+      "type": "custom",
+      "position": {
+        "x": 2980,
+        "y": 300
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "chat_trigger_kb_1",
+      "target": "js_prepare_query"
+    },
+    {
+      "id": "e2",
+      "source": "js_prepare_query",
+      "target": "db_search_kb"
+    },
+    {
+      "id": "e3",
+      "source": "db_search_kb",
+      "target": "js_format_kb_results"
+    },
+    {
+      "id": "e4",
+      "source": "js_format_kb_results",
+      "target": "if_kb_found"
+    },
+    {
+      "id": "e5",
+      "source": "if_kb_found",
+      "target": "ai_answer_with_sources",
+      "sourceHandle": "true"
+    },
+    {
+      "id": "e6",
+      "source": "if_kb_found",
+      "target": "ai_fallback_answer",
+      "sourceHandle": "false"
+    },
+    {
+      "id": "e7",
+      "source": "ai_answer_with_sources",
+      "target": "js_format_response"
+    },
+    {
+      "id": "e8",
+      "source": "js_format_response",
+      "target": "db_log_query"
+    },
+    {
+      "id": "e9",
+      "source": "ai_fallback_answer",
+      "target": "db_log_not_found"
+    },
+    {
+      "id": "e10",
+      "source": "db_log_not_found",
+      "target": "slack_escalate_kb"
+    },
+    {
+      "id": "e11",
+      "source": "db_log_query",
+      "target": "merge_responses_kb"
+    },
+    {
+      "id": "e12",
+      "source": "slack_escalate_kb",
+      "target": "merge_responses_kb"
+    },
+    {
+      "id": "e13",
+      "source": "merge_responses_kb",
+      "target": "log_output_kb"
+    }
+  ],
+  "difficulty": "Advanced",
+  "estimated_setup_time": 10,
+  "tags": [
+    "knowledge-base",
+    "internal-ops",
+    "documentation",
+    "qa",
+    "employee-assistant"
+  ],
+  "preview_image": null,
+  "is_featured": true,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2,
+  "created_by": null,
+  "updated_by": null,
+  "created_at": "2026-04-24T14:32:25.195Z",
+  "updated_at": "2026-04-24T14:32:25.195Z"
+}
