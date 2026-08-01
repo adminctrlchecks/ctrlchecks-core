@@ -23,6 +23,8 @@ import {
 } from './property-population-stage-client';
 import { logger } from '../../../core/logger';
 import { unifiedNodeRegistry } from '../../../core/registry/unified-node-registry';
+import { resolveNodeType } from '../../../core/registry/node-type-resolution';
+import { sanitizeIdentityValues } from '../../../core/registry/identity-value-sanitizer';
 import {
   extractJsonFieldRefs,
   resolveUpstreamFields,
@@ -63,7 +65,7 @@ function stripMarkdownFences(text: string): string {
 function buildCompactGraphDigest(workflow: Workflow): string {
   return workflow.nodes
     .map((n, i) => {
-      const t = n.type ?? n.data?.type ?? '?';
+      const t = resolveNodeType(n as never).nodeType || '?';
       return `${i + 1}. ${n.id}: ${t}`;
     })
     .join('\n');
@@ -89,6 +91,19 @@ function isFabricatedRecipientLiteral(value: string, examples: unknown): boolean
     return examples.some((ex) => typeof ex === 'string' && ex.trim().toLowerCase() === trimmed);
   }
   return false;
+}
+
+/**
+ * True when a value is nothing but a single upstream reference — `{{$json.inputData.id}}`.
+ *
+ * The distinction this whole stage turns on: a value **mapped** from what an upstream node
+ * actually produces is not invented, so it cannot silently target the wrong resource. A
+ * literal identifier is invented. Identity fields are closed to the second and open to the
+ * first — anything with prose wrapped around the reference is treated as a literal, so the
+ * model cannot smuggle one through by appending text.
+ */
+function isPureUpstreamReference(value: unknown): boolean {
+  return typeof value === 'string' && /^\{\{\s*\$json\.[A-Za-z_][A-Za-z0-9_.]*\s*\}\}$/.test(value.trim());
 }
 
 /** True when the stored value equals the registry default — no explicit choice was made yet. */
@@ -337,7 +352,12 @@ export async function runPropertyPopulationStage(
   for (const node of nodes) {
     nodeIndex++;
     const nodeId = node.id;
-    const nodeType = node.type ?? node.data?.type;
+    /*
+     * Canonical type. `node.type` alone is `'custom'` for a stored/canvas node and may be an
+     * alias in either position; both make the strict `get()` below miss, and a missed lookup
+     * SKIPS the node — no AI configuration at all, logged as a warning nobody reads.
+     */
+    const { nodeType, definition } = resolveNodeType(node as never);
 
     if (!nodeType) {
       logger.warn({
@@ -353,7 +373,7 @@ export async function runPropertyPopulationStage(
 
     try {
       // ── 2.2 Field selection ──────────────────────────────────────────────
-      const nodeDef = unifiedNodeRegistry.get(nodeType);
+      const nodeDef = definition;
       if (!nodeDef) {
         logger.warn({
           event: 'ai_pipeline_stage_warn',
@@ -401,7 +421,7 @@ export async function runPropertyPopulationStage(
         if (incomingEdge) {
           const upstreamNode = workflow.nodes.find((n) => n.id === incomingEdge.source);
           if (upstreamNode) {
-            upstreamNodeType = upstreamNode.type ?? upstreamNode.data?.type;
+            upstreamNodeType = resolveNodeType(upstreamNode as never).nodeType || undefined;
           }
         }
       } catch {
@@ -610,8 +630,17 @@ export async function runPropertyPopulationStage(
       for (const [key, value] of Object.entries(parsed)) {
         const fieldDef = inputSchema[key];
         if (!fieldDef) continue;
-        // Gate 1: Skip fields where supportsBuildtimeAI is explicitly false
-        if (fieldDef.fillMode?.supportsBuildtimeAI === false) continue;
+        // Gate 1: fields closed to build-time AI — identity fields, mostly — may still
+        // receive a value MAPPED from upstream. Reusing what the node above actually
+        // produces is the intended behaviour; only inventing a literal is dangerous. The
+        // ungrounded-reference check further down then verifies the reference is real, so a
+        // reference to a field nothing produces still falls back to the user.
+        if (fieldDef.fillMode?.supportsBuildtimeAI === false) {
+          if (fieldDef.ownership === 'credential') continue;
+          if (!isPureUpstreamReference(value)) continue;
+          filteredLlmValues[key] = value;
+          continue;
+        }
         // Gate 2: Skip fields where fillMode.default is runtime_ai (defer to runtime)
         if (fieldDef.fillMode?.default === 'runtime_ai') continue;
         // Gate 3: Allow buildtime_ai_once AND manual_static+supportsBuildtimeAI fields
@@ -646,6 +675,28 @@ export async function runPropertyPopulationStage(
         } else {
           filteredLlmValues[key] = value;
         }
+      }
+
+      // ── Strip fabricated identifiers from INSIDE object values (RC-3) ────
+      // The fillMode gate above is per FIELD. `manual_trigger.inputData` is one field the AI
+      // may legitimately fill, and it filled it with an object *containing* a spreadsheetId —
+      // Google's documentation sample — so blocking identity FIELDS alone just moves the
+      // fabrication into a JSON key. Structural, because a model told "don't invent IDs"
+      // still sometimes does.
+      for (const [key, value] of Object.entries(filteredLlmValues)) {
+        if (value === null || typeof value !== 'object') continue;
+        const sanitized = sanitizeIdentityValues(value);
+        if (!sanitized.changed) continue;
+        filteredLlmValues[key] = sanitized.value;
+        logger.warn({
+          event: 'ai_pipeline_stage_warn',
+          stage: 'property_population',
+          correlationId,
+          nodeId,
+          nodeType,
+          field: key,
+          reason: `stripped fabricated identifier(s) from generated object value: ${sanitized.strippedKeys.join(', ')}`,
+        });
       }
 
       // ── Enforce {{$json.*}} references for long_body fields ──────────────

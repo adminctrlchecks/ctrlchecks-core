@@ -24,7 +24,7 @@ import { Response } from 'express';
 import { executeNode } from '../execute-workflow';
 import { LRUNodeOutputsCache } from '../../core/cache/lru-node-outputs-cache';
 import { getDbClient } from '../../core/database/db-client';
-import { unifiedNodeRegistry } from '../../core/registry/unified-node-registry';
+import { resolveNodeType } from '../../core/registry/node-type-resolution';
 import {
   ConsentRequiredError,
   assertConsent,
@@ -76,8 +76,9 @@ interface GraphNode {
   data?: { type?: string; label?: string; config?: Record<string, unknown> };
 }
 
+/** Canonical type — see core/registry/node-type-resolution.ts for why this is not inline. */
 function nodeTypeOf(node: GraphNode): string {
-  return String(node?.type ?? node?.data?.type ?? '').trim();
+  return resolveNodeType(node).nodeType;
 }
 
 function nodeLabelOf(node: GraphNode): string {
@@ -173,8 +174,8 @@ export default async function runNode(req: AuthenticatedRequest, res: Response):
     return;
   }
 
-  const nodeType = nodeTypeOf(node);
-  const definition = unifiedNodeRegistry.get(nodeType);
+  // One lookup: a second strict `get()` on an alias would miss what the helper just resolved.
+  const { nodeType, definition } = resolveNodeType(node);
   if (!definition) {
     res.status(400).json({ error: `Unknown node type "${nodeType}".` });
     return;

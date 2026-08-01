@@ -8,8 +8,16 @@
 import { extractJsonFieldRefs, resolveUpstreamFields } from '../upstream-field-resolver';
 import { unifiedNodeRegistry } from '../../registry/unified-node-registry';
 
+/*
+ * `get` / `resolveAlias` back the shared node-type resolution the walk now uses; the identity
+ * implementations keep these tests about the WALK, with the schema mock still driving shape.
+ */
 jest.mock('../../registry/unified-node-registry', () => ({
-  unifiedNodeRegistry: { getEffectiveOutputSchema: jest.fn() },
+  unifiedNodeRegistry: {
+    getEffectiveOutputSchema: jest.fn(),
+    resolveAlias: (type: string) => type,
+    get: () => ({}),
+  },
 }));
 
 const mockedSchema = unifiedNodeRegistry.getEffectiveOutputSchema as jest.Mock;

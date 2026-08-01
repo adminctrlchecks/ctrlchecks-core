@@ -21,6 +21,8 @@ jest.mock('../../../../core/registry/unified-node-registry', () => ({
   unifiedNodeRegistry: {
     get: jest.fn(),
     getBuildValueContext: jest.fn(),
+    // Backs the shared node-type resolution the stage uses; identity keeps fixtures literal.
+    resolveAlias: (type: string) => type,
   },
 }));
 

@@ -21,6 +21,25 @@ jest.mock('../../../../core/registry/unified-node-registry', () => ({
   unifiedNodeRegistry: {
     get: jest.fn(),
     getBuildValueContext: jest.fn(),
+    // Backs the shared node-type resolution the stage uses; identity keeps fixtures literal.
+    resolveAlias: (type: string) => type,
+    /*
+     * The grounded upstream walk calls this for every producer. Omitting it threw
+     * "getEffectiveOutputSchema is not a function" INSIDE the stage's per-node catch, which
+     * silently fell back to defaultConfig — so all three tests here failed on an error the
+     * suite never named. The upstream shape itself is asserted in upstream-field-resolver's
+     * own tests; here it only has to exist.
+     */
+    getEffectiveOutputSchema: jest.fn((type: string) =>
+      type === 'form'
+        ? {
+            properties: {
+              email: { type: 'string', description: 'Submitted email' },
+              fullName: { type: 'string', description: 'Submitted full name' },
+            },
+          }
+        : { properties: {} },
+    ),
   },
 }));
 

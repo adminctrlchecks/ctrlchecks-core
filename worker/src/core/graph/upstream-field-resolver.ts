@@ -12,6 +12,7 @@
  */
 
 import { unifiedNodeRegistry } from '../registry/unified-node-registry';
+import { resolveNodeType } from '../registry/node-type-resolution';
 
 export interface UpstreamGraphNode {
   id: string;
@@ -63,6 +64,46 @@ export interface UpstreamFieldContext {
  * First writer wins for a given field name, matching the original: the nearest upstream
  * node that declares a real shape owns it, and the walk does not attribute it further back.
  */
+/**
+ * How far into a nested object value to descend. The field-plan endpoint is called on a
+ * wizard debounce, so an unbounded walk over a large generated JSON blob would be felt on
+ * every keystroke.
+ */
+const MAX_NESTED_DEPTH = 3;
+
+/** Runtime type of a config value, in the vocabulary the output schema already uses. */
+function runtimeTypeOf(value: unknown): string {
+  if (Array.isArray(value)) return 'array';
+  if (value === null) return 'string';
+  return typeof value;
+}
+
+/**
+ * Emits `parent.child` paths for the plain-object values inside an upstream node's config.
+ *
+ * Arrays are offered whole (`inputData.rows`) and not descended into: an index-addressed
+ * reference would be attributing a shape to data that has not run yet.
+ */
+function collectNestedFields(params: {
+  value: unknown;
+  path: string;
+  depth: number;
+  seen: WeakSet<object>;
+  onField: (fieldName: string, type: string) => void;
+}): void {
+  const { value, path, depth, seen, onField } = params;
+  if (depth > MAX_NESTED_DEPTH) return;
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return;
+  if (seen.has(value as object)) return;
+  seen.add(value as object);
+
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    const childPath = `${path}.${key}`;
+    onField(childPath, runtimeTypeOf(child));
+    collectNestedFields({ value: child, path: childPath, depth: depth + 1, seen, onField });
+  }
+}
+
 export function resolveUpstreamFields(graph: UpstreamGraph, nodeId: string): UpstreamFieldContext {
   const fields: UpstreamField[] = [];
   const names = new Set<string>();
@@ -78,7 +119,12 @@ export function resolveUpstreamFields(graph: UpstreamGraph, nodeId: string): Ups
       if (edge.target !== currentId || visited.has(edge.source)) continue;
       const upNode = graph.nodes.find((n) => n.id === edge.source);
       if (!upNode) continue;
-      const upType = String(upNode.type ?? upNode.data?.type ?? '');
+      /*
+       * The canonical type, not `upNode.type` — a stored/canvas node carries `'custom'`
+       * there, which resolves to no schema, so every field went unattributed and the wizard
+       * asked the user for a value the upstream node already had.
+       */
+      const upType = resolveNodeType(upNode).nodeType;
       const upLabel = String(upNode.data?.label ?? upType ?? upNode.id);
       const effective = unifiedNodeRegistry.getEffectiveOutputSchema(
         upType,
@@ -99,6 +145,42 @@ export function resolveUpstreamFields(graph: UpstreamGraph, nodeId: string): Ups
             });
           }
         }
+        /*
+         * Nested values are addressable too (RC-4).
+         *
+         * The walk used to stop at the top level, so a `spreadsheetId` living inside
+         * `manual_trigger.inputData` was invisible: the best reference downstream could ever
+         * be offered was `{{$json.inputData}}`, never `{{$json.inputData.spreadsheetId}}`.
+         * With no usable reference the next node had nothing to link to and asked the user
+         * for a value the node above already carried.
+         *
+         * The nested shape comes from the upstream node's INSTANCE config, exactly as a form
+         * node's output shape already comes from `config.fields` — no node-type branching
+         * here, only "this declared output property currently holds an object".
+         */
+        const config = upNode.data?.config as Record<string, unknown> | undefined;
+        if (config) {
+          for (const name of Object.keys(effective.properties)) {
+            collectNestedFields({
+              value: config[name],
+              path: name,
+              depth: 1,
+              seen: new WeakSet<object>(),
+              onField: (fieldName, type) => {
+                if (names.has(fieldName)) return;
+                names.add(fieldName);
+                fields.push({
+                  name: fieldName,
+                  type,
+                  producedByNodeId: upNode.id,
+                  producedByNodeType: upType,
+                  producedByNodeLabel: upLabel,
+                });
+              },
+            });
+          }
+        }
+
         continue; // Real shape found here — don't attribute it to nodes further back.
       }
 

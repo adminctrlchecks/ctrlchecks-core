@@ -14,7 +14,8 @@ import { __resetMemoryStore } from '../../../core/execution/build-run-state';
 jest.mock('../../execute-workflow', () => ({ executeNode: jest.fn() }));
 jest.mock('../../../core/database/db-client', () => ({ getDbClient: () => ({}) }));
 jest.mock('../../../core/registry/unified-node-registry', () => ({
-  unifiedNodeRegistry: { get: jest.fn(() => ({ label: 'node' })) },
+  // Node type resolution is shared now; identity aliasing keeps this file's fixtures literal.
+  unifiedNodeRegistry: { get: jest.fn(() => ({ label: 'node' })), resolveAlias: (type: string) => type },
 }));
 
 const mockedExecute = executeNode as jest.MockedFunction<typeof executeNode>;

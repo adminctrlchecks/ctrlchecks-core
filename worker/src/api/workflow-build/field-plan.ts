@@ -16,6 +16,7 @@
 
 import { Response } from 'express';
 import { unifiedNodeRegistry } from '../../core/registry/unified-node-registry';
+import { resolveNodeType } from '../../core/registry/node-type-resolution';
 import { resolveFieldPolicyForNode } from '../../core/operations/field-policy-resolver';
 import { buildEffectiveFillModes } from '../../core/utils/fill-mode-resolver';
 import {
@@ -150,46 +151,16 @@ export default async function fieldPlan(
 
     for (const node of graph.nodes) {
       /*
-       * Work out which node this actually is.
+       * Which node this actually is. The resolution rules — business type first, alias
+       * translation, strict lookup — live in core/registry/node-type-resolution.ts, because
+       * getting them wrong fails silently and differently at every site that reads a type.
+       * Here the failure was an entry with five EMPTY groups: no error, no diagnostic, and a
+       * card that rendered three empty sections and read as a grouping bug.
        *
-       * Two things had to be got right here, and the original code got both wrong:
-       *
-       * 1. **`node.type` is the React Flow RENDERER type, not the business type.** Saved
-       *    workflows carry `type: 'custom'` with the real type in `data.type`. Reading
-       *    `node.type ?? node.data?.type` therefore resolved to `'custom'` for every node in
-       *    a stored workflow — a type no registry will ever know.
-       *
-       * 2. **`unifiedNodeRegistry.get()` is deliberately strict** — canonical names only, no
-       *    translation — while workflows legitimately carry nicknames (`gmail` for
-       *    `google_gmail`, `mail`, `ai`, …), so the alias has to be resolved first.
-       *
-       * Either failure landed in the `!def` branch below, which returns an entry with five
-       * EMPTY groups. That was not visible as an error: the card rendered its sections, found
-       * nothing to put in them, and swept every field into its leftover bucket — so a
-       * perfectly valid node reported "0, 0, 0" and read as a grouping bug.
-       *
-       * Both candidates are tried, business type first, and the first that actually resolves
-       * wins. That covers stored workflows (`data.type`), backend-generated graphs (`type`),
-       * and aliases in either position, without assuming a shape.
+       * `nodeType` is canonical when resolved and the type AS IT ARRIVED when not — "unknown
+       * node type google_gmail" would be nonsense when what was sent was `gmail`.
        */
-      const typeCandidates = [node.data?.type, node.type]
-        .map((candidate) => String(candidate ?? '').trim())
-        .filter(Boolean);
-
-      let nodeType = '';
-      let def: ReturnType<typeof unifiedNodeRegistry.get>;
-      for (const candidate of typeCandidates) {
-        const resolved = unifiedNodeRegistry.resolveAlias(candidate) ?? candidate;
-        const candidateDef = unifiedNodeRegistry.get(resolved);
-        if (candidateDef) {
-          nodeType = resolved;
-          def = candidateDef;
-          break;
-        }
-      }
-      // Nothing resolved — report the type as it arrived, which is what a reader can act on.
-      const rawNodeType = typeCandidates[0] ?? '';
-      if (!def) nodeType = rawNodeType;
+      const { nodeType, definition: def, rawNodeType } = resolveNodeType(node);
       const nodeLabel = String(node.data?.label ?? def?.label ?? nodeType ?? node.id);
       if (!def) {
         planNodes.push({

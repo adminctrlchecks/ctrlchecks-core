@@ -1459,7 +1459,15 @@
       "tableId",
       "operation",
       "recordId",
-      "fields"
+      "fields",
+      "filterByFormula",
+      "maxRecords",
+      "view",
+      "sort",
+      "pageSize",
+      "typecast",
+      "matchField",
+      "records"
     ],
     "credentialType": null,
     "capabilities": []

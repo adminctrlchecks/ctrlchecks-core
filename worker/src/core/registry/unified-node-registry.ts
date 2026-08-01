@@ -40,6 +40,7 @@ import {
   inferFieldHelpMetadata,
 } from '../utils/field-help-metadata';
 import type { FieldHelpCategory } from '../utils/field-help-metadata';
+import { applyIdentityFieldPolicy } from './identity-field-policy';
 import { classifyFieldOwnership, isCredentialOwnership } from '../utils/field-ownership';
 import { buildFieldIntelligence } from '../utils/node-field-intelligence';
 import type { Workflow } from '../types/ai-types';
@@ -1605,7 +1606,14 @@ export class UnifiedNodeRegistry implements INodeRegistry {
   // ============================================
   
   register(definition: UnifiedNodeDefinition): void {
-    this.definitions.set(definition.type, definition);
+    /*
+     * Identity fields lose build-time AI here, at the ONE point every definition passes
+     * through, so the guarantee holds however a node's schema was authored and for every node
+     * added later with no further work. Doing it per-field, as before, left 125 of 197
+     * `role: 'id'` fields fabricatable with no principle separating them from the 72 blocked.
+     * Runtime AI is deliberately untouched — see identity-field-policy.ts.
+     */
+    this.definitions.set(definition.type, applyIdentityFieldPolicy(definition));
     this.registryAliasIndexCache = null;
     this.communicationCategoryDefsCache = null;
     this.emailChannelIntentKeywordCache = null;

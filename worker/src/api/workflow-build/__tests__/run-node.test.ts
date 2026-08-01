@@ -18,6 +18,8 @@ jest.mock('../../../core/database/db-client', () => ({ getDbClient: () => ({}) }
 jest.mock('../../../core/registry/unified-node-registry', () => ({
   unifiedNodeRegistry: {
     get: jest.fn((type: string) => (type === 'unknown_node' ? undefined : { label: type })),
+    // Node type resolution is shared now; identity aliasing keeps this file's fixtures literal.
+    resolveAlias: (type: string) => type,
   },
 }));
 

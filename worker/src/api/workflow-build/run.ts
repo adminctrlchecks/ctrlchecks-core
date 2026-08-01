@@ -18,7 +18,7 @@ import { executeNode } from '../execute-workflow';
 import { shouldSkipNode } from '../../core/execution/unified-execution-engine';
 import { LRUNodeOutputsCache } from '../../core/cache/lru-node-outputs-cache';
 import { getDbClient } from '../../core/database/db-client';
-import { unifiedNodeRegistry } from '../../core/registry/unified-node-registry';
+import { resolveNodeType } from '../../core/registry/node-type-resolution';
 import { requiresStrongConfirmation, resolveFirstRunClass, requiresConsent } from '../../core/execution/first-run-policy';
 import { describeSampling, sampleCollectionForFirstRun } from '../../core/execution/fanout-sampler';
 import {
@@ -47,7 +47,8 @@ interface GraphEdge {
   sourceHandle?: string;
 }
 
-const nodeTypeOf = (n: GraphNode) => String(n?.type ?? n?.data?.type ?? '').trim();
+/** Canonical type — see core/registry/node-type-resolution.ts for why this is not inline. */
+export const nodeTypeOf = (n: GraphNode) => resolveNodeType(n).nodeType;
 const nodeLabelOf = (n: GraphNode) => String(n?.data?.label ?? nodeTypeOf(n) ?? n?.id ?? 'this step');
 
 /**
@@ -179,8 +180,9 @@ export default async function runWorkflowBuild(
         continue;
       }
 
-      const nodeType = nodeTypeOf(node);
-      if (!unifiedNodeRegistry.get(nodeType)) {
+      // One lookup: a second strict `get()` on an alias would miss what the helper resolved.
+      const { nodeType, definition } = resolveNodeType(node);
+      if (!definition) {
         emit({ type: 'node', nodeId, status: 'needs_attention', message: `Unknown node type "${nodeType}".` });
         continue;
       }
