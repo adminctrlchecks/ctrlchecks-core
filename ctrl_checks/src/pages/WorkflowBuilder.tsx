@@ -10,6 +10,11 @@ import { Copy, ExternalLink, ChevronRight, ChevronLeft, History } from 'lucide-r
 import { cn } from '@/lib/utils';
 import { NodeTypeDefinition } from '@/components/workflow/nodeTypes';
 import WorkflowHeader from '@/components/workflow/WorkflowHeader';
+import WorkflowSubHeader from '@/components/workflow/WorkflowSubHeader';
+import WorkflowModeSwitch from '@/components/workflow/WorkflowModeSwitch';
+import { useEditorMode } from '@/hooks/useEditorMode';
+import { resolveEditorLayout } from '@/lib/workflow-editor-layout';
+import { useResizablePanelWidth } from '@/hooks/useResizablePanelWidth';
 import { useWorkflowConnectionStatus } from '@/hooks/useWorkflowConnectionStatus';
 import { WorkflowConnectionGate } from '@/components/workflow/WorkflowConnectionGate';
 import { useDebugStore } from '@/stores/debugStore';
@@ -35,6 +40,7 @@ import type { ExecutionResult } from '../lib/executionNotifications';
 const NodeLibrary = lazy(() => import('@/components/workflow/NodeLibrary'));
 const WorkflowCanvas = lazy(() => import('@/components/workflow/WorkflowCanvas'));
 const PropertiesPanel = lazy(() => import('@/components/workflow/PropertiesPanel'));
+const PromptModePanel = lazy(() => import('@/components/workflow/PromptModePanel'));
 const ExecutionConsole = lazy(() => import('@/components/workflow/ExecutionConsole'));
 const DebugPanel = lazy(() => import('@/components/workflow/debug/DebugPanel'));
 const WorkflowVersionPanel = lazy(() => import('@/components/workflow/WorkflowVersionPanel'));
@@ -137,6 +143,20 @@ export default function WorkflowBuilder() {
   const [setupPanelOpen, setSetupPanelOpen] = useState(false);
   const [isCheckingSetup, setIsCheckingSetup] = useState(false);
   const [latestSetupCheck, setLatestSetupCheck] = useState<{ workflowId: string; ready: boolean; checkedAt: number } | null>(null);
+  const { mode: editorMode, setMode: setEditorMode } = useEditorMode();
+  const editorLayout = resolveEditorLayout(editorMode);
+  const {
+    width: assistantWidth,
+    isResizing: isResizingAssistant,
+    startResize: startAssistantResize,
+    nudge: nudgeAssistantWidth,
+  } = useResizablePanelWidth({
+    storageKey: 'ctrlchecks_prompt_panel_width',
+    defaultFraction: 0.4,
+    // 208px run-list column + ~310px of detail is about the narrowest that stays readable.
+    minWidth: 520,
+    maxFraction: 0.7,
+  });
 
   const {
     readiness: workflowReadiness,
@@ -1564,6 +1584,9 @@ export default function WorkflowBuilder() {
         missingConnectionsCount={missingConnections.length}
         missingConnections={missingConnections.map(c => ({ provider: c.provider, displayName: c.displayName }))}
       />
+      <WorkflowSubHeader>
+        <WorkflowModeSwitch mode={editorMode} onChange={setEditorMode} />
+      </WorkflowSubHeader>
       {id && id !== 'new' && (setupPanelOpen || (!gateDismissed && (hasSetupBlockers || isCheckingConnections))) && (
         <WorkflowConnectionGate
           missingConnections={missingConnections}
@@ -1621,8 +1644,8 @@ export default function WorkflowBuilder() {
             </div>
           )}
           <div className="flex-1 min-h-0 min-w-0 flex overflow-hidden">
-            {/* Left Panel - Node Library */}
-            {nodeLibraryOpen ? (
+            {/* Left Panel - Node Library (Expert mode only — not even the collapsed rail in Prompt mode) */}
+            {editorLayout.showNodeLibrary && (nodeLibraryOpen ? (
               <div className="relative w-[360px] shrink-0 overflow-hidden border-r border-border/60">
                 <NodeLibrary
                   onDragStart={onDragStart}
@@ -1642,7 +1665,7 @@ export default function WorkflowBuilder() {
               >
                 <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-foreground/60 transition-colors duration-150" />
               </button>
-            )}
+            ))}
 
             {/* Central Canvas Area */}
             <div className="relative h-full min-h-0 min-w-0 flex-[1_1_0%] overflow-hidden">
@@ -1678,8 +1701,10 @@ export default function WorkflowBuilder() {
               )}
             </div>
 
-            {/* Right Panel - Properties */}
-            {propertiesPanelOpen ? (
+            {/* Right Panel - Properties. Expert mode only: this gate is also what makes a node
+                click in Prompt mode open nothing — the node still highlights on the canvas, but
+                there is no panel to show, whatever `propertiesPanelOpen` happens to be. */}
+            {editorLayout.showPropertiesPanel && (propertiesPanelOpen ? (
               <div className="relative w-[360px] shrink-0 overflow-hidden border-l border-border/60">
                 <PropertiesPanel
                   onClose={() => setPropertiesPanelOpen(false)}
@@ -1699,12 +1724,46 @@ export default function WorkflowBuilder() {
               >
                 <ChevronLeft className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-foreground/60 transition-colors duration-150" />
               </button>
+            ))}
+
+            {/* Right column - Prompt mode: AI Editor / Execution Logs as a toggle, so the
+                selected one gets the full column instead of the two splitting it. Drag the
+                handle on its left edge to resize; the width is remembered per browser. */}
+            {editorLayout.showAssistantColumn && (
+              <>
+                <div
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label="Resize assistant panel"
+                  tabIndex={0}
+                  onPointerDown={startAssistantResize}
+                  onKeyDown={(e) => {
+                    if (e.key === 'ArrowLeft') { e.preventDefault(); nudgeAssistantWidth(24); }
+                    if (e.key === 'ArrowRight') { e.preventDefault(); nudgeAssistantWidth(-24); }
+                  }}
+                  className={cn(
+                    'w-1 shrink-0 cursor-col-resize bg-border/40 transition-colors',
+                    'hover:bg-primary/40 focus-visible:outline-none focus-visible:bg-primary/60',
+                    isResizingAssistant && 'bg-primary/60',
+                  )}
+                />
+                <div
+                  className="relative flex shrink-0 flex-col overflow-hidden border-l border-border/60 bg-card"
+                  style={{ width: assistantWidth }}
+                >
+                  <PromptModePanel revealLogs={consoleExpanded} />
+                </div>
+              </>
             )}
           </div>
-          <ExecutionConsole
-            isExpanded={consoleExpanded}
-            onToggle={() => setConsoleExpanded(!consoleExpanded)}
-          />
+          {/* Expert mode keeps the full-width bottom bar; Prompt mode's console lives in the
+              right column above, in its vertical variant. */}
+          {editorLayout.showBottomConsole && (
+            <ExecutionConsole
+              isExpanded={consoleExpanded}
+              onToggle={() => setConsoleExpanded(!consoleExpanded)}
+            />
+          )}
         </div>
 
         {/* Debug Panel Overlay */}

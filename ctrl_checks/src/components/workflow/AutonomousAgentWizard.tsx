@@ -25,6 +25,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { validateAndFixWorkflow, type ValidateAndFixWorkflowOptions } from '@/lib/workflowValidation';
 import { computeExecutionOrderRank } from '@/lib/workflowGraphValidator';
 import { useTheme } from '@/hooks/useTheme';
+import { AI_WIZARD_ORIGIN } from '@/hooks/useEditorMode';
 import { InputGuideLink } from './InputGuideLink';
 import { GlassBlurLoader } from '@/components/ui/glass-blur-loader';
 import { ThemedBorderGlow } from '@/components/ui/themed-border-glow';
@@ -3642,7 +3643,7 @@ export function AutonomousAgentWizard() {
                     // trigger a visible re-render (the component unmounts on navigation).
                     setIsNavigating(true);
                     await commitSetupWorkflow(savedWorkflow.id);
-                    navigate(`/workflow/${savedWorkflow.id}`, { replace: true });
+                    navigate(`/workflow/${savedWorkflow.id}`, { replace: true, state: { origin: AI_WIZARD_ORIGIN } });
                     // No-ops from here — component is unmounting
                     setGeneratedWorkflowId(savedWorkflow.id);
                     setNodes(normalized.nodes as any[]);
@@ -4535,7 +4536,7 @@ export function AutonomousAgentWizard() {
                                             description: 'Your workflow has been created successfully!',
                                         });
                                         await commitSetupWorkflow(savedWorkflow.id);
-                                        navigate(`/workflow/${savedWorkflow.id}`, { replace: true });
+                                        navigate(`/workflow/${savedWorkflow.id}`, { replace: true, state: { origin: AI_WIZARD_ORIGIN } });
                                     } else {
                                         console.error('Workflow saved but no ID returned');
                                         throw new Error('Failed to get workflow ID after save');
@@ -7636,7 +7637,7 @@ export function AutonomousAgentWizard() {
                                                                 description: 'Workflow configured successfully!',
                                                             });
                                                             await commitSetupWorkflow(generatedWorkflowId);
-                                                            navigate(`/workflow/${generatedWorkflowId}`, { replace: true });
+                                                            navigate(`/workflow/${generatedWorkflowId}`, { replace: true, state: { origin: AI_WIZARD_ORIGIN } });
                                                         } catch (error: any) {
                                                             const guidance = mapWorkflowIssueToGuidance({
                                                                 message: error?.message || 'Failed to configure workflow',
@@ -7760,7 +7761,7 @@ export function AutonomousAgentWizard() {
                                             // Add autoRun query parameter to automatically start the workflow
                                             try {
                                                 await commitSetupWorkflow(generatedWorkflowId);
-                                                navigate(`/workflow/${generatedWorkflowId}?autoRun=true`, { replace: false });
+                                                navigate(`/workflow/${generatedWorkflowId}?autoRun=true`, { replace: false, state: { origin: AI_WIZARD_ORIGIN } });
                                             } catch (error: any) {
                                                 toast({
                                                     title: 'Workflow setup incomplete',

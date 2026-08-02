@@ -1,13 +1,14 @@
-﻿/**
+/**
  * Templates Page (User View)
  * Browse and copy workflow templates
  */
 
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Copy, Star, Clock, TrendingUp } from 'lucide-react';
+import { Copy, Star, Clock, TrendingUp, Search, X, LayoutTemplate } from 'lucide-react';
 import { WorkflowAuthGate } from '@/components/WorkflowAuthGate';
 import { WorkflowActionButton } from '@/components/WorkflowActionButton';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -24,6 +25,37 @@ type Template = Database['public']['Tables']['templates']['Row'] & {
   estimated_setup_time?: number;
   tags?: string[];
 };
+
+/** Placeholder cards sized like the real ones, so the grid does not jump when data lands. */
+function TemplateCardSkeleton() {
+  return (
+    <Card className="flex h-full flex-col motion-safe:hover:scale-100" aria-hidden>
+      <CardHeader className="gap-3 pb-4">
+        <div className="flex gap-1.5">
+          <div className="h-5 w-32 animate-pulse rounded-full bg-muted" />
+          <div className="h-5 w-20 animate-pulse rounded-full bg-muted" />
+        </div>
+        <div className="h-6 w-3/4 animate-pulse rounded bg-muted" />
+        <div className="space-y-1.5">
+          <div className="h-3 w-full animate-pulse rounded bg-muted" />
+          <div className="h-3 w-full animate-pulse rounded bg-muted" />
+          <div className="h-3 w-2/3 animate-pulse rounded bg-muted" />
+        </div>
+      </CardHeader>
+      <CardContent className="flex flex-1 flex-col pt-0">
+        <div className="mt-auto space-y-4">
+          <div className="border-t border-border/50 pt-4">
+            <div className="h-3 w-24 animate-pulse rounded bg-muted" />
+          </div>
+          <div className="flex items-center justify-between border-t border-border/50 pt-4">
+            <div className="h-4 w-16 animate-pulse rounded bg-muted" />
+            <div className="h-9 w-32 animate-pulse rounded-lg bg-muted" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function Templates() {
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -98,104 +130,188 @@ export default function Templates() {
     template.description?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const isSearching = searchQuery.trim().length > 0;
+
   return (
     <div className="min-h-screen bg-background">
       <AppChromeHeader />
-      <div className="container mx-auto space-y-6 p-6">
-        {loading ? (
-          <p className="text-sm text-muted-foreground">Loading templates...</p>
-        ) : (
-      <WorkflowAuthGate>
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Workflow Templates</h1>
-            <p className="text-muted-foreground mt-1">
-              Browse pre-built workflow templates. Copy any template to start customizing.
-            </p>
-          </div>
-          <Input
-            placeholder="Search templates..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full md:max-w-sm"
-          />
-        </div>
+      <div className="container mx-auto max-w-7xl px-6 py-8">
+        <WorkflowAuthGate>
+          {/* Page header — title block and search on one baseline, separated from the
+              grid by a rule so the input never reads as part of the first card. */}
+          <header className="flex flex-col gap-4 border-b border-border/60 pb-6 md:flex-row md:items-center md:justify-between md:gap-8">
+            <div className="min-w-0">
+              <h1 className="text-3xl font-bold tracking-tight">Workflow Templates</h1>
+              <p className="mt-1.5 text-muted-foreground">
+                Browse pre-built workflow templates. Copy any template to start customizing.
+              </p>
+            </div>
+            <div className="relative w-full shrink-0 md:w-80">
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden
+              />
+              <Input
+                placeholder="Search templates..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 pr-9"
+                aria-label="Search templates"
+              />
+              {isSearching && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  aria-label="Clear search"
+                  className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredTemplates.map((template) => (
-            <Card key={template.id} className="hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <CardTitle className="flex items-center gap-2">
-                      {template.name}
-                      {template.is_featured && (
-                        <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                      )}
-                    </CardTitle>
-                    <CardDescription className="mt-1">
-                      {template.description}
-                    </CardDescription>
-                  </div>
+          {loading ? (
+            <>
+              <div className="mt-6 h-5 w-32 animate-pulse rounded bg-muted" aria-hidden />
+              <div className="mt-4 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <TemplateCardSkeleton key={i} />
+                ))}
+              </div>
+              <p className="sr-only" role="status">Loading templates…</p>
+            </>
+          ) : (
+            <>
+              <p className="mt-6 text-sm text-muted-foreground" role="status" aria-live="polite">
+                {filteredTemplates.length}{' '}
+                {filteredTemplates.length === 1 ? 'template' : 'templates'}
+                {isSearching && <> matching &ldquo;{searchQuery}&rdquo;</>}
+              </p>
+
+              {filteredTemplates.length > 0 ? (
+                <div className="mt-4 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+                  {filteredTemplates.map((template) => {
+                    const tags = template.tags ?? [];
+                    const visibleTags = tags.slice(0, 3);
+                    const hiddenTagCount = tags.length - visibleTags.length;
+
+                    return (
+                      // h-full + flex column is what lets the footer pin to the bottom, so
+                      // "Use Template" lands on the same line in every card of a row.
+                      <Card key={template.id} className="flex h-full flex-col">
+                        <CardHeader className="gap-3 space-y-0 pb-4">
+                          {/* One meta row — category, difficulty and setup time read as a
+                              single line of context instead of three wrapping rows. */}
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {template.category && (
+                              <Badge variant="secondary" className="font-medium">
+                                {template.category}
+                              </Badge>
+                            )}
+                            {template.difficulty && (
+                              <Badge variant="outline" className="font-normal capitalize">
+                                {template.difficulty}
+                              </Badge>
+                            )}
+                            {template.estimated_setup_time && (
+                              <Badge variant="outline" className="items-center gap-1 font-normal">
+                                <Clock className="h-3 w-3 shrink-0" aria-hidden />
+                                {template.estimated_setup_time} min
+                              </Badge>
+                            )}
+                          </div>
+
+                          <CardTitle className="flex items-start gap-2 text-lg leading-snug">
+                            <span className="line-clamp-2 min-w-0">{template.name}</span>
+                            {template.is_featured && (
+                              <Star
+                                className="mt-0.5 h-4 w-4 shrink-0 fill-yellow-500 text-yellow-500"
+                                aria-label="Featured"
+                              />
+                            )}
+                          </CardTitle>
+
+                          {/* Clamped to three lines with the space always reserved, so a long
+                              description cannot shove one card's layout out of step. */}
+                          <CardDescription
+                            className="line-clamp-3 min-h-[3.75rem]"
+                            title={template.description ?? undefined}
+                          >
+                            {template.description}
+                          </CardDescription>
+                        </CardHeader>
+
+                        <CardContent className="flex flex-1 flex-col pt-0">
+                          <div className="flex min-h-[1.5rem] flex-wrap gap-1.5">
+                            {visibleTags.map((tag) => (
+                              <Badge key={tag} variant="outline" className="text-xs font-normal">
+                                {tag}
+                              </Badge>
+                            ))}
+                            {hiddenTagCount > 0 && (
+                              <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
+                                +{hiddenTagCount}
+                              </Badge>
+                            )}
+                          </div>
+
+                          {/* Bottom-anchored group: connections sit directly above the action
+                              row, and both stay flush with the bottom of the card. */}
+                          <div className="mt-auto space-y-4 pt-4">
+                            <div className="border-t border-border/50 pt-4">
+                              <TemplateConnections
+                                connections={getTemplateConnections(
+                                  template.nodes as Parameters<typeof getTemplateConnections>[0],
+                                  catalog,
+                                )}
+                                loading={catalogLoading}
+                              />
+                            </div>
+                            <div className="flex items-center justify-between gap-3 border-t border-border/50 pt-4">
+                              <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                                <TrendingUp className="h-4 w-4 shrink-0" aria-hidden />
+                                {template.use_count || 0} uses
+                              </span>
+                              <WorkflowActionButton onClick={() => handleCopyTemplate(template)}>
+                                <Copy className="mr-2 h-4 w-4" />
+                                Use Template
+                              </WorkflowActionButton>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex flex-wrap gap-2">
-                    <Badge variant="outline">{template.category}</Badge>
-                    {template.difficulty && (
-                      <Badge variant="secondary">{template.difficulty}</Badge>
-                    )}
-                    {template.estimated_setup_time && (
-                      <Badge variant="outline" className="gap-1 items-center">
-                        <Clock className="h-3 w-3 shrink-0" />
-                        {template.estimated_setup_time} min
-                      </Badge>
+              ) : (
+                <div className="mt-4 flex flex-col items-center justify-center rounded-xl border border-dashed border-border/70 px-6 py-16 text-center">
+                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                    {isSearching ? (
+                      <Search className="h-5 w-5 text-muted-foreground" aria-hidden />
+                    ) : (
+                      <LayoutTemplate className="h-5 w-5 text-muted-foreground" aria-hidden />
                     )}
                   </div>
-                  {template.tags && template.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {template.tags.slice(0, 3).map((tag, idx) => (
-                        <Badge key={idx} variant="outline" className="text-xs">
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
+                  <p className="font-medium">
+                    {isSearching ? 'No templates match your search' : 'No templates available yet'}
+                  </p>
+                  <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+                    {isSearching
+                      ? 'Try a different name, service or keyword.'
+                      : 'Templates published by your workspace will appear here.'}
+                  </p>
+                  {isSearching && (
+                    <Button variant="outline" size="sm" className="mt-4" onClick={() => setSearchQuery('')}>
+                      Clear search
+                    </Button>
                   )}
-                  <div className="border-t border-border/50 pt-3">
-                    <TemplateConnections
-                      connections={getTemplateConnections(
-                        template.nodes as Parameters<typeof getTemplateConnections>[0],
-                        catalog,
-                      )}
-                      loading={catalogLoading}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between pt-2">
-                    <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                      <TrendingUp className="h-4 w-4" />
-                      <span>{template.use_count || 0} uses</span>
-                    </div>
-                    <WorkflowActionButton onClick={() => handleCopyTemplate(template)}>
-                      <Copy className="h-4 w-4 mr-2" />
-                      Use Template
-                    </WorkflowActionButton>
-                  </div>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {filteredTemplates.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-muted-foreground">No templates found</p>
-          </div>
-        )}
-      </WorkflowAuthGate>
-        )}
+              )}
+            </>
+          )}
+        </WorkflowAuthGate>
       </div>
     </div>
   );
 }
-

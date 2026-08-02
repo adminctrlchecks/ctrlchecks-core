@@ -1,9 +1,7 @@
 ﻿import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Link2, Play, Save, Settings, Upload, Download, Square, ListChecks } from 'lucide-react';
+import { ArrowLeft, Link2, Play, Settings, Upload, Download, Square, ListChecks } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ProviderLogo } from '@/components/connections/ProviderLogo';
 import {
@@ -17,6 +15,7 @@ import { AppBrand } from '@/components/brand/AppBrand';
 import { useWorkflowStore } from '@/stores/workflowStore';
 import WebhookSettings from './WebhookSettings';
 import ScheduleSettings from './ScheduleSettings';
+import SaveStateButton from './SaveStateButton';
 import { WorkflowActionButton } from '@/components/WorkflowActionButton';
 import { toast } from '@/hooks/use-toast';
 import { awsClient } from '@/integrations/aws/client';
@@ -52,8 +51,7 @@ export default function WorkflowHeader({
   missingConnections = [],
 }: WorkflowHeaderProps) {
   const navigate = useNavigate();
-  const { workflowId, workflowName, setWorkflowName, isDirty, nodes, edges } = useWorkflowStore();
-  const [isEditing, setIsEditing] = useState(false);
+  const { workflowId, workflowName, isDirty, nodes, edges } = useWorkflowStore();
   const [isExporting, setIsExporting] = useState(false);
   const [isScheduleActive, setIsScheduleActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -206,31 +204,6 @@ export default function WorkflowHeader({
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <AppBrand context="app" size="sm" className="hidden sm:flex" />
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          {isEditing ? (
-            <Input
-              value={workflowName}
-              onChange={(e) => setWorkflowName(e.target.value)}
-              onBlur={() => setIsEditing(false)}
-              onKeyDown={(e) => e.key === 'Enter' && setIsEditing(false)}
-              className="h-8 w-64"
-              autoFocus
-            />
-          ) : (
-            <button
-              onClick={() => setIsEditing(true)}
-              className="min-w-0 truncate text-left text-lg font-semibold hover:text-primary transition-colors"
-              title={workflowName}
-            >
-              {workflowName}
-            </button>
-          )}
-          {isDirty && (
-            <Badge variant="secondary" className="shrink-0 text-xs">
-              Unsaved
-            </Badge>
-          )}
-        </div>
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
@@ -272,10 +245,7 @@ export default function WorkflowHeader({
         <ScheduleSettings workflowId={workflowId} onScheduleChange={setIsScheduleActive} />
         <WebhookSettings workflowId={workflowId} />
 
-        <Button variant="outline" size="sm" onClick={onSave} disabled={isSaving || !isDirty}>
-          <Save className="mr-2 h-4 w-4" />
-          {isSaving ? 'Saving...' : 'Save'}
-        </Button>
+        <SaveStateButton onSave={onSave} isDirty={isDirty} isSaving={Boolean(isSaving)} />
 
         <WorkflowActionButton
           size="sm"

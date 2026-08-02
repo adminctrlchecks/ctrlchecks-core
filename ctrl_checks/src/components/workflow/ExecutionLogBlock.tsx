@@ -33,6 +33,13 @@ interface ExecutionLogBlockProps {
   index: number;
   totalNodes: number;
   isLast?: boolean;
+  /**
+   * Start every section closed, leaving just the node's summary row (name, status, timing,
+   * position). Used by Prompt mode, where the narrow column turns nine expanded JSON payloads
+   * into an unreadable wall. Expert mode leaves this false and stays fully expanded.
+   * Only seeds the initial state — the user's own expand/collapse always wins afterwards.
+   */
+  defaultCollapsed?: boolean;
 }
 
 // Map node types to icons
@@ -105,11 +112,18 @@ const countModifiedFields = (input: unknown, output: unknown): number => {
   return modified;
 };
 
-export default function ExecutionLogBlock({ log, index, totalNodes, isLast = false }: ExecutionLogBlockProps) {
-  const [isExpanded, setIsExpanded] = useState(true);
-  const [inputExpanded, setInputExpanded] = useState(true);
-  const [resolvedInputsExpanded, setResolvedInputsExpanded] = useState(true);
-  const [outputExpanded, setOutputExpanded] = useState(true);
+export default function ExecutionLogBlock({
+  log,
+  index,
+  totalNodes,
+  isLast = false,
+  defaultCollapsed = false,
+}: ExecutionLogBlockProps) {
+  const startOpen = !defaultCollapsed;
+  const [isExpanded, setIsExpanded] = useState(startOpen);
+  const [inputExpanded, setInputExpanded] = useState(startOpen);
+  const [resolvedInputsExpanded, setResolvedInputsExpanded] = useState(startOpen);
+  const [outputExpanded, setOutputExpanded] = useState(startOpen);
 
   const NodeIcon = getNodeIcon(log.nodeType, log.nodeName);
   const nodeName = log.nodeName || log.nodeId || `Node ${index + 1}`;

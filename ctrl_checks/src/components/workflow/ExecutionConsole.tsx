@@ -46,6 +46,24 @@ interface ExecutionStep {
 interface ExecutionConsoleProps {
   isExpanded: boolean;
   onToggle: () => void;
+  /**
+   * 'horizontal' (default) is the full-width bottom bar used by Expert mode.
+   * 'vertical' is the tall, narrow right-hand column used by Prompt mode: the run list
+   * moves above the detail pane instead of beside it.
+   */
+  orientation?: 'horizontal' | 'vertical';
+  /**
+   * False when the console is the body of a tab that already controls its visibility
+   * (Prompt mode). The header keeps its run count and refresh button but loses the
+   * expand/collapse affordance, and the body always fills the available space.
+   */
+  collapsible?: boolean;
+  /**
+   * Render each node's log entry collapsed to its summary row (name, status, timing, position),
+   * so a run reads as a scannable list instead of a wall of JSON. Prompt mode turns this on;
+   * Expert mode leaves it off and keeps today's fully-expanded payloads.
+   */
+  collapseLogsByDefault?: boolean;
 }
 
 type ResolvedInputSource = 'static_config' | 'template' | 'deterministic_runtime' | 'runtime_ai';
@@ -111,7 +129,16 @@ function buildLogsFromSteps(steps: ExecutionStep[]) {
     }));
 }
 
-export default function ExecutionConsole({ isExpanded, onToggle }: ExecutionConsoleProps) {
+export default function ExecutionConsole({
+  isExpanded,
+  onToggle,
+  orientation = 'horizontal',
+  collapsible = true,
+  collapseLogsByDefault = false,
+}: ExecutionConsoleProps) {
+  const isVertical = orientation === 'vertical';
+  /** Whether the body is showing. Identical to `isExpanded` in the default collapsible mode. */
+  const isOpen = collapsible ? isExpanded : true;
   const { workflowId, updateNodeStatus, resetWorkflow, resetAllNodeStatuses, nodes, setNodeError, clearNodeErrors } = useWorkflowStore();
   const { activeExecution, reconnecting } = useExecutionStatus();
   const [executions, setExecutions] = useState<Execution[]>([]);
@@ -327,13 +354,13 @@ export default function ExecutionConsole({ isExpanded, onToggle }: ExecutionCons
   }, [workflowId, loadExecution]);
 
   useEffect(() => {
-    if (workflowId && isExpanded) {
+    if (workflowId && isOpen) {
       // ✅ FIX: Reset manual selection flag when workflow changes or console is collapsed/expanded
       // This allows auto-selection to work again for new workflows
       setIsManualSelection(false);
       loadExecutions();
     }
-  }, [workflowId, isExpanded, loadExecutions]);
+  }, [workflowId, isOpen, loadExecutions]);
 
   // Listen for workflow execution started event to force refresh
   useEffect(() => {
@@ -436,7 +463,7 @@ export default function ExecutionConsole({ isExpanded, onToggle }: ExecutionCons
 
   // Auto-refresh executions periodically when console is expanded and there's a running execution
   useEffect(() => {
-    if (!isExpanded || !workflowId) return;
+    if (!isOpen || !workflowId) return;
     
     const hasRunningExecution = executions.some(exec => 
       exec.status === 'running' || exec.status === 'waiting'
@@ -459,7 +486,7 @@ export default function ExecutionConsole({ isExpanded, onToggle }: ExecutionCons
       scheduleNext();
       return () => { stopped = true; clearTimeout(timerId); };
     }
-  }, [isExpanded, workflowId, executions, loadExecutions]);
+  }, [isOpen, workflowId, executions, loadExecutions]);
 
   // Real-time subscription for live updates
   useEffect(() => {
@@ -672,6 +699,7 @@ export default function ExecutionConsole({ isExpanded, onToggle }: ExecutionCons
               index={i}
               totalNodes={validLogs.length}
               isLast={i === validLogs.length - 1}
+              defaultCollapsed={collapseLogsByDefault}
             />
           ))}
         </div>
@@ -688,17 +716,26 @@ export default function ExecutionConsole({ isExpanded, onToggle }: ExecutionCons
 
   return (
     <div className={cn(
-      "border-t border-border bg-card transition-all duration-300 flex-shrink-0",
-      isExpanded ? "h-[600px]" : "h-10"
+      "border-border bg-card transition-all duration-300",
+      // As a tab body the console sits directly under the toggle row, which already has a
+      // bottom border — a top border here would double it up.
+      collapsible && "border-t",
+      isVertical
+        ? cn("flex min-h-0 w-full flex-col overflow-hidden", isOpen ? "flex-1" : "h-10 shrink-0")
+        : cn("flex-shrink-0", isOpen ? "h-[600px]" : "h-10")
     )}>
       {/* Console Header */}
       <div
-        className="h-10 px-4 flex items-center justify-between cursor-pointer hover:bg-muted/50"
-        onClick={onToggle}
+        className={cn(
+          "h-10 px-4 flex items-center justify-between",
+          collapsible && "cursor-pointer hover:bg-muted/50",
+          isVertical && "shrink-0 gap-2"
+        )}
+        onClick={collapsible ? onToggle : undefined}
       >
-        <div className="flex items-center gap-2">
-          <Terminal className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-medium">Execution Console</span>
+        <div className={cn("flex items-center gap-2", isVertical && "min-w-0")}>
+          <Terminal className={cn("h-4 w-4 text-muted-foreground", isVertical && "shrink-0")} />
+          <span className={cn("text-sm font-medium", isVertical && "truncate")}>Execution Console</span>
           {executions.length > 0 && (
             <Badge variant="secondary" className="text-xs">
               {executions.length} runs
@@ -706,7 +743,7 @@ export default function ExecutionConsole({ isExpanded, onToggle }: ExecutionCons
           )}
         </div>
         <div className="flex items-center gap-2">
-          {isExpanded && (
+          {isOpen && (
             <Button
               variant="ghost"
               size="sm"
@@ -716,17 +753,20 @@ export default function ExecutionConsole({ isExpanded, onToggle }: ExecutionCons
               <RefreshCw className={cn("h-3 w-3", loading && "animate-spin")} />
             </Button>
           )}
-          {isExpanded ? (
+          {collapsible && (isExpanded ? (
             <ChevronDown className="h-4 w-4 text-muted-foreground" />
           ) : (
             <ChevronUp className="h-4 w-4 text-muted-foreground" />
-          )}
+          ))}
         </div>
       </div>
 
       {/* Console Content */}
-      {isExpanded && (
-        <div className="h-[calc(100%-40px)] flex flex-col">
+      {isOpen && (
+        <div className={cn(
+          "flex flex-col",
+          isVertical ? "min-h-0 flex-1 overflow-hidden" : "h-[calc(100%-40px)]"
+        )}>
           {activeExecution && activeExecution.status !== 'idle' && (
             <div className="px-4 pt-3 pb-1 shrink-0">
               <ExecutionStatusBanner execution={activeExecution} reconnecting={reconnecting} />
@@ -737,9 +777,15 @@ export default function ExecutionConsole({ isExpanded, onToggle }: ExecutionCons
               Reconnecting to live updates…
             </div>
           )}
-          <div className="flex flex-1 min-h-0">
-          {/* Execution List */}
-          <div className="w-64 border-r border-border">
+          <div className={cn("flex flex-1 min-h-0", isVertical && "min-w-0")}>
+          {/* Execution List — a fixed-width column beside the details in both orientations, so a
+              growing run history scrolls inside its own column instead of eating the detail pane. */}
+          <div className={cn(
+            "border-r border-border",
+            // Same side-by-side structure in both orientations; the column is just a little
+            // narrower in the panel so the detail pane still has room at minimum width.
+            isVertical ? "w-52 shrink-0" : "w-64"
+          )}>
             <ScrollArea className="h-full">
               {!workflowId ? (
                 <div className="p-4 text-sm text-muted-foreground text-center">
@@ -798,7 +844,11 @@ export default function ExecutionConsole({ isExpanded, onToggle }: ExecutionCons
           </div>
 
           {/* Execution Details */}
-          <div className="flex-1 overflow-y-auto">
+          <div className={cn(
+            "flex-1 overflow-y-auto",
+            // Narrow column: contain wide payloads so the page itself never scrolls sideways.
+            isVertical && "min-h-0 min-w-0 overflow-x-hidden"
+          )}>
             {liveUpdatesDegraded && (
               <div className="mx-4 mt-4 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200 flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
