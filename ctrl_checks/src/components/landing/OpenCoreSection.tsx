@@ -4,6 +4,7 @@ import {
   landingViewport,
   springSoft,
 } from "@/components/landing/landing-motion";
+import { SECTION_SHELL } from "@/components/landing/landing-layout";
 
 /** Slide 9 — platform capabilities for builders (embedding lives in Plugins & APIs). */
 const blocks = [
@@ -24,63 +25,69 @@ export function OpenCoreSection() {
 
   return (
     <section id="developer-platform" className="py-12 sm:py-16" aria-labelledby="developer-platform-heading">
-      <div className="container mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={landingViewport}
-          transition={reduceMotion ? { duration: 0.45 } : springSoft}
-          className="mx-auto max-w-3xl text-center"
-        >
-          <h2
-            id="developer-platform-heading"
-            className="text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl"
+      <div className={SECTION_SHELL}>
+        {/* Heading + narrative on the left, capability blocks on the right. A
+            centred heading over a short bullet list left a tall empty gap under
+            the text while the cards ran on beside it. */}
+        <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={landingViewport}
+            transition={reduceMotion ? { duration: 0.45 } : springSoft}
+            className="text-center lg:text-left"
           >
-            What you can{" "}
-            <span className="text-gradient">build with CtrlChecks</span>
-          </h2>
-          <p className="mt-4 text-muted-foreground">
-            The automation engine, ready-made connectors, and AI agent blueprints that let any team build powerful workflows on CtrlChecks cloud — and ship them fast. Distinct from embedding CtrlChecks inside your own product (see Connect &amp; Extend).
-          </p>
-        </motion.div>
-
-        <ul className="mx-auto mt-10 max-w-2xl space-y-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
-          {developerPath.map((line, i) => (
-            <motion.li
-              key={line}
-              initial={{ opacity: 0, x: -10 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={landingViewport}
-              transition={
-                reduceMotion ? { duration: 0.3, delay: i * 0.05 } : { ...springSoft, delay: i * 0.07 }
-              }
-              className="flex gap-2"
+            <h2
+              id="developer-platform-heading"
+              className="text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl"
             >
-              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden />
-              <span>{line}</span>
-            </motion.li>
-          ))}
-        </ul>
+              What you can{" "}
+              <span className="text-gradient">build with CtrlChecks</span>
+            </h2>
+            <p className="mt-4 text-muted-foreground">
+              The automation engine, ready-made connectors, and AI agent blueprints that let any
+              team build powerful workflows on CtrlChecks cloud — and ship them fast.
+            </p>
 
-        <div className="mx-auto mt-14 grid max-w-4xl gap-4 sm:grid-cols-2">
-          {blocks.map((b, index) => (
-            <motion.div
-              key={b.title}
-              initial={{ opacity: 0, y: 18 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={landingViewport}
-              transition={
-                reduceMotion
-                  ? { duration: 0.35, delay: index * 0.05 }
-                  : { ...springSoft, delay: index * 0.08 }
-              }
-              {...(reduceMotion ? {} : cardHoverTap)}
-              className="rounded-2xl border border-border/50 bg-background/10 p-6 shadow-none backdrop-blur-md transition-colors hover:border-primary/30 dark:border-white/10 dark:bg-white/5"
-            >
-              <h3 className="text-lg font-semibold">{b.title}</h3>
-              <p className="mt-2 text-sm text-muted-foreground">{b.item}</p>
-            </motion.div>
-          ))}
+            <ul className="mt-8 space-y-4 text-left text-sm leading-relaxed text-muted-foreground sm:text-base">
+              {developerPath.map((line, i) => (
+                <motion.li
+                  key={line}
+                  initial={{ opacity: 0, x: -10 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={landingViewport}
+                  transition={
+                    reduceMotion ? { duration: 0.3, delay: i * 0.05 } : { ...springSoft, delay: i * 0.07 }
+                  }
+                  className="flex gap-3"
+                >
+                  <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden />
+                  <span>{line}</span>
+                </motion.li>
+              ))}
+            </ul>
+          </motion.div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            {blocks.map((b, index) => (
+              <motion.div
+                key={b.title}
+                initial={{ opacity: 0, y: 18 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={landingViewport}
+                transition={
+                  reduceMotion
+                    ? { duration: 0.35, delay: index * 0.05 }
+                    : { ...springSoft, delay: index * 0.08 }
+                }
+                {...(reduceMotion ? {} : cardHoverTap)}
+                className="h-full rounded-2xl border border-border/50 bg-background/10 p-6 shadow-none backdrop-blur-md transition-colors hover:border-primary/30 dark:border-white/10 dark:bg-white/5"
+              >
+                <h3 className="text-lg font-semibold">{b.title}</h3>
+                <p className="mt-2 text-sm text-muted-foreground">{b.item}</p>
+              </motion.div>
+            ))}
+          </div>
         </div>
       </div>
     </section>

@@ -43,11 +43,14 @@ function isHowItWorksSectionPreserved(indexFileContent: string): boolean {
  * Check if all other existing sections are preserved
  */
 function areOtherSectionsPreserved(indexFileContent: string): boolean {
+  // WorkflowDemoSection was merged into Hero (the demo is now the first screen),
+  // so it is no longer a standalone section on the page.
   const expectedSections = [
-    'WorkflowDemoSection',
-    'OpenCoreSection', 
+    'TemplateShowcaseSection',
+    'OpenCoreSection',
     'PluginsApiSection',
     'IndustryVerticalsSection',
+    'TrustSection',
     'WhyCtrlChecksSection',
     'Pricing',
     'FaqSection',
@@ -286,14 +289,14 @@ describe('Property 2: Preservation - Existing Landing Page Layout', () => {
       <main>
         <Hero />
         <HowItWorks />
-        <WorkflowDemoSection />
+        <TemplateShowcaseSection />
         <Pricing />
       </main>
     `;
 
     const extractedOrder = extractSectionOrder(testContent);
-    
-    expect(extractedOrder).toEqual(['Hero', 'HowItWorks', 'WorkflowDemoSection', 'Pricing']);
+
+    expect(extractedOrder).toEqual(['Hero', 'HowItWorks', 'TemplateShowcaseSection', 'Pricing']);
     expect(extractedOrder).toHaveLength(4);
   });
 
@@ -305,20 +308,22 @@ describe('Property 2: Preservation - Existing Landing Page Layout', () => {
   it('property: other sections preservation correctly identifies all expected sections', () => {
     // Create a mock content with all expected sections
     const allSectionsContent = `
-      import { WorkflowDemoSection } from "@/components/landing/WorkflowDemoSection";
+      import { TemplateShowcaseSection } from "@/components/landing/TemplateShowcaseSection";
       import { OpenCoreSection } from "@/components/landing/OpenCoreSection";
       import { PluginsApiSection } from "@/components/landing/PluginsApiSection";
       import { IndustryVerticalsSection } from "@/components/landing/IndustryVerticalsSection";
+      import { TrustSection } from "@/components/landing/TrustSection";
       import { WhyCtrlChecksSection } from "@/components/landing/WhyCtrlChecksSection";
       import { Pricing } from "@/components/landing/Pricing";
       import { FaqSection } from "@/components/landing/FaqSection";
       import { CTA } from "@/components/landing/CTA";
-      
+
       <main>
-        <WorkflowDemoSection />
+        <TemplateShowcaseSection />
         <OpenCoreSection />
         <PluginsApiSection />
         <IndustryVerticalsSection />
+        <TrustSection />
         <WhyCtrlChecksSection />
         <Pricing />
         <FaqSection />

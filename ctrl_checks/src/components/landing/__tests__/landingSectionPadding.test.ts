@@ -19,13 +19,21 @@ const LANDING_DIR = path.resolve(
   ".." // ctrl_checks/src/components/landing
 );
 
-/** Files that should use py-12 */
+/**
+ * Files that should use py-12.
+ *
+ * WorkflowDemoSection.tsx was merged into Hero.tsx (the demo now lives in the
+ * first screen), so it is no longer listed. TrustSection.tsx and
+ * TemplateShowcaseSection.tsx are mounted on the landing page and follow the
+ * same padding rule.
+ */
 const PY12_FILES = [
   "HowItWorks.tsx",
-  "WorkflowDemoSection.tsx",
+  "TemplateShowcaseSection.tsx",
   "OpenCoreSection.tsx",
   "PluginsApiSection.tsx",
   "IndustryVerticalsSection.tsx",
+  "TrustSection.tsx",
   "WhyCtrlChecksSection.tsx",
   "Features.tsx",
   "Pricing.tsx",
@@ -72,8 +80,8 @@ function extractSectionClassNames(source: string): string[] {
 }
 
 describe("Landing section reduced vertical padding (Property 6 / design)", () => {
-  it("each of the 12 updated section files has the correct reduced padding class", () => {
-    // Use fast-check to parameterize over the 12 section entries
+  it("each landing section file has the correct reduced padding class", () => {
+    // Use fast-check to parameterize over the section entries
     // fc.constantFrom picks one entry per run; with 100 iterations each entry is sampled multiple times
     fc.assert(
       fc.property(fc.constantFrom(...ALL_SECTIONS), (entry: SectionEntry) => {

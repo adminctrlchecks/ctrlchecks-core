@@ -1,5 +1,6 @@
 import { motion, useReducedMotion } from "framer-motion";
 import { landingViewport, springSoft } from "@/components/landing/landing-motion";
+import { SECTION_PROSE, SECTION_SHELL } from '@/components/landing/landing-layout';
 import { GoogleLogo } from "@/components/icons/GoogleLogo";
 
 type IntegrationLogo = {
@@ -133,7 +134,15 @@ const splitIntoColumns = <T,>(items: T[], columnCount: number): T[][] => {
   return columns;
 };
 
-const COLUMN_DIRECTIONS: Array<'up' | 'down'> = ['up', 'down', 'up', 'down'];
+/**
+ * Six columns so the marquee fills the widened section shell. Columns past the
+ * breakpoint's grid width are hidden rather than wrapped — wrapping would break
+ * the fixed-height scrollers. COLUMN_VISIBILITY must stay in step with the grid
+ * column counts on the container below.
+ */
+const MARQUEE_COLUMN_COUNT = 6;
+const COLUMN_DIRECTIONS: Array<'up' | 'down'> = ['up', 'down', 'up', 'down', 'up', 'down'];
+const COLUMN_VISIBILITY = ['', '', 'hidden sm:block', 'hidden lg:block', 'hidden xl:block', 'hidden xl:block'];
 const COLUMN_DURATION = 30;
 
 function normalizeDisplayName(name: string) {
@@ -145,7 +154,7 @@ const normalizedIntegrations = integrations.map((item) => ({
   name: normalizeDisplayName(item.name),
 }));
 
-const columns = splitIntoColumns(normalizedIntegrations, 4);
+const columns = splitIntoColumns(normalizedIntegrations, MARQUEE_COLUMN_COUNT);
 
 function LogoTile({ item }: { item: IntegrationLogo }) {
   const isGoogleTile = item.name.toLowerCase() === "google";
@@ -185,14 +194,16 @@ function MarqueeColumn({
   items,
   direction,
   duration,
+  className = '',
 }: {
   items: IntegrationLogo[];
   direction: 'up' | 'down';
   duration: number;
+  className?: string;
 }) {
   const duplicated = [...items, ...items];
   return (
-    <div className="overflow-hidden">
+    <div className={`overflow-hidden ${className}`}>
       <div
         style={{
           display: 'flex',
@@ -221,13 +232,13 @@ export function IntegrationsMarqueeSection() {
       className="relative py-6 sm:py-8"
       aria-labelledby="integrations-heading"
     >
-      <div className="container mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
+      <div className={SECTION_SHELL}>
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={landingViewport}
           transition={reduceMotion ? { duration: 0.35 } : springSoft}
-          className="mx-auto max-w-3xl text-center"
+          className={SECTION_PROSE}
         >
           <h2 id="integrations-heading" className="text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
             Integrate Instantly
@@ -242,25 +253,29 @@ export function IntegrationsMarqueeSection() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={landingViewport}
           transition={reduceMotion ? { duration: 0.35 } : { ...springSoft, delay: 0.08 }}
-          className="relative mx-auto mt-10 max-w-6xl overflow-hidden rounded-2xl border border-border/50 bg-background/10 p-4 backdrop-blur-md dark:border-white/10 dark:bg-white/5 sm:p-6"
+          className="relative mt-10 overflow-hidden rounded-2xl border border-border/50 bg-background/10 p-4 backdrop-blur-md dark:border-white/10 dark:bg-white/5 sm:p-6"
         >
           <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-16 bg-gradient-to-b from-background to-transparent" />
           <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-16 bg-gradient-to-t from-background to-transparent" />
 
           {reduceMotion ? (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
               {normalizedIntegrations.map((item) => (
                 <LogoTile key={item.name} item={item} />
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-4 gap-3" style={{ height: '332px' }}>
+            <div
+              className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6"
+              style={{ height: '332px' }}
+            >
               {columns.map((colItems, index) => (
                 <MarqueeColumn
                   key={`col-${index}`}
                   items={colItems}
                   direction={COLUMN_DIRECTIONS[index] ?? 'up'}
                   duration={COLUMN_DURATION}
+                  className={COLUMN_VISIBILITY[index] ?? ''}
                 />
               ))}
             </div>

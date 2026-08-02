@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { landingViewport, springBouncy, springSoft } from "@/components/landing/landing-motion";
+import { SECTION_SHELL } from "@/components/landing/landing-layout";
 
 /** Slides 14–15 — deck copy. */
 export function CTA() {
@@ -10,7 +11,7 @@ export function CTA() {
 
   return (
     <section className="py-12 sm:py-16" aria-labelledby="cta-heading">
-      <div className="container mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
+      <div className={SECTION_SHELL}>
         <motion.div
           initial={{ opacity: 0, y: 28, scale: 0.98 }}
           whileInView={{ opacity: 1, y: 0, scale: 1 }}

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/lib/auth";
 import { AppBrand } from "@/components/brand/AppBrand";
+import { SECTION_SHELL } from "@/components/landing/landing-layout";
 
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -13,13 +14,13 @@ export function Header() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
+  // Kept to six: ten links crowded the bar and pushed the auth buttons tight
+  // against the edge. The dropped anchors (Trust, Developers, Verticals, Why us)
+  // are all still reachable by scrolling and from the footer.
   const navItems = [
-    { name: "Demo", href: "#demo" },
     { name: "How it works", href: "#how-it-works" },
-    { name: "Trust", href: "#trust" },
-    { name: "Developers", href: "#developer-platform" },
-    { name: "Integrations", href: "#plugins-api" },
-    { name: "Verticals", href: "#verticals" },
+    { name: "Templates", href: "#templates" },
+    { name: "Integrations", href: "#integrations" },
     { name: "Why us", href: "#why-ctrlchecks" },
     { name: "Docs", href: "/docs", isRoute: true },
     { name: "Plans", href: "/subscriptions", isRoute: true },
@@ -27,11 +28,11 @@ export function Header() {
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 glass-strong">
-      <nav className="container mx-auto max-w-7xl px-5 sm:px-8 lg:px-10" aria-label="Main">
+      <nav className={SECTION_SHELL} aria-label="Main">
         <div className="flex h-[4.25rem] items-center justify-between">
           <AppBrand context="marketing" />
 
-          <div className="hidden xl:flex xl:items-center xl:gap-5">
+          <div className="hidden lg:flex lg:items-center lg:gap-6">
             {navItems.map((item) =>
               item.isRoute ? (
                 <Link
@@ -53,7 +54,7 @@ export function Header() {
             )}
           </div>
 
-          <div className="hidden xl:flex xl:items-center xl:gap-4">
+          <div className="hidden lg:flex lg:items-center lg:gap-3">
             <Button
               variant="ghost"
               size="icon"
@@ -84,7 +85,7 @@ export function Header() {
             )}
           </div>
 
-          <div className="flex items-center gap-2 xl:hidden">
+          <div className="flex items-center gap-2 lg:hidden">
             <Button
               variant="ghost"
               size="icon"
@@ -116,7 +117,7 @@ export function Header() {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              className="xl:hidden"
+              className="lg:hidden"
             >
               <div className="max-h-[min(70vh,28rem)] space-y-1 overflow-y-auto pb-4 pt-2">
                 {navItems.map((item) =>

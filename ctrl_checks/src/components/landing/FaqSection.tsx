@@ -11,6 +11,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { SECTION_PROSE, SECTION_SHELL } from "@/components/landing/landing-layout";
 
 function AnswerBody({ text }: { text: string }) {
   const parts = text.split(/\n\n/).filter(Boolean);
@@ -30,13 +31,13 @@ export function FaqSection() {
 
   return (
     <section id="faq" className="py-12 sm:py-16" aria-labelledby="faq-heading">
-      <div className="container mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
+      <div className={SECTION_SHELL}>
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={landingViewport}
           transition={reduceMotion ? { duration: 0.45 } : springSoft}
-          className="mx-auto max-w-3xl text-center"
+          className={SECTION_PROSE}
         >
           <div className="flex justify-center">
             <span className="inline-flex items-center gap-2 rounded-full border border-border/50 bg-background/10 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur-md dark:border-white/10 dark:bg-white/5">
@@ -51,12 +52,12 @@ export function FaqSection() {
             {LANDING_FAQ_INTRO.title}
           </h2>
           <p className="mt-4 text-muted-foreground">{LANDING_FAQ_INTRO.lede}</p>
-          <p className="mt-3 text-xs text-muted-foreground/90">
-            {LANDING_FAQ_INTRO.uiAlignmentLine}
-          </p>
         </motion.div>
 
-        <div className="mx-auto mt-14 max-w-3xl space-y-12">
+        {/* CSS columns rather than a grid: groups have very different item counts,
+            and grid rows would size to the tallest group and leave a dead block
+            beside the short one. Columns flow and balance instead. */}
+        <div className="mt-14 gap-x-12 lg:columns-2">
           {LANDING_FAQ_GROUPS.map((group, gi) => (
             <motion.div
               key={group.id}
@@ -66,6 +67,7 @@ export function FaqSection() {
               transition={
                 reduceMotion ? { duration: 0.4 } : { ...springSoft, delay: gi * 0.05 }
               }
+              className="mb-12 break-inside-avoid"
             >
               <h3 className="text-lg font-semibold tracking-tight text-foreground">
                 {group.title}

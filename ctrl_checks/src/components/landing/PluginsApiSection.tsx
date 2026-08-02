@@ -5,6 +5,7 @@ import {
   landingViewport,
   springSoft,
 } from "@/components/landing/landing-motion";
+import { SECTION_PROSE, SECTION_SHELL } from "@/components/landing/landing-layout";
 
 /** Slide 10 — product embedding & document-backed workflows (distinct from the developer platform path). */
 const tags = ["CRMs", "ERPs", "SaaS platforms", "Enterprise tools"];
@@ -25,8 +26,8 @@ export function PluginsApiSection() {
       className="py-12 sm:py-16"
       aria-labelledby="plugins-heading"
     >
-      <div className="container mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
-        <div className="mx-auto max-w-3xl text-center">
+      <div className={SECTION_SHELL}>
+        <div className={SECTION_PROSE}>
           <motion.h2
             id="plugins-heading"
             initial={{ opacity: 0, y: 20 }}
@@ -63,7 +64,7 @@ export function PluginsApiSection() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={landingViewport}
           transition={reduceMotion ? { duration: 0.35, delay: 0.12 } : { ...springSoft, delay: 0.14 }}
-          className="mx-auto mt-8 flex max-w-xl items-start gap-3 rounded-2xl border border-border/50 bg-background/10 p-4 text-left text-sm text-muted-foreground backdrop-blur-md dark:border-white/10 dark:bg-white/5 sm:p-5"
+          className="mx-auto mt-8 flex max-w-3xl items-start gap-3 rounded-2xl border border-border/50 bg-background/10 p-4 text-left text-sm text-muted-foreground backdrop-blur-md dark:border-white/10 dark:bg-white/5 sm:p-5"
         >
           <FileText className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden />
           <p>
@@ -108,7 +109,7 @@ export function PluginsApiSection() {
           Intelligence that gets smarter over time
         </motion.p>
 
-        <div className="mx-auto mt-12 grid max-w-3xl gap-3 sm:grid-cols-2">
+        <div className="mt-12 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {rows.map((row, i) => (
             <motion.div
               key={row.title}
@@ -121,7 +122,7 @@ export function PluginsApiSection() {
                   : { ...springSoft, delay: i * 0.08 }
               }
               {...(reduceMotion ? {} : cardHoverTap)}
-              className="flex items-center gap-3 rounded-2xl border border-border/50 bg-background/10 px-5 py-4 shadow-none backdrop-blur-md dark:border-white/10 dark:bg-white/5"
+              className="flex h-full items-center gap-3 rounded-2xl border border-border/50 bg-background/10 px-5 py-4 shadow-none backdrop-blur-md dark:border-white/10 dark:bg-white/5"
             >
               <Plug className="h-5 w-5 shrink-0 text-primary" aria-hidden />
               <span className="font-medium">{row.title}</span>

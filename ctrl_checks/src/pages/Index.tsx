@@ -3,10 +3,11 @@ import { LandingLightPillarBackground } from "@/components/landing/LandingLightP
 import { Hero } from "@/components/landing/Hero";
 import { IntegrationsMarqueeSection } from "@/components/landing/IntegrationsMarqueeSection";
 import { HowItWorks } from "@/components/landing/HowItWorks";
-import { WorkflowDemoSection } from "@/components/landing/WorkflowDemoSection";
+import { TemplateShowcaseSection } from "@/components/landing/TemplateShowcaseSection";
 import { OpenCoreSection } from "@/components/landing/OpenCoreSection";
 import { PluginsApiSection } from "@/components/landing/PluginsApiSection";
 import { IndustryVerticalsSection } from "@/components/landing/IndustryVerticalsSection";
+import { TrustSection } from "@/components/landing/TrustSection";
 import { WhyCtrlChecksSection } from "@/components/landing/WhyCtrlChecksSection";
 import { Pricing } from "@/components/landing/Pricing";
 import { FaqSection } from "@/components/landing/FaqSection";
@@ -21,12 +22,13 @@ const Index = () => {
         <Header />
         <main className="bg-transparent">
           <Hero />
-          <WorkflowDemoSection />
           <IntegrationsMarqueeSection />
           <HowItWorks />
+          <TemplateShowcaseSection />
           <OpenCoreSection />
           <PluginsApiSection />
           <IndustryVerticalsSection />
+          <TrustSection />
           <WhyCtrlChecksSection />
           <Pricing />
           <FaqSection />

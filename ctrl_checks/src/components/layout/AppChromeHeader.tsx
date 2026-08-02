@@ -39,18 +39,21 @@ export function AppChromeHeader({
 
   return (
     <header className={cn('sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/85', className)}>
-      <div className="container mx-auto flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+      {/* Wider than Tailwind's `container` (capped at 1400px): with Admin visible
+          the nav is 8 items and was wrapping "Admin" onto its own row. */}
+      <div className="mx-auto flex w-full max-w-[1600px] flex-wrap items-center justify-between gap-3 px-4 py-3">
         <AppBrand context="app" />
 
+        {/* nowrap from lg up so the last item can never drop to a second line */}
         <nav
-          className="order-3 flex w-full flex-wrap items-center justify-center gap-1 sm:order-none sm:flex-1 sm:justify-center lg:w-auto"
+          className="order-3 flex w-full flex-wrap items-center justify-center gap-1 sm:order-none sm:flex-1 sm:justify-center lg:w-auto lg:flex-nowrap"
           aria-label="Main"
         >
           {USER_PRIMARY_NAV.map(({ title, path, icon: Icon }) => (
             <NavLink
               key={path}
               to={path}
-              className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+              className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
               activeClassName="bg-muted text-primary"
             >
               <Icon className="h-4 w-4 shrink-0" />
@@ -60,7 +63,7 @@ export function AppChromeHeader({
           {canAccessAdmin && (
             <NavLink
               to="/admin/dashboard"
-              className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+              className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
               activeClassName="bg-muted text-primary"
             >
               <Shield className="h-4 w-4 shrink-0" />

@@ -19,15 +19,21 @@ import {
 import { ENDPOINTS } from '@/config/endpoints';
 import type { LandingDemoEdge, LandingDemoNode, LandingDemoScenario } from '@/lib/api/admin';
 
+// Coordinate space the stored scenarios author their node positions in.
+// Never change these — projectNodes() normalizes against them.
 const LOGICAL_STAGE_WIDTH = 720;
 const LOGICAL_STAGE_HEIGHT = 380;
 const LOGICAL_NODE_WIDTH = 142;
 const LOGICAL_NODE_HEIGHT = 64;
+
+// Render stage. Wider and proportionally shorter than the logical space so the
+// canvas can span the hero without becoming tall enough to push the CTA far
+// below the fold.
 const DESKTOP_STAGE = {
-  width: LOGICAL_STAGE_WIDTH,
-  height: LOGICAL_STAGE_HEIGHT,
-  nodeWidth: LOGICAL_NODE_WIDTH,
-  nodeHeight: LOGICAL_NODE_HEIGHT,
+  width: 1120,
+  height: 380,
+  nodeWidth: 200,
+  nodeHeight: 68,
 };
 const COMPACT_STAGE = {
   width: 440,
@@ -338,21 +344,30 @@ function DemoStage({
   );
 }
 
-function DecorativePrompt({ prompts }: { prompts: string[] }) {
-  const [index, setIndex] = useState(0);
-
-  useEffect(() => {
-    if (prompts.length <= 1) return;
-    const id = window.setInterval(() => {
-      setIndex((current) => (current + 1) % prompts.length);
-    }, 3000);
-    return () => window.clearInterval(id);
-  }, [prompts.length]);
-
+/**
+ * Shows the prompt for the scenario currently on the canvas.
+ *
+ * This used to cycle through every prompt on its own 3s timer, independent of
+ * the selected chip — so the card could read "Alert on negative mentions" while
+ * the canvas drew the Stripe → Slack flow. It is now driven by the active
+ * scenario so prompt, chip, and diagram always agree.
+ */
+function ActivePrompt({ prompt, reduceMotion }: { prompt: string; reduceMotion: boolean }) {
   return (
-    <div className="rounded-lg border border-border/70 bg-background/80 px-4 py-3 text-left shadow-sm">
+    <div className="rounded-xl border border-border/70 bg-background/80 px-4 py-3 text-left shadow-sm sm:px-5 sm:py-4">
       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Example prompt</p>
-      <p className="mt-1 min-h-6 text-sm font-medium text-foreground">{prompts[index] || 'Loading examples...'}</p>
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.p
+          key={prompt}
+          initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
+          transition={{ duration: reduceMotion ? 0 : 0.2, ease: 'easeOut' }}
+          className="mt-1 min-h-6 text-sm font-medium text-foreground sm:text-base"
+        >
+          {prompt}
+        </motion.p>
+      </AnimatePresence>
     </div>
   );
 }
@@ -394,7 +409,6 @@ export function InteractiveDemoPreview() {
   }, [activeId, scenarios]);
 
   const activeScenario = scenarios.find((scenario) => scenario.id === activeId) || scenarios[0];
-  const prompts = scenarios.map((scenario) => scenario.label);
 
   useEffect(() => {
     if (!activeScenario) return;
@@ -438,16 +452,18 @@ export function InteractiveDemoPreview() {
   }
 
   return (
-    <div className="space-y-5">
-      <DecorativePrompt prompts={prompts} />
-      <div className="flex flex-wrap justify-center gap-2">
+    <div className="space-y-4 sm:space-y-5">
+      <div className="mx-auto max-w-3xl">
+        <ActivePrompt prompt={activeScenario.label} reduceMotion={Boolean(reduceMotion)} />
+      </div>
+      <div className="mx-auto flex max-w-5xl flex-wrap justify-center gap-2">
         {scenarios.map((scenario) => (
           <button
             key={scenario.id}
             type="button"
             onClick={() => selectScenario(scenario.id)}
             aria-pressed={scenario.id === activeScenario.id}
-            className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
+            className={`rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors sm:text-sm ${
               scenario.id === activeScenario.id
                 ? 'border-primary bg-primary text-primary-foreground shadow-sm'
                 : 'border-border/70 bg-background/75 text-foreground hover:border-primary/50 hover:bg-primary/10'

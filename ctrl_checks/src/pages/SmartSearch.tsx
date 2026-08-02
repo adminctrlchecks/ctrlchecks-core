@@ -20,6 +20,18 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useSmartSearch } from '@/hooks/useSmartSearch';
 import type { SearchResultItem } from '@/types/search';
 
+/**
+ * Shown as clickable chips on the empty state. These were previously quoted
+ * inline in the intro paragraph, where they read as cramped prose and could not
+ * be acted on.
+ */
+const EXAMPLE_QUERIES = [
+  'How do I set up my first project?',
+  'Templates for landing pages',
+  'Where do I change my billing?',
+  'How do I connect Slack?',
+];
+
 const RESULT_TYPE_LABEL: Record<SearchResultItem['type'], string> = {
   page: 'Page',
   feature: 'Feature',
@@ -35,9 +47,10 @@ function ResultsSkeleton() {
   return (
     <div className="space-y-3" aria-hidden="true">
       {[0, 1, 2].map((key) => (
-        <div key={key} className="animate-pulse space-y-2 rounded-lg border border-border/50 bg-card p-4">
+        <div key={key} className="animate-pulse space-y-2.5 rounded-xl border border-border/50 bg-card p-5">
           <div className="h-4 w-1/3 rounded bg-muted" />
           <div className="h-3 w-full rounded bg-muted" />
+          <div className="h-3 w-2/3 rounded bg-muted" />
         </div>
       ))}
     </div>
@@ -47,19 +60,22 @@ function ResultsSkeleton() {
 function ResultCard({ result }: { result: SearchResultItem }) {
   const navigate = useNavigate();
   return (
-    <Card>
-      <CardContent className="flex items-start justify-between gap-3 p-4">
-        <div className="min-w-0">
+    <Card className="transition-colors hover:border-primary/40">
+      <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0 space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-semibold text-foreground">{result.title}</p>
-            <Badge variant="outline" className="text-[10px]">
+            <p className="font-semibold text-foreground">{result.title}</p>
+            <Badge variant="outline" className="text-[10px] font-medium">
               {RESULT_TYPE_LABEL[result.type]}
             </Badge>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">{result.description}</p>
-          <p className="mt-1.5 text-xs italic text-muted-foreground/70">{result.reason}</p>
+          <p className="text-sm leading-relaxed text-muted-foreground">{result.description}</p>
+          <p className="text-xs italic text-muted-foreground/70">{result.reason}</p>
         </div>
-        <Button size="sm" className="shrink-0" onClick={() => navigate(result.url)}>
+        <Button
+          className="shrink-0 self-start sm:self-auto"
+          onClick={() => navigate(result.url)}
+        >
           {result.action_label}
         </Button>
       </CardContent>
@@ -94,34 +110,39 @@ export default function SmartSearch() {
   return (
     <div className="min-h-screen bg-background">
       <AppChromeHeader />
-      <div className="container mx-auto max-w-3xl space-y-6 p-6">
+      <div className="mx-auto w-full max-w-3xl px-6 py-12 sm:py-16">
         <WorkflowAuthGate>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Search</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Ask in plain language — "how do I set up my first project?", "templates for landing pages", "where do I
-              change my billing?"
+          <header className="text-center">
+            <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">Search</h1>
+            <p className="mx-auto mt-3 max-w-lg text-muted-foreground">
+              Ask in plain language and we'll point you to the right page, template, or doc.
             </p>
-          </div>
+          </header>
 
-          <div className="flex items-center gap-2">
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 onKeyDown={(event) => event.key === 'Enter' && handleSearch(query)}
-                placeholder="Search..."
-                className="pl-9"
+                placeholder="Ask a question…"
+                className="h-12 pl-11 text-base"
                 disabled={isSearching}
                 autoFocus
               />
             </div>
-            <Button onClick={() => handleSearch(query)} disabled={isSearching || !query.trim()}>
+            <Button
+              size="lg"
+              className="h-12 sm:w-32"
+              onClick={() => handleSearch(query)}
+              disabled={isSearching || !query.trim()}
+            >
               {isSearching ? 'Searching…' : 'Search'}
             </Button>
           </div>
 
+          <div className="mt-10 space-y-6">
           {isSearching && <ResultsSkeleton />}
 
           {isError && !isSearching && (
@@ -138,21 +159,21 @@ export default function SmartSearch() {
           )}
 
           {!isSearching && !isError && data && (
-            <div className="space-y-5">
-              <div className="rounded-lg border border-primary/20 bg-primary/[0.03] p-4">
-                <div className="flex items-center gap-2 text-xs font-medium text-primary">
-                  <Sparkles className="h-3.5 w-3.5" />
+            <div className="space-y-8">
+              <div className="rounded-xl border border-primary/20 bg-primary/[0.03] p-5">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-primary">
+                  <Sparkles className="h-3.5 w-3.5 shrink-0" />
                   {data.interpreted_intent}
                 </div>
-                <p className="mt-1.5 text-sm text-foreground">{data.answer}</p>
+                <p className="mt-2.5 leading-relaxed text-foreground">{data.answer}</p>
               </div>
 
               {data.results.length === 0 ? (
-                <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                <p className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
                   No matches for "{lastQuery}" yet. Try one of the related searches below, or describe it differently.
                 </p>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {data.results.map((result, index) => (
                     <ResultCard key={`${result.url}-${index}`} result={result} />
                   ))}
@@ -160,40 +181,71 @@ export default function SmartSearch() {
               )}
 
               {data.suggested_actions.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {data.suggested_actions.map((action) => (
-                    <Button key={action.target} size="sm" variant="outline" onClick={() => navigate(action.target)}>
-                      {action.label}
-                    </Button>
-                  ))}
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Suggested actions
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {data.suggested_actions.map((action) => (
+                      <Button key={action.target} size="sm" variant="outline" onClick={() => navigate(action.target)}>
+                        {action.label}
+                      </Button>
+                    ))}
+                  </div>
                 </div>
               )}
 
               {data.related_searches.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {data.related_searches.map((related) => (
-                    <button
-                      key={related}
-                      type="button"
-                      onClick={() => {
-                        setQuery(related);
-                        handleSearch(related);
-                      }}
-                      className="rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                    >
-                      {related}
-                    </button>
-                  ))}
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Related searches
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {data.related_searches.map((related) => (
+                      <button
+                        key={related}
+                        type="button"
+                        onClick={() => {
+                          setQuery(related);
+                          handleSearch(related);
+                        }}
+                        className="rounded-full border border-border px-3.5 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted hover:text-foreground"
+                      >
+                        {related}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
           )}
 
           {!hasSearched && (
-            <p className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-              Type a question above to search across pages, features, templates, and docs.
-            </p>
+            <div className="text-center">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Try one of these
+              </p>
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
+                {EXAMPLE_QUERIES.map((example) => (
+                  <button
+                    key={example}
+                    type="button"
+                    onClick={() => {
+                      setQuery(example);
+                      handleSearch(example);
+                    }}
+                    className="rounded-full border border-border bg-card px-4 py-2 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted hover:text-foreground"
+                  >
+                    {example}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-8 text-sm text-muted-foreground/80">
+                Searches across pages, features, templates, and docs.
+              </p>
+            </div>
           )}
+          </div>
         </WorkflowAuthGate>
       </div>
     </div>

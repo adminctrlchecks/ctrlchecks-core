@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { Github, Twitter, Linkedin, Youtube } from "lucide-react";
+import { SECTION_SHELL } from "@/components/landing/landing-layout";
 
 const footerLinks = {
   Product: [
@@ -46,7 +47,7 @@ const socialLinks = [
 export function Footer() {
   return (
     <footer className="border-t border-border/50 bg-transparent">
-      <div className="container mx-auto max-w-7xl px-5 py-16 sm:px-8 lg:px-10 lg:py-20">
+      <div className={`${SECTION_SHELL} py-16 lg:py-20`}>
         <div className="grid gap-8 lg:grid-cols-6">
           <div className="lg:col-span-2">
             <Link to="/" className="flex items-center gap-2">

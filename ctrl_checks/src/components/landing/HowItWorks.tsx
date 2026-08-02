@@ -1,6 +1,7 @@
 import { motion, useReducedMotion } from "framer-motion";
 import { Target, Bot, Rocket } from "lucide-react";
 import { landingViewport, springSoft, springSnappy } from "@/components/landing/landing-motion";
+import { SECTION_PROSE, SECTION_SHELL } from "@/components/landing/landing-layout";
 
 const steps = [
   {
@@ -28,13 +29,13 @@ export function HowItWorks() {
 
   return (
     <section id="how-it-works" className="py-12 sm:py-16" aria-labelledby="how-heading">
-      <div className="container mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
+      <div className={SECTION_SHELL}>
         <motion.div
           initial={{ opacity: 0, y: 28 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={landingViewport}
           transition={reduceMotion ? { duration: 0.45 } : springSoft}
-          className="mx-auto max-w-3xl text-center"
+          className={SECTION_PROSE}
         >
           <h2
             id="how-heading"
