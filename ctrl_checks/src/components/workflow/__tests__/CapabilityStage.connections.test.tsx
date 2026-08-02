@@ -804,10 +804,10 @@ describe('CapabilityStage — independent column scrolling', () => {
     });
 
     it('takes exactly the leftover height so the stage cannot overflow', () => {
-        const { container } = render(
+        const { container: dom } = render(
             <CapabilityStage containers={[TRIGGER, SLACK]} onComplete={vi.fn()} />,
         );
-        const grid = container.querySelector('.grid')!;
+        const grid = dom.querySelector('.grid')!;
         // Grows into spare space...
         expect(grid.className).toMatch(/lg:flex-1/);
         // ...and shrinks to fit. A `min-h` floor here overflows the root when it binds, and
@@ -849,10 +849,10 @@ describe('CapabilityStage — independent column scrolling', () => {
     });
 
     it('reserves the pinned bar its own space so it never covers a card', () => {
-        const { container } = render(
+        const { container: dom } = render(
             <CapabilityStage containers={[TRIGGER, SLACK]} onComplete={vi.fn()} />,
         );
-        const root = container.firstElementChild as HTMLElement;
+        const root = dom.firstElementChild as HTMLElement;
         // Unconditional: the bar is fixed at every size, so the padding is needed at every
         // size. An `lg:pb-0` here put the last candidate card underneath it.
         expect(root.className).toMatch(/(^|\s)pb-20(\s|$)/);
