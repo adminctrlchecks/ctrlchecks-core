@@ -3,7 +3,7 @@
  * Browse and copy workflow templates
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Copy, Star, Clock, TrendingUp, Search, X, LayoutTemplate } from 'lucide-react';
 import { WorkflowAuthGate } from '@/components/WorkflowAuthGate';
@@ -17,7 +17,12 @@ import { useToast } from '@/hooks/use-toast';
 import { AppChromeHeader } from '@/components/layout/AppChromeHeader';
 import { TemplateConnections } from '@/components/templates/TemplateConnections';
 import { fetchConnectionCatalog, type ConnectionCatalogEntry } from '@/lib/connections-catalog';
-import { getTemplateConnections } from '@/lib/templateConnections';
+import { getTemplateConnections, type TemplateConnection } from '@/lib/templateConnections';
+import ConnectionFilterInput from '@/components/templates/ConnectionFilterInput';
+import {
+  collectConnectionOptions,
+  templateMatchesConnectionFilter,
+} from '@/lib/templateConnectionFilter';
 import type { Database } from '@/integrations/aws/types';
 
 type Template = Database['public']['Tables']['templates']['Row'] & {
@@ -61,6 +66,10 @@ export default function Templates() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  // Committed service chips plus the word still being typed. Both filter, so results
+  // move while the user types rather than only once they hit a comma.
+  const [connectionTokens, setConnectionTokens] = useState<string[]>([]);
+  const [connectionDraft, setConnectionDraft] = useState('');
   const [catalog, setCatalog] = useState<ConnectionCatalogEntry[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const navigate = useNavigate();
@@ -125,12 +134,50 @@ export default function Templates() {
     }
   }
 
+  // Computed once per template rather than per render of each card — the cards read
+  // from this map too, so the filter and the chips can never disagree.
+  const connectionsByTemplate = useMemo(() => {
+    const map = new Map<string, TemplateConnection[]>();
+    for (const template of templates) {
+      map.set(
+        template.id,
+        getTemplateConnections(
+          template.nodes as Parameters<typeof getTemplateConnections>[0],
+          catalog,
+        ),
+      );
+    }
+    return map;
+  }, [templates, catalog]);
+
+  const connectionOptions = useMemo(
+    () => collectConnectionOptions([...connectionsByTemplate.values()]),
+    [connectionsByTemplate],
+  );
+
+  const activeConnectionTokens = useMemo(() => {
+    const draft = connectionDraft.trim();
+    return draft ? [...connectionTokens, draft] : connectionTokens;
+  }, [connectionTokens, connectionDraft]);
+
   const filteredTemplates = templates.filter((template) =>
-    template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    template.description?.toLowerCase().includes(searchQuery.toLowerCase())
+    (template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    template.description?.toLowerCase().includes(searchQuery.toLowerCase()))
+    && templateMatchesConnectionFilter(
+      connectionsByTemplate.get(template.id) ?? [],
+      activeConnectionTokens,
+    )
   );
 
   const isSearching = searchQuery.trim().length > 0;
+  const isFilteringConnections = activeConnectionTokens.length > 0;
+  const hasFilters = isSearching || isFilteringConnections;
+
+  const clearAllFilters = () => {
+    setSearchQuery('');
+    setConnectionTokens([]);
+    setConnectionDraft('');
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -171,6 +218,21 @@ export default function Templates() {
             </div>
           </header>
 
+          {/* Connection filter — name the services you have, see only what you can run. */}
+          <div className="mt-4">
+            <ConnectionFilterInput
+              tokens={connectionTokens}
+              onTokensChange={setConnectionTokens}
+              draft={connectionDraft}
+              onDraftChange={setConnectionDraft}
+              options={connectionOptions}
+            />
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              Separate services with commas. Shows only templates you could run with those
+              connections — anything needing something extra is hidden.
+            </p>
+          </div>
+
           {loading ? (
             <>
               <div className="mt-6 h-5 w-32 animate-pulse rounded bg-muted" aria-hidden />
@@ -183,11 +245,26 @@ export default function Templates() {
             </>
           ) : (
             <>
-              <p className="mt-6 text-sm text-muted-foreground" role="status" aria-live="polite">
-                {filteredTemplates.length}{' '}
-                {filteredTemplates.length === 1 ? 'template' : 'templates'}
-                {isSearching && <> matching &ldquo;{searchQuery}&rdquo;</>}
-              </p>
+              <div className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-1">
+                <p className="text-sm text-muted-foreground" role="status" aria-live="polite">
+                  {filteredTemplates.length}{' '}
+                  {filteredTemplates.length === 1 ? 'template' : 'templates'}
+                  {isSearching && <> matching &ldquo;{searchQuery}&rdquo;</>}
+                  {isFilteringConnections && (
+                    <> you can run with {activeConnectionTokens.join(', ')}</>
+                  )}
+                  {hasFilters && <> of {templates.length}</>}
+                </p>
+                {hasFilters && (
+                  <button
+                    type="button"
+                    onClick={clearAllFilters}
+                    className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+                  >
+                    Reset filters
+                  </button>
+                )}
+              </div>
 
               {filteredTemplates.length > 0 ? (
                 <div className="mt-4 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
@@ -261,10 +338,7 @@ export default function Templates() {
                           <div className="mt-auto space-y-4 pt-4">
                             <div className="border-t border-border/50 pt-4">
                               <TemplateConnections
-                                connections={getTemplateConnections(
-                                  template.nodes as Parameters<typeof getTemplateConnections>[0],
-                                  catalog,
-                                )}
+                                connections={connectionsByTemplate.get(template.id) ?? []}
                                 loading={catalogLoading}
                               />
                             </div>
@@ -287,23 +361,25 @@ export default function Templates() {
               ) : (
                 <div className="mt-4 flex flex-col items-center justify-center rounded-xl border border-dashed border-border/70 px-6 py-16 text-center">
                   <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-                    {isSearching ? (
+                    {hasFilters ? (
                       <Search className="h-5 w-5 text-muted-foreground" aria-hidden />
                     ) : (
                       <LayoutTemplate className="h-5 w-5 text-muted-foreground" aria-hidden />
                     )}
                   </div>
                   <p className="font-medium">
-                    {isSearching ? 'No templates match your search' : 'No templates available yet'}
+                    {hasFilters ? 'No templates match your filters' : 'No templates available yet'}
                   </p>
                   <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-                    {isSearching
-                      ? 'Try a different name, service or keyword.'
-                      : 'Templates published by your workspace will appear here.'}
+                    {isFilteringConnections
+                      ? 'Every template needs at least one service you have not listed. Add another connection to widen the results.'
+                      : isSearching
+                        ? 'Try a different name, service or keyword.'
+                        : 'Templates published by your workspace will appear here.'}
                   </p>
-                  {isSearching && (
-                    <Button variant="outline" size="sm" className="mt-4" onClick={() => setSearchQuery('')}>
-                      Clear search
+                  {hasFilters && (
+                    <Button variant="outline" size="sm" className="mt-4" onClick={clearAllFilters}>
+                      Reset filters
                     </Button>
                   )}
                 </div>
