@@ -59,12 +59,17 @@ export function overrideBitbucket(
           output = await integrationJsonRequest(url, { headers });
         } else if (operation === 'create' || operation === 'update') {
           if (!repoSlug) throw new Error('repoSlug is required');
+          // inputs.data defaults to {} (an empty object), which is truthy in JS — `inputs.data ||
+          // {...}` would silently pick that empty default over the real scm/is_private/description
+          // payload, sending Bitbucket an empty body. Only treat inputs.data as an override when
+          // it actually has content.
+          const hasDataOverride = inputs.data && typeof inputs.data === 'object' && Object.keys(inputs.data).length > 0;
           output = await integrationJsonRequest(
             `https://api.bitbucket.org/2.0/repositories/${encodeURIComponent(workspace)}/${encodeURIComponent(repoSlug)}`,
             {
               method: operation === 'create' ? 'POST' : 'PUT',
               headers,
-              body: JSON.stringify(inputs.data || { scm: 'git', is_private: inputs.isPrivate ?? true, description: inputs.description }),
+              body: JSON.stringify(hasDataOverride ? inputs.data : { scm: 'git', is_private: inputs.isPrivate ?? true, description: inputs.description }),
             },
           );
         } else if (operation === 'delete') {

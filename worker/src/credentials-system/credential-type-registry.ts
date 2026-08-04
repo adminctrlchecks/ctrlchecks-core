@@ -2537,6 +2537,7 @@ export const credentialTypeDefinitions: CredentialTypeDefinition[] = addCredenti
         'If you get 401 rest_cannot_access, confirm the Application Password is correct and the user has permission for the action.',
         'If the Application Passwords section is missing in WP Admin, the site may not be served over HTTPS or a security plugin disabled it.',
         'If you get 404 on /wp-json, permalinks may be set to "Plain" - change them in Settings -> Permalinks, or the REST API is blocked by the host.',
+        'If reads (Get Posts) work but every write (Create/Update/Delete) fails with 401 rest_cannot_edit or rest_not_logged_in even though the username and password are correct, the host is likely stripping the Authorization header before it reaches WordPress - a common default on shared/sandboxed hosting (including most free temporary WordPress site providers). This is a server configuration issue, not a credential problem; it usually requires the host to forward the Authorization header (often via an .htaccess rewrite rule), which free/sandbox hosts rarely expose. Try a different host or a local WordPress install if this happens.',
       ],
     },
     form: { layout: 'stacked', submitLabel: 'Save WordPress Login', testLabel: 'Test WordPress' },
@@ -2723,15 +2724,16 @@ export const credentialTypeDefinitions: CredentialTypeDefinition[] = addCredenti
     displayName: 'SAP',
     authType: 'bearer_token',
     inputFields: [
-      { name: 'accessToken', label: 'Access Token', type: 'password', required: false, secret: true, helpText: 'OAuth2 / SAML bearer token for SAP authentication. Provide this or a Username + Password.' },
-      { name: 'username', label: 'Username', type: 'text', required: false, helpText: 'SAP Communication User (Basic Auth, used when no Access Token is provided).' },
+      { name: 'accessToken', label: 'Access Token', type: 'password', required: false, secret: true, helpText: 'OAuth2 / SAML bearer token for SAP authentication. Provide this, an API Key, or a Username + Password.' },
+      { name: 'apiKey', label: 'API Key', type: 'password', required: false, secret: true, helpText: 'API key for SAP systems that authenticate via a custom APIKey header (e.g. the SAP Business Accelerator Hub sandbox) rather than OAuth2 or Basic Auth.' },
+      { name: 'username', label: 'Username', type: 'text', required: false, helpText: 'SAP Communication User (Basic Auth, used when no Access Token or API Key is provided).' },
       { name: 'password', label: 'Password', type: 'password', required: false, secret: true, helpText: 'Password for the SAP Communication User.' },
     ],
     form: { layout: 'stacked', submitLabel: 'Save Connection', testLabel: 'Test SAP' },
     validation: { requiredFields: [] },
     injection: [],
     refresh: { enabled: false, refreshBeforeSeconds: 0 },
-    maskFields: ['accessToken', 'password'],
+    maskFields: ['accessToken', 'apiKey', 'password'],
   },
 
   // ─── Chargebee ────────────────────────────────────────────────────────────────

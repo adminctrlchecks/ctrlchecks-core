@@ -49,6 +49,14 @@ export interface NodeReadinessIssue {
   examples?: unknown[];
   nextSteps?: string[];
   recommendations?: string[];
+  /**
+   * True when this field is only present because includeProviderDefaultFields pulled in a
+   * genuinely optional (schema `allowsEmpty`) field for wizard-style prompting — not because
+   * the node's real schema requires it. Consumers that gate execution (not just suggest fields
+   * to fill) must treat these as non-blocking; only node-readiness-resolver's own `ready`
+   * computation (which never sets includeProviderDefaultFields) is authoritative for execution.
+   */
+  isProviderDefault?: boolean;
 }
 
 export interface NodeReadinessDetails {
@@ -243,6 +251,7 @@ export function buildNodeInputReadinessIssues(input: {
 
     const value = (config as Record<string, unknown>)[fieldKey];
     const label = fieldLabel(fieldKey, field);
+    const isProviderDefault = !fieldPolicy.requiredFields.includes(fieldKey);
     if (valueMissing(value)) {
       issues.push({
         kind: 'missing_input',
@@ -258,7 +267,9 @@ export function buildNodeInputReadinessIssues(input: {
         fieldLabel: label,
         fieldType: field.type,
         inputType: inputTypeFor(field),
-        message: `${nodeLabel} ${label} is required${operationLabel ? ` for ${operationLabel}` : ''}.`,
+        message: isProviderDefault
+          ? `${nodeLabel} ${label} is optional but commonly set${operationLabel ? ` for ${operationLabel}` : ''}.`
+          : `${nodeLabel} ${label} is required${operationLabel ? ` for ${operationLabel}` : ''}.`,
         reason: `${label} is empty or missing.`,
         helpText: fieldHelp(fieldKey, field),
         docsUrl: field.docsUrl,
@@ -266,6 +277,7 @@ export function buildNodeInputReadinessIssues(input: {
         examples: field.examples,
         nextSteps: [`Open ${nodeLabel} and fill ${label}.`],
         recommendations: recommendationsFor(field),
+        isProviderDefault,
       });
       continue;
     }

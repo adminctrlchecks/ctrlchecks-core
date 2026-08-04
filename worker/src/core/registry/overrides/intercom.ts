@@ -102,15 +102,21 @@ export function overrideIntercom(def: UnifiedNodeDefinition, _schema: NodeSchema
           const conversationId = String(inputs.conversationId || '').trim();
           const message = String(inputs.message || inputs.body || '').trim();
           const adminId = String(inputs.adminId || '').trim();
+          // inputs.data defaults to {} (an empty object), which is truthy in JS — `!inputs.data`
+          // and `inputs.data || {...}` would both silently treat that empty default as "the user
+          // provided an override", skipping the message/adminId validation below and sending
+          // Intercom an empty reply body. Only treat inputs.data as an override when it actually
+          // has content.
+          const hasDataOverride = inputs.data && typeof inputs.data === 'object' && Object.keys(inputs.data).length > 0;
           if (!conversationId) throw new Error('conversationId is required for send');
-          if (!message && !inputs.data) throw new Error('message is required for send');
-          if (!adminId && !inputs.data) throw new Error('adminId is required for admin conversation replies');
+          if (!message && !hasDataOverride) throw new Error('message is required for send');
+          if (!adminId && !hasDataOverride) throw new Error('adminId is required for admin conversation replies');
           output = await integrationJsonRequest(
             `https://api.intercom.io/conversations/${encodeURIComponent(conversationId)}/reply`,
             {
               method: 'POST',
               headers,
-              body: JSON.stringify(inputs.data || {
+              body: JSON.stringify(hasDataOverride ? inputs.data : {
                 message_type: 'comment',
                 type: 'admin',
                 admin_id: adminId,

@@ -5458,7 +5458,7 @@ Output: {
   },
 
   odoo: {
-    overview: 'Search, read, create, update, or delete records in any Odoo model, or call a custom Odoo method, via JSON-RPC. A saved "Odoo Credentials" Connections entry exists but does not currently auto-fill this node - URL, Database, Username, and Password must always be typed directly on the node.',
+    overview: 'Search, read, create, update, or delete records in any Odoo model, or call a custom Odoo method, via JSON-RPC. A saved "Odoo Credentials" connection supplies Username and Password automatically - only the Odoo URL and Database name are entered directly on the node, since those are per-instance values rather than secrets.',
     inputs: ['url', 'db', 'username', 'password', 'operation', 'model', 'domain', 'fields', 'limit', 'offset', 'values', 'recordId', 'method', 'methodArgs', 'methodKwargs'],
     outputs: ['success', 'operation', 'model', 'data', 'error', '_error'],
     example: `Model: res.partner
@@ -5475,11 +5475,12 @@ Output: {
   error: null
 }`,
     tips: [
-      'This node logs in as a real Odoo user on every single run - the saved "Odoo Credentials" Connections entry exists but is not wired to auto-fill this node yet, so URL/Database/Username/Password must be typed on the node itself',
+      'This node logs in as a real Odoo user on every single run - select a saved "Odoo Credentials" connection to supply Username/Password automatically; the Odoo URL and Database name are still entered directly on the node',
       'Use technical field/model names (like res.partner, name, email), not the display labels shown in the Odoo UI - enable Developer Mode in Odoo to see them',
       'Create Record and Update Record do not return the saved field values - Create returns only the new numeric ID, Update returns only true; use a follow-up Get Records to see the data',
       'Odoo record IDs are plain integers, not GUIDs',
       'Execute Method can call any model method (like action_confirm) for actions beyond basic create/read/update/delete',
+      'Always fill in the Fields list for Get Records (e.g. ["id","name","email"]). Leaving it blank returns every field on the model, including several base64-encoded avatar/image fields on res.partner - these can be tens of thousands of characters per record and bloat the workflow output for no reason.',
     ],
   },
 

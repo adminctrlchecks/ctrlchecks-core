@@ -6096,9 +6096,13 @@ export class NodeLibrary {
             type: 'string',
             description: 'OAuth2 / SAML bearer token for SAP authentication (stored as credential)',
           },
+          apiKey: {
+            type: 'string',
+            description: 'API key for SAP systems that authenticate via a custom APIKey header (e.g. the SAP Business Accelerator Hub sandbox), used when no OAuth token is provided (stored as credential)',
+          },
           username: {
             type: 'string',
-            description: 'SAP Basic Auth username (used when no OAuth token is provided)',
+            description: 'SAP Basic Auth username (used when no OAuth token or API key is provided)',
           },
           password: {
             type: 'string',

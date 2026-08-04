@@ -1266,7 +1266,7 @@ export class UnifiedNodeRegistry implements INodeRegistry {
     {
       credentialTypeId: string;
       label: string;
-      authType: 'oauth2' | 'api_key' | 'bearer_token' | 'basic_auth';
+      authType: 'oauth2' | 'api_key' | 'bearer_token' | 'basic_auth' | 'query_auth';
       compatibleCredentialTypeIds?: string[];
     }
   > = {
@@ -1276,9 +1276,9 @@ export class UnifiedNodeRegistry implements INodeRegistry {
     anthropic:     { credentialTypeId: 'anthropic_api_key',    label: 'Anthropic API Key',        authType: 'api_key' },
     pinecone:      { credentialTypeId: 'pinecone_api_key',     label: 'Pinecone API Key',         authType: 'api_key' },
     qdrant:        { credentialTypeId: 'qdrant_api_key',       label: 'Qdrant API Key',           authType: 'api_key' },
-    cohere:        { credentialTypeId: 'cohere_api_key',       label: 'Cohere API Key',           authType: 'api_key' },
+    cohere:        { credentialTypeId: 'cohere_api_key',       label: 'Cohere API Key',           authType: 'bearer_token' },
     huggingface:   { credentialTypeId: 'huggingface_token',    label: 'Hugging Face Token',       authType: 'bearer_token' },
-    mistral:       { credentialTypeId: 'mistral_api_key',      label: 'Mistral API Key',          authType: 'api_key' },
+    mistral:       { credentialTypeId: 'mistral_api_key',      label: 'Mistral API Key',          authType: 'bearer_token' },
     // Google OAuth
     google:        { credentialTypeId: 'google_oauth2',        label: 'Google OAuth2',            authType: 'oauth2' },
     // Communication / messaging
@@ -1301,7 +1301,7 @@ export class UnifiedNodeRegistry implements INodeRegistry {
     sendgrid:      { credentialTypeId: 'sendgrid_api_key',     label: 'SendGrid API Key',         authType: 'bearer_token' },
     smtp:          { credentialTypeId: 'smtp_credentials',     label: 'SMTP Account',             authType: 'basic_auth' },
     mailgun:       { credentialTypeId: 'mailgun_api',          label: 'Mailgun API Key',          authType: 'basic_auth' },
-    mailchimp:     { credentialTypeId: 'mailchimp_api_key',    label: 'Mailchimp API Key',        authType: 'api_key' },
+    mailchimp:     { credentialTypeId: 'mailchimp_api_key',    label: 'Mailchimp API Key',        authType: 'basic_auth' },
     activecampaign:{ credentialTypeId: 'activecampaign_api',   label: 'ActiveCampaign API Key',   authType: 'api_key' },
     // Project management
     notion:        { credentialTypeId: 'notion_api_key',       label: 'Notion API Key',           authType: 'bearer_token' },
@@ -1309,13 +1309,13 @@ export class UnifiedNodeRegistry implements INodeRegistry {
     clickup:       { credentialTypeId: 'clickup_api_token',    label: 'ClickUp API Token',        authType: 'bearer_token' },
     linear:        { credentialTypeId: 'linear_api_key',       label: 'Linear API Key',           authType: 'bearer_token' },
     linear_trigger:{ credentialTypeId: 'linear_api_key',       label: 'Linear API Key',           authType: 'bearer_token' },
-    trello:        { credentialTypeId: 'trello_api_key',       label: 'Trello API Key',           authType: 'api_key' },
-    trello_trigger:{ credentialTypeId: 'trello_api_key',       label: 'Trello API Key',           authType: 'api_key' },
+    trello:        { credentialTypeId: 'trello_api_key',       label: 'Trello API Key',           authType: 'query_auth' },
+    trello_trigger:{ credentialTypeId: 'trello_api_key',       label: 'Trello API Key',           authType: 'query_auth' },
     asana:         { credentialTypeId: 'asana_oauth2',         label: 'Asana Connection',         authType: 'oauth2' },
     // CRM
     hubspot:       { credentialTypeId: 'hubspot_oauth2',       label: 'HubSpot Connection',       authType: 'oauth2' },
     salesforce:    { credentialTypeId: 'salesforce_oauth2',    label: 'Salesforce Connection',    authType: 'oauth2' },
-    pipedrive:     { credentialTypeId: 'pipedrive_api_key',    label: 'Pipedrive API Key',        authType: 'api_key' },
+    pipedrive:     { credentialTypeId: 'pipedrive_api_key',    label: 'Pipedrive API Key',        authType: 'query_auth' },
     zoho:          { credentialTypeId: 'zoho_oauth2',          label: 'Zoho Connection',          authType: 'oauth2' },
     freshdesk:     { credentialTypeId: 'freshdesk_api_key',    label: 'Freshdesk API Key',        authType: 'basic_auth' },
     intercom:      { credentialTypeId: 'intercom_token',       label: 'Intercom Token',           authType: 'bearer_token' },
@@ -1340,8 +1340,8 @@ export class UnifiedNodeRegistry implements INodeRegistry {
     stripe:        { credentialTypeId: 'stripe_api_key',       label: 'Stripe API Key',           authType: 'bearer_token' },
     stripe_trigger:{ credentialTypeId: 'stripe_api_key',       label: 'Stripe API Key',           authType: 'bearer_token' },
     paypal:        { credentialTypeId: 'paypal_oauth2',        label: 'PayPal Connection',        authType: 'oauth2' },
-    shopify:       { credentialTypeId: 'shopify_api_key',      label: 'Shopify API Key',          authType: 'api_key' },
-    shopify_trigger:{ credentialTypeId: 'shopify_api_key',     label: 'Shopify API Key',          authType: 'api_key' },
+    shopify:       { credentialTypeId: 'shopify_api_key',      label: 'Shopify API Key',          authType: 'bearer_token' },
+    shopify_trigger:{ credentialTypeId: 'shopify_api_key',     label: 'Shopify API Key',          authType: 'bearer_token' },
     woocommerce:   { credentialTypeId: 'woocommerce_api_key',  label: 'WooCommerce API Key',      authType: 'basic_auth' },
     typeform:      { credentialTypeId: 'typeform_token',       label: 'Typeform Token',           authType: 'bearer_token' },
     typeform_trigger: { credentialTypeId: 'typeform_token',    label: 'Typeform Token',           authType: 'bearer_token' },
@@ -1349,6 +1349,7 @@ export class UnifiedNodeRegistry implements INodeRegistry {
     calendly:      { credentialTypeId: 'calendly_api',         label: 'Calendly API Key',         authType: 'bearer_token' },
     xero:          { credentialTypeId: 'xero_oauth2',          label: 'Xero Connection',          authType: 'oauth2' },
     contentful:    { credentialTypeId: 'contentful_cma_token', label: 'Contentful CMA Personal Access Token', authType: 'bearer_token', compatibleCredentialTypeIds: ['contentful_cma_token', 'bearer_token'] },
+    wordpress:     { credentialTypeId: 'wordpress_app_password', label: 'WordPress Application Password', authType: 'basic_auth' },
     // Cloud / infra
     aws:           { credentialTypeId: 'aws_s3_api_key',       label: 'AWS Credentials',          authType: 'api_key' },
     amazon_ses:    { credentialTypeId: 'amazon_ses_access_key', label: 'Amazon SES Access Key',    authType: 'api_key', compatibleCredentialTypeIds: ['amazon_ses_access_key', 'aws_s3_api_key'] },

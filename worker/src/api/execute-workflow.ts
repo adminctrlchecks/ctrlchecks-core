@@ -582,6 +582,7 @@ function mergeRuntimeCredentials(config: Record<string, unknown>, credentials: R
     ['apiUrl', 'baseUrl'],             // ActiveCampaign: vault 'apiUrl' → node 'baseUrl'
     ['username', 'email'],             // Jira: vault 'username' (email) → node 'email'
     ['password', 'apiToken'],          // Jira: vault 'password' (API token) → node 'apiToken'
+    ['password', 'apiKey'],            // Mailchimp: vault 'password' (labeled "API Key" in the form) → node 'apiKey'
     ['domain', 'baseUrl'],             // Jira: vault 'domain' → node 'baseUrl' (https:// added at runtime)
     ['apiBaseUrl', 'baseUrl'],          // Mailgun: optional custom API base URL
     ['projectUrl', 'url'],              // Supabase: connection project URL -> node URL
@@ -15446,6 +15447,7 @@ export async function executeNodeLegacy(
       const endpoint = getStringProperty(config, 'endpoint', '');
       const baseUrl = getStringProperty(config, 'baseUrl', '').replace(/\/$/, '');
       const sapAccessToken = getStringProperty(config, 'accessToken', '').trim();
+      const sapApiKey = getStringProperty(config, 'apiKey', '').trim();
       const sapUsername = getStringProperty(config, 'username', '').trim();
       const sapPassword = getStringProperty(config, 'password', '').trim();
       const csrfToken = getStringProperty(config, 'csrfToken', '').trim();
@@ -15466,10 +15468,10 @@ export async function executeNodeLegacy(
         };
       }
 
-      if (!sapAccessToken && (!sapUsername || !sapPassword)) {
+      if (!sapAccessToken && !sapApiKey && (!sapUsername || !sapPassword)) {
         return {
           ...inputObj,
-          _error: 'SAP node: authentication required — provide accessToken (OAuth2) or username + password (Basic Auth)',
+          _error: 'SAP node: authentication required — provide accessToken (OAuth2), apiKey, or username + password (Basic Auth)',
         };
       }
 
@@ -15491,6 +15493,11 @@ export async function executeNodeLegacy(
 
       if (sapAccessToken) {
         sapHeaders['Authorization'] = `Bearer ${sapAccessToken}`;
+      } else if (sapApiKey) {
+        // Some SAP systems (e.g. the SAP Business Accelerator Hub sandbox) authenticate via a
+        // custom APIKey header rather than OAuth2/Basic Auth — neither of the other two modes
+        // this node supports maps onto that, so it needs its own explicit branch.
+        sapHeaders['APIKey'] = sapApiKey;
       } else {
         const encoded = Buffer.from(`${sapUsername}:${sapPassword}`).toString('base64');
         sapHeaders['Authorization'] = `Basic ${encoded}`;
@@ -17578,7 +17585,19 @@ export async function executeNodeLegacy(
 
         if (response.ok) {
           const data = await response.json().catch(() => ({}));
-          return { success: true, data, error: {} };
+          // Curated summary up front for single-post operations (create/update/delete) — a raw
+          // WP post has 20+ fields (guid, _links with a dozen sub-URLs, template, class_list,
+          // ...) that bury the handful most workflows reference downstream. get_posts returns
+          // an array, which this intentionally leaves untouched.
+          const summary = !Array.isArray(data) && data && typeof data === 'object'
+            ? {
+                postId: (data as any).id,
+                title: (data as any).title?.rendered,
+                link: (data as any).link,
+                status: (data as any).status,
+              }
+            : {};
+          return { success: true, data, error: {}, ...summary };
         }
         const message = await response.text().catch(() => response.statusText);
         return { success: false, data: {}, error: { message, status: response.status } };

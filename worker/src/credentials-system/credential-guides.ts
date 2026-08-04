@@ -1047,8 +1047,8 @@ export const specificGuides: Record<string, GuideOverride> = {
   sendgrid_api_key: {
     summary: 'Create a SendGrid API key and verify a sender identity to send transactional emails.',
     prerequisites: [
-      'A SendGrid account at app.sendgrid.com (free plan: 100 emails/day).',
-      'A verified sender email or domain — required before sending (Settings → Sender Authentication).',
+      'A SendGrid account at app.sendgrid.com — no card required to sign up. As of account creation the free access is a time-limited trial (the dashboard shows an explicit end date, e.g. "your free trial ends on..."), not a permanent free tier — check your account\'s own trial end date and plan to upgrade or re-verify before it expires.',
+      'A verified sender email or domain — required before sending (Settings → Sender Authentication → Single Sender Verification is the fastest path; Domain Authentication needs DNS access).',
     ],
     steps: [
       'Go to https://app.sendgrid.com and sign in.',
@@ -1071,6 +1071,11 @@ export const specificGuides: Record<string, GuideOverride> = {
       },
     },
     docsUrl: 'https://docs.sendgrid.com/ui/account-and-settings/api-keys',
+    troubleshooting: [
+      '403 Forbidden / "does not match a verified Sender Identity": the node\'s From Email field must be an EXACT match to an address listed under Settings -> Sender Authentication -> Single Sender Verification (or belong to a fully authenticated domain), including capitalization. Verifying one address does not authorize any other address, even on the same mailbox provider.',
+      '401 Unauthorized: the API key is missing the "Mail Send" permission (recreate it with Restricted Access and enable Mail Send, or use Full Access for testing), or was copied incompletely — it is shown only once, regenerate if unsure.',
+      'Emails not arriving: check Activity (left sidebar) in the SendGrid dashboard for delivery status first, then spam/junk. A brand-new account with no sending history has no domain reputation yet, so first sends often get filtered even though the API call itself succeeded.',
+    ],
   },
 
   // ─── Mailchimp ────────────────────────────────────────────────────────────────
@@ -1112,7 +1117,7 @@ export const specificGuides: Record<string, GuideOverride> = {
 
   activecampaign_api: {
     summary: 'Get your ActiveCampaign API URL and API Key — both values are required to manage contacts, lists, and automations.',
-    prerequisites: ['An ActiveCampaign account (any plan).'],
+    prerequisites: ['An ActiveCampaign account. New accounts get a 14-day free trial (no card required, up to 100 contacts) — no permanent free tier after that.'],
     steps: [
       'Go to your ActiveCampaign account and sign in.',
       'Click Settings (gear icon, bottom left) → Developer.',
@@ -1125,7 +1130,10 @@ export const specificGuides: Record<string, GuideOverride> = {
         description: 'Your ActiveCampaign API base URL — unique to your account.',
         whereToFind: 'ActiveCampaign → Settings → Developer → API URL. Format: https://youraccount.api-us1.com',
         example: 'https://youraccount.api-us1.com',
-        notes: ['This URL is unique to your account — do not use the generic api-us1.com hostname.'],
+        notes: [
+          'This URL is unique to your account — do not use the generic api-us1.com hostname.',
+          'This is entered directly on the ActiveCampaign node itself, not saved with this connection — only the API Key is credential-owned. Re-enter the URL on every ActiveCampaign node you place.',
+        ],
       },
       apiKey: {
         label: 'API Key',
@@ -1135,6 +1143,11 @@ export const specificGuides: Record<string, GuideOverride> = {
       },
     },
     docsUrl: 'https://developers.activecampaign.com/reference/url',
+    troubleshooting: [
+      'HTTP 422 on Add: almost always means the email address already exists as a contact in ActiveCampaign (duplicate), or a required field was left empty. The error message returned should now name the specific field ActiveCampaign rejected.',
+      'HTTP 401/403: the API Key is wrong, or the Account URL does not match the account the key belongs to (each account has its own unique API URL — keys are not portable across accounts).',
+      'HTTP 404 on Update/Delete: the Contact ID does not exist in this account. Contact IDs are account-specific — copying one from a different ActiveCampaign account will not work.',
+    ],
   },
 
   // ─── Calendly ─────────────────────────────────────────────────────────────────
@@ -1213,6 +1226,7 @@ export const specificGuides: Record<string, GuideOverride> = {
     prerequisites: [
       'An AWS account with Amazon SES enabled in the region you will use.',
       'A verified SES sender identity for the From Address used by the workflow.',
+      'New AWS accounts start in SES Sandbox mode: you can only send TO addresses that are also verified, not just the From address. Verify every recipient you plan to test with (SES -> Configuration -> Identities -> Create identity), or request production access to lift this restriction.',
       'Permission to create IAM users or access keys.',
     ],
     steps: [
@@ -1241,10 +1255,18 @@ export const specificGuides: Record<string, GuideOverride> = {
         description: 'AWS region where your SES verified identities, templates, and configuration sets live.',
         whereToFind: 'AWS Console -> Amazon SES -> region selector in the top navigation.',
         example: 'us-east-1',
-        notes: ['SES identities and templates are regional. Using the wrong region causes not found or unverified sender errors.'],
+        notes: [
+          'SES identities and templates are regional. Using the wrong region causes not found or unverified sender errors.',
+          'The Amazon SES node also has its own AWS Region field that overrides this connection region. Make sure that node-level field matches the region you enter here, or sending will fail even though this connection is correct.',
+        ],
       },
     },
     docsUrl: 'https://docs.aws.amazon.com/ses/latest/dg/security-iam.html',
+    troubleshooting: [
+      '"Email address is not verified" for the recipient (not the sender) almost always means your AWS account is still in SES Sandbox mode. Verify the recipient address too (SES -> Configuration -> Identities), or request SES production access to send to unverified addresses.',
+      '"Email address is not verified" naming the sender means the From Address on the node does not match a verified SES identity in the region actually being used - check the node\'s AWS Region field, not just this connection.',
+      'A successful send (a returned messageId) only means AWS accepted the message - delivery is separate. First-time sends from a brand-new SES identity often land in Spam until the sending domain builds reputation; check Spam if the recipient inbox looks empty.',
+    ],
   },
 
   // ─── SMTP (generic email) ─────────────────────────────────────────────────────
@@ -1285,7 +1307,10 @@ export const specificGuides: Record<string, GuideOverride> = {
         label: 'Password',
         description: 'SMTP password or app password for the account.',
         whereToFind: 'Gmail: Google Account -> Security -> App passwords. Outlook: account.microsoft.com -> Security -> App passwords. Other providers: your normal mailbox password.',
-        notes: ['Never use a Gmail/Outlook login password directly — generate an app password.'],
+        notes: [
+          'Never use a Gmail/Outlook login password directly — generate an app password.',
+          'The app password must be generated while signed into the SAME account as the Username above. If you have multiple Google/Microsoft accounts open, double-check which one the app password page shows before copying it — a mismatch produces the same generic authentication error as a wrong password.',
+        ],
       },
       from: {
         label: 'From Address',
@@ -1295,6 +1320,11 @@ export const specificGuides: Record<string, GuideOverride> = {
       },
     },
     docsUrl: 'https://en.wikipedia.org/wiki/Simple_Mail_Transfer_Protocol',
+    troubleshooting: [
+      'Gmail "535-5.7.8 Username and Password not accepted": almost always one of two causes — (1) a regular login password was used instead of an app password, or (2) the app password was generated under a different Google account than the Username field here. Regenerate the app password while signed into the exact same account as the Username, and confirm the account shown at myaccount.google.com/apppasswords matches.',
+      'Outlook/Microsoft 365 "authentication unsuccessful": Microsoft has been retiring basic SMTP auth for many tenants — if app passwords are not accepted, use the Outlook node (OAuth) instead of this SMTP node for Microsoft accounts.',
+      'Connection timeout on port 587: some networks block outbound SMTP ports; try port 465 (implicit TLS) or confirm the host is not behind a firewall.',
+    ],
   },
 
   // ─── AWS S3 ───────────────────────────────────────────────────────────────────

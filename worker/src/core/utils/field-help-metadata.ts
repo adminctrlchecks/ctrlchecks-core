@@ -313,8 +313,8 @@ export function inferFieldHelpMetadata(
   // Oracle node names its username field `user` — treat it as a connection username so it
   // becomes credential-owned (handled by the saved connection, not an inline node field).
   if (f === 'user' && nt === 'oracle_database') return pick('username');
-  if (f === 'username' && /(postgres|mysql|mongo|redis|database|ftp|sftp|jenkins|bitbucket|smtp|mail)/.test(nt)) return pick('username');
-  if ((f === 'password' || f === 'apppassword' || f === 'app_password') && /(postgres|mysql|mongo|redis|database|ftp|sftp|jenkins|bitbucket|smtp|mail)/.test(nt)) return pick('password');
+  if (f === 'username' && /(postgres|mysql|mongo|redis|database|ftp|sftp|jenkins|bitbucket|smtp|mail|wordpress)/.test(nt)) return pick('username');
+  if ((f === 'password' || f === 'apppassword' || f === 'app_password') && /(postgres|mysql|mongo|redis|database|ftp|sftp|jenkins|bitbucket|smtp|mail|wordpress)/.test(nt)) return pick('password');
 
   if (f === 'webhookurl' || f === 'webhook_url') return pick('webhook_url');
   if (f === 'callbackurl' || f === 'callback_url') return pick('callback_url');

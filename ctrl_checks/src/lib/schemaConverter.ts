@@ -86,6 +86,15 @@ function detectObjectWidget(
     return 'json';
   }
 
+  // Amazon SES recipients is { to: string[], cc?: string[], bcc?: string[] } —
+  // a flat key-value editor can only produce string values, not arrays, so
+  // "to" always came out as a single string instead of an array and the
+  // executor's Array.isArray(recipients.to) check silently rejected it.
+  // The dedicated To/Cc/Bcc editor avoids making users hand-write JSON.
+  if (nodeType === 'amazon_ses' && fieldKey === 'recipients') {
+    return 'emailRecipients';
+  }
+
   // Everything that's a plain object becomes a key-value editor
   return 'keyValue';
 }
@@ -161,6 +170,45 @@ function deriveInputHelpText(fieldKey: string, fieldSchema: InputFieldSchema, fr
       'Contact example: {"email":"alice@example.com","firstname":"Alice","lastname":"Kumar","phone":"+919876543210"}',
       'Deal example: {"dealname":"Website redesign","amount":"25000","pipeline":"default","dealstage":"appointmentscheduled"}',
       'Common mistake: Use HubSpot internal names such as firstname, not only the visible label such as First name.',
+    ]);
+  }
+  if (nodeType === 'wordpress' && lower === 'postid') {
+    return guideText([
+      'What this field is: The numeric ID of the WordPress post to update or delete.',
+      'Where to find it: In WP Admin, go to Posts, hover over (or click) the post title, and read the number after post= in the URL shown at the bottom of the browser or in the address bar (e.g. .../wp-admin/post.php?post=1&action=edit means the ID is 1).',
+      'Tip: Run this node with Operation set to Get Posts first — its output includes the id field for every post.',
+      'Example: 1',
+    ]);
+  }
+  if (nodeType === 'wordpress' && lower === 'siteurl') {
+    return guideText([
+      `What this field is: ${description}`,
+      'How to fill it: Paste the full site address, starting with https:// and with no trailing slash.',
+      'Important: This is not saved with the connection — only the username and Application Password are. You must re-enter the Site URL on every WordPress node you place, even ones using the same connection.',
+      'Example: https://myblog.com',
+    ]);
+  }
+  if (nodeType === 'sendgrid' && lower === 'from') {
+    return guideText([
+      `What this field is: ${description}`,
+      'Important: this must be an EXACT match to an address verified under SendGrid Settings -> Sender Authentication -> Single Sender Verification (or belong to a fully authenticated domain) — verifying one address does not authorize any other address, even a similar-looking one.',
+      'If this does not match, sending fails with a 403 error naming a Sender Identity mismatch, not a credential/API-key error.',
+      'Example: vusalashivakumar@gmail.com (must be the exact address shown as Verified in Sender Authentication)',
+    ]);
+  }
+  if (nodeType === 'activecampaign' && lower === 'contactid') {
+    return guideText([
+      'What this field is: The numeric ActiveCampaign contact ID to update or delete.',
+      'Where to find it: Run this node once with Operation set to Add for a new contact - the output includes data.contact.id. For an existing contact, open it in ActiveCampaign (Contacts list) and copy the number from the end of the browser URL.',
+      'Example: 123',
+    ]);
+  }
+  if (nodeType === 'amazon_ses' && lower === 'awsregion') {
+    return guideText([
+      `What this field is: ${description}`,
+      'Important: This field always overrides the region saved on your connection, even if you never change it from its default. It ships pre-filled with US East (N. Virginia) (us-east-1) — if your SES sender identity was verified in a different region, change this dropdown/field to match, or sending will fail with an unverified-identity error even though the connection itself is correct.',
+      'Where to find your real region: AWS Console -> Amazon SES -> the region selector in the top navigation.',
+      'Example: ap-south-1',
     ]);
   }
   if ((nodeType === 'whatsapp' || nodeType === 'whatsapp_cloud') && lower === 'contacts') {

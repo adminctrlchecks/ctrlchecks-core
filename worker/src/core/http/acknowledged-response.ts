@@ -134,16 +134,44 @@ export async function readAcknowledgedHttpResponse<T = any>(
   };
 }
 
+/**
+ * Pulls a specific, human-readable message out of a failed API response body.
+ *
+ * Providers disagree on error shape, so this checks the conventions actually seen in
+ * production across our integrations: plain `message`/`detail` fields, an `error` field
+ * that's either a string or an object with `.message`, OAuth2's `error_description`, and
+ * JSON:API/RFC-7807-style `errors[]` arrays (ActiveCampaign, Mailchimp, and others) whose
+ * entries carry per-field detail via `field`/`title`/`detail` rather than a flat `message`.
+ *
+ * The per-field errors[] array is checked FIRST, ahead of a top-level `message`/`detail`,
+ * because providers following RFC 7807 (Mailchimp included) pair a deliberately generic
+ * top-level `detail` — literally "...see the errors array" — with the actually useful
+ * specifics inside errors[]. Checking the generic field first meant every such failure
+ * surfaced as "see the errors array" instead of what was actually wrong. When an errors[]
+ * array has multiple entries, all of them are joined so nothing is lost.
+ */
 export function extractProviderErrorMessage(
   parsed: AcknowledgedHttpResponse,
   fallbackPrefix = 'HTTP',
 ): string {
   const payload = parsed.data as any;
+
+  const errorsArray = Array.isArray(payload?.errors) ? payload.errors : undefined;
+  const errorsArrayMessage = errorsArray
+    ?.map((entry: any) => {
+      if (typeof entry === 'string') return entry;
+      const detail = entry?.message || entry?.title || entry?.detail;
+      return entry?.field && detail ? `${entry.field}: ${detail}` : detail;
+    })
+    .filter(Boolean)
+    .join('; ');
+
   return (
-    payload?.error?.message ||
+    (errorsArrayMessage || undefined) ||
+    (typeof payload?.error === 'string' ? payload.error : payload?.error?.message) ||
     payload?.message ||
     payload?.detail ||
-    payload?.errors?.[0]?.message ||
+    payload?.error_description ||
     (typeof payload === 'string' ? payload : '') ||
     `${fallbackPrefix} ${parsed.status}`
   );

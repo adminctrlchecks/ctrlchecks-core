@@ -110,7 +110,12 @@ export function overrideMailchimp(def: UnifiedNodeDefinition, _schema: NodeSchem
           const email = String(inputs.email || inputs.data?.email_address || inputs.data?.email || '').trim();
           if (!listId) throw new Error('listId is required for subscribe');
           if (!email) throw new Error('email is required for subscribe');
-          const body = inputs.data || {
+          // inputs.data defaults to {} (an empty object), which is truthy in JS — `inputs.data ||
+          // {...}` always picked that empty default over the real email_address/status payload
+          // below, so Mailchimp received a genuinely empty body no matter what Email/List Id the
+          // user filled in. Only use inputs.data as an override when it actually has content.
+          const hasDataOverride = inputs.data && typeof inputs.data === 'object' && Object.keys(inputs.data).length > 0;
+          const body = hasDataOverride ? inputs.data : {
             email_address: email,
             status_if_new: String(inputs.status || 'subscribed'),
             status: String(inputs.status || 'subscribed'),
@@ -140,7 +145,18 @@ export function overrideMailchimp(def: UnifiedNodeDefinition, _schema: NodeSchem
           throw new Error(`Unsupported Mailchimp operation: ${operation}`);
         }
 
-        return { success: true, output: { operation, data: output } };
+        // Curated summary up front — a raw Mailchimp member object has 30+ internal fields
+        // (ip_opt, gravatar-style fields, sms_subscription_status, a dozen _links entries, ...)
+        // that bury the handful most workflows actually reference downstream.
+        const summary = output && typeof output === 'object' && !Array.isArray(output) && 'email_address' in output
+          ? {
+              memberId: (output as any).id,
+              email: (output as any).email_address,
+              status: (output as any).status,
+              listId: (output as any).list_id,
+            }
+          : {};
+        return { success: true, output: { operation, ...summary, data: output } };
       } catch (error: any) {
         return { success: false, error: { code: 'MAILCHIMP_FAILED', message: error?.message || 'Mailchimp operation failed' } };
       }

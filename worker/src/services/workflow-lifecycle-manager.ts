@@ -1619,7 +1619,11 @@ export class WorkflowLifecycleManager {
         placeholder: controlMetadata.placeholder,
         uiWidget: controlMetadata.uiWidget,
         description: issue.helpText || fieldDef.description || issue.fieldKey,
-        required: true,
+        // includeProviderDefaultFields pulls in genuinely optional (allowsEmpty) fields for
+        // wizard-style prompting alongside truly required ones — only mark the latter as
+        // required, since distributed-execute-workflow.ts gates actual execution on this flag
+        // and must not block a run over a field the node's own schema doesn't require.
+        required: !issue.isProviderDefault,
         defaultValue: fieldDef.default,
         examples: fieldDef.examples,
         ownership: fieldDef.ownership || 'value',

@@ -21,6 +21,7 @@ import {
 } from './credential-scope-registry';
 import { normalizeCredentialUserId } from './user-id-normalizer';
 import { credentialTypeDefinitions } from '../credentials-system/credential-type-registry';
+import { findCanonicalConnectionByProvider, getDecryptedConnection } from './canonical-credential-lookup';
 
 export interface ResolveCredentialInput {
   userId: string;
@@ -250,6 +251,49 @@ async function deleteConnectionByUnifiedCredentialId(ucId: string, userId: strin
   }
 }
 
+const CANONICAL_TOKEN_FIELD_CANDIDATES = [
+  'accessToken', 'access_token', 'token', 'apiKey', 'api_key', 'apiToken', 'password',
+];
+
+/**
+ * Fallback for credentials that exist as a saved Connections-page row but were never written
+ * into unified_credentials (true of every plain API-key/basic-auth credential type, since only
+ * the OAuth flow populates unified_credentials). Deliberately excludes OAuth2 connections — if
+ * unified_credentials has nothing for an OAuth provider, that's a real expired/missing-token
+ * state that should keep failing, not be silently papered over with a stale row.
+ */
+async function resolveFromCanonicalConnection(
+  userId: string,
+  provider: string,
+): Promise<ResolvedCredential | null> {
+  try {
+    const found = await findCanonicalConnectionByProvider(userId, provider);
+    if (!found || found.connection.authType === 'oauth2') return null;
+
+    const decrypted = await getDecryptedConnection(userId, found.connection.id);
+    if (!decrypted) return null;
+
+    const credentials = decrypted.connection.credentials;
+    const tokenValue = CANONICAL_TOKEN_FIELD_CANDIDATES
+      .map((key) => credentials?.[key])
+      .find((value): value is string => typeof value === 'string' && value.length > 0);
+    if (!tokenValue) return null;
+
+    return {
+      id: found.connection.id,
+      userId,
+      provider,
+      scopes: [],
+      accessToken: tokenValue,
+      refreshToken: null,
+      expiresAt: found.connection.expiresAt ? new Date(found.connection.expiresAt) : null,
+      source: found.source,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function resolveCredential(input: ResolveCredentialInput): Promise<ResolvedCredential> {
   const provider = normalizeProvider(input.provider);
   const userId = await normalizeCredentialUserId(input.userId);
@@ -273,6 +317,14 @@ export async function resolveCredential(input: ResolveCredentialInput): Promise<
 
   if (!row) {
     if (rows.length > 0) throw new CredentialMissingScopeError(context, availableScopes);
+    // Nothing in unified_credentials — but a plain API-key/basic-auth credential saved via the
+    // Connections page (e.g. Intercom, ActiveCampaign) is never synced into unified_credentials
+    // at all; only OAuth connections are. Without this fallback, this resolver (used by the
+    // readiness/"Check Setup" dry run) disagrees with the execution path's canonical connection
+    // lookup, which DOES check the connections table — so a genuinely working, saved connection
+    // shows as permanently "runtime token is missing" no matter how many times it's reconnected.
+    const fallback = await resolveFromCanonicalConnection(userId, provider);
+    if (fallback) return fallback;
     throw new CredentialNotFoundError(context);
   }
 

@@ -199,6 +199,11 @@ function mergeConnectionCredentialsIntoConfig(
     ['secretKey', 'apiKey'],
     ['apiKey', 'secretKey'],
     ['authToken', 'token'],
+    // Several basic_auth-shaped credential types (Mailchimp, and others where the "username" is
+    // a fixed/ignored placeholder) label their secret input field "password" for a friendlier
+    // form, but the node executor itself only ever reads config.apiKey — with no bridge here the
+    // value silently never reached the node despite the connection being valid and selected.
+    ['password', 'apiKey'],
     // Supabase: the supabase_api_key credential stores projectUrl + token (service role key),
     // but the Supabase node executor reads url + serviceRoleKey. Map them so a saved connection
     // satisfies the node without the user re-typing anything.

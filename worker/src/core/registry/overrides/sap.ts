@@ -74,6 +74,17 @@ export function overrideSap(
             },
           }
         : def.inputSchema.accessToken,
+      apiKey: def.inputSchema.apiKey
+        ? {
+            ...def.inputSchema.apiKey,
+            ownership: 'credential' as const,
+            fillMode: {
+              default: 'manual_static' as const,
+              supportsRuntimeAI: false,
+              supportsBuildtimeAI: false,
+            },
+          }
+        : def.inputSchema.apiKey,
       username: def.inputSchema.username
         ? {
             ...def.inputSchema.username,

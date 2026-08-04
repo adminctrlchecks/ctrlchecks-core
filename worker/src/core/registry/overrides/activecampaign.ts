@@ -36,20 +36,25 @@ export function overrideActivecampaign(def: UnifiedNodeDefinition, _schema: Node
       try {
         if (!baseUrl) throw new Error('apiUrl is required');
         if (!apiKey) throw new Error('apiKey is required');
+        // inputs.data defaults to {} (an empty object) when the field is present but untouched,
+        // and {} is truthy in JS — `inputs.data || {...}` would silently pick that empty default
+        // over the real email/firstName/lastName payload, sending ActiveCampaign a body with no
+        // actual contact fields. Only treat inputs.data as an override when it has real content.
+        const hasDataOverride = inputs.data && typeof inputs.data === 'object' && Object.keys(inputs.data).length > 0;
         let output: any;
         if (operation === 'add') {
           if (!inputs.email && !inputs.data?.email) throw new Error('email is required for add');
           output = await integrationJsonRequest(`${baseUrl}/api/3/contacts`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ contact: inputs.data || { email: inputs.email, firstName: inputs.firstName, lastName: inputs.lastName } }),
+            body: JSON.stringify({ contact: hasDataOverride ? inputs.data : { email: inputs.email, firstName: inputs.firstName, lastName: inputs.lastName } }),
           });
         } else if (operation === 'update') {
           if (!inputs.contactId) throw new Error('contactId is required for update');
           output = await integrationJsonRequest(`${baseUrl}/api/3/contacts/${encodeURIComponent(String(inputs.contactId))}`, {
             method: 'PUT',
             headers,
-            body: JSON.stringify({ contact: inputs.data || { email: inputs.email, firstName: inputs.firstName, lastName: inputs.lastName } }),
+            body: JSON.stringify({ contact: hasDataOverride ? inputs.data : { email: inputs.email, firstName: inputs.firstName, lastName: inputs.lastName } }),
           });
         } else if (operation === 'delete') {
           if (!inputs.contactId) throw new Error('contactId is required for delete');
@@ -58,7 +63,21 @@ export function overrideActivecampaign(def: UnifiedNodeDefinition, _schema: Node
         } else {
           throw new Error(`Unsupported ActiveCampaign operation: ${operation}`);
         }
-        return { success: true, output: { operation, data: output } };
+        const contact = output?.contact;
+        return {
+          success: true,
+          output: {
+            operation,
+            // Curated summary up front — ActiveCampaign's raw contact object has 40+ internal
+            // fields (hash, ua, gravatar, mpp_tracking, sms_consent_updated_at, ...) that bury
+            // the handful of fields most workflows actually reference downstream.
+            contactId: contact?.id ?? inputs.contactId,
+            email: contact?.email ?? inputs.email,
+            firstName: contact?.firstName ?? inputs.firstName,
+            lastName: contact?.lastName ?? inputs.lastName,
+            data: output,
+          },
+        };
       } catch (error: any) {
         return { success: false, error: { code: 'ACTIVECAMPAIGN_FAILED', message: error?.message || 'ActiveCampaign operation failed' } };
       }

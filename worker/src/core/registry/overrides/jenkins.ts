@@ -160,7 +160,25 @@ export function overrideJenkins(def: UnifiedNodeDefinition, _schema: NodeSchema)
           throw new Error(`Unsupported Jenkins operation: ${operation}`);
         }
 
-        return { success: true, output: { operation, jobName: name, data: output } };
+        // Curated summary up front — a raw Jenkins build object has 10+ internal fields
+        // (actions/causes, changeSet, culprits, executor, ...) that bury the handful most
+        // workflows actually reference downstream.
+        let summary: Record<string, unknown> = {};
+        if (operation === 'build') {
+          summary = { queued: true, queueUrl: output?.location };
+        } else if (operation === 'status') {
+          summary = {
+            buildNumber: output?.number,
+            result: output?.result,
+            building: output?.building,
+            url: output?.url,
+            duration: output?.duration,
+          };
+        } else if (operation === 'cancel') {
+          summary = { stopped: true };
+        }
+
+        return { success: true, output: { operation, jobName: name, ...summary, data: output } };
       } catch (error: any) {
         return { success: false, error: { code: 'JENKINS_FAILED', message: error?.message || 'Jenkins operation failed' } };
       }

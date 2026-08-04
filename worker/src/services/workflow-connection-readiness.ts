@@ -163,10 +163,17 @@ function providerDisplayName(provider: string): string {
 
 function credentialTypeForProvider(provider: string): { credentialTypeId: string; authType: ConnectionReadinessAuthType; label: string } {
   const canonical = canonicalProvider(provider);
-  const oauthDef = credentialTypeDefinitions.find(
-    (definition) => definition.provider === canonical && definition.authType === 'oauth2',
+  // Prefer a non-OAuth credential type when a provider has more than one registered (e.g.
+  // Mailchimp has both mailchimp_api_key and mailchimp_oauth2): a plain API-key/basic-auth type
+  // only needs the user's own credentials, while OAuth needs a CtrlChecks-side app registration
+  // (CLIENT_ID/CLIENT_SECRET) that may not be configured. Picking OAuth by default here caused
+  // a working, correctly-connected API-key connection to be permanently reported as mismatched
+  // against a requirement for an unconfigured OAuth type. Falls back to OAuth only when it's the
+  // sole credential type registered for the provider.
+  const nonOauthDef = credentialTypeDefinitions.find(
+    (definition) => definition.provider === canonical && definition.authType !== 'oauth2',
   );
-  const anyDef = oauthDef || credentialTypeDefinitions.find((definition) => definition.provider === canonical);
+  const anyDef = nonOauthDef || credentialTypeDefinitions.find((definition) => definition.provider === canonical);
   if (anyDef) {
     return {
       credentialTypeId: canonicalCredentialTypeId(anyDef.id),
@@ -189,9 +196,20 @@ function credentialTypeForContract(provider: string, contractType?: string) {
     contractType === 'token' ? 'bearer_token' :
     contractType === 'basic_auth' ? 'basic_auth' :
     undefined;
-  const match = preferredAuthType
+  const exactMatch = preferredAuthType
     ? byProvider.find((definition) => definition.authType === preferredAuthType)
     : undefined;
+  // The connector registry's contract "type" is a loose category (api_key/token/basic_auth all
+  // just mean "not OAuth"), not always the literal authType string a credential definition uses —
+  // e.g. Mailchimp's connector contract says 'api_key' but its real non-OAuth definition uses
+  // authType 'basic_auth'. When the exact string doesn't match but the contract is clearly
+  // non-OAuth, prefer any non-OAuth definition for the provider before ever falling through to
+  // credentialTypeForProvider's OAuth-preferring default — this fixes the match at its root
+  // instead of depending on providers happening to have exactly one non-OAuth type each.
+  const looseMatch = !exactMatch && preferredAuthType && preferredAuthType !== 'oauth2'
+    ? byProvider.find((definition) => definition.authType !== 'oauth2')
+    : undefined;
+  const match = exactMatch || looseMatch;
   if (match) {
     return {
       credentialTypeId: canonicalCredentialTypeId(match.id),

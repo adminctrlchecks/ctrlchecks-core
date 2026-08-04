@@ -295,12 +295,27 @@ export default function Connections() {
       setRepairError('Multiple saved accounts can satisfy this requirement. Select the intended saved connection on the affected workflow nodes instead of creating a duplicate connection.');
       return;
     }
+    // When the readiness check didn't pin down which credential type a node needs (e.g. a
+    // stale/unresolvable connection ref), providers with more than one registered credential
+    // type (Mailchimp has both mailchimp_api_key and mailchimp_oauth2) previously always fell
+    // back to "the first OAuth option for this provider" — even when that OAuth app was never
+    // configured (no CLIENT_ID/CLIENT_SECRET) and a working API-key type existed for the same
+    // provider. Prefer the non-OAuth option when ambiguous: it only needs the user's own
+    // credentials, not a CtrlChecks-side app registration, so it's far more likely to work.
+    const candidatesForProvider = credentialTypes.filter((type) => type.provider === group.provider);
     const credentialType = group.credentialTypeId
       ? credentialTypes.find((type) => type.id === group.credentialTypeId)
-      : credentialTypes.find((type) => type.provider === group.provider && type.authType === 'oauth2');
+      : candidatesForProvider.find((type) => type.authType !== 'oauth2') || candidatesForProvider[0];
     if (!credentialType) {
       setConnSearch(group.displayName || group.provider);
-      setRepairError(`No OAuth connection type was found for ${group.displayName}.`);
+      setRepairError(`No connection type was found for ${group.displayName}.`);
+      return;
+    }
+
+    // Non-OAuth providers (basic auth, API key, etc.) have no authorize/callback flow —
+    // route them to the same manual credential-entry modal the "+ Add Connection" button uses.
+    if (credentialType.authType !== 'oauth2') {
+      openModalForType(credentialType);
       return;
     }
 

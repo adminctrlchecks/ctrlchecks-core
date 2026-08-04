@@ -56,6 +56,7 @@ import { InputGuideLink } from './InputGuideLink';
 import type { ConditionRule } from './ConditionBuilder';
 const ConditionBuilder = lazy(() => import('./ConditionBuilder'));
 import KeyValueEditor from './editors/KeyValueEditor';
+import EmailRecipientsEditor from './editors/EmailRecipientsEditor';
 import HubSpotRecordEditor from './editors/HubSpotRecordEditor';
 import VariableListEditor from './editors/VariableListEditor';
 import CaseListEditor from './editors/CaseListEditor';
@@ -1812,6 +1813,16 @@ export default function PropertiesPanel({
               : {}}
             onChange={(v) => handleConfigChange(field.key, v)}
             addButtonLabel={field.addButtonLabel ?? 'Add Entry'}
+          />
+        );
+
+      case 'emailRecipients':
+        return (
+          <EmailRecipientsEditor
+            value={typeof value === 'object' && !Array.isArray(value) && value !== null
+              ? value as { to?: string[]; cc?: string[]; bcc?: string[] }
+              : undefined}
+            onChange={(v) => handleConfigChange(field.key, v)}
           />
         );
 
