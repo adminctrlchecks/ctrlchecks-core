@@ -34,7 +34,13 @@ export function overrideBitbucket(
     ...def,
     inputSchema,
     credentialSchema: {
-      requirements: [{ provider: 'bitbucket', category: 'credential', required: true, description: 'Bitbucket app password or OAuth access token' }],
+      requirements: [{
+        provider: 'bitbucket',
+        category: 'credential',
+        required: true,
+        description: 'Bitbucket app password or OAuth access token',
+        credentialTypeId: 'bitbucket_app_password',
+      }],
       credentialFields: ['username', 'appPassword', 'accessToken'],
     },
     execute: async (context) => {

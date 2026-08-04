@@ -68,6 +68,7 @@ import {
   getDecryptedConnection,
   markConnectionUsed,
 } from '../../services/canonical-credential-lookup';
+import { resolveCredential } from '../../services/credential-resolver';
 
 /** Stable nodeOutputs cache keys — see `worker/docs/OBSERVABILITY_CONTRACT.md`. */
 export const EXECUTION_OBSERVABILITY_KEYS = {
@@ -170,6 +171,36 @@ function collectSelectedConnectionIds(
   const directId = (config as any).connectionId || (node.data as any)?.connectionId;
   if (typeof directId === 'string' && directId.trim()) selected.add(directId.trim());
   return Array.from(selected);
+}
+
+/**
+ * OAuth2 access tokens expire (Zoho's in ~1 hour); this codebase already has a proper
+ * auto-refreshing resolver (credential-resolver.ts's resolveCredential(), which checks
+ * unified_credentials and refreshes an expiring token before returning it), but node
+ * execution here reads connection.credentials straight off the `connections` table row
+ * instead — the ORIGINAL token from the OAuth grant, never updated when a refresh
+ * happens elsewhere. That produced "invalid oauth token" on any connection more than a
+ * token lifetime old, for any OAuth2 provider, not just Zoho. For oauth2-type
+ * connections, get a live (refreshed-if-needed) token instead of trusting the stored
+ * copy; any provider without a unified_credentials row (or resolution failure for any
+ * other reason) just keeps the original stored credentials unchanged.
+ */
+async function withFreshOAuthCredentials(
+  ownerUserId: string,
+  connection: { authType: string; provider: string; credentials: Record<string, unknown> },
+): Promise<Record<string, unknown>> {
+  if (connection.authType !== 'oauth2') return connection.credentials;
+  try {
+    const resolved = await resolveCredential({ userId: ownerUserId, provider: connection.provider });
+    if (!resolved.accessToken) return connection.credentials;
+    return {
+      ...connection.credentials,
+      access_token: resolved.accessToken,
+      refresh_token: resolved.refreshToken || connection.credentials.refresh_token,
+    };
+  } catch {
+    return connection.credentials;
+  }
 }
 
 function mergeConnectionCredentialsIntoConfig(
@@ -302,12 +333,45 @@ async function injectDynamicConnectionCredentials(params: {
           lastMessage = `Connection "${connection.name}" is not active. Please reconnect before executing this workflow.`;
           continue;
         }
-        nextConfig = mergeConnectionCredentialsIntoConfig(nextConfig, connection.credentials);
+        const liveCredentials = await withFreshOAuthCredentials(ownerUserId, connection);
+        nextConfig = mergeConnectionCredentialsIntoConfig(nextConfig, liveCredentials);
         await markConnectionUsed(ownerUserId, connection.id, lookup.source);
         resolved = true;
         break;
       } catch (error) {
         lastMessage = error instanceof Error ? error.message : 'Unable to resolve selected connection';
+      }
+    }
+
+    if (!resolved && acceptedCredentialTypeIds.length > 0) {
+      // The node's stored connectionRef couldn't be used (the connection it points at
+      // was deleted, replaced, deactivated, or is the wrong credential type) — before
+      // giving up, fall back to auto-discovering the current active canonical
+      // connection for this provider, the same way a node with NO connectionRef at all
+      // already does above (lines ~260-271). Without this, a node whose connectionRef
+      // ever pointed at a connection that later got deleted/reconnected-under-a-new-id
+      // stays permanently broken with "Connection not found" even when a perfectly
+      // valid active connection exists for the same provider, until the user manually
+      // re-selects it in the UI.
+      for (const ownerUserId of ownerUserIds) {
+        for (const credentialTypeId of acceptedCredentialTypeIds) {
+          const canonical = await findCanonicalConnection(ownerUserId, credentialTypeId).catch(() => null);
+          if (!canonical) continue;
+          try {
+            const lookup = await getDecryptedConnection(ownerUserId, canonical.connection.id);
+            const connection = lookup?.connection;
+            if (connection && connection.status === 'active') {
+              const liveCredentials = await withFreshOAuthCredentials(ownerUserId, connection);
+              nextConfig = mergeConnectionCredentialsIntoConfig(nextConfig, liveCredentials);
+              await markConnectionUsed(ownerUserId, connection.id, lookup.source);
+              resolved = true;
+              break;
+            }
+          } catch {
+            // Try the next candidate credential type / owner.
+          }
+        }
+        if (resolved) break;
       }
     }
 

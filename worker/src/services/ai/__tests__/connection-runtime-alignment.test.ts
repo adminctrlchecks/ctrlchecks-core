@@ -103,6 +103,29 @@ describe('connection runtime alignment', () => {
     expect(missing).toEqual([]);
   });
 
+  it('every required, provider-scoped credential requirement declares a credentialTypeId', () => {
+    // Regression test: Bitbucket's requirement had `provider: 'bitbucket'` but no
+    // `credentialTypeId`. dynamic-node-executor.ts's canonical-connection auto-discovery
+    // (used whenever a node has no explicit connectionRef wired on it) only runs when
+    // getAcceptedCredentialTypeIds() returns at least one id — with none declared, it
+    // silently skipped credential injection entirely, so `username`/`appPassword` stayed
+    // empty and the node sent an empty Basic Auth header, producing an HTTP 401 even
+    // though the user had a valid, active saved connection. This must never regress for
+    // any node, not just Bitbucket.
+    const gaps: string[] = [];
+    for (const nodeType of unifiedNodeRegistry.getAllTypes()) {
+      const definition = unifiedNodeRegistry.get(nodeType);
+      for (const requirement of definition?.credentialSchema?.requirements || []) {
+        if (!requirement.required || !requirement.provider) continue;
+        const ids = [requirement.credentialTypeId, ...(requirement.credentialTypeIds || [])].filter(
+          (id): id is string => typeof id === 'string' && id.length > 0
+        );
+        if (ids.length === 0) gaps.push(`${nodeType} (provider=${requirement.provider})`);
+      }
+    }
+    expect(gaps).toEqual([]);
+  });
+
   it('unified node credential requirements reference known credential schemas', () => {
     const missing: string[] = [];
 

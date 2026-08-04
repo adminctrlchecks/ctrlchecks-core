@@ -57,7 +57,7 @@ import {
 import { getStructuralDiagnostics, materializeStructuralFields } from '../services/ai/structure-materializer';
 import { applyStructuralIntentAlignment } from '../services/ai/intent-structural-projection';
 import { hydrateRequiredConfigFromRegistryDefaults } from '../core/validation/workflow-config-hydrator';
-import { isCredentialOwnership, isStructuralOwnership } from '../core/utils/field-ownership';
+import { isCredentialOwnership, isStructuralOwnership, isReservedControlVocabularyValue } from '../core/utils/field-ownership';
 import {
   isConfigMetaKey,
   resolveAliasTargetFieldName,
@@ -1165,6 +1165,12 @@ async function runAttachInputsPipeline(req: Request, res: Response): Promise<{ s
                 });
                 logger.warn(
                   `[AttachInputs] Preserved existing ${fieldName} on node ${node.id} (${nodeType}): ${preserve.reason}`
+                );
+                continue;
+              }
+              if (isReservedControlVocabularyValue(fieldDef, value)) {
+                logger.warn(
+                  `[AttachInputs] Rejected reserved control-vocabulary value "${value}" for ${node.id}.${fieldName} (${nodeType}) — looks like a fill-mode/ownership label, not real content`
                 );
                 continue;
               }

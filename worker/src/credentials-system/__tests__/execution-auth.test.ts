@@ -58,4 +58,52 @@ describe('AuthInjectionEngine', () => {
 
     expect(request.url).toBe('https://api.example.test/items?existing=1&api_key=xyz');
   });
+
+  it('injects Bitbucket Basic Auth from username + appPassword', async () => {
+    // Regression test: the registry's injection rule for bitbucket_app_password used to be
+    // `{ target: 'header', valueTemplate: 'Basic {{base64({{username}}:{{appPassword}})}}' }`.
+    // renderTemplate() has no base64() function and can't parse nested {{...}} — it silently
+    // produced a garbage, non-base64 Authorization header, so the "Test Bitbucket" connection
+    // button always failed even with valid credentials. Fixed by using the engine's real
+    // `target: 'basic_auth'` mode, which actually base64-encodes the rendered template.
+    const engine = new AuthInjectionEngine({
+      getDecryptedConnection: jest.fn().mockResolvedValue({
+        ...baseConnection,
+        credentialTypeId: 'bitbucket_app_password',
+        provider: 'bitbucket',
+        authType: 'basic_auth',
+        credentials: { username: 'someone@example.com', appPassword: 'secret-app-password' },
+      }),
+      markUsed: jest.fn(),
+    } as any);
+
+    const request = await engine.injectIntoRequest(
+      { userId: 'user-1', nodeId: 'n1', nodeType: 'bitbucket', connectionId: 'conn-1' },
+      { method: 'GET', url: 'https://api.bitbucket.org/2.0/user' },
+    );
+
+    const expected = `Basic ${Buffer.from('someone@example.com:secret-app-password').toString('base64')}`;
+    expect(request.headers?.Authorization).toBe(expected);
+  });
+
+  it('injects Zendesk Basic Auth from username/token + apiToken', async () => {
+    const engine = new AuthInjectionEngine({
+      getDecryptedConnection: jest.fn().mockResolvedValue({
+        ...baseConnection,
+        credentialTypeId: 'zendesk_api',
+        provider: 'zendesk',
+        authType: 'basic_auth',
+        credentials: { subdomain: 'acme', username: 'agent@example.com', apiToken: 'zd-token' },
+      }),
+      markUsed: jest.fn(),
+    } as any);
+
+    const request = await engine.injectIntoRequest(
+      { userId: 'user-1', nodeId: 'n1', nodeType: 'zendesk', connectionId: 'conn-1' },
+      { method: 'GET', url: 'https://acme.zendesk.com/api/v2/users/me.json' },
+    );
+
+    const expected = `Basic ${Buffer.from('agent@example.com/token:zd-token').toString('base64')}`;
+    expect(request.headers?.Authorization).toBe(expected);
+  });
 });

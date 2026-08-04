@@ -4,6 +4,7 @@
 import type { DbClient } from '@db/db-js';
 import { config } from '../core/config';
 import { resolveOAuthTokenString } from './credential-resolver';
+import { resolveCredential } from '../services/credential-resolver';
 
 export type ZohoRegion = 'US' | 'EU' | 'IN' | 'AU' | 'CN' | 'JP';
 
@@ -195,30 +196,68 @@ export async function getZohoCredentials(
     }
 
     for (const uid of userIdsToTry) {
-      const { data: tokenData } = await db
-        .from('zoho_oauth_tokens')
-        .select('access_token, refresh_token, region')
-        .eq('user_id', uid)
-        .eq('region', configRegion)
-        .single();
+      try {
+        const { data: tokenData } = await db
+          .from('zoho_oauth_tokens')
+          .select('access_token, refresh_token, region')
+          .eq('user_id', uid)
+          .eq('region', configRegion)
+          .single();
 
-      if (tokenData) {
-        const clientId = config.zohoOAuthClientId || process.env.ZOHO_OAUTH_CLIENT_ID;
-        const clientSecret = config.zohoOAuthClientSecret || process.env.ZOHO_OAUTH_CLIENT_SECRET;
+        if (tokenData) {
+          const clientId = config.zohoOAuthClientId || process.env.ZOHO_OAUTH_CLIENT_ID;
+          const clientSecret = config.zohoOAuthClientSecret || process.env.ZOHO_OAUTH_CLIENT_SECRET;
 
-        if (clientId && clientSecret && tokenData.access_token && tokenData.refresh_token) {
-          // Try to get a fresh token
-          const freshToken = await getZohoAccessToken(db, uid, (tokenData.region as ZohoRegion) || configRegion);
-          if (freshToken) {
-            return {
-              accessToken: freshToken,
-              refreshToken: tokenData.refresh_token,
-              clientId,
-              clientSecret,
-              region: (tokenData.region as ZohoRegion) || configRegion,
-            };
+          if (clientId && clientSecret && tokenData.access_token && tokenData.refresh_token) {
+            // Try to get a fresh token
+            const freshToken = await getZohoAccessToken(db, uid, (tokenData.region as ZohoRegion) || configRegion);
+            if (freshToken) {
+              return {
+                accessToken: freshToken,
+                refreshToken: tokenData.refresh_token,
+                clientId,
+                clientSecret,
+                region: (tokenData.region as ZohoRegion) || configRegion,
+              };
+            }
           }
         }
+      } catch {
+        // Legacy zoho_oauth_tokens table lookup failed (e.g. table doesn't exist in the
+        // current schema) — fall through to the unified connections lookup below.
+      }
+    }
+
+    // Fallback: the standard "Connect Zoho" button (credential-type-registry.ts's
+    // zoho_oauth2 OAuth flow, same generic system every other OAuth provider uses)
+    // writes to unified_credentials/connections, never to the legacy zoho_oauth_tokens
+    // table checked above. Without this, a genuinely connected Zoho account was
+    // permanently reported as "not connected" because this function only ever
+    // looked in the old, no-longer-written-to table.
+    //
+    // Use resolveCredential() rather than reading connections.credentials directly —
+    // it auto-refreshes an expiring/expired access token before returning it. A raw
+    // read here previously handed Zoho a stale token and got back "invalid oauth
+    // token" (401) on the very first live call, because refreshes performed by the
+    // rest of the system land in unified_credentials, not on the original
+    // connections row.
+    for (const uid of userIdsToTry) {
+      try {
+        const resolved = await resolveCredential({ userId: uid, provider: 'zoho', action: 'zoho_node_execute' });
+        const clientId = process.env.ZOHO_CLIENT_ID || config.zohoOAuthClientId || process.env.ZOHO_OAUTH_CLIENT_ID;
+        const clientSecret = process.env.ZOHO_CLIENT_SECRET || config.zohoOAuthClientSecret || process.env.ZOHO_OAUTH_CLIENT_SECRET;
+
+        if (resolved.accessToken && clientId && clientSecret) {
+          return {
+            accessToken: resolved.accessToken,
+            refreshToken: resolved.refreshToken || '',
+            clientId,
+            clientSecret,
+            region: configRegion,
+          };
+        }
+      } catch {
+        // Try the next candidate user id.
       }
     }
   }

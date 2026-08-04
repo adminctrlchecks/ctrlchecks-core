@@ -10,21 +10,20 @@
 
 | | Count | % of catalog |
 |---|---|---|
-| **Nodes verified working end-to-end** | **144** | **81%** |
-| Nodes not yet working / not yet tested | 34 | 19% |
+| **Nodes verified working end-to-end** | **146** | **82%** |
+| Nodes not yet working / not yet tested | 32 | 18% |
 | **Total registered node types** | **178** | 100% |
 
 **For investors: 81% of the entire integration catalog is confirmed working today** — not "code written," but actually executed against the real third-party service with real credentials and a correct result observed. The remaining 19% is not a product gap: every one of them has complete, registered backend code, and each is blocked by a specific, named, external cause (a vendor payment, a business-identity requirement, a shared blocker with another listed node, or a vendor-side account/platform bug) rather than by missing engineering work.
 
 ---
 
-## Part 1 — Not Yet Working / Not Yet Tested (34 nodes)
+## Part 1 — Not Yet Working / Not Yet Tested (32 nodes)
 
 Every row below has been individually investigated. None are blocked by missing CtrlChecks code — each reason is external (money, business identity, a shared prerequisite with another row in this table, or a vendor-side issue).
 
 | Platform | Node type(s) | Category | Reason it isn't confirmed working |
 |---|---|---|---|
-| Mailgun | `mailgun` | Email | No free tier at signup — cheapest plan is $15/month and requires a card at checkout. Deferred, not yet tested. |
 | Chargebee | `chargebee` | Billing | Free trial only; no-cost path exhausted, real subscription data needs a paid plan. Not yet tested. |
 | Microsoft Teams | `microsoft_teams`, `microsoft_teams_trigger` | Communication | Teams' free tier ("Communities") has no Connectors/Workflows/Apps at all — verified live. Needs a Microsoft 365 **Business Basic** tenant ($7/user/month) plus an Azure AD app registration that doesn't exist yet for CtrlChecks. |
 | Twitter / X | `twitter` | Social | X's API now requires a **paid developer tier ($100/month)** — no functional free tier remains for posting. |
@@ -40,7 +39,6 @@ Every row below has been individually investigated. None are blocked by missing 
 | Workday | `workday` | HR/ERP | Enterprise-only — no self-serve signup exists at all; requires contacting Workday sales for a tenant. |
 | ScheduleWise | `schedulewise` | Scheduling | Same enterprise-only situation as Workday — no self-serve signup path exists; vendor relationship required. |
 | Tally Trigger | `tally_trigger` | Forms/ERP | Same enterprise-only situation as Workday — Tally Solutions has no self-serve access-token flow; vendor relationship required. |
-| Bitbucket | `bitbucket` | DevOps/Git | Backend code has been audited and a data-handling bug already fixed, but a live OAuth connection has not yet been created/tested against a real Bitbucket account. |
 | Salesforce | `salesforce` | CRM | Not yet tested — a free developer org has not been created yet. |
 | PayPal | `paypal` | Payments | Not yet tested — sandbox credentials have not been created yet. |
 | Shopify | `shopify` | E-commerce | Not yet tested — no development store or API key has been created yet. |
@@ -53,11 +51,11 @@ Every row below has been individually investigated. None are blocked by missing 
 | Instagram | `instagram`, `instagram_trigger` | Social | Same Meta Business verification requirement as Facebook (shared Meta app review). |
 | WhatsApp | `whatsapp`, `whatsapp_cloud`, `whatsapp_trigger` | Messaging | Same Meta Business verification requirement — WhatsApp Cloud API sits behind the identical Meta app review process. |
 
-**Pattern across all 34:** every single one is blocked by something outside the codebase — a vendor payment, a business-identity/domain requirement, an enterprise-only sales process, a shared prerequisite with another row above, or a vendor-side bug — never by unwritten or broken CtrlChecks code. Full investigation detail for each (verification dates, exact error text, escalation status) lives in `docs/PLATFORM_TESTING_COST_PLAN.md`.
+**Pattern across all 32:** every single one is blocked by something outside the codebase — a vendor payment, a business-identity/domain requirement, an enterprise-only sales process, a shared prerequisite with another row above, or a vendor-side bug — never by unwritten or broken CtrlChecks code. Full investigation detail for each (verification dates, exact error text, escalation status) lives in `docs/PLATFORM_TESTING_COST_PLAN.md`.
 
 ---
 
-## Part 2 — Verified Working (144 nodes)
+## Part 2 — Verified Working (146 nodes)
 
 Organized by category. Everything below has been manually exercised end-to-end with real credentials and a real API call, and returned a correct result. Counts are exact — every node type in the registry is accounted for in exactly one row of Part 1 or one category below.
 
@@ -84,14 +82,14 @@ HubSpot, Zoho CRM, Pipedrive, Odoo, Mailchimp, ActiveCampaign, Airtable, Notion,
 ### Productivity & Project Management — 10 nodes
 ClickUp, Linear, Linear Trigger, Trello, Trello Trigger, Jira, Jira Trigger, Calendly, Typeform, Typeform Trigger
 
-### Communication & Messaging — 11 nodes
-Slack Message, Slack Trigger, Slack Webhook, Discord, Discord Trigger, Discord Webhook, Telegram, Telegram Trigger, Email (SMTP), SendGrid, Amazon SES
+### Communication & Messaging — 12 nodes
+Slack Message, Slack Trigger, Slack Webhook, Discord, Discord Trigger, Discord Webhook, Telegram, Telegram Trigger, Email (SMTP), SendGrid, Amazon SES, Mailgun
 
 ### Social — 2 nodes
 LinkedIn, YouTube
 
-### DevOps & Infrastructure — 7 nodes
-GitHub, GitHub Trigger, GitLab, GitLab Trigger, Jenkins, Netlify, Vercel
+### DevOps & Infrastructure — 8 nodes
+GitHub, GitHub Trigger, GitLab, GitLab Trigger, Jenkins, Netlify, Vercel, Bitbucket
 
 ### Databases & Storage — 16 nodes
 PostgreSQL, MySQL, MongoDB, Redis, Supabase, Firebase, Google Cloud Storage, AWS S3, Oracle Database, SQL Server, TimescaleDB, Dropbox, FTP, SFTP, Database Read (generic), Database Write (generic)
@@ -99,7 +97,7 @@ PostgreSQL, MySQL, MongoDB, Redis, Supabase, Firebase, Google Cloud Storage, AWS
 ### CMS & Forms — 2 nodes
 WordPress, Contentful
 
-**Category total check:** 63 + 11 + 12 + 10 + 10 + 11 + 2 + 7 + 16 + 2 = **144** ✓
+**Category total check:** 63 + 11 + 12 + 10 + 10 + 12 + 2 + 8 + 16 + 2 = **146** ✓
 
 ---
 

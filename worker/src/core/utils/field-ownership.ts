@@ -77,3 +77,44 @@ export function isCredentialOwnership(
 ): boolean {
   return (field.ownership ?? classifyFieldOwnership(fieldName, field)) === 'credential';
 }
+
+// Internal fill-mode / ownership-class vocabulary words. These describe HOW a field
+// is filled (who owns it), never WHAT it contains, so they must never end up stored
+// as a field's actual value.
+const RESERVED_CONTROL_VOCABULARY = new Set<string>([
+  'manual_static',
+  'runtime_ai',
+  'buildtime_ai_once',
+  'structural',
+  'credential',
+  'manual',
+  'ai',
+  'system',
+]);
+
+/**
+ * True when `value` is exactly one of the reserved fill-mode/ownership-class words
+ * (or a common short form of one) rather than real field content.
+ *
+ * Guards against a UI/pipeline bug writing a mode/ownership LABEL into a field's
+ * actual value (e.g. `replyTo: "manual"`) instead of into fill-mode metadata —
+ * this has happened historically and permanently corrupts persisted workflow
+ * config, since nothing else ever clears it and the field silently fails
+ * validation on every future run. Any write path that sets a field's content
+ * from user/AI input should reject a value that matches this list, unless the
+ * field's own declared options legitimately include it as a real choice.
+ */
+export function isReservedControlVocabularyValue(
+  field: Pick<NodeInputField, 'ui'> | undefined,
+  value: unknown
+): boolean {
+  if (typeof value !== 'string') return false;
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed || !RESERVED_CONTROL_VOCABULARY.has(trimmed)) return false;
+  const declaredOptions = field?.ui?.options;
+  if (Array.isArray(declaredOptions)) {
+    const isDeclaredChoice = declaredOptions.some((opt) => String(opt?.value ?? '').toLowerCase() === trimmed);
+    if (isDeclaredChoice) return false;
+  }
+  return true;
+}

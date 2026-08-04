@@ -2055,30 +2055,30 @@ export const specificGuides: Record<string, GuideOverride> = {
   // ─── Bitbucket ────────────────────────────────────────────────────────────────
 
   bitbucket_app_password: {
-    summary: 'Create a Bitbucket App Password to access repositories, pipelines, and pull requests via the API.',
-    prerequisites: ['A Bitbucket account at bitbucket.org.'],
+    summary: 'Create an Atlassian API token scoped to Bitbucket to access repositories via the API. Atlassian has migrated Bitbucket off classic "App passwords" (Bitbucket → Personal Settings → App passwords no longer exists for most accounts) onto unified API tokens created from your Atlassian account.',
+    prerequisites: ['A Bitbucket account at bitbucket.org.', 'An Atlassian account (id.atlassian.com) — the same login you use for Bitbucket.'],
     steps: [
-      'Go to https://bitbucket.org and sign in.',
-      'Click your profile photo (bottom left) → Personal Settings → App passwords.',
-      'Click "Create app password" → give it a label like "CtrlChecks".',
-      'Select permissions: Repositories: Read + Write; Pipelines: Read + Write. Add others as needed.',
-      'Click Create → copy the app password — shown only once.',
-      'Enter your Bitbucket Username and the App Password, then click Save.',
+      'Go to https://id.atlassian.com/manage-profile/security/api-tokens and sign in.',
+      'Click "Create API token" → "Name and expiry": give it a label like "CtrlChecks" and set an expiry (max 365 days).',
+      'On "Select app": choose Bitbucket.',
+      'On "Select scopes": check read:account, read:workspace:bitbucket, read:repository:bitbucket, write:repository:bitbucket (add delete:repository:bitbucket only if you need the delete operation).',
+      'Click Create token → copy it immediately — shown only once, and starts with "ATATT".',
+      'Enter your Bitbucket account email address as Username and the token as App Password, then click Save.',
     ],
     fieldGuides: {
       username: {
         label: 'Username',
-        description: 'Your Bitbucket username (not your email address).',
-        whereToFind: 'Bitbucket → your profile photo → Personal Settings → Account settings → Bitbucket username.',
+        description: 'Your Bitbucket account email address — Atlassian API tokens authenticate with email, not your Bitbucket handle.',
+        whereToFind: 'The email address you sign in to bitbucket.org and id.atlassian.com with.',
       },
       appPassword: {
         label: 'App Password',
-        description: 'Bitbucket App Password with scoped permissions.',
-        whereToFind: 'Bitbucket → Personal Settings → App passwords → Create app password. Shown only once.',
-        notes: ['Shown only once — copy before closing. Select only the permission scopes your workflows need.'],
+        description: 'An Atlassian API token scoped to Bitbucket (starts with "ATATT"). Classic Bitbucket App Passwords have been retired for most accounts — this replaces them.',
+        whereToFind: 'id.atlassian.com → Security → API tokens → Create API token → select app "Bitbucket" → select repository read/write scopes. Shown only once.',
+        notes: ['Shown only once — copy before closing.', 'If Bitbucket → Personal Settings still shows an "App passwords" page for your account, that classic flow also works and produces a shorter token — either works as long as it was actually generated there, not your account login password.'],
       },
     },
-    docsUrl: 'https://support.atlassian.com/bitbucket-cloud/docs/app-passwords/',
+    docsUrl: 'https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/',
   },
 
   // ─── FTP ──────────────────────────────────────────────────────────────────────

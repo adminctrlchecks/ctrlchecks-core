@@ -978,6 +978,16 @@ export const credentialTypeDefinitions: CredentialTypeDefinition[] = addCredenti
       defaultScopes: ['ZohoCRM.modules.ALL', 'ZohoCRM.users.READ'],
       scopeSeparator: ',',
       pkce: false,
+      // Zoho, like Google, only issues a refresh_token when the authorization request
+      // explicitly asks for offline access. Without this, every "Connect Zoho" produced
+      // an access token with no way to renew it — the token silently died ~1 hour later
+      // and every execution after that failed with "invalid oauth token" forever, with
+      // no path back to a working state except a brand new authorization. `prompt:
+      // consent` additionally guarantees Zoho re-issues a refresh_token even when the
+      // user has already authorized this client before (Zoho, like Google, can skip
+      // issuing one on a silent/repeat consent otherwise).
+      accessType: 'offline',
+      prompt: 'consent',
     },
     refresh: { enabled: true, refreshBeforeSeconds: 300 },
     maskFields: ['access_token', 'refresh_token'],
@@ -2384,7 +2394,7 @@ export const credentialTypeDefinitions: CredentialTypeDefinition[] = addCredenti
     ],
     form: { layout: 'stacked', submitLabel: 'Save Credentials', testLabel: 'Test Zendesk' },
     validation: { requiredFields: ['subdomain', 'username', 'apiToken'] },
-    injection: [{ target: 'header', name: 'Authorization', valueTemplate: 'Basic {{base64({{username}}/token:{{apiToken}})}}' }],
+    injection: [{ target: 'basic_auth', valueTemplate: '{{username}}/token:{{apiToken}}' }],
     refresh: { enabled: false, refreshBeforeSeconds: 0 },
     maskFields: ['apiToken'],
   },
@@ -2571,13 +2581,13 @@ export const credentialTypeDefinitions: CredentialTypeDefinition[] = addCredenti
     displayName: 'Bitbucket App Password',
     authType: 'basic_auth',
     inputFields: [
-      { name: 'username', label: 'Username', type: 'text', required: true, placeholder: 'your-bitbucket-username' },
-      { name: 'appPassword', label: 'App Password', type: 'password', required: true, secret: true, helpText: 'From Bitbucket → Personal Settings → App passwords' },
+      { name: 'username', label: 'Username', type: 'text', required: true, placeholder: 'you@example.com', helpText: 'Your Bitbucket account email address (not your Bitbucket handle).' },
+      { name: 'appPassword', label: 'App Password', type: 'password', required: true, secret: true, helpText: 'An Atlassian API token scoped to Bitbucket, from id.atlassian.com → Security → API tokens (starts with "ATATT"). Classic Bitbucket App Passwords also work if your account still has that option.' },
     ],
     form: { layout: 'stacked', submitLabel: 'Save Credentials', testLabel: 'Test Bitbucket' },
     validation: { requiredFields: ['username', 'appPassword'] },
     testRequest: { method: 'GET', url: 'https://api.bitbucket.org/2.0/user', successStatus: [200] },
-    injection: [{ target: 'header', name: 'Authorization', valueTemplate: 'Basic {{base64({{username}}:{{appPassword}})}}' }],
+    injection: [{ target: 'basic_auth', valueTemplate: '{{username}}:{{appPassword}}' }],
     refresh: { enabled: false, refreshBeforeSeconds: 0 },
     maskFields: ['appPassword'],
   },

@@ -256,6 +256,26 @@ const CANONICAL_TOKEN_FIELD_CANDIDATES = [
 ];
 
 /**
+ * The static candidate list above is a guess at common field names and misses any
+ * credential type whose secret field is named something else (e.g. Bitbucket's App
+ * Password field is `appPassword`, not `password`) — that produced a permanently
+ * "runtime token is missing" readiness state for a correctly-saved connection.
+ * The registry (credential-type-registry.ts) is the single source of truth for what
+ * a provider's secret field is actually called, so look it up there first instead of
+ * maintaining a second, inevitably-incomplete list by hand.
+ */
+export function registrySecretFieldNamesForProvider(provider: string): string[] {
+  const names = new Set<string>();
+  for (const definition of credentialTypeDefinitions) {
+    if (definition.provider !== provider || definition.authType === 'oauth2') continue;
+    for (const field of definition.inputFields || []) {
+      if (field.secret) names.add(field.name);
+    }
+  }
+  return Array.from(names);
+}
+
+/**
  * Fallback for credentials that exist as a saved Connections-page row but were never written
  * into unified_credentials (true of every plain API-key/basic-auth credential type, since only
  * the OAuth flow populates unified_credentials). Deliberately excludes OAuth2 connections — if
@@ -274,7 +294,11 @@ async function resolveFromCanonicalConnection(
     if (!decrypted) return null;
 
     const credentials = decrypted.connection.credentials;
-    const tokenValue = CANONICAL_TOKEN_FIELD_CANDIDATES
+    const candidateFieldNames = [
+      ...registrySecretFieldNamesForProvider(provider),
+      ...CANONICAL_TOKEN_FIELD_CANDIDATES,
+    ];
+    const tokenValue = candidateFieldNames
       .map((key) => credentials?.[key])
       .find((value): value is string => typeof value === 'string' && value.length > 0);
     if (!tokenValue) return null;

@@ -14842,10 +14842,19 @@ export async function executeNodeLegacy(
           region,
         });
 
-        // Build execution parameters from config
+        // Build execution parameters from config.
+        // NOTE: the node's own `resource` field holds a Zoho MODULE name (Contacts,
+        // Leads, Deals, ...) — but ZohoApiClient.execute()'s `resource` parameter is a
+        // CATEGORY keyword ('record', 'tag', 'blueprint', 'bulk_read', ...) that routes
+        // to a handler expecting the module name separately as `params.module`. Passing
+        // the module name straight through as the category (e.g. resource: 'Contacts')
+        // never matches any case in that switch and always fails with "Unknown CRM
+        // resource". This node only ever performs record-level CRUD, so the category is
+        // always 'record'.
         const executeParams: any = {
           service,
-          resource,
+          resource: 'record',
+          module: resource,
           operation,
         };
 

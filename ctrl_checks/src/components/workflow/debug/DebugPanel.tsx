@@ -101,22 +101,31 @@ export function getDebugFailureToast(error: StructuredDebugError | string | unde
   };
 }
 
-function getNodeOutputFailure(output: unknown): StructuredDebugError | null {
+export function getNodeOutputFailure(output: unknown): StructuredDebugError | null {
   if (!output || typeof output !== 'object' || Array.isArray(output)) return null;
   const record = output as Record<string, unknown>;
   const status = typeof record.status === 'string' ? record.status.toLowerCase() : '';
+
+  // An explicit success signal always wins. Many node outputs (Mailgun, Slack,
+  // generic API wrappers) legitimately include a `message` field as their
+  // success confirmation text (e.g. "Queued. Thank you.") — that must never be
+  // misread as an error just because no dedicated `error`/`_error` field exists.
+  const explicitlySucceeded =
+    record.ok === true || record.success === true || status === 'success' || status === 'ok';
+
   const errorMessage =
     (typeof record._error === 'string' && record._error) ||
     (typeof record.error === 'string' && record.error) ||
-    (typeof record.message === 'string' && record.message) ||
+    (!explicitlySucceeded && typeof record.message === 'string' && record.message) ||
     '';
 
   const failed =
-    record.ok === false ||
-    record.success === false ||
-    status === 'failed' ||
-    status === 'error' ||
-    Boolean(errorMessage);
+    !explicitlySucceeded &&
+    (record.ok === false ||
+      record.success === false ||
+      status === 'failed' ||
+      status === 'error' ||
+      Boolean(errorMessage));
 
   if (!failed) return null;
 

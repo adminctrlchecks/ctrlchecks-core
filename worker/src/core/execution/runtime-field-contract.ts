@@ -8,6 +8,7 @@ import type {
 } from '../types/unified-node-contract';
 import { normalizeGoogleSheetsWriteValues } from '../../shared/google-sheets-write-values';
 import { extractEmailsFromText, parseRecipientEmails } from '../utils/recipient-resolver';
+import { isReservedControlVocabularyValue } from '../utils/field-ownership';
 
 export interface RuntimeLineageContext {
   upstreamPayload: unknown;
@@ -72,6 +73,12 @@ export function isRuntimeEmptyValue(value: unknown): boolean {
     if (!trimmed) return true;
     const lower = trimmed.toLowerCase();
     if (['v', 'n/a', 'na', 'none', 'null', 'undefined', 'not configured'].includes(lower)) {
+      return true;
+    }
+    // A fill-mode/ownership-class label (e.g. "manual") is never real field content —
+    // it means the value was never actually filled in, regardless of which field it
+    // ended up stored on. See isReservedControlVocabularyValue for why this can happen.
+    if (isReservedControlVocabularyValue(undefined, trimmed)) {
       return true;
     }
     // A value that starts with a real URL scheme is never placeholder-like regardless of
@@ -371,9 +378,10 @@ export function enforceRuntimeFieldContracts(
     }
     warnings.push(...repair.warnings);
 
-    const value = resolved[fieldName];
+    let value = resolved[fieldName];
     const source = sources[fieldName];
     const fieldErrors: string[] = [];
+    let healedOptional = false;
     if (protectedField && (source === 'runtime_ai' || source === 'field_directive_ai')) {
       fieldErrors.push(`${fieldName}: runtime AI cannot generate protected field`);
     }
@@ -387,6 +395,19 @@ export function enforceRuntimeFieldContracts(
     if (empty && required && !allowEmpty && !groupSatisfied(fieldName, fieldDef, resolved, context.inputSchema)) {
       fieldErrors.push(`${fieldName} is required but empty or placeholder-like`);
     }
+    // An optional field that is "empty" by content (a placeholder word, a stray
+    // fill-mode/ownership label, an invalid example) must never forward that raw
+    // string into execution — e.g. a corrupted `cc: "manual"` must reach the
+    // Mailgun API as nothing, not as the literal text "manual". Normalize it here,
+    // once, for every field/node, rather than trusting each node executor to
+    // re-derive the same "is this actually usable" judgment.
+    if (empty && !required && value !== '' && value !== undefined && value !== null) {
+      value = '';
+      resolved[fieldName] = '';
+      healedOptional = true;
+      repairs.push(`${fieldName} cleared: optional value was empty/placeholder-like`);
+      warnings.push(`${fieldName} held an empty/placeholder-like value and was cleared`);
+    }
 
     const formats = [...fieldFormats(fieldDef)];
     const inferred = formatDefault(fieldName, fieldDef);
@@ -396,7 +417,20 @@ export function enforceRuntimeFieldContracts(
         const formatError = validateFormat(value, format);
         if (formatError && !(allowEmpty && empty)) {
           if (groupSatisfied(fieldName, fieldDef, resolved, context.inputSchema)) continue;
-          fieldErrors.push(`${fieldName}: ${formatError}`);
+          if (required) {
+            fieldErrors.push(`${fieldName}: ${formatError}`);
+          } else {
+            // An optional field can never legitimately block execution on a format
+            // error — its only content is whatever static/stale data happens to be
+            // sitting in config (e.g. a stray value left over from an earlier wizard
+            // pass). Self-heal by dropping it, the same as if the user had left it
+            // blank, instead of failing every future run of the node.
+            value = '';
+            resolved[fieldName] = '';
+            healedOptional = true;
+            repairs.push(`${fieldName} cleared: optional value failed format validation (${formatError})`);
+            warnings.push(`${fieldName} held an invalid value (${formatError}) and was cleared`);
+          }
         }
       }
     }
@@ -409,7 +443,7 @@ export function enforceRuntimeFieldContracts(
       expectedCardinality: fieldDef.runtimeContract?.cardinality,
       source,
       valid: fieldErrors.length === 0,
-      repaired: repair.repaired,
+      repaired: repair.repaired || healedOptional,
       errors: fieldErrors,
       preview: preview(value),
     });
