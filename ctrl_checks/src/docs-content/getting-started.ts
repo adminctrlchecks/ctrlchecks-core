@@ -148,5 +148,38 @@ export const gettingStartedPages: Record<string, StaticDocPage> = {
         body: ['Check the execution output panel in CtrlChecks, then open Gmail Sent Mail to confirm the message was sent.']
       }
     ]
+  },
+  'zoom-integration': {
+    slug: 'zoom-integration',
+    title: 'Using the Zoom Integration',
+    description: 'How to add, use, and remove the Zoom connection in CtrlChecks, and what the Zoom Video node can do once connected.',
+    sections: [
+      {
+        id: 'adding-the-app',
+        title: 'Adding The Zoom Connection',
+        body: [
+          'CtrlChecks connects to Zoom using OAuth. Go to Connections in CtrlChecks, find Zoom under the service list, and click Connect.',
+          'You will be redirected to zoom.us to sign in and approve the permissions CtrlChecks requests: creating, viewing, listing, and updating meetings, and viewing basic account/user information. You are always shown exactly which permissions are being requested before you approve.',
+          'After approving, Zoom redirects back to CtrlChecks and the connection appears as Active in the Connections list.'
+        ]
+      },
+      {
+        id: 'using-the-app',
+        title: 'Using The Zoom Video Node',
+        body: [
+          'Add a "Zoom Video" node to any workflow and select your Zoom connection. The node supports five operations: Create Meeting, List Meetings, Get Meeting, Update Meeting, and Delete Meeting.',
+          'For Create Meeting and Update Meeting, set the meeting topic, duration, and start time (leave start time blank for an instant meeting). For Get Meeting, Update Meeting, and Delete Meeting, provide the target meeting ID, which can come from a previous node’s output.',
+          'Run the node from the CtrlChecks debug panel or as part of a full workflow execution to see the live result returned from the Zoom API.'
+        ]
+      },
+      {
+        id: 'removing-the-app',
+        title: 'Removing The Zoom Connection',
+        body: [
+          'To disconnect, go to Connections in CtrlChecks, find your Zoom connection, and choose Remove/Disconnect from its menu. This deletes the stored token from CtrlChecks and stops any workflow step using it from authenticating.',
+          'You can also revoke CtrlChecks’ access directly from Zoom: sign in at zoom.us, go to your app management page (Profile > Zoom Apps in the Zoom web portal), and remove the CtrlChecks app from your authorized apps.'
+        ]
+      }
+    ]
   }
 };

@@ -59,6 +59,7 @@ const ModelTestPage = lazy(() => import("./pages/ModelTestPage"));
 const NodeTestPage = lazy(() => import("./pages/NodeTestPage"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const Terms = lazy(() => import("./pages/Terms"));
+const Support = lazy(() => import("./pages/Support"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Subscriptions = lazy(() => import("./pages/Subscriptions"));
 const Connections = lazy(() => import("./pages/Connections"));
@@ -258,6 +259,7 @@ const App = () => (
                   <Route path="/model-testing/:category/:model" element={<ModelTestPage />} />
                   <Route path="/privacy" element={<Privacy />} />
                   <Route path="/terms" element={<Terms />} />
+                  <Route path="/support" element={<Support />} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>
