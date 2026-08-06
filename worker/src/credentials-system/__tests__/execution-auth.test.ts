@@ -59,6 +59,40 @@ describe('AuthInjectionEngine', () => {
     expect(request.url).toBe('https://api.example.test/items?existing=1&api_key=xyz');
   });
 
+  it('renders saved credential fields in request URL, headers, query, and body', async () => {
+    const engine = new AuthInjectionEngine({
+      getDecryptedConnection: jest.fn().mockResolvedValue({
+        ...baseConnection,
+        credentialTypeId: 'shopify_api_key',
+        provider: 'shopify',
+        credentials: {
+          storeUrl: 'ctrlchecks-test.myshopify.com',
+          token: 'shpat_test',
+          shop: 'ctrlchecks-test',
+        },
+      }),
+      markUsed: jest.fn(),
+    } as any);
+
+    const request = await engine.injectIntoRequest(
+      { userId: 'user-1', nodeId: 'n1', nodeType: 'shopify', connectionId: 'conn-1' },
+      {
+        method: 'POST',
+        url: 'https://{{storeUrl}}/admin/api/2025-10/shop.json',
+        headers: { 'X-Shop': '{{shop}}' },
+        query: { source: '{{shop}}' },
+        body: { shop: '{{shop}}' },
+      },
+    );
+
+    expect(request.url).toBe('https://ctrlchecks-test.myshopify.com/admin/api/2025-10/shop.json?source=ctrlchecks-test');
+    expect(request.headers).toMatchObject({
+      'X-Shop': 'ctrlchecks-test',
+      'X-Shopify-Access-Token': 'shpat_test',
+    });
+    expect(request.body).toEqual({ shop: 'ctrlchecks-test' });
+  });
+
   it('injects Bitbucket Basic Auth from username + appPassword', async () => {
     // Regression test: the registry's injection rule for bitbucket_app_password used to be
     // `{ target: 'header', valueTemplate: 'Basic {{base64({{username}}:{{appPassword}})}}' }`.

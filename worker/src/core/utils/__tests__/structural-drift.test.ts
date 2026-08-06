@@ -127,6 +127,39 @@ describe('detectStructuralDrift — universality: node types without a hardcoded
   });
 });
 
+describe('detectStructuralDrift — Shopify node payload editing', () => {
+  it('does not report drift when Shopify data payload keys are edited after freeze', () => {
+    const before = {
+      resource: 'product',
+      operation: 'create',
+      data: '',
+      shopDomain: 'bs6vxw-66.myshopify.com',
+      limit: 50,
+    };
+    const after = {
+      ...before,
+      data: {
+        title: 'CtrlChecks Test Product',
+        body_html: 'Created by CtrlChecks Shopify node test',
+        vendor: 'CtrlChecks',
+        product_type: 'Test',
+        status: 'draft',
+      },
+    };
+
+    const drifts = detectStructuralDrift('shopify', before, after);
+    expect(drifts.find((d) => d.field === 'data')).toBeUndefined();
+  });
+
+  it('still reports drift when Shopify operation shape changes after freeze', () => {
+    const before = { resource: 'product', operation: 'get' };
+    const after = { resource: 'product', operation: 'create' };
+
+    const drifts = detectStructuralDrift('shopify', before, after);
+    expect(drifts.find((d) => d.field === 'operation')).toBeDefined();
+  });
+});
+
 describe('detectStructuralDrift — unknown node type', () => {
   it('returns no drifts when the node type is not registered', () => {
     const drifts = detectStructuralDrift('not_a_real_node_type', { a: 1 }, { a: 2 });

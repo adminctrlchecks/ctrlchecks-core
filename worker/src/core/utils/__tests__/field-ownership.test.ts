@@ -22,17 +22,27 @@ describe('classifyFieldOwnership', () => {
     expect(classifyFieldOwnership('privateKey', { helpCategory: 'private_key' })).toBe('credential');
   });
 
-  it('returns structural for role raw_json', () => {
-    expect(classifyFieldOwnership('body', { role: 'raw_json' })).toBe('structural');
+  it('returns value for role raw_json because payload shapes are user-editable config', () => {
+    expect(classifyFieldOwnership('body', { role: 'raw_json' })).toBe('value');
   });
 
-  it('returns structural for role config', () => {
-    expect(classifyFieldOwnership('settings', { role: 'config' })).toBe('structural');
+  it('returns value for role config because scalar settings are user-editable config', () => {
+    expect(classifyFieldOwnership('settings', { role: 'config' })).toBe('value');
   });
 
-  it('returns structural when fillMode.supportsRuntimeAI is false', () => {
+  it('does not infer structural ownership only because runtime AI is disabled', () => {
     expect(
-      classifyFieldOwnership('layoutSpec', { fillMode: { default: 'manual_static', supportsRuntimeAI: false } })
+      classifyFieldOwnership('limit', { fillMode: { default: 'manual_static', supportsRuntimeAI: false } })
+    ).toBe('value');
+  });
+
+  it('returns structural for operation selector roles', () => {
+    expect(classifyFieldOwnership('action', { role: 'operation_selector' })).toBe('structural');
+  });
+
+  it('returns structural for fieldName "operation"', () => {
+    expect(
+      classifyFieldOwnership('operation', { fillMode: { default: 'manual_static', supportsRuntimeAI: false } })
     ).toBe('structural');
   });
 

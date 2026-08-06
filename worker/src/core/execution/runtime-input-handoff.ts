@@ -7,7 +7,7 @@ import type {
   RuntimeInputSource,
 } from '../types/unified-node-contract';
 import type { NormalizedOperationContract } from '../operations/operation-contract-resolver';
-import { fieldAllowsEmptyValue } from '../operations/operation-contract-resolver';
+import { fieldAllowsEmptyValue, fieldRequiredByOperationContract } from '../operations/operation-contract-resolver';
 import type { ResolvedOperationFieldPolicy } from '../operations/field-policy-resolver';
 import { isCredentialOwnership } from '../utils/field-ownership';
 import { isRuntimeEmptyValue } from './runtime-field-contract';
@@ -207,6 +207,14 @@ export function validateRuntimeInputHandoff(params: {
       if (isRuntimeEmptyValue(providerValue)) {
         if (params.operationContract && fieldAllowsEmptyValue(params.operationContract, fieldName)) {
           handoffStatus = 'accepted_empty_provider_default';
+        } else if (
+          isRuntimeEmptyValue(resolvedValue) &&
+          params.operationContract &&
+          !fieldRequiredByOperationContract(params.operationContract, fieldName)
+        ) {
+          handoffStatus = 'not_applicable';
+        } else if (isRuntimeEmptyValue(resolvedValue) && !params.operationContract && !params.inputSchema[fieldName]?.required) {
+          handoffStatus = 'not_applicable';
         } else if (source === 'deterministic_runtime') {
           // deterministic_runtime values are runtime fallbacks (e.g. narrative text picked from
           // upstream output). The node's own execute() re-derives them via getAuthoritativeInputs,

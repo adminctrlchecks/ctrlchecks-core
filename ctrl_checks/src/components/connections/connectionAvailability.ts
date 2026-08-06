@@ -6,7 +6,6 @@ const COMING_SOON_PROVIDERS = new Set([
   'paypal',
   'quickbooks',
   'xero',
-  'shopify',
   'woocommerce',
 ]);
 

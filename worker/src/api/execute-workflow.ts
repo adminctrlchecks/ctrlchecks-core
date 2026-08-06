@@ -5275,7 +5275,7 @@ export async function executeNodeLegacy(
       if (!shopDomain) return { ...inputObj, _error: 'Shopify: shopDomain is required (e.g., my-store.myshopify.com or saved in the Shopify connection)' };
       if (!token) return { ...inputObj, _error: 'Shopify: access token not found. Provide apiKey or vault credential "shopify".' };
 
-      const base = `https://${shopDomain}/admin/api/2024-04`;
+      const base = `https://${shopDomain}/admin/api/${process.env.SHOPIFY_API_VERSION || '2025-10'}`;
       const mapResource = (r: string): string => {
         if (r === 'product' || r === 'products') return 'products';
         if (r === 'order' || r === 'orders') return 'orders';

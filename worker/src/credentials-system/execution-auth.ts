@@ -10,6 +10,20 @@ function renderTemplate(template: string, values: Record<string, unknown>): stri
   });
 }
 
+function renderRuntimeValue(value: unknown, values: Record<string, unknown>): unknown {
+  if (typeof value === 'string') return renderTemplate(value, values);
+  if (Array.isArray(value)) return value.map((item) => renderRuntimeValue(item, values));
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, nested]) => [
+        renderTemplate(key, values),
+        renderRuntimeValue(nested, values),
+      ]),
+    );
+  }
+  return value;
+}
+
 export class AuthInjectionEngine {
   constructor(private readonly connections: ConnectionService = connectionService) {}
 
@@ -22,9 +36,11 @@ export class AuthInjectionEngine {
       throw new Error(`Connection is not available (status: ${connection.status}). Please reconnect.`);
     }
 
-    const headers = { ...(request.headers || {}) };
-    const url = new URL(request.url);
-    for (const [key, value] of Object.entries(request.query || {})) {
+    const headers = renderRuntimeValue(request.headers || {}, connection.credentials) as Record<string, string>;
+    const query = renderRuntimeValue(request.query || {}, connection.credentials) as Record<string, string>;
+    const body = renderRuntimeValue(request.body, connection.credentials);
+    const url = new URL(renderTemplate(request.url, connection.credentials));
+    for (const [key, value] of Object.entries(query)) {
       url.searchParams.set(key, value);
     }
 
@@ -42,7 +58,7 @@ export class AuthInjectionEngine {
     }
 
     await this.connections.markUsed(context.userId, context.connectionId);
-    return { ...request, url: url.toString(), headers };
+    return { ...request, url: url.toString(), headers, body };
   }
 
   async executeNodeRequest(context: RuntimeExecutionContext, request: RuntimeRequest): Promise<{

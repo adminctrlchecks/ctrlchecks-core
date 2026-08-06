@@ -41,15 +41,16 @@ export function classifyFieldOwnership(
   }
 
   const role = field.role;
-  if (role === 'raw_json' || role === 'config') {
-    return 'structural';
-  }
-  if (field.fillMode?.supportsRuntimeAI === false) {
+  if (role === 'operation_selector' || role === 'type_selector' || role === 'field_name') {
     return 'structural';
   }
 
   const f = (fieldName || '').toLowerCase();
   if (
+    f === 'operation' ||
+    f === 'resource' ||
+    f === 'event' ||
+    f === 'servicetype' ||
     f === 'fields' ||
     f === 'expression' ||
     f.includes('condition') ||

@@ -1942,7 +1942,7 @@ export const credentialTypeDefinitions: CredentialTypeDefinition[] = addCredenti
       {
         name: 'storeUrl',
         label: 'Store URL',
-        type: 'url',
+        type: 'text',
         required: true,
         placeholder: 'yourstore.myshopify.com',
         helpText: 'Your Shopify store domain',
@@ -1966,6 +1966,7 @@ export const credentialTypeDefinitions: CredentialTypeDefinition[] = addCredenti
     ],
     form: { layout: 'stacked', submitLabel: 'Save Credentials', testLabel: 'Test Shopify' },
     validation: { requiredFields: ['storeUrl', 'token'] },
+    testRequest: { method: 'GET', url: 'https://{{storeUrl}}/admin/api/2025-10/shop.json', successStatus: [200] },
     injection: [{ target: 'header', name: 'X-Shopify-Access-Token', valueTemplate: '{{token}}' }],
     refresh: { enabled: false, refreshBeforeSeconds: 0 },
     maskFields: ['token', 'clientSecret'],

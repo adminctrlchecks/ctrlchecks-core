@@ -342,4 +342,79 @@ describe('runtime-input-handoff', () => {
     expect(result.audit.find((entry) => entry.fieldName === 'body')?.handoffStatus)
       .toBe('not_applicable');
   });
+
+  it('ignores empty optional runtime-owned alias fields during handoff', () => {
+    const operationContract: NormalizedOperationContract = {
+      operation: 'get',
+      resource: 'product',
+      label: 'Get Product',
+      requiredFields: ['resource', 'operation', 'id'],
+      optionalFields: ['productId', 'orderId', 'customerId', 'data', 'limit'],
+      forbiddenFields: [],
+      conditionallyRequiredFields: [],
+      payloadGroups: [],
+      emptyValuePolicy: {},
+      providerDefaultFields: [],
+      fieldSourcePolicy: {},
+      runtimeAiPolicy: {},
+      activeFields: ['resource', 'operation', 'id', 'productId', 'orderId', 'customerId', 'data', 'limit'],
+      credentialProviders: ['shopify'],
+      outputFields: ['default'],
+      legacyAliases: [],
+      status: 'implemented',
+      diagnostics: [],
+      generated: false,
+    };
+
+    const result = validateRuntimeInputHandoff({
+      nodeId: 'shopify_1',
+      nodeType: 'shopify',
+      finalResolvedInputs: {
+        resource: 'product',
+        operation: 'get',
+        id: '7502207975509',
+        productId: '',
+        orderId: '',
+        customerId: '',
+      },
+      providerConfig: {
+        resource: 'product',
+        operation: 'get',
+        id: '7502207975509',
+      },
+      inputSources: {
+        resource: 'static_config',
+        operation: 'static_config',
+        id: 'static_config',
+        productId: 'runtime_ai',
+        orderId: 'runtime_ai',
+        customerId: 'runtime_ai',
+      },
+      inputSchema: {
+        resource: { type: 'string', description: 'resource', required: true },
+        operation: { type: 'string', description: 'operation', required: true },
+        id: { type: 'string', description: 'id', required: true },
+        productId: { type: 'string', description: 'product id', required: false },
+        orderId: { type: 'string', description: 'order id', required: false },
+        customerId: { type: 'string', description: 'customer id', required: false },
+      },
+      effectiveFillModes: {
+        resource: 'manual_static',
+        operation: 'manual_static',
+        id: 'manual_static',
+        productId: 'runtime_ai',
+        orderId: 'runtime_ai',
+        customerId: 'runtime_ai',
+      },
+      operationContract,
+    });
+
+    expect(result.valid).toBe(true);
+    expect(result.audit.find((entry) => entry.fieldName === 'productId')?.handoffStatus)
+      .toBe('not_applicable');
+    expect(result.audit.find((entry) => entry.fieldName === 'orderId')?.handoffStatus)
+      .toBe('not_applicable');
+    expect(result.audit.find((entry) => entry.fieldName === 'customerId')?.handoffStatus)
+      .toBe('not_applicable');
+  });
 });

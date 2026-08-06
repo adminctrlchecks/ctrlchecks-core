@@ -1807,17 +1807,19 @@ export const specificGuides: Record<string, GuideOverride> = {
   // ─── eCommerce ────────────────────────────────────────────────────────────────
 
   shopify_api_key: {
-    summary: 'Create a Shopify custom app Admin API token and enter your store domain to manage products, orders, and customers.',
+    summary: 'Create a Shopify custom app, generate an Admin API access token, and enter your store domain to manage products, orders, customers, and webhooks.',
     prerequisites: [
       'A Shopify store (any plan) at yourstore.myshopify.com/admin.',
-      'Custom app development enabled in your store settings.',
+      'Permission to create or install custom apps for the store.',
     ],
     steps: [
-      'In your Shopify admin, go to Settings → Apps and sales channels.',
-      'Click "Develop apps" → "Allow custom app development" (if prompted) → "Create an app" → give it a name like "CtrlChecks".',
-      'Click the app name → go to "Configuration" tab → Admin API integration → Edit → select the scopes you need (e.g. read_orders, write_orders, read_products, write_products).',
-      'Go to "API credentials" tab → "Install app" → Install.',
-      'Copy the "Admin API access token" — it starts with shpat_ and is shown only once.',
+      'In Shopify admin, go to Settings → Apps → Develop apps → Build apps in Dev Dashboard.',
+      'Create a custom app named "CtrlChecks" and create/release an app version with the Admin API scopes needed for the workflow.',
+      'For a basic live test, include read_products and read_orders. For write tests, add write_products, write_orders, and write_customers only when you plan to test those operations.',
+      'Install the app on the test store.',
+      'In the Dev Dashboard app settings, copy the Client ID and Client Secret.',
+      'Use Shopify\'s client credentials grant to generate an Admin API access token for the store, then paste the returned access_token into CtrlChecks. It usually starts with shpat_.',
+      'For Shopify Trigger, paste the same app Client Secret into the optional App Client Secret / Webhook Signing Secret field so CtrlChecks can verify X-Shopify-Hmac-Sha256.',
       'Your store domain is the part before .myshopify.com (e.g. if your URL is mystore.myshopify.com, the store URL is mystore.myshopify.com).',
       'Enter the Store URL and the Access Token, then click Save.',
     ],
@@ -1832,12 +1834,18 @@ export const specificGuides: Record<string, GuideOverride> = {
       token: {
         label: 'Admin API Access Token',
         description: 'Shopify Admin API token with store management permissions.',
-        whereToFind: 'Shopify Admin → Settings → Apps → Develop apps → your app → API credentials → Admin API access token. Starts with shpat_ and shown only once.',
+        whereToFind: 'Generate it from the app Client ID and Client Secret using Shopify\'s client credentials grant endpoint: https://{shop}.myshopify.com/admin/oauth/access_token.',
         example: 'shpat_...',
-        notes: ['Shown only once — copy before leaving the page. If lost, you must generate a new token.'],
+        notes: ['Use the minimum scopes needed for the node test.', 'If Shopify returns an expires_in value, generate a fresh token before testing again.'],
+      },
+      clientSecret: {
+        label: 'App Client Secret / Webhook Signing Secret',
+        description: 'Shopify app client secret used to verify webhook HMAC signatures for Shopify Trigger.',
+        whereToFind: 'Shopify Dev Dashboard → Apps → your app → Settings → Client credentials → Client secret.',
+        notes: ['Required for Shopify Trigger webhook registration and delivery validation.', 'Optional for action-only Shopify Admin API tests.'],
       },
     },
-    docsUrl: 'https://shopify.dev/docs/apps/build/authentication-authorization',
+    docsUrl: 'https://shopify.dev/docs/apps/build/authentication-authorization/client-secrets',
   },
 
   shopify_oauth2: {

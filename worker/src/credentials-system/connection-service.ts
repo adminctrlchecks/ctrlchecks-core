@@ -52,6 +52,26 @@ function normalizeCredentialPayload(
   definition: CredentialTypeDefinition,
   credentials: Record<string, unknown>,
 ): Record<string, unknown> {
+  if (definition.id === 'shopify_api_key') {
+    const storeUrl =
+      typeof credentials.storeUrl === 'string'
+        ? credentials.storeUrl
+            .trim()
+            .replace(/^https?:\/\//i, '')
+            .replace(/\/admin.*$/i, '')
+            .replace(/\/+$/g, '')
+        : credentials.storeUrl;
+    const normalizedStoreUrl =
+      typeof storeUrl === 'string' && storeUrl && !storeUrl.includes('.')
+        ? `${storeUrl}.myshopify.com`
+        : storeUrl;
+    const token =
+      typeof credentials.token === 'string'
+        ? credentials.token.replace(/^Bearer\s+/i, '').trim()
+        : credentials.token;
+    return { ...credentials, storeUrl: normalizedStoreUrl, token };
+  }
+
   if (definition.id !== 'openai_api_key') return credentials;
 
   const token =

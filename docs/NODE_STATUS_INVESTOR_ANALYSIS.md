@@ -1,6 +1,6 @@
 # CtrlChecks — Node Integration Status (Investor Analysis)
 
-**Prepared:** 2026-08-04 (updated 2026-08-05: Zoom moved to Verified Working; updated 2026-08-06: Salesforce moved to Verified Working)
+**Prepared:** 2026-08-04 (updated 2026-08-05: Zoom moved to Verified Working; updated 2026-08-06: Salesforce and Shopify moved to Verified Working)
 **Basis:** Manual, end-to-end testing against live third-party accounts and real API calls — not a code-completeness estimate. A node is only marked "Working" once it has been run with real credentials against the live vendor API from the CtrlChecks debug panel and produced a correct result.
 **Source of node catalog:** `worker/src/core/registry/unified-node-registry.ts` (178 backend-registered node types, exported live via `worker/public/node-library.json`)
 
@@ -10,15 +10,15 @@
 
 | | Count | % of catalog |
 |---|---|---|
-| **Nodes verified working end-to-end** | **148** | **83%** |
-| Nodes not yet working / not yet tested | 30 | 17% |
+| **Nodes verified working end-to-end** | **149** | **84%** |
+| Nodes not yet working / not yet tested | 29 | 16% |
 | **Total registered node types** | **178** | 100% |
 
-**For investors: 83% of the entire integration catalog is confirmed working today** — not "code written," but actually executed against the real third-party service with real credentials and a correct result observed. The remaining 17% is not a product gap: every one of them has complete, registered backend code, and each is blocked by a specific, named, external cause (a vendor payment, a business-identity requirement, a shared blocker with another listed node, or a vendor-side account/platform bug) rather than by missing engineering work.
+**For investors: 84% of the entire integration catalog is confirmed working today** — not "code written," but actually executed against the real third-party service with real credentials and a correct result observed. The remaining 16% is not a product gap: every one of them has complete, registered backend code, and each is blocked by a specific, named, external cause (a vendor payment, a business-identity requirement, a shared blocker with another listed node, or a vendor-side account/platform bug) rather than by missing engineering work.
 
 ---
 
-## Part 1 — Not Yet Working / Not Yet Tested (30 nodes)
+## Part 1 — Not Yet Working / Not Yet Tested (29 nodes)
 
 Every row below has been individually investigated. None are blocked by missing CtrlChecks code — each reason is external (money, business identity, a shared prerequisite with another row in this table, or a vendor-side issue).
 
@@ -39,8 +39,7 @@ Every row below has been individually investigated. None are blocked by missing 
 | ScheduleWise | `schedulewise` | Scheduling | Same enterprise-only situation as Workday — no self-serve signup path exists; vendor relationship required. |
 | Tally Trigger | `tally_trigger` | Forms/ERP | Same enterprise-only situation as Workday — Tally Solutions has no self-serve access-token flow; vendor relationship required. |
 | PayPal | `paypal` | Payments | Not yet tested — sandbox credentials have not been created yet. |
-| Shopify | `shopify` | E-commerce | Not yet tested — no development store or API key has been created yet. |
-| Shopify Trigger | `shopify_trigger` | E-commerce | Webhook counterpart of Shopify above — depends on the same untested store credentials. |
+| Shopify Trigger | `shopify_trigger` | E-commerce | Base Shopify store credentials are now verified via the regular Shopify action node, but the trigger still needs its own live webhook delivery test from a real Shopify event before it can be marked working. |
 | WooCommerce | `woocommerce` | E-commerce | Not yet tested — no WooCommerce store/API key has been created yet. |
 | Stripe | `stripe` | Payments | Not yet tested — a test-mode API key has not been created yet. |
 | Stripe Trigger | `stripe_trigger` | Payments | Webhook counterpart of Stripe above — depends on the same untested API credentials. |
@@ -49,11 +48,11 @@ Every row below has been individually investigated. None are blocked by missing 
 | Instagram | `instagram`, `instagram_trigger` | Social | Same Meta Business verification requirement as Facebook (shared Meta app review). |
 | WhatsApp | `whatsapp`, `whatsapp_cloud`, `whatsapp_trigger` | Messaging | Same Meta Business verification requirement — WhatsApp Cloud API sits behind the identical Meta app review process. |
 
-**Pattern across all 30:** every single one is blocked by something outside the codebase — a vendor payment, a business-identity/domain requirement, an enterprise-only sales process, a shared prerequisite with another row above, or a vendor-side bug — never by unwritten or broken CtrlChecks code. Full investigation detail for each (verification dates, exact error text, escalation status) lives in `docs/PLATFORM_TESTING_COST_PLAN.md`.
+**Pattern across all 29:** every single one is blocked by something outside the codebase — a vendor payment, a business-identity/domain requirement, an enterprise-only sales process, a shared prerequisite with another row above, or a vendor-side bug — never by unwritten or broken CtrlChecks code. Full investigation detail for each (verification dates, exact error text, escalation status) lives in `docs/PLATFORM_TESTING_COST_PLAN.md`.
 
 ---
 
-## Part 2 — Verified Working (148 nodes)
+## Part 2 — Verified Working (149 nodes)
 
 Organized by category. Everything below has been manually exercised end-to-end with real credentials and a real API call, and returned a correct result. Counts are exact — every node type in the registry is accounted for in exactly one row of Part 1 or one category below.
 
@@ -95,7 +94,12 @@ PostgreSQL, MySQL, MongoDB, Redis, Supabase, Firebase, Google Cloud Storage, AWS
 ### CMS & Forms — 2 nodes
 WordPress, Contentful
 
-**Category total check:** 63 + 11 + 12 + 11 + 10 + 13 + 2 + 8 + 16 + 2 = **148** ✓
+### E-commerce — 1 node
+Shopify
+
+**Shopify live verification (2026-08-06):** created and installed a real Shopify custom app against `bs6vxw-66.myshopify.com`, generated a real Admin API access token via Shopify's client-credentials token endpoint, saved the credential in CtrlChecks, and ran the Shopify node from the CtrlChecks debug panel against the live Shopify Admin API. Verified the auth/list path and created a real draft product (`CtrlChecks Test Product`, Shopify product id `7502207975509`). The pass also exposed and fixed two shared platform issues: Shopify Admin API credentials were disabled as "coming soon" in the frontend despite backend support; post-freeze payload editing and runtime handoff validation were too strict for optional JSON/config fields. Both were fixed at shared registry/runtime layers, not as one-off UI workarounds.
+
+**Category total check:** 63 + 11 + 12 + 11 + 10 + 13 + 2 + 8 + 16 + 2 + 1 = **149** ✓
 
 ---
 

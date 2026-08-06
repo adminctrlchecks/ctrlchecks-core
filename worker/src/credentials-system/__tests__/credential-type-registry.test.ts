@@ -95,6 +95,17 @@ describe('credential type registry', () => {
     expect(stepsText).toContain('dashboard.stripe.com');
   });
 
+  it('shopify_api_key accepts a shop domain and has a live Admin API test request', () => {
+    const shopify = getCredentialType('shopify_api_key');
+    expect(shopify).toBeTruthy();
+    expect(shopify!.inputFields.find((field) => field.name === 'storeUrl')?.type).toBe('text');
+    expect(shopify!.testRequest).toMatchObject({
+      method: 'GET',
+      url: 'https://{{storeUrl}}/admin/api/2025-10/shop.json',
+      successStatus: [200],
+    });
+  });
+
   it('twilio_api_key field guides mention AC prefix for Account SID', () => {
     const twilio = getCredentialType('twilio_api_key');
     expect(twilio).toBeTruthy();
