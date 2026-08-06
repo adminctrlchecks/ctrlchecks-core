@@ -25,7 +25,7 @@ import { join } from 'path';
  * Check if IntegrationsMarqueeSection is imported in Index.tsx
  */
 function isIntegrationsMarqueeImported(indexFileContent: string): boolean {
-  const importPattern = /import.*IntegrationsMarqueeSection.*from.*@\/components\/landing\/IntegrationsMarqueeSection/;
+  const importPattern = /(?:^|\n)\s*import.*IntegrationsMarqueeSection.*from.*@\/components\/landing\/IntegrationsMarqueeSection/;
   return importPattern.test(indexFileContent);
 }
 
@@ -33,7 +33,7 @@ function isIntegrationsMarqueeImported(indexFileContent: string): boolean {
  * Check if IntegrationsMarqueeSection JSX element is rendered in Index.tsx
  */
 function isIntegrationsMarqueeRendered(indexFileContent: string): boolean {
-  const jsxPattern = /<IntegrationsMarqueeSection\s*\/>/;
+  const jsxPattern = /(?:^|\n)\s*<IntegrationsMarqueeSection\s*\/>/;
   return jsxPattern.test(indexFileContent);
 }
 

@@ -9,7 +9,6 @@ import { PluginsApiSection } from "@/components/landing/PluginsApiSection";
 import { IndustryVerticalsSection } from "@/components/landing/IndustryVerticalsSection";
 import { TrustSection } from "@/components/landing/TrustSection";
 import { WhyCtrlChecksSection } from "@/components/landing/WhyCtrlChecksSection";
-import { Pricing } from "@/components/landing/Pricing";
 import { FaqSection } from "@/components/landing/FaqSection";
 import { CTA } from "@/components/landing/CTA";
 import { Footer } from "@/components/landing/Footer";
@@ -30,7 +29,6 @@ const Index = () => {
           <IndustryVerticalsSection />
           <TrustSection />
           <WhyCtrlChecksSection />
-          <Pricing />
           <FaqSection />
           <CTA />
         </main>

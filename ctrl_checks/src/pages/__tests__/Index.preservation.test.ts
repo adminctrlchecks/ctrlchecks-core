@@ -52,7 +52,6 @@ function areOtherSectionsPreserved(indexFileContent: string): boolean {
     'IndustryVerticalsSection',
     'TrustSection',
     'WhyCtrlChecksSection',
-    'Pricing',
     'FaqSection',
     'CTA'
   ];
@@ -290,13 +289,13 @@ describe('Property 2: Preservation - Existing Landing Page Layout', () => {
         <Hero />
         <HowItWorks />
         <TemplateShowcaseSection />
-        <Pricing />
+        <FaqSection />
       </main>
     `;
 
     const extractedOrder = extractSectionOrder(testContent);
 
-    expect(extractedOrder).toEqual(['Hero', 'HowItWorks', 'TemplateShowcaseSection', 'Pricing']);
+    expect(extractedOrder).toEqual(['Hero', 'HowItWorks', 'TemplateShowcaseSection', 'FaqSection']);
     expect(extractedOrder).toHaveLength(4);
   });
 
@@ -314,7 +313,6 @@ describe('Property 2: Preservation - Existing Landing Page Layout', () => {
       import { IndustryVerticalsSection } from "@/components/landing/IndustryVerticalsSection";
       import { TrustSection } from "@/components/landing/TrustSection";
       import { WhyCtrlChecksSection } from "@/components/landing/WhyCtrlChecksSection";
-      import { Pricing } from "@/components/landing/Pricing";
       import { FaqSection } from "@/components/landing/FaqSection";
       import { CTA } from "@/components/landing/CTA";
 
@@ -325,7 +323,6 @@ describe('Property 2: Preservation - Existing Landing Page Layout', () => {
         <IndustryVerticalsSection />
         <TrustSection />
         <WhyCtrlChecksSection />
-        <Pricing />
         <FaqSection />
         <CTA />
       </main>
@@ -335,8 +332,8 @@ describe('Property 2: Preservation - Existing Landing Page Layout', () => {
 
     // Test with missing section - remove both import and JSX
     const missingSectionContent = allSectionsContent
-      .replace('import { Pricing } from "@/components/landing/Pricing";', '')
-      .replace('<Pricing />', '');
+      .replace('import { FaqSection } from "@/components/landing/FaqSection";', '')
+      .replace('<FaqSection />', '');
     
     // Debug: log what we're testing
     console.log('Testing missing section detection...');

@@ -7,12 +7,14 @@ import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/lib/auth";
 import { AppBrand } from "@/components/brand/AppBrand";
 import { SECTION_SHELL } from "@/components/landing/landing-layout";
+import { usePublicSubscriptionSettings } from "@/hooks/usePublicSubscriptionSettings";
 
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { showPlanLinks } = usePublicSubscriptionSettings();
 
   // Kept to six: ten links crowded the bar and pushed the auth buttons tight
   // against the edge. The dropped anchors (Trust, Developers, Verticals, Why us)
@@ -23,7 +25,7 @@ export function Header() {
     { name: "Integrations", href: "#integrations" },
     { name: "Why us", href: "#why-ctrlchecks" },
     { name: "Docs", href: "/docs", isRoute: true },
-    { name: "Plans", href: "/subscriptions", isRoute: true },
+    ...(showPlanLinks ? [{ name: "Plans", href: "/subscriptions", isRoute: true }] : []),
   ];
 
   return (

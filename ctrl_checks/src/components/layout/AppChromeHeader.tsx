@@ -11,6 +11,7 @@ import {
 import { useAuth } from '@/lib/auth';
 import { useRole } from '@/hooks/useRole';
 import { useTheme } from '@/hooks/useTheme';
+import { useSubscription } from '@/hooks/useSubscription';
 import { cn } from '@/lib/utils';
 import { Moon, Sun, Shield, UserCircle, LogOut, User, Zap, Search } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -30,6 +31,7 @@ export function AppChromeHeader({
   const { user, signOut } = useAuth();
   const { canAccessAdmin } = useRole();
   const { theme, toggleTheme } = useTheme();
+  const { unlimitedModeEnabled } = useSubscription();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
@@ -116,12 +118,14 @@ export function AppChromeHeader({
                     My Account
                   </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link to="/subscriptions" className="flex items-center gap-2 cursor-pointer">
-                    <Zap className="h-4 w-4" />
-                    Subscription
-                  </Link>
-                </DropdownMenuItem>
+                {!unlimitedModeEnabled && (
+                  <DropdownMenuItem asChild>
+                    <Link to="/subscriptions" className="flex items-center gap-2 cursor-pointer">
+                      <Zap className="h-4 w-4" />
+                      Subscription
+                    </Link>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={handleSignOut}

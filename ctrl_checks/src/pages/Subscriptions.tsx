@@ -237,9 +237,13 @@ export default function Subscriptions() {
 
         {/* Page header */}
         <div className="text-center mb-10">
-          <h1 className="text-3xl font-bold tracking-tight mb-2">Subscription Plans</h1>
+          <h1 className="mb-2 text-3xl font-bold tracking-tight">
+            {unlimitedMode ? "Unlimited access" : "Subscription Plans"}
+          </h1>
           <p className="text-muted-foreground">
-            Choose the plan that fits your workflow needs
+            {unlimitedMode
+              ? "Every user can build freely while plan enforcement is switched off."
+              : "Choose the plan that fits your workflow needs"}
           </p>
 
           {/* User identity pill */}
@@ -291,7 +295,7 @@ export default function Subscriptions() {
 
         {/* Unlimited access replaces the pricing grid entirely */}
         {unlimitedMode ? (
-          <div className="rounded-2xl border border-primary/30 bg-primary/5 p-8 text-center">
+          <div className="rounded-2xl border border-primary/30 bg-primary/5 p-8 text-center shadow-[0_18px_48px_-34px_hsl(var(--primary)/0.5)]">
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
               <Check className="h-6 w-6 text-primary" />
             </div>

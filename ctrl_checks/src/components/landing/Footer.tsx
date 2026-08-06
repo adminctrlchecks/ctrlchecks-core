@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { SECTION_SHELL } from "@/components/landing/landing-layout";
+import { usePublicSubscriptionSettings } from "@/hooks/usePublicSubscriptionSettings";
 
 const footerLinks = {
   Product: [
@@ -7,7 +8,6 @@ const footerLinks = {
     { name: "How it works", href: "#how-it-works" },
     { name: "Integrations", href: "#integrations" },
     { name: "Templates", href: "#templates" },
-    { name: "Plans", href: "/subscriptions", isRoute: true },
   ],
   Resources: [
     { name: "Documentation", href: "/docs", isRoute: true },
@@ -25,6 +25,14 @@ const footerLinks = {
 };
 
 export function Footer() {
+  const { showPlanLinks } = usePublicSubscriptionSettings();
+  const footerLinkGroups = {
+    ...footerLinks,
+    Product: showPlanLinks
+      ? [...footerLinks.Product, { name: "Plans", href: "/subscriptions", isRoute: true }]
+      : footerLinks.Product,
+  };
+
   return (
     <footer className="border-t border-border/50 bg-transparent">
       <div className={`${SECTION_SHELL} py-10 lg:py-12`}>
@@ -41,11 +49,11 @@ export function Footer() {
             </p>
           </div>
 
-          {Object.entries(footerLinks).map(([category, links]) => (
+          {Object.entries(footerLinkGroups).map(([category, sectionLinks]) => (
             <div key={category}>
               <h3 className="text-sm font-semibold uppercase tracking-wide text-foreground/90">{category}</h3>
               <ul className="mt-4 space-y-2.5">
-                {links.map((link) => (
+                {sectionLinks.map((link) => (
                   <li key={link.name}>
                     {link.isRoute ? (
                       <Link

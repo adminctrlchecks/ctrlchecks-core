@@ -26,6 +26,7 @@ import {
   updateSubscriptionPlan,
   type AdminSubscriptionPlan,
 } from '@/lib/api/admin';
+import { PUBLIC_SUBSCRIPTION_SETTINGS_QUERY_KEY } from '@/hooks/usePublicSubscriptionSettings';
 import { AlertTriangle, Crown, Infinity as InfinityIcon, Loader2, Shield, Zap } from 'lucide-react';
 
 const PLAN_ICON: Record<string, React.ReactNode> = {
@@ -78,6 +79,7 @@ export default function AdminSettings() {
       queryClient.setQueryData(['admin', 'unlimited-mode'], setting);
       queryClient.invalidateQueries({ queryKey: ['admin', 'subscription-plans'] });
       queryClient.invalidateQueries({ queryKey: ['subscription'] });
+      queryClient.invalidateQueries({ queryKey: PUBLIC_SUBSCRIPTION_SETTINGS_QUERY_KEY });
       toast({
         title: setting.enabled ? 'Unlimited access is ON' : 'Unlimited access is OFF',
         description: setting.enabled

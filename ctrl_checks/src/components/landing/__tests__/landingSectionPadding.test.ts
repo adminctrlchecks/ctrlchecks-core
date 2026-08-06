@@ -20,14 +20,14 @@ const LANDING_DIR = path.resolve(
 );
 
 /**
- * Files that should use py-12.
+ * Mounted landing sections should use compact vertical padding.
  *
  * WorkflowDemoSection.tsx was merged into Hero.tsx (the demo now lives in the
- * first screen), so it is no longer listed. TrustSection.tsx and
- * TemplateShowcaseSection.tsx are mounted on the landing page and follow the
- * same padding rule.
+ * first screen), so it is no longer listed. Pricing.tsx is intentionally not
+ * mounted on the homepage; plan UI lives behind /subscriptions when billing is
+ * active.
  */
-const PY12_FILES = [
+const COMPACT_SECTION_FILES = [
   "HowItWorks.tsx",
   "TemplateShowcaseSection.tsx",
   "OpenCoreSection.tsx",
@@ -35,24 +35,21 @@ const PY12_FILES = [
   "IndustryVerticalsSection.tsx",
   "TrustSection.tsx",
   "WhyCtrlChecksSection.tsx",
-  "Features.tsx",
-  "Pricing.tsx",
-  "SubscriptionSection.tsx",
   "FaqSection.tsx",
   "CTA.tsx",
 ] as const;
 
-/** Files that should use py-8 (already had smaller padding, proportionally reduced) */
-const PY8_FILES = ["IntegrationsMarqueeSection.tsx"] as const;
+/** Integrations is tighter because it sits immediately under the hero demo. */
+const TIGHT_SECTION_FILES = ["IntegrationsMarqueeSection.tsx"] as const;
 
 type SectionEntry = {
   file: string;
-  expectedPadding: "py-12" | "py-8";
+  expectedPadding: "py-8" | "py-4";
 };
 
 const ALL_SECTIONS: SectionEntry[] = [
-  ...PY12_FILES.map((f) => ({ file: f, expectedPadding: "py-12" as const })),
-  ...PY8_FILES.map((f) => ({ file: f, expectedPadding: "py-8" as const })),
+  ...COMPACT_SECTION_FILES.map((f) => ({ file: f, expectedPadding: "py-8" as const })),
+  ...TIGHT_SECTION_FILES.map((f) => ({ file: f, expectedPadding: "py-4" as const })),
 ];
 
 /**
@@ -107,16 +104,16 @@ describe("Landing section reduced vertical padding (Property 6 / design)", () =>
     );
   });
 
-  it("py-12 files: section className contains py-12 and not py-24 or py-32", () => {
+  it("compact files: section className contains py-8 and not py-24 or py-32", () => {
     fc.assert(
-      fc.property(fc.constantFrom(...PY12_FILES), (file: string) => {
+      fc.property(fc.constantFrom(...COMPACT_SECTION_FILES), (file: string) => {
         const source = fs.readFileSync(path.join(LANDING_DIR, file), "utf-8");
         const classNames = extractSectionClassNames(source);
 
         expect(classNames.length).toBeGreaterThan(0);
 
         for (const cls of classNames) {
-          expect(cls).toContain("py-12");
+          expect(cls).toContain("py-8");
           expect(cls).not.toContain("py-24");
           expect(cls).not.toContain("py-32");
         }
@@ -125,10 +122,10 @@ describe("Landing section reduced vertical padding (Property 6 / design)", () =>
     );
   });
 
-  it("IntegrationsMarqueeSection: section className contains py-8 and not py-24 or py-32", () => {
+  it("IntegrationsMarqueeSection: section className contains py-4 and not py-24 or py-32", () => {
     fc.assert(
       fc.property(
-        fc.constantFrom(...PY8_FILES),
+        fc.constantFrom(...TIGHT_SECTION_FILES),
         (file: string) => {
           const source = fs.readFileSync(path.join(LANDING_DIR, file), "utf-8");
           const classNames = extractSectionClassNames(source);
@@ -136,7 +133,7 @@ describe("Landing section reduced vertical padding (Property 6 / design)", () =>
           expect(classNames.length).toBeGreaterThan(0);
 
           for (const cls of classNames) {
-            expect(cls).toContain("py-8");
+            expect(cls).toContain("py-4");
             expect(cls).not.toContain("py-24");
             expect(cls).not.toContain("py-32");
           }
