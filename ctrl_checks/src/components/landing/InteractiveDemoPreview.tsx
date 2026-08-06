@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
   Bot,
   CalendarClock,
+  ChevronLeft,
+  ChevronRight,
   Code2,
   CreditCard,
   Database,
@@ -31,18 +33,19 @@ const LOGICAL_NODE_HEIGHT = 64;
 // below the fold.
 const DESKTOP_STAGE = {
   width: 1120,
-  height: 380,
+  height: 320,
   nodeWidth: 200,
   nodeHeight: 68,
 };
 const COMPACT_STAGE = {
   width: 440,
-  height: 360,
+  height: 300,
   nodeWidth: 142,
   nodeHeight: LOGICAL_NODE_HEIGHT,
 };
 const STAGE_GUTTER = 8;
 const SESSION_STORAGE_KEY = 'ctrlchecks_landing_demo_session';
+const AUTO_ADVANCE_DELAY_MS = 2200;
 
 const iconMap = {
   ai: Bot,
@@ -222,11 +225,13 @@ function DemoNode({
 function AnimatedDiagram({
   scenario,
   stage,
+  direction,
   reduceMotion,
   onAnimationSettled,
 }: {
   scenario: LandingDemoScenario;
   stage: StageMetrics;
+  direction: number;
   reduceMotion: boolean;
   onAnimationSettled: (scenarioId: string) => void;
 }) {
@@ -247,9 +252,11 @@ function AnimatedDiagram({
     <motion.div
       key={scenario.id}
       className="absolute inset-0"
-      initial={false}
-      exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.985 }}
-      transition={{ duration: reduceMotion ? 0 : 0.18, ease: 'easeOut' }}
+      custom={direction}
+      initial={reduceMotion ? false : { opacity: 0, x: direction >= 0 ? 28 : -28 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: direction >= 0 ? -28 : 28 }}
+      transition={{ duration: reduceMotion ? 0 : 0.22, ease: 'easeOut' }}
     >
       <svg className="absolute inset-0 h-full w-full" viewBox={`0 0 ${stage.width} ${stage.height}`} aria-hidden>
         <defs>
@@ -317,11 +324,13 @@ function AnimatedDiagram({
 function DemoStage({
   scenario,
   stage,
+  direction,
   reduceMotion,
   onAnimationSettled,
 }: {
   scenario: LandingDemoScenario;
   stage: StageMetrics;
+  direction: number;
   reduceMotion: boolean;
   onAnimationSettled: (scenarioId: string) => void;
 }) {
@@ -336,6 +345,7 @@ function DemoStage({
           key={scenario.id}
           scenario={scenario}
           stage={stage}
+          direction={direction}
           reduceMotion={reduceMotion}
           onAnimationSettled={onAnimationSettled}
         />
@@ -352,23 +362,53 @@ function DemoStage({
  * the canvas drew the Stripe → Slack flow. It is now driven by the active
  * scenario so prompt, chip, and diagram always agree.
  */
-function ActivePrompt({ prompt, reduceMotion }: { prompt: string; reduceMotion: boolean }) {
+function ActivePrompt({
+  prompt,
+  direction,
+  reduceMotion,
+}: {
+  prompt: string;
+  direction: number;
+  reduceMotion: boolean;
+}) {
   return (
-    <div className="rounded-xl border border-border/70 bg-background/80 px-4 py-3 text-left shadow-sm sm:px-5 sm:py-4">
+    <div className="min-w-0 flex-1 rounded-xl border border-border/70 bg-background/85 px-4 py-3 text-left shadow-sm sm:px-5">
       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Example prompt</p>
-      <AnimatePresence mode="wait" initial={false}>
+      <AnimatePresence mode="wait" initial={false} custom={direction}>
         <motion.p
           key={prompt}
-          initial={reduceMotion ? false : { opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
+          custom={direction}
+          initial={reduceMotion ? false : { opacity: 0, x: direction >= 0 ? 24 : -24 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: direction >= 0 ? -24 : 24 }}
           transition={{ duration: reduceMotion ? 0 : 0.2, ease: 'easeOut' }}
-          className="mt-1 min-h-6 text-sm font-medium text-foreground sm:text-base"
+          className="mt-1 min-h-6 text-sm font-medium leading-snug text-foreground sm:text-base"
         >
           {prompt}
         </motion.p>
       </AnimatePresence>
     </div>
+  );
+}
+
+function CarouselArrow({
+  direction,
+  onClick,
+}: {
+  direction: 'previous' | 'next';
+  onClick: () => void;
+}) {
+  const Icon = direction === 'previous' ? ChevronLeft : ChevronRight;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border/70 bg-background/85 text-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      aria-label={direction === 'previous' ? 'Previous workflow' : 'Next workflow'}
+    >
+      <Icon className="h-4 w-4" aria-hidden />
+    </button>
   );
 }
 
@@ -396,11 +436,13 @@ export function InteractiveDemoPreview() {
     staleTime: 60_000,
   });
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [direction, setDirection] = useState(1);
   const [playback, setPlayback] = useState<{ phase: 'idle' | 'animating' | 'settled'; scenarioId: string | null }>({
     phase: 'idle',
     scenarioId: null,
   });
   const completedAnimationRef = useRef<string | null>(null);
+  const autoplayTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
 
   useEffect(() => {
     if (!activeId && scenarios.length > 0) {
@@ -408,24 +450,70 @@ export function InteractiveDemoPreview() {
     }
   }, [activeId, scenarios]);
 
-  const activeScenario = scenarios.find((scenario) => scenario.id === activeId) || scenarios[0];
+  const activeIndex = Math.max(
+    0,
+    scenarios.findIndex((scenario) => scenario.id === activeId)
+  );
+  const activeScenario = scenarios[activeIndex] || scenarios[0];
+
+  const clearAutoplayTimer = useCallback(() => {
+    if (autoplayTimerRef.current) {
+      window.clearTimeout(autoplayTimerRef.current);
+      autoplayTimerRef.current = null;
+    }
+  }, []);
+
+  const activateScenario = useCallback(
+    (nextIndex: number, nextDirection: number, source: 'auto' | 'manual') => {
+      if (scenarios.length === 0) return;
+      const normalizedIndex = (nextIndex + scenarios.length) % scenarios.length;
+      const nextScenario = scenarios[normalizedIndex];
+      if (!nextScenario || nextScenario.id === activeScenario?.id) return;
+
+      clearAutoplayTimer();
+      setDirection(nextDirection);
+      setPlayback({ phase: 'animating', scenarioId: nextScenario.id });
+      setActiveId(nextScenario.id);
+      if (source === 'manual') {
+        recordLandingDemoEvent(nextScenario.id, 'pill_click');
+      }
+    },
+    [activeScenario?.id, clearAutoplayTimer, scenarios]
+  );
+
+  const goToNextScenario = useCallback(
+    (source: 'auto' | 'manual' = 'auto') => activateScenario(activeIndex + 1, 1, source),
+    [activeIndex, activateScenario]
+  );
+
+  const goToPreviousScenario = useCallback(
+    () => activateScenario(activeIndex - 1, -1, 'manual'),
+    [activeIndex, activateScenario]
+  );
 
   useEffect(() => {
     if (!activeScenario) return;
+    clearAutoplayTimer();
     completedAnimationRef.current = reduceMotion ? activeScenario.id : null;
     setPlayback({ phase: reduceMotion ? 'settled' : 'animating', scenarioId: activeScenario.id });
     recordLandingDemoEvent(activeScenario.id, 'view');
     if (reduceMotion) {
       recordLandingDemoEvent(activeScenario.id, 'animation_complete');
     }
-  }, [activeScenario, reduceMotion]);
+  }, [activeScenario, clearAutoplayTimer, reduceMotion]);
 
-  function selectScenario(scenarioId: string) {
-    if (scenarioId === activeScenario?.id) return;
-    setPlayback({ phase: 'animating', scenarioId });
-    setActiveId(scenarioId);
-    recordLandingDemoEvent(scenarioId, 'pill_click');
-  }
+  useEffect(() => {
+    if (!activeScenario || scenarios.length <= 1 || playback.phase !== 'settled') return;
+
+    clearAutoplayTimer();
+    autoplayTimerRef.current = window.setTimeout(() => {
+      goToNextScenario('auto');
+    }, AUTO_ADVANCE_DELAY_MS);
+
+    return clearAutoplayTimer;
+  }, [activeScenario, clearAutoplayTimer, goToNextScenario, playback.phase, scenarios.length]);
+
+  useEffect(() => clearAutoplayTimer, [clearAutoplayTimer]);
 
   function handleAnimationSettled(scenarioId: string) {
     if (activeScenario?.id !== scenarioId) return;
@@ -452,30 +540,32 @@ export function InteractiveDemoPreview() {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-5">
-      <div className="mx-auto max-w-3xl">
-        <ActivePrompt prompt={activeScenario.label} reduceMotion={Boolean(reduceMotion)} />
+    <div className="space-y-3 sm:space-y-4">
+      <div className="mx-auto flex max-w-3xl items-center gap-2 sm:gap-3">
+        <CarouselArrow direction="previous" onClick={goToPreviousScenario} />
+        <ActivePrompt
+          prompt={activeScenario.label}
+          direction={direction}
+          reduceMotion={Boolean(reduceMotion)}
+        />
+        <CarouselArrow direction="next" onClick={() => goToNextScenario('manual')} />
       </div>
-      <div className="mx-auto flex max-w-5xl flex-wrap justify-center gap-2">
+      <div className="flex justify-center gap-1.5" aria-hidden>
         {scenarios.map((scenario) => (
-          <button
+          <span
             key={scenario.id}
-            type="button"
-            onClick={() => selectScenario(scenario.id)}
-            aria-pressed={scenario.id === activeScenario.id}
-            className={`rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors sm:text-sm ${
+            className={`h-1.5 rounded-full transition-all ${
               scenario.id === activeScenario.id
-                ? 'border-primary bg-primary text-primary-foreground shadow-sm'
-                : 'border-border/70 bg-background/75 text-foreground hover:border-primary/50 hover:bg-primary/10'
+                ? 'w-7 bg-primary'
+                : 'w-1.5 bg-muted-foreground/30'
             }`}
-          >
-            {scenario.label}
-          </button>
+          />
         ))}
       </div>
       <DemoStage
         scenario={activeScenario}
         stage={stage}
+        direction={direction}
         reduceMotion={Boolean(reduceMotion)}
         onAnimationSettled={handleAnimationSettled}
       />
