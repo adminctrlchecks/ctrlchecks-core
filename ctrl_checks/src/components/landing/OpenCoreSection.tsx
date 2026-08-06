@@ -24,12 +24,12 @@ export function OpenCoreSection() {
   const reduceMotion = useReducedMotion();
 
   return (
-    <section id="developer-platform" className="py-12 sm:py-16" aria-labelledby="developer-platform-heading">
+    <section id="developer-platform" className="scroll-mt-24 py-8 sm:py-10" aria-labelledby="developer-platform-heading">
       <div className={SECTION_SHELL}>
         {/* Heading + narrative on the left, capability blocks on the right. A
             centred heading over a short bullet list left a tall empty gap under
             the text while the cards ran on beside it. */}
-        <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
+        <div className="grid items-center gap-6 lg:grid-cols-2 lg:gap-10">
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -39,16 +39,16 @@ export function OpenCoreSection() {
           >
             <h2
               id="developer-platform-heading"
-              className="text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl"
+              className="text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl"
             >
               Simple for teams.{" "}
               <span className="text-gradient">Powerful for builders.</span>
             </h2>
-            <p className="mt-4 text-muted-foreground">
+            <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
               CtrlChecks starts with plain English, then gives technical teams the structure, controls, and connectors needed to run real business workflows.
             </p>
 
-            <ul className="mt-8 space-y-4 text-left text-sm leading-relaxed text-muted-foreground sm:text-base">
+            <ul className="mt-5 space-y-3 text-left text-sm leading-relaxed text-muted-foreground sm:text-base">
               {developerPath.map((line, i) => (
                 <motion.li
                   key={line}
@@ -67,7 +67,7 @@ export function OpenCoreSection() {
             </ul>
           </motion.div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2">
             {blocks.map((b, index) => (
               <motion.div
                 key={b.title}
@@ -80,7 +80,7 @@ export function OpenCoreSection() {
                     : { ...springSoft, delay: index * 0.08 }
                 }
                 {...(reduceMotion ? {} : cardHoverTap)}
-                className="h-full rounded-2xl border border-border/50 bg-background/10 p-6 shadow-none backdrop-blur-md transition-colors hover:border-primary/30 dark:border-white/10 dark:bg-white/5"
+                className="h-full rounded-lg border border-border/50 bg-background/20 p-5 shadow-[0_14px_34px_-30px_hsl(var(--foreground)/0.45)] backdrop-blur-md transition-colors hover:border-primary/30 dark:border-white/10 dark:bg-white/5"
               >
                 <h3 className="text-lg font-semibold">{b.title}</h3>
                 <p className="mt-2 text-sm text-muted-foreground">{b.item}</p>

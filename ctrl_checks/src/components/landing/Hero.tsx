@@ -18,7 +18,7 @@ export function Hero() {
   return (
     <section
       id="demo"
-      className="relative overflow-hidden pt-20 pb-8 sm:pt-24 sm:pb-10"
+      className="relative overflow-hidden pt-20 pb-3 sm:pt-20 sm:pb-4"
       aria-labelledby="hero-heading"
     >
       <div className={`relative ${SECTION_SHELL}`}>
@@ -27,28 +27,17 @@ export function Hero() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={titleTransition}
-          className="mx-auto max-w-5xl text-center text-3xl font-bold leading-[1.08] tracking-tight sm:text-4xl lg:text-5xl"
+          className="mx-auto max-w-[1500px] text-center text-3xl font-bold leading-[1.08] tracking-tight sm:text-4xl lg:text-5xl xl:whitespace-nowrap"
         >
-          {/* Each sentence owns its line so the headline never breaks mid-clause
-              ("Describe your workflow. Watch" / "it build itself."). */}
-          <span className="block">Describe your workflow.</span>
-          <span className="block text-gradient drop-shadow-sm">Watch it build itself.</span>
+          Describe your workflow and integrations.{" "}
+          <span className="text-gradient drop-shadow-sm">Watch it build itself.</span>
         </motion.h1>
-
-        <motion.p
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ ...titleTransition, delay: 0.06 }}
-          className="mx-auto mt-3 max-w-3xl text-center text-sm leading-relaxed text-muted-foreground sm:text-base"
-        >
-          Tell CtrlChecks the outcome. It connects the right apps, creates the steps, and shows the logic as it runs.
-        </motion.p>
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ ...titleTransition, delay: 0.1 }}
-          className="mx-auto mt-6 max-w-6xl sm:mt-7"
+          transition={{ ...titleTransition, delay: 0.08 }}
+          className="mx-auto mt-5 max-w-[1280px] sm:mt-6"
         >
           <InteractiveDemoPreview />
         </motion.div>

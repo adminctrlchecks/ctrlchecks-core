@@ -28,7 +28,7 @@ export function HowItWorks() {
   const reduceMotion = useReducedMotion();
 
   return (
-    <section id="how-it-works" className="py-12 sm:py-16" aria-labelledby="how-heading">
+    <section id="how-it-works" className="scroll-mt-24 py-8 sm:py-10" aria-labelledby="how-heading">
       <div className={SECTION_SHELL}>
         <motion.div
           initial={{ opacity: 0, y: 28 }}
@@ -39,17 +39,17 @@ export function HowItWorks() {
         >
           <h2
             id="how-heading"
-            className="text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl"
+            className="text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl"
           >
             From plain English to{" "}
             <span className="text-gradient">a working automation.</span>
           </h2>
-          <p className="mt-4 text-lg text-muted-foreground">
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
             Business users get a simple starting point. Technical teams still see the structure, data flow, and controls.
           </p>
         </motion.div>
 
-        <div className="mt-16 grid gap-10 lg:grid-cols-3">
+        <div className="mt-8 grid gap-4 lg:grid-cols-3">
           {steps.map((step, index) => (
             <motion.div
               key={step.number}
@@ -61,27 +61,8 @@ export function HowItWorks() {
                   ? { duration: 0.4, delay: index * 0.08 }
                   : { ...springSnappy, delay: index * 0.12 }
               }
-              className="relative"
+              className="relative h-full rounded-lg border border-border/50 bg-background/20 p-5 text-center shadow-[0_16px_36px_-30px_hsl(var(--foreground)/0.45)] backdrop-blur-md transition-colors hover:border-primary/30 dark:border-white/10 dark:bg-white/5"
             >
-              {index < steps.length - 1 && (
-                <div
-                  className="absolute top-12 left-1/2 hidden w-full overflow-hidden lg:block"
-                  aria-hidden
-                >
-                  <motion.div
-                    className="h-0.5 w-full origin-left bg-gradient-to-r from-primary/60 to-transparent"
-                    initial={{ scaleX: 0 }}
-                    whileInView={{ scaleX: 1 }}
-                    viewport={{ once: true, margin: "-40px" }}
-                    transition={
-                      reduceMotion
-                        ? { duration: 0.3, delay: 0.2 + index * 0.1 }
-                        : { ...springSoft, delay: 0.35 + index * 0.12 }
-                    }
-                  />
-                </div>
-              )}
-
               <div className="relative flex flex-col items-center text-center">
                 <motion.div
                   className="relative"
@@ -89,7 +70,7 @@ export function HowItWorks() {
                   transition={springSoft}
                 >
                   <motion.div
-                    className="flex h-24 w-24 items-center justify-center rounded-2xl border border-border/50 bg-background/10 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-white/5"
+                    className="flex h-16 w-16 items-center justify-center rounded-lg border border-primary/25 bg-primary/10 text-primary shadow-sm"
                     whileHover={
                       reduceMotion
                         ? undefined
@@ -104,11 +85,11 @@ export function HowItWorks() {
                       whileHover={reduceMotion ? undefined : { scale: 1.08, rotate: [0, -4, 4, 0] }}
                       transition={{ duration: 0.45 }}
                     >
-                      <step.icon className="h-10 w-10 text-primary" />
+                      <step.icon className="h-7 w-7 text-primary" />
                     </motion.span>
                   </motion.div>
                   <motion.span
-                    className="absolute -top-3 -right-3 flex h-8 w-8 items-center justify-center rounded-full gradient-primary text-sm font-bold text-primary-foreground shadow-md"
+                    className="absolute -top-2 -right-2 flex h-7 w-7 items-center justify-center rounded-full gradient-primary text-xs font-bold text-primary-foreground shadow-md"
                     initial={{ scale: 0 }}
                     whileInView={{ scale: 1 }}
                     viewport={{ once: true }}
@@ -122,8 +103,8 @@ export function HowItWorks() {
                   </motion.span>
                 </motion.div>
 
-                <h3 className="mt-6 text-xl font-semibold">{step.title}</h3>
-                <p className="mt-2 text-muted-foreground">{step.description}</p>
+                <h3 className="mt-4 text-lg font-semibold">{step.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{step.description}</p>
               </div>
             </motion.div>
           ))}

@@ -33,7 +33,7 @@ const LOGICAL_NODE_HEIGHT = 64;
 // below the fold.
 const DESKTOP_STAGE = {
   width: 1120,
-  height: 320,
+  height: 280,
   nodeWidth: 200,
   nodeHeight: 68,
 };
@@ -342,10 +342,11 @@ function DemoStage({
 }) {
   return (
     <div
-      className="relative w-full overflow-hidden rounded-xl border border-border/70 bg-background/85 shadow-lg"
+      className="relative w-full overflow-hidden rounded-lg border border-border/70 bg-background/90 shadow-[0_18px_45px_-28px_hsl(var(--foreground)/0.35)]"
       style={{ aspectRatio: `${stage.width} / ${stage.height}` }}
     >
       <div className="absolute inset-0 bg-[linear-gradient(to_right,hsl(var(--border)/0.35)_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--border)/0.35)_1px,transparent_1px)] bg-[size:36px_36px]" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/70 via-cyan-400/60 to-emerald-400/60" />
       <AnimatePresence mode="wait" initial={false}>
         <AnimatedDiagram
           key={scenario.id}
@@ -378,8 +379,8 @@ function ActivePrompt({
   reduceMotion: boolean;
 }) {
   return (
-    <div className="min-w-0 flex-1 rounded-xl border border-border/70 bg-background/85 px-4 py-3 text-left shadow-sm sm:px-5">
-      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Example prompt</p>
+    <div className="min-w-0 flex-1 rounded-lg border border-border/70 bg-background/90 px-4 py-2.5 text-left shadow-sm sm:px-5">
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Example integration prompt</p>
       <AnimatePresence mode="wait" initial={false} custom={direction}>
         <motion.p
           key={prompt}
@@ -388,7 +389,7 @@ function ActivePrompt({
           animate={{ opacity: 1, x: 0 }}
           exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: direction >= 0 ? -24 : 24 }}
           transition={{ duration: reduceMotion ? 0 : 0.2, ease: 'easeOut' }}
-          className="mt-1 min-h-6 text-sm font-medium leading-snug text-foreground sm:text-base"
+          className="mt-1 min-h-6 text-sm font-medium leading-snug text-foreground sm:text-base lg:text-lg"
         >
           {prompt}
         </motion.p>
@@ -546,8 +547,8 @@ export function InteractiveDemoPreview() {
   }
 
   return (
-    <div className="space-y-3 sm:space-y-4">
-      <div className="mx-auto flex max-w-3xl items-center gap-2 sm:gap-3">
+    <div className="space-y-2.5 sm:space-y-3">
+      <div className="mx-auto flex max-w-[1280px] items-center gap-2 sm:gap-3">
         <CarouselArrow direction="previous" onClick={goToPreviousScenario} />
         <ActivePrompt
           prompt={activeScenario.label}

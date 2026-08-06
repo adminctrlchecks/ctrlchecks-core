@@ -9,7 +9,7 @@
  * Dropping `container` removes the double cap so a single value controls the
  * width, and the wider ceiling lets grids and the demo canvas actually use it.
  */
-export const SECTION_SHELL = "mx-auto w-full max-w-[1440px] px-6 sm:px-8 lg:px-12";
+export const SECTION_SHELL = "mx-auto w-full max-w-[1600px] px-4 sm:px-6 lg:px-8";
 
 /**
  * Centered prose column for section headings.
@@ -18,4 +18,4 @@ export const SECTION_SHELL = "mx-auto w-full max-w-[1440px] px-6 sm:px-8 lg:px-1
  * full 1440px would hurt readability. Only prose stays capped; grids, cards and
  * the demo canvas span the shell.
  */
-export const SECTION_PROSE = "mx-auto max-w-3xl text-center";
+export const SECTION_PROSE = "mx-auto max-w-4xl text-center";

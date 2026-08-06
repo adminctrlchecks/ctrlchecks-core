@@ -229,7 +229,7 @@ export function IntegrationsMarqueeSection() {
     <style dangerouslySetInnerHTML={{ __html: marqueeStyles }} />
     <section
       id="integrations"
-      className="relative py-5 sm:py-6"
+      className="relative scroll-mt-24 py-4 sm:py-5"
       aria-labelledby="integrations-heading"
     >
       <div className={SECTION_SHELL}>
@@ -241,10 +241,10 @@ export function IntegrationsMarqueeSection() {
           className={SECTION_PROSE}
         >
           <h2 id="integrations-heading" className="text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl">
-            Works with the tools you already use
+            Workflow integrations for the tools you already use
           </h2>
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
-            Connect everyday apps like Gmail, Slack, Sheets, Stripe, Notion, and Jira, with API-ready depth for technical teams.
+            Connect Gmail, Slack, Sheets, Stripe, Notion, Jira, and APIs without hiding the workflow logic.
           </p>
         </motion.div>
 
@@ -253,7 +253,7 @@ export function IntegrationsMarqueeSection() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={landingViewport}
           transition={reduceMotion ? { duration: 0.35 } : { ...springSoft, delay: 0.08 }}
-          className="relative mt-6 overflow-hidden rounded-xl border border-border/50 bg-background/10 p-3 backdrop-blur-md dark:border-white/10 dark:bg-white/5 sm:p-4"
+          className="relative mt-4 overflow-hidden rounded-lg border border-border/50 bg-background/20 p-3 shadow-[0_18px_45px_-32px_hsl(var(--foreground)/0.45)] backdrop-blur-md dark:border-white/10 dark:bg-white/5 sm:p-4"
         >
           <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-16 bg-gradient-to-b from-background to-transparent" />
           <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-16 bg-gradient-to-t from-background to-transparent" />
@@ -267,7 +267,7 @@ export function IntegrationsMarqueeSection() {
           ) : (
             <div
               className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6"
-              style={{ height: '220px' }}
+              style={{ height: '190px' }}
             >
               {columns.map((colItems, index) => (
                 <MarqueeColumn

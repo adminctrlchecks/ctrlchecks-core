@@ -35,7 +35,7 @@ export function TemplateShowcaseSection() {
   if (isError || cards.length === 0) return null;
 
   return (
-    <section id="templates" className="py-12 sm:py-16" aria-labelledby="templates-heading">
+    <section id="templates" className="scroll-mt-24 py-8 sm:py-10" aria-labelledby="templates-heading">
       <div className={SECTION_SHELL}>
         <motion.div
           initial={{ opacity: 0, y: 24 }}
@@ -46,16 +46,16 @@ export function TemplateShowcaseSection() {
         >
           <h2
             id="templates-heading"
-            className="text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl"
+            className="text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl"
           >
             Start faster with <span className="text-gradient">ready-made workflows</span>
           </h2>
-          <p className="mt-4 text-muted-foreground">
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
             Pick a proven workflow, run it as-is, or adjust the logic in plain English when your team needs more control.
           </p>
         </motion.div>
 
-        <ul className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <ul className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {cards.map((template, index) => (
             <motion.li
               key={template.id}
@@ -68,19 +68,19 @@ export function TemplateShowcaseSection() {
                   : { ...springSoft, delay: Math.min(index, 4) * 0.06 }
               }
               {...(reduceMotion ? {} : cardHoverTap)}
-              className="flex h-full flex-col rounded-2xl border border-border/50 bg-background/10 p-5 shadow-none backdrop-blur-md transition-colors hover:border-primary/30 dark:border-white/10 dark:bg-white/5"
+              className="flex h-full flex-col rounded-lg border border-border/50 bg-background/20 p-4 shadow-[0_14px_34px_-30px_hsl(var(--foreground)/0.45)] backdrop-blur-md transition-colors hover:border-primary/30 dark:border-white/10 dark:bg-white/5"
             >
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 text-primary">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-primary">
                 <LayoutTemplate className="h-4 w-4" aria-hidden />
               </div>
-              <h3 className="mt-4 font-semibold leading-snug text-foreground">{template.name}</h3>
+              <h3 className="mt-3 font-semibold leading-snug text-foreground">{template.name}</h3>
               {/* flex-1 on the description pushes every card's category chip to
                   the same baseline, whatever the description length. */}
               <p className="mt-2 line-clamp-3 flex-1 text-sm leading-relaxed text-muted-foreground">
                 {template.description}
               </p>
               {template.category && (
-                <span className="mt-4 inline-flex w-fit rounded-full border border-border/50 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                <span className="mt-3 inline-flex w-fit rounded-full border border-border/50 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
                   {template.category}
                 </span>
               )}
@@ -88,7 +88,7 @@ export function TemplateShowcaseSection() {
           ))}
         </ul>
 
-        <div className="mt-10 flex justify-center">
+        <div className="mt-7 flex justify-center">
           <Link
             to="/templates"
             className="inline-flex items-center gap-2 rounded-full border border-border/60 px-5 py-2.5 text-sm font-semibold text-foreground transition-colors hover:border-primary/50 hover:bg-primary/10"
