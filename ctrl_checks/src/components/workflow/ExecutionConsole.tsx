@@ -16,6 +16,7 @@ import ExecutionLogBlock from './ExecutionLogBlock';
 import { ENDPOINTS } from '@/config/endpoints';
 import ExecutionStatusBanner from './ExecutionStatusBanner';
 import { useExecutionStatus } from '@/hooks/useExecutionStatus';
+import { extractOutcome, isAttentionOutcome, outcomeLabel, type ExecutionOutcome } from '@/lib/executionOutcome';
 
 interface Execution {
   id: string;
@@ -27,6 +28,7 @@ interface Execution {
   logs: Json | null;
   output: Json | null;
   input?: Json | null;
+  outcome?: ExecutionOutcome | null;
 }
 
 interface ExecutionStep {
@@ -70,10 +72,10 @@ type ResolvedInputSource = 'static_config' | 'template' | 'deterministic_runtime
 
 /** Returns true when the execution has reached a terminal state. */
 function isTerminalStatus(status: string): boolean {
-  return status === 'success' || status === 'failed' || status === 'completed' || status === 'error';
+  return ['success', 'failed', 'completed', 'error', 'stopped', 'stopped_expected', 'needs_connection', 'needs_configuration', 'provider_unavailable'].includes(status);
 }
 
-function normalizeLogStatus(status?: string | null): 'running' | 'success' | 'failed' | 'skipped' | 'pending' {
+function normalizeLogStatus(status?: string | null): 'running' | 'success' | 'failed' | 'skipped' | 'pending' | 'stopped' {
   switch (status) {
     case 'success':
     case 'completed':
@@ -86,6 +88,12 @@ function normalizeLogStatus(status?: string | null): 'running' | 'success' | 'fa
       return 'running';
     case 'skipped':
       return 'skipped';
+    case 'stopped':
+    case 'stopped_expected':
+    case 'needs_connection':
+    case 'needs_configuration':
+    case 'provider_unavailable':
+      return 'stopped';
     default:
       return 'pending';
   }
@@ -114,19 +122,23 @@ function buildLogsFromSteps(steps: ExecutionStep[]) {
   return steps
     .slice()
     .sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0))
-    .map((step, index) => ({
-      id: step.id || `${step.node_id}-${step.sequence ?? index}`,
-      nodeId: step.node_id,
-      nodeName: step.node_name || step.node_id,
-      nodeType: step.node_type || undefined,
-      status: normalizeLogStatus(step.status),
-      startedAt: step.started_at || step.completed_at || new Date().toISOString(),
-      finishedAt: step.completed_at || undefined,
-      input: step.input_json,
-      output: step.output_json,
-      error: step.error || undefined,
-      sequence: step.sequence ?? index + 1,
-    }));
+    .map((step, index) => {
+      const outcome = extractOutcome(step.output_json);
+      return {
+        id: step.id || `${step.node_id}-${step.sequence ?? index}`,
+        nodeId: step.node_id,
+        nodeName: step.node_name || step.node_id,
+        nodeType: step.node_type || undefined,
+        status: isAttentionOutcome(outcome) ? 'stopped' : normalizeLogStatus(step.status),
+        startedAt: step.started_at || step.completed_at || new Date().toISOString(),
+        finishedAt: step.completed_at || undefined,
+        input: step.input_json,
+        output: step.output_json,
+        error: step.error || outcome?.developerMessage || undefined,
+        outcome: outcome || undefined,
+        sequence: step.sequence ?? index + 1,
+      };
+    });
 }
 
 export default function ExecutionConsole({
@@ -283,7 +295,7 @@ export default function ExecutionConsole({
     try {
       const { data, error } = await awsClient
         .from('executions')
-        .select('id, status, started_at, finished_at, duration_ms, error')
+        .select('id, status, started_at, finished_at, duration_ms, error, output')
         .eq('workflow_id', workflowId)
         .order('started_at', { ascending: false })
         .limit(10);
@@ -403,6 +415,8 @@ export default function ExecutionConsole({
                   started_at: statusData.started_at,
                   finished_at: statusData.completed_at,
                   error: statusData.error || null,
+                  output: statusData.output || null,
+                  outcome: statusData.outcome || extractOutcome(statusData.output),
                   ...(liveSteps.length > 0 ? { logs: buildLogsFromSteps(liveSteps) as unknown as Json } : {}),
                 } as Execution;
                 setExecutions((prev) => [nextSummary, ...prev.filter((e) => e.id !== executionId)].slice(0, 10));
@@ -609,6 +623,7 @@ export default function ExecutionConsole({
           case 'pending': nodeStatus = 'idle'; break; // Show as idle until running
           case 'running': nodeStatus = 'running'; break;
           case 'success': nodeStatus = 'success'; break;
+          case 'stopped': nodeStatus = 'success'; break;
           case 'failed': nodeStatus = 'error'; break;
           case 'skipped': nodeStatus = 'idle'; break; // Skipped nodes remain idle
           default: nodeStatus = 'idle'; break;
@@ -622,6 +637,12 @@ export default function ExecutionConsole({
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'success': return <CheckCircle className="h-3 w-3 text-success" />;
+      case 'stopped':
+      case 'stopped_expected':
+      case 'needs_connection':
+      case 'needs_configuration':
+      case 'provider_unavailable':
+        return <AlertTriangle className="h-3 w-3 text-amber-500" />;
       case 'failed': return <XCircle className="h-3 w-3 text-destructive" />;
       case 'running': return <Loader2 className="h-3 w-3 text-primary animate-spin" />;
       default: return <Clock className="h-3 w-3 text-muted-foreground" />;
@@ -631,6 +652,12 @@ export default function ExecutionConsole({
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'success': return 'bg-success/10 text-success border-success/20';
+      case 'stopped':
+      case 'stopped_expected':
+      case 'needs_connection':
+      case 'needs_configuration':
+      case 'provider_unavailable':
+        return 'bg-amber-500/10 text-amber-700 border-amber-500/20';
       case 'failed': return 'bg-destructive/10 text-destructive border-destructive/20';
       case 'running': return 'bg-primary/10 text-primary border-primary/20';
       default: return 'bg-muted text-muted-foreground';
@@ -641,6 +668,16 @@ export default function ExecutionConsole({
     if (!ms) return '-';
     if (ms < 1000) return `${ms}ms`;
     return `${(ms / 1000).toFixed(2)}s`;
+  };
+
+  const getDisplayStatus = (execution: Execution): string => {
+    const outcome = execution.outcome || extractOutcome(execution.output);
+    return isAttentionOutcome(outcome) ? outcome!.kind : execution.status;
+  };
+
+  const getDisplayStatusLabel = (execution: Execution): string => {
+    const outcome = execution.outcome || extractOutcome(execution.output);
+    return isAttentionOutcome(outcome) ? outcomeLabel(outcome!) : execution.status;
   };
 
   // Render structured logs using block-wise UI
@@ -679,29 +716,33 @@ export default function ExecutionConsole({
 
       return (
         <div className="space-y-0">
-          {validLogs.map((log: any, i: number) => (
-            <ExecutionLogBlock
-              // Use a stable, per-log key to avoid React duplicate key warnings
-              key={log.id || `${log.executionId || 'exec'}-${log.nodeId || 'node'}-${log.sequence ?? i}`}
-              log={{
-                nodeId: log.nodeId || `node-${i}`,
-                nodeName: log.nodeName || log.nodeId || `Node ${i + 1}`,
-                nodeType: log.nodeType,
-                status: log.status || 'unknown',
-                startedAt: log.startedAt || log.started_at || new Date().toISOString(),
-                finishedAt: log.finishedAt || log.finished_at,
-                input: log.input,
-                output: log.output,
-                error: log.error,
-                resolvedInputs: log.resolvedInputs,
-                resolvedInputSources: log.resolvedInputSources as Record<string, ResolvedInputSource> | undefined,
-              }}
-              index={i}
-              totalNodes={validLogs.length}
-              isLast={i === validLogs.length - 1}
-              defaultCollapsed={collapseLogsByDefault}
-            />
-          ))}
+          {validLogs.map((log: any, i: number) => {
+            const outcome = log.outcome || extractOutcome(log.output) || extractOutcome(log);
+            return (
+              <ExecutionLogBlock
+                // Use a stable, per-log key to avoid React duplicate key warnings
+                key={log.id || `${log.executionId || 'exec'}-${log.nodeId || 'node'}-${log.sequence ?? i}`}
+                log={{
+                  nodeId: log.nodeId || `node-${i}`,
+                  nodeName: log.nodeName || log.nodeId || `Node ${i + 1}`,
+                  nodeType: log.nodeType,
+                  status: isAttentionOutcome(outcome) ? 'stopped' : (log.status || 'unknown'),
+                  startedAt: log.startedAt || log.started_at || new Date().toISOString(),
+                  finishedAt: log.finishedAt || log.finished_at,
+                  input: log.input,
+                  output: log.output,
+                  error: log.error,
+                  outcome: outcome || undefined,
+                  resolvedInputs: log.resolvedInputs,
+                  resolvedInputSources: log.resolvedInputSources as Record<string, ResolvedInputSource> | undefined,
+                }}
+                index={i}
+                totalNodes={validLogs.length}
+                isLast={i === validLogs.length - 1}
+                defaultCollapsed={collapseLogsByDefault}
+              />
+            );
+          })}
         </div>
       );
     }
@@ -798,6 +839,10 @@ export default function ExecutionConsole({
               ) : (
                 <div className="p-2 space-y-1">
                   {executions.map((exec) => (
+                    (() => {
+                      const displayStatus = getDisplayStatus(exec);
+                      const displayLabel = getDisplayStatusLabel(exec);
+                      return (
                     <div
                       key={exec.id}
                       className={cn(
@@ -821,10 +866,10 @@ export default function ExecutionConsole({
                       }}
                     >
                       <div className="flex items-center gap-2">
-                        {getStatusIcon(exec.status)}
+                        {getStatusIcon(displayStatus)}
                         <span className="font-mono text-xs">{exec.id.slice(0, 8)}...</span>
-                        <Badge variant="outline" className={cn("text-xs px-1 py-0", getStatusColor(exec.status))}>
-                          {exec.status}
+                        <Badge variant="outline" className={cn("text-xs px-1 py-0", getStatusColor(displayStatus))}>
+                          {displayLabel}
                         </Badge>
                       </div>
                       <div className="flex items-center justify-between mt-1 text-muted-foreground text-xs">
@@ -837,6 +882,8 @@ export default function ExecutionConsole({
                         </div>
                       )}
                     </div>
+                      );
+                    })()
                   ))}
                 </div>
               )}
@@ -858,8 +905,8 @@ export default function ExecutionConsole({
             {selectedExecution ? (
               <div className="p-4 space-y-4">
                   <div className="flex items-center gap-3">
-                    <Badge variant="outline" className={getStatusColor(selectedExecution.status)}>
-                      {selectedExecution.status}
+                    <Badge variant="outline" className={getStatusColor(getDisplayStatus(selectedExecution))}>
+                      {getDisplayStatusLabel(selectedExecution)}
                     </Badge>
                     <span className="text-xs text-muted-foreground">
                       {new Date(selectedExecution.started_at).toLocaleString()}

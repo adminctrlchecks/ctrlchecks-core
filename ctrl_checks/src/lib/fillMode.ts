@@ -10,7 +10,7 @@ type InputSchemaField = {
 
 export function resolveEffectiveFieldFillMode(
   fieldName: string,
-  inputSchema?: Record<string, InputSchemaField>,
+  _inputSchema?: Record<string, InputSchemaField>,
   config?: Record<string, unknown>
 ): FieldFillMode {
   const explicit = (config?._fillMode as Record<string, FieldFillMode> | undefined)?.[fieldName];
@@ -18,15 +18,8 @@ export function resolveEffectiveFieldFillMode(
     return explicit;
   }
 
-  const schemaDefault = inputSchema?.[fieldName]?.fillMode?.default;
-  if (
-    schemaDefault === 'manual_static' ||
-    schemaDefault === 'runtime_ai' ||
-    schemaDefault === 'buildtime_ai_once'
-  ) {
-    return schemaDefault;
-  }
-
+  // Registry defaults are AI generation hints, not editor state. A field should
+  // become AI-owned only when `_fillMode[fieldName]` records that explicit choice.
   return 'manual_static';
 }
 
@@ -39,11 +32,12 @@ export function supportsRuntimeAI(
 
 /**
  * Wizard ownership step: resolve effective fill mode when state may omit untouched rows.
- * Mirrors worker `resolveEffectiveFieldFillMode` for explicit override + schema default.
+ * Wizard ownership step: question defaults are generation-time recommendations,
+ * so the wizard may preselect them before the user confirms the generated graph.
  */
 export function resolveWizardFieldFillMode(
   wizardExplicit: string | undefined,
-  questionDefault: FieldFillMode | undefined
+  _questionDefault: FieldFillMode | undefined
 ): FieldFillMode {
   if (
     wizardExplicit === 'manual_static' ||
@@ -51,13 +45,6 @@ export function resolveWizardFieldFillMode(
     wizardExplicit === 'buildtime_ai_once'
   ) {
     return wizardExplicit;
-  }
-  if (
-    questionDefault === 'manual_static' ||
-    questionDefault === 'runtime_ai' ||
-    questionDefault === 'buildtime_ai_once'
-  ) {
-    return questionDefault;
   }
   return 'manual_static';
 }
@@ -83,9 +70,7 @@ export function resolveWizardEffectiveFieldFillMode(
 
   if (mode === 'runtime_ai' && allowRuntimeAI === false) {
     mode =
-      questionDefault === 'runtime_ai'
-        ? 'manual_static'
-        : questionDefault === 'manual_static' || questionDefault === 'buildtime_ai_once'
+      questionDefault === 'manual_static' || questionDefault === 'buildtime_ai_once'
           ? questionDefault
           : 'manual_static';
     if (mode === 'runtime_ai') mode = 'manual_static';
@@ -94,9 +79,7 @@ export function resolveWizardEffectiveFieldFillMode(
   }
   if (mode === 'buildtime_ai_once' && allowBuildtimeAI === false) {
     mode =
-      questionDefault === 'buildtime_ai_once'
-        ? 'manual_static'
-        : questionDefault === 'manual_static' || questionDefault === 'runtime_ai'
+      questionDefault === 'manual_static' || questionDefault === 'runtime_ai'
           ? questionDefault
           : 'manual_static';
     if (mode === 'buildtime_ai_once') mode = 'manual_static';

@@ -3,6 +3,7 @@ import type { Request } from 'express';
 import { config } from '../../core/config';
 import { logger } from '../../core/logger';
 import { retrieveCredential } from '../../core/utils/credential-retriever';
+import { getDecryptedConnection, markConnectionUsed } from '../canonical-credential-lookup';
 import { getRedisClient } from '../../shared/redis-client';
 
 /**
@@ -20,6 +21,8 @@ import { getRedisClient } from '../../shared/redis-client';
 
 export type ShopifyTriggerConfig = {
   connectionId?: string;
+  credentialId?: string;
+  connectionRefs?: Record<string, unknown>;
   shopDomain?: string;
   topics?: string | string[];
   eventTypes?: string | string[];
@@ -77,6 +80,7 @@ export type ShopifyWebhookRegistrationStatus = {
   topics?: string[];
   shopDomain?: string;
   apiVersion?: string;
+  warnings?: string[];
   error?: string;
 };
 
@@ -90,6 +94,7 @@ type ShopifyWebhookState = {
   userId: string;
   workflowId: string;
   nodeId: string;
+  connectionId?: string;
 };
 
 export type ResolvedShopifyCredential = {
@@ -97,6 +102,7 @@ export type ResolvedShopifyCredential = {
   adminAccessToken: string;
   webhookSecret: string;
   apiVersion: string;
+  connectionId?: string;
 };
 
 const STATE_TTL_SECONDS = 365 * 24 * 60 * 60;
@@ -199,8 +205,13 @@ function normalizeToken(value: unknown): string {
 
 function resolveWebhookSecret(parsed: Record<string, any>): string {
   return asString(parsed.webhookSecret) ||
+    asString(parsed.webhook_signing_secret) ||
+    asString(parsed.webhookSigningSecret) ||
+    asString(parsed.appClientSecret) ||
+    asString(parsed.app_client_secret) ||
     asString(parsed.clientSecret) ||
     asString(parsed.client_secret) ||
+    asString(parsed.hmacSecret) ||
     asString(parsed.sharedSecret) ||
     asString(parsed.signingSecret) ||
     asString(parsed.secret) ||
@@ -208,39 +219,139 @@ function resolveWebhookSecret(parsed: Record<string, any>): string {
     asString(process.env.SHOPIFY_WEBHOOK_SECRET);
 }
 
+function selectedConnectionId(config: ShopifyTriggerConfig): string {
+  return asString(config.connectionId) || asString(config.credentialId);
+}
+
+function selectedConnectionIdFromRefs(refs: Record<string, unknown> | undefined): string {
+  if (!refs || typeof refs !== 'object') return '';
+  const preferredKeys = [
+    'connectionId',
+    'credentialId',
+    'shopify_api_key',
+    'shopify',
+    'shopify_trigger',
+    'shopify_oauth2',
+    'shopify_api_key_connection',
+    'shopify_connection',
+    'shopify_token',
+  ];
+  for (const key of preferredKeys) {
+    const value = asString(refs[key]);
+    if (value) return value;
+  }
+  for (const [key, value] of Object.entries(refs)) {
+    if (!key.toLowerCase().includes('shopify')) continue;
+    const connectionId = asString(value);
+    if (connectionId) return connectionId;
+  }
+  return '';
+}
+
+export function shopifyTriggerConfigFromNode(node: any): ShopifyTriggerConfig {
+  const config = { ...(node?.config || {}), ...(node?.data?.config || {}) } as ShopifyTriggerConfig;
+  const connectionRefs = {
+    ...((config.connectionRefs || {}) as Record<string, unknown>),
+    ...((node?.data?.connectionRefs || {}) as Record<string, unknown>),
+  };
+  const connectionId =
+    asString(config.connectionId) ||
+    asString(config.credentialId) ||
+    selectedConnectionIdFromRefs(connectionRefs) ||
+    asString((node?.data as any)?.connectionId) ||
+    asString(node?.connectionId);
+  return {
+    ...config,
+    ...(Object.keys(connectionRefs).length > 0 ? { connectionRefs } : {}),
+    ...(connectionId ? { connectionId } : {}),
+  };
+}
+
+function resolveCredentialPayload(
+  parsed: Record<string, any>,
+  triggerConfig: ShopifyTriggerConfig,
+  connectionId?: string,
+): ResolvedShopifyCredential | null {
+  const shopDomain = normalizeShopifyShopDomain(
+    triggerConfig.shopDomain ||
+    parsed.storeUrl ||
+    parsed.shopDomain ||
+    parsed.shopUrl ||
+    parsed.shop ||
+    parsed.domain,
+  );
+  const adminAccessToken = normalizeToken(
+    parsed.token ||
+    parsed.adminAccessToken ||
+    parsed.admin_api_access_token ||
+    parsed.apiKey ||
+    parsed.api_key ||
+    parsed.accessToken ||
+    parsed.access_token ||
+    parsed.bearerToken ||
+    parsed.value,
+  );
+  const webhookSecret = resolveWebhookSecret(parsed);
+  if (!shopDomain || !adminAccessToken || !webhookSecret) return null;
+  return {
+    shopDomain,
+    adminAccessToken,
+    webhookSecret,
+    apiVersion: asString(parsed.apiVersion) || asString(parsed.api_version) || DEFAULT_API_VERSION,
+    ...(connectionId ? { connectionId } : {}),
+  };
+}
+
+function shopDomainFromCredentialPayload(parsed: Record<string, any>, triggerConfig: ShopifyTriggerConfig): string {
+  return normalizeShopifyShopDomain(
+    triggerConfig.shopDomain ||
+    parsed.storeUrl ||
+    parsed.shopDomain ||
+    parsed.shopUrl ||
+    parsed.shop ||
+    parsed.domain,
+  );
+}
+
 export async function resolveShopifyCredential(
   userId: string,
   triggerConfig: ShopifyTriggerConfig = {},
 ): Promise<ResolvedShopifyCredential> {
   let lastShopDomain = normalizeShopifyShopDomain(triggerConfig.shopDomain);
+  const connectionId = selectedConnectionId(triggerConfig);
+  if (connectionId) {
+    const lookup = await getDecryptedConnection(userId, connectionId).catch(() => null);
+    const connection = lookup?.connection;
+    if (!connection) {
+      throw new Error('Selected Shopify connection was not found. Reconnect Shopify in Connections, then save the workflow again.');
+    }
+    if (connection.provider !== 'shopify' && !String(connection.credentialTypeId || '').startsWith('shopify')) {
+      throw new Error(`Selected connection "${connection.name}" is not a Shopify connection.`);
+    }
+    if (connection.status !== 'active' || (connection.expiresAt && new Date(connection.expiresAt).getTime() <= Date.now())) {
+      throw new Error(`Selected Shopify connection "${connection.name}" is not active. Reconnect Shopify before registering this trigger.`);
+    }
+    const parsed = (connection.credentials || {}) as Record<string, any>;
+    lastShopDomain = shopDomainFromCredentialPayload(parsed, triggerConfig) || lastShopDomain;
+    const resolved = resolveCredentialPayload(parsed, triggerConfig, connection.id);
+    if (resolved) {
+      await markConnectionUsed(userId, connection.id, lookup.source).catch(() => undefined);
+      return resolved;
+    }
+    if (!lastShopDomain) {
+      throw new Error('No Shopify shop domain found. Save a Shopify Admin API connection with Store URL first.');
+    }
+    throw new Error('No complete Shopify Trigger connection found. Save a Shopify Admin API connection with Admin API token and app client secret/webhook signing secret.');
+  }
+
   for (const key of ['shopify_api_key', 'shopify_oauth2', 'shopify']) {
     const stored = await retrieveCredential({ userId }, key).catch(() => null);
     if (!stored) continue;
     const parsed = parseCredentialValue(stored);
-    const shopDomain = normalizeShopifyShopDomain(
-      triggerConfig.shopDomain ||
-      parsed.storeUrl ||
-      parsed.shopDomain ||
-      parsed.shop ||
-      parsed.domain,
-    );
+    const shopDomain = shopDomainFromCredentialPayload(parsed, triggerConfig);
     lastShopDomain = shopDomain || lastShopDomain;
-    const adminAccessToken = normalizeToken(
-      parsed.token ||
-      parsed.apiKey ||
-      parsed.accessToken ||
-      parsed.access_token ||
-      parsed.value,
-    );
-    const webhookSecret = resolveWebhookSecret(parsed);
-    if (shopDomain && adminAccessToken && webhookSecret) {
-      return {
-        shopDomain,
-        adminAccessToken,
-        webhookSecret,
-        apiVersion: asString(parsed.apiVersion) || DEFAULT_API_VERSION,
-      };
-    }
+    const resolved = resolveCredentialPayload(parsed, triggerConfig);
+    if (resolved) return resolved;
   }
 
   if (!lastShopDomain) {
@@ -522,7 +633,7 @@ export async function registerShopifyWebhooks(input: {
   workflowId: string;
   nodeId: string;
   triggerConfig?: ShopifyTriggerConfig;
-}): Promise<{ success: true; webhookUrl: string; webhookIds: string[]; topics: string[]; shopDomain: string; apiVersion: string }> {
+}): Promise<{ success: true; webhookUrl: string; webhookIds: string[]; topics: string[]; shopDomain: string; apiVersion: string; warnings?: string[] }> {
   const triggerConfig = input.triggerConfig || {};
   const credential = await resolveShopifyCredential(input.userId, triggerConfig);
   const webhookUrl = getShopifyWebhookUrl(input.workflowId, input.nodeId);
@@ -540,27 +651,40 @@ export async function registerShopifyWebhooks(input: {
   }
 
   const webhookIds: string[] = [];
+  const registeredTopics: string[] = [];
+  const warnings: string[] = [];
   for (const topic of topics) {
-    const response = await shopifyApiFetch(credential, '/webhooks.json', {
-      method: 'POST',
-      body: JSON.stringify({
-        webhook: {
-          topic,
-          address: webhookUrl,
-          format: 'json',
-        },
-      }),
-    });
-    const webhookId = firstText(response?.webhook?.id, response?.id);
-    if (!webhookId) {
-      throw new Error(`Shopify webhook creation for topic "${topic}" did not return a webhook id.`);
+    try {
+      const response = await shopifyApiFetch(credential, '/webhooks.json', {
+        method: 'POST',
+        body: JSON.stringify({
+          webhook: {
+            topic,
+            address: webhookUrl,
+            format: 'json',
+          },
+        }),
+      });
+      const webhookId = firstText(response?.webhook?.id, response?.id);
+      if (!webhookId) {
+        throw new Error(`Shopify webhook creation for topic "${topic}" did not return a webhook id.`);
+      }
+      webhookIds.push(webhookId);
+      registeredTopics.push(topic);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      warnings.push(`Topic "${topic}" was not registered: ${message}`);
+      logger.warn({ workflowId: input.workflowId, nodeId: input.nodeId, topic, error: message }, '[Shopify Trigger] Webhook topic registration failed');
     }
-    webhookIds.push(webhookId);
+  }
+
+  if (webhookIds.length === 0) {
+    throw new Error(`Shopify webhook registration failed for all selected topics. ${warnings.join(' ')}`);
   }
 
   await setWebhookState({
     webhookIds,
-    topics,
+    topics: registeredTopics,
     webhookSecret: credential.webhookSecret,
     webhookUrl,
     shopDomain: credential.shopDomain,
@@ -568,9 +692,18 @@ export async function registerShopifyWebhooks(input: {
     userId: input.userId,
     workflowId: input.workflowId,
     nodeId: input.nodeId,
+    ...(credential.connectionId ? { connectionId: credential.connectionId } : {}),
   });
 
-  return { success: true, webhookUrl, webhookIds, topics, shopDomain: credential.shopDomain, apiVersion: credential.apiVersion };
+  return {
+    success: true,
+    webhookUrl,
+    webhookIds,
+    topics: registeredTopics,
+    shopDomain: credential.shopDomain,
+    apiVersion: credential.apiVersion,
+    ...(warnings.length ? { warnings } : {}),
+  };
 }
 
 export async function unregisterShopifyWebhooks(input: {
@@ -580,7 +713,10 @@ export async function unregisterShopifyWebhooks(input: {
 }): Promise<{ success: true }> {
   const state = await getWebhookState(input.workflowId, input.nodeId);
   if (state?.webhookIds?.length) {
-    const credential = await resolveShopifyCredential(input.userId, { shopDomain: state.shopDomain }).catch(() => null);
+    const credential = await resolveShopifyCredential(input.userId, {
+      shopDomain: state.shopDomain,
+      ...(state.connectionId ? { connectionId: state.connectionId } : {}),
+    }).catch(() => null);
     if (credential) {
       for (const webhookId of state.webhookIds) {
         await shopifyApiFetch(credential, `/webhooks/${encodeURIComponent(webhookId)}.json`, { method: 'DELETE' }).catch((error) => {
@@ -604,10 +740,6 @@ function nodeTypeOf(node: any): string {
   return String(node?.data?.type || node?.type || '').trim();
 }
 
-function nodeConfigOf(node: any): ShopifyTriggerConfig {
-  return (node?.data?.config || node?.config || {}) as ShopifyTriggerConfig;
-}
-
 export async function autoRegisterShopifyWebhooksForWorkflow(input: {
   userId: string;
   workflow: any;
@@ -626,7 +758,7 @@ export async function autoRegisterShopifyWebhooksForWorkflow(input: {
         userId: input.userId,
         workflowId,
         nodeId,
-        triggerConfig: nodeConfigOf(node),
+        triggerConfig: shopifyTriggerConfigFromNode(node),
       });
       results.push({
         nodeId,

@@ -31,16 +31,20 @@ describe('fill-mode-resolver', () => {
 
   it('builds effective modes for all schema fields', () => {
     const modes = buildEffectiveFillModes(inputSchema, { _fillMode: { subject: 'runtime_ai' } });
-    expect(modes.text).toBe('runtime_ai');
+    expect(modes.text).toBe('manual_static');
     expect(modes.subject).toBe('runtime_ai');
   });
 
-  it('uses schema default when _fillMode omits a field (wizard partial keys)', () => {
+  it('uses manual_static when _fillMode omits a field', () => {
     const modes = buildEffectiveFillModes(inputSchema, {
       _fillMode: { subject: 'manual_static' },
     });
     expect(modes.subject).toBe('manual_static');
-    expect(modes.text).toBe('runtime_ai');
+    expect(modes.text).toBe('manual_static');
+  });
+
+  it('does not treat schema default runtime_ai as an explicit ownership choice', () => {
+    expect(resolveEffectiveFieldFillMode('text', inputSchema, {})).toBe('manual_static');
   });
 
   it('falls back to manual_static when field has no fillMode metadata', () => {

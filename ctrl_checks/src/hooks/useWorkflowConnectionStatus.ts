@@ -135,6 +135,7 @@ const PROVIDER_DISPLAY: Record<string, string> = {
   linkedin: 'LinkedIn',
   whatsapp: 'WhatsApp',
   salesforce: 'Salesforce',
+  shopify: 'Shopify',
   zoho: 'Zoho',
   youtube: 'YouTube',
   calendly: 'Calendly',

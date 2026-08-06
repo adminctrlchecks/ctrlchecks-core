@@ -289,8 +289,8 @@ describe('IntelligentConfigFiller — _fillMode / no-_fieldModes contract', () =
 
   // ── Test 3: _fillMode entries match registry fillMode.default ─────────────
 
-  describe('_fillMode values match registry defaults', () => {
-    it('_fillMode[fieldName] matches fillMode.default for each field in inputSchema', async () => {
+  describe('_fillMode values are explicit only', () => {
+    it('does not stamp registry defaults into _fillMode', async () => {
       const filler = new IntelligentConfigFiller();
       const workflow = makeWorkflow('test_node');
 
@@ -304,12 +304,12 @@ describe('IntelligentConfigFiller — _fillMode / no-_fieldModes contract', () =
       const fillMode = config._fillMode as Record<string, string>;
 
       // prompt → buildtime_ai_once (from MOCK_NODE_DEF)
-      expect(fillMode.prompt).toBe('buildtime_ai_once');
+      expect(fillMode.prompt).toBeUndefined();
       // apiKey → manual_static (from MOCK_NODE_DEF)
-      expect(fillMode.apiKey).toBe('manual_static');
+      expect(fillMode.apiKey).toBeUndefined();
     });
 
-    it('_fillMode entries match registry defaults for all three fill modes', async () => {
+    it('does not stamp runtime_ai schema defaults into saved ownership', async () => {
       mockRegistryGet.mockReturnValue(MOCK_NODE_DEF_ALL_MODES as any);
       const filler = new IntelligentConfigFiller();
       const workflow = makeWorkflow('email_node');
@@ -323,12 +323,12 @@ describe('IntelligentConfigFiller — _fillMode / no-_fieldModes contract', () =
       const config = (result.nodes[0] as any).data?.config ?? {};
       const fillMode = config._fillMode as Record<string, string>;
 
-      expect(fillMode.subject).toBe('buildtime_ai_once');
-      expect(fillMode.body).toBe('runtime_ai');
-      expect(fillMode.recipient).toBe('manual_static');
+      expect(fillMode.subject).toBeUndefined();
+      expect(fillMode.body).toBeUndefined();
+      expect(fillMode.recipient).toBeUndefined();
     });
 
-    it('_fillMode defaults to manual_static for fields with no fillMode.default in schema', async () => {
+    it('does not stamp fields with no fillMode.default in schema', async () => {
       mockRegistryGet.mockReturnValue({
         inputSchema: {
           someField: {
@@ -355,10 +355,10 @@ describe('IntelligentConfigFiller — _fillMode / no-_fieldModes contract', () =
       const fillMode = config._fillMode as Record<string, string>;
 
       // No fillMode.default → falls back to 'manual_static'
-      expect(fillMode.someField).toBe('manual_static');
+      expect(fillMode.someField).toBeUndefined();
     });
 
-    it('every field in inputSchema has a corresponding entry in _fillMode', async () => {
+    it('does not create per-field entries for untouched inputSchema fields', async () => {
       mockRegistryGet.mockReturnValue(MOCK_NODE_DEF_ALL_MODES as any);
       const filler = new IntelligentConfigFiller();
       const workflow = makeWorkflow('email_node');
@@ -372,10 +372,7 @@ describe('IntelligentConfigFiller — _fillMode / no-_fieldModes contract', () =
       const config = (result.nodes[0] as any).data?.config ?? {};
       const fillMode = config._fillMode as Record<string, string>;
 
-      const expectedFields = Object.keys(MOCK_NODE_DEF_ALL_MODES.inputSchema);
-      for (const fieldName of expectedFields) {
-        expect(fillMode[fieldName]).toBeDefined();
-      }
+      expect(Object.keys(fillMode)).toHaveLength(0);
     });
   });
 
@@ -447,7 +444,7 @@ describe('IntelligentConfigFiller — _fillMode / no-_fieldModes contract', () =
       expect(fillMode.prompt).toBe('runtime_ai');
     });
 
-    it('only unstamped fields get the registry default; already-stamped fields are untouched', async () => {
+    it('preserves stamped fields without adding registry defaults for unstamped fields', async () => {
       mockRegistryGet.mockReturnValue(MOCK_NODE_DEF_ALL_MODES as any);
       const filler = new IntelligentConfigFiller();
 
@@ -468,12 +465,11 @@ describe('IntelligentConfigFiller — _fillMode / no-_fieldModes contract', () =
 
       // Prior stamp preserved
       expect(fillMode.subject).toBe('buildtime_ai_once');
-      // Unstamped fields get registry defaults
-      expect(fillMode.body).toBe('runtime_ai');
-      expect(fillMode.recipient).toBe('manual_static');
+      expect(fillMode.body).toBeUndefined();
+      expect(fillMode.recipient).toBeUndefined();
     });
 
-    it('_fillMode from prior stage is merged with new registry defaults (not replaced)', async () => {
+    it('_fillMode from prior stage is preserved without adding registry defaults', async () => {
       const filler = new IntelligentConfigFiller();
 
       // Prior stage only stamped 'prompt'; 'apiKey' is unstamped
@@ -492,8 +488,7 @@ describe('IntelligentConfigFiller — _fillMode / no-_fieldModes contract', () =
 
       // Prior stamp preserved
       expect(fillMode.prompt).toBe('buildtime_ai_once');
-      // New registry default added for unstamped field
-      expect(fillMode.apiKey).toBe('manual_static');
+      expect(fillMode.apiKey).toBeUndefined();
     });
   });
 

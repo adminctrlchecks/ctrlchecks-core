@@ -11,6 +11,7 @@ import {
   normalizeShopifyEvent,
   registerShopifyWebhooks,
   shouldAcceptShopifyEvent,
+  shopifyTriggerConfigFromNode,
   unregisterShopifyWebhooks,
   validateShopifyWebhookSecret,
   type ShopifyTriggerConfig,
@@ -27,7 +28,7 @@ function nodeTypeOf(node: any): string {
 }
 
 function nodeConfigOf(node: any): ShopifyTriggerConfig {
-  return (node?.data?.config || node?.config || {}) as ShopifyTriggerConfig;
+  return shopifyTriggerConfigFromNode(node);
 }
 
 function workflowNodes(workflow: any): any[] {

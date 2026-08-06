@@ -59,6 +59,42 @@ type ReliabilityUiState = {
   lastErrorCode?: string;
 };
 
+type WebhookRegistrationStatus = {
+  success?: boolean;
+  webhookUrl?: string;
+  topics?: string[];
+  shopDomain?: string;
+  error?: string;
+};
+
+function summarizeShopifyWebhookRegistrations(row: unknown): {
+  successCount: number;
+  failureMessage?: string;
+  successMessage?: string;
+} | null {
+  const registrations = (row as { shopifyWebhookRegistrations?: unknown } | null)?.shopifyWebhookRegistrations;
+  if (!Array.isArray(registrations) || registrations.length === 0) return null;
+  const typed = registrations as WebhookRegistrationStatus[];
+  const failures = typed.filter((item) => item?.success === false);
+  if (failures.length > 0) {
+    const first = failures[0];
+    return {
+      successCount: typed.length - failures.length,
+      failureMessage: first?.error || 'Shopify webhook registration did not complete.',
+    };
+  }
+  const first = typed[0];
+  const topicCount = typed.reduce((count, item) => count + (Array.isArray(item.topics) ? item.topics.length : 0), 0);
+  return {
+    successCount: typed.length,
+    successMessage: [
+      topicCount > 0 ? `${topicCount} topic${topicCount === 1 ? '' : 's'}` : 'Selected topics',
+      first?.shopDomain ? `for ${first.shopDomain}` : '',
+      first?.webhookUrl ? `at ${first.webhookUrl}` : '',
+    ].filter(Boolean).join(' '),
+  };
+}
+
 /** True when the backend already reported specific, actionable diagnostics for this error. */
 function hasConcreteBackendDiagnostics(details: Record<string, unknown> | undefined): boolean {
   if (!details) return false;
@@ -443,6 +479,7 @@ export default function WorkflowBuilder() {
 
     setIsSaving(true);
     let saveSucceeded = false;
+    let savedWorkflowRow: unknown = null;
     try {
       // Validate edges before saving
       const validEdges = edges.filter(edge => {
@@ -521,12 +558,13 @@ export default function WorkflowBuilder() {
       }
       
       if (savedWorkflowId) {
-        const { error } = await awsClient
+        const { data: updatedWorkflow, error } = await awsClient
           .from('workflows')
           .update(workflowData)
           .eq('id', savedWorkflowId);
 
         if (error) throw error;
+        savedWorkflowRow = updatedWorkflow;
       } else {
         const { data, error } = await awsClient
           .from('workflows')
@@ -537,6 +575,7 @@ export default function WorkflowBuilder() {
         if (error) throw error;
 
         if (data) {
+          savedWorkflowRow = data;
           savedWorkflowId = data.id;
           setWorkflowId(data.id);
           navigate(`/workflow/${data.id}`, { replace: true });
@@ -645,6 +684,18 @@ export default function WorkflowBuilder() {
       }
 
       saveSucceeded = true;
+      const shopifyRegistrationSummary = summarizeShopifyWebhookRegistrations(savedWorkflowRow);
+      if (shopifyRegistrationSummary?.failureMessage) {
+        toast({
+          title: 'Shopify webhook was not registered',
+          description: shopifyRegistrationSummary.failureMessage,
+        });
+      } else if (shopifyRegistrationSummary?.successMessage) {
+        toast({
+          title: 'Shopify webhook registered',
+          description: shopifyRegistrationSummary.successMessage,
+        });
+      }
       toast({
         title: 'Saved',
         description: 'Workflow saved and configured successfully',

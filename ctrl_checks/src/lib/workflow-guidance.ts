@@ -358,6 +358,30 @@ export function mapWorkflowIssueToGuidance(input: WorkflowIssueInput): GuidedSta
   }
 
   const payload = toRecord(input);
+  const outcome = toRecord(payload.outcome);
+  if (getString(outcome.kind) && getString(outcome.userMessage)) {
+    const kind = getString(outcome.kind);
+    const nextSteps = Array.isArray(outcome.nextSteps)
+      ? (outcome.nextSteps as unknown[]).filter((step): step is string => typeof step === 'string')
+      : [];
+    return {
+      title:
+        kind === 'stopped_expected'
+          ? 'Workflow stopped'
+          : kind === 'needs_connection'
+            ? 'Connection needed'
+            : kind === 'needs_configuration'
+              ? 'Configuration needed'
+              : kind === 'provider_unavailable'
+                ? 'Provider unavailable'
+                : 'Execution needs attention',
+      description: getString(outcome.userMessage),
+      resolution: getString(outcome.developerMessage),
+      nextSteps,
+      details: getString(outcome.reason) ? `Reason: ${humanizeKey(getString(outcome.reason))}` : undefined,
+      tone: kind === 'needs_connection' ? 'connection' : kind === 'needs_configuration' ? 'configuration' : 'attention',
+    };
+  }
   const code = getString(payload.code).toUpperCase();
   const message = getString(payload.message) || getString(payload.error) || 'Configuration update is pending.';
   const currentPhase = getString(payload.currentPhase) || getString(payload.phase);

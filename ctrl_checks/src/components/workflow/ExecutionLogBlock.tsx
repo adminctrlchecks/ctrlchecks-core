@@ -13,17 +13,19 @@ import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
+import { type ExecutionOutcome, outcomeLabel, outcomeTone } from '@/lib/executionOutcome';
 
 interface ExecutionLog {
   nodeId: string;
   nodeName: string;
   nodeType?: string;
-  status: 'running' | 'success' | 'failed' | 'skipped' | 'pending';
+  status: 'running' | 'success' | 'failed' | 'skipped' | 'pending' | 'stopped';
   startedAt: string;
   finishedAt?: string;
   input?: unknown;
   output?: unknown;
   error?: string;
+  outcome?: ExecutionOutcome;
   resolvedInputs?: Record<string, unknown>;
   resolvedInputSources?: Record<string, 'static_config' | 'template' | 'deterministic_runtime' | 'runtime_ai'>;
 }
@@ -128,6 +130,8 @@ export default function ExecutionLogBlock({
   const NodeIcon = getNodeIcon(log.nodeType, log.nodeName);
   const nodeName = log.nodeName || log.nodeId || `Node ${index + 1}`;
   const status = log.status || 'unknown';
+  const outcome = log.outcome;
+  const effectiveStatus = outcome && outcome.kind !== 'system_error' && status === 'failed' ? 'stopped' : status;
 
   // Calculate duration
   const duration = log.startedAt && log.finishedAt
@@ -151,6 +155,14 @@ export default function ExecutionLogBlock({
       badge: 'bg-red-500/10 text-red-600 border-red-500/30',
       icon: XCircle,
       iconColor: 'text-red-500'
+    },
+    stopped: {
+      border: 'border-amber-500/30',
+      bg: 'bg-amber-500/5',
+      text: 'text-amber-700',
+      badge: 'bg-amber-500/10 text-amber-700 border-amber-500/30',
+      icon: AlertTriangle,
+      iconColor: 'text-amber-500'
     },
     running: {
       border: 'border-blue-500/30',
@@ -178,7 +190,7 @@ export default function ExecutionLogBlock({
     }
   };
 
-  const style = statusStyles[status] || statusStyles.pending;
+  const style = statusStyles[effectiveStatus] || statusStyles.pending;
   const StatusIcon = style.icon;
 
   // Copy to clipboard function
@@ -218,7 +230,7 @@ export default function ExecutionLogBlock({
           "hover:scale-[1.01]"
         )}
         data-node-id={log.nodeId}
-        data-status={status}
+        data-status={effectiveStatus}
       >
         {/* Node Header */}
         <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
@@ -234,7 +246,7 @@ export default function ExecutionLogBlock({
                       Node #{index + 1}: {nodeName}
                     </h3>
                     <Badge variant="outline" className={cn("text-xs px-2 py-0", style.badge)}>
-                      {status.toUpperCase()}
+                      {outcome ? outcomeLabel(outcome).toUpperCase() : String(effectiveStatus).toUpperCase()}
                     </Badge>
                   </div>
                   <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
@@ -256,7 +268,7 @@ export default function ExecutionLogBlock({
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <StatusIcon className={cn("h-4 w-4", style.iconColor, status === 'running' && "animate-spin")} />
+                  <StatusIcon className={cn("h-4 w-4", style.iconColor, effectiveStatus === 'running' && "animate-spin")} />
                   {isExpanded ? (
                     <ChevronUp className="h-4 w-4 text-muted-foreground" />
                   ) : (
@@ -269,6 +281,28 @@ export default function ExecutionLogBlock({
 
           <CollapsibleContent>
             <div className="node-content space-y-3 mt-3">
+              {outcome && outcome.kind !== 'completed' && (
+                <div
+                  className={cn(
+                    "rounded-md border px-3 py-2 text-sm",
+                    outcomeTone(outcome) === 'error'
+                      ? "border-red-500/20 bg-red-500/10 text-red-700"
+                      : outcomeTone(outcome) === 'connection'
+                        ? "border-blue-500/20 bg-blue-500/10 text-blue-700"
+                        : "border-amber-500/20 bg-amber-500/10 text-amber-800"
+                  )}
+                >
+                  <div className="font-medium">{outcome.userMessage}</div>
+                  {outcome.nextSteps?.length > 0 && (
+                    <ol className="mt-2 list-decimal space-y-1 pl-4 text-xs">
+                      {outcome.nextSteps.map((step, stepIndex) => (
+                        <li key={`${log.nodeId}-step-${stepIndex}`}>{step}</li>
+                      ))}
+                    </ol>
+                  )}
+                </div>
+              )}
+
               {/* Input Section */}
               {log.input !== undefined && (
                 <Collapsible open={inputExpanded} onOpenChange={setInputExpanded}>
@@ -452,12 +486,22 @@ export default function ExecutionLogBlock({
 
               {/* Error Section */}
               {log.error && (
-                <div className="error-section mt-3 pt-3 border-t border-red-500/30">
+                <div className={cn(
+                  "error-section mt-3 pt-3 border-t",
+                  outcome && outcome.kind !== 'system_error' ? "border-amber-500/30" : "border-red-500/30"
+                )}>
                   <div className="flex items-center gap-2 mb-2">
-                    <AlertTriangle className="h-4 w-4 text-red-500" />
-                    <h4 className="text-xs font-semibold text-red-500">❌ ERROR</h4>
+                    <AlertTriangle className={cn("h-4 w-4", outcome && outcome.kind !== 'system_error' ? "text-amber-500" : "text-red-500")} />
+                    <h4 className={cn("text-xs font-semibold", outcome && outcome.kind !== 'system_error' ? "text-amber-600" : "text-red-500")}>
+                      {outcome && outcome.kind !== 'system_error' ? 'STOP REASON' : 'ERROR'}
+                    </h4>
                   </div>
-                  <pre className="p-3 rounded-md bg-red-500/10 border border-red-500/20 text-xs font-mono text-red-400 whitespace-pre-wrap break-words">
+                  <pre className={cn(
+                    "p-3 rounded-md text-xs font-mono whitespace-pre-wrap break-words",
+                    outcome && outcome.kind !== 'system_error'
+                      ? "bg-amber-500/10 border border-amber-500/20 text-amber-700"
+                      : "bg-red-500/10 border border-red-500/20 text-red-400"
+                  )}>
                     {log.error}
                   </pre>
                 </div>

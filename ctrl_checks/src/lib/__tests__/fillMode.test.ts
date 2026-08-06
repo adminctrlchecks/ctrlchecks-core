@@ -1,9 +1,54 @@
 import { describe, expect, it } from 'vitest';
 import {
+  resolveEffectiveFieldFillMode,
   resolveWizardEffectiveFieldFillMode,
   shouldAskWizardManualQuestion,
   wizardBulkAIModeForQuestion,
 } from '../fillMode';
+
+describe('editor fill mode resolver', () => {
+  it('defaults to manual_static even when schema default is runtime_ai', () => {
+    const out = resolveEffectiveFieldFillMode(
+      'productId',
+      {
+        productId: {
+          fillMode: { default: 'runtime_ai', supportsRuntimeAI: true },
+        },
+      },
+      {}
+    );
+
+    expect(out).toBe('manual_static');
+  });
+
+  it('honors explicit saved runtime_ai ownership', () => {
+    const out = resolveEffectiveFieldFillMode(
+      'productId',
+      {
+        productId: {
+          fillMode: { default: 'manual_static', supportsRuntimeAI: true },
+        },
+      },
+      { _fillMode: { productId: 'runtime_ai' } }
+    );
+
+    expect(out).toBe('runtime_ai');
+  });
+
+  it('honors explicit saved buildtime_ai_once ownership', () => {
+    const out = resolveEffectiveFieldFillMode(
+      'data',
+      {
+        data: {
+          fillMode: { default: 'runtime_ai', supportsBuildtimeAI: true },
+        },
+      },
+      { _fillMode: { data: 'buildtime_ai_once' } }
+    );
+
+    expect(out).toBe('buildtime_ai_once');
+  });
+});
 
 describe('wizard fill mode policy helpers', () => {
   it('coerces runtime_ai to manual_static when runtime is unsupported', () => {
@@ -50,9 +95,9 @@ describe('wizard fill mode policy helpers', () => {
     expect(wizardBulkAIModeForQuestion(undefined, undefined)).toBe('runtime_ai');
   });
 
-  it('reset-style resolution uses schema default when explicit undefined', () => {
+  it('reset-style resolution stays manual when explicit undefined', () => {
     const out = resolveWizardEffectiveFieldFillMode(undefined, 'buildtime_ai_once', false, true);
-    expect(out.mode).toBe('buildtime_ai_once');
+    expect(out.mode).toBe('manual_static');
     expect(out.coerced).toBe(false);
   });
 

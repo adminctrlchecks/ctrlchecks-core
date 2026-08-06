@@ -13,7 +13,16 @@ import { normalizeIfElseConfig } from '@/lib/ifElseConditions';
 
 export type NodeCategory = 'triggers' | 'ai' | 'logic' | 'data' | 'database' | 'storage' | 'output' | 'http_api' | 'google' | 'devops' | 'social_media' | 'crm' | 'utility' | 'productivity' | 'authentication' | 'payment' | 'ecommerce' | 'analytics' | 'cms';
 
-export type ExecutionStatus = 'idle' | 'queued' | 'running' | 'success' | 'failed';
+export type ExecutionStatus =
+  | 'idle'
+  | 'queued'
+  | 'running'
+  | 'success'
+  | 'failed'
+  | 'stopped_expected'
+  | 'needs_connection'
+  | 'needs_configuration'
+  | 'provider_unavailable';
 
 export interface ActiveExecution {
   executionId: string;
@@ -22,6 +31,7 @@ export interface ActiveExecution {
   progress: number;
   currentStep: string | null;
   errorMessage: string | null;
+  outcome?: import('@/lib/executionOutcome').ExecutionOutcome | null;
 }
 
 export interface NodeData {

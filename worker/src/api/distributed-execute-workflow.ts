@@ -736,7 +736,7 @@ export async function getExecutionStatus(
       .select(lite
         // Bug 2 fix: use the actual column names written by execute-workflow.ts.
         // 'finished_at' (not 'completed_at') and 'error' (not 'error_message').
-        ? 'id, workflow_id, status, current_node, started_at, finished_at, error'
+        ? 'id, workflow_id, status, current_node, started_at, finished_at, error, output'
         : '*')
       .eq('id', executionId)
       .single();
@@ -772,6 +772,10 @@ export async function getExecutionStatus(
       completed_at: execution.finished_at ?? execution.completed_at ?? null,
       // Bug 2 fix: read 'error' column (not 'error_message') — that's what execute-workflow.ts writes.
       error: execution.error ?? execution.error_message ?? null,
+      output: execution.output ?? null,
+      outcome: execution.output && typeof execution.output === 'object'
+        ? (execution.output as Record<string, unknown>).outcome ?? null
+        : null,
       steps: steps || [],
       progress: {
         total: steps?.length || 0,

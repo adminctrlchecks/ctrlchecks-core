@@ -125,6 +125,7 @@ Return a JSON object mapping each target field to exactly one upstream key. Exam
 
       const existingConfig = node.data?.config || {};
       const mergedConfig = { ...existingConfig, ...intelligentConfig };
+      delete (mergedConfig as any)._fieldModes;
 
       updatedMap.set(nodeId, {
         ...node,
@@ -196,8 +197,8 @@ Return a JSON object mapping each target field to exactly one upstream key. Exam
    * - SKIP ownership === 'credential' fields unconditionally
    * - ONLY fill buildtime_ai_once fields
    *
-   * After filling, writes _fieldModes metadata into `filled` by iterating inputSchema
-   * and recording field.fillMode?.default ?? 'manual_static' for every field.
+   * After filling, preserves explicit `_fillMode` metadata from prior stages.
+   * Registry fillMode defaults are generation hints, not saved ownership choices.
    */
   private async analyzeAndFillConfig(
     node: WorkflowNode,
@@ -343,11 +344,10 @@ Return a JSON object mapping each target field to exactly one upstream key. Exam
     }
 
     // ── Write _fillMode metadata ──────────────────────────────────────────
-    // Stamp _fillMode[fieldName] for every field so the UI toggle reflects the
-    // correct mode. This is the canonical key read by PropertiesPanel.tsx.
-    // Preserve any entries already written by a prior stage (e.g. property-population-stage.ts
-    // which stamps 'buildtime_ai_once' for fields it fills, or user-set entries from the UI).
-    // Priority: existingConfig._fillMode (prior stage) > filled._fillMode > registry default.
+    // Preserve explicit ownership choices only. Registry defaults describe what
+    // AI may choose during generation; they must not become saved editor state
+    // for every untouched optional field.
+    // Priority: existingConfig._fillMode (prior stage/user) > filled._fillMode.
     const priorFillMode =
       typeof (existingConfig as any)._fillMode === 'object' && (existingConfig as any)._fillMode !== null
         ? { ...(existingConfig as any)._fillMode as Record<string, string> }
@@ -356,16 +356,12 @@ Return a JSON object mapping each target field to exactly one upstream key. Exam
       typeof (filled as any)._fillMode === 'object' && (filled as any)._fillMode !== null
         ? { ...(filled as any)._fillMode as Record<string, string> }
         : {} as Record<string, string>;
-    // Merge: start from registry defaults, then apply in-flight stamps, then prior stamps (highest priority)
     const existingFillMode: Record<string, string> = {};
-    for (const [name, field] of Object.entries(inputSchema as Record<string, any>)) {
-      existingFillMode[name] = (field as any)?.fillMode?.default ?? 'manual_static';
-    }
-    // In-flight stamps (from this run) override registry defaults
+    // In-flight stamps from this run are explicit generated ownership.
     for (const [name, mode] of Object.entries(inFlightFillMode)) {
       existingFillMode[name] = mode;
     }
-    // Prior stage stamps (highest priority) override everything
+    // Prior stage/user stamps (highest priority) override everything.
     for (const [name, mode] of Object.entries(priorFillMode)) {
       existingFillMode[name] = mode;
     }

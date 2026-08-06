@@ -15,6 +15,7 @@ import {
   buildWorkflowReadinessEnvelope,
   workflowReadinessResponseFields,
 } from '../core/readiness/workflow-readiness-aggregator';
+import { classifyExecutionOutcome, isNonFailureOutcome } from '../core/execution/execution-outcome';
 
 // WorkflowNode interface must match execute-workflow.ts
 interface WorkflowNode {
@@ -224,6 +225,58 @@ export default async function executeNodeHandler(req: Request, res: Response) {
     // This prevents placeholder values and config fields from appearing in output JSON
     const { cleanOutputFromConfig } = await import('../core/utils/placeholder-filter');
     const cleanedOutput = cleanOutputFromConfig(output, node.data.config || {});
+
+    if (
+      cleanedOutput &&
+      typeof cleanedOutput === 'object' &&
+      !Array.isArray(cleanedOutput) &&
+      typeof (cleanedOutput as Record<string, unknown>)._error === 'string'
+    ) {
+      const outcome = classifyExecutionOutcome({
+        nodeId,
+        nodeType,
+        nodeName: node.data.label,
+        config: node.data.config || {},
+        input,
+        output: cleanedOutput,
+      });
+
+      if (isNonFailureOutcome(outcome)) {
+        nodeOutputs.clear();
+        return res.status(200).json({
+          success: true,
+          status: outcome.kind,
+          outcome,
+          output: {
+            outcome,
+            stoppedAtNodeId: nodeId,
+            stoppedAtNodeName: node.data.label,
+            stoppedAtNodeType: nodeType,
+            output: cleanedOutput,
+          },
+          executionTime,
+          nodeId,
+          nodeType,
+          runId,
+        });
+      }
+
+      nodeOutputs.clear();
+      return res.status(500).json({
+        success: false,
+        status: 'failed',
+        outcome,
+        error: outcome.userMessage,
+        details: {
+          output: cleanedOutput,
+          technical: outcome.technical,
+        },
+        executionTime,
+        nodeId,
+        nodeType,
+        runId,
+      });
+    }
 
     if (
       cleanedOutput &&

@@ -80,11 +80,11 @@ describe('runFieldOwnershipStage', () => {
     expect(result.ok).toBe(true);
     expect(result.fieldOwnershipMap['n1']).toEqual({
       subject: 'manual_static',
-      body: 'runtime_ai',
+      body: 'manual_static',
     });
   });
 
-  it('defaults fillMode to manual_static when field has no fillMode.default', async () => {
+  it('defaults fillMode to manual_static when no explicit _fillMode exists', async () => {
     mockRegistryGet.mockReturnValue({
       inputSchema: {
         noFillMode: {},
@@ -97,7 +97,7 @@ describe('runFieldOwnershipStage', () => {
 
     expect(result.ok).toBe(true);
     expect(result.fieldOwnershipMap['n1']['noFillMode']).toBe('manual_static');
-    expect(result.fieldOwnershipMap['n1']['withDefault']).toBe('buildtime_ai_once');
+    expect(result.fieldOwnershipMap['n1']['withDefault']).toBe('manual_static');
   });
 
   it('skips nodes whose inputSchema is an empty object', async () => {
@@ -123,7 +123,7 @@ describe('runFieldOwnershipStage', () => {
     await runFieldOwnershipStage(workflow);
 
     const config = node.data.config as Record<string, any>;
-    expect(config._fillMode).toEqual({ to: 'manual_static', subject: 'runtime_ai' });
+    expect(config._fillMode).toEqual({ to: 'manual_static', subject: 'manual_static' });
   });
 
   it('does not overwrite existing _fillMode entries (prior stage wins)', async () => {
@@ -211,7 +211,7 @@ describe('runFieldOwnershipStage', () => {
 
     expect(result.ok).toBe(true);
     expect(result.fieldOwnershipMap['n1']).toEqual({ payload: 'manual_static' });
-    expect(result.fieldOwnershipMap['n2']).toEqual({ channel: 'runtime_ai' });
+    expect(result.fieldOwnershipMap['n2']).toEqual({ channel: 'manual_static' });
     expect(result.fieldOwnershipMap['n3']).toBeUndefined();
   });
 
@@ -229,6 +229,6 @@ describe('runFieldOwnershipStage', () => {
     await runFieldOwnershipStage(workflow);
 
     const config = node.data.config as Record<string, any>;
-    expect(config._fillMode).toEqual({ text: 'runtime_ai' });
+    expect(config._fillMode).toEqual({ text: 'manual_static' });
   });
 });

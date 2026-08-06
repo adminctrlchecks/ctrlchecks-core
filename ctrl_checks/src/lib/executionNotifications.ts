@@ -3,6 +3,8 @@
  * All functions are pure with no side effects.
  */
 
+import { extractOutcome, isAttentionOutcome, type ExecutionOutcome } from './executionOutcome';
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -12,7 +14,11 @@ export type ExecutionClassification =
   | 'full_success'
   | 'partial_success'
   | 'acknowledgement_warning'
-  | 'status_sync_issue'
+ | 'status_sync_issue'
+  | 'stopped_expected'
+  | 'needs_connection'
+  | 'needs_configuration'
+  | 'provider_unavailable'
   | 'auth_failure'
   | 'node_error'
   | 'stuck';
@@ -46,8 +52,9 @@ export interface ExecutionNodeLog {
   nodeId: string;
   nodeName: string;
   nodeType?: string;
-  status: 'success' | 'failed' | 'skipped' | 'running' | 'pending';
+  status: 'success' | 'failed' | 'skipped' | 'running' | 'pending' | 'stopped';
   error?: string | null;
+  outcome?: ExecutionOutcome;
   metadata?: {
     operationStatus?: 'succeeded' | 'failed' | 'unknown';
     acknowledgementStatus?: 'parsed' | 'empty_success' | 'parse_failed' | 'not_required';
@@ -61,6 +68,8 @@ export interface ExecutionResult {
   status: string;           // backend terminal status: 'success' | 'failed' | 'running' | ...
   logs: ExecutionNodeLog[] | null;
   error?: string | null;
+  outcome?: ExecutionOutcome | null;
+  output?: unknown;
   /** Node statuses currently displayed in the UI (used to detect stale RUNNING state). */
   uiNodeStatuses?: Record<string, string>;
 }
@@ -133,6 +142,19 @@ export function classifyExecutionResult(result: ExecutionResult): ExecutionClass
     }
 
     const safeLogs = logs ?? [];
+    const outcome =
+      result.outcome ||
+      extractOutcome(result.output) ||
+      safeLogs.map((log) => log.outcome || extractOutcome(log)).find(Boolean) ||
+      null;
+
+    if (isAttentionOutcome(outcome)) {
+      if (outcome.kind === 'stopped_expected') return 'stopped_expected';
+      if (outcome.kind === 'needs_connection') return 'needs_connection';
+      if (outcome.kind === 'needs_configuration') return 'needs_configuration';
+      if (outcome.kind === 'provider_unavailable') return 'provider_unavailable';
+      if (outcome.kind === 'acknowledgement_uncertain') return 'acknowledgement_warning';
+    }
 
     if (isStatusSyncIssue(result.error)) {
       return 'status_sync_issue';

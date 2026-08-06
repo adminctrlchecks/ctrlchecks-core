@@ -80,9 +80,10 @@ test('Property 22: runtime_ai resolution uses upstream JSON and workflow intent'
 
         const effectiveModes = buildEffectiveFillModes(inputSchema, {});
 
-        // Effective modes must match the schema defaults when no config override
-        expect(effectiveModes.fieldA).toBe(fillModeDefaults.fieldA);
-        expect(effectiveModes.fieldB).toBe(fillModeDefaults.fieldB);
+        // Schema defaults are generation hints; without _fillMode, editor/execution
+        // ownership is user/manual.
+        expect(effectiveModes.fieldA).toBe('manual_static');
+        expect(effectiveModes.fieldB).toBe('manual_static');
       }
     ),
     { numRuns: 100 }

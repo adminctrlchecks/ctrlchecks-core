@@ -9,6 +9,7 @@ import { GuidedStatusCard } from '@/components/ui/guided-status-card';
 import { mapWorkflowIssueToGuidance, type GuidedStatusContent } from '@/lib/workflow-guidance';
 import { getAIGuidance } from '@/lib/ai-error-guidance';
 import type { DebugNodeError, StructuredDebugError } from '@/stores/debugStore';
+import { extractOutcome, isAttentionOutcome } from '@/lib/executionOutcome';
 
 interface JsonKey {
   path: string;
@@ -186,6 +187,7 @@ export default function OutputPanel({
   const [aiGuidance, setAiGuidance] = useState<GuidedStatusContent | null>(null);
   const [guidanceLoading, setGuidanceLoading] = useState(false);
   const structuredError = isStructuredDebugError(error) ? error : null;
+  const outputOutcome = useMemo(() => extractOutcome(outputData), [outputData]);
   const needsAIGuidance = Boolean(structuredError && shouldFetchAIGuidance(structuredError));
   const staticGuidance = useMemo(
     () => (structuredError ? mapWorkflowIssueToGuidance(structuredError) : null),
@@ -720,6 +722,26 @@ export default function OutputPanel({
           </div>
         </div>
         
+        {isAttentionOutcome(outputOutcome) && (
+          <div className="px-4 py-3 space-y-3 border-b border-border bg-muted/10">
+            <GuidedStatusCard
+              title={
+                outputOutcome!.kind === 'stopped_expected'
+                  ? 'Workflow stopped'
+                  : outputOutcome!.kind === 'needs_connection'
+                    ? 'Connection needed'
+                    : outputOutcome!.kind === 'needs_configuration'
+                      ? 'Configuration needed'
+                      : 'Provider unavailable'
+              }
+              description={outputOutcome!.userMessage}
+              resolution={outputOutcome!.retryable ? 'Retry after the provider is available.' : undefined}
+              nextSteps={outputOutcome!.nextSteps}
+              tone={outputOutcome!.kind === 'needs_connection' ? 'connection' : outputOutcome!.kind === 'needs_configuration' ? 'configuration' : 'attention'}
+            />
+          </div>
+        )}
+
         {structuredError && status === 'error' && (
           <div className="px-4 py-3 space-y-3 border-b border-border bg-muted/10">
             {guidedError ? (

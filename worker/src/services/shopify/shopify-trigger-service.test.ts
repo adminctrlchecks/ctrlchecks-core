@@ -1,6 +1,7 @@
 import { createHmac } from 'crypto';
 import { config } from '../../core/config';
 import { retrieveCredential } from '../../core/utils/credential-retriever';
+import { getDecryptedConnection, markConnectionUsed } from '../canonical-credential-lookup';
 import { getRedisClient } from '../../shared/redis-client';
 import {
   autoRegisterShopifyWebhooksForWorkflow,
@@ -10,6 +11,7 @@ import {
   registerShopifyWebhooks,
   resolveShopifyCredential,
   shouldAcceptShopifyEvent,
+  shopifyTriggerConfigFromNode,
   unregisterShopifyWebhooks,
   validateShopifyHmac,
   validateShopifyWebhookSecret,
@@ -17,6 +19,11 @@ import {
 
 jest.mock('../../core/utils/credential-retriever', () => ({
   retrieveCredential: jest.fn(),
+}));
+
+jest.mock('../canonical-credential-lookup', () => ({
+  getDecryptedConnection: jest.fn(),
+  markConnectionUsed: jest.fn(),
 }));
 
 jest.mock('../../shared/redis-client', () => ({
@@ -73,6 +80,7 @@ describe('shopify-trigger-service', () => {
     delete process.env.SHOPIFY_WEBHOOK_SECRET;
     (global as any).fetch = jest.fn();
     config.publicBaseUrl = 'https://ctrlchecks.example';
+    (markConnectionUsed as jest.Mock).mockResolvedValue(undefined);
   });
 
   it('normalizes shop domains from admin URLs, bare shop names, and myshopify domains', () => {
@@ -177,6 +185,56 @@ describe('shopify-trigger-service', () => {
     });
   });
 
+  it('resolves the explicitly selected Shopify connection by connectionId', async () => {
+    (getDecryptedConnection as jest.Mock).mockResolvedValue({
+      source: 'connections',
+      connection: {
+        id: 'conn-shopify-selected',
+        name: 'Selected Shopify',
+        provider: 'shopify',
+        credentialTypeId: 'shopify_api_key',
+        status: 'active',
+        expiresAt: null,
+        credentials: {
+          storeUrl: 'selected-shop.myshopify.com',
+          adminAccessToken: 'shpat_selected',
+          webhookSigningSecret: 'selected_secret',
+          apiVersion: '2025-10',
+        },
+      },
+    });
+
+    await expect(resolveShopifyCredential('user-1', { connectionId: 'conn-shopify-selected' })).resolves.toMatchObject({
+      shopDomain: 'selected-shop.myshopify.com',
+      adminAccessToken: 'shpat_selected',
+      webhookSecret: 'selected_secret',
+      connectionId: 'conn-shopify-selected',
+    });
+    expect(retrieveCredential).not.toHaveBeenCalled();
+    expect(markConnectionUsed).toHaveBeenCalledWith('user-1', 'conn-shopify-selected', 'connections');
+  });
+
+  it('extracts the selected Shopify connection from editor connectionRefs', () => {
+    expect(shopifyTriggerConfigFromNode({
+      id: 'shopify-node',
+      data: {
+        type: 'shopify_trigger',
+        connectionRefs: {
+          shopify_api_key: 'conn-from-picker',
+        },
+        config: {
+          topics: 'products/create',
+        },
+      },
+    })).toMatchObject({
+      connectionId: 'conn-from-picker',
+      topics: 'products/create',
+      connectionRefs: {
+        shopify_api_key: 'conn-from-picker',
+      },
+    });
+  });
+
   it('falls back to env webhook secret for older Shopify credentials', async () => {
     process.env.SHOPIFY_CLIENT_SECRET = 'env_secret';
     (retrieveCredential as jest.Mock).mockResolvedValue(JSON.stringify({
@@ -245,6 +303,41 @@ describe('shopify-trigger-service', () => {
     })).resolves.toBe(false);
   });
 
+  it('registers valid topics and reports warnings for topics rejected by Shopify', async () => {
+    const fakeRedis = makeFakeRedis();
+    (getRedisClient as jest.Mock).mockResolvedValue(fakeRedis);
+    (retrieveCredential as jest.Mock).mockResolvedValue(JSON.stringify({
+      storeUrl: 'demo.myshopify.com',
+      token: 'shpat_123',
+      clientSecret: 'client_secret',
+    }));
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({ ok: true, text: async () => JSON.stringify({ webhook: { id: 101 } }) })
+      .mockResolvedValueOnce({ ok: false, status: 403, statusText: 'Forbidden', text: async () => JSON.stringify({ errors: 'Missing scope for customers/create' }) });
+
+    const result = await registerShopifyWebhooks({
+      userId: 'user-1',
+      workflowId: 'wf1',
+      nodeId: 'shopify-node',
+      triggerConfig: { topics: 'orders/paid, customers/create' },
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      webhookIds: ['101'],
+      topics: ['orders/paid'],
+      warnings: [expect.stringContaining('customers/create')],
+    });
+    const rawBody = Buffer.from(JSON.stringify(orderPayload));
+    await expect(validateShopifyWebhookSecret({
+      workflowId: 'wf1',
+      nodeId: 'shopify-node',
+      rawBody,
+      hmacHeader: shopifyHmac(rawBody, 'client_secret'),
+      topic: 'customers/create',
+    })).resolves.toBe(false);
+  });
+
   it('auto-registers active Shopify trigger nodes', async () => {
     const fakeRedis = makeFakeRedis();
     (getRedisClient as jest.Mock).mockResolvedValue(fakeRedis);
@@ -272,6 +365,62 @@ describe('shopify-trigger-service', () => {
     expect(result).toEqual([
       expect.objectContaining({ nodeId: 'shopify-node', success: true, webhookIds: ['101'], topics: ['orders/paid'] }),
     ]);
+  });
+
+  it('auto-registers active Shopify trigger nodes using data.connectionRefs', async () => {
+    const fakeRedis = makeFakeRedis();
+    (getRedisClient as jest.Mock).mockResolvedValue(fakeRedis);
+    (getDecryptedConnection as jest.Mock).mockResolvedValue({
+      source: 'connections',
+      connection: {
+        id: 'conn-shopify-selected',
+        name: 'Selected Shopify',
+        provider: 'shopify',
+        credentialTypeId: 'shopify_api_key',
+        status: 'active',
+        expiresAt: null,
+        credentials: {
+          storeUrl: 'selected-shop.myshopify.com',
+          token: 'shpat_selected',
+          clientSecret: 'selected_secret',
+        },
+      },
+    });
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      text: async () => JSON.stringify({ webhook: { id: 101 } }),
+    });
+
+    const result = await autoRegisterShopifyWebhooksForWorkflow({
+      userId: 'user-1',
+      workflow: {
+        id: 'wf1',
+        status: 'active',
+        nodes: [
+          {
+            id: 'shopify-node',
+            type: 'custom',
+            data: {
+              type: 'shopify_trigger',
+              connectionRefs: { shopify_api_key: 'conn-shopify-selected' },
+              config: { topics: 'products/create' },
+            },
+          },
+        ],
+      },
+    });
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        nodeId: 'shopify-node',
+        success: true,
+        shopDomain: 'selected-shop.myshopify.com',
+        webhookIds: ['101'],
+        topics: ['products/create'],
+      }),
+    ]);
+    expect(getDecryptedConnection).toHaveBeenCalledWith('user-1', 'conn-shopify-selected');
+    expect(retrieveCredential).not.toHaveBeenCalled();
   });
 
   it('unregisters Shopify webhooks and clears local state', async () => {

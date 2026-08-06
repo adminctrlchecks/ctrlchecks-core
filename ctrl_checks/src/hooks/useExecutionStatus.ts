@@ -3,11 +3,12 @@ import { awsClient } from '@/integrations/aws/client';
 import { useWorkflowStore } from '@/stores/workflowStore';
 import { useExecutionWebSocket } from './useExecutionWebSocket';
 import { ENDPOINTS } from '@/config/endpoints';
+import { extractOutcome } from '@/lib/executionOutcome';
 
 const POLL_INTERVAL_MS = 3000;
 
 function isTerminal(status: string): boolean {
-  return status === 'success' || status === 'failed' || status === 'completed' || status === 'error';
+  return ['success', 'failed', 'completed', 'error', 'stopped_expected', 'needs_connection', 'needs_configuration', 'provider_unavailable'].includes(status);
 }
 
 export function useExecutionStatus() {
@@ -47,6 +48,7 @@ export function useExecutionStatus() {
         progress: body.progress ?? 0,
         currentStep: body.current_step ?? null,
         errorMessage: body.error ?? null,
+        outcome: body.outcome ?? extractOutcome(body.output),
       });
       if (isTerminal(body.status)) {
         stopPolling();
@@ -66,6 +68,7 @@ export function useExecutionStatus() {
           progress: typeof data.progress === 'number' ? data.progress : undefined,
           currentStep: typeof data.currentStep === 'string' ? data.currentStep : null,
           errorMessage: typeof data.error === 'string' ? data.error : null,
+          outcome: data.outcome && typeof data.outcome === 'object' ? data.outcome as any : extractOutcome(data.output),
         });
         if (isTerminal(status)) {
           stopPolling();

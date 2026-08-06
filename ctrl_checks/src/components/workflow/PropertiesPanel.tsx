@@ -2632,8 +2632,6 @@ export default function PropertiesPanel({
                             // ── Per-field on/off toggle ──────────────────────────────────────────
                             const nodeConfig = (selectedNode.data.config || {}) as Record<string, unknown>;
                             const fieldEnabledMap = (nodeConfig._fieldEnabled as Record<string, boolean> | undefined) ?? {};
-                            const fillModeMap = (nodeConfig._fillMode as Record<string, string> | undefined) ?? {};
-
                             // A field is auto-enabled when AI already gave it a non-empty value
                             const rawFieldValue = nodeConfig[field.key];
                             const hasAiValue =
@@ -2650,13 +2648,11 @@ export default function PropertiesPanel({
                               );
 
                             // Explicit user toggle takes precedence; fall back to auto-enable when AI filled.
-                            // Force-open when runtime_ai so the ownership toggle is always reachable.
+                            // Runtime AI is a fill mode, not an instruction to force optional fields on.
                             const fieldEnabled: boolean =
-                              currentFillMode === 'runtime_ai'
-                                ? true
-                                : fieldEnabledMap[field.key] !== undefined
-                                  ? fieldEnabledMap[field.key]
-                                  : hasAiValue;
+                              fieldEnabledMap[field.key] !== undefined
+                                ? fieldEnabledMap[field.key]
+                                : hasAiValue;
 
                             return (
                               <div key={field.key} className="min-w-0 max-w-full overflow-hidden rounded-md border border-border/40 bg-muted/10">

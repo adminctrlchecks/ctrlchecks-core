@@ -45,6 +45,11 @@ import {
   validateCanonicalIfElseConditions,
 } from '../core/utils/if-else-conditions';
 import { EXECUTION_OBSERVABILITY_KEYS } from '../core/execution/dynamic-node-executor';
+import {
+  classifyExecutionOutcome,
+  isNonFailureOutcome,
+  type ExecutionOutcome,
+} from '../core/execution/execution-outcome';
 import { circuitBreakerManager } from '../services/workflow-executor/distributed/reliability/circuit-breaker';
 import { getProviderCircuitKeyFromNodeType } from '../core/reliability/provider-circuit-key';
 import { decryptToken } from '../core/utils/token-encryption';
@@ -220,12 +225,14 @@ interface WorkflowEdge {
 interface ExecutionLog {
   nodeId: string;
   nodeName: string;
-  status: 'running' | 'success' | 'failed' | 'skipped';
+  nodeType?: string;
+  status: 'running' | 'success' | 'failed' | 'skipped' | 'stopped';
   startedAt: string;
   finishedAt?: string;
   input?: unknown;
   output?: unknown;
   error?: string;
+  outcome?: ExecutionOutcome;
   resolvedInputs?: Record<string, unknown>;
   resolvedInputSources?: Record<string, string>;
   runtimeInputAudit?: unknown;
@@ -19945,6 +19952,7 @@ export default async function executeWorkflowHandler(req: Request, res: Response
     // ✅ FIX: Use executionInput (which may contain form submission data when resuming)
     let finalOutput: unknown = executionInput;
     let hasError = false;
+    let terminalOutcome: ExecutionOutcome | null = null;
     let errorMessage = '';
 
     // Wire real-time WebSocket visualization (fire-and-forget; never blocks execution)
@@ -19973,6 +19981,7 @@ export default async function executeWorkflowHandler(req: Request, res: Response
       const log: ExecutionLog = {
         nodeId: node.id,
         nodeName: node.data?.label || node.id,
+        nodeType,
         status: 'running',
         startedAt: new Date().toISOString(),
       };
@@ -21003,41 +21012,84 @@ export default async function executeWorkflowHandler(req: Request, res: Response
             const outputObj = output as Record<string, unknown>;
             if (typeof outputObj._error === 'string' && outputObj._error.length > 0) {
               const softErrorMsg = outputObj._error;
-              logger.error(
-                `[ExecuteWorkflow] ❌ Node returned soft error: ${node.data.label} (${nodeType}): ${softErrorMsg}`
-              );
+              const outcome = classifyExecutionOutcome({
+                nodeId: node.id,
+                nodeType,
+                nodeName: node.data?.label || node.id,
+                config: node.data?.config || {},
+                input: nodeInput,
+                output,
+              });
+              const isExpectedStop = isNonFailureOutcome(outcome);
+              terminalOutcome = outcome;
+              if (isExpectedStop) {
+                logger.warn(
+                  `[ExecuteWorkflow] Stopped cleanly: ${node.data.label} (${nodeType}): ${softErrorMsg}`,
+                  { outcome }
+                );
+              } else {
+                logger.error(
+                  `[ExecuteWorkflow] Node failed: ${node.data.label} (${nodeType}): ${softErrorMsg}`,
+                  { outcome }
+                );
+              }
 
-              // 1. Add to skippedNodeIds → shouldSkipNode will recursively skip downstream
+              // 1. Add to skippedNodeIds -> shouldSkipNode will recursively skip downstream.
               skippedNodeIds.add(node.id);
 
-              // 2. Mark overall workflow as failed
-              hasError = true;
-              errorMessage = `Node "${node.data.label}" failed: ${softErrorMsg}`;
+              // 2. Only true CtrlChecks/system errors become platform failures.
+              hasError = !isExpectedStop;
+              errorMessage = isExpectedStop
+                ? outcome.userMessage
+                : `Node "${node.data.label}" failed: ${softErrorMsg}`;
+              finalOutput = {
+                outcome,
+                stoppedAtNodeId: node.id,
+                stoppedAtNodeName: node.data?.label || node.id,
+                stoppedAtNodeType: nodeType,
+                output,
+              };
 
-              // 3. Persist step as 'error'
+              // 3. Persist step status. Keep expected stops out of the error bucket while
+              // preserving technical output_json for logs/debugging.
               try {
                 await db
                   .from('execution_steps')
-                  .update({ status: 'error', last_error: softErrorMsg })
+                  .update({
+                    status: isExpectedStop ? 'completed' : 'error',
+                    last_error: isExpectedStop ? null : softErrorMsg,
+                    output_json: finalOutput,
+                  })
                   .eq('execution_id', executionId)
                   .eq('node_id', node.id);
               } catch (_e) { /* best-effort */ }
 
               // 4. Log and push
-              log.output = output;
-              log.status = 'failed';
+              log.output = finalOutput;
+              log.status = isExpectedStop ? 'stopped' : 'failed';
               log.error = softErrorMsg;
+              log.outcome = outcome;
               log.finishedAt = new Date().toISOString();
               logs.push(log);
-              try { wsStateManager.updateNodeState(executionId, node.id, node.data?.label || node.id, 'error', { error: softErrorMsg, output }); } catch (_e) { /* non-fatal */ }
+              try {
+                wsStateManager.updateNodeState(
+                  executionId,
+                  node.id,
+                  node.data?.label || node.id,
+                  isExpectedStop ? 'skipped' : 'error',
+                  { error: softErrorMsg, output: finalOutput, outcome }
+                );
+              } catch (_e) { /* non-fatal */ }
 
-              await logExecutionEvent(db, executionId, workflowId, 'NODE_FAILED', {
+              await logExecutionEvent(db, executionId, workflowId, isExpectedStop ? 'NODE_SKIPPED' : 'NODE_FAILED', {
                 nodeId: node.id,
                 nodeName: node.data.label,
                 nodeType,
                 sequence: i + 1,
                 error: softErrorMsg,
                 softError: true,
+                stoppedExpected: isExpectedStop,
+                outcome,
               }, node.id, node.data.label, i + 1);
 
               // 5. Update incremental logs for real-time frontend progress
@@ -21358,13 +21410,14 @@ export default async function executeWorkflowHandler(req: Request, res: Response
         durationMs,
         nodesExecuted: logs.length,
         success: true,
+        ...(terminalOutcome ? { outcome: terminalOutcome } : {}),
       });
       recordAuditEvent({
         actorUserId: currentUserId || authenticatedUserId,
         action: 'workflow.execution.finished',
         resourceType: 'workflow',
         resourceId: workflowId,
-        metadata: { executionId, durationMs, nodesExecuted: logs.length },
+        metadata: { executionId, durationMs, nodesExecuted: logs.length, ...(terminalOutcome ? { outcome: terminalOutcome, stoppedExpected: true } : {}) },
       });
     }
 
@@ -21485,16 +21538,18 @@ export default async function executeWorkflowHandler(req: Request, res: Response
         executionId,
         logs,
         output: finalOutput,
+        outcome: terminalOutcome,
       });
     }
 
     return res.json({
-      status: 'success',
+      status: terminalOutcome ? terminalOutcome.kind : 'success',
       success: true,
       executionId,
       output: finalOutput,
       logs,
       durationMs,
+      outcome: terminalOutcome,
     });
   } catch (error) {
     const errorObj = error instanceof Error ? error : new Error(String(error));

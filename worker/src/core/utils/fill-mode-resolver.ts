@@ -10,23 +10,14 @@ export function resolveEffectiveFieldFillMode(
   inputSchema?: NodeInputSchema,
   config?: Record<string, any>
 ): FieldFillMode {
-  let candidate: FieldFillMode = 'manual_static';
   const explicitMode = config?._fillMode?.[fieldName];
+  let candidate: FieldFillMode = 'manual_static';
   if (
     explicitMode === 'manual_static' ||
     explicitMode === 'runtime_ai' ||
     explicitMode === 'buildtime_ai_once'
   ) {
     candidate = explicitMode;
-  } else {
-    const schemaDefault = inputSchema?.[fieldName]?.fillMode?.default;
-    if (
-      schemaDefault === 'manual_static' ||
-      schemaDefault === 'runtime_ai' ||
-      schemaDefault === 'buildtime_ai_once'
-    ) {
-      candidate = schemaDefault;
-    }
   }
 
   const hasExplicitUserChoice =
@@ -49,6 +40,8 @@ export function resolveEffectiveFieldFillMode(
     return coerceFieldFillModeByPolicy(fieldName, candidate, inputSchema, config).mode;
   }
 
+  // Schema fillMode defaults are generation hints. Execution/editor behavior
+  // should only treat a field as AI-owned when `_fillMode[fieldName]` is saved.
   return coerceFieldFillModeByPolicy(fieldName, candidate, inputSchema, config).mode;
 }
 
@@ -101,15 +94,17 @@ export function coerceFieldFillModeByPolicy(
   }
 
   if (requestedMode === 'runtime_ai' && fillMeta.supportsRuntimeAI === false) {
+    const fallback = fillMeta.default ?? 'manual_static';
     return {
-      mode: fillMeta.default === 'runtime_ai' ? 'manual_static' : fillMeta.default,
+      mode: fallback === 'runtime_ai' ? 'manual_static' : fallback,
       coerced: true,
       reason: 'runtime_not_supported',
     };
   }
   if (requestedMode === 'buildtime_ai_once' && fillMeta.supportsBuildtimeAI === false) {
+    const fallback = fillMeta.default ?? 'manual_static';
     return {
-      mode: fillMeta.default === 'buildtime_ai_once' ? 'manual_static' : fillMeta.default,
+      mode: fallback === 'buildtime_ai_once' ? 'manual_static' : fallback,
       coerced: true,
       reason: 'buildtime_not_supported',
     };

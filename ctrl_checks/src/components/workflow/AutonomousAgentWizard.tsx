@@ -1605,11 +1605,9 @@ export function AutonomousAgentWizard() {
                 }
             }
             // Intent-aware pre-selection: for fields not yet in _fillMode, infer the
-            // correct button from the question metadata set by the backend generator.
-            // - aiFilledAtBuildTime=true  → AI already generated a value → pre-select buildtime_ai_once
-            // - aiUsesRuntime=true        → value intentionally empty, resolved at run time → pre-select runtime_ai
-            //                               (coerced to buildtime_ai_once when supportsRuntimeAI===false)
-            // - otherwise                 → user must provide → pre-select manual_static (schema default)
+            // button only from actual generated ownership metadata.
+            // Schema fillMode defaults are capabilities/recommendations; they should
+            // not turn untouched optional fields into AI Runtime selections.
             for (const q of allQuestions) {
                 const nodeId = (q as any)?.nodeId;
                 const fieldName = (q as any)?.fieldName;
@@ -1618,7 +1616,6 @@ export function AutonomousAgentWizard() {
                 if (next[key] !== undefined) continue; // already set by _fillMode or user
                 const aiFilledAtBuildTime = (q as any)?.aiFilledAtBuildTime;
                 const aiUsesRuntime = (q as any)?.aiUsesRuntime;
-                const fillModeDefault = (q as any)?.fillModeDefault as string | undefined;
                 const supportsRuntime = (q as any)?.supportsRuntimeAI !== false;
                 if (aiFilledAtBuildTime) {
                     next[key] = 'buildtime_ai_once';
@@ -1626,13 +1623,6 @@ export function AutonomousAgentWizard() {
                 } else if (aiUsesRuntime) {
                     // Layer B: respect registry policy — if runtime_ai is not supported, use buildtime.
                     next[key] = supportsRuntime ? 'runtime_ai' : 'buildtime_ai_once';
-                    changed = true;
-                } else if (fillModeDefault === 'buildtime_ai_once') {
-                    next[key] = 'buildtime_ai_once';
-                    changed = true;
-                } else if (fillModeDefault === 'runtime_ai' && supportsRuntime) {
-                    // Only honour runtime_ai schema default when the registry actually allows it.
-                    next[key] = 'runtime_ai';
                     changed = true;
                 }
                 // manual_static fields: leave undefined so the UI shows "You" as default

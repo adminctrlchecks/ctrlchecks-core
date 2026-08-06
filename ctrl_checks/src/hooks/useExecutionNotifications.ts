@@ -6,6 +6,7 @@ import {
   type ExecutionResult,
   type NotificationConfig,
 } from '../lib/executionNotifications';
+import { extractOutcome, outcomeLabel } from '../lib/executionOutcome';
 
 // ---------------------------------------------------------------------------
 // Callbacks interface
@@ -47,6 +48,11 @@ export function useExecutionNotifications(
 
     const classification = classifyExecutionResult(result);
     const safeLogs = result.logs ?? [];
+    const outcome =
+      result.outcome ||
+      extractOutcome(result.output) ||
+      safeLogs.map((log) => log.outcome || extractOutcome(log)).find(Boolean) ||
+      null;
 
     /** Returns a stable ID for a given cache key, generating one on first call. */
     const stableId = (cacheKey: string): string => {
@@ -185,6 +191,46 @@ export function useExecutionNotifications(
               callbacks.onDismiss(id);
             },
           },
+        ],
+      };
+      return [config];
+    }
+
+    if (
+      classification === 'stopped_expected' ||
+      classification === 'needs_connection' ||
+      classification === 'needs_configuration' ||
+      classification === 'provider_unavailable'
+    ) {
+      const id = stableId(`${result.id}-${classification}-0`);
+      const firstOutcomeLog = safeLogs.find((l) => l.outcome || extractOutcome(l));
+      const nodeId = firstOutcomeLog?.nodeId;
+      const title = outcome ? outcomeLabel(outcome) : 'Execution needs attention';
+      const config: NotificationConfig = {
+        id,
+        classification,
+        severity: 'warning',
+        renderMode: 'banner',
+        title,
+        message: outcome?.userMessage || 'The workflow stopped before downstream steps ran.',
+        resolution: outcome?.nextSteps?.join(' ') || 'Open the logs and review the suggested next step.',
+        actions: [
+          {
+            label: 'View Logs',
+            onClick: () => {
+              callbacks.onViewLogs(nodeId);
+              callbacks.onDismiss(id);
+            },
+          },
+          ...(classification === 'provider_unavailable'
+            ? [{
+                label: 'Refresh',
+                onClick: () => {
+                  callbacks.onRefresh();
+                  callbacks.onDismiss(id);
+                },
+              }]
+            : []),
         ],
       };
       return [config];
