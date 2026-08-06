@@ -2,7 +2,7 @@
   "id": "ca1c8a37-6786-4dce-a785-a3288283e794",
   "name": "Client Priority Ranker",
   "description": "With limited account-management time, this workflow runs every week, reviews every client’s history of delays and issues, estimates who is likely to need help, and sends your team a ranked list so attention goes to the accounts that need it most.",
-  "category": "Business Verification & Compliance",
+  "category": "Sales, Support & Internal Operations",
   "nodes": [
     {
       "id": "schedule_weekly_rank",

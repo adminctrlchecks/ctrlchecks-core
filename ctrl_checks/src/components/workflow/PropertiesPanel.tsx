@@ -121,6 +121,7 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
 interface PropertiesPanelProps {
   onClose?: () => void;
   debugMode?: boolean;
+  isTemplateMode?: boolean;
   debugInputData?: unknown;
   debugError?: DebugNodeError;
   lastResolvedInputs?: Record<
@@ -328,6 +329,7 @@ function buildDebugValidationErrors(
 export default function PropertiesPanel({
   onClose,
   debugMode = false,
+  isTemplateMode = false,
   debugInputData,
   debugError,
   lastResolvedInputs = {},
@@ -399,6 +401,12 @@ export default function PropertiesPanel({
 
   // View mode state - default to properties
   const [viewMode, setViewMode] = useState<ViewMode>('properties');
+
+  useEffect(() => {
+    if (isTemplateMode && viewMode !== 'properties') {
+      setViewMode('properties');
+    }
+  }, [isTemplateMode, viewMode]);
 
   // Test Node state (Type 1 nodes only)
   const [testNodeState, setTestNodeState] = useState<'idle' | 'running' | 'passed' | 'failed'>('idle');
@@ -1212,19 +1220,21 @@ export default function PropertiesPanel({
               >
                 Properties
               </ToggleGroupItem>
-              <ToggleGroupItem
-                value="ai-editor"
-                aria-label="AI Editor"
-                className={cn(
-                  "h-7 px-3 text-xs font-medium border-0",
-                  "data-[state=on]:bg-muted/60 data-[state=on]:text-foreground",
-                  "data-[state=off]:text-muted-foreground/70",
-                  "hover:bg-muted/40 transition-colors duration-150",
-                  "rounded-sm"
-                )}
-              >
-                AI Editor
-              </ToggleGroupItem>
+              {!isTemplateMode && (
+                <ToggleGroupItem
+                  value="ai-editor"
+                  aria-label="AI Editor"
+                  className={cn(
+                    "h-7 px-3 text-xs font-medium border-0",
+                    "data-[state=on]:bg-muted/60 data-[state=on]:text-foreground",
+                    "data-[state=off]:text-muted-foreground/70",
+                    "hover:bg-muted/40 transition-colors duration-150",
+                    "rounded-sm"
+                  )}
+                >
+                  AI Editor
+                </ToggleGroupItem>
+              )}
             </ToggleGroup>
             {onClose && (
               <button
@@ -1254,10 +1264,12 @@ export default function PropertiesPanel({
             </div>
           </div>
         )}
-        <AIEditorPanel
-          isActive={viewMode === 'ai-editor'}
-          className={cn(viewMode !== 'ai-editor' && 'hidden')}
-        />
+        {!isTemplateMode && (
+          <AIEditorPanel
+            isActive={viewMode === 'ai-editor'}
+            className={cn(viewMode !== 'ai-editor' && 'hidden')}
+          />
+        )}
       </div>
     );
   }
@@ -1334,6 +1346,9 @@ export default function PropertiesPanel({
   });
 
   const nodeUsageGuide = getUsageGuideForType(lookupNodeType);
+  const templateNotes = selectedNode.data.notes && typeof selectedNode.data.notes === 'object'
+    ? selectedNode.data.notes as Record<string, unknown>
+    : null;
 
   // Get operation-specific helpText for Instagram node
   const getInstagramOperationHelpText = (operation: string): string => {
@@ -1958,23 +1973,25 @@ export default function PropertiesPanel({
           >
             Properties
           </ToggleGroupItem>
-          <ToggleGroupItem
-            value="ai-editor"
-            aria-label="AI Editor"
-            className={cn(
-              "h-7 min-w-0 shrink truncate px-3 text-xs font-medium border-0",
-              "data-[state=on]:bg-muted/60 data-[state=on]:text-foreground",
-              "data-[state=off]:text-muted-foreground/70",
-              "hover:bg-muted/40 transition-colors duration-150",
-              "rounded-sm"
-            )}
-          >
-            AI Editor
-          </ToggleGroupItem>
+          {!isTemplateMode && (
+            <ToggleGroupItem
+              value="ai-editor"
+              aria-label="AI Editor"
+              className={cn(
+                "h-7 min-w-0 shrink truncate px-3 text-xs font-medium border-0",
+                "data-[state=on]:bg-muted/60 data-[state=on]:text-foreground",
+                "data-[state=off]:text-muted-foreground/70",
+                "hover:bg-muted/40 transition-colors duration-150",
+                "rounded-sm"
+              )}
+            >
+              AI Editor
+            </ToggleGroupItem>
+          )}
         </ToggleGroup>
         <div className="flex min-w-0 shrink-0 items-center gap-1.5 overflow-hidden">
           {/* Test Node button — visible only for Type 1 nodes that have fixtures */}
-          {viewMode === 'properties' && !(backendSchema?.credentialSchema && Object.keys(backendSchema.credentialSchema).length > 0) && (
+          {viewMode === 'properties' && !isTemplateMode && !(backendSchema?.credentialSchema && Object.keys(backendSchema.credentialSchema).length > 0) && (
             <button
               onClick={handleTestNode}
               disabled={testNodeState === 'running'}
@@ -2094,13 +2111,21 @@ export default function PropertiesPanel({
                   <Label className="text-xs font-medium text-muted-foreground/70">Description</Label>
                   <p className="text-xs text-muted-foreground/70 mt-1 leading-relaxed break-words">{nodeDescription}</p>
                 </div>
+                {templateNotes?.why && (
+                  <div className="min-w-0 max-w-full overflow-hidden rounded-sm border border-border/50 bg-muted/20 p-3">
+                    <Label className="text-xs font-medium text-muted-foreground/70">Why this node is here</Label>
+                    <p className="mt-1 text-xs leading-relaxed text-foreground/80 break-words">
+                      {String(templateNotes.why)}
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Config Fields */}
               {nodeDefinition && (
                 <>
                   {/* Form Settings for Form Nodes - Show prominently at the top */}
-                  {selectedNode.data.type === 'form' && (
+                  {selectedNode.data.type === 'form' && !isTemplateMode && (
                     <div className="min-w-0 max-w-full space-y-4 overflow-hidden">
                       <h3 className="text-xs font-medium uppercase text-muted-foreground/70 tracking-wide">
                         Form Settings
@@ -2199,7 +2224,7 @@ export default function PropertiesPanel({
                   )}
 
                   {/* Chat URL Display - Show when chat trigger node is selected */}
-                  {selectedNode.data.type === 'chat_trigger' && (
+                  {selectedNode.data.type === 'chat_trigger' && !isTemplateMode && (
                     <div className="min-w-0 max-w-full space-y-4 overflow-hidden">
                       <h3 className="text-xs font-medium uppercase text-muted-foreground/70 tracking-wide">
                         Chat Settings
@@ -2331,6 +2356,8 @@ export default function PropertiesPanel({
                               });
                               
                               // Save to workflows table and start scheduler (if workflow is saved)
+                              if (isTemplateMode) return;
+
                               if (!workflowId || workflowId === 'new') {
                                 toast({
                                   title: 'Save workflow first',
@@ -2430,7 +2457,7 @@ export default function PropertiesPanel({
                                   const raw = parseInt(e.target.value, 10);
                                   const value = Number.isFinite(raw) && raw > 0 ? raw : 1;
                                   const unit = (selectedNode.data.config?.unit as string) || 'minutes';
-                                  await activateIntervalTrigger(value, unit);
+                                  if (!isTemplateMode) await activateIntervalTrigger(value, unit);
                                 }}
                               />
                             </div>
@@ -2441,7 +2468,7 @@ export default function PropertiesPanel({
                                 onValueChange={async (unit) => {
                                   const value = (selectedNode.data.config?.interval as number) ?? 5;
                                   updateNodeConfig(selectedNode.id, { interval: value, unit });
-                                  await activateIntervalTrigger(value, unit);
+                                  if (!isTemplateMode) await activateIntervalTrigger(value, unit);
                                 }}
                               >
                                 <SelectTrigger className="min-w-0">
@@ -2455,12 +2482,14 @@ export default function PropertiesPanel({
                             </div>
                           </div>
                           <p className="text-xs text-muted-foreground break-words">
-                            {!workflowId || workflowId === 'new'
+                            {isTemplateMode
+                              ? 'Template schedules are configured here; activation happens after a user copies and saves the workflow.'
+                              : !workflowId || workflowId === 'new'
                               ? 'Save the workflow first — the interval will activate automatically after saving.'
                               : 'Runs automatically at this interval once the workflow is active.'}
                           </p>
                         </div>
-                      ) : selectedNode.data.type === 'schedulewise' ? (
+                      ) : selectedNode.data.type === 'schedulewise' && !isTemplateMode ? (
                         <div className="min-w-0 max-w-full space-y-4 overflow-hidden">
                           <h3 className="text-xs font-medium uppercase text-muted-foreground/70 tracking-wide">
                             Configuration

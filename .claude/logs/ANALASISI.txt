@@ -1,111 +1,422 @@
-  Intent Context
-Workflow intent is locked in. Continue with ownership and configuration.
+Workflow Templates
+Browse pre-built workflow templates. Copy any template to start customizing.
 
-Original prompt: get data from google sheets
+Search templates...
+Filter by connections — e.g. airtable, whatsapp
+Separate services with commas. Shows only templates you could run with those connections — anything needing something extra is hidden.
 
-get data from google sheets
+21 templates
 
-Edit intent
-Restart
-Field Ownership Required
-Two areas: workflow structure (forms, logic), then secrets and fill mode. Locked rows use OAuth, vault, or AI-filled values?finish accounts on the Credentials step.
+Business Verification & Compliance
+Advanced
+12 min
+Document Vault — Smart Search
+Ask for any stored client document in plain English over chat and get the file link back. Reads the tagged vault built by "Document Vault — Intake & Auto-Tagging".
 
-Walk me through all fields
-Workflow structure
-Forms, conditions, and branching. Choose You for static values, AI (build) for one-time generation at build, or AI (runtime) when the field supports it.
+ai-agent
+document-management
+search
++2
+Needs 2 connections
 
-Manual Trigger
+airtable logo
+Airtable
+whatsapp logo
+WhatsApp
+0 uses
+Use Template
+Business Verification & Compliance
+Intermediate
+24 min
+Business Details Matcher
+Catches the silent rejection cause: a business name or address that's written slightly differently on the website vs. the GST filing vs. the bank account. Checks every client every 15 minutes, cross-references every version of the business identity, and emails a match/mismatch report. (No instant Airtable-update trigger exists yet, so this polls every 15 minutes and checks one client per run, marking each as checked so it is never re-reported.)
 
-manual_trigger
+verification
+compliance
+ai
++2
+Needs 3 connections
 
-What does this node do?
-What inputData should "Manual Trigger" use?
+airtable logo
+Airtable
+openai logo
+OpenAI
+google logo
+Google
+0 uses
+Use Template
+Business Verification & Compliance
+Beginner
+15 min
+License Renewal Reminder
+Licenses and registrations expire quietly — this workflow checks your stored expiry dates every day and sends escalating WhatsApp and email reminders at the 90, 30, and 7-day marks, so nothing lapses without warning.
 
-AI prefilled
-Manual Trigger?inputData
+compliance
+reminders
+whatsapp
++2
+Needs 3 connections
 
-What does this input field do?
+airtable logo
+Airtable
+whatsapp logo
+WhatsApp
+google logo
+Google
+0 uses
+Use Template
+Business Verification & Compliance
+Beginner
+18 min
+Missing Document Finder
+Stop chasing clients for 'one more document.' Upload whatever paperwork a client has sent so far, in any order, and this workflow figures out exactly which required documents are still missing and messages the client a specific checklist on WhatsApp.
 
-Owner: AI Build
+verification
+onboarding
+documents
++3
+Needs 3 connections
 
-Change ownership
-Current value in workflow (edit on Configuration step)
+airtable logo
+Airtable
+openai logo
+OpenAI
+whatsapp logo
+WhatsApp
+0 uses
+Use Template
+Business Verification & Compliance
+Advanced
+21 min
+Smart Alert Co-Pilot
+Move from 'checking on a schedule' to 'getting told the moment something's wrong.' An AI judgment layer watches your client records, pulls related context before deciding, and sends a targeted alert to the right person only when a change is actually worth interrupting someone for. (No instant Airtable-update trigger exists yet, so this polls every 10 minutes instead of firing immediately.)
 
-{
-  "spreadsheetId": "1BxiMVs0XRA5nFMdKvBdBipkAIAOk1EAM3KC61u73O0U",
-  "sheetName": "Sheet1",
-  "range": "A1:D100"
-}
-Google Sheets
+ai-agent
+alerts
+monitoring
++3
+Needs 2 connections
 
-google_sheets
+airtable logo
+Airtable
+whatsapp logo
+WhatsApp
+0 uses
+Use Template
+Business Verification & Compliance
+Intermediate
+21 min
+Submission Package Builder
+Once a client's readiness score clears the bar, this workflow automatically gathers the homepage/policy screenshots, live policy text, and already-uploaded documents a verification submission needs, and emails you all the pieces. Simplification: since this platform has no PDF-merge node, the pieces are delivered as individual links rather than one combined PDF.
 
-What does this node do?
-What Google Sheets operation should "Google Sheets" perform?
+verification
+compliance
+google-drive
++2
+Needs 2 connections
 
-AI prefilled
-Google Sheets?operation
+airtable logo
+Airtable
+google logo
+Google
+1 uses
+Use Template
+Business Verification & Compliance
+Beginner
+27 min
+Verification Readiness Checker
+Know whether your business will pass Meta or Google verification before you apply. This workflow scores your website and documents against the checks verifiers actually run — privacy policy, terms, matching business details — then emails and WhatsApps you a fix list so you can pass on the first try.
 
-What does this input field do?
+verification
+compliance
+ai
++3
+Needs 4 connections
 
-Owner: AI Build
+airtable logo
+Airtable
+openai logo
+OpenAI
+google logo
+Google
+whatsapp logo
+WhatsApp
+0 uses
+Use Template
+Business Verification & Compliance
+Beginner
+15 min
+FAQ Answering Assistant
+Let clients ask their own questions instead of pinging your team every time. This chat assistant answers strictly from your own FAQ records and automatically hands the question to a human in Slack whenever it isn't confident in the answer.
 
-Change ownership
-Current value in workflow (edit on Configuration step)
+support
+ai
+chatbot
++3
+Needs 4 connections
 
-read
-What is the Google Sheets spreadsheet ID?
+airtable logo
+Airtable
+openai logo
+OpenAI
+whatsapp logo
+WhatsApp
+slack logo
+Slack
+1 uses
+Use Template
+Business Verification & Compliance
+Intermediate
+21 min
+New Client Risk Checker
+Judge new business signups on real signals instead of gut feeling. This workflow checks domain age, runs an AI risk read, scores the result, and alerts your compliance team in Slack the moment a new client crosses your risk threshold.
 
-Google Sheets?spreadsheetId
+risk
+fraud-prevention
+ai
++3
+Needs 3 connections
 
-What does this input field do?
+openai logo
+OpenAI
+airtable logo
+Airtable
+slack logo
+Slack
+2 uses
+Use Template
+Business Verification & Compliance
+Beginner
+15 min
+Overdue Task Tracker
+Requests shouldn't sit untouched until a client complains. This workflow checks open items every hour, flags anything past its expected turnaround, alerts the responsible person, and escalates to their manager once it's gone very overdue.
 
-If off, this step will still need spreadsheet id before the workflow can run.
+sla
+slack
+operations
++2
+Needs 2 connections
 
-What is the sheet name (tab)?
+airtable logo
+Airtable
+slack logo
+Slack
+1 uses
+Use Template
+Business Verification & Compliance
+Intermediate
+15 min
+Client Priority Ranker
+With limited account-management time, this workflow runs every week, reviews every client’s history of delays and issues, estimates who is likely to need help, and sends your team a ranked list so attention goes to the accounts that need it most.
 
-Google Sheets?sheetName
+account-management
+ai
+slack
++2
+Needs 3 connections
 
-What does this input field do?
+airtable logo
+Airtable
+openai logo
+OpenAI
+slack logo
+Slack
+3 uses
+Use Template
+Business Verification & Compliance
+Advanced
+24 min
+Verification Co-Pilot Chat
+Answer 'what's the status of X?' without anyone manually digging through records. Ask in plain English over WhatsApp or Slack and an AI co-pilot pulls the live client record — and optionally a platform status API — to give a grounded, current answer, with no app-switching required.
 
-If off, this sheet name input is not included in setup. If empty, this optional sheet name setting is skipped unless this workflow specifically needs it.
+ai-agent
+chatbot
+whatsapp
++2
+Needs 2 connections
 
-What is the cell range (e.g., A1:D100)?
+airtable logo
+Airtable
+whatsapp logo
+WhatsApp
+1 uses
+Use Template
+Business Verification & Compliance
+Advanced
+12 min
+Document Vault — Intake & Auto-Tagging
+Client documents scattered across email, WhatsApp and Drive make "find that PAN card from March" take forever. This workflow tags every document the moment it arrives through a simple upload form, so it can be found later. Pairs with "Document Vault — Smart Search". (No native Drive file-watch trigger exists yet, so intake happens via the upload form rather than a watched folder.)
 
-Google Sheets?range
+document-management
+airtable
+ai
++2
+Needs 1 connection
 
-What does this input field do?
+airtable logo
+Airtable
+1 uses
+Use Template
+Business Verification & Compliance
+Beginner
+12 min
+Live Status Lookup Bot
+The simplest way to check where a client stands without opening Airtable or asking someone else to look it up. Type a client name or order number in chat and get back a clean, formatted status straight from the live record.
 
-If off, this range input is not included in setup. If empty, this optional range setting is skipped unless this workflow specifically needs it.
+chatbot
+lookup
+airtable
++2
+Needs 2 connections
 
-What output format should we use?
+airtable logo
+Airtable
+slack logo
+Slack
+0 uses
+Use Template
+Business Verification & Compliance
+Intermediate
+18 min
+Cross-Platform Sync Engine
+Keep client data in Airtable, your CRM and a shared spreadsheet from drifting apart. Every 15 minutes this workflow picks up one client record that has changed since it was last synced, pushes it to HubSpot and Google Sheets, then stamps it as synced so it is never pushed twice. Requires a HubSpotId column on your Airtable table. (No instant Airtable-update trigger exists yet, so this polls.)
 
-AI prefilled
-Google Sheets?outputFormat
+sync
+hubspot
+google-sheets
++3
+Needs 4 connections
 
-What does this input field do?
+airtable logo
+Airtable
+hubspot logo
+HubSpot
+google logo
+Google
+slack logo
+Slack
+0 uses
+Use Template
+Business Verification & Compliance
+Beginner
+21 min
+Approval Chance Predictor
+Get a realistic percentage chance of approval before you submit a verification application, based on the same details reviewers use to reject applications. Built for businesses applying for verification and for agencies managing many client applications at once.
 
-Owner: AI Build
+verification
+compliance
+ai
++3
+Needs 4 connections
 
-Change ownership
-Current value in workflow (edit on Configuration step)
+airtable logo
+Airtable
+openai logo
+OpenAI
+slack logo
+Slack
+google logo
+Google
+0 uses
+Use Template
+Customer Support
+Advanced
+15 min
+Customer Support Agent
+Intelligent customer support agent that handles FAQs, checks order status, and escalates complex issues to human agents. Fully working with intent detection, data fetching, and confidence-based routing.
 
-json
-data
+customer-support
+ai-agent
+intent-detection
++2
+Needs 3 connections
 
-AI at runtime
-Google Sheets?data
+postgresql logo
+PostgreSQL
+openai logo
+OpenAI
+slack_webhook logo
+Slack
+3 uses
+Use Template
+Finance & Accounting
+Advanced
+15 min
+Finance / Compliance Agent
+Automated finance operations agent that processes invoices and expenses, categorizes transactions, performs compliance checks, and triggers alerts for anomalies. Reduces manual finance workload.
 
-What does this input field do?
+finance
+compliance
+invoicing
++3
+Needs 4 connections
 
-Owner: AI Runtime
+openai logo
+OpenAI
+postgresql logo
+PostgreSQL
+slack_webhook logo
+Slack
+google logo
+Google
+2 uses
+Use Template
+Human Resources
+Advanced
+15 min
+HR / Hiring Workflow Agent
+Automated resume processing agent that extracts skills, matches candidates against job requirements, scores applications, and automatically schedules interviews for shortlisted candidates.
 
-Change ownership
-Secrets & fill mode
-API keys, webhooks, and other values: You, AI (build), or AI (runtime) where supported. Vault and OAuth are completed on Credentials.
+hr
+hiring
+resume
++2
+Needs 3 connections
 
-No fields in this category for this workflow.
+openai logo
+OpenAI
+postgresql logo
+PostgreSQL
+google logo
+Google
+2 uses
+Use Template
+Internal Operations
+Advanced
+10 min
+Internal Knowledge / Ops Agent
+Internal knowledge base assistant that searches company documentation, answers employee questions with source citations, and escalates when information is not found. Perfect for employee self-service.
 
-Proceed To Credentials
+knowledge-base
+internal-ops
+documentation
++2
+Needs 3 connections
 
-image.png
+postgresql logo
+PostgreSQL
+openai logo
+OpenAI
+slack_webhook logo
+Slack
+0 uses
+Use Template
+Sales & Marketing
+Advanced
+12 min
+Sales & Lead Qualification Agent
+Automated lead qualification agent that captures lead information, asks qualifying questions, scores leads, and routes qualified leads to CRM with meeting booking. Unqualified leads receive automated follow-up.
+
+sales
+lead-qualification
+crm
++2
+Needs 3 connections
+
+openai logo
+OpenAI
+hubspot logo
+HubSpot
+google logo
+Google
+5 uses

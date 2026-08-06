@@ -79,7 +79,7 @@
     "js_parse_search_query": "Takes the raw chat message and prepares it as a search term. Written to work whether the chat trigger hands over a string or an object.",
     "airtable_search_vault": "Reads the tagged vault built by the Intake template. Capped so a large vault cannot overflow the agent's prompt.",
     "ai_agent_find_match": "Matches a loose human request ('that PAN card from March') against the tagged records and picks the best one.",
-    "whatsapp_reply_search": "Sends the file link straight back to whoever asked."
+    "whatsapp_reply_search": "Returns the matched file link in the same chat where the request was made."
   },
   "faq-answering-assistant": {
     "chat_trigger_faq": "Lets clients ask their own questions instead of messaging your team.",
@@ -87,7 +87,7 @@
     "ai_answer_from_faq": "Answers strictly from the supplied FAQ records and rates its own confidence, so the workflow can tell a solid answer from a guess.",
     "js_parse_faq_answer": "Extracts the answer and the confidence score from the AI's JSON. Without this the gate below has no confidence value to read and every question escalates.",
     "if_confidence_check": "Decides whether the client hears from the bot or from a person. 0.75 is the dial — lower it to answer more questions automatically, raise it to be more cautious.",
-    "whatsapp_reply_client": "Sends a confident answer straight to the client.",
+    "whatsapp_reply_client": "Returns a confident answer in the active chat session.",
     "slack_escalate_human": "Hands an uncertain question to your team with the AI's draft attached, so the human starts from something rather than nothing."
   },
   "finance-compliance-agent": {
@@ -139,10 +139,9 @@
     "schedule_daily_check": "Runs every 10 minutes and handles one licence per run, which clears any realistic renewal queue within the day.",
     "airtable_read_expiry_dates": "Picks up one licence approaching expiry that has not been reminded at its current milestone.",
     "js_flag_expiring": "Works out how many days remain and which milestone band the licence is in. The 90 / 30 / 7 day bands are set here.",
-    "if_shouldremind": "Most runs find nothing. Without this the workflow would send a blank WhatsApp and email on every empty poll.",
+    "if_shouldremind": "Most runs find nothing. Without this the workflow would send a blank email on every empty poll.",
     "airtable_mark_reminded": "Records which milestone was sent. Delete this and the client receives the same reminder every 10 minutes until the licence expires.",
-    "whatsapp_send_reminder": "WhatsApp first, because renewal reminders sent only by email get missed.",
-    "gmail_send_backup_reminder": "Email as a second channel — a lapsed licence is expensive enough to justify telling someone twice."
+    "gmail_send_backup_reminder": "Emails the client at the right milestone. This is the deliverable, and the marker above prevents repeat reminders."
   },
   "live-status-lookup-bot": {
     "chat_trigger_status": "Lets anyone check a client's status without opening Airtable or asking a colleague.",
@@ -158,7 +157,7 @@
     "airtable_read_prior_docs": "Reads everything this client has ever sent. Without this the checklist only sees the file just uploaded and reports almost everything as missing.",
     "js_check_missing": "Compares the full set received against the required checklist. The two checklists — Individual and Business — are defined here.",
     "ai_write_missing_message": "Writes a short, friendly chase message rather than a blunt system list.",
-    "whatsapp_send_missing": "Sends the client exactly what is still outstanding, which is what stops the back-and-forth."
+    "whatsapp_send_missing": "Emails the client exactly what is still outstanding, which is what stops the back-and-forth."
   },
   "new-client-risk-checker": {
     "form_new_client": "The signup point, and the source of the domain that gets checked below.",
@@ -200,8 +199,8 @@
     "js_parse_alert_decision": "Extracts the verdict, reason and severity from the agent's reply.",
     "airtable_mark_alert_checked": "Stamps the record as examined — deliberately BEFORE the gate below, so records judged not worth alerting are not re-judged and re-billed on every subsequent poll.",
     "if_alert_worthy": "Enforces the agent's verdict. Without this node the workflow alerts on every change and becomes a noisier version of a dumb alert.",
-    "js_route_notification": "Sends high-severity alerts to the compliance lead and everything else to the account manager. Set both numbers here.",
-    "whatsapp_send_smart_alert": "Delivers the alert to the one person who needs it."
+    "js_route_notification": "Sends high-severity alerts to the compliance channel and everything else to the account-management channel. Set both channels here.",
+    "whatsapp_send_smart_alert": "Posts the alert to the one Slack channel that needs it."
   },
   "submission-package-builder": {
     "schedule_poll_ready": "Polls for clients who have cleared the readiness bar. One client per run.",
@@ -230,8 +229,7 @@
     "js_score": "Turns the issue list into a 0-100 score. Each issue costs 15 points — change that here to make the score stricter.",
     "airtable_update_score": "Writes the score back onto the client record so it is on file for the next check.",
     "ai_fix_list": "Converts the technical issues into two or three plain-English actions the client can actually carry out.",
-    "js_compose_results": "Assembles the score, fix list and contact details into one payload so both the email and the WhatsApp message have everything they need.",
-    "gmail_send_results": "Sends the score and the fix list. This is the deliverable the client came for.",
-    "whatsapp_send_results": "A short WhatsApp nudge pointing at the email, for clients who will not open it otherwise."
+    "js_compose_results": "Assembles the score, fix list and contact details into one payload so the email has everything it needs.",
+    "gmail_send_results": "Sends the score and the fix list. This is the deliverable the client came for."
   }
 }

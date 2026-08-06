@@ -12,19 +12,11 @@ ONE COMMAND (recommended — runs all three steps with safety checks):
 
 Or run the files by hand, in this order:
 
-  00_backup_current_templates.sql    REQUIRED FIRST. 15 of the 20 live templates
-                                     exist only in this database.
-  01_deactivate_unsafe_templates.sql Pulls the two dangerous templates from the
-                                     gallery. Safe to run on its own, immediately.
-  02_apply_templates_v2.sql          Applies the corrected graphs to all 21.
-
-After 02, reactivate the two from step 01 once you have run each end to end:
-
-  UPDATE templates SET is_active = true
-  WHERE name IN ('Cross-Platform Sync Engine', 'Internal Knowledge / Ops Agent');
+  00_backup_current_templates.sql    REQUIRED FIRST. Preserves the current live
+                                     template table before replacing the active
+                                     library with the corrected 36.
+  01_deactivate_unsafe_templates.sql Historical no-op kept for runbook safety.
+  02_apply_templates_v2.sql          Applies the corrected graphs to all 36.
 
 Still outstanding after this migration — see DEFERRED.md:
-  - FAQ Answering Assistant: whatsapp_reply_client.to = {{input.senderPhone}}
-  - Verification Co-Pilot Chat: whatsapp_reply_copilot.to = {{input.senderPhone}}
-  - Document Vault — Smart Search: whatsapp_reply_search.to = {{input.senderPhone}}
   - Finance / Compliance Agent: webhook_finance_1 has no auth

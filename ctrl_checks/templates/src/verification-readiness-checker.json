@@ -1,7 +1,7 @@
 {
   "id": "5d82ee6f-2e45-472e-bb4e-94d77b251586",
   "name": "Verification Readiness Checker",
-  "description": "Know whether your business will pass Meta or Google verification before you apply. This workflow scores your website and documents against the checks verifiers actually run — privacy policy, terms, matching business details — then emails and WhatsApps you a fix list so you can pass on the first try.",
+  "description": "Know whether your business will pass Meta or Google verification before you apply. This workflow scores your website and documents against the checks verifiers actually run — privacy policy, terms, matching business details — then emails you a fix list so you can pass on the first try.",
   "category": "Business Verification & Compliance",
   "nodes": [
     {
@@ -29,12 +29,6 @@
               "type": "email",
               "label": "Contact Email",
               "required": true
-            },
-            {
-              "key": "whatsappNumber",
-              "type": "tel",
-              "label": "WhatsApp Number",
-              "required": false
             },
             {
               "key": "gstDocument",
@@ -95,8 +89,7 @@
             "Name": "{{input.businessName}}",
             "Email": "{{input.contactEmail}}",
             "Status": "New",
-            "Website": "{{input.website}}",
-            "WhatsApp": "{{input.whatsappNumber}}"
+            "Website": "{{input.website}}"
           },
           "tableId": "Clients",
           "operation": "create"
@@ -309,39 +302,7 @@
       "type": "custom",
       "position": {
         "x": 2660,
-        "y": 205
-      }
-    },
-    {
-      "id": "whatsapp_send_results",
-      "data": {
-        "icon": "MessageCircle",
-        "type": "whatsapp",
-        "label": "WhatsApp Results",
-        "config": {
-          "to": "{{input.whatsappNumber}}",
-          "text": "Hi {{input.businessName}}! Your verification readiness score is {{input.score}}/100. Check your email for the full fix list, or reply here with questions.",
-          "resource": "message",
-          "operation": "sendText"
-        },
-        "category": "output",
-        "notes": {
-          "family": "Communication",
-          "what": "Sends WhatsApp messages to customers via the official WhatsApp Business API",
-          "overview": "Send WhatsApp messages, media, locations, contact cards, approved templates, and interactive buttons/lists through the WhatsApp Business Cloud API. Connect a WhatsApp/Facebook account under Connections â€” credentials are resolved automatically. The visual panel exposes the Message resource; Contact, Conversation, Template, Campaign, and AI Agent resources are runtime-supported for advanced or AI-generated workflows.",
-          "tips": [
-            "Connect a WhatsApp account under Connections â€” no access tokens entered on the node itself",
-            "Phone numbers should be in E.164 format, e.g. +12345678900",
-            "First message to a new contact must use Send Template; free-form Send Text only works inside the 24-hour customer service window"
-          ],
-          "docsHref": "/docs/nodes/whatsapp",
-          "why": "A short WhatsApp nudge pointing at the email, for clients who will not open it otherwise."
-        }
-      },
-      "type": "custom",
-      "position": {
-        "x": 2660,
-        "y": 395
+        "y": 300
       }
     },
     {
@@ -357,7 +318,7 @@
         "label": "Assemble Result Payload",
         "category": "data",
         "config": {
-          "code": "const fixList = input.response || input.text || input.content || \"\";\nreturn {\n  ...input,\n  fixList,\n  score: input.score,\n  issueCount: input.issueCount,\n  businessName: input.businessName,\n  contactEmail: input.contactEmail,\n  whatsappNumber: input.whatsappNumber\n};",
+          "code": "const fixList = input.response || input.text || input.content || \"\";\nreturn {\n  ...input,\n  fixList,\n  score: input.score,\n  issueCount: input.issueCount,\n  businessName: input.businessName,\n  contactEmail: input.contactEmail\n};",
           "timeout": 5000
         },
         "notes": {
@@ -372,7 +333,7 @@
             "Do not paste API keys, tokens, or passwords into code"
           ],
           "docsHref": "/docs/nodes/javascript",
-          "why": "Assembles the score, fix list and contact details into one payload so both the email and the WhatsApp message have everything they need."
+          "why": "Assembles the score, fix list and contact details into one payload so the email has everything it needs."
         }
       }
     }
@@ -414,11 +375,6 @@
       "target": "gmail_send_results"
     },
     {
-      "id": "e8",
-      "source": "js_compose_results",
-      "target": "whatsapp_send_results"
-    },
-    {
       "id": "e_ai_fix_list_js_compose_results",
       "source": "ai_fix_list",
       "target": "js_compose_results"
@@ -431,7 +387,7 @@
     "compliance",
     "ai",
     "airtable",
-    "whatsapp",
+    "email",
     "onboarding"
   ],
   "preview_image": null,

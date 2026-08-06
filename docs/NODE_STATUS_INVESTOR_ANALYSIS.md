@@ -1,6 +1,6 @@
 # CtrlChecks — Node Integration Status (Investor Analysis)
 
-**Prepared:** 2026-08-04 (updated 2026-08-05: Zoom moved to Verified Working; updated 2026-08-06: Salesforce and Shopify moved to Verified Working)
+**Prepared:** 2026-08-04 (updated 2026-08-05: Zoom moved to Verified Working; updated 2026-08-06: Salesforce and Shopify moved to Verified Working; updated 2026-08-07: active templates aligned to verified-working nodes only and expanded into four user-facing sectors)
 **Basis:** Manual, end-to-end testing against live third-party accounts and real API calls — not a code-completeness estimate. A node is only marked "Working" once it has been run with real credentials against the live vendor API from the CtrlChecks debug panel and produced a correct result.
 **Source of node catalog:** `worker/src/core/registry/unified-node-registry.ts` (178 backend-registered node types, exported live via `worker/public/node-library.json`)
 
@@ -15,6 +15,23 @@
 | **Total registered node types** | **178** | 100% |
 
 **For investors: 84% of the entire integration catalog is confirmed working today** — not "code written," but actually executed against the real third-party service with real credentials and a correct result observed. The remaining 16% is not a product gap: every one of them has complete, registered backend code, and each is blocked by a specific, named, external cause (a vendor payment, a business-identity requirement, a shared blocker with another listed node, or a vendor-side account/platform bug) rather than by missing engineering work.
+
+---
+
+## Active Template Alignment - 2026-08-07
+
+The live active template library has been aligned to this audit. Active templates now use only node types that are verified working in this document, and the gallery is organized into four user-facing sectors: Business Verification & Compliance, Healthcare & Clinics, Finance, Accounting & Insurance, and Sales, Support & Internal Operations.
+
+| Check | Result |
+|---|---|
+| Active templates in database | 36 |
+| Active template nodes using Part 1 blocked/not-yet-working node types | 0 |
+| User-facing sector filters | 4 |
+| Templates regenerated from source | Yes |
+| Database updated from regenerated SQL | Yes |
+| Contract test coverage | `577 passed` |
+
+WhatsApp had been used in seven active templates, but the WhatsApp nodes are still blocked by Meta Business verification. Those workflows now use working alternatives: `chat_send` for chat-originated answers, `google_gmail` for client notifications, and `slack_message` for internal operational alerts. The 15 added templates were built from the same verified-working node set.
 
 ---
 

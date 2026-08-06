@@ -1,7 +1,8 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 
 export type EditorMode = 'prompt' | 'expert';
+export type EditorEntrySource = 'ai-wizard' | 'manual-new' | 'standard';
 
 export const EDITOR_MODE_STORAGE_KEY = 'ctrlchecks_workflow_editor_mode';
 
@@ -19,25 +20,43 @@ export function readStoredEditorMode(): EditorMode | null {
 }
 
 /**
- * Stored preference wins. With no stored preference, workflows arriving straight
- * from the AI wizard open in Prompt mode; everything else opens in Expert mode.
+ * Creation source wins for first impression:
+ * - AI wizard handoff opens in Prompt mode so non-technical users see the assistant first.
+ * - Manual creation opens in Expert mode because the user chose the node builder.
+ * Stored preference applies only to ordinary workflow opens.
  */
 export function resolveInitialEditorMode(
   stored: EditorMode | null,
-  cameFromAiWizard: boolean,
+  entrySource: EditorEntrySource,
 ): EditorMode {
-  if (stored) return stored;
-  return cameFromAiWizard ? 'prompt' : 'expert';
+  if (entrySource === 'ai-wizard') return 'prompt';
+  if (entrySource === 'manual-new') return 'expert';
+  return stored ?? 'expert';
+}
+
+export function resolveEditorEntrySource(pathname: string, origin?: unknown): EditorEntrySource {
+  if (origin === AI_WIZARD_ORIGIN) return 'ai-wizard';
+  return /^\/workflow\/new\/?$/.test(pathname) ? 'manual-new' : 'standard';
 }
 
 export function useEditorMode(): { mode: EditorMode; setMode: (next: EditorMode) => void } {
   const location = useLocation();
-  const cameFromAiWizard =
-    (location.state as { origin?: string } | null)?.origin === AI_WIZARD_ORIGIN;
+  const entrySource = useMemo(
+    () =>
+      resolveEditorEntrySource(
+        location.pathname,
+        (location.state as { origin?: string } | null)?.origin,
+      ),
+    [location.pathname, location.state],
+  );
 
   const [mode, setModeState] = useState<EditorMode>(() =>
-    resolveInitialEditorMode(readStoredEditorMode(), cameFromAiWizard),
+    resolveInitialEditorMode(readStoredEditorMode(), entrySource),
   );
+
+  useEffect(() => {
+    setModeState(resolveInitialEditorMode(readStoredEditorMode(), entrySource));
+  }, [entrySource]);
 
   // Only ever called from an explicit user click on the mode switch, so the
   // origin-based default is never written back to storage on its own.

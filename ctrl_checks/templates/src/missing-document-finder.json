@@ -1,7 +1,7 @@
 {
   "id": "58703e5c-2ec9-437f-9b05-264a017e5ce8",
   "name": "Missing Document Finder",
-  "description": "Stop chasing clients for 'one more document.' Upload whatever paperwork a client has sent so far, in any order, and this workflow figures out exactly which required documents are still missing and messages the client a specific checklist on WhatsApp.",
+  "description": "Stop chasing clients for 'one more document.' Upload whatever paperwork a client has sent so far, in any order, and this workflow figures out exactly which required documents are still missing and emails the client a specific checklist.",
   "category": "Business Verification & Compliance",
   "nodes": [
     {
@@ -35,9 +35,9 @@
               "required": true
             },
             {
-              "key": "whatsappNumber",
-              "type": "tel",
-              "label": "WhatsApp Number",
+              "key": "contactEmail",
+              "type": "email",
+              "label": "Contact Email",
               "required": true
             }
           ],
@@ -170,7 +170,7 @@
         "label": "Write Missing Docs Message",
         "config": {
           "model": "gpt-4o-mini",
-          "prompt": "Write a short, friendly WhatsApp message to {{input.clientName}} listing exactly which documents are still missing: {{input.missing}}. If nothing is missing, congratulate them that their file is complete. Keep it under 3 sentences.",
+          "prompt": "Write a short, friendly email message to {{input.clientName}} listing exactly which documents are still missing: {{input.missing}}. If nothing is missing, congratulate them that their file is complete. Keep it under 3 sentences.",
           "temperature": 0.6
         },
         "category": "ai",
@@ -192,27 +192,31 @@
     {
       "id": "whatsapp_send_missing",
       "data": {
-        "icon": "MessageCircle",
-        "type": "whatsapp",
-        "label": "Send Missing Docs List",
+        "icon": "Mail",
+        "type": "google_gmail",
+        "label": "Email Missing Docs List",
         "config": {
-          "to": "{{input.whatsappNumber}}",
-          "text": "{{input.response}}",
-          "resource": "message",
-          "operation": "sendText"
+          "operation": "send",
+          "recipientSource": "manual_entry",
+          "recipientEmails": "{{input.contactEmail}}",
+          "subject": "Missing documents for {{input.clientName}}",
+          "body": "{{input.response}}"
         },
         "category": "output",
         "notes": {
           "family": "Communication",
-          "what": "Sends WhatsApp messages to customers via the official WhatsApp Business API",
-          "overview": "Send WhatsApp messages, media, locations, contact cards, approved templates, and interactive buttons/lists through the WhatsApp Business Cloud API. Connect a WhatsApp/Facebook account under Connections â€” credentials are resolved automatically. The visual panel exposes the Message resource; Contact, Conversation, Template, Campaign, and AI Agent resources are runtime-supported for advanced or AI-generated workflows.",
+          "what": "Send emails from your Gmail account or read and search messages in your inbox",
+          "overview": "Send, list, get, or search Gmail messages. Send recipients can be typed manually or extracted from upstream/fallback Google Sheets rows.",
           "tips": [
-            "Connect a WhatsApp account under Connections â€” no access tokens entered on the node itself",
-            "Phone numbers should be in E.164 format, e.g. +12345678900",
-            "First message to a new contact must use Send Template; free-form Send Text only works inside the 24-hour customer service window"
+            "Connect Google OAuth in Connections; do not paste tokens into workflow fields",
+            "Gmail search syntax: from:, subject:, is:unread, has:attachment",
+            "List/Search only return {id, threadId} per message â€” use a Get step with that id for full content",
+            "Body is plain text only",
+            "Get returns Gmail's raw API message; the body text is base64url-encoded inside message.payload.body.data",
+            "Use search to filter messages before getting details"
           ],
-          "docsHref": "/docs/nodes/whatsapp",
-          "why": "Sends the client exactly what is still outstanding, which is what stops the back-and-forth."
+          "docsHref": "/docs/nodes/google_gmail",
+          "why": "Emails the client exactly what is still outstanding, which is what stops the back-and-forth."
         }
       },
       "type": "custom",
@@ -296,7 +300,7 @@
     "onboarding",
     "documents",
     "ai",
-    "whatsapp",
+    "email",
     "airtable"
   ],
   "preview_image": null,

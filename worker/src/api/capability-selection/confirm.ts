@@ -25,6 +25,7 @@ import { hydrateRequiredConfigFromRegistryDefaults } from '../../core/validation
 import type { Workflow, WorkflowNode } from '../../core/types/ai-types';
 import type { SwitchContext } from '../../core/orchestration/unified-graph-orchestrator';
 import type { CaseNodeMapping } from '../../core/types/unified-node-contract';
+import { groundWorkflowTemplateReferences } from '../../core/graph/template-reference-grounding';
 import { compileSummaryV2FromWorkflow } from '../../services/ai/summary-v2-compiler';
 import { validateSummaryV2 } from '../../core/validation/summary-v2-validator';
 import { logger } from '../../core/logger';
@@ -375,6 +376,19 @@ export default async function confirmCapabilityWorkflow(req: AuthenticatedReques
       populatedWorkflow = stampFormFieldsAsBuilt(withDefaults as Workflow);
     } catch (stampErr) {
       logger.warn('[CapabilityConfirm] Field stamp failed (non-fatal):', stampErr);
+    }
+
+    try {
+      const grounding = groundWorkflowTemplateReferences(populatedWorkflow as any);
+      populatedWorkflow = grounding.workflow as Workflow;
+      if (grounding.repairs.length > 0 || grounding.deferredFields.length > 0) {
+        logger.warn('[CapabilityConfirm] Template grounding applied', {
+          repairs: grounding.repairs,
+          deferredFields: grounding.deferredFields,
+        });
+      }
+    } catch (groundingErr) {
+      logger.warn('[CapabilityConfirm] Template grounding failed (non-fatal):', groundingErr);
     }
 
     // Stage: Credential Discovery (Req 6.3) — non-blocking

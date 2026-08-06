@@ -2,7 +2,7 @@
   "id": "ddd65341-f690-46f8-8436-3df14e283c28",
   "name": "Sales & Lead Qualification Agent",
   "description": "Automated lead qualification agent that captures lead information, asks qualifying questions, scores leads, and routes qualified leads to CRM with meeting booking. Unqualified leads receive automated follow-up.",
-  "category": "Sales & Marketing",
+  "category": "Sales, Support & Internal Operations",
   "nodes": [
     {
       "id": "webhook_lead_1",

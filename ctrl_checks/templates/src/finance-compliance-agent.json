@@ -2,7 +2,7 @@
   "id": "9fff0187-8a5b-4f12-bf80-0d3b88737190",
   "name": "Finance / Compliance Agent",
   "description": "Automated finance operations agent that processes invoices and expenses, categorizes transactions, performs compliance checks, and triggers alerts for anomalies. Reduces manual finance workload.",
-  "category": "Finance & Accounting",
+  "category": "Finance, Accounting & Insurance",
   "nodes": [
     {
       "id": "webhook_finance_1",

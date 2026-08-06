@@ -1,0 +1,238 @@
+{
+  "id": "91000000-0000-4000-8000-000000000009",
+  "name": "Payment Failure Recovery",
+  "description": "Capture payment-failure events from a billing system, classify the failure, notify the customer, and alert finance when manual recovery is needed.",
+  "category": "Finance, Accounting & Insurance",
+  "nodes": [
+    {
+      "id": "webhook_payment_failed",
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      },
+      "data": {
+        "icon": "Box",
+        "type": "webhook",
+        "label": "Payment Failure Webhook",
+        "category": "triggers",
+        "config": {
+          "method": "POST"
+        },
+        "notes": {
+          "family": "Triggers",
+          "what": "Starts your workflow the moment another app sends it data — like a doorbell for your automation",
+          "overview": "Starts a workflow when an external app, website form, payment system, or internal service sends data to the generated CtrlChecks webhook URL. Captures the request body, headers, query values, and method for the next node.",
+          "tips": [],
+          "docsHref": "/docs/nodes/webhook",
+          "why": "Receives payment-failure payloads from whichever billing tool the customer uses."
+        }
+      }
+    },
+    {
+      "id": "js_extract_payment",
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      },
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Extract Failure Details",
+        "category": "data",
+        "config": {
+          "code": "const payload = input.body || input;\nreturn { ...input, customerEmail: payload.customerEmail || payload.email || \"\", customerName: payload.customerName || payload.name || \"there\", amount: payload.amount || 0, failureReason: payload.failureReason || payload.reason || \"payment failed\" };",
+          "timeout": 5000
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Normalises common billing payload shapes into fields used by the recovery steps."
+        }
+      }
+    },
+    {
+      "id": "ai_recovery_message",
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      },
+      "data": {
+        "icon": "Box",
+        "type": "openai_gpt",
+        "label": "Draft Recovery Message",
+        "category": "ai",
+        "config": {
+          "model": "gpt-4o-mini",
+          "prompt": "Write a short, helpful payment recovery email for {{input.customerName}}. Amount: {{input.amount}}. Failure reason: {{input.failureReason}}. Do not blame the customer.",
+          "temperature": 0.4
+        },
+        "notes": {
+          "family": "AI",
+          "what": "Sends your prompt to OpenAI's ChatGPT and gets back an AI-written response",
+          "overview": "Calls OpenAI through the legacy LLM adapter. Prompt is the main input; Messages is only a fallback when Prompt is blank. Temperature and Memory are visible legacy fields ignored by the current executor.",
+          "tips": [],
+          "docsHref": "/docs/nodes/openai_gpt",
+          "why": "Produces customer-friendly recovery copy instead of a cold system error."
+        }
+      }
+    },
+    {
+      "id": "gmail_payment_recovery",
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      },
+      "data": {
+        "icon": "Mail",
+        "type": "google_gmail",
+        "label": "Email Customer",
+        "category": "output",
+        "config": {
+          "operation": "send",
+          "recipientSource": "manual_entry",
+          "recipientEmails": "{{input.customerEmail}}",
+          "subject": "Action needed: payment issue",
+          "body": "{{input.response}}"
+        },
+        "notes": {
+          "family": "Communication",
+          "what": "Send emails from your Gmail account or read and search messages in your inbox",
+          "overview": "Send, list, get, or search Gmail messages. Send recipients can be typed manually or extracted from upstream/fallback Google Sheets rows.",
+          "tips": [
+            "Connect Google OAuth in Connections; do not paste tokens into workflow fields",
+            "Gmail search syntax: from:, subject:, is:unread, has:attachment",
+            "List/Search only return {id, threadId} per message â€” use a Get step with that id for full content",
+            "Body is plain text only",
+            "Get returns Gmail's raw API message; the body text is base64url-encoded inside message.payload.body.data",
+            "Use search to filter messages before getting details"
+          ],
+          "docsHref": "/docs/nodes/google_gmail",
+          "why": "Sends the recovery message through a verified working email channel."
+        }
+      }
+    },
+    {
+      "id": "if_high_value_payment",
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 300
+      },
+      "data": {
+        "icon": "GitBranch",
+        "type": "if_else",
+        "label": "High Value Failure?",
+        "category": "logic",
+        "config": {
+          "conditions": [
+            {
+              "field": "$json.amount",
+              "operator": "greaterThan",
+              "value": 1000
+            }
+          ],
+          "combineOperation": "AND"
+        },
+        "notes": {
+          "family": "Logic",
+          "what": "Makes a yes/no decision: if something is true, go one way; otherwise go another",
+          "overview": "Makes a yes/no decision from previous-step data and routes matching work through TRUE and non-matching work through FALSE.",
+          "tips": [
+            "Use the builder for normal setup; use JSON mode only when pasting prepared condition objects.",
+            "Choose AND when every row must match; choose OR when any row can match.",
+            "Use equals for statuses and categories, greater-than operators for numeric thresholds, and contains for text or lists.",
+            "Connect both TRUE and FALSE outputs so no business case silently disappears."
+          ],
+          "docsHref": "/docs/nodes/if_else",
+          "why": "Separates failures worth manual finance follow-up from normal automated recovery."
+        }
+      }
+    },
+    {
+      "id": "slack_payment_followup",
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 300
+      },
+      "data": {
+        "icon": "Hash",
+        "type": "slack_message",
+        "label": "Alert Finance",
+        "category": "output",
+        "config": {
+          "channel": "#finance-recovery",
+          "message": "High-value payment failure: {{input.customerEmail}} / {{input.amount}}\nReason: {{input.failureReason}}"
+        },
+        "notes": {
+          "family": "Communication",
+          "what": "Sends messages using a Slack app or bot connection",
+          "overview": "Send Slack bot messages to channels, direct messages, or existing threads through a saved Slack OAuth2 connection. Use it for workplace alerts, support replies, incident updates, approvals, report summaries, and deployment notifications.",
+          "tips": [
+            "Select a Slack OAuth2 connection; do not paste bot tokens into message fields",
+            "The Slack app needs chat:write, and the bot must be invited before it can post in private channels",
+            "Use {{$json.channelId}} and {{$json.threadTs}} from Slack Trigger to reply in the same conversation",
+            "Keep Message filled as readable fallback text even when Blocks contains a rich Block Kit layout",
+            "Connect downstream service accounts separately; Slack OAuth2 only authorizes the Slack send"
+          ],
+          "docsHref": "/docs/nodes/slack_message",
+          "why": "Gets large failed payments into a human recovery queue."
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_1_webhook_payment_failed_js_extract_payment",
+      "source": "webhook_payment_failed",
+      "target": "js_extract_payment"
+    },
+    {
+      "id": "e_2_js_extract_payment_ai_recovery_message",
+      "source": "js_extract_payment",
+      "target": "ai_recovery_message"
+    },
+    {
+      "id": "e_3_ai_recovery_message_gmail_payment_recovery",
+      "source": "ai_recovery_message",
+      "target": "gmail_payment_recovery"
+    },
+    {
+      "id": "e_4_gmail_payment_recovery_if_high_value_payment",
+      "source": "gmail_payment_recovery",
+      "target": "if_high_value_payment"
+    },
+    {
+      "id": "e_5_if_high_value_payment_slack_payment_followup",
+      "source": "if_high_value_payment",
+      "target": "slack_payment_followup",
+      "sourceHandle": "true"
+    }
+  ],
+  "difficulty": "Intermediate",
+  "estimated_setup_time": 20,
+  "tags": [
+    "finance",
+    "billing",
+    "webhook",
+    "email",
+    "slack"
+  ],
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2
+}

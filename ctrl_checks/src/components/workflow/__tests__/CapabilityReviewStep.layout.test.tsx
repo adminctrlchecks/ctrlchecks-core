@@ -1,10 +1,8 @@
 /**
- * CapabilityReviewStep — layout and content.
+ * CapabilityReviewStep layout and content.
  *
- * The screen must use the full width the wizard gives it, and must put the summary above
- * the step list rather than beside it. Side by side, the summary got half the width, which
- * turned a few sentences of prose into a tall narrow ribbon that needed its own inner
- * scrollbar to read; the step list is short rows and loses nothing by moving below.
+ * The review order is intentional:
+ * selected workflow nodes -> workflow summary.
  */
 
 import { describe, it, expect, vi } from 'vitest';
@@ -20,7 +18,7 @@ vi.mock('framer-motion', () => ({
                 ({ children, ...rest }: { children?: React.ReactNode } & Record<string, unknown>) => (
                     <div {...(rest as Record<string, never>)}>{children}</div>
                 ),
-        }
+        },
     ),
 }));
 
@@ -54,75 +52,114 @@ function renderStep(nodes: ReturnType<typeof node>[]) {
     return { ...utils, root: utils.container.firstElementChild as HTMLElement };
 }
 
-describe('CapabilityReviewStep — space usage', () => {
+function reviewCard(title: string) {
+    return screen.getByText(title).closest('div[class*="border-border/80"]') as HTMLElement;
+}
+
+describe('CapabilityReviewStep space usage', () => {
     it('does not cap itself to a narrow centred column', () => {
         const { root } = renderStep([node('manual_trigger', 'Manual Trigger')]);
-        // The wizard controls the outer width; this component must not re-clamp inside it.
         expect(root.className).not.toMatch(/max-w-3xl/);
         expect(root.className).toContain('w-full');
     });
 
-    it('stacks the summary above the step list instead of splitting the width', () => {
+    it('stacks selected nodes before the summary without a duplicate execution section', () => {
         const { root } = renderStep([
             node('manual_trigger', 'Manual Trigger'),
             node('google_sheets', 'Google Sheets'),
         ]);
-        // No two-track grid anywhere: the summary must span the whole width.
         expect(root.innerHTML).not.toMatch(/lg:grid-cols-\[/);
 
-        const summary = screen.getByText('Workflow summary').closest('div[class*="rounded"]')!;
-        const steps = screen.getByText('Execution steps').closest('div[class*="rounded"]')!;
-        // DOCUMENT_POSITION_FOLLOWING — the steps card comes after the summary in the DOM,
-        // which with a plain block stack is also the visual order.
-        expect(summary.compareDocumentPosition(steps) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        const selected = reviewCard('Selected workflow nodes');
+        const summary = reviewCard('Workflow summary');
+
+        expect(selected.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(screen.queryByText('Execution steps')).toBeNull();
     });
 
     it('does not trap the summary in its own scrollbox', () => {
         renderStep([node('manual_trigger', 'Manual Trigger')]);
-        const summary = screen.getByText('Workflow summary').closest('div[class*="rounded"]')!;
-        // The height cap existed only to keep a sticky half-width column inside the viewport.
+        const summary = reviewCard('Workflow summary');
         expect(summary.className).not.toMatch(/overflow-y-auto/);
         expect(summary.className).not.toMatch(/max-h-/);
     });
 
-    it('keeps every step visible as the node count grows', () => {
+    it('keeps every selected node visible as the node count grows', () => {
         const many = Array.from({ length: 14 }, (_, i) => node(`n${i}`, `Node ${i + 1}`));
         renderStep(many);
         for (const n of many) {
-            expect(screen.getByText(n.data.label)).toBeTruthy();
+            expect(screen.getAllByText(n.data.label).length).toBeGreaterThan(0);
         }
     });
 
-    it('shows the step count so a long list is legible at a glance', () => {
+    it('shows the selected node count so a long list is legible at a glance', () => {
         renderStep(Array.from({ length: 9 }, (_, i) => node(`n${i}`, `Node ${i + 1}`)));
-        expect(screen.getByText('9 steps')).toBeTruthy();
+        expect(screen.getByText('9 nodes selected')).toBeTruthy();
     });
 
     it('uses the singular form for a one-step workflow', () => {
         renderStep([node('manual_trigger', 'Manual Trigger')]);
-        expect(screen.getByText('1 step')).toBeTruthy();
+        expect(screen.getByText('1 node selected')).toBeTruthy();
     });
 });
 
-describe('CapabilityReviewStep — content', () => {
-    it('renders the parsed summary sections', () => {
+describe('CapabilityReviewStep content', () => {
+    it('renders the parsed summary sections as points', () => {
         renderStep([node('manual_trigger', 'Manual Trigger')]);
+        expect(screen.getByText('Goal')).toBeTruthy();
         expect(screen.getByText('Trigger')).toBeTruthy();
         expect(screen.getByText('Flow')).toBeTruthy();
         expect(screen.getByText('Connections')).toBeTruthy();
-        // getAllByText: the string also matches the containing card, not just the <p>.
         expect(screen.getAllByText(/Retrieve spreadsheet data on demand/).length).toBeGreaterThan(0);
     });
 
-    it('numbers the steps in execution order', () => {
+    it('renders selected workflow nodes from selected containers', () => {
+        render(
+            <CapabilityReviewStep
+                structuralPrompt={STRUCTURED_PROMPT}
+                workflow={{ nodes: [node('manual_trigger', 'Manual Trigger')] }}
+                selections={{ c1: 'manual_trigger' }}
+                containers={[
+                    {
+                        containerId: 'c1',
+                        label: 'Collect payment form',
+                        useCaseUnit: {
+                            unitId: 'u1',
+                            label: 'Collect payment details',
+                            description: 'Capture the payment status and amount before routing.',
+                            semanticRole: 'trigger',
+                            orderIndex: 0,
+                        },
+                        candidates: [
+                            {
+                                nodeType: 'manual_trigger',
+                                label: 'Form Trigger',
+                                description: 'Starts when a form is submitted.',
+                                credentialRequirements: [],
+                                credentialRequired: false,
+                                hasCredentials: true,
+                            },
+                        ],
+                    },
+                ]}
+                onConfirm={vi.fn()}
+                onBack={vi.fn()}
+            />,
+        );
+
+        expect(screen.getByText('Form Trigger')).toBeTruthy();
+        expect(screen.getByText('Collect payment details')).toBeTruthy();
+        expect(screen.getByText('Capture the payment status and amount before routing.')).toBeTruthy();
+    });
+
+    it('numbers the selected nodes in execution order', () => {
         const { container } = renderStep([
             node('manual_trigger', 'Manual Trigger'),
             node('google_sheets', 'Google Sheets'),
         ]);
-        const stepsCard = screen.getByText('Execution steps').closest('div[class*="rounded"]');
-        expect(stepsCard).not.toBeNull();
-        expect(within(stepsCard as HTMLElement).getByText('1')).toBeTruthy();
-        expect(within(stepsCard as HTMLElement).getByText('2')).toBeTruthy();
+        const selectedCard = reviewCard('Selected workflow nodes');
+        expect(within(selectedCard).getByText('1')).toBeTruthy();
+        expect(within(selectedCard).getByText('2')).toBeTruthy();
         expect(container.textContent).toContain('Manual Trigger');
     });
 

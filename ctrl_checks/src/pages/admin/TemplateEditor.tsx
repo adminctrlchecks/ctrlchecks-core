@@ -7,21 +7,19 @@ import { useEffect, useCallback, useState, Suspense, lazy } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { useWorkflowStore, WorkflowNode } from '@/stores/workflowStore';
-import { awsClient } from '@/integrations/aws/client';
 import { useToast } from '@/hooks/use-toast';
 import type { NodeTypeDefinition } from '@/components/workflow/nodeTypes';
 
 const NodeLibrary = lazy(() => import('@/components/workflow/NodeLibrary'));
 const WorkflowCanvas = lazy(() => import('@/components/workflow/WorkflowCanvas'));
 const PropertiesPanel = lazy(() => import('@/components/workflow/PropertiesPanel'));
-const ExecutionConsole = lazy(() => import('@/components/workflow/ExecutionConsole'));
 import { AdminChromeHeader } from '@/components/layout/AdminChromeHeader';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Save } from 'lucide-react';
+import { ArrowLeft, Loader2, Save } from 'lucide-react';
 import { Edge } from '@xyflow/react';
 import { Json } from '@/integrations/aws/types';
-import { updateTemplate } from '@/lib/api/admin';
+import { getTemplateById, updateTemplate } from '@/lib/api/admin';
 import { validateAndFixWorkflow } from '@/lib/workflowValidation';
 import { enforceFrontendRenderContract, normalizeBackendWorkflow, validateNodeTypesRegistered } from '@/lib/node-type-normalizer';
 
@@ -31,7 +29,7 @@ export default function TemplateEditor() {
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
-  const [consoleExpanded, setConsoleExpanded] = useState(false);
+  const [isLoadingTemplate, setIsLoadingTemplate] = useState(true);
   const [templateData, setTemplateData] = useState<any>(null);
   const [invalidNodesCount, setInvalidNodesCount] = useState(0);
   const {
@@ -40,6 +38,7 @@ export default function TemplateEditor() {
     setNodes,
     setEdges,
     setWorkflowName,
+    setWorkflowId,
     setIsDirty,
     resetWorkflow,
   } = useWorkflowStore();
@@ -52,18 +51,18 @@ export default function TemplateEditor() {
 
   // Load template
   const loadTemplate = useCallback(async (templateId: string) => {
-    try {
-      const { data, error } = await awsClient
-        .from('templates')
-        .select('*')
-        .eq('id', templateId)
-        .single();
+    resetWorkflow();
+    setTemplateData(null);
+    setInvalidNodesCount(0);
+    setIsLoadingTemplate(true);
 
-      if (error) throw error;
+    try {
+      const data = await getTemplateById(templateId);
 
       if (data) {
         setTemplateData(data);
         setWorkflowName(data.name);
+        setWorkflowId(null);
 
         // Run the same 4-step hydration pipeline WorkflowBuilder.loadWorkflow() uses,
         // so admin template editing never diverges from what end users see when they
@@ -111,8 +110,10 @@ export default function TemplateEditor() {
         description: 'Failed to load template',
         variant: 'destructive',
       });
+    } finally {
+      setIsLoadingTemplate(false);
     }
-  }, [setNodes, setEdges, setWorkflowName, setIsDirty, toast]);
+  }, [resetWorkflow, setNodes, setEdges, setWorkflowName, setWorkflowId, setIsDirty, toast]);
 
   // Load template
   useEffect(() => {
@@ -120,6 +121,8 @@ export default function TemplateEditor() {
       loadTemplate(id);
     } else if (!id) {
       resetWorkflow();
+      setTemplateData(null);
+      setIsLoadingTemplate(false);
     }
   }, [id, user, loadTemplate, resetWorkflow]);
 
@@ -232,7 +235,7 @@ export default function TemplateEditor() {
               ⚠️ {invalidNodesCount} unregistered node type(s)
             </Badge>
           )}
-          <Button variant="outline" size="sm" onClick={handleSave} disabled={isSaving}>
+          <Button variant="outline" size="sm" onClick={handleSave} disabled={isSaving || isLoadingTemplate || !templateData}>
             <Save className="mr-2 h-4 w-4" />
             {isSaving ? 'Saving...' : 'Save Template'}
           </Button>
@@ -245,20 +248,27 @@ export default function TemplateEditor() {
           </Suspense>
         </div>
         <div className="flex-1 relative w-full h-full" style={{ minWidth: 0, minHeight: 0 }}>
-          <Suspense fallback={null}>
-            <WorkflowCanvas />
-          </Suspense>
+          {isLoadingTemplate ? (
+            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Loading template...
+            </div>
+          ) : (
+            <Suspense fallback={null}>
+              <WorkflowCanvas />
+            </Suspense>
+          )}
         </div>
         <div className="w-80 border-l border-border overflow-y-auto">
-          <Suspense fallback={<div className="p-4 text-sm text-muted-foreground">Loading…</div>}>
-            <PropertiesPanel />
-          </Suspense>
+          {isLoadingTemplate ? (
+            <div className="p-4 text-sm text-muted-foreground">Loading template properties...</div>
+          ) : (
+            <Suspense fallback={<div className="p-4 text-sm text-muted-foreground">Loading…</div>}>
+              <PropertiesPanel isTemplateMode />
+            </Suspense>
+          )}
         </div>
       </div>
-      <Suspense fallback={null}>
-        <ExecutionConsole isExpanded={consoleExpanded} onToggle={() => setConsoleExpanded(!consoleExpanded)} />
-      </Suspense>
     </div>
   );
 }
-

@@ -6395,6 +6395,7 @@ export function AutonomousAgentWizard() {
                                     structuralPrompt={capNodeStructuralPrompt}
                                     workflow={capNodeWorkflow}
                                     selections={capNodeSelections}
+                                    containers={capNodeContainers}
                                     onConfirm={() => {
                                         // Req 5.3, 5.4, 6.1: sole gate for Backend_Generation
                                         void handleCapabilityNodeSelectionConfirm();

@@ -1,229 +1,275 @@
 /**
  * Capability Review Step UI Component
  *
- * Displays the structural prompt and workflow summary to the user.
- * The Continue button is the sole gate for Backend_Generation — no backend
- * credential resolution or execution begins before the user clicks it.
- *
- * Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 6.1
+ * Shows the final review before Backend_Generation starts. This screen is read-only:
+ * Continue is still the sole gate that sends the unchanged workflow and structural prompt
+ * to the backend confirm endpoint.
  */
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
-import type { NodeSelectionMap } from '../../types/capability-selection';
+import type { ReactNode } from 'react';
+import type { CapabilityContainer, NodeSelectionMap } from '../../types/capability-selection';
 
-// ─── Props ────────────────────────────────────────────────────────────────────
+interface PreviewNode {
+  id?: string;
+  type?: string;
+  data?: {
+    label?: string;
+    type?: string;
+    category?: string;
+    description?: string;
+  };
+}
 
 interface CapabilityReviewStepProps {
   structuralPrompt: string;
-  // workflow is `any` because the Workflow type lives in the worker package
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  workflow: any;
+  workflow?: { nodes?: PreviewNode[] } | null;
   selections: NodeSelectionMap;
+  containers?: CapabilityContainer[];
   onConfirm: () => void;
   onBack: () => void;
 }
 
-// ─── Node Row ─────────────────────────────────────────────────────────────────
-
-interface NodeRowProps {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  node: any;
-  index: number;
+interface SelectedWorkflowNode {
+  id: string;
+  label: string;
+  nodeType: string;
+  role?: string;
+  intentLabel?: string;
+  intentDescription?: string;
+  nodeDescription?: string;
 }
 
-function NodeRow({ node, index }: NodeRowProps) {
-  const label: string = node?.data?.label ?? node?.data?.type ?? node?.type ?? 'Unknown node';
-  const description: string = node?.data?.description ?? '';
+function parseStructuredPrompt(raw: string) {
+  const workflowMatch = raw.match(/^WORKFLOW:\s*(.+?)(?=\n\n|\nTRIGGER)/ms);
+  const triggerMatch = raw.match(/TRIGGER:?\s*\n?([\s\S]+?)(?=\n\nFLOW|\nFLOW)/ms);
+  const flowMatch = raw.match(/FLOW:?\s*\n?([\s\S]+?)(?=\n\nCONNECTIONS|\nCONNECTIONS|$)/ms);
+  const connectionsMatch = raw.match(/CONNECTIONS:?\s*\n?([\s\S]+?)$/ms);
 
-  return (
-    <motion.div
-      initial={{ opacity: 0, x: -8 }}
-      animate={{ opacity: 1, x: 0 }}
-      // Cap the stagger: at 25 nodes a per-index delay would leave the last row blank for
-      // over a second, which reads as the page having failed to load.
-      transition={{ delay: Math.min(index, 8) * 0.04, duration: 0.25 }}
-      // Self-contained bordered row rather than a `border-b` divider list: the steps flow
-      // into multiple columns on wide screens, where a shared bottom border would misalign.
-      className="flex items-start gap-3 rounded-lg border border-border/60 bg-background/60 p-3"
-    >
-      {/* Step number */}
-      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-semibold mt-0.5">
-        {index + 1}
-      </div>
+  return {
+    workflow: workflowMatch?.[1]?.trim() ?? '',
+    trigger: triggerMatch?.[1]?.trim() ?? '',
+    flow: flowMatch?.[1]?.trim() ?? '',
+    connections: connectionsMatch?.[1]?.trim() ?? '',
+    isStructured:
+      raw.includes('WORKFLOW:') &&
+      (raw.includes('FLOW:') || raw.includes('\nFLOW\n') || raw.includes('\nFLOW\r\n')),
+  };
+}
 
-      {/* Content */}
-      <div className="flex-1 min-w-0 space-y-0.5">
-        <p className="text-sm font-medium leading-tight">{label}</p>
-        {description && (
-          <p className="text-xs text-muted-foreground leading-relaxed">{description}</p>
-        )}
-      </div>
-
-      <CheckCircle2 className="h-4 w-4 shrink-0 text-primary/60 mt-0.5" aria-hidden="true" />
-    </motion.div>
+function renderBold(text: string) {
+  return text.split(/(\*\*[^*]+\*\*)/).map((part, i) =>
+    part.startsWith('**') && part.endsWith('**') ? (
+      <strong key={i}>{part.slice(2, -2)}</strong>
+    ) : (
+      part
+    ),
   );
 }
 
-// ─── Capability Review Step ───────────────────────────────────────────────────
+function splitReadablePoints(text: string) {
+  return text
+    .split(/\n+|(?<=\.)\s+(?=[A-Z0-9])/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function buildSelectedWorkflowNodes(
+  nodes: PreviewNode[],
+  containers: CapabilityContainer[],
+  selections: NodeSelectionMap,
+): SelectedWorkflowNode[] {
+  if (containers.length > 0 && Object.keys(selections).length > 0) {
+    return containers
+      .slice()
+      .sort((a, b) => a.useCaseUnit.orderIndex - b.useCaseUnit.orderIndex)
+      .filter((container) => Boolean(selections[container.containerId]))
+      .map((container, index) => {
+        const selectedNodeType = selections[container.containerId];
+        const candidate = container.candidates.find((item) => item.nodeType === selectedNodeType);
+
+        return {
+          id: container.containerId || `${selectedNodeType}_${index}`,
+          label: candidate?.label ?? container.label ?? selectedNodeType,
+          nodeType: selectedNodeType,
+          role: container.useCaseUnit.semanticRole,
+          intentLabel: container.useCaseUnit.label,
+          intentDescription: container.useCaseUnit.description,
+          nodeDescription: candidate?.description,
+        };
+      });
+  }
+
+  return nodes.map((node, index) => ({
+    id: node?.id ?? `${node?.type ?? 'node'}_${index}`,
+    label: node?.data?.label ?? node?.data?.type ?? node?.type ?? 'Unknown node',
+    nodeType: node?.data?.type ?? node?.type ?? 'unknown',
+    role: node?.data?.category,
+    nodeDescription: node?.data?.description,
+  }));
+}
+
+function SummaryPoint({ children, muted = false }: { children: ReactNode; muted?: boolean }) {
+  return (
+    <li className={`flex gap-2 text-sm leading-relaxed ${muted ? 'text-muted-foreground' : 'text-foreground'}`}>
+      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary/70" />
+      <span>{children}</span>
+    </li>
+  );
+}
 
 export function CapabilityReviewStep({
   structuralPrompt,
   workflow,
   selections,
+  containers = [],
   onConfirm,
   onBack,
 }: CapabilityReviewStepProps) {
-  // Req 5.2 — list nodes in execution order from workflow.nodes
-  const nodes: any[] = Array.isArray(workflow?.nodes) ? workflow.nodes : [];
-  const selectionCount = Object.keys(selections).length;
-
-  // Parse the structured prompt into sections: WORKFLOW, TRIGGER, FLOW, CONNECTIONS
-  // Handles both "SECTION: content" and "SECTION\ncontent" formats for robustness
-  const parseStructuredPrompt = (raw: string) => {
-    const workflowMatch = raw.match(/^WORKFLOW:\s*(.+?)(?=\n\n|\nTRIGGER)/ms);
-    const triggerMatch = raw.match(/TRIGGER:?\s*\n?([\s\S]+?)(?=\n\nFLOW|\nFLOW)/ms);
-    const flowMatch = raw.match(/FLOW:?\s*\n?([\s\S]+?)(?=\n\nCONNECTIONS|\nCONNECTIONS|$)/ms);
-    const connectionsMatch = raw.match(/CONNECTIONS:?\s*\n?([\s\S]+?)$/ms);
-
-    return {
-      workflow: workflowMatch?.[1]?.trim() ?? '',
-      trigger: triggerMatch?.[1]?.trim() ?? '',
-      flow: flowMatch?.[1]?.trim() ?? '',
-      connections: connectionsMatch?.[1]?.trim() ?? '',
-      // Structured if it has at least WORKFLOW and FLOW sections
-      isStructured: raw.includes('WORKFLOW:') && (raw.includes('FLOW:') || raw.includes('\nFLOW\n') || raw.includes('\nFLOW\r\n')),
-    };
-  };
-
+  const nodes = Array.isArray(workflow?.nodes) ? workflow.nodes : [];
+  const selectedWorkflowNodes = buildSelectedWorkflowNodes(nodes, containers, selections);
   const parsed = parseStructuredPrompt(structuralPrompt);
 
-  // Render bold **text** inline
-  const renderBold = (text: string) =>
-    text.split(/(\*\*[^*]+\*\*)/).map((part, i) =>
-      part.startsWith('**') && part.endsWith('**')
-        ? <strong key={i}>{part.slice(2, -2)}</strong>
-        : part
-    );
-
-  // Render flow lines — handle branch cases (→ Case) with indentation
   const renderFlowLines = (flowText: string) =>
     flowText.split('\n').map((line, i) => {
-      const isBranchCase = line.trim().startsWith('→');
+      const trimmed = line.trim();
+      if (!trimmed) return null;
+      const isBranchCase = /^(?:->|\u2192|\u00e2\u2020\u2019)?\s*Case\b/i.test(trimmed);
+
       return (
-        <div key={i} className={isBranchCase ? 'pl-4 text-xs text-muted-foreground' : 'text-sm'}>
-          {renderBold(line)}
-        </div>
+        <li
+          key={i}
+          className={[
+            'flex gap-2 leading-relaxed',
+            isBranchCase ? 'ml-7 text-xs text-muted-foreground' : 'text-sm text-foreground',
+          ].join(' ')}
+        >
+          <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary/70" />
+          <span>{renderBold(trimmed.replace(/^(?:->|\u2192|\u00e2\u2020\u2019)\s*/, ''))}</span>
+        </li>
       );
     });
 
   return (
-    // Full width rather than a centred column, and stacked rather than split: the summary
-    // is prose, and squeezing it into half the width made it a narrow ribbon that had to be
-    // scrolled inside its own box to read. Full-bleed it fits in a few lines, and the step
-    // list — which is short rows, not prose — reads fine underneath it.
     <div className="w-full space-y-4 pb-24">
-      {/* Header */}
-      <div className="space-y-1">
-        <h2 className="text-xl font-semibold">Review your workflow</h2>
-        <p className="text-sm text-muted-foreground">
-          Confirm the workflow below before we start building it.{' '}
-          <span className="font-medium text-foreground">
-            {selectionCount} {selectionCount === 1 ? 'integration' : 'integrations'} selected.
-          </span>
-        </p>
-      </div>
+      <Card className="border-border/80">
+        <CardHeader className="pb-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <CardTitle className="text-base">Selected workflow nodes</CardTitle>
+              <CardDescription className="text-sm">
+                Nodes will run in this order. Review the selected building blocks before setup starts.
+              </CardDescription>
+            </div>
+            <Badge variant="outline" className="shrink-0 text-xs">
+              {selectedWorkflowNodes.length} {selectedWorkflowNodes.length === 1 ? 'node' : 'nodes'} selected
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-0">
+          {selectedWorkflowNodes.length > 0 ? (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {selectedWorkflowNodes.map((item, index) => (
+                <motion.div
+                  key={item.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: Math.min(index, 8) * 0.04, duration: 0.25 }}
+                  className="rounded-lg border border-border/70 bg-background/70 p-3"
+                >
+                  <div className="mb-2 flex items-start justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+                        {index + 1}
+                      </span>
+                      <p className="truncate text-sm font-semibold">{item.label}</p>
+                    </div>
+                    {item.role && (
+                      <Badge variant="secondary" className="shrink-0 text-[10px] capitalize">
+                        {item.role.replace(/_/g, ' ')}
+                      </Badge>
+                    )}
+                  </div>
+                  {item.intentLabel && (
+                    <p className="text-xs font-medium text-foreground/80">{item.intentLabel}</p>
+                  )}
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    {item.intentDescription || item.nodeDescription || 'Selected for this workflow step.'}
+                  </p>
+                </motion.div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">No selected nodes are available yet.</p>
+          )}
+        </CardContent>
+      </Card>
 
-      {/* Workflow summary — structured AI-generated blueprint. Full width, above the steps.
-          No height cap or inner scroll: at this width it is short enough to read in place,
-          and a nested scrollbar only hid the end of it. */}
       <Card className="border-border/80">
         <CardHeader className="pb-2">
           <div className="flex items-center gap-2">
             <CardTitle className="text-base">Workflow summary</CardTitle>
             <Badge variant="secondary" className="text-xs">AI generated</Badge>
           </div>
-          {parsed.isStructured && parsed.workflow && (
-            <CardDescription className="text-sm font-medium text-foreground/80 mt-1">
-              {parsed.workflow}
-            </CardDescription>
-          )}
+          <CardDescription className="text-sm">
+            Point-wise explanation of what the AI will build next.
+          </CardDescription>
         </CardHeader>
-        <CardContent className="pt-0 space-y-3">
+        <CardContent className="space-y-4 pt-0">
           {parsed.isStructured ? (
             <>
+              {parsed.workflow && (
+                <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Goal</p>
+                  <ul className="space-y-1.5">
+                    <SummaryPoint>{renderBold(parsed.workflow)}</SummaryPoint>
+                  </ul>
+                </div>
+              )}
               {parsed.trigger && (
-                <div>
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Trigger</p>
-                  <p className="text-sm text-foreground">{renderBold(parsed.trigger)}</p>
+                <div className="rounded-lg border border-border/60 bg-background/70 p-3">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Trigger</p>
+                  <ul className="space-y-1.5">
+                    {splitReadablePoints(parsed.trigger).map((point, index) => (
+                      <SummaryPoint key={index}>{renderBold(point)}</SummaryPoint>
+                    ))}
+                  </ul>
                 </div>
               )}
               {parsed.flow && (
-                <div>
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Flow</p>
-                  <div className="space-y-1">{renderFlowLines(parsed.flow)}</div>
+                <div className="rounded-lg border border-border/60 bg-background/70 p-3">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Flow</p>
+                  <ul className="space-y-1.5">{renderFlowLines(parsed.flow)}</ul>
                 </div>
               )}
               {parsed.connections && (
-                <div>
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Connections</p>
-                  <p className="text-sm text-muted-foreground">{parsed.connections}</p>
+                <div className="rounded-lg border border-border/60 bg-background/70 p-3">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Connections</p>
+                  <ul className="space-y-1.5">
+                    {splitReadablePoints(parsed.connections).map((point, index) => (
+                      <SummaryPoint key={index} muted>
+                        {renderBold(point)}
+                      </SummaryPoint>
+                    ))}
+                  </ul>
                 </div>
               )}
             </>
           ) : (
-            /* Legacy fallback for unstructured prompts */
-            <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
-              {structuralPrompt.split(/(\*\*[^*]+\*\*)/).map((part, i) =>
-                part.startsWith('**') && part.endsWith('**')
-                  ? <strong key={i}>{part.slice(2, -2)}</strong>
-                  : part
-              )}
-            </p>
+            <ul className="space-y-2">
+              {splitReadablePoints(structuralPrompt).map((point, index) => (
+                <SummaryPoint key={index}>{renderBold(point)}</SummaryPoint>
+              ))}
+            </ul>
           )}
         </CardContent>
       </Card>
 
-      {/* Execution steps — node name + description only, no duplication */}
-      {nodes.length > 0 && (
-        <Card className="border-border/80">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <CardTitle className="text-base">Execution steps</CardTitle>
-                <CardDescription className="text-sm">Nodes will run in this order.</CardDescription>
-              </div>
-              <Badge variant="outline" className="shrink-0 text-xs">
-                {nodes.length} {nodes.length === 1 ? 'step' : 'steps'}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            {/* Now that the card spans the full width, split into columns much sooner —
-                otherwise a handful of short rows would leave most of the width blank.
-                Rows fill left-to-right then wrap; the step numbers carry the order.
-                Short workflows stay in one column rather than being stretched into a
-                sparse grid. */}
-            <div
-              className={[
-                'grid gap-2',
-                nodes.length > 3 ? 'md:grid-cols-2' : '',
-                nodes.length > 8 ? 'xl:grid-cols-3' : '',
-              ].join(' ')}
-            >
-              {nodes.map((node, index) => (
-                <NodeRow key={node?.id ?? index} node={node} index={index} />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Action buttons */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-t px-4 py-3 flex gap-3">
+      <div className="fixed bottom-0 left-0 right-0 z-50 flex gap-3 border-t bg-background/95 px-4 py-3 backdrop-blur-sm">
         <Button variant="outline" onClick={onBack} className="gap-2">
           <ArrowLeft className="h-4 w-4" />
           Go Back

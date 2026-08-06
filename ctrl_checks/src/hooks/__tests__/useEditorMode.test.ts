@@ -1,19 +1,43 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  AI_WIZARD_ORIGIN,
   EDITOR_MODE_STORAGE_KEY,
   readStoredEditorMode,
+  resolveEditorEntrySource,
   resolveInitialEditorMode,
 } from '../useEditorMode';
 
 describe('resolveInitialEditorMode', () => {
-  it('prefers the stored preference over the navigation origin', () => {
-    expect(resolveInitialEditorMode('expert', true)).toBe('expert');
-    expect(resolveInitialEditorMode('prompt', false)).toBe('prompt');
+  it('opens AI-wizard handoffs in prompt mode regardless of stored preference', () => {
+    expect(resolveInitialEditorMode('expert', 'ai-wizard')).toBe('prompt');
+    expect(resolveInitialEditorMode(null, 'ai-wizard')).toBe('prompt');
   });
 
-  it('falls back to prompt only for AI-wizard arrivals with no stored preference', () => {
-    expect(resolveInitialEditorMode(null, true)).toBe('prompt');
-    expect(resolveInitialEditorMode(null, false)).toBe('expert');
+  it('opens manual-new workflows in expert mode regardless of stored preference', () => {
+    expect(resolveInitialEditorMode('prompt', 'manual-new')).toBe('expert');
+    expect(resolveInitialEditorMode(null, 'manual-new')).toBe('expert');
+  });
+
+  it('uses stored preference only for ordinary workflow opens', () => {
+    expect(resolveInitialEditorMode('prompt', 'standard')).toBe('prompt');
+    expect(resolveInitialEditorMode('expert', 'standard')).toBe('expert');
+    expect(resolveInitialEditorMode(null, 'standard')).toBe('expert');
+  });
+});
+
+describe('resolveEditorEntrySource', () => {
+  it('detects the AI wizard navigation origin', () => {
+    expect(resolveEditorEntrySource('/workflow/abc', AI_WIZARD_ORIGIN)).toBe('ai-wizard');
+  });
+
+  it('detects manual workflow creation by route', () => {
+    expect(resolveEditorEntrySource('/workflow/new')).toBe('manual-new');
+    expect(resolveEditorEntrySource('/workflow/new/')).toBe('manual-new');
+  });
+
+  it('treats ordinary workflow pages as standard opens', () => {
+    expect(resolveEditorEntrySource('/workflow/abc')).toBe('standard');
+    expect(resolveEditorEntrySource('/workflows')).toBe('standard');
   });
 });
 

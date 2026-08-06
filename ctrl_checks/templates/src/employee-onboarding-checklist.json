@@ -1,0 +1,295 @@
+{
+  "id": "91000000-0000-4000-8000-000000000012",
+  "name": "Employee Onboarding Checklist",
+  "description": "Track one new hire at a time, send their onboarding email, notify the hiring team, and mark onboarding as started.",
+  "category": "Sales, Support & Internal Operations",
+  "nodes": [
+    {
+      "id": "schedule_onboarding",
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      },
+      "data": {
+        "icon": "Box",
+        "type": "schedule",
+        "label": "Check New Hires",
+        "category": "triggers",
+        "config": {
+          "cron": "0 10 * * *",
+          "timezone": "Asia/Kolkata"
+        },
+        "notes": {
+          "family": "Triggers",
+          "what": "Works like an alarm clock — runs your workflow automatically at a specific time you set each day",
+          "overview": "Runs your workflow automatically on a schedule using a simple time picker. Select your time (HH:MM format) and timezone, and the workflow will execute daily at that time. Great for daily reports, periodic checks, or recurring tasks.",
+          "tips": [
+            "Use 24-hour format (e.g., 09:00 for 9 AM, 14:30 for 2:30 PM)",
+            "Select your timezone from the dropdown (IST, UTC, etc.)",
+            "Workflow runs daily at the specified time",
+            "Test with manual trigger first",
+            "Timezone conversion is handled automatically"
+          ],
+          "docsHref": "/docs/nodes/schedule",
+          "why": "Runs daily to pick up new hires without manual HR checks."
+        }
+      }
+    },
+    {
+      "id": "airtable_read_new_hire",
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      },
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Read One New Hire",
+        "category": "data",
+        "config": {
+          "baseId": "",
+          "tableId": "NewHires",
+          "operation": "read",
+          "filterByFormula": "AND({Status}='Ready', {OnboardingStarted}='')",
+          "maxRecords": 1
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Selects one ready new hire that has not started onboarding."
+        }
+      }
+    },
+    {
+      "id": "js_prepare_onboarding",
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      },
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Prepare Onboarding Payload",
+        "category": "data",
+        "config": {
+          "code": "const rec = (input.records || [])[0];\nif (!rec) return { ...input, hasHire: false };\nconst f = rec.fields || {};\nreturn { ...input, hasHire: true, recordId: rec.id, employeeName: f.Name || \"there\", employeeEmail: f.Email || \"\", manager: f.Manager || \"your manager\", startDate: f.StartDate || \"\" };",
+          "timeout": 5000
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Lifts new-hire fields into a clean payload for email, Slack and marking."
+        }
+      }
+    },
+    {
+      "id": "if_has_hire",
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      },
+      "data": {
+        "icon": "GitBranch",
+        "type": "if_else",
+        "label": "New Hire Found?",
+        "category": "logic",
+        "config": {
+          "conditions": [
+            {
+              "field": "$json.hasHire",
+              "operator": "equals",
+              "value": true
+            }
+          ],
+          "combineOperation": "AND"
+        },
+        "notes": {
+          "family": "Logic",
+          "what": "Makes a yes/no decision: if something is true, go one way; otherwise go another",
+          "overview": "Makes a yes/no decision from previous-step data and routes matching work through TRUE and non-matching work through FALSE.",
+          "tips": [
+            "Use the builder for normal setup; use JSON mode only when pasting prepared condition objects.",
+            "Choose AND when every row must match; choose OR when any row can match.",
+            "Use equals for statuses and categories, greater-than operators for numeric thresholds, and contains for text or lists.",
+            "Connect both TRUE and FALSE outputs so no business case silently disappears."
+          ],
+          "docsHref": "/docs/nodes/if_else",
+          "why": "Stops empty daily checks from sending blank onboarding messages."
+        }
+      }
+    },
+    {
+      "id": "gmail_onboarding",
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 300
+      },
+      "data": {
+        "icon": "Mail",
+        "type": "google_gmail",
+        "label": "Email New Hire",
+        "category": "output",
+        "config": {
+          "operation": "send",
+          "recipientSource": "manual_entry",
+          "recipientEmails": "{{input.employeeEmail}}",
+          "subject": "Welcome to the team",
+          "body": "Hi {{input.employeeName}},\n\nWelcome. Your start date is {{input.startDate}}. Your manager is {{input.manager}}. We will share your onboarding tasks shortly."
+        },
+        "notes": {
+          "family": "Communication",
+          "what": "Send emails from your Gmail account or read and search messages in your inbox",
+          "overview": "Send, list, get, or search Gmail messages. Send recipients can be typed manually or extracted from upstream/fallback Google Sheets rows.",
+          "tips": [
+            "Connect Google OAuth in Connections; do not paste tokens into workflow fields",
+            "Gmail search syntax: from:, subject:, is:unread, has:attachment",
+            "List/Search only return {id, threadId} per message â€” use a Get step with that id for full content",
+            "Body is plain text only",
+            "Get returns Gmail's raw API message; the body text is base64url-encoded inside message.payload.body.data",
+            "Use search to filter messages before getting details"
+          ],
+          "docsHref": "/docs/nodes/google_gmail",
+          "why": "Sends a consistent welcome email to the new hire."
+        }
+      }
+    },
+    {
+      "id": "slack_onboarding",
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 300
+      },
+      "data": {
+        "icon": "Hash",
+        "type": "slack_message",
+        "label": "Notify Hiring Team",
+        "category": "output",
+        "config": {
+          "channel": "#people-ops",
+          "message": "Onboarding started for {{input.employeeName}}. Manager: {{input.manager}}. Start: {{input.startDate}}"
+        },
+        "notes": {
+          "family": "Communication",
+          "what": "Sends messages using a Slack app or bot connection",
+          "overview": "Send Slack bot messages to channels, direct messages, or existing threads through a saved Slack OAuth2 connection. Use it for workplace alerts, support replies, incident updates, approvals, report summaries, and deployment notifications.",
+          "tips": [
+            "Select a Slack OAuth2 connection; do not paste bot tokens into message fields",
+            "The Slack app needs chat:write, and the bot must be invited before it can post in private channels",
+            "Use {{$json.channelId}} and {{$json.threadTs}} from Slack Trigger to reply in the same conversation",
+            "Keep Message filled as readable fallback text even when Blocks contains a rich Block Kit layout",
+            "Connect downstream service accounts separately; Slack OAuth2 only authorizes the Slack send"
+          ],
+          "docsHref": "/docs/nodes/slack_message",
+          "why": "Tells People Ops and the manager that onboarding has started."
+        }
+      }
+    },
+    {
+      "id": "airtable_mark_onboarding",
+      "type": "custom",
+      "position": {
+        "x": 2020,
+        "y": 300
+      },
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Mark Started",
+        "category": "data",
+        "config": {
+          "baseId": "",
+          "tableId": "NewHires",
+          "operation": "update",
+          "recordId": "{{input.recordId}}",
+          "fields": {
+            "OnboardingStarted": "Yes"
+          }
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Prevents duplicate onboarding starts for the same employee."
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_1_schedule_onboarding_airtable_read_new_hire",
+      "source": "schedule_onboarding",
+      "target": "airtable_read_new_hire"
+    },
+    {
+      "id": "e_2_airtable_read_new_hire_js_prepare_onboarding",
+      "source": "airtable_read_new_hire",
+      "target": "js_prepare_onboarding"
+    },
+    {
+      "id": "e_3_js_prepare_onboarding_if_has_hire",
+      "source": "js_prepare_onboarding",
+      "target": "if_has_hire"
+    },
+    {
+      "id": "e_4_if_has_hire_gmail_onboarding",
+      "source": "if_has_hire",
+      "target": "gmail_onboarding",
+      "sourceHandle": "true"
+    },
+    {
+      "id": "e_5_gmail_onboarding_slack_onboarding",
+      "source": "gmail_onboarding",
+      "target": "slack_onboarding"
+    },
+    {
+      "id": "e_6_slack_onboarding_airtable_mark_onboarding",
+      "source": "slack_onboarding",
+      "target": "airtable_mark_onboarding"
+    }
+  ],
+  "difficulty": "Beginner",
+  "estimated_setup_time": 17,
+  "tags": [
+    "hr",
+    "onboarding",
+    "airtable",
+    "email",
+    "slack"
+  ],
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2
+}

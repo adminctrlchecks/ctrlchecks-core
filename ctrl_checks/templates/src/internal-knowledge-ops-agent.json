@@ -2,7 +2,7 @@
   "id": "5b3d400a-0eec-4c09-ac51-921cd6a35a50",
   "name": "Internal Knowledge / Ops Agent",
   "description": "Internal knowledge base assistant that searches company documentation, answers employee questions with source citations, and escalates when information is not found. Perfect for employee self-service.",
-  "category": "Internal Operations",
+  "category": "Sales, Support & Internal Operations",
   "nodes": [
     {
       "id": "chat_trigger_kb_1",

@@ -1,0 +1,302 @@
+{
+  "id": "91000000-0000-4000-8000-000000000010",
+  "name": "Support Ticket Triage",
+  "description": "Classify new support requests, save the ticket, route urgent cases to Slack, and email the customer with next steps.",
+  "category": "Sales, Support & Internal Operations",
+  "nodes": [
+    {
+      "id": "form_support_request",
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      },
+      "data": {
+        "icon": "Box",
+        "type": "form",
+        "label": "Support Request Form",
+        "category": "triggers",
+        "config": {
+          "fields": [
+            {
+              "key": "customerEmail",
+              "type": "email",
+              "label": "Customer Email",
+              "required": true
+            },
+            {
+              "key": "subject",
+              "type": "text",
+              "label": "Subject",
+              "required": true
+            },
+            {
+              "key": "message",
+              "type": "textarea",
+              "label": "Message",
+              "required": true
+            }
+          ],
+          "formTitle": "Support Request",
+          "submitButtonText": "Send Request"
+        },
+        "notes": {
+          "family": "Triggers",
+          "what": "Starts your workflow when someone fills out and submits a web form you built",
+          "overview": "Build a public CtrlChecks form and start the workflow when someone submits structured answers, files, or intake details.",
+          "tips": [
+            "Use friendly labels for submitters and stable internal names for workflow mapping.",
+            "Map answers with {{$json.customer_email}} or {{$json.data.customer_email}} after checking a test execution.",
+            "Use select or radio options for values that drive routing, approvals, reporting, or branch conditions.",
+            "Turn CAPTCHA on for public forms that can create tickets, leads, or notifications.",
+            "Require authentication only for internal or sensitive forms.",
+            "Changing an internal name after downstream nodes are mapped requires updating those mappings too."
+          ],
+          "docsHref": "/docs/nodes/form",
+          "why": "Collects the customer issue in a structured form instead of an untracked inbox."
+        }
+      }
+    },
+    {
+      "id": "ai_classify_ticket",
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      },
+      "data": {
+        "icon": "Box",
+        "type": "openai_gpt",
+        "label": "Classify Ticket",
+        "category": "ai",
+        "config": {
+          "model": "gpt-4o-mini",
+          "prompt": "Classify this support request. Subject: {{input.subject}}. Message: {{input.message}}. Return ONLY JSON: {\"priority\":\"low|normal|urgent\",\"category\":\"billing|technical|account|other\",\"summary\":\"short summary\"}.",
+          "temperature": 0.2
+        },
+        "notes": {
+          "family": "AI",
+          "what": "Sends your prompt to OpenAI's ChatGPT and gets back an AI-written response",
+          "overview": "Calls OpenAI through the legacy LLM adapter. Prompt is the main input; Messages is only a fallback when Prompt is blank. Temperature and Memory are visible legacy fields ignored by the current executor.",
+          "tips": [],
+          "docsHref": "/docs/nodes/openai_gpt",
+          "why": "Turns the request into priority and category fields."
+        }
+      }
+    },
+    {
+      "id": "js_parse_ticket",
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      },
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Parse Ticket Fields",
+        "category": "data",
+        "config": {
+          "code": "let parsed = {};\ntry { const text = input.response || \"{}\"; const m = text.match(/\\{[\\s\\S]*\\}/); parsed = m ? JSON.parse(m[0]) : {}; } catch (e) { parsed = {}; }\nreturn { ...input, priority: parsed.priority || \"normal\", category: parsed.category || \"other\", summary: parsed.summary || input.message || \"\" };",
+          "timeout": 5000
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Creates stable fields for database storage and priority routing."
+        }
+      }
+    },
+    {
+      "id": "postgres_create_ticket",
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      },
+      "data": {
+        "icon": "Box",
+        "type": "postgresql",
+        "label": "Create Support Ticket",
+        "category": "data",
+        "config": {
+          "query": "INSERT INTO support_tickets (customer_email, subject, category, priority, summary, status, created_at) VALUES ('{{input.customerEmail}}', '{{input.subject}}', '{{input.category}}', '{{input.priority}}', '{{input.summary}}', 'open', now())"
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Connects to a PostgreSQL database to run queries or insert data",
+          "overview": "Run PostgreSQL executeQuery, insert, update, or delete through the real database executor. The visual panel now uses runtime operation values and Parameters maps to the executor parameter array.",
+          "tips": [
+            "Use executeQuery for raw SQL with $1, $2 placeholders and Parameters as a JSON array.",
+            "Insert returns inserted/count; update and delete return rows/rowsAffected because PostgreSQL uses RETURNING *.",
+            "The backend schema still lists connectionString, but the executor validates host, username, password, database, port, and ssl.",
+            "Update and delete require Where; the executor refuses missing where clauses.",
+            "Store database passwords in Connections rather than ordinary workflow fields."
+          ],
+          "docsHref": "/docs/nodes/postgresql",
+          "why": "Creates a durable ticket instead of leaving support requests only in email or Slack."
+        }
+      }
+    },
+    {
+      "id": "if_urgent_ticket",
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 205
+      },
+      "data": {
+        "icon": "GitBranch",
+        "type": "if_else",
+        "label": "Urgent Ticket?",
+        "category": "logic",
+        "config": {
+          "conditions": [
+            {
+              "field": "$json.priority",
+              "operator": "equals",
+              "value": "urgent"
+            }
+          ],
+          "combineOperation": "AND"
+        },
+        "notes": {
+          "family": "Logic",
+          "what": "Makes a yes/no decision: if something is true, go one way; otherwise go another",
+          "overview": "Makes a yes/no decision from previous-step data and routes matching work through TRUE and non-matching work through FALSE.",
+          "tips": [
+            "Use the builder for normal setup; use JSON mode only when pasting prepared condition objects.",
+            "Choose AND when every row must match; choose OR when any row can match.",
+            "Use equals for statuses and categories, greater-than operators for numeric thresholds, and contains for text or lists.",
+            "Connect both TRUE and FALSE outputs so no business case silently disappears."
+          ],
+          "docsHref": "/docs/nodes/if_else",
+          "why": "Only urgent tickets interrupt the team immediately."
+        }
+      }
+    },
+    {
+      "id": "slack_urgent_ticket",
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 300
+      },
+      "data": {
+        "icon": "Hash",
+        "type": "slack_message",
+        "label": "Alert Support Team",
+        "category": "output",
+        "config": {
+          "channel": "#support-urgent",
+          "message": "Urgent support ticket: {{input.subject}}\n{{input.summary}}"
+        },
+        "notes": {
+          "family": "Communication",
+          "what": "Sends messages using a Slack app or bot connection",
+          "overview": "Send Slack bot messages to channels, direct messages, or existing threads through a saved Slack OAuth2 connection. Use it for workplace alerts, support replies, incident updates, approvals, report summaries, and deployment notifications.",
+          "tips": [
+            "Select a Slack OAuth2 connection; do not paste bot tokens into message fields",
+            "The Slack app needs chat:write, and the bot must be invited before it can post in private channels",
+            "Use {{$json.channelId}} and {{$json.threadTs}} from Slack Trigger to reply in the same conversation",
+            "Keep Message filled as readable fallback text even when Blocks contains a rich Block Kit layout",
+            "Connect downstream service accounts separately; Slack OAuth2 only authorizes the Slack send"
+          ],
+          "docsHref": "/docs/nodes/slack_message",
+          "why": "Puts urgent requests in front of support staff fast."
+        }
+      }
+    },
+    {
+      "id": "gmail_ticket_ack",
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 395
+      },
+      "data": {
+        "icon": "Mail",
+        "type": "google_gmail",
+        "label": "Email Customer",
+        "category": "output",
+        "config": {
+          "operation": "send",
+          "recipientSource": "manual_entry",
+          "recipientEmails": "{{input.customerEmail}}",
+          "subject": "We received your request",
+          "body": "We received your request about \"{{input.subject}}\". Priority: {{input.priority}}. Our team will follow up."
+        },
+        "notes": {
+          "family": "Communication",
+          "what": "Send emails from your Gmail account or read and search messages in your inbox",
+          "overview": "Send, list, get, or search Gmail messages. Send recipients can be typed manually or extracted from upstream/fallback Google Sheets rows.",
+          "tips": [
+            "Connect Google OAuth in Connections; do not paste tokens into workflow fields",
+            "Gmail search syntax: from:, subject:, is:unread, has:attachment",
+            "List/Search only return {id, threadId} per message â€” use a Get step with that id for full content",
+            "Body is plain text only",
+            "Get returns Gmail's raw API message; the body text is base64url-encoded inside message.payload.body.data",
+            "Use search to filter messages before getting details"
+          ],
+          "docsHref": "/docs/nodes/google_gmail",
+          "why": "Confirms the ticket was received and sets customer expectations."
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_1_form_support_request_ai_classify_ticket",
+      "source": "form_support_request",
+      "target": "ai_classify_ticket"
+    },
+    {
+      "id": "e_2_ai_classify_ticket_js_parse_ticket",
+      "source": "ai_classify_ticket",
+      "target": "js_parse_ticket"
+    },
+    {
+      "id": "e_3_js_parse_ticket_postgres_create_ticket",
+      "source": "js_parse_ticket",
+      "target": "postgres_create_ticket"
+    },
+    {
+      "id": "e_4_postgres_create_ticket_if_urgent_ticket",
+      "source": "postgres_create_ticket",
+      "target": "if_urgent_ticket"
+    },
+    {
+      "id": "e_5_if_urgent_ticket_slack_urgent_ticket",
+      "source": "if_urgent_ticket",
+      "target": "slack_urgent_ticket",
+      "sourceHandle": "true"
+    },
+    {
+      "id": "e_6_postgres_create_ticket_gmail_ticket_ack",
+      "source": "postgres_create_ticket",
+      "target": "gmail_ticket_ack"
+    }
+  ],
+  "difficulty": "Beginner",
+  "estimated_setup_time": 18,
+  "tags": [
+    "support",
+    "triage",
+    "ai",
+    "postgresql",
+    "email"
+  ],
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2
+}

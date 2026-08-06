@@ -1,7 +1,7 @@
 {
   "id": "19c9665f-25c5-472f-8c0e-4ed82b6ba249",
   "name": "Verification Co-Pilot Chat",
-  "description": "Answer 'what's the status of X?' without anyone manually digging through records. Ask in plain English over WhatsApp or Slack and an AI co-pilot pulls the live client record — and optionally a platform status API — to give a grounded, current answer, with no app-switching required.",
+  "description": "Answer 'what's the status of X?' without anyone manually digging through records. Ask in plain English over chat or Slack and an AI co-pilot pulls the live client record — and optionally a platform status API — to give a grounded, current answer, with no app-switching required.",
   "category": "Business Verification & Compliance",
   "nodes": [
     {
@@ -130,26 +130,19 @@
     {
       "id": "whatsapp_reply_copilot",
       "data": {
-        "icon": "MessageCircle",
-        "type": "whatsapp",
+        "icon": "Send",
+        "type": "chat_send",
         "label": "Reply in Chat",
         "config": {
-          "to": "{{input.senderPhone}}",
-          "text": "{{input.response}}",
-          "resource": "message",
-          "operation": "sendText"
+          "message": "{{input.response}}"
         },
         "category": "output",
         "notes": {
-          "family": "Communication",
-          "what": "Sends WhatsApp messages to customers via the official WhatsApp Business API",
-          "overview": "Send WhatsApp messages, media, locations, contact cards, approved templates, and interactive buttons/lists through the WhatsApp Business Cloud API. Connect a WhatsApp/Facebook account under Connections â€” credentials are resolved automatically. The visual panel exposes the Message resource; Contact, Conversation, Template, Campaign, and AI Agent resources are runtime-supported for advanced or AI-generated workflows.",
-          "tips": [
-            "Connect a WhatsApp account under Connections â€” no access tokens entered on the node itself",
-            "Phone numbers should be in E.164 format, e.g. +12345678900",
-            "First message to a new contact must use Send Template; free-form Send Text only works inside the 24-hour customer service window"
-          ],
-          "docsHref": "/docs/nodes/whatsapp",
+          "family": "Database",
+          "what": "Sends a reply in a chat conversation — works with a chat trigger to create a bot",
+          "overview": "",
+          "tips": [],
+          "docsHref": null,
           "why": "Returns the answer in chat, so nobody has to open Airtable."
         }
       },
@@ -187,7 +180,7 @@
   "tags": [
     "ai-agent",
     "chatbot",
-    "whatsapp",
+    "chat",
     "airtable",
     "co-pilot"
   ],

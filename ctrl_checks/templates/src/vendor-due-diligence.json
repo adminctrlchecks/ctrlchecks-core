@@ -1,0 +1,303 @@
+{
+  "id": "91000000-0000-4000-8000-000000000008",
+  "name": "Vendor Due Diligence",
+  "description": "Collect vendor details, fetch the live website, summarize risk, save the review, and alert procurement for high-risk vendors.",
+  "category": "Finance, Accounting & Insurance",
+  "nodes": [
+    {
+      "id": "form_vendor",
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      },
+      "data": {
+        "icon": "Box",
+        "type": "form",
+        "label": "Vendor Intake Form",
+        "category": "triggers",
+        "config": {
+          "fields": [
+            {
+              "key": "vendorName",
+              "type": "text",
+              "label": "Vendor Name",
+              "required": true
+            },
+            {
+              "key": "website",
+              "type": "url",
+              "label": "Website",
+              "required": true
+            },
+            {
+              "key": "ownerEmail",
+              "type": "email",
+              "label": "Owner Email",
+              "required": true
+            }
+          ],
+          "formTitle": "Vendor Due Diligence",
+          "submitButtonText": "Review Vendor"
+        },
+        "notes": {
+          "family": "Triggers",
+          "what": "Starts your workflow when someone fills out and submits a web form you built",
+          "overview": "Build a public CtrlChecks form and start the workflow when someone submits structured answers, files, or intake details.",
+          "tips": [
+            "Use friendly labels for submitters and stable internal names for workflow mapping.",
+            "Map answers with {{$json.customer_email}} or {{$json.data.customer_email}} after checking a test execution.",
+            "Use select or radio options for values that drive routing, approvals, reporting, or branch conditions.",
+            "Turn CAPTCHA on for public forms that can create tickets, leads, or notifications.",
+            "Require authentication only for internal or sensitive forms.",
+            "Changing an internal name after downstream nodes are mapped requires updating those mappings too."
+          ],
+          "docsHref": "/docs/nodes/form",
+          "why": "Collects the vendor identity and internal owner before any review starts."
+        }
+      }
+    },
+    {
+      "id": "http_fetch_vendor_site",
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      },
+      "data": {
+        "icon": "Box",
+        "type": "http_request",
+        "label": "Fetch Vendor Website",
+        "category": "http_api",
+        "config": {
+          "url": "{{input.website}}",
+          "method": "GET",
+          "headers": {},
+          "timeout": 10000
+        },
+        "notes": {
+          "family": "HTTP & API",
+          "what": "Calls any web URL and gets data back — your universal connector to the internet",
+          "overview": "Call an external API or webhook, optionally adding headers, query parameters, body data, and a timeout.",
+          "tips": [],
+          "docsHref": "/docs/nodes/http_request",
+          "why": "Reads the live vendor website so the review uses current public information."
+        }
+      }
+    },
+    {
+      "id": "ai_vendor_risk",
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      },
+      "data": {
+        "icon": "Box",
+        "type": "openai_gpt",
+        "label": "Assess Vendor Risk",
+        "category": "ai",
+        "config": {
+          "model": "gpt-4o-mini",
+          "prompt": "Assess vendor risk from this website HTML and owner data. Vendor: {{input.vendorName}}. Website HTML: {{input.body}}. Return ONLY JSON: {\"risk\":\"low|medium|high\",\"summary\":\"short summary\",\"requiresReview\":true|false}.",
+          "temperature": 0.2
+        },
+        "notes": {
+          "family": "AI",
+          "what": "Sends your prompt to OpenAI's ChatGPT and gets back an AI-written response",
+          "overview": "Calls OpenAI through the legacy LLM adapter. Prompt is the main input; Messages is only a fallback when Prompt is blank. Temperature and Memory are visible legacy fields ignored by the current executor.",
+          "tips": [],
+          "docsHref": "/docs/nodes/openai_gpt",
+          "why": "Summarizes vendor risk using the live website rather than only the submitted name."
+        }
+      }
+    },
+    {
+      "id": "js_parse_vendor",
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      },
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Parse Vendor Risk",
+        "category": "data",
+        "config": {
+          "code": "let parsed = {};\ntry { const text = input.response || \"{}\"; const m = text.match(/\\{[\\s\\S]*\\}/); parsed = m ? JSON.parse(m[0]) : {}; } catch (e) { parsed = {}; }\nreturn { ...input, risk: parsed.risk || \"medium\", summary: parsed.summary || \"\", requiresReview: parsed.requiresReview === true || parsed.risk === \"high\" };",
+          "timeout": 5000
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Creates fields for storage and the procurement review branch."
+        }
+      }
+    },
+    {
+      "id": "airtable_log_vendor",
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 300
+      },
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Log Vendor Review",
+        "category": "data",
+        "config": {
+          "baseId": "",
+          "tableId": "VendorReviews",
+          "operation": "create",
+          "fields": {
+            "Vendor": "{{input.vendorName}}",
+            "Website": "{{input.website}}",
+            "Risk": "{{input.risk}}",
+            "Summary": "{{input.summary}}",
+            "OwnerEmail": "{{input.ownerEmail}}"
+          }
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Stores the review so procurement has an audit trail."
+        }
+      }
+    },
+    {
+      "id": "if_vendor_review",
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 300
+      },
+      "data": {
+        "icon": "GitBranch",
+        "type": "if_else",
+        "label": "Procurement Review Needed?",
+        "category": "logic",
+        "config": {
+          "conditions": [
+            {
+              "field": "$json.requiresReview",
+              "operator": "equals",
+              "value": true
+            }
+          ],
+          "combineOperation": "AND"
+        },
+        "notes": {
+          "family": "Logic",
+          "what": "Makes a yes/no decision: if something is true, go one way; otherwise go another",
+          "overview": "Makes a yes/no decision from previous-step data and routes matching work through TRUE and non-matching work through FALSE.",
+          "tips": [
+            "Use the builder for normal setup; use JSON mode only when pasting prepared condition objects.",
+            "Choose AND when every row must match; choose OR when any row can match.",
+            "Use equals for statuses and categories, greater-than operators for numeric thresholds, and contains for text or lists.",
+            "Connect both TRUE and FALSE outputs so no business case silently disappears."
+          ],
+          "docsHref": "/docs/nodes/if_else",
+          "why": "Only interrupts procurement for vendors that need a closer look."
+        }
+      }
+    },
+    {
+      "id": "slack_vendor_review",
+      "type": "custom",
+      "position": {
+        "x": 2020,
+        "y": 300
+      },
+      "data": {
+        "icon": "Hash",
+        "type": "slack_message",
+        "label": "Alert Procurement",
+        "category": "output",
+        "config": {
+          "channel": "#procurement",
+          "message": "Vendor review needed: {{input.vendorName}}\nRisk: {{input.risk}}\n{{input.summary}}"
+        },
+        "notes": {
+          "family": "Communication",
+          "what": "Sends messages using a Slack app or bot connection",
+          "overview": "Send Slack bot messages to channels, direct messages, or existing threads through a saved Slack OAuth2 connection. Use it for workplace alerts, support replies, incident updates, approvals, report summaries, and deployment notifications.",
+          "tips": [
+            "Select a Slack OAuth2 connection; do not paste bot tokens into message fields",
+            "The Slack app needs chat:write, and the bot must be invited before it can post in private channels",
+            "Use {{$json.channelId}} and {{$json.threadTs}} from Slack Trigger to reply in the same conversation",
+            "Keep Message filled as readable fallback text even when Blocks contains a rich Block Kit layout",
+            "Connect downstream service accounts separately; Slack OAuth2 only authorizes the Slack send"
+          ],
+          "docsHref": "/docs/nodes/slack_message",
+          "why": "Routes high-risk vendor reviews to procurement immediately."
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_1_form_vendor_http_fetch_vendor_site",
+      "source": "form_vendor",
+      "target": "http_fetch_vendor_site"
+    },
+    {
+      "id": "e_2_http_fetch_vendor_site_ai_vendor_risk",
+      "source": "http_fetch_vendor_site",
+      "target": "ai_vendor_risk"
+    },
+    {
+      "id": "e_3_ai_vendor_risk_js_parse_vendor",
+      "source": "ai_vendor_risk",
+      "target": "js_parse_vendor"
+    },
+    {
+      "id": "e_4_js_parse_vendor_airtable_log_vendor",
+      "source": "js_parse_vendor",
+      "target": "airtable_log_vendor"
+    },
+    {
+      "id": "e_5_airtable_log_vendor_if_vendor_review",
+      "source": "airtable_log_vendor",
+      "target": "if_vendor_review"
+    },
+    {
+      "id": "e_6_if_vendor_review_slack_vendor_review",
+      "source": "if_vendor_review",
+      "target": "slack_vendor_review",
+      "sourceHandle": "true"
+    }
+  ],
+  "difficulty": "Intermediate",
+  "estimated_setup_time": 24,
+  "tags": [
+    "finance",
+    "vendor",
+    "risk",
+    "http",
+    "airtable"
+  ],
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2
+}

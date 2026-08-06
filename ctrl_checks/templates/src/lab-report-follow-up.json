@@ -1,0 +1,267 @@
+{
+  "id": "91000000-0000-4000-8000-000000000003",
+  "name": "Lab Report Follow-up",
+  "description": "Review uploaded lab-report context, decide whether it needs a clinician follow-up, then email the patient or alert the care team.",
+  "category": "Healthcare & Clinics",
+  "nodes": [
+    {
+      "id": "form_lab_report",
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      },
+      "data": {
+        "icon": "Box",
+        "type": "form",
+        "label": "Lab Report Form",
+        "category": "triggers",
+        "config": {
+          "fields": [
+            {
+              "key": "patientName",
+              "type": "text",
+              "label": "Patient Name",
+              "required": true
+            },
+            {
+              "key": "contactEmail",
+              "type": "email",
+              "label": "Contact Email",
+              "required": true
+            },
+            {
+              "key": "reportSummary",
+              "type": "textarea",
+              "label": "Report Summary",
+              "required": true
+            }
+          ],
+          "formTitle": "Lab Report Follow-up",
+          "submitButtonText": "Submit Report"
+        },
+        "notes": {
+          "family": "Triggers",
+          "what": "Starts your workflow when someone fills out and submits a web form you built",
+          "overview": "Build a public CtrlChecks form and start the workflow when someone submits structured answers, files, or intake details.",
+          "tips": [
+            "Use friendly labels for submitters and stable internal names for workflow mapping.",
+            "Map answers with {{$json.customer_email}} or {{$json.data.customer_email}} after checking a test execution.",
+            "Use select or radio options for values that drive routing, approvals, reporting, or branch conditions.",
+            "Turn CAPTCHA on for public forms that can create tickets, leads, or notifications.",
+            "Require authentication only for internal or sensitive forms.",
+            "Changing an internal name after downstream nodes are mapped requires updating those mappings too."
+          ],
+          "docsHref": "/docs/nodes/form",
+          "why": "Collects the report summary and patient contact in one controlled intake."
+        }
+      }
+    },
+    {
+      "id": "ai_review_lab",
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      },
+      "data": {
+        "icon": "Box",
+        "type": "openai_gpt",
+        "label": "Review Follow-up Need",
+        "category": "ai",
+        "config": {
+          "model": "gpt-4o-mini",
+          "prompt": "Review this lab report summary for administrative follow-up routing only: {{input.reportSummary}}. Return ONLY JSON: {\"needsClinician\":true|false,\"patientMessage\":\"plain language message\",\"staffSummary\":\"short staff note\"}.",
+          "temperature": 0.2
+        },
+        "notes": {
+          "family": "AI",
+          "what": "Sends your prompt to OpenAI's ChatGPT and gets back an AI-written response",
+          "overview": "Calls OpenAI through the legacy LLM adapter. Prompt is the main input; Messages is only a fallback when Prompt is blank. Temperature and Memory are visible legacy fields ignored by the current executor.",
+          "tips": [],
+          "docsHref": "/docs/nodes/openai_gpt",
+          "why": "Classifies whether the clinic team should review before a patient message goes out."
+        }
+      }
+    },
+    {
+      "id": "js_parse_lab",
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      },
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Parse Lab Review",
+        "category": "data",
+        "config": {
+          "code": "let parsed = {};\ntry { const text = input.response || \"{}\"; const m = text.match(/\\{[\\s\\S]*\\}/); parsed = m ? JSON.parse(m[0]) : {}; } catch (e) { parsed = {}; }\nreturn { ...input, needsClinician: parsed.needsClinician === true, patientMessage: parsed.patientMessage || \"\", staffSummary: parsed.staffSummary || \"\" };",
+          "timeout": 5000
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Makes the clinician-review flag available to the branch."
+        }
+      }
+    },
+    {
+      "id": "if_lab_needs_review",
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      },
+      "data": {
+        "icon": "GitBranch",
+        "type": "if_else",
+        "label": "Needs Clinician Review?",
+        "category": "logic",
+        "config": {
+          "conditions": [
+            {
+              "field": "$json.needsClinician",
+              "operator": "equals",
+              "value": true
+            }
+          ],
+          "combineOperation": "AND"
+        },
+        "notes": {
+          "family": "Logic",
+          "what": "Makes a yes/no decision: if something is true, go one way; otherwise go another",
+          "overview": "Makes a yes/no decision from previous-step data and routes matching work through TRUE and non-matching work through FALSE.",
+          "tips": [
+            "Use the builder for normal setup; use JSON mode only when pasting prepared condition objects.",
+            "Choose AND when every row must match; choose OR when any row can match.",
+            "Use equals for statuses and categories, greater-than operators for numeric thresholds, and contains for text or lists.",
+            "Connect both TRUE and FALSE outputs so no business case silently disappears."
+          ],
+          "docsHref": "/docs/nodes/if_else",
+          "why": "Keeps sensitive or unclear report follow-ups with staff instead of auto-emailing them."
+        }
+      }
+    },
+    {
+      "id": "slack_lab_review",
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 205
+      },
+      "data": {
+        "icon": "Hash",
+        "type": "slack_message",
+        "label": "Ask Care Team to Review",
+        "category": "output",
+        "config": {
+          "channel": "#care-team",
+          "message": "Lab report for {{input.patientName}} needs review:\n{{input.staffSummary}}"
+        },
+        "notes": {
+          "family": "Communication",
+          "what": "Sends messages using a Slack app or bot connection",
+          "overview": "Send Slack bot messages to channels, direct messages, or existing threads through a saved Slack OAuth2 connection. Use it for workplace alerts, support replies, incident updates, approvals, report summaries, and deployment notifications.",
+          "tips": [
+            "Select a Slack OAuth2 connection; do not paste bot tokens into message fields",
+            "The Slack app needs chat:write, and the bot must be invited before it can post in private channels",
+            "Use {{$json.channelId}} and {{$json.threadTs}} from Slack Trigger to reply in the same conversation",
+            "Keep Message filled as readable fallback text even when Blocks contains a rich Block Kit layout",
+            "Connect downstream service accounts separately; Slack OAuth2 only authorizes the Slack send"
+          ],
+          "docsHref": "/docs/nodes/slack_message",
+          "why": "Routes clinician-needed cases to the care team for human review."
+        }
+      }
+    },
+    {
+      "id": "gmail_lab_followup",
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 395
+      },
+      "data": {
+        "icon": "Mail",
+        "type": "google_gmail",
+        "label": "Email Patient Follow-up",
+        "category": "output",
+        "config": {
+          "operation": "send",
+          "recipientSource": "manual_entry",
+          "recipientEmails": "{{input.contactEmail}}",
+          "subject": "Your lab report follow-up",
+          "body": "Hi {{input.patientName}},\n\n{{input.patientMessage}}"
+        },
+        "notes": {
+          "family": "Communication",
+          "what": "Send emails from your Gmail account or read and search messages in your inbox",
+          "overview": "Send, list, get, or search Gmail messages. Send recipients can be typed manually or extracted from upstream/fallback Google Sheets rows.",
+          "tips": [
+            "Connect Google OAuth in Connections; do not paste tokens into workflow fields",
+            "Gmail search syntax: from:, subject:, is:unread, has:attachment",
+            "List/Search only return {id, threadId} per message â€” use a Get step with that id for full content",
+            "Body is plain text only",
+            "Get returns Gmail's raw API message; the body text is base64url-encoded inside message.payload.body.data",
+            "Use search to filter messages before getting details"
+          ],
+          "docsHref": "/docs/nodes/google_gmail",
+          "why": "Sends clear next-step communication when staff review is not required."
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_1_form_lab_report_ai_review_lab",
+      "source": "form_lab_report",
+      "target": "ai_review_lab"
+    },
+    {
+      "id": "e_2_ai_review_lab_js_parse_lab",
+      "source": "ai_review_lab",
+      "target": "js_parse_lab"
+    },
+    {
+      "id": "e_3_js_parse_lab_if_lab_needs_review",
+      "source": "js_parse_lab",
+      "target": "if_lab_needs_review"
+    },
+    {
+      "id": "e_4_if_lab_needs_review_slack_lab_review",
+      "source": "if_lab_needs_review",
+      "target": "slack_lab_review",
+      "sourceHandle": "true"
+    },
+    {
+      "id": "e_5_if_lab_needs_review_gmail_lab_followup",
+      "source": "if_lab_needs_review",
+      "target": "gmail_lab_followup",
+      "sourceHandle": "false"
+    }
+  ],
+  "difficulty": "Intermediate",
+  "estimated_setup_time": 20,
+  "tags": [
+    "healthcare",
+    "labs",
+    "follow-up",
+    "ai",
+    "email"
+  ],
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2
+}

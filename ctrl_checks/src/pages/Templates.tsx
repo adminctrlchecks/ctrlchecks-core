@@ -23,6 +23,7 @@ import {
   collectConnectionOptions,
   templateMatchesConnectionFilter,
 } from '@/lib/templateConnectionFilter';
+import { TEMPLATE_SECTOR_OPTIONS, type TemplateSectorFilter } from '@/lib/templateSectors';
 import type { Database } from '@/integrations/aws/types';
 
 type Template = Database['public']['Tables']['templates']['Row'] & {
@@ -70,6 +71,7 @@ export default function Templates() {
   // move while the user types rather than only once they hit a comma.
   const [connectionTokens, setConnectionTokens] = useState<string[]>([]);
   const [connectionDraft, setConnectionDraft] = useState('');
+  const [sectorFilter, setSectorFilter] = useState<TemplateSectorFilter>('All sectors');
   const [catalog, setCatalog] = useState<ConnectionCatalogEntry[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const navigate = useNavigate();
@@ -161,6 +163,8 @@ export default function Templates() {
   }, [connectionTokens, connectionDraft]);
 
   const filteredTemplates = templates.filter((template) =>
+    (sectorFilter === 'All sectors' || template.category === sectorFilter)
+    &&
     (template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     template.description?.toLowerCase().includes(searchQuery.toLowerCase()))
     && templateMatchesConnectionFilter(
@@ -171,12 +175,14 @@ export default function Templates() {
 
   const isSearching = searchQuery.trim().length > 0;
   const isFilteringConnections = activeConnectionTokens.length > 0;
-  const hasFilters = isSearching || isFilteringConnections;
+  const isFilteringSector = sectorFilter !== 'All sectors';
+  const hasFilters = isSearching || isFilteringConnections || isFilteringSector;
 
   const clearAllFilters = () => {
     setSearchQuery('');
     setConnectionTokens([]);
     setConnectionDraft('');
+    setSectorFilter('All sectors');
   };
 
   return (
@@ -220,6 +226,23 @@ export default function Templates() {
 
           {/* Connection filter — name the services you have, see only what you can run. */}
           <div className="mt-4">
+            <div className="mb-3 flex flex-wrap gap-2" aria-label="Filter templates by sector">
+              {TEMPLATE_SECTOR_OPTIONS.map((sector) => (
+                <button
+                  key={sector}
+                  type="button"
+                  onClick={() => setSectorFilter(sector)}
+                  className={[
+                    'rounded-md border px-3 py-1.5 text-sm font-medium transition-colors',
+                    sectorFilter === sector
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground',
+                  ].join(' ')}
+                >
+                  {sector}
+                </button>
+              ))}
+            </div>
             <ConnectionFilterInput
               tokens={connectionTokens}
               onTokensChange={setConnectionTokens}
@@ -253,6 +276,7 @@ export default function Templates() {
                   {isFilteringConnections && (
                     <> you can run with {activeConnectionTokens.join(', ')}</>
                   )}
+                  {isFilteringSector && <> in {sectorFilter}</>}
                   {hasFilters && <> of {templates.length}</>}
                 </p>
                 {hasFilters && (

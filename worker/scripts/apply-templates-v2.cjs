@@ -10,9 +10,7 @@
  *
  * Modes:
  *   --dry-run      show what would happen, write nothing
- *   (no flag)      apply: backup, deactivate the two unsafe templates, apply all 21
- *   --reactivate   turn the two held-back templates back on, after you have run
- *                  each of them end to end
+ *   (no flag)      apply: backup, run the historical no-op safety step, apply all 36
  *   --rollback     restore every template from the backup table
  *
  * Safety: refuses to write unless a complete backup table exists. Step 00 creates
@@ -34,12 +32,13 @@ const VERIFY = process.argv.includes('--verify');
 const REACTIVATE = process.argv.includes('--reactivate');
 const ROLLBACK = process.argv.includes('--rollback');
 const BACKUP = 'templates_backup_20260731';
-const HELD_BACK = ['Cross-Platform Sync Engine', 'Internal Knowledge / Ops Agent'];
+const EXPECTED_TEMPLATE_COUNT = 36;
+const HELD_BACK = [];
 
 const STEPS = [
   ['00_backup_current_templates.sql', 'back up all templates'],
-  ['01_deactivate_unsafe_templates.sql', 'deactivate the two unsafe templates'],
-  ['02_apply_templates_v2.sql', 'apply the 21 corrected templates'],
+  ['01_deactivate_unsafe_templates.sql', 'run historical no-op safety step'],
+  ['02_apply_templates_v2.sql', 'apply the corrected template library'],
 ];
 
 (async () => {
@@ -74,7 +73,7 @@ const STEPS = [
            FROM templates WHERE version >= 2 ORDER BY name`,
       )
     ).rows;
-    console.log(`Templates at version >= 2: ${rows.length} (expect 21)\n`);
+    console.log(`Templates at version >= 2: ${rows.length} (expect ${EXPECTED_TEMPLATE_COUNT})\n`);
     rows.forEach((r) =>
       console.log(`  ${r.is_active ? '●' : '○'} ${String(r.name).padEnd(42)} v${r.version}  ${r.nodes} nodes`),
     );
@@ -102,7 +101,7 @@ const STEPS = [
     console.log(`\nCRM nodes now in place:`);
     crm.forEach((r) => console.log(`  ${r.name} → "${r.label}" (${r.type}, family ${r.family})`));
 
-    const ok = ghosts.n === 0 && noNotes.n === 0 && rows.length === 21;
+    const ok = ghosts.n === 0 && noNotes.n === 0 && rows.length === EXPECTED_TEMPLATE_COUNT;
     console.log(`\n${ok ? '✔ everything checks out' : '✖ something is off — see above'}`);
     await pool.end();
     process.exit(ok ? 0 : 1);
@@ -182,11 +181,10 @@ const STEPS = [
   );
 
   console.log(`\nAfter:   ${after.total} templates, ${after.active} active`);
-  console.log(`         ${v2.n} at version >= 2 (expect 21)`);
+  console.log(`         ${v2.n} at version >= 2 (expect ${EXPECTED_TEMPLATE_COUNT})`);
   console.log(`         held back pending an end-to-end run: ${inactive.rows.map((r) => r.name).join(', ') || 'none'}`);
 
-  console.log(`\nNext: open /templates, copy one template and run it once. Then:`);
-  console.log(`  node scripts/apply-templates-v2.cjs --reactivate`);
+  console.log(`\nNext: open /templates, copy one template and run it once.`);
   console.log(`\nIf anything looks wrong:`);
   console.log(`  node scripts/apply-templates-v2.cjs --rollback`);
 

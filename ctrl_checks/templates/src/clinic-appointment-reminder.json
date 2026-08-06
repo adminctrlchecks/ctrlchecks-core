@@ -1,0 +1,258 @@
+{
+  "id": "91000000-0000-4000-8000-000000000002",
+  "name": "Clinic Appointment Reminder",
+  "description": "Check the next upcoming appointment, send an email reminder, and mark the reminder so the same patient is not contacted repeatedly.",
+  "category": "Healthcare & Clinics",
+  "nodes": [
+    {
+      "id": "schedule_appointment_check",
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      },
+      "data": {
+        "icon": "Box",
+        "type": "schedule",
+        "label": "Check Upcoming Appointments",
+        "category": "triggers",
+        "config": {
+          "cron": "0 9 * * *",
+          "timezone": "Asia/Kolkata"
+        },
+        "notes": {
+          "family": "Triggers",
+          "what": "Works like an alarm clock — runs your workflow automatically at a specific time you set each day",
+          "overview": "Runs your workflow automatically on a schedule using a simple time picker. Select your time (HH:MM format) and timezone, and the workflow will execute daily at that time. Great for daily reports, periodic checks, or recurring tasks.",
+          "tips": [
+            "Use 24-hour format (e.g., 09:00 for 9 AM, 14:30 for 2:30 PM)",
+            "Select your timezone from the dropdown (IST, UTC, etc.)",
+            "Workflow runs daily at the specified time",
+            "Test with manual trigger first",
+            "Timezone conversion is handled automatically"
+          ],
+          "docsHref": "/docs/nodes/schedule",
+          "why": "Runs daily because appointment reminders are time-based, not manually triggered."
+        }
+      }
+    },
+    {
+      "id": "airtable_read_appointment",
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      },
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Read Next Unreminded Appointment",
+        "category": "data",
+        "config": {
+          "baseId": "",
+          "tableId": "Appointments",
+          "operation": "read",
+          "filterByFormula": "AND({AppointmentDate}!='', {ReminderSent}='')",
+          "maxRecords": 1
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Selects one appointment that still needs a reminder so each run is safe and repeatable."
+        }
+      }
+    },
+    {
+      "id": "js_prepare_appointment",
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      },
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Prepare Reminder",
+        "category": "data",
+        "config": {
+          "code": "const rec = (input.records || [])[0];\nif (!rec) return { ...input, hasAppointment: false };\nconst f = rec.fields || {};\nreturn { ...input, hasAppointment: true, recordId: rec.id, patientName: f.PatientName || \"there\", contactEmail: f.Email || \"\", appointmentDate: f.AppointmentDate || \"\", doctorName: f.Doctor || \"your clinician\" };",
+          "timeout": 5000
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Lifts the appointment row into fields used by the email and marker nodes."
+        }
+      }
+    },
+    {
+      "id": "if_has_appointment",
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      },
+      "data": {
+        "icon": "GitBranch",
+        "type": "if_else",
+        "label": "Appointment Found?",
+        "category": "logic",
+        "config": {
+          "conditions": [
+            {
+              "field": "$json.hasAppointment",
+              "operator": "equals",
+              "value": true
+            }
+          ],
+          "combineOperation": "AND"
+        },
+        "notes": {
+          "family": "Logic",
+          "what": "Makes a yes/no decision: if something is true, go one way; otherwise go another",
+          "overview": "Makes a yes/no decision from previous-step data and routes matching work through TRUE and non-matching work through FALSE.",
+          "tips": [
+            "Use the builder for normal setup; use JSON mode only when pasting prepared condition objects.",
+            "Choose AND when every row must match; choose OR when any row can match.",
+            "Use equals for statuses and categories, greater-than operators for numeric thresholds, and contains for text or lists.",
+            "Connect both TRUE and FALSE outputs so no business case silently disappears."
+          ],
+          "docsHref": "/docs/nodes/if_else",
+          "why": "Stops empty daily checks from sending blank reminders."
+        }
+      }
+    },
+    {
+      "id": "gmail_send_appointment",
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 300
+      },
+      "data": {
+        "icon": "Mail",
+        "type": "google_gmail",
+        "label": "Send Appointment Reminder",
+        "category": "output",
+        "config": {
+          "operation": "send",
+          "recipientSource": "manual_entry",
+          "recipientEmails": "{{input.contactEmail}}",
+          "subject": "Appointment reminder: {{input.appointmentDate}}",
+          "body": "Hi {{input.patientName}},\n\nThis is a reminder for your appointment with {{input.doctorName}} on {{input.appointmentDate}}."
+        },
+        "notes": {
+          "family": "Communication",
+          "what": "Send emails from your Gmail account or read and search messages in your inbox",
+          "overview": "Send, list, get, or search Gmail messages. Send recipients can be typed manually or extracted from upstream/fallback Google Sheets rows.",
+          "tips": [
+            "Connect Google OAuth in Connections; do not paste tokens into workflow fields",
+            "Gmail search syntax: from:, subject:, is:unread, has:attachment",
+            "List/Search only return {id, threadId} per message â€” use a Get step with that id for full content",
+            "Body is plain text only",
+            "Get returns Gmail's raw API message; the body text is base64url-encoded inside message.payload.body.data",
+            "Use search to filter messages before getting details"
+          ],
+          "docsHref": "/docs/nodes/google_gmail",
+          "why": "Delivers the reminder through Gmail, a verified working channel."
+        }
+      }
+    },
+    {
+      "id": "airtable_mark_appointment",
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 300
+      },
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Mark Reminder Sent",
+        "category": "data",
+        "config": {
+          "baseId": "",
+          "tableId": "Appointments",
+          "operation": "update",
+          "recordId": "{{input.recordId}}",
+          "fields": {
+            "ReminderSent": "Yes"
+          }
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Prevents the same appointment reminder being sent again on the next scheduled run."
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_1_schedule_appointment_check_airtable_read_appointment",
+      "source": "schedule_appointment_check",
+      "target": "airtable_read_appointment"
+    },
+    {
+      "id": "e_2_airtable_read_appointment_js_prepare_appointment",
+      "source": "airtable_read_appointment",
+      "target": "js_prepare_appointment"
+    },
+    {
+      "id": "e_3_js_prepare_appointment_if_has_appointment",
+      "source": "js_prepare_appointment",
+      "target": "if_has_appointment"
+    },
+    {
+      "id": "e_4_if_has_appointment_gmail_send_appointment",
+      "source": "if_has_appointment",
+      "target": "gmail_send_appointment",
+      "sourceHandle": "true"
+    },
+    {
+      "id": "e_5_gmail_send_appointment_airtable_mark_appointment",
+      "source": "gmail_send_appointment",
+      "target": "airtable_mark_appointment"
+    }
+  ],
+  "difficulty": "Beginner",
+  "estimated_setup_time": 16,
+  "tags": [
+    "healthcare",
+    "appointments",
+    "reminders",
+    "airtable",
+    "email"
+  ],
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2
+}

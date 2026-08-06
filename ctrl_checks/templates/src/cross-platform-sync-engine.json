@@ -2,7 +2,7 @@
   "id": "85e90794-5759-4cda-9738-6c045e5e1c6c",
   "name": "Cross-Platform Sync Engine",
   "description": "Keep client data in Airtable, your CRM and a shared spreadsheet from drifting apart. Every 15 minutes this workflow picks up one client record that has changed since it was last synced, pushes it to HubSpot and Google Sheets, then stamps it as synced so it is never pushed twice. Requires a HubSpotId column on your Airtable table. (No instant Airtable-update trigger exists yet, so this polls.)",
-  "category": "Business Verification & Compliance",
+  "category": "Sales, Support & Internal Operations",
   "nodes": [
     {
       "id": "schedule_poll_changes",

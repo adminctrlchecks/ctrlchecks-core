@@ -2,7 +2,7 @@
   "id": "17edfa66-2567-413c-9ac5-74f92765d510",
   "name": "Customer Support Agent",
   "description": "Intelligent customer support agent that handles FAQs, checks order status, and escalates complex issues to human agents. Fully working with intent detection, data fetching, and confidence-based routing.",
-  "category": "Customer Support",
+  "category": "Sales, Support & Internal Operations",
   "nodes": [
     {
       "id": "chat_trigger_1",

@@ -19,6 +19,7 @@ import { getAllTemplates, deleteTemplate, toggleTemplateActive, createTemplate, 
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import type { Database } from '@/integrations/aws/types';
+import { TEMPLATE_SECTOR_OPTIONS, TEMPLATE_SECTORS, type TemplateSectorFilter } from '@/lib/templateSectors';
 
 type Template = Database['public']['Tables']['templates']['Row'];
 
@@ -28,6 +29,7 @@ export default function TemplatesManager() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
+  const [sectorFilter, setSectorFilter] = useState<TemplateSectorFilter>('All sectors');
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -39,6 +41,9 @@ export default function TemplatesManager() {
   });
   const { toast } = useToast();
   const navigate = useNavigate();
+  const filteredTemplates = templates.filter((template) =>
+    sectorFilter === 'All sectors' || template.category === sectorFilter
+  );
 
   useEffect(() => {
     loadTemplates();
@@ -259,13 +264,9 @@ export default function TemplatesManager() {
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="AI Chatbots">AI Chatbots</SelectItem>
-                      <SelectItem value="Webhook Automation">Webhook Automation</SelectItem>
-                      <SelectItem value="Data Processing">Data Processing</SelectItem>
-                      <SelectItem value="If-Else Logic">If-Else Logic</SelectItem>
-                      <SelectItem value="Monitoring & Alerts">Monitoring & Alerts</SelectItem>
-                      <SelectItem value="AI Agents">AI Agents</SelectItem>
-                      <SelectItem value="Business Verification & Compliance">Business Verification & Compliance</SelectItem>
+                      {TEMPLATE_SECTORS.map((sector) => (
+                        <SelectItem key={sector} value={sector}>{sector}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -327,8 +328,29 @@ export default function TemplatesManager() {
         </Dialog>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2">
+        {TEMPLATE_SECTOR_OPTIONS.map((sector) => (
+          <button
+            key={sector}
+            type="button"
+            onClick={() => setSectorFilter(sector)}
+            className={[
+              'rounded-md border px-3 py-1.5 text-sm font-medium transition-colors',
+              sectorFilter === sector
+                ? 'border-primary bg-primary text-primary-foreground'
+                : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground',
+            ].join(' ')}
+          >
+            {sector}
+          </button>
+        ))}
+        <span className="ml-auto text-sm text-muted-foreground">
+          {filteredTemplates.length} of {templates.length} templates
+        </span>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {templates.map((template) => (
+        {filteredTemplates.map((template) => (
           <Card key={template.id}>
             <CardHeader>
               <div className="flex items-start justify-between">
@@ -429,16 +451,12 @@ export default function TemplatesManager() {
                     <Label htmlFor="edit-category">Category *</Label>
                     <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
                     <SelectTrigger id="edit-category">
-                        <SelectValue placeholder="Select category" />
+                      <SelectValue placeholder="Select category" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="AI Chatbots">AI Chatbots</SelectItem>
-                        <SelectItem value="Webhook Automation">Webhook Automation</SelectItem>
-                        <SelectItem value="Data Processing">Data Processing</SelectItem>
-                        <SelectItem value="If-Else Logic">If-Else Logic</SelectItem>
-                        <SelectItem value="Monitoring & Alerts">Monitoring & Alerts</SelectItem>
-                        <SelectItem value="AI Agents">AI Agents</SelectItem>
-                        <SelectItem value="Business Verification & Compliance">Business Verification & Compliance</SelectItem>
+                        {TEMPLATE_SECTORS.map((sector) => (
+                          <SelectItem key={sector} value={sector}>{sector}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -516,4 +534,3 @@ export default function TemplatesManager() {
     </div>
   );
 }
-

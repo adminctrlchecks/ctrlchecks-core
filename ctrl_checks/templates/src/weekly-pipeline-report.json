@@ -1,0 +1,205 @@
+{
+  "id": "91000000-0000-4000-8000-000000000013",
+  "name": "Weekly Pipeline Report",
+  "description": "Read current pipeline rows, summarize risk and next actions, then email leadership and post the summary to Slack.",
+  "category": "Sales, Support & Internal Operations",
+  "nodes": [
+    {
+      "id": "schedule_pipeline_report",
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      },
+      "data": {
+        "icon": "Box",
+        "type": "schedule",
+        "label": "Weekly Report Schedule",
+        "category": "triggers",
+        "config": {
+          "cron": "0 9 * * 1",
+          "timezone": "Asia/Kolkata"
+        },
+        "notes": {
+          "family": "Triggers",
+          "what": "Works like an alarm clock — runs your workflow automatically at a specific time you set each day",
+          "overview": "Runs your workflow automatically on a schedule using a simple time picker. Select your time (HH:MM format) and timezone, and the workflow will execute daily at that time. Great for daily reports, periodic checks, or recurring tasks.",
+          "tips": [
+            "Use 24-hour format (e.g., 09:00 for 9 AM, 14:30 for 2:30 PM)",
+            "Select your timezone from the dropdown (IST, UTC, etc.)",
+            "Workflow runs daily at the specified time",
+            "Test with manual trigger first",
+            "Timezone conversion is handled automatically"
+          ],
+          "docsHref": "/docs/nodes/schedule",
+          "why": "Runs weekly so leadership receives a consistent pipeline view."
+        }
+      }
+    },
+    {
+      "id": "airtable_read_pipeline",
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      },
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Read Pipeline Deals",
+        "category": "data",
+        "config": {
+          "baseId": "",
+          "tableId": "Deals",
+          "operation": "read",
+          "filterByFormula": "{Stage}!='Closed Lost'",
+          "maxRecords": 100
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Loads active deals that belong in the weekly report."
+        }
+      }
+    },
+    {
+      "id": "ai_summarize_pipeline",
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      },
+      "data": {
+        "icon": "Box",
+        "type": "openai_gpt",
+        "label": "Summarize Pipeline",
+        "category": "ai",
+        "config": {
+          "model": "gpt-4o-mini",
+          "prompt": "Summarize this sales pipeline for leadership: {{input.records}}. Include total themes, risks, and next actions. Keep it concise.",
+          "temperature": 0.3
+        },
+        "notes": {
+          "family": "AI",
+          "what": "Sends your prompt to OpenAI's ChatGPT and gets back an AI-written response",
+          "overview": "Calls OpenAI through the legacy LLM adapter. Prompt is the main input; Messages is only a fallback when Prompt is blank. Temperature and Memory are visible legacy fields ignored by the current executor.",
+          "tips": [],
+          "docsHref": "/docs/nodes/openai_gpt",
+          "why": "Turns raw deal rows into an executive-readable summary."
+        }
+      }
+    },
+    {
+      "id": "gmail_pipeline_report",
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 205
+      },
+      "data": {
+        "icon": "Mail",
+        "type": "google_gmail",
+        "label": "Email Leadership",
+        "category": "output",
+        "config": {
+          "operation": "send",
+          "recipientSource": "manual_entry",
+          "recipientEmails": "REPLACE_WITH_LEADERSHIP_EMAIL",
+          "subject": "Weekly pipeline report",
+          "body": "{{input.response}}"
+        },
+        "notes": {
+          "family": "Communication",
+          "what": "Send emails from your Gmail account or read and search messages in your inbox",
+          "overview": "Send, list, get, or search Gmail messages. Send recipients can be typed manually or extracted from upstream/fallback Google Sheets rows.",
+          "tips": [
+            "Connect Google OAuth in Connections; do not paste tokens into workflow fields",
+            "Gmail search syntax: from:, subject:, is:unread, has:attachment",
+            "List/Search only return {id, threadId} per message â€” use a Get step with that id for full content",
+            "Body is plain text only",
+            "Get returns Gmail's raw API message; the body text is base64url-encoded inside message.payload.body.data",
+            "Use search to filter messages before getting details"
+          ],
+          "docsHref": "/docs/nodes/google_gmail",
+          "why": "Sends the report to leadership without requiring them to open the CRM."
+        }
+      }
+    },
+    {
+      "id": "slack_pipeline_report",
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 395
+      },
+      "data": {
+        "icon": "Hash",
+        "type": "slack_message",
+        "label": "Post Sales Summary",
+        "category": "output",
+        "config": {
+          "channel": "#sales",
+          "message": "*Weekly pipeline report*\n{{input.response}}"
+        },
+        "notes": {
+          "family": "Communication",
+          "what": "Sends messages using a Slack app or bot connection",
+          "overview": "Send Slack bot messages to channels, direct messages, or existing threads through a saved Slack OAuth2 connection. Use it for workplace alerts, support replies, incident updates, approvals, report summaries, and deployment notifications.",
+          "tips": [
+            "Select a Slack OAuth2 connection; do not paste bot tokens into message fields",
+            "The Slack app needs chat:write, and the bot must be invited before it can post in private channels",
+            "Use {{$json.channelId}} and {{$json.threadTs}} from Slack Trigger to reply in the same conversation",
+            "Keep Message filled as readable fallback text even when Blocks contains a rich Block Kit layout",
+            "Connect downstream service accounts separately; Slack OAuth2 only authorizes the Slack send"
+          ],
+          "docsHref": "/docs/nodes/slack_message",
+          "why": "Shares the same summary in the sales team channel for follow-up."
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_1_schedule_pipeline_report_airtable_read_pipeline",
+      "source": "schedule_pipeline_report",
+      "target": "airtable_read_pipeline"
+    },
+    {
+      "id": "e_2_airtable_read_pipeline_ai_summarize_pipeline",
+      "source": "airtable_read_pipeline",
+      "target": "ai_summarize_pipeline"
+    },
+    {
+      "id": "e_3_ai_summarize_pipeline_gmail_pipeline_report",
+      "source": "ai_summarize_pipeline",
+      "target": "gmail_pipeline_report"
+    },
+    {
+      "id": "e_4_ai_summarize_pipeline_slack_pipeline_report",
+      "source": "ai_summarize_pipeline",
+      "target": "slack_pipeline_report"
+    }
+  ],
+  "difficulty": "Intermediate",
+  "estimated_setup_time": 19,
+  "tags": [
+    "sales",
+    "pipeline",
+    "reporting",
+    "airtable",
+    "slack"
+  ],
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2
+}

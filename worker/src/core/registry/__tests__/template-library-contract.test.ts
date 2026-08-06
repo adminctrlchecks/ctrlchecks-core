@@ -121,6 +121,7 @@ const RUNTIME_ONLY_KEYS: Record<string, string[]> = {
   database_write: ['table', 'operation', 'dataTemplate'],
   slack_webhook: ['message', 'username', 'webhookUrl'],
   slack_message: ['channel', 'message'],
+  chat_send: ['message'],
   whatsapp: ['to', 'text', 'resource', 'operation'],
   google_gmail: ['to', 'body', 'subject', 'operation', 'recipientEmails', 'recipientSource'],
   google_sheets: ['range', 'values', 'operation', 'sheetName', 'spreadsheetId'],
@@ -138,6 +139,43 @@ const RUNTIME_ONLY_KEYS: Record<string, string[]> = {
   if_else: ['conditions', 'combineOperation'],
   switch: ['expression', 'cases', 'routingType'],
 };
+
+/**
+ * From docs/NODE_STATUS_INVESTOR_ANALYSIS.md. These nodes were either blocked by
+ * third-party verification gates or not verified working, so templates must not
+ * ship with them until that audit document is updated.
+ */
+const NOT_VERIFIED_WORKING_NODE_TYPES = new Set([
+  'chargebee',
+  'microsoft_teams',
+  'microsoft_teams_trigger',
+  'twitter',
+  'freshdesk',
+  'outlook',
+  'outlook_trigger',
+  'onedrive',
+  'microsoft_dynamics',
+  'twilio',
+  'intercom',
+  'zendesk',
+  'sap',
+  'workday',
+  'schedulewise',
+  'tally_trigger',
+  'paypal',
+  'shopify_trigger',
+  'woocommerce',
+  'stripe',
+  'stripe_trigger',
+  'xero',
+  'facebook',
+  'facebook_trigger',
+  'instagram',
+  'instagram_trigger',
+  'whatsapp',
+  'whatsapp_cloud',
+  'whatsapp_trigger',
+]);
 
 function allExpressions(value: unknown, acc: string[] = []): string[] {
   if (typeof value === 'string') {
@@ -176,6 +214,11 @@ describe('template library contract', () => {
       // HTTP & API node.
       const missing = t.nodes.filter((n) => !FRONTEND_NODE_TYPES.has(n.data.type));
       expect(missing.map((n) => `${n.id}:${n.data.type}`)).toEqual([]);
+    });
+
+    it('uses only node types verified working in the investor node-status audit', () => {
+      const blocked = t.nodes.filter((n) => NOT_VERIFIED_WORKING_NODE_TYPES.has(n.data.type));
+      expect(blocked.map((n) => `${n.id}:${n.data.type}`)).toEqual([]);
     });
 
     it('sets no config key the node does not accept', () => {

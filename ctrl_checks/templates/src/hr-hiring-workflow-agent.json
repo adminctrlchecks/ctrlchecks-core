@@ -2,7 +2,7 @@
   "id": "2f520baf-ce2b-4cdc-bd8c-d46d7f61c747",
   "name": "HR / Hiring Workflow Agent",
   "description": "Automated resume processing agent that extracts skills, matches candidates against job requirements, scores applications, and automatically schedules interviews for shortlisted candidates.",
-  "category": "Human Resources",
+  "category": "Sales, Support & Internal Operations",
   "nodes": [
     {
       "id": "webhook_resume_1",

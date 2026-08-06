@@ -1,0 +1,314 @@
+{
+  "id": "91000000-0000-4000-8000-000000000006",
+  "name": "Invoice Approval Triage",
+  "description": "Accept invoice submissions, classify policy risk, route high-value or suspicious invoices to finance, and store the decision.",
+  "category": "Finance, Accounting & Insurance",
+  "nodes": [
+    {
+      "id": "form_invoice_submission",
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      },
+      "data": {
+        "icon": "Box",
+        "type": "form",
+        "label": "Invoice Submission Form",
+        "category": "triggers",
+        "config": {
+          "fields": [
+            {
+              "key": "vendor",
+              "type": "text",
+              "label": "Vendor",
+              "required": true
+            },
+            {
+              "key": "amount",
+              "type": "number",
+              "label": "Amount",
+              "required": true
+            },
+            {
+              "key": "description",
+              "type": "textarea",
+              "label": "Description",
+              "required": true
+            },
+            {
+              "key": "submitterEmail",
+              "type": "email",
+              "label": "Submitter Email",
+              "required": true
+            }
+          ],
+          "formTitle": "Invoice Approval",
+          "submitButtonText": "Submit Invoice"
+        },
+        "notes": {
+          "family": "Triggers",
+          "what": "Starts your workflow when someone fills out and submits a web form you built",
+          "overview": "Build a public CtrlChecks form and start the workflow when someone submits structured answers, files, or intake details.",
+          "tips": [
+            "Use friendly labels for submitters and stable internal names for workflow mapping.",
+            "Map answers with {{$json.customer_email}} or {{$json.data.customer_email}} after checking a test execution.",
+            "Use select or radio options for values that drive routing, approvals, reporting, or branch conditions.",
+            "Turn CAPTCHA on for public forms that can create tickets, leads, or notifications.",
+            "Require authentication only for internal or sensitive forms.",
+            "Changing an internal name after downstream nodes are mapped requires updating those mappings too."
+          ],
+          "docsHref": "/docs/nodes/form",
+          "why": "Collects the vendor, amount and context needed for an approval decision."
+        }
+      }
+    },
+    {
+      "id": "ai_invoice_risk",
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      },
+      "data": {
+        "icon": "Box",
+        "type": "openai_gpt",
+        "label": "Assess Invoice Risk",
+        "category": "ai",
+        "config": {
+          "model": "gpt-4o-mini",
+          "prompt": "Assess this invoice. Vendor: {{input.vendor}}. Amount: {{input.amount}}. Description: {{input.description}}. Return ONLY JSON: {\"requiresApproval\":true|false,\"risk\":\"low|medium|high\",\"reason\":\"short reason\"}.",
+          "temperature": 0.2
+        },
+        "notes": {
+          "family": "AI",
+          "what": "Sends your prompt to OpenAI's ChatGPT and gets back an AI-written response",
+          "overview": "Calls OpenAI through the legacy LLM adapter. Prompt is the main input; Messages is only a fallback when Prompt is blank. Temperature and Memory are visible legacy fields ignored by the current executor.",
+          "tips": [],
+          "docsHref": "/docs/nodes/openai_gpt",
+          "why": "Adds policy/risk judgment beyond a simple amount threshold."
+        }
+      }
+    },
+    {
+      "id": "js_parse_invoice",
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      },
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Parse Approval Decision",
+        "category": "data",
+        "config": {
+          "code": "let parsed = {};\ntry { const text = input.response || \"{}\"; const m = text.match(/\\{[\\s\\S]*\\}/); parsed = m ? JSON.parse(m[0]) : {}; } catch (e) { parsed = {}; }\nconst amount = Number(input.amount || 0);\nreturn { ...input, amount, requiresApproval: parsed.requiresApproval === true || amount >= 5000, risk: parsed.risk || \"medium\", reason: parsed.reason || \"\" };",
+          "timeout": 5000
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Combines AI judgment with a hard approval threshold into a reliable flag."
+        }
+      }
+    },
+    {
+      "id": "if_invoice_approval",
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      },
+      "data": {
+        "icon": "GitBranch",
+        "type": "if_else",
+        "label": "Approval Required?",
+        "category": "logic",
+        "config": {
+          "conditions": [
+            {
+              "field": "$json.requiresApproval",
+              "operator": "equals",
+              "value": true
+            }
+          ],
+          "combineOperation": "AND"
+        },
+        "notes": {
+          "family": "Logic",
+          "what": "Makes a yes/no decision: if something is true, go one way; otherwise go another",
+          "overview": "Makes a yes/no decision from previous-step data and routes matching work through TRUE and non-matching work through FALSE.",
+          "tips": [
+            "Use the builder for normal setup; use JSON mode only when pasting prepared condition objects.",
+            "Choose AND when every row must match; choose OR when any row can match.",
+            "Use equals for statuses and categories, greater-than operators for numeric thresholds, and contains for text or lists.",
+            "Connect both TRUE and FALSE outputs so no business case silently disappears."
+          ],
+          "docsHref": "/docs/nodes/if_else",
+          "why": "Separates invoices finance must review from those that can be filed."
+        }
+      }
+    },
+    {
+      "id": "postgres_log_invoice",
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 300
+      },
+      "data": {
+        "icon": "Box",
+        "type": "postgresql",
+        "label": "Log Invoice Decision",
+        "category": "data",
+        "config": {
+          "query": "INSERT INTO invoice_reviews (vendor, amount, risk, requires_approval, reason, submitter_email, created_at) VALUES ('{{input.vendor}}', {{input.amount}}, '{{input.risk}}', '{{input.requiresApproval}}', '{{input.reason}}', '{{input.submitterEmail}}', now())"
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Connects to a PostgreSQL database to run queries or insert data",
+          "overview": "Run PostgreSQL executeQuery, insert, update, or delete through the real database executor. The visual panel now uses runtime operation values and Parameters maps to the executor parameter array.",
+          "tips": [
+            "Use executeQuery for raw SQL with $1, $2 placeholders and Parameters as a JSON array.",
+            "Insert returns inserted/count; update and delete return rows/rowsAffected because PostgreSQL uses RETURNING *.",
+            "The backend schema still lists connectionString, but the executor validates host, username, password, database, port, and ssl.",
+            "Update and delete require Where; the executor refuses missing where clauses.",
+            "Store database passwords in Connections rather than ordinary workflow fields."
+          ],
+          "docsHref": "/docs/nodes/postgresql",
+          "why": "Creates an audit record for every invoice decision."
+        }
+      }
+    },
+    {
+      "id": "slack_invoice_approval",
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 300
+      },
+      "data": {
+        "icon": "Hash",
+        "type": "slack_message",
+        "label": "Alert Finance Approver",
+        "category": "output",
+        "config": {
+          "channel": "#finance-approvals",
+          "message": "Invoice needs approval: {{input.vendor}} - {{input.amount}}\nRisk: {{input.risk}}\nReason: {{input.reason}}"
+        },
+        "notes": {
+          "family": "Communication",
+          "what": "Sends messages using a Slack app or bot connection",
+          "overview": "Send Slack bot messages to channels, direct messages, or existing threads through a saved Slack OAuth2 connection. Use it for workplace alerts, support replies, incident updates, approvals, report summaries, and deployment notifications.",
+          "tips": [
+            "Select a Slack OAuth2 connection; do not paste bot tokens into message fields",
+            "The Slack app needs chat:write, and the bot must be invited before it can post in private channels",
+            "Use {{$json.channelId}} and {{$json.threadTs}} from Slack Trigger to reply in the same conversation",
+            "Keep Message filled as readable fallback text even when Blocks contains a rich Block Kit layout",
+            "Connect downstream service accounts separately; Slack OAuth2 only authorizes the Slack send"
+          ],
+          "docsHref": "/docs/nodes/slack_message",
+          "why": "Puts approval-required invoices in the finance queue immediately."
+        }
+      }
+    },
+    {
+      "id": "gmail_invoice_received",
+      "type": "custom",
+      "position": {
+        "x": 2020,
+        "y": 300
+      },
+      "data": {
+        "icon": "Mail",
+        "type": "google_gmail",
+        "label": "Email Submitter",
+        "category": "output",
+        "config": {
+          "operation": "send",
+          "recipientSource": "manual_entry",
+          "recipientEmails": "{{input.submitterEmail}}",
+          "subject": "Invoice received: {{input.vendor}}",
+          "body": "Your invoice submission was received. Approval required: {{input.requiresApproval}}. Reason: {{input.reason}}"
+        },
+        "notes": {
+          "family": "Communication",
+          "what": "Send emails from your Gmail account or read and search messages in your inbox",
+          "overview": "Send, list, get, or search Gmail messages. Send recipients can be typed manually or extracted from upstream/fallback Google Sheets rows.",
+          "tips": [
+            "Connect Google OAuth in Connections; do not paste tokens into workflow fields",
+            "Gmail search syntax: from:, subject:, is:unread, has:attachment",
+            "List/Search only return {id, threadId} per message â€” use a Get step with that id for full content",
+            "Body is plain text only",
+            "Get returns Gmail's raw API message; the body text is base64url-encoded inside message.payload.body.data",
+            "Use search to filter messages before getting details"
+          ],
+          "docsHref": "/docs/nodes/google_gmail",
+          "why": "Confirms receipt so the submitter knows the invoice is in process."
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_1_form_invoice_submission_ai_invoice_risk",
+      "source": "form_invoice_submission",
+      "target": "ai_invoice_risk"
+    },
+    {
+      "id": "e_2_ai_invoice_risk_js_parse_invoice",
+      "source": "ai_invoice_risk",
+      "target": "js_parse_invoice"
+    },
+    {
+      "id": "e_3_js_parse_invoice_if_invoice_approval",
+      "source": "js_parse_invoice",
+      "target": "if_invoice_approval"
+    },
+    {
+      "id": "e_4_if_invoice_approval_slack_invoice_approval",
+      "source": "if_invoice_approval",
+      "target": "slack_invoice_approval",
+      "sourceHandle": "true"
+    },
+    {
+      "id": "e_5_if_invoice_approval_postgres_log_invoice",
+      "source": "if_invoice_approval",
+      "target": "postgres_log_invoice",
+      "sourceHandle": "false"
+    },
+    {
+      "id": "e_6_slack_invoice_approval_postgres_log_invoice",
+      "source": "slack_invoice_approval",
+      "target": "postgres_log_invoice"
+    },
+    {
+      "id": "e_7_postgres_log_invoice_gmail_invoice_received",
+      "source": "postgres_log_invoice",
+      "target": "gmail_invoice_received"
+    }
+  ],
+  "difficulty": "Intermediate",
+  "estimated_setup_time": 21,
+  "tags": [
+    "finance",
+    "invoice",
+    "approval",
+    "postgresql",
+    "slack"
+  ],
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2
+}

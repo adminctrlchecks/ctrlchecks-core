@@ -62,6 +62,10 @@ const deferred = [];
 const noteGaps = [];
 /** Human-readable log of everything we did change. */
 const changelog = [];
+/** Notes authored inline for new generated templates. Existing templates still use node-notes.json. */
+const generatedNodeNotes = new Map();
+/** New template IDs that must be inserted by the generated SQL instead of updated. */
+const newTemplateIds = new Set();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // helpers
@@ -73,6 +77,9 @@ const ICONS = {
   merge: 'GitMerge',
   airtable: 'Database',
   loop: 'Repeat',
+  chat_send: 'Send',
+  google_gmail: 'Mail',
+  slack_message: 'Hash',
 };
 
 function T(name) {
@@ -201,6 +208,60 @@ function untag(t, tag) {
     t.tags = t.tags.filter((x) => x !== tag);
     log(t, 'FIX', `tags: removed "${tag}"`);
   }
+}
+
+function retag(t, oldTag, newTag) {
+  if (!Array.isArray(t.tags) || !t.tags.includes(oldTag)) return;
+  t.tags = t.tags.map((x) => (x === oldTag ? newTag : x));
+  t.tags = [...new Set(t.tags)];
+  log(t, 'FIX', `tags: replaced "${oldTag}" with "${newTag}"`);
+}
+
+const SECTORS = {
+  verification: 'Business Verification & Compliance',
+  healthcare: 'Healthcare & Clinics',
+  finance: 'Finance, Accounting & Insurance',
+  operations: 'Sales, Support & Internal Operations',
+};
+
+function setSector(templateName, sector) {
+  const t = T(templateName);
+  if (t.category !== sector) {
+    t.category = sector;
+    log(t, 'FIX', `category: moved to "${sector}" sector`);
+  }
+}
+
+function addTemplate(def) {
+  if (byName.has(def.name)) throw new Error(`Template already exists: ${def.name}`);
+  const s = slug(def.name);
+  const t = {
+    id: def.id,
+    name: def.name,
+    description: def.description,
+    category: def.category,
+    nodes: def.nodes.map((n) => {
+      generatedNodeNotes.set(`${s}.${n.id}`, n.why);
+      return mkNode(n.id, n.type, n.label, n.category, n.config || {});
+    }),
+    edges: def.edges.map(([source, target, sourceHandle], i) => ({
+      id: `e_${i + 1}_${source}_${target}`,
+      source,
+      target,
+      ...(sourceHandle ? { sourceHandle } : {}),
+    })),
+    difficulty: def.difficulty,
+    estimated_setup_time: def.estimated_setup_time,
+    tags: def.tags,
+    is_featured: Boolean(def.is_featured),
+    is_active: true,
+    use_count: 0,
+    version: 1,
+  };
+  relayout(t);
+  byName.set(t.name, t);
+  newTemplateIds.add(t.id);
+  log(t, 'ADD', `new ${def.category} template with ${t.nodes.length} working-node steps`);
 }
 
 function defer(template, item, reason) {
@@ -673,12 +734,6 @@ const CHAT_MESSAGE = `const raw = (typeof input === 'string') ? input : (input &
     'the AI was told to return JSON but nothing parsed it, so $json.confidence never existed, the gate was always false, and every client question escalated to Slack instead of being answered',
   );
 
-  defer(
-    t.name,
-    'whatsapp_reply_client.to = {{input.senderPhone}}',
-    'senderPhone has 0 matches anywhere in the codebase and the chat_trigger output contract is contested (execute-workflow.ts:3052 returns a string; the comment at :20086 claims an object). Needs one live chat execution to settle before a value can be written.',
-  );
-
   relayout(t);
 }
 
@@ -863,12 +918,6 @@ const CHAT_MESSAGE = `const raw = (typeof input === 'string') ? input : (input &
   agent.data.config.userInput = 'Question: {{input.originalQuestion}}\nClient record: {{input.records}}\n\nWrite a clear, human answer to the question using only this data.';
   log(t, 'FIX', 'ai_agent_answer: dropped the reference to the deleted status-API node');
 
-  defer(
-    t.name,
-    'whatsapp_reply_copilot.to = {{input.senderPhone}}',
-    'blocked on the chat_trigger output contract (see B4). senderPhone exists nowhere in the codebase.',
-  );
-
   relayout(t);
 }
 
@@ -968,11 +1017,6 @@ const CHAT_MESSAGE = `const raw = (typeof input === 'string') ? input : (input &
     'airtable_search_vault',
     { maxRecords: 200 },
     'bounded so a large vault cannot blow the agent prompt context',
-  );
-  defer(
-    search.name,
-    'whatsapp_reply_search.to = {{input.senderPhone}}',
-    'blocked on the chat_trigger output contract (see B4).',
   );
   relayout(search);
 }
@@ -1711,6 +1755,522 @@ const PG_NOTE =
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
+// Working-node alignment from docs/NODE_STATUS_INVESTOR_ANALYSIS.md
+//
+// The 2026-07 investor audit marks WhatsApp nodes as blocked by Meta Business
+// verification/app review, so the shipped templates must not depend on them.
+// Chat-native replies use chat_send, client notifications use Gmail, and internal
+// operational alerts use Slack.
+// ═════════════════════════════════════════════════════════════════════════════
+
+{
+  const t = T('Document Vault — Smart Search');
+  swapNode(
+    t,
+    'whatsapp_reply_search',
+    'chat_send',
+    'Reply in Chat',
+    { message: '{{input.response}}' },
+    'WhatsApp is not currently verified working; this workflow starts from chat, so the answer should return to the chat session.',
+  );
+  retag(t, 'whatsapp', 'chat');
+  relayout(t);
+}
+
+{
+  const t = T('FAQ Answering Assistant');
+  swapNode(
+    t,
+    'whatsapp_reply_client',
+    'chat_send',
+    'Reply in Chat',
+    { message: '{{input.answer}}' },
+    'WhatsApp is not currently verified working; confident FAQ answers should return to the active chat session.',
+  );
+  retag(t, 'whatsapp', 'chat');
+  relayout(t);
+}
+
+{
+  const t = T('Verification Co-Pilot Chat');
+  swapNode(
+    t,
+    'whatsapp_reply_copilot',
+    'chat_send',
+    'Reply in Chat',
+    { message: '{{input.response}}' },
+    'WhatsApp is not currently verified working; this chat workflow should answer in the same chat channel.',
+  );
+  t.description = t.description.replace('over WhatsApp or Slack', 'over chat or Slack');
+  log(t, 'FIX', 'description: removed WhatsApp dependency from the user-facing copy');
+  retag(t, 'whatsapp', 'chat');
+  relayout(t);
+}
+
+{
+  const t = T('Missing Document Finder');
+  cfg(
+    t,
+    'form_doc_upload',
+    {
+      fields: N(t, 'form_doc_upload').data.config.fields.map((f) =>
+        f.key === 'whatsappNumber'
+          ? { ...f, key: 'contactEmail', type: 'email', label: 'Contact Email' }
+          : f,
+      ),
+    },
+    'collects email instead of WhatsApp because Gmail is verified working and WhatsApp is not',
+  );
+  N(t, 'ai_write_missing_message').data.config.prompt = N(t, 'ai_write_missing_message').data.config.prompt.replace(
+    /WhatsApp/gi,
+    'email',
+  );
+  log(t, 'FIX', 'ai_write_missing_message: writes an email-friendly chase message instead of WhatsApp copy');
+  swapNode(
+    t,
+    'whatsapp_send_missing',
+    'google_gmail',
+    'Email Missing Docs List',
+    {
+      operation: 'send',
+      recipientSource: 'manual_entry',
+      recipientEmails: '{{input.contactEmail}}',
+      subject: 'Missing documents for {{input.clientName}}',
+      body: '{{input.response}}',
+    },
+    'WhatsApp is not currently verified working; email is a verified client notification channel.',
+  );
+  t.description = t.description.replace('messages the client a specific checklist on WhatsApp', 'emails the client a specific checklist');
+  log(t, 'FIX', 'description: changed the promised output from WhatsApp to email');
+  retag(t, 'whatsapp', 'email');
+  relayout(t);
+}
+
+{
+  const t = T('License Renewal Reminder');
+  const flag = N(t, 'js_flag_expiring');
+  flag.data.config.code = String(flag.data.config.code).replace('  whatsappNumber: f.WhatsApp || "",\n', '');
+  log(t, 'FIX', 'js_flag_expiring: removed unused WhatsApp number output');
+  delNode(
+    t,
+    'whatsapp_send_reminder',
+    'WhatsApp is not currently verified working; the verified Gmail node now carries the client reminder.',
+  );
+  relabel(t, 'gmail_send_backup_reminder', 'Send Email Reminder', 'this is now the primary verified reminder channel');
+  cfg(
+    t,
+    'gmail_send_backup_reminder',
+    {
+      body: 'Your {{input.licenseName}} expires on {{input.expiryDate}} — {{input.daysLeft}} days from now. Please renew soon to avoid a lapse.',
+    },
+    'removed backup/WhatsApp wording because this email is now the primary reminder',
+  );
+  t.description = t.description.replace('sends escalating WhatsApp and email reminders', 'sends escalating email reminders');
+  log(t, 'FIX', 'description: changed the promised output from WhatsApp plus email to verified email reminders');
+  retag(t, 'whatsapp', 'email');
+  relayout(t);
+}
+
+{
+  const t = T('Smart Alert Co-Pilot');
+  cfg(
+    t,
+    'js_route_notification',
+    {
+      code: [
+        '// Set these two channels when you set up the template.',
+        'const complianceLeadChannel = input.complianceLeadChannel || "#compliance-alerts";',
+        'const accountManagerChannel = input.accountManagerChannel || "#account-management";',
+        'const recipientChannel = input.severity === "high" ? complianceLeadChannel : accountManagerChannel;',
+        'return { ...input, recipientChannel };',
+      ].join('\n'),
+    },
+    'routes to Slack channels because Slack is verified working and WhatsApp is not',
+  );
+  swapNode(
+    t,
+    'whatsapp_send_smart_alert',
+    'slack_message',
+    'Send Targeted Slack Alert',
+    {
+      channel: '{{input.recipientChannel}}',
+      message: ':rotating_light: {{input.severity}} priority alert: {{input.reason}}',
+    },
+    'WhatsApp is not currently verified working; Slack is a verified internal alert channel.',
+  );
+  retag(t, 'whatsapp', 'slack');
+  relayout(t);
+}
+
+{
+  const t = T('Verification Readiness Checker');
+  cfg(
+    t,
+    'form_intake',
+    {
+      fields: N(t, 'form_intake').data.config.fields.filter((f) => f.key !== 'whatsappNumber'),
+    },
+    'removes the WhatsApp number field because no working output node now uses it',
+  );
+  const fields = { ...N(t, 'airtable_create_client').data.config.fields };
+  delete fields.WhatsApp;
+  cfg(t, 'airtable_create_client', { fields }, 'stops storing a WhatsApp field that the working-node template no longer collects');
+  cfg(
+    t,
+    'js_compose_results',
+    {
+      code: [
+        'const fixList = input.response || input.text || input.content || "";',
+        'return {',
+        '  ...input,',
+        '  fixList,',
+        '  score: input.score,',
+        '  issueCount: input.issueCount,',
+        '  businessName: input.businessName,',
+        '  contactEmail: input.contactEmail',
+        '};',
+      ].join('\n'),
+    },
+    'assembles only fields consumed by the remaining verified Gmail output',
+  );
+  delNode(
+    t,
+    'whatsapp_send_results',
+    'WhatsApp is not currently verified working; the full readiness result is already delivered by Gmail.',
+  );
+  t.description = t.description.replace('then emails and WhatsApps you a fix list', 'then emails you a fix list');
+  log(t, 'FIX', 'description: changed the promised output from email plus WhatsApp to email');
+  retag(t, 'whatsapp', 'email');
+  relayout(t);
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Four-sector taxonomy
+// ═════════════════════════════════════════════════════════════════════════════
+
+[
+  'Approval Chance Predictor',
+  'Business Details Matcher',
+  'Document Vault — Intake & Auto-Tagging',
+  'Document Vault — Smart Search',
+  'License Renewal Reminder',
+  'Live Status Lookup Bot',
+  'Missing Document Finder',
+  'New Client Risk Checker',
+  'Smart Alert Co-Pilot',
+  'Submission Package Builder',
+  'Verification Co-Pilot Chat',
+  'Verification Readiness Checker',
+].forEach((name) => setSector(name, SECTORS.verification));
+
+['Finance / Compliance Agent'].forEach((name) => setSector(name, SECTORS.finance));
+
+[
+  'Client Priority Ranker',
+  'Cross-Platform Sync Engine',
+  'Customer Support Agent',
+  'FAQ Answering Assistant',
+  'HR / Hiring Workflow Agent',
+  'Internal Knowledge / Ops Agent',
+  'Overdue Task Tracker',
+  'Sales & Lead Qualification Agent',
+].forEach((name) => setSector(name, SECTORS.operations));
+
+// ═════════════════════════════════════════════════════════════════════════════
+// New sector templates built only from verified-working node types
+// ═════════════════════════════════════════════════════════════════════════════
+
+addTemplate({
+  id: '91000000-0000-4000-8000-000000000001',
+  name: 'Patient Intake Triage',
+  description: 'Collect symptoms, urgency and contact details from a patient intake form, classify the case, then route urgent cases to staff and routine cases to email follow-up.',
+  category: SECTORS.healthcare,
+  difficulty: 'Beginner',
+  estimated_setup_time: 18,
+  tags: ['healthcare', 'triage', 'intake', 'email', 'slack'],
+  nodes: [
+    { id: 'form_patient_intake', type: 'form', label: 'Patient Intake Form', category: 'triggers', config: { fields: [{ key: 'patientName', type: 'text', label: 'Patient Name', required: true }, { key: 'contactEmail', type: 'email', label: 'Contact Email', required: true }, { key: 'symptoms', type: 'textarea', label: 'Symptoms', required: true }, { key: 'duration', type: 'text', label: 'How Long Has This Been Happening?', required: false }], formTitle: 'Patient Intake', formDescription: 'Share the details needed for a first triage.', submitButtonText: 'Submit Intake' }, why: 'Collects the minimum structured details a clinic needs before deciding who should respond.' },
+    { id: 'ai_classify_triage', type: 'openai_gpt', label: 'Classify Triage Need', category: 'ai', config: { model: 'gpt-4o-mini', prompt: 'Review this patient intake. Symptoms: {{input.symptoms}}. Duration: {{input.duration}}. Return ONLY JSON: {"urgency":"urgent|routine","summary":"short clinical admin summary","nextStep":"what staff should do next"}.', temperature: 0.2 }, why: 'Turns free-text symptoms into a simple urgency decision that downstream routing can use.' },
+    { id: 'js_parse_triage', type: 'javascript', label: 'Parse Triage Decision', category: 'data', config: { code: 'let parsed = {};\ntry {\n  const text = input.response || input.text || input.content || "{}";\n  const m = text.match(/\\{[\\s\\S]*\\}/);\n  parsed = m ? JSON.parse(m[0]) : {};\n} catch (e) { parsed = {}; }\nreturn { ...input, urgency: parsed.urgency || "routine", summary: parsed.summary || "", nextStep: parsed.nextStep || "" };', timeout: 5000 }, why: 'Converts the AI response into real fields so the branch below is deterministic.' },
+    { id: 'if_urgent_triage', type: 'if_else', label: 'Urgent Case?', category: 'logic', config: { conditions: [{ field: '$json.urgency', operator: 'equals', value: 'urgent' }], combineOperation: 'AND' }, why: 'Separates patients needing staff attention now from those safe for normal follow-up.' },
+    { id: 'slack_alert_clinic', type: 'slack_message', label: 'Alert Clinic Team', category: 'output', config: { channel: '#clinic-triage', message: ':rotating_light: Urgent intake for {{input.patientName}}\n{{input.summary}}\nNext: {{input.nextStep}}' }, why: 'Puts urgent cases where staff see them immediately.' },
+    { id: 'gmail_confirm_patient', type: 'google_gmail', label: 'Email Patient Confirmation', category: 'output', config: { operation: 'send', recipientSource: 'manual_entry', recipientEmails: '{{input.contactEmail}}', subject: 'We received your intake', body: 'Hi {{input.patientName}},\n\nWe received your intake. Summary: {{input.summary}}\n\nNext step: {{input.nextStep}}' }, why: 'Gives routine patients a clear acknowledgment and next step without waiting for a phone call.' },
+  ],
+  edges: [['form_patient_intake', 'ai_classify_triage'], ['ai_classify_triage', 'js_parse_triage'], ['js_parse_triage', 'if_urgent_triage'], ['if_urgent_triage', 'slack_alert_clinic', 'true'], ['if_urgent_triage', 'gmail_confirm_patient', 'false']],
+});
+
+addTemplate({
+  id: '91000000-0000-4000-8000-000000000002',
+  name: 'Clinic Appointment Reminder',
+  description: 'Check the next upcoming appointment, send an email reminder, and mark the reminder so the same patient is not contacted repeatedly.',
+  category: SECTORS.healthcare,
+  difficulty: 'Beginner',
+  estimated_setup_time: 16,
+  tags: ['healthcare', 'appointments', 'reminders', 'airtable', 'email'],
+  nodes: [
+    { id: 'schedule_appointment_check', type: 'schedule', label: 'Check Upcoming Appointments', category: 'triggers', config: { cron: '0 9 * * *', timezone: 'Asia/Kolkata' }, why: 'Runs daily because appointment reminders are time-based, not manually triggered.' },
+    { id: 'airtable_read_appointment', type: 'airtable', label: 'Read Next Unreminded Appointment', category: 'database', config: { baseId: '', tableId: 'Appointments', operation: 'read', filterByFormula: "AND({AppointmentDate}!='', {ReminderSent}='')", maxRecords: 1 }, why: 'Selects one appointment that still needs a reminder so each run is safe and repeatable.' },
+    { id: 'js_prepare_appointment', type: 'javascript', label: 'Prepare Reminder', category: 'data', config: { code: 'const rec = (input.records || [])[0];\nif (!rec) return { ...input, hasAppointment: false };\nconst f = rec.fields || {};\nreturn { ...input, hasAppointment: true, recordId: rec.id, patientName: f.PatientName || "there", contactEmail: f.Email || "", appointmentDate: f.AppointmentDate || "", doctorName: f.Doctor || "your clinician" };', timeout: 5000 }, why: 'Lifts the appointment row into fields used by the email and marker nodes.' },
+    { id: 'if_has_appointment', type: 'if_else', label: 'Appointment Found?', category: 'logic', config: { conditions: [{ field: '$json.hasAppointment', operator: 'equals', value: true }], combineOperation: 'AND' }, why: 'Stops empty daily checks from sending blank reminders.' },
+    { id: 'gmail_send_appointment', type: 'google_gmail', label: 'Send Appointment Reminder', category: 'output', config: { operation: 'send', recipientSource: 'manual_entry', recipientEmails: '{{input.contactEmail}}', subject: 'Appointment reminder: {{input.appointmentDate}}', body: 'Hi {{input.patientName}},\n\nThis is a reminder for your appointment with {{input.doctorName}} on {{input.appointmentDate}}.' }, why: 'Delivers the reminder through Gmail, a verified working channel.' },
+    { id: 'airtable_mark_appointment', type: 'airtable', label: 'Mark Reminder Sent', category: 'database', config: { baseId: '', tableId: 'Appointments', operation: 'update', recordId: '{{input.recordId}}', fields: { ReminderSent: 'Yes' } }, why: 'Prevents the same appointment reminder being sent again on the next scheduled run.' },
+  ],
+  edges: [['schedule_appointment_check', 'airtable_read_appointment'], ['airtable_read_appointment', 'js_prepare_appointment'], ['js_prepare_appointment', 'if_has_appointment'], ['if_has_appointment', 'gmail_send_appointment', 'true'], ['gmail_send_appointment', 'airtable_mark_appointment']],
+});
+
+addTemplate({
+  id: '91000000-0000-4000-8000-000000000003',
+  name: 'Lab Report Follow-up',
+  description: 'Review uploaded lab-report context, decide whether it needs a clinician follow-up, then email the patient or alert the care team.',
+  category: SECTORS.healthcare,
+  difficulty: 'Intermediate',
+  estimated_setup_time: 20,
+  tags: ['healthcare', 'labs', 'follow-up', 'ai', 'email'],
+  nodes: [
+    { id: 'form_lab_report', type: 'form', label: 'Lab Report Form', category: 'triggers', config: { fields: [{ key: 'patientName', type: 'text', label: 'Patient Name', required: true }, { key: 'contactEmail', type: 'email', label: 'Contact Email', required: true }, { key: 'reportSummary', type: 'textarea', label: 'Report Summary', required: true }], formTitle: 'Lab Report Follow-up', submitButtonText: 'Submit Report' }, why: 'Collects the report summary and patient contact in one controlled intake.' },
+    { id: 'ai_review_lab', type: 'openai_gpt', label: 'Review Follow-up Need', category: 'ai', config: { model: 'gpt-4o-mini', prompt: 'Review this lab report summary for administrative follow-up routing only: {{input.reportSummary}}. Return ONLY JSON: {"needsClinician":true|false,"patientMessage":"plain language message","staffSummary":"short staff note"}.', temperature: 0.2 }, why: 'Classifies whether the clinic team should review before a patient message goes out.' },
+    { id: 'js_parse_lab', type: 'javascript', label: 'Parse Lab Review', category: 'data', config: { code: 'let parsed = {};\ntry { const text = input.response || "{}"; const m = text.match(/\\{[\\s\\S]*\\}/); parsed = m ? JSON.parse(m[0]) : {}; } catch (e) { parsed = {}; }\nreturn { ...input, needsClinician: parsed.needsClinician === true, patientMessage: parsed.patientMessage || "", staffSummary: parsed.staffSummary || "" };', timeout: 5000 }, why: 'Makes the clinician-review flag available to the branch.' },
+    { id: 'if_lab_needs_review', type: 'if_else', label: 'Needs Clinician Review?', category: 'logic', config: { conditions: [{ field: '$json.needsClinician', operator: 'equals', value: true }], combineOperation: 'AND' }, why: 'Keeps sensitive or unclear report follow-ups with staff instead of auto-emailing them.' },
+    { id: 'slack_lab_review', type: 'slack_message', label: 'Ask Care Team to Review', category: 'output', config: { channel: '#care-team', message: 'Lab report for {{input.patientName}} needs review:\n{{input.staffSummary}}' }, why: 'Routes clinician-needed cases to the care team for human review.' },
+    { id: 'gmail_lab_followup', type: 'google_gmail', label: 'Email Patient Follow-up', category: 'output', config: { operation: 'send', recipientSource: 'manual_entry', recipientEmails: '{{input.contactEmail}}', subject: 'Your lab report follow-up', body: 'Hi {{input.patientName}},\n\n{{input.patientMessage}}' }, why: 'Sends clear next-step communication when staff review is not required.' },
+  ],
+  edges: [['form_lab_report', 'ai_review_lab'], ['ai_review_lab', 'js_parse_lab'], ['js_parse_lab', 'if_lab_needs_review'], ['if_lab_needs_review', 'slack_lab_review', 'true'], ['if_lab_needs_review', 'gmail_lab_followup', 'false']],
+});
+
+addTemplate({
+  id: '91000000-0000-4000-8000-000000000004',
+  name: 'Insurance Pre-Authorization Tracker',
+  description: 'Poll pre-authorization requests, notify staff or patients based on status, and stamp the request as checked.',
+  category: SECTORS.healthcare,
+  difficulty: 'Intermediate',
+  estimated_setup_time: 22,
+  tags: ['healthcare', 'insurance', 'airtable', 'slack', 'email'],
+  nodes: [
+    { id: 'schedule_preauth_check', type: 'schedule', label: 'Check Pre-Authorizations', category: 'triggers', config: { cron: '*/30 * * * *', timezone: 'Asia/Kolkata' }, why: 'Pre-authorization status changes are periodic, so polling is safer than manual checking.' },
+    { id: 'airtable_read_preauth', type: 'airtable', label: 'Read One Pending Request', category: 'database', config: { baseId: '', tableId: 'PreAuthorizations', operation: 'read', filterByFormula: "AND({Status}!='Closed', {LastCheckedAt}='')", maxRecords: 1 }, why: 'Handles one pending request per run to avoid duplicate notifications.' },
+    { id: 'js_prepare_preauth', type: 'javascript', label: 'Prepare Status Message', category: 'data', config: { code: 'const rec = (input.records || [])[0];\nif (!rec) return { ...input, hasRequest: false };\nconst f = rec.fields || {};\nconst status = f.Status || "Pending";\nreturn { ...input, hasRequest: true, recordId: rec.id, patientName: f.PatientName || "patient", contactEmail: f.Email || "", status, needsStaff: status === "Denied" || status === "More Info Needed" };', timeout: 5000 }, why: 'Normalises the pre-authorization row into the status and routing fields used below.' },
+    { id: 'if_has_preauth', type: 'if_else', label: 'Request Found?', category: 'logic', config: { conditions: [{ field: '$json.hasRequest', operator: 'equals', value: true }], combineOperation: 'AND' }, why: 'Stops empty polls from creating noise.' },
+    { id: 'if_preauth_staff', type: 'if_else', label: 'Needs Staff Action?', category: 'logic', config: { conditions: [{ field: '$json.needsStaff', operator: 'equals', value: true }], combineOperation: 'AND' }, why: 'Separates requests that need staff intervention from simple patient updates.' },
+    { id: 'slack_preauth_staff', type: 'slack_message', label: 'Notify Insurance Desk', category: 'output', config: { channel: '#insurance-desk', message: 'Pre-authorization needs action for {{input.patientName}}. Status: {{input.status}}' }, why: 'Gets denied or information-needed cases in front of the insurance desk.' },
+    { id: 'gmail_preauth_patient', type: 'google_gmail', label: 'Email Patient Status', category: 'output', config: { operation: 'send', recipientSource: 'manual_entry', recipientEmails: '{{input.contactEmail}}', subject: 'Insurance pre-authorization status', body: 'Hi {{input.patientName}},\n\nYour current pre-authorization status is: {{input.status}}.' }, why: 'Keeps patients informed when the request does not need immediate staff action.' },
+    { id: 'airtable_mark_preauth', type: 'airtable', label: 'Stamp Checked', category: 'database', config: { baseId: '', tableId: 'PreAuthorizations', operation: 'update', recordId: '{{input.recordId}}', fields: { LastCheckedAt: 'Checked' } }, why: 'Marks the request so it is not processed repeatedly.' },
+  ],
+  edges: [['schedule_preauth_check', 'airtable_read_preauth'], ['airtable_read_preauth', 'js_prepare_preauth'], ['js_prepare_preauth', 'if_has_preauth'], ['if_has_preauth', 'if_preauth_staff', 'true'], ['if_preauth_staff', 'slack_preauth_staff', 'true'], ['if_preauth_staff', 'gmail_preauth_patient', 'false'], ['slack_preauth_staff', 'airtable_mark_preauth'], ['gmail_preauth_patient', 'airtable_mark_preauth']],
+});
+
+addTemplate({
+  id: '91000000-0000-4000-8000-000000000005',
+  name: 'Patient Feedback Classifier',
+  description: 'Classify patient feedback, store the category, and alert staff when sentiment or safety concerns require attention.',
+  category: SECTORS.healthcare,
+  difficulty: 'Beginner',
+  estimated_setup_time: 17,
+  tags: ['healthcare', 'feedback', 'sentiment', 'airtable', 'slack'],
+  nodes: [
+    { id: 'form_patient_feedback', type: 'form', label: 'Feedback Form', category: 'triggers', config: { fields: [{ key: 'patientName', type: 'text', label: 'Patient Name', required: false }, { key: 'contactEmail', type: 'email', label: 'Contact Email', required: false }, { key: 'feedback', type: 'textarea', label: 'Feedback', required: true }], formTitle: 'Patient Feedback', submitButtonText: 'Send Feedback' }, why: 'Provides a simple channel for structured patient feedback.' },
+    { id: 'ai_classify_feedback', type: 'openai_gpt', label: 'Classify Feedback', category: 'ai', config: { model: 'gpt-4o-mini', prompt: 'Classify this patient feedback: {{input.feedback}}. Return ONLY JSON: {"category":"compliment|complaint|billing|safety|other","sentiment":"positive|neutral|negative","summary":"short summary","needsReview":true|false}.', temperature: 0.2 }, why: 'Turns free-text feedback into category and review fields.' },
+    { id: 'js_parse_feedback', type: 'javascript', label: 'Parse Classification', category: 'data', config: { code: 'let parsed = {};\ntry { const text = input.response || "{}"; const m = text.match(/\\{[\\s\\S]*\\}/); parsed = m ? JSON.parse(m[0]) : {}; } catch (e) { parsed = {}; }\nreturn { ...input, category: parsed.category || "other", sentiment: parsed.sentiment || "neutral", summary: parsed.summary || input.feedback || "", needsReview: parsed.needsReview === true };', timeout: 5000 }, why: 'Creates stable fields for storage and review routing.' },
+    { id: 'airtable_log_feedback', type: 'airtable', label: 'Log Feedback', category: 'database', config: { baseId: '', tableId: 'PatientFeedback', operation: 'create', fields: { Patient: '{{input.patientName}}', Email: '{{input.contactEmail}}', Category: '{{input.category}}', Sentiment: '{{input.sentiment}}', Summary: '{{input.summary}}' } }, why: 'Keeps a searchable record of feedback themes and sentiment.' },
+    { id: 'if_feedback_review', type: 'if_else', label: 'Needs Staff Review?', category: 'logic', config: { conditions: [{ field: '$json.needsReview', operator: 'equals', value: true }], combineOperation: 'AND' }, why: 'Only interrupts staff when the classification says review is needed.' },
+    { id: 'slack_feedback_review', type: 'slack_message', label: 'Alert Patient Experience Team', category: 'output', config: { channel: '#patient-experience', message: 'Feedback needs review: {{input.category}} / {{input.sentiment}}\n{{input.summary}}' }, why: 'Sends important feedback to the team that can respond.' },
+  ],
+  edges: [['form_patient_feedback', 'ai_classify_feedback'], ['ai_classify_feedback', 'js_parse_feedback'], ['js_parse_feedback', 'airtable_log_feedback'], ['airtable_log_feedback', 'if_feedback_review'], ['if_feedback_review', 'slack_feedback_review', 'true']],
+});
+
+addTemplate({
+  id: '91000000-0000-4000-8000-000000000006',
+  name: 'Invoice Approval Triage',
+  description: 'Accept invoice submissions, classify policy risk, route high-value or suspicious invoices to finance, and store the decision.',
+  category: SECTORS.finance,
+  difficulty: 'Intermediate',
+  estimated_setup_time: 21,
+  tags: ['finance', 'invoice', 'approval', 'postgresql', 'slack'],
+  nodes: [
+    { id: 'form_invoice_submission', type: 'form', label: 'Invoice Submission Form', category: 'triggers', config: { fields: [{ key: 'vendor', type: 'text', label: 'Vendor', required: true }, { key: 'amount', type: 'number', label: 'Amount', required: true }, { key: 'description', type: 'textarea', label: 'Description', required: true }, { key: 'submitterEmail', type: 'email', label: 'Submitter Email', required: true }], formTitle: 'Invoice Approval', submitButtonText: 'Submit Invoice' }, why: 'Collects the vendor, amount and context needed for an approval decision.' },
+    { id: 'ai_invoice_risk', type: 'openai_gpt', label: 'Assess Invoice Risk', category: 'ai', config: { model: 'gpt-4o-mini', prompt: 'Assess this invoice. Vendor: {{input.vendor}}. Amount: {{input.amount}}. Description: {{input.description}}. Return ONLY JSON: {"requiresApproval":true|false,"risk":"low|medium|high","reason":"short reason"}.', temperature: 0.2 }, why: 'Adds policy/risk judgment beyond a simple amount threshold.' },
+    { id: 'js_parse_invoice', type: 'javascript', label: 'Parse Approval Decision', category: 'data', config: { code: 'let parsed = {};\ntry { const text = input.response || "{}"; const m = text.match(/\\{[\\s\\S]*\\}/); parsed = m ? JSON.parse(m[0]) : {}; } catch (e) { parsed = {}; }\nconst amount = Number(input.amount || 0);\nreturn { ...input, amount, requiresApproval: parsed.requiresApproval === true || amount >= 5000, risk: parsed.risk || "medium", reason: parsed.reason || "" };', timeout: 5000 }, why: 'Combines AI judgment with a hard approval threshold into a reliable flag.' },
+    { id: 'if_invoice_approval', type: 'if_else', label: 'Approval Required?', category: 'logic', config: { conditions: [{ field: '$json.requiresApproval', operator: 'equals', value: true }], combineOperation: 'AND' }, why: 'Separates invoices finance must review from those that can be filed.' },
+    { id: 'postgres_log_invoice', type: 'postgresql', label: 'Log Invoice Decision', category: 'database', config: { query: "INSERT INTO invoice_reviews (vendor, amount, risk, requires_approval, reason, submitter_email, created_at) VALUES ('{{input.vendor}}', {{input.amount}}, '{{input.risk}}', '{{input.requiresApproval}}', '{{input.reason}}', '{{input.submitterEmail}}', now())" }, why: 'Creates an audit record for every invoice decision.' },
+    { id: 'slack_invoice_approval', type: 'slack_message', label: 'Alert Finance Approver', category: 'output', config: { channel: '#finance-approvals', message: 'Invoice needs approval: {{input.vendor}} - {{input.amount}}\nRisk: {{input.risk}}\nReason: {{input.reason}}' }, why: 'Puts approval-required invoices in the finance queue immediately.' },
+    { id: 'gmail_invoice_received', type: 'google_gmail', label: 'Email Submitter', category: 'output', config: { operation: 'send', recipientSource: 'manual_entry', recipientEmails: '{{input.submitterEmail}}', subject: 'Invoice received: {{input.vendor}}', body: 'Your invoice submission was received. Approval required: {{input.requiresApproval}}. Reason: {{input.reason}}' }, why: 'Confirms receipt so the submitter knows the invoice is in process.' },
+  ],
+  edges: [['form_invoice_submission', 'ai_invoice_risk'], ['ai_invoice_risk', 'js_parse_invoice'], ['js_parse_invoice', 'if_invoice_approval'], ['if_invoice_approval', 'slack_invoice_approval', 'true'], ['if_invoice_approval', 'postgres_log_invoice', 'false'], ['slack_invoice_approval', 'postgres_log_invoice'], ['postgres_log_invoice', 'gmail_invoice_received']],
+});
+
+addTemplate({
+  id: '91000000-0000-4000-8000-000000000007',
+  name: 'Expense Policy Checker',
+  description: 'Check submitted expenses against policy, save the result, and notify finance only when an expense needs review.',
+  category: SECTORS.finance,
+  difficulty: 'Beginner',
+  estimated_setup_time: 18,
+  tags: ['finance', 'expenses', 'policy', 'ai', 'slack'],
+  nodes: [
+    { id: 'form_expense', type: 'form', label: 'Expense Form', category: 'triggers', config: { fields: [{ key: 'employeeEmail', type: 'email', label: 'Employee Email', required: true }, { key: 'amount', type: 'number', label: 'Amount', required: true }, { key: 'category', type: 'text', label: 'Category', required: true }, { key: 'description', type: 'textarea', label: 'Description', required: true }], formTitle: 'Expense Check', submitButtonText: 'Submit Expense' }, why: 'Captures the expense data needed for policy review.' },
+    { id: 'ai_policy_check', type: 'openai_gpt', label: 'Check Policy Fit', category: 'ai', config: { model: 'gpt-4o-mini', prompt: 'Check this expense against a normal business expense policy. Amount: {{input.amount}}. Category: {{input.category}}. Description: {{input.description}}. Return ONLY JSON: {"approved":true|false,"reason":"short reason","risk":"low|medium|high"}.', temperature: 0.2 }, why: 'Flags unusual expenses while allowing normal ones through.' },
+    { id: 'js_parse_expense', type: 'javascript', label: 'Parse Policy Result', category: 'data', config: { code: 'let parsed = {};\ntry { const text = input.response || "{}"; const m = text.match(/\\{[\\s\\S]*\\}/); parsed = m ? JSON.parse(m[0]) : {}; } catch (e) { parsed = {}; }\nreturn { ...input, approved: parsed.approved === true, reason: parsed.reason || "", risk: parsed.risk || "medium" };', timeout: 5000 }, why: 'Turns the AI result into fields that can be stored and branched on.' },
+    { id: 'postgres_save_expense', type: 'postgresql', label: 'Save Expense Review', category: 'database', config: { query: "INSERT INTO expense_reviews (employee_email, amount, category, approved, risk, reason, created_at) VALUES ('{{input.employeeEmail}}', {{input.amount}}, '{{input.category}}', '{{input.approved}}', '{{input.risk}}', '{{input.reason}}', now())" }, why: 'Keeps every policy decision auditable.' },
+    { id: 'if_expense_review', type: 'if_else', label: 'Needs Finance Review?', category: 'logic', config: { conditions: [{ field: '$json.approved', operator: 'equals', value: false }], combineOperation: 'AND' }, why: 'Only sends exceptions to finance; approved expenses are simply recorded.' },
+    { id: 'slack_expense_review', type: 'slack_message', label: 'Alert Finance', category: 'output', config: { channel: '#finance-review', message: 'Expense needs review: {{input.employeeEmail}} / {{input.amount}}\nRisk: {{input.risk}}\nReason: {{input.reason}}' }, why: 'Notifies finance when the policy result is not approved.' },
+  ],
+  edges: [['form_expense', 'ai_policy_check'], ['ai_policy_check', 'js_parse_expense'], ['js_parse_expense', 'postgres_save_expense'], ['postgres_save_expense', 'if_expense_review'], ['if_expense_review', 'slack_expense_review', 'true']],
+});
+
+addTemplate({
+  id: '91000000-0000-4000-8000-000000000008',
+  name: 'Vendor Due Diligence',
+  description: 'Collect vendor details, fetch the live website, summarize risk, save the review, and alert procurement for high-risk vendors.',
+  category: SECTORS.finance,
+  difficulty: 'Intermediate',
+  estimated_setup_time: 24,
+  tags: ['finance', 'vendor', 'risk', 'http', 'airtable'],
+  nodes: [
+    { id: 'form_vendor', type: 'form', label: 'Vendor Intake Form', category: 'triggers', config: { fields: [{ key: 'vendorName', type: 'text', label: 'Vendor Name', required: true }, { key: 'website', type: 'url', label: 'Website', required: true }, { key: 'ownerEmail', type: 'email', label: 'Owner Email', required: true }], formTitle: 'Vendor Due Diligence', submitButtonText: 'Review Vendor' }, why: 'Collects the vendor identity and internal owner before any review starts.' },
+    { id: 'http_fetch_vendor_site', type: 'http_request', label: 'Fetch Vendor Website', category: 'http_api', config: { url: '{{input.website}}', method: 'GET', headers: {}, timeout: 10000 }, why: 'Reads the live vendor website so the review uses current public information.' },
+    { id: 'ai_vendor_risk', type: 'openai_gpt', label: 'Assess Vendor Risk', category: 'ai', config: { model: 'gpt-4o-mini', prompt: 'Assess vendor risk from this website HTML and owner data. Vendor: {{input.vendorName}}. Website HTML: {{input.body}}. Return ONLY JSON: {"risk":"low|medium|high","summary":"short summary","requiresReview":true|false}.', temperature: 0.2 }, why: 'Summarizes vendor risk using the live website rather than only the submitted name.' },
+    { id: 'js_parse_vendor', type: 'javascript', label: 'Parse Vendor Risk', category: 'data', config: { code: 'let parsed = {};\ntry { const text = input.response || "{}"; const m = text.match(/\\{[\\s\\S]*\\}/); parsed = m ? JSON.parse(m[0]) : {}; } catch (e) { parsed = {}; }\nreturn { ...input, risk: parsed.risk || "medium", summary: parsed.summary || "", requiresReview: parsed.requiresReview === true || parsed.risk === "high" };', timeout: 5000 }, why: 'Creates fields for storage and the procurement review branch.' },
+    { id: 'airtable_log_vendor', type: 'airtable', label: 'Log Vendor Review', category: 'database', config: { baseId: '', tableId: 'VendorReviews', operation: 'create', fields: { Vendor: '{{input.vendorName}}', Website: '{{input.website}}', Risk: '{{input.risk}}', Summary: '{{input.summary}}', OwnerEmail: '{{input.ownerEmail}}' } }, why: 'Stores the review so procurement has an audit trail.' },
+    { id: 'if_vendor_review', type: 'if_else', label: 'Procurement Review Needed?', category: 'logic', config: { conditions: [{ field: '$json.requiresReview', operator: 'equals', value: true }], combineOperation: 'AND' }, why: 'Only interrupts procurement for vendors that need a closer look.' },
+    { id: 'slack_vendor_review', type: 'slack_message', label: 'Alert Procurement', category: 'output', config: { channel: '#procurement', message: 'Vendor review needed: {{input.vendorName}}\nRisk: {{input.risk}}\n{{input.summary}}' }, why: 'Routes high-risk vendor reviews to procurement immediately.' },
+  ],
+  edges: [['form_vendor', 'http_fetch_vendor_site'], ['http_fetch_vendor_site', 'ai_vendor_risk'], ['ai_vendor_risk', 'js_parse_vendor'], ['js_parse_vendor', 'airtable_log_vendor'], ['airtable_log_vendor', 'if_vendor_review'], ['if_vendor_review', 'slack_vendor_review', 'true']],
+});
+
+addTemplate({
+  id: '91000000-0000-4000-8000-000000000009',
+  name: 'Payment Failure Recovery',
+  description: 'Capture payment-failure events from a billing system, classify the failure, notify the customer, and alert finance when manual recovery is needed.',
+  category: SECTORS.finance,
+  difficulty: 'Intermediate',
+  estimated_setup_time: 20,
+  tags: ['finance', 'billing', 'webhook', 'email', 'slack'],
+  nodes: [
+    { id: 'webhook_payment_failed', type: 'webhook', label: 'Payment Failure Webhook', category: 'triggers', config: { method: 'POST' }, why: 'Receives payment-failure payloads from whichever billing tool the customer uses.' },
+    { id: 'js_extract_payment', type: 'javascript', label: 'Extract Failure Details', category: 'data', config: { code: 'const payload = input.body || input;\nreturn { ...input, customerEmail: payload.customerEmail || payload.email || "", customerName: payload.customerName || payload.name || "there", amount: payload.amount || 0, failureReason: payload.failureReason || payload.reason || "payment failed" };', timeout: 5000 }, why: 'Normalises common billing payload shapes into fields used by the recovery steps.' },
+    { id: 'ai_recovery_message', type: 'openai_gpt', label: 'Draft Recovery Message', category: 'ai', config: { model: 'gpt-4o-mini', prompt: 'Write a short, helpful payment recovery email for {{input.customerName}}. Amount: {{input.amount}}. Failure reason: {{input.failureReason}}. Do not blame the customer.', temperature: 0.4 }, why: 'Produces customer-friendly recovery copy instead of a cold system error.' },
+    { id: 'gmail_payment_recovery', type: 'google_gmail', label: 'Email Customer', category: 'output', config: { operation: 'send', recipientSource: 'manual_entry', recipientEmails: '{{input.customerEmail}}', subject: 'Action needed: payment issue', body: '{{input.response}}' }, why: 'Sends the recovery message through a verified working email channel.' },
+    { id: 'if_high_value_payment', type: 'if_else', label: 'High Value Failure?', category: 'logic', config: { conditions: [{ field: '$json.amount', operator: 'greaterThan', value: 1000 }], combineOperation: 'AND' }, why: 'Separates failures worth manual finance follow-up from normal automated recovery.' },
+    { id: 'slack_payment_followup', type: 'slack_message', label: 'Alert Finance', category: 'output', config: { channel: '#finance-recovery', message: 'High-value payment failure: {{input.customerEmail}} / {{input.amount}}\nReason: {{input.failureReason}}' }, why: 'Gets large failed payments into a human recovery queue.' },
+  ],
+  edges: [['webhook_payment_failed', 'js_extract_payment'], ['js_extract_payment', 'ai_recovery_message'], ['ai_recovery_message', 'gmail_payment_recovery'], ['gmail_payment_recovery', 'if_high_value_payment'], ['if_high_value_payment', 'slack_payment_followup', 'true']],
+});
+
+addTemplate({
+  id: '91000000-0000-4000-8000-000000000010',
+  name: 'Support Ticket Triage',
+  description: 'Classify new support requests, save the ticket, route urgent cases to Slack, and email the customer with next steps.',
+  category: SECTORS.operations,
+  difficulty: 'Beginner',
+  estimated_setup_time: 18,
+  tags: ['support', 'triage', 'ai', 'postgresql', 'email'],
+  nodes: [
+    { id: 'form_support_request', type: 'form', label: 'Support Request Form', category: 'triggers', config: { fields: [{ key: 'customerEmail', type: 'email', label: 'Customer Email', required: true }, { key: 'subject', type: 'text', label: 'Subject', required: true }, { key: 'message', type: 'textarea', label: 'Message', required: true }], formTitle: 'Support Request', submitButtonText: 'Send Request' }, why: 'Collects the customer issue in a structured form instead of an untracked inbox.' },
+    { id: 'ai_classify_ticket', type: 'openai_gpt', label: 'Classify Ticket', category: 'ai', config: { model: 'gpt-4o-mini', prompt: 'Classify this support request. Subject: {{input.subject}}. Message: {{input.message}}. Return ONLY JSON: {"priority":"low|normal|urgent","category":"billing|technical|account|other","summary":"short summary"}.', temperature: 0.2 }, why: 'Turns the request into priority and category fields.' },
+    { id: 'js_parse_ticket', type: 'javascript', label: 'Parse Ticket Fields', category: 'data', config: { code: 'let parsed = {};\ntry { const text = input.response || "{}"; const m = text.match(/\\{[\\s\\S]*\\}/); parsed = m ? JSON.parse(m[0]) : {}; } catch (e) { parsed = {}; }\nreturn { ...input, priority: parsed.priority || "normal", category: parsed.category || "other", summary: parsed.summary || input.message || "" };', timeout: 5000 }, why: 'Creates stable fields for database storage and priority routing.' },
+    { id: 'postgres_create_ticket', type: 'postgresql', label: 'Create Support Ticket', category: 'database', config: { query: "INSERT INTO support_tickets (customer_email, subject, category, priority, summary, status, created_at) VALUES ('{{input.customerEmail}}', '{{input.subject}}', '{{input.category}}', '{{input.priority}}', '{{input.summary}}', 'open', now())" }, why: 'Creates a durable ticket instead of leaving support requests only in email or Slack.' },
+    { id: 'if_urgent_ticket', type: 'if_else', label: 'Urgent Ticket?', category: 'logic', config: { conditions: [{ field: '$json.priority', operator: 'equals', value: 'urgent' }], combineOperation: 'AND' }, why: 'Only urgent tickets interrupt the team immediately.' },
+    { id: 'slack_urgent_ticket', type: 'slack_message', label: 'Alert Support Team', category: 'output', config: { channel: '#support-urgent', message: 'Urgent support ticket: {{input.subject}}\n{{input.summary}}' }, why: 'Puts urgent requests in front of support staff fast.' },
+    { id: 'gmail_ticket_ack', type: 'google_gmail', label: 'Email Customer', category: 'output', config: { operation: 'send', recipientSource: 'manual_entry', recipientEmails: '{{input.customerEmail}}', subject: 'We received your request', body: 'We received your request about "{{input.subject}}". Priority: {{input.priority}}. Our team will follow up.' }, why: 'Confirms the ticket was received and sets customer expectations.' },
+  ],
+  edges: [['form_support_request', 'ai_classify_ticket'], ['ai_classify_ticket', 'js_parse_ticket'], ['js_parse_ticket', 'postgres_create_ticket'], ['postgres_create_ticket', 'if_urgent_ticket'], ['if_urgent_ticket', 'slack_urgent_ticket', 'true'], ['postgres_create_ticket', 'gmail_ticket_ack']],
+});
+
+addTemplate({
+  id: '91000000-0000-4000-8000-000000000011',
+  name: 'Meeting Notes to Action Items',
+  description: 'Turn meeting notes into owners and action items, store the summary, and post the task list to the team.',
+  category: SECTORS.operations,
+  difficulty: 'Beginner',
+  estimated_setup_time: 15,
+  tags: ['operations', 'meetings', 'actions', 'ai', 'slack'],
+  nodes: [
+    { id: 'form_meeting_notes', type: 'form', label: 'Meeting Notes Form', category: 'triggers', config: { fields: [{ key: 'meetingTitle', type: 'text', label: 'Meeting Title', required: true }, { key: 'notes', type: 'textarea', label: 'Notes', required: true }, { key: 'teamChannel', type: 'text', label: 'Team Slack Channel', required: false }], formTitle: 'Meeting Notes', submitButtonText: 'Create Actions' }, why: 'Gives the team a simple way to turn raw notes into follow-up work.' },
+    { id: 'ai_extract_actions', type: 'openai_gpt', label: 'Extract Action Items', category: 'ai', config: { model: 'gpt-4o-mini', prompt: 'Extract action items from these meeting notes: {{input.notes}}. Return ONLY JSON: {"summary":"short summary","actionsText":"numbered action list with owner and due date when present"}.', temperature: 0.2 }, why: 'Finds action items and owners in unstructured notes.' },
+    { id: 'js_parse_actions', type: 'javascript', label: 'Parse Action Items', category: 'data', config: { code: 'let parsed = {};\ntry { const text = input.response || "{}"; const m = text.match(/\\{[\\s\\S]*\\}/); parsed = m ? JSON.parse(m[0]) : {}; } catch (e) { parsed = {}; }\nreturn { ...input, summary: parsed.summary || "", actionsText: parsed.actionsText || "No action items found.", channel: input.teamChannel || "#team-updates" };', timeout: 5000 }, why: 'Formats the AI result for storage and Slack posting.' },
+    { id: 'postgres_save_meeting', type: 'postgresql', label: 'Save Meeting Summary', category: 'database', config: { query: "INSERT INTO meeting_summaries (title, summary, actions, created_at) VALUES ('{{input.meetingTitle}}', '{{input.summary}}', '{{input.actionsText}}', now())" }, why: 'Keeps a searchable record of meeting decisions and tasks.' },
+    { id: 'slack_post_actions', type: 'slack_message', label: 'Post Actions to Team', category: 'output', config: { channel: '{{input.channel}}', message: '*{{input.meetingTitle}} actions*\n{{input.actionsText}}' }, why: 'Puts the follow-up list where the team already coordinates.' },
+  ],
+  edges: [['form_meeting_notes', 'ai_extract_actions'], ['ai_extract_actions', 'js_parse_actions'], ['js_parse_actions', 'postgres_save_meeting'], ['postgres_save_meeting', 'slack_post_actions']],
+});
+
+addTemplate({
+  id: '91000000-0000-4000-8000-000000000012',
+  name: 'Employee Onboarding Checklist',
+  description: 'Track one new hire at a time, send their onboarding email, notify the hiring team, and mark onboarding as started.',
+  category: SECTORS.operations,
+  difficulty: 'Beginner',
+  estimated_setup_time: 17,
+  tags: ['hr', 'onboarding', 'airtable', 'email', 'slack'],
+  nodes: [
+    { id: 'schedule_onboarding', type: 'schedule', label: 'Check New Hires', category: 'triggers', config: { cron: '0 10 * * *', timezone: 'Asia/Kolkata' }, why: 'Runs daily to pick up new hires without manual HR checks.' },
+    { id: 'airtable_read_new_hire', type: 'airtable', label: 'Read One New Hire', category: 'database', config: { baseId: '', tableId: 'NewHires', operation: 'read', filterByFormula: "AND({Status}='Ready', {OnboardingStarted}='')", maxRecords: 1 }, why: 'Selects one ready new hire that has not started onboarding.' },
+    { id: 'js_prepare_onboarding', type: 'javascript', label: 'Prepare Onboarding Payload', category: 'data', config: { code: 'const rec = (input.records || [])[0];\nif (!rec) return { ...input, hasHire: false };\nconst f = rec.fields || {};\nreturn { ...input, hasHire: true, recordId: rec.id, employeeName: f.Name || "there", employeeEmail: f.Email || "", manager: f.Manager || "your manager", startDate: f.StartDate || "" };', timeout: 5000 }, why: 'Lifts new-hire fields into a clean payload for email, Slack and marking.' },
+    { id: 'if_has_hire', type: 'if_else', label: 'New Hire Found?', category: 'logic', config: { conditions: [{ field: '$json.hasHire', operator: 'equals', value: true }], combineOperation: 'AND' }, why: 'Stops empty daily checks from sending blank onboarding messages.' },
+    { id: 'gmail_onboarding', type: 'google_gmail', label: 'Email New Hire', category: 'output', config: { operation: 'send', recipientSource: 'manual_entry', recipientEmails: '{{input.employeeEmail}}', subject: 'Welcome to the team', body: 'Hi {{input.employeeName}},\n\nWelcome. Your start date is {{input.startDate}}. Your manager is {{input.manager}}. We will share your onboarding tasks shortly.' }, why: 'Sends a consistent welcome email to the new hire.' },
+    { id: 'slack_onboarding', type: 'slack_message', label: 'Notify Hiring Team', category: 'output', config: { channel: '#people-ops', message: 'Onboarding started for {{input.employeeName}}. Manager: {{input.manager}}. Start: {{input.startDate}}' }, why: 'Tells People Ops and the manager that onboarding has started.' },
+    { id: 'airtable_mark_onboarding', type: 'airtable', label: 'Mark Started', category: 'database', config: { baseId: '', tableId: 'NewHires', operation: 'update', recordId: '{{input.recordId}}', fields: { OnboardingStarted: 'Yes' } }, why: 'Prevents duplicate onboarding starts for the same employee.' },
+  ],
+  edges: [['schedule_onboarding', 'airtable_read_new_hire'], ['airtable_read_new_hire', 'js_prepare_onboarding'], ['js_prepare_onboarding', 'if_has_hire'], ['if_has_hire', 'gmail_onboarding', 'true'], ['gmail_onboarding', 'slack_onboarding'], ['slack_onboarding', 'airtable_mark_onboarding']],
+});
+
+addTemplate({
+  id: '91000000-0000-4000-8000-000000000013',
+  name: 'Weekly Pipeline Report',
+  description: 'Read current pipeline rows, summarize risk and next actions, then email leadership and post the summary to Slack.',
+  category: SECTORS.operations,
+  difficulty: 'Intermediate',
+  estimated_setup_time: 19,
+  tags: ['sales', 'pipeline', 'reporting', 'airtable', 'slack'],
+  nodes: [
+    { id: 'schedule_pipeline_report', type: 'schedule', label: 'Weekly Report Schedule', category: 'triggers', config: { cron: '0 9 * * 1', timezone: 'Asia/Kolkata' }, why: 'Runs weekly so leadership receives a consistent pipeline view.' },
+    { id: 'airtable_read_pipeline', type: 'airtable', label: 'Read Pipeline Deals', category: 'database', config: { baseId: '', tableId: 'Deals', operation: 'read', filterByFormula: "{Stage}!='Closed Lost'", maxRecords: 100 }, why: 'Loads active deals that belong in the weekly report.' },
+    { id: 'ai_summarize_pipeline', type: 'openai_gpt', label: 'Summarize Pipeline', category: 'ai', config: { model: 'gpt-4o-mini', prompt: 'Summarize this sales pipeline for leadership: {{input.records}}. Include total themes, risks, and next actions. Keep it concise.', temperature: 0.3 }, why: 'Turns raw deal rows into an executive-readable summary.' },
+    { id: 'gmail_pipeline_report', type: 'google_gmail', label: 'Email Leadership', category: 'output', config: { operation: 'send', recipientSource: 'manual_entry', recipientEmails: 'REPLACE_WITH_LEADERSHIP_EMAIL', subject: 'Weekly pipeline report', body: '{{input.response}}' }, why: 'Sends the report to leadership without requiring them to open the CRM.' },
+    { id: 'slack_pipeline_report', type: 'slack_message', label: 'Post Sales Summary', category: 'output', config: { channel: '#sales', message: '*Weekly pipeline report*\n{{input.response}}' }, why: 'Shares the same summary in the sales team channel for follow-up.' },
+  ],
+  edges: [['schedule_pipeline_report', 'airtable_read_pipeline'], ['airtable_read_pipeline', 'ai_summarize_pipeline'], ['ai_summarize_pipeline', 'gmail_pipeline_report'], ['ai_summarize_pipeline', 'slack_pipeline_report']],
+});
+
+addTemplate({
+  id: '91000000-0000-4000-8000-000000000014',
+  name: 'CRM Data Cleanup Assistant',
+  description: 'Find one CRM contact needing cleanup, detect missing fields, update the CRM, and notify ops when human research is needed.',
+  category: SECTORS.operations,
+  difficulty: 'Intermediate',
+  estimated_setup_time: 23,
+  tags: ['crm', 'hubspot', 'cleanup', 'operations', 'slack'],
+  nodes: [
+    { id: 'schedule_crm_cleanup', type: 'schedule', label: 'Check CRM Records', category: 'triggers', config: { cron: '*/20 * * * *', timezone: 'Asia/Kolkata' }, why: 'Runs continuously but lightly, cleaning one record per pass.' },
+    { id: 'hubspot_read_contact', type: 'hubspot', label: 'Find Contact to Clean', category: 'crm', config: { resource: 'contact', operation: 'list', properties: { limit: 1 } }, why: 'Uses the real CRM node so the template works against the system sales teams use.' },
+    { id: 'js_detect_missing_crm', type: 'javascript', label: 'Detect Missing Fields', category: 'data', config: { code: 'const contact = (input.results || input.contacts || [])[0] || input;\nconst missing = ["email", "firstname", "company"].filter((field) => !contact[field]);\nreturn { ...input, contactId: contact.id || "", missing, needsResearch: missing.length > 0, missingText: missing.join(", ") || "None" };', timeout: 5000 }, why: 'Finds the exact fields missing from the contact record.' },
+    { id: 'if_crm_missing', type: 'if_else', label: 'Needs Cleanup?', category: 'logic', config: { conditions: [{ field: '$json.needsResearch', operator: 'equals', value: true }], combineOperation: 'AND' }, why: 'Only records with missing required fields create work for ops.' },
+    { id: 'slack_crm_research', type: 'slack_message', label: 'Ask Ops to Research', category: 'output', config: { channel: '#revops', message: 'CRM contact needs cleanup. Missing: {{input.missingText}}. Contact ID: {{input.contactId}}' }, why: 'Routes incomplete records to RevOps for human research.' },
+    { id: 'hubspot_mark_reviewed', type: 'hubspot', label: 'Mark Reviewed', category: 'crm', config: { resource: 'contact', operation: 'update', id: '{{input.contactId}}', properties: { ctrlchecks_reviewed: 'true' } }, why: 'Marks the contact as reviewed so it can be excluded from future cleanup passes.' },
+  ],
+  edges: [['schedule_crm_cleanup', 'hubspot_read_contact'], ['hubspot_read_contact', 'js_detect_missing_crm'], ['js_detect_missing_crm', 'if_crm_missing'], ['if_crm_missing', 'slack_crm_research', 'true'], ['if_crm_missing', 'hubspot_mark_reviewed', 'false'], ['slack_crm_research', 'hubspot_mark_reviewed']],
+});
+
+addTemplate({
+  id: '91000000-0000-4000-8000-000000000015',
+  name: 'Customer Churn Risk Alert',
+  description: 'Poll one customer account, score churn risk from usage and notes, alert account managers, and mark the record checked.',
+  category: SECTORS.operations,
+  difficulty: 'Intermediate',
+  estimated_setup_time: 22,
+  tags: ['customer-success', 'churn', 'airtable', 'ai', 'slack'],
+  nodes: [
+    { id: 'schedule_churn_check', type: 'schedule', label: 'Check Customer Risk', category: 'triggers', config: { cron: '*/30 * * * *', timezone: 'Asia/Kolkata' }, why: 'Runs on a timer because churn signals appear in account data over time.' },
+    { id: 'airtable_read_customer', type: 'airtable', label: 'Read One Customer', category: 'database', config: { baseId: '', tableId: 'Customers', operation: 'read', filterByFormula: "AND({Status}='Active', {ChurnCheckedAt}='')", maxRecords: 1 }, why: 'Selects one active customer that has not been checked yet.' },
+    { id: 'ai_churn_score', type: 'openai_gpt', label: 'Score Churn Risk', category: 'ai', config: { model: 'gpt-4o-mini', prompt: 'Score churn risk for this customer record: {{input.records}}. Return ONLY JSON: {"risk":"low|medium|high","reason":"short reason","nextAction":"specific action"}.', temperature: 0.2 }, why: 'Uses account context to judge risk and recommend the next action.' },
+    { id: 'js_parse_churn', type: 'javascript', label: 'Parse Risk Score', category: 'data', config: { code: 'const rec = (input.records || [])[0];\nlet parsed = {};\ntry { const text = input.response || "{}"; const m = text.match(/\\{[\\s\\S]*\\}/); parsed = m ? JSON.parse(m[0]) : {}; } catch (e) { parsed = {}; }\nconst f = rec?.fields || {};\nreturn { ...input, recordId: rec?.id || "", customerName: f.Name || "customer", ownerChannel: f.OwnerChannel || "#customer-success", risk: parsed.risk || "medium", reason: parsed.reason || "", nextAction: parsed.nextAction || "" };', timeout: 5000 }, why: 'Combines the Airtable record ID with the parsed AI risk fields.' },
+    { id: 'if_high_churn', type: 'if_else', label: 'High Churn Risk?', category: 'logic', config: { conditions: [{ field: '$json.risk', operator: 'equals', value: 'high' }], combineOperation: 'AND' }, why: 'Only high-risk accounts interrupt the account team.' },
+    { id: 'slack_churn_alert', type: 'slack_message', label: 'Alert Account Manager', category: 'output', config: { channel: '{{input.ownerChannel}}', message: 'High churn risk: {{input.customerName}}\nReason: {{input.reason}}\nNext action: {{input.nextAction}}' }, why: 'Routes the alert to the owner responsible for saving the account.' },
+    { id: 'airtable_mark_churn_checked', type: 'airtable', label: 'Mark Checked', category: 'database', config: { baseId: '', tableId: 'Customers', operation: 'update', recordId: '{{input.recordId}}', fields: { ChurnCheckedAt: 'Checked' } }, why: 'Prevents the same customer from being rescored on every poll.' },
+  ],
+  edges: [['schedule_churn_check', 'airtable_read_customer'], ['airtable_read_customer', 'ai_churn_score'], ['ai_churn_score', 'js_parse_churn'], ['js_parse_churn', 'if_high_churn'], ['if_high_churn', 'slack_churn_alert', 'true'], ['if_high_churn', 'airtable_mark_churn_checked', 'false'], ['slack_churn_alert', 'airtable_mark_churn_checked']],
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
 // Emit
 // ═════════════════════════════════════════════════════════════════════════════
 
@@ -1748,7 +2308,7 @@ function applyCategoriesAndNotes(t) {
       n.data.category = family;
     }
 
-    const why = instance[n.id];
+    const why = instance[n.id] || generatedNodeNotes.get(`${s}.${n.id}`);
     if (!why) missing.push(`${s}.${n.id}`);
 
     n.data.notes = {
@@ -1788,7 +2348,7 @@ const q = (s) => `$tpl$${s}$tpl$`;
 const jsonb = (v) => `$tpl$${JSON.stringify(v)}$tpl$::jsonb`;
 const textArr = (a) => `ARRAY[${a.map((x) => q(x)).join(',')}]::text[]`;
 
-const NEW_IDS = new Set(['b7f3c1d2-4e58-4a91-9c06-2d8e5f0a7b34']);
+const NEW_IDS = new Set(['b7f3c1d2-4e58-4a91-9c06-2d8e5f0a7b34', ...newTemplateIds]);
 
 fs.writeFileSync(
   path.join(SQL_DIR, '00_backup_current_templates.sql'),
@@ -1831,15 +2391,23 @@ fs.writeFileSync(
 
 BEGIN;
 
-UPDATE templates
-SET is_active = false, updated_at = now()
-WHERE name IN ('Cross-Platform Sync Engine', 'Internal Knowledge / Ops Agent');
+SELECT 0 AS deactivated;
 
--- Expect: 2
-SELECT count(*) AS deactivated
-FROM templates
-WHERE name IN ('Cross-Platform Sync Engine', 'Internal Knowledge / Ops Agent')
-  AND is_active = false;
+COMMIT;
+`,
+);
+
+fs.writeFileSync(
+  path.join(SQL_DIR, '01_deactivate_unsafe_templates.sql'),
+  `-- Template Library v2 - step 1: historical safety step.
+-- Earlier drafts used this step to temporarily hide unsafe templates before the
+-- corrected graphs were applied. The current migration inserts/updates the full
+-- corrected 36-template library directly, so this step intentionally does not
+-- change live data.
+
+BEGIN;
+
+SELECT 0 AS deactivated;
 
 COMMIT;
 `,
@@ -1889,7 +2457,7 @@ fs.writeFileSync(
 -- Every change is documented in ctrl_checks/templates/CHANGELOG.md and
 -- justified in docs/TEMPLATE_LIBRARY_FIX_SPEC.md.
 --
--- Templates: ${out.length} (${out.length - 1} updated, 1 inserted)
+-- Templates: ${out.length} (${out.length - NEW_IDS.size} updated, ${NEW_IDS.size} inserted)
 -- Run 00_backup_current_templates.sql first.
 
 BEGIN;
@@ -1919,16 +2487,11 @@ ONE COMMAND (recommended — runs all three steps with safety checks):
 
 Or run the files by hand, in this order:
 
-  00_backup_current_templates.sql    REQUIRED FIRST. 15 of the 20 live templates
-                                     exist only in this database.
-  01_deactivate_unsafe_templates.sql Pulls the two dangerous templates from the
-                                     gallery. Safe to run on its own, immediately.
+  00_backup_current_templates.sql    REQUIRED FIRST. Preserves the current live
+                                     template table before replacing the active
+                                     library with the corrected ${out.length}.
+  01_deactivate_unsafe_templates.sql Historical no-op kept for runbook safety.
   02_apply_templates_v2.sql          Applies the corrected graphs to all ${out.length}.
-
-After 02, reactivate the two from step 01 once you have run each end to end:
-
-  UPDATE templates SET is_active = true
-  WHERE name IN ('Cross-Platform Sync Engine', 'Internal Knowledge / Ops Agent');
 
 Still outstanding after this migration — see DEFERRED.md:
 ${deferred.map((d) => `  - ${d.template}: ${d.item}`).join('\n')}

@@ -2,7 +2,7 @@
   "id": "8431165d-7466-4579-8940-8b0724b28db2",
   "name": "Overdue Task Tracker",
   "description": "Requests shouldn't sit untouched until a client complains. This workflow checks open items every hour, flags anything past its expected turnaround, alerts the responsible person, and escalates to their manager once it's gone very overdue.",
-  "category": "Business Verification & Compliance",
+  "category": "Sales, Support & Internal Operations",
   "nodes": [
     {
       "id": "schedule_hourly_check",

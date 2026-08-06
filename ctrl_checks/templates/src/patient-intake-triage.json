@@ -1,0 +1,274 @@
+{
+  "id": "91000000-0000-4000-8000-000000000001",
+  "name": "Patient Intake Triage",
+  "description": "Collect symptoms, urgency and contact details from a patient intake form, classify the case, then route urgent cases to staff and routine cases to email follow-up.",
+  "category": "Healthcare & Clinics",
+  "nodes": [
+    {
+      "id": "form_patient_intake",
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      },
+      "data": {
+        "icon": "Box",
+        "type": "form",
+        "label": "Patient Intake Form",
+        "category": "triggers",
+        "config": {
+          "fields": [
+            {
+              "key": "patientName",
+              "type": "text",
+              "label": "Patient Name",
+              "required": true
+            },
+            {
+              "key": "contactEmail",
+              "type": "email",
+              "label": "Contact Email",
+              "required": true
+            },
+            {
+              "key": "symptoms",
+              "type": "textarea",
+              "label": "Symptoms",
+              "required": true
+            },
+            {
+              "key": "duration",
+              "type": "text",
+              "label": "How Long Has This Been Happening?",
+              "required": false
+            }
+          ],
+          "formTitle": "Patient Intake",
+          "formDescription": "Share the details needed for a first triage.",
+          "submitButtonText": "Submit Intake"
+        },
+        "notes": {
+          "family": "Triggers",
+          "what": "Starts your workflow when someone fills out and submits a web form you built",
+          "overview": "Build a public CtrlChecks form and start the workflow when someone submits structured answers, files, or intake details.",
+          "tips": [
+            "Use friendly labels for submitters and stable internal names for workflow mapping.",
+            "Map answers with {{$json.customer_email}} or {{$json.data.customer_email}} after checking a test execution.",
+            "Use select or radio options for values that drive routing, approvals, reporting, or branch conditions.",
+            "Turn CAPTCHA on for public forms that can create tickets, leads, or notifications.",
+            "Require authentication only for internal or sensitive forms.",
+            "Changing an internal name after downstream nodes are mapped requires updating those mappings too."
+          ],
+          "docsHref": "/docs/nodes/form",
+          "why": "Collects the minimum structured details a clinic needs before deciding who should respond."
+        }
+      }
+    },
+    {
+      "id": "ai_classify_triage",
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      },
+      "data": {
+        "icon": "Box",
+        "type": "openai_gpt",
+        "label": "Classify Triage Need",
+        "category": "ai",
+        "config": {
+          "model": "gpt-4o-mini",
+          "prompt": "Review this patient intake. Symptoms: {{input.symptoms}}. Duration: {{input.duration}}. Return ONLY JSON: {\"urgency\":\"urgent|routine\",\"summary\":\"short clinical admin summary\",\"nextStep\":\"what staff should do next\"}.",
+          "temperature": 0.2
+        },
+        "notes": {
+          "family": "AI",
+          "what": "Sends your prompt to OpenAI's ChatGPT and gets back an AI-written response",
+          "overview": "Calls OpenAI through the legacy LLM adapter. Prompt is the main input; Messages is only a fallback when Prompt is blank. Temperature and Memory are visible legacy fields ignored by the current executor.",
+          "tips": [],
+          "docsHref": "/docs/nodes/openai_gpt",
+          "why": "Turns free-text symptoms into a simple urgency decision that downstream routing can use."
+        }
+      }
+    },
+    {
+      "id": "js_parse_triage",
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      },
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Parse Triage Decision",
+        "category": "data",
+        "config": {
+          "code": "let parsed = {};\ntry {\n  const text = input.response || input.text || input.content || \"{}\";\n  const m = text.match(/\\{[\\s\\S]*\\}/);\n  parsed = m ? JSON.parse(m[0]) : {};\n} catch (e) { parsed = {}; }\nreturn { ...input, urgency: parsed.urgency || \"routine\", summary: parsed.summary || \"\", nextStep: parsed.nextStep || \"\" };",
+          "timeout": 5000
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Converts the AI response into real fields so the branch below is deterministic."
+        }
+      }
+    },
+    {
+      "id": "if_urgent_triage",
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      },
+      "data": {
+        "icon": "GitBranch",
+        "type": "if_else",
+        "label": "Urgent Case?",
+        "category": "logic",
+        "config": {
+          "conditions": [
+            {
+              "field": "$json.urgency",
+              "operator": "equals",
+              "value": "urgent"
+            }
+          ],
+          "combineOperation": "AND"
+        },
+        "notes": {
+          "family": "Logic",
+          "what": "Makes a yes/no decision: if something is true, go one way; otherwise go another",
+          "overview": "Makes a yes/no decision from previous-step data and routes matching work through TRUE and non-matching work through FALSE.",
+          "tips": [
+            "Use the builder for normal setup; use JSON mode only when pasting prepared condition objects.",
+            "Choose AND when every row must match; choose OR when any row can match.",
+            "Use equals for statuses and categories, greater-than operators for numeric thresholds, and contains for text or lists.",
+            "Connect both TRUE and FALSE outputs so no business case silently disappears."
+          ],
+          "docsHref": "/docs/nodes/if_else",
+          "why": "Separates patients needing staff attention now from those safe for normal follow-up."
+        }
+      }
+    },
+    {
+      "id": "slack_alert_clinic",
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 205
+      },
+      "data": {
+        "icon": "Hash",
+        "type": "slack_message",
+        "label": "Alert Clinic Team",
+        "category": "output",
+        "config": {
+          "channel": "#clinic-triage",
+          "message": ":rotating_light: Urgent intake for {{input.patientName}}\n{{input.summary}}\nNext: {{input.nextStep}}"
+        },
+        "notes": {
+          "family": "Communication",
+          "what": "Sends messages using a Slack app or bot connection",
+          "overview": "Send Slack bot messages to channels, direct messages, or existing threads through a saved Slack OAuth2 connection. Use it for workplace alerts, support replies, incident updates, approvals, report summaries, and deployment notifications.",
+          "tips": [
+            "Select a Slack OAuth2 connection; do not paste bot tokens into message fields",
+            "The Slack app needs chat:write, and the bot must be invited before it can post in private channels",
+            "Use {{$json.channelId}} and {{$json.threadTs}} from Slack Trigger to reply in the same conversation",
+            "Keep Message filled as readable fallback text even when Blocks contains a rich Block Kit layout",
+            "Connect downstream service accounts separately; Slack OAuth2 only authorizes the Slack send"
+          ],
+          "docsHref": "/docs/nodes/slack_message",
+          "why": "Puts urgent cases where staff see them immediately."
+        }
+      }
+    },
+    {
+      "id": "gmail_confirm_patient",
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 395
+      },
+      "data": {
+        "icon": "Mail",
+        "type": "google_gmail",
+        "label": "Email Patient Confirmation",
+        "category": "output",
+        "config": {
+          "operation": "send",
+          "recipientSource": "manual_entry",
+          "recipientEmails": "{{input.contactEmail}}",
+          "subject": "We received your intake",
+          "body": "Hi {{input.patientName}},\n\nWe received your intake. Summary: {{input.summary}}\n\nNext step: {{input.nextStep}}"
+        },
+        "notes": {
+          "family": "Communication",
+          "what": "Send emails from your Gmail account or read and search messages in your inbox",
+          "overview": "Send, list, get, or search Gmail messages. Send recipients can be typed manually or extracted from upstream/fallback Google Sheets rows.",
+          "tips": [
+            "Connect Google OAuth in Connections; do not paste tokens into workflow fields",
+            "Gmail search syntax: from:, subject:, is:unread, has:attachment",
+            "List/Search only return {id, threadId} per message â€” use a Get step with that id for full content",
+            "Body is plain text only",
+            "Get returns Gmail's raw API message; the body text is base64url-encoded inside message.payload.body.data",
+            "Use search to filter messages before getting details"
+          ],
+          "docsHref": "/docs/nodes/google_gmail",
+          "why": "Gives routine patients a clear acknowledgment and next step without waiting for a phone call."
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_1_form_patient_intake_ai_classify_triage",
+      "source": "form_patient_intake",
+      "target": "ai_classify_triage"
+    },
+    {
+      "id": "e_2_ai_classify_triage_js_parse_triage",
+      "source": "ai_classify_triage",
+      "target": "js_parse_triage"
+    },
+    {
+      "id": "e_3_js_parse_triage_if_urgent_triage",
+      "source": "js_parse_triage",
+      "target": "if_urgent_triage"
+    },
+    {
+      "id": "e_4_if_urgent_triage_slack_alert_clinic",
+      "source": "if_urgent_triage",
+      "target": "slack_alert_clinic",
+      "sourceHandle": "true"
+    },
+    {
+      "id": "e_5_if_urgent_triage_gmail_confirm_patient",
+      "source": "if_urgent_triage",
+      "target": "gmail_confirm_patient",
+      "sourceHandle": "false"
+    }
+  ],
+  "difficulty": "Beginner",
+  "estimated_setup_time": 18,
+  "tags": [
+    "healthcare",
+    "triage",
+    "intake",
+    "email",
+    "slack"
+  ],
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2
+}

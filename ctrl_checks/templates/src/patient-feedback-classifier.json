@@ -1,0 +1,270 @@
+{
+  "id": "91000000-0000-4000-8000-000000000005",
+  "name": "Patient Feedback Classifier",
+  "description": "Classify patient feedback, store the category, and alert staff when sentiment or safety concerns require attention.",
+  "category": "Healthcare & Clinics",
+  "nodes": [
+    {
+      "id": "form_patient_feedback",
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      },
+      "data": {
+        "icon": "Box",
+        "type": "form",
+        "label": "Feedback Form",
+        "category": "triggers",
+        "config": {
+          "fields": [
+            {
+              "key": "patientName",
+              "type": "text",
+              "label": "Patient Name",
+              "required": false
+            },
+            {
+              "key": "contactEmail",
+              "type": "email",
+              "label": "Contact Email",
+              "required": false
+            },
+            {
+              "key": "feedback",
+              "type": "textarea",
+              "label": "Feedback",
+              "required": true
+            }
+          ],
+          "formTitle": "Patient Feedback",
+          "submitButtonText": "Send Feedback"
+        },
+        "notes": {
+          "family": "Triggers",
+          "what": "Starts your workflow when someone fills out and submits a web form you built",
+          "overview": "Build a public CtrlChecks form and start the workflow when someone submits structured answers, files, or intake details.",
+          "tips": [
+            "Use friendly labels for submitters and stable internal names for workflow mapping.",
+            "Map answers with {{$json.customer_email}} or {{$json.data.customer_email}} after checking a test execution.",
+            "Use select or radio options for values that drive routing, approvals, reporting, or branch conditions.",
+            "Turn CAPTCHA on for public forms that can create tickets, leads, or notifications.",
+            "Require authentication only for internal or sensitive forms.",
+            "Changing an internal name after downstream nodes are mapped requires updating those mappings too."
+          ],
+          "docsHref": "/docs/nodes/form",
+          "why": "Provides a simple channel for structured patient feedback."
+        }
+      }
+    },
+    {
+      "id": "ai_classify_feedback",
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      },
+      "data": {
+        "icon": "Box",
+        "type": "openai_gpt",
+        "label": "Classify Feedback",
+        "category": "ai",
+        "config": {
+          "model": "gpt-4o-mini",
+          "prompt": "Classify this patient feedback: {{input.feedback}}. Return ONLY JSON: {\"category\":\"compliment|complaint|billing|safety|other\",\"sentiment\":\"positive|neutral|negative\",\"summary\":\"short summary\",\"needsReview\":true|false}.",
+          "temperature": 0.2
+        },
+        "notes": {
+          "family": "AI",
+          "what": "Sends your prompt to OpenAI's ChatGPT and gets back an AI-written response",
+          "overview": "Calls OpenAI through the legacy LLM adapter. Prompt is the main input; Messages is only a fallback when Prompt is blank. Temperature and Memory are visible legacy fields ignored by the current executor.",
+          "tips": [],
+          "docsHref": "/docs/nodes/openai_gpt",
+          "why": "Turns free-text feedback into category and review fields."
+        }
+      }
+    },
+    {
+      "id": "js_parse_feedback",
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      },
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Parse Classification",
+        "category": "data",
+        "config": {
+          "code": "let parsed = {};\ntry { const text = input.response || \"{}\"; const m = text.match(/\\{[\\s\\S]*\\}/); parsed = m ? JSON.parse(m[0]) : {}; } catch (e) { parsed = {}; }\nreturn { ...input, category: parsed.category || \"other\", sentiment: parsed.sentiment || \"neutral\", summary: parsed.summary || input.feedback || \"\", needsReview: parsed.needsReview === true };",
+          "timeout": 5000
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Creates stable fields for storage and review routing."
+        }
+      }
+    },
+    {
+      "id": "airtable_log_feedback",
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      },
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Log Feedback",
+        "category": "data",
+        "config": {
+          "baseId": "",
+          "tableId": "PatientFeedback",
+          "operation": "create",
+          "fields": {
+            "Patient": "{{input.patientName}}",
+            "Email": "{{input.contactEmail}}",
+            "Category": "{{input.category}}",
+            "Sentiment": "{{input.sentiment}}",
+            "Summary": "{{input.summary}}"
+          }
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Keeps a searchable record of feedback themes and sentiment."
+        }
+      }
+    },
+    {
+      "id": "if_feedback_review",
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 300
+      },
+      "data": {
+        "icon": "GitBranch",
+        "type": "if_else",
+        "label": "Needs Staff Review?",
+        "category": "logic",
+        "config": {
+          "conditions": [
+            {
+              "field": "$json.needsReview",
+              "operator": "equals",
+              "value": true
+            }
+          ],
+          "combineOperation": "AND"
+        },
+        "notes": {
+          "family": "Logic",
+          "what": "Makes a yes/no decision: if something is true, go one way; otherwise go another",
+          "overview": "Makes a yes/no decision from previous-step data and routes matching work through TRUE and non-matching work through FALSE.",
+          "tips": [
+            "Use the builder for normal setup; use JSON mode only when pasting prepared condition objects.",
+            "Choose AND when every row must match; choose OR when any row can match.",
+            "Use equals for statuses and categories, greater-than operators for numeric thresholds, and contains for text or lists.",
+            "Connect both TRUE and FALSE outputs so no business case silently disappears."
+          ],
+          "docsHref": "/docs/nodes/if_else",
+          "why": "Only interrupts staff when the classification says review is needed."
+        }
+      }
+    },
+    {
+      "id": "slack_feedback_review",
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 300
+      },
+      "data": {
+        "icon": "Hash",
+        "type": "slack_message",
+        "label": "Alert Patient Experience Team",
+        "category": "output",
+        "config": {
+          "channel": "#patient-experience",
+          "message": "Feedback needs review: {{input.category}} / {{input.sentiment}}\n{{input.summary}}"
+        },
+        "notes": {
+          "family": "Communication",
+          "what": "Sends messages using a Slack app or bot connection",
+          "overview": "Send Slack bot messages to channels, direct messages, or existing threads through a saved Slack OAuth2 connection. Use it for workplace alerts, support replies, incident updates, approvals, report summaries, and deployment notifications.",
+          "tips": [
+            "Select a Slack OAuth2 connection; do not paste bot tokens into message fields",
+            "The Slack app needs chat:write, and the bot must be invited before it can post in private channels",
+            "Use {{$json.channelId}} and {{$json.threadTs}} from Slack Trigger to reply in the same conversation",
+            "Keep Message filled as readable fallback text even when Blocks contains a rich Block Kit layout",
+            "Connect downstream service accounts separately; Slack OAuth2 only authorizes the Slack send"
+          ],
+          "docsHref": "/docs/nodes/slack_message",
+          "why": "Sends important feedback to the team that can respond."
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_1_form_patient_feedback_ai_classify_feedback",
+      "source": "form_patient_feedback",
+      "target": "ai_classify_feedback"
+    },
+    {
+      "id": "e_2_ai_classify_feedback_js_parse_feedback",
+      "source": "ai_classify_feedback",
+      "target": "js_parse_feedback"
+    },
+    {
+      "id": "e_3_js_parse_feedback_airtable_log_feedback",
+      "source": "js_parse_feedback",
+      "target": "airtable_log_feedback"
+    },
+    {
+      "id": "e_4_airtable_log_feedback_if_feedback_review",
+      "source": "airtable_log_feedback",
+      "target": "if_feedback_review"
+    },
+    {
+      "id": "e_5_if_feedback_review_slack_feedback_review",
+      "source": "if_feedback_review",
+      "target": "slack_feedback_review",
+      "sourceHandle": "true"
+    }
+  ],
+  "difficulty": "Beginner",
+  "estimated_setup_time": 17,
+  "tags": [
+    "healthcare",
+    "feedback",
+    "sentiment",
+    "airtable",
+    "slack"
+  ],
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2
+}
