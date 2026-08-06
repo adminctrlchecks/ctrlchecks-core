@@ -54,12 +54,35 @@ export function overrideSalesforce(
     supportsRuntimeAI: false,
     supportsBuildtimeAI: true,
   };
+  const OPERATIONS_NEEDING_RESOURCE = [
+    'get', 'create', 'update', 'delete', 'upsert',
+    'bulkCreate', 'bulkUpdate', 'bulkDelete', 'bulkUpsert',
+  ];
+
   const inputSchema = {
     ...def.inputSchema,
+    // Base schema (node-library.json) marks `resource` unconditionally required, but execute()
+    // below only actually needs it for non-query/search operations. Mirror the same
+    // required-only-for-certain-operations pattern already used by Zoom's `meetingId` field
+    // (see overrides/zoom-video or its input schema) instead of blocking Query/Search runs.
+    resource: {
+      ...def.inputSchema.resource,
+      required: false,
+      ui: {
+        ...(def.inputSchema.resource?.ui || {}),
+        requiredIf: { field: 'operation', equals: OPERATIONS_NEEDING_RESOURCE },
+      },
+    },
     instanceUrl: {
       ...def.inputSchema.instanceUrl,
       required: true,
-      ownership: 'value' as const,
+      // 'credential' (not 'value'): instanceUrl comes from the OAuth connection's stored
+      // instance_url (see the instance_url -> instanceUrl alias in dynamic-node-executor.ts),
+      // exactly like accessToken below. Marking it 'value' made the readiness gate
+      // (services/ai/unified-readiness.ts, which excludes only ownershipClass === 'credential'
+      // fields from its "you must fill this in" check) treat it as a manual field the user
+      // has to type in, even though a valid connection already supplies it.
+      ownership: 'credential' as const,
       role: 'config' as const,
       helpCategory: 'base_url' as const,
       fillMode: manualStatic,
@@ -99,7 +122,13 @@ export function overrideSalesforce(
   return {
     ...def,
     inputSchema,
-    requiredInputs: Array.from(new Set([...(def.requiredInputs || []), 'instanceUrl', 'accessToken'])),
+    // `resource` is deliberately excluded here even though the base schema (node-library.json)
+    // marks it required: execute() below only actually needs it for non-query/search operations
+    // (`if (!resource && !['query','search'].includes(operation))`). Leaving the blanket
+    // requirement in place blocked Query/Search runs from ever passing the readiness gate.
+    requiredInputs: Array.from(
+      new Set([...(def.requiredInputs || []).filter((f) => f !== 'resource'), 'operation', 'instanceUrl', 'accessToken']),
+    ),
     credentialSchema: {
       requirements: [
         {

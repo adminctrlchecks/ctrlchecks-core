@@ -5405,9 +5405,13 @@ export class NodeLibrary {
       category: 'crm',
       description: 'Work with Salesforce objects (Account, Contact, Lead, Opportunity, etc.) using REST/SOQL/SOSL',
       configSchema: {
-        // Only core operation/object fields should be treated as required config inputs.
-        // Credentials (accessToken) and instanceUrl are provided via connector/credentials layer.
-        required: ['resource', 'operation'],
+        // Only `operation` is unconditionally required. Credentials (accessToken) and
+        // instanceUrl are provided via the connector/credentials layer (see comment below).
+        // `resource` is deliberately excluded too: execute() (core/registry/overrides/salesforce.ts)
+        // only actually needs it for non-query/search operations
+        // (`if (!resource && !['query','search'].includes(operation))`) — listing it here
+        // unconditionally blocked Query/Search runs from ever passing the readiness gate.
+        required: ['operation'],
         optional: {
           // Credential / environment fields (should be treated as credential/runtime, not user prompts):
           instanceUrl: {

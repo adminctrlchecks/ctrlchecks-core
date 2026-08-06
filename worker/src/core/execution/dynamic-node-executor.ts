@@ -240,6 +240,12 @@ function mergeConnectionCredentialsIntoConfig(
     // satisfies the node without the user re-typing anything.
     ['projectUrl', 'url'],
     ['token', 'serviceRoleKey'],
+    // Salesforce (and any other node reading a per-org API base URL): the OAuth token
+    // response always includes instance_url and it is preserved verbatim into the saved
+    // connection's credentials, but the node executor reads the camelCase `instanceUrl`
+    // input field — with no bridge here that value never reached the node despite the
+    // connection being valid and selected, forcing users to paste it in by hand.
+    ['instance_url', 'instanceUrl'],
   ];
   for (const [from, to] of aliases) {
     if ((next[to] === undefined || next[to] === '') && credentials[from] !== undefined && credentials[from] !== null && credentials[from] !== '') {

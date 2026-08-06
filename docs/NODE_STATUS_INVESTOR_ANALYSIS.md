@@ -1,6 +1,6 @@
 # CtrlChecks — Node Integration Status (Investor Analysis)
 
-**Prepared:** 2026-08-04
+**Prepared:** 2026-08-04 (updated 2026-08-05: Zoom moved to Verified Working; updated 2026-08-06: Salesforce moved to Verified Working)
 **Basis:** Manual, end-to-end testing against live third-party accounts and real API calls — not a code-completeness estimate. A node is only marked "Working" once it has been run with real credentials against the live vendor API from the CtrlChecks debug panel and produced a correct result.
 **Source of node catalog:** `worker/src/core/registry/unified-node-registry.ts` (178 backend-registered node types, exported live via `worker/public/node-library.json`)
 
@@ -10,15 +10,15 @@
 
 | | Count | % of catalog |
 |---|---|---|
-| **Nodes verified working end-to-end** | **146** | **82%** |
-| Nodes not yet working / not yet tested | 32 | 18% |
+| **Nodes verified working end-to-end** | **148** | **83%** |
+| Nodes not yet working / not yet tested | 30 | 17% |
 | **Total registered node types** | **178** | 100% |
 
-**For investors: 81% of the entire integration catalog is confirmed working today** — not "code written," but actually executed against the real third-party service with real credentials and a correct result observed. The remaining 19% is not a product gap: every one of them has complete, registered backend code, and each is blocked by a specific, named, external cause (a vendor payment, a business-identity requirement, a shared blocker with another listed node, or a vendor-side account/platform bug) rather than by missing engineering work.
+**For investors: 83% of the entire integration catalog is confirmed working today** — not "code written," but actually executed against the real third-party service with real credentials and a correct result observed. The remaining 17% is not a product gap: every one of them has complete, registered backend code, and each is blocked by a specific, named, external cause (a vendor payment, a business-identity requirement, a shared blocker with another listed node, or a vendor-side account/platform bug) rather than by missing engineering work.
 
 ---
 
-## Part 1 — Not Yet Working / Not Yet Tested (32 nodes)
+## Part 1 — Not Yet Working / Not Yet Tested (30 nodes)
 
 Every row below has been individually investigated. None are blocked by missing CtrlChecks code — each reason is external (money, business identity, a shared prerequisite with another row in this table, or a vendor-side issue).
 
@@ -26,20 +26,18 @@ Every row below has been individually investigated. None are blocked by missing 
 |---|---|---|---|
 | Chargebee | `chargebee` | Billing | Free trial only; no-cost path exhausted, real subscription data needs a paid plan. Not yet tested. |
 | Microsoft Teams | `microsoft_teams`, `microsoft_teams_trigger` | Communication | Teams' free tier ("Communities") has no Connectors/Workflows/Apps at all — verified live. Needs a Microsoft 365 **Business Basic** tenant ($7/user/month) plus an Azure AD app registration that doesn't exist yet for CtrlChecks. |
-| Twitter / X | `twitter` | Social | X's API now requires a **paid developer tier ($100/month)** — no functional free tier remains for posting. |
+| Twitter / X | `twitter` | Social | X's API is usage-based pay-per-resource (not a flat tier) — no functional free tier remains for posting. An example workload (10k post reads, 5k user reads, 2k DM reads, 5k post creates, 1k DM + 2k user interaction creates per month) estimates to **~$240/month** per X's own pricing calculator. See `docs/PLATFORM_TESTING_COST_PLAN.md` for the per-resource rate breakdown. |
 | Freshdesk | `freshdesk` | Customer Support | Signup form hard-rejects personal email addresses (Gmail, etc.) with "Please enter your business email" — verified live. Needs an email on a real company domain just to create a trial account. |
 | Outlook | `outlook`, `outlook_trigger` | Email/Microsoft | No Azure AD app registered for CtrlChecks yet. Personal Microsoft accounts can no longer self-register an app (Microsoft deprecated that path) — needs an existing company Azure/M365 tenant, or a paid Azure subscription to create one. |
 | OneDrive | `onedrive` | Storage/Microsoft | Shares the *identical* unregistered-Azure-app blocker as Outlook above — cannot function until that same app is registered. |
-| Microsoft Dynamics | `microsoft_dynamics` | CRM/Microsoft | Same "no developer tenant" situation as Salesforce/SAP/Workday below; not independently tested. |
+| Microsoft Dynamics | `microsoft_dynamics` | CRM/Microsoft | Same "no developer tenant" situation as SAP/Workday below; not independently tested. |
 | Twilio | `twilio` | SMS/Voice | Signup itself is free, but buying a phone number (required to send SMS) now needs an identity/compliance profile. The automated check failed on a legitimate personal account; escalated to Twilio's manual review queue (up to 48 business hours, outcome not guaranteed). |
-| Zoom | `zoom_video` | Video | An OAuth app already exists in the worker's config, but its registered redirect URL doesn't match the live callback (`invalid_redirect` error). Fix is in progress as part of migrating the OAuth app to the company's shared developer account; new-app creation also requires phone verification. |
 | Intercom | `intercom` | Customer Messaging | CtrlChecks' side is fully verified working — a real credential-readiness bug was found and fixed, and the connection succeeds. The live API call itself is blocked because every new Intercom trial workspace gets auto-suspended immediately, a confirmed, known issue on Intercom's own support community (not something we can fix). |
 | Zendesk | `zendesk` | Customer Support | The trial account's "API Tokens" admin page renders completely empty (confirmed after toggling settings and a hard refresh) — appears to be a restriction on new Zendesk trial accounts. |
 | SAP | `sap` | ERP/CRM | Enterprise product — production use needs a paid SAP license. The free developer sandbox was attempted (and a real gap was found and fixed: added API-key-header auth support), but SAP's own login portal errors with a SAML/OIDC misconfiguration on their side. |
 | Workday | `workday` | HR/ERP | Enterprise-only — no self-serve signup exists at all; requires contacting Workday sales for a tenant. |
 | ScheduleWise | `schedulewise` | Scheduling | Same enterprise-only situation as Workday — no self-serve signup path exists; vendor relationship required. |
 | Tally Trigger | `tally_trigger` | Forms/ERP | Same enterprise-only situation as Workday — Tally Solutions has no self-serve access-token flow; vendor relationship required. |
-| Salesforce | `salesforce` | CRM | Not yet tested — a free developer org has not been created yet. |
 | PayPal | `paypal` | Payments | Not yet tested — sandbox credentials have not been created yet. |
 | Shopify | `shopify` | E-commerce | Not yet tested — no development store or API key has been created yet. |
 | Shopify Trigger | `shopify_trigger` | E-commerce | Webhook counterpart of Shopify above — depends on the same untested store credentials. |
@@ -51,11 +49,11 @@ Every row below has been individually investigated. None are blocked by missing 
 | Instagram | `instagram`, `instagram_trigger` | Social | Same Meta Business verification requirement as Facebook (shared Meta app review). |
 | WhatsApp | `whatsapp`, `whatsapp_cloud`, `whatsapp_trigger` | Messaging | Same Meta Business verification requirement — WhatsApp Cloud API sits behind the identical Meta app review process. |
 
-**Pattern across all 32:** every single one is blocked by something outside the codebase — a vendor payment, a business-identity/domain requirement, an enterprise-only sales process, a shared prerequisite with another row above, or a vendor-side bug — never by unwritten or broken CtrlChecks code. Full investigation detail for each (verification dates, exact error text, escalation status) lives in `docs/PLATFORM_TESTING_COST_PLAN.md`.
+**Pattern across all 30:** every single one is blocked by something outside the codebase — a vendor payment, a business-identity/domain requirement, an enterprise-only sales process, a shared prerequisite with another row above, or a vendor-side bug — never by unwritten or broken CtrlChecks code. Full investigation detail for each (verification dates, exact error text, escalation status) lives in `docs/PLATFORM_TESTING_COST_PLAN.md`.
 
 ---
 
-## Part 2 — Verified Working (146 nodes)
+## Part 2 — Verified Working (148 nodes)
 
 Organized by category. Everything below has been manually exercised end-to-end with real credentials and a real API call, and returned a correct result. Counts are exact — every node type in the registry is accounted for in exactly one row of Part 1 or one category below.
 
@@ -76,14 +74,14 @@ OpenAI (GPT), Anthropic (Claude), Google Gemini, Ollama (local), Cohere, Mistral
 ### Google Workspace — 12 nodes
 Gmail, Gmail Trigger, Google Sheets, Google Sheets Trigger, Google Docs, Google Drive, Google Drive Trigger, Google Calendar, Google Calendar Trigger, Google Contacts, Google Tasks, Google BigQuery
 
-### CRM & Business Data — 10 nodes
-HubSpot, Zoho CRM, Pipedrive, Odoo, Mailchimp, ActiveCampaign, Airtable, Notion, Intuit/QuickBooks (SMEs), Tally
+### CRM & Business Data — 11 nodes
+HubSpot, Zoho CRM, Pipedrive, Odoo, Mailchimp, ActiveCampaign, Airtable, Notion, Intuit/QuickBooks (SMEs), Tally, Salesforce
 
 ### Productivity & Project Management — 10 nodes
 ClickUp, Linear, Linear Trigger, Trello, Trello Trigger, Jira, Jira Trigger, Calendly, Typeform, Typeform Trigger
 
-### Communication & Messaging — 12 nodes
-Slack Message, Slack Trigger, Slack Webhook, Discord, Discord Trigger, Discord Webhook, Telegram, Telegram Trigger, Email (SMTP), SendGrid, Amazon SES, Mailgun
+### Communication & Messaging — 13 nodes
+Slack Message, Slack Trigger, Slack Webhook, Discord, Discord Trigger, Discord Webhook, Telegram, Telegram Trigger, Email (SMTP), SendGrid, Amazon SES, Mailgun, Zoom Video
 
 ### Social — 2 nodes
 LinkedIn, YouTube
@@ -97,7 +95,7 @@ PostgreSQL, MySQL, MongoDB, Redis, Supabase, Firebase, Google Cloud Storage, AWS
 ### CMS & Forms — 2 nodes
 WordPress, Contentful
 
-**Category total check:** 63 + 11 + 12 + 10 + 10 + 12 + 2 + 8 + 16 + 2 = **146** ✓
+**Category total check:** 63 + 11 + 12 + 11 + 10 + 13 + 2 + 8 + 16 + 2 = **148** ✓
 
 ---
 

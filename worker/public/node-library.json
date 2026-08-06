@@ -12,7 +12,9 @@
     "optionalConfig": [
       "cron",
       "timezone"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "webhook",
@@ -32,7 +34,9 @@
       "responseMode",
       "verifySignature",
       "secretToken"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "manual_trigger",
@@ -45,7 +49,9 @@
     "requiredConfig": [],
     "optionalConfig": [
       "inputData"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "interval",
@@ -63,7 +69,9 @@
     "optionalConfig": [
       "interval",
       "unit"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "chat_trigger",
@@ -79,7 +87,9 @@
       "channel",
       "allowedSenders",
       "message"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "telegram_trigger",
@@ -97,7 +107,9 @@
       "allowedChatIds",
       "commandFilter",
       "secretToken"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "form",
@@ -121,7 +133,9 @@
       "allowMultipleSubmissions",
       "requireAuthentication",
       "captcha"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "http_request",
@@ -145,7 +159,9 @@
       "body",
       "qs",
       "timeout"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "respond_to_webhook",
@@ -165,7 +181,9 @@
       "headers",
       "responseBody",
       "body"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "postgresql",
@@ -186,7 +204,9 @@
       "connectionString",
       "query",
       "parameters"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "supabase",
@@ -209,7 +229,9 @@
       "operation",
       "data",
       "filters"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "database_read",
@@ -230,7 +252,9 @@
       "connectionString",
       "query",
       "parameters"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "database_write",
@@ -251,7 +275,9 @@
       "connectionString",
       "query",
       "parameters"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "google_sheets",
@@ -277,7 +303,9 @@
       "outputFormat",
       "values",
       "data"
-    ]
+    ],
+    "credentialType": "googleOAuth",
+    "capabilities": []
   },
   {
     "type": "google_sheets_trigger",
@@ -296,7 +324,9 @@
       "hasHeaderRow",
       "eventTypes",
       "query"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "google_doc",
@@ -320,7 +350,9 @@
       "title",
       "content",
       "format"
-    ]
+    ],
+    "credentialType": "googleOAuth",
+    "capabilities": []
   },
   {
     "type": "google_gmail",
@@ -352,7 +384,9 @@
       "messageId",
       "query",
       "maxResults"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "gmail_trigger",
@@ -371,7 +405,9 @@
       "labelIds",
       "query",
       "validateAuth"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "outlook",
@@ -391,7 +427,9 @@
       "to",
       "subject",
       "body"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "outlook_trigger",
@@ -408,7 +446,9 @@
       "changeTypes",
       "folderName",
       "query"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "salesforce",
@@ -423,7 +463,6 @@
       "result"
     ],
     "requiredConfig": [
-      "resource",
       "operation"
     ],
     "optionalConfig": [
@@ -439,7 +478,9 @@
       "externalIdValue",
       "fields",
       "records"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "microsoft_dynamics",
@@ -469,7 +510,9 @@
       "select",
       "filter",
       "top"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "sap",
@@ -494,11 +537,14 @@
       "payload",
       "queryParams",
       "accessToken",
+      "apiKey",
       "username",
       "password",
       "csrfToken",
       "format"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "clickup",
@@ -535,7 +581,9 @@
       "token",
       "teamId",
       "baseUrl"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "set_variable",
@@ -557,7 +605,9 @@
       "value",
       "values",
       "keepSource"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "javascript",
@@ -578,7 +628,9 @@
       "code",
       "timeout",
       "outputSchema"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "function",
@@ -598,7 +650,9 @@
     "optionalConfig": [
       "code",
       "timeout"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "function_item",
@@ -618,7 +672,9 @@
     "optionalConfig": [
       "code",
       "timeout"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "date_time",
@@ -645,7 +701,9 @@
       "value",
       "unit",
       "endDate"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "text_formatter",
@@ -664,7 +722,9 @@
     ],
     "optionalConfig": [
       "template"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "if_else",
@@ -684,7 +744,9 @@
     "optionalConfig": [
       "conditions",
       "combineOperation"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "switch",
@@ -707,7 +769,9 @@
       "cases",
       "routingType",
       "rules"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "merge",
@@ -724,7 +788,9 @@
     "requiredConfig": [],
     "optionalConfig": [
       "mode"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "error_handler",
@@ -741,7 +807,9 @@
     "requiredConfig": [],
     "optionalConfig": [
       "fallbackValue"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "wait",
@@ -761,7 +829,9 @@
     "optionalConfig": [
       "duration",
       "unit"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "delay",
@@ -781,7 +851,9 @@
     "optionalConfig": [
       "duration",
       "unit"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "timeout",
@@ -800,7 +872,9 @@
     ],
     "optionalConfig": [
       "limit"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "return",
@@ -818,7 +892,9 @@
     "optionalConfig": [
       "value",
       "includeInput"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "execute_workflow",
@@ -838,7 +914,9 @@
     "optionalConfig": [
       "workflowId",
       "input"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "try_catch",
@@ -853,7 +931,9 @@
       "result"
     ],
     "requiredConfig": [],
-    "optionalConfig": []
+    "optionalConfig": [],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "retry",
@@ -874,7 +954,9 @@
       "maxAttempts",
       "delayBetween",
       "backoff"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "parallel",
@@ -891,7 +973,9 @@
     "requiredConfig": [],
     "optionalConfig": [
       "mode"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "queue_push",
@@ -913,7 +997,9 @@
       "queueName",
       "message",
       "options"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "queue_consume",
@@ -934,7 +1020,9 @@
       "queueName",
       "timeout",
       "autoAck"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "cache_get",
@@ -954,7 +1042,9 @@
     "optionalConfig": [
       "key",
       "defaultValue"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "cache_set",
@@ -976,7 +1066,9 @@
       "key",
       "value",
       "ttl"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "ai_agent",
@@ -1004,7 +1096,9 @@
       "retryCount",
       "outputFormat",
       "includeReasoning"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "ai_chat_model",
@@ -1027,7 +1121,9 @@
       "systemPrompt",
       "responseFormat",
       "model"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "slack_message",
@@ -1052,7 +1148,9 @@
       "username",
       "iconEmoji",
       "threadTs"
-    ]
+    ],
+    "credentialType": "slackOAuth",
+    "capabilities": []
   },
   {
     "type": "slack_trigger",
@@ -1073,7 +1171,9 @@
       "teamId",
       "signingSecret",
       "validateSignature"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "email",
@@ -1099,7 +1199,9 @@
       "text",
       "html",
       "from"
-    ]
+    ],
+    "credentialType": "smtp",
+    "capabilities": []
   },
   {
     "type": "log_output",
@@ -1118,7 +1220,9 @@
     "optionalConfig": [
       "level",
       "message"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "chat_send",
@@ -1139,7 +1243,9 @@
     "optionalConfig": [
       "message",
       "sessionId"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "telegram",
@@ -1173,7 +1279,9 @@
       "disableNotification",
       "protectContent",
       "allowSendingWithoutReply"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "linkedin",
@@ -1198,7 +1306,9 @@
       "dryRun",
       "richText",
       "media"
-    ]
+    ],
+    "credentialType": "linkedinOAuth",
+    "capabilities": []
   },
   {
     "type": "twitter",
@@ -1225,7 +1335,9 @@
       "query",
       "accessToken",
       "credentialId"
-    ]
+    ],
+    "credentialType": "twitterOAuth",
+    "capabilities": []
   },
   {
     "type": "instagram",
@@ -1251,7 +1363,9 @@
       "caption",
       "accessToken",
       "credentialId"
-    ]
+    ],
+    "credentialType": "instagramOAuth",
+    "capabilities": []
   },
   {
     "type": "youtube",
@@ -1284,7 +1398,9 @@
       "query",
       "maxResults",
       "channelId"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "hubspot",
@@ -1314,7 +1430,9 @@
       "searchQuery",
       "limit",
       "after"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "airtable",
@@ -1350,7 +1468,9 @@
       "typecast",
       "matchField",
       "records"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "notion",
@@ -1381,7 +1501,9 @@
       "content",
       "properties",
       "filter"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "zoho_crm",
@@ -1408,7 +1530,9 @@
       "recordId",
       "criteria",
       "data"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "pipedrive",
@@ -1433,7 +1557,9 @@
       "operation",
       "id",
       "data"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "intuit_smes",
@@ -1460,7 +1586,9 @@
       "email",
       "amount",
       "data"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "tally",
@@ -1485,7 +1613,9 @@
       "companyName",
       "ledgerName",
       "voucherId"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "discord",
@@ -1509,7 +1639,9 @@
       "interactionToken",
       "applicationId",
       "replyToMessageId"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "discord_trigger",
@@ -1530,7 +1662,9 @@
       "applicationId",
       "publicKey",
       "validateSignature"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "zoom_video",
@@ -1553,7 +1687,9 @@
       "duration",
       "startTime",
       "meetingId"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "json_parser",
@@ -1573,7 +1709,9 @@
     "optionalConfig": [
       "json",
       "extractFields"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "merge_data",
@@ -1590,7 +1728,9 @@
     "requiredConfig": [],
     "optionalConfig": [
       "mode"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "edit_fields",
@@ -1607,7 +1747,9 @@
     "requiredConfig": [],
     "optionalConfig": [
       "fields"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "error_trigger",
@@ -1619,7 +1761,9 @@
       "result"
     ],
     "requiredConfig": [],
-    "optionalConfig": []
+    "optionalConfig": [],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "workflow_trigger",
@@ -1635,7 +1779,9 @@
     ],
     "optionalConfig": [
       "source_workflow_id"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "filter",
@@ -1655,7 +1801,9 @@
     "optionalConfig": [
       "array",
       "condition"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "loop",
@@ -1673,7 +1821,9 @@
     "optionalConfig": [
       "array",
       "maxIterations"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "noop",
@@ -1688,7 +1838,9 @@
       "result"
     ],
     "requiredConfig": [],
-    "optionalConfig": []
+    "optionalConfig": [],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "set",
@@ -1707,7 +1859,9 @@
     ],
     "optionalConfig": [
       "fields"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "split_in_batches",
@@ -1727,7 +1881,9 @@
     "optionalConfig": [
       "array",
       "batchSize"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "stop_and_error",
@@ -1747,7 +1903,9 @@
     "optionalConfig": [
       "errorMessage",
       "errorCode"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "math",
@@ -1769,7 +1927,9 @@
       "value1",
       "value2",
       "precision"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "html",
@@ -1790,7 +1950,9 @@
       "html",
       "operation",
       "selector"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "xml",
@@ -1812,7 +1974,9 @@
       "operation",
       "xpath",
       "maxSize"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "csv",
@@ -1835,7 +1999,9 @@
       "data",
       "delimiter",
       "hasHeader"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "rename_keys",
@@ -1854,7 +2020,9 @@
     ],
     "optionalConfig": [
       "mappings"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "aggregate",
@@ -1875,7 +2043,9 @@
       "operation",
       "field",
       "delimiter"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "sort",
@@ -1894,7 +2064,9 @@
       "field",
       "direction",
       "type"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "limit",
@@ -1914,7 +2086,9 @@
     "optionalConfig": [
       "limit",
       "array"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "openai_gpt",
@@ -1942,7 +2116,9 @@
       "messages",
       "temperature",
       "memory"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "anthropic_claude",
@@ -1966,7 +2142,9 @@
       "messages",
       "temperature",
       "memory"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "google_gemini",
@@ -1989,7 +2167,9 @@
       "prompt",
       "temperature",
       "memory"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "ollama",
@@ -2009,7 +2189,9 @@
     "optionalConfig": [
       "prompt",
       "temperature"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "text_summarizer",
@@ -2031,7 +2213,9 @@
       "maxLength",
       "apiKey",
       "temperature"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "sentiment_analyzer",
@@ -2052,7 +2236,9 @@
       "text",
       "apiKey",
       "temperature"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "chat_model",
@@ -2073,7 +2259,9 @@
       "apiKey",
       "model",
       "prompt"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "memory",
@@ -2096,7 +2284,9 @@
       "memoryType",
       "ttl",
       "maxMessages"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "tool",
@@ -2115,7 +2305,9 @@
     ],
     "optionalConfig": [
       "toolName"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "http_post",
@@ -2137,7 +2329,9 @@
       "url",
       "body",
       "headers"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "webhook_response",
@@ -2156,7 +2350,9 @@
       "statusCode",
       "body",
       "headers"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "graphql",
@@ -2181,7 +2377,9 @@
       "operationName",
       "headers",
       "timeout"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "google_drive",
@@ -2202,7 +2400,9 @@
       "operation",
       "fileId",
       "fileName"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "google_drive_trigger",
@@ -2218,7 +2418,9 @@
       "folderId",
       "eventTypes",
       "query"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "google_calendar",
@@ -2251,7 +2453,9 @@
       "timeMax",
       "maxResults",
       "q"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "google_calendar_trigger",
@@ -2267,7 +2471,9 @@
       "calendarId",
       "eventTypes",
       "query"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "google_contacts",
@@ -2287,7 +2493,9 @@
     "optionalConfig": [
       "operation",
       "contactId"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "google_tasks",
@@ -2307,7 +2515,9 @@
     "optionalConfig": [
       "operation",
       "taskId"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "google_bigquery",
@@ -2327,7 +2537,9 @@
     "optionalConfig": [
       "query",
       "projectId"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "slack_webhook",
@@ -2347,7 +2559,9 @@
     ],
     "optionalConfig": [
       "message"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "discord_webhook",
@@ -2369,7 +2583,9 @@
       "message",
       "username",
       "avatarUrl"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "microsoft_teams",
@@ -2393,7 +2609,9 @@
       "serviceUrl",
       "conversationId",
       "replyToId"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "microsoft_teams_trigger",
@@ -2414,7 +2632,9 @@
       "appId",
       "validationSecret",
       "validateJwt"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "whatsapp_cloud",
@@ -2440,7 +2660,9 @@
       "to",
       "text",
       "mediaUrl"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "twilio",
@@ -2465,7 +2687,9 @@
       "from",
       "messagingServiceSid",
       "mediaUrl"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "mailgun",
@@ -2499,7 +2723,9 @@
       "tags",
       "template",
       "templateVariables"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "sendgrid",
@@ -2525,7 +2751,9 @@
       "subject",
       "text",
       "html"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "amazon_ses",
@@ -2558,7 +2786,9 @@
       "configurationSetName",
       "tags",
       "returnPath"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "facebook",
@@ -2581,7 +2811,9 @@
       "pageId",
       "accessToken",
       "credentialId"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "whatsapp",
@@ -2639,7 +2871,9 @@
       "limit",
       "after",
       "returnAll"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "whatsapp_trigger",
@@ -2658,7 +2892,9 @@
       "allowedWaIds",
       "verifyToken",
       "validateSignature"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "instagram_trigger",
@@ -2677,7 +2913,9 @@
       "allowedSenderIds",
       "verifyToken",
       "validateSignature"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "facebook_trigger",
@@ -2696,7 +2934,9 @@
       "allowedSenderIds",
       "verifyToken",
       "validateSignature"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "mysql",
@@ -2716,7 +2956,9 @@
     "optionalConfig": [
       "query",
       "parameters"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "mongodb",
@@ -2740,7 +2982,9 @@
       "filter",
       "document",
       "update"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "firebase",
@@ -2767,7 +3011,9 @@
       "filter",
       "limit",
       "databaseUrl"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "google_cloud_storage",
@@ -2792,7 +3038,9 @@
       "fileName",
       "fileContent",
       "filter"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "redis",
@@ -2824,7 +3072,9 @@
       "field",
       "command",
       "args"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "odoo",
@@ -2854,7 +3104,9 @@
       "method",
       "methodArgs",
       "methodKwargs"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "freshdesk",
@@ -2884,7 +3136,9 @@
       "priority",
       "status",
       "data"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "intercom",
@@ -2904,7 +3158,9 @@
     "optionalConfig": [
       "operation",
       "conversationId"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "mailchimp",
@@ -2925,7 +3181,9 @@
       "operation",
       "listId",
       "email"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "activecampaign",
@@ -2945,7 +3203,9 @@
     "optionalConfig": [
       "operation",
       "contactId"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "read_binary_file",
@@ -2966,7 +3226,9 @@
       "filePath",
       "storageKey",
       "maxSize"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "write_binary_file",
@@ -2993,7 +3255,9 @@
       "data",
       "content",
       "fileData"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "aws_s3",
@@ -3023,7 +3287,9 @@
       "dataBase64",
       "data",
       "content"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "dropbox",
@@ -3047,7 +3313,9 @@
       "data",
       "content",
       "recursive"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "onedrive",
@@ -3072,7 +3340,9 @@
       "dataBase64",
       "data",
       "content"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "ftp",
@@ -3102,7 +3372,9 @@
       "dataBase64",
       "fileData",
       "secure"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "sftp",
@@ -3133,7 +3405,9 @@
       "content",
       "dataBase64",
       "fileData"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "github",
@@ -3177,7 +3451,9 @@
       "accessToken",
       "apiKey",
       "credentialId"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "github_trigger",
@@ -3196,7 +3472,9 @@
       "eventTypes",
       "webhookSecret",
       "query"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "gitlab",
@@ -3222,7 +3500,9 @@
       "issueIid",
       "title",
       "descriptionText"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "gitlab_trigger",
@@ -3241,7 +3521,9 @@
       "eventTypes",
       "secretToken",
       "query"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "bitbucket",
@@ -3269,7 +3551,9 @@
       "description",
       "isPrivate",
       "data"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "jira",
@@ -3301,7 +3585,9 @@
       "maxResults",
       "commentBody",
       "transitionId"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "jira_trigger",
@@ -3320,7 +3606,9 @@
       "secretToken",
       "jql",
       "query"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "jenkins",
@@ -3345,7 +3633,9 @@
       "jobName",
       "buildNumber",
       "parameters"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "shopify",
@@ -3374,7 +3664,9 @@
       "customerId",
       "data",
       "limit"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "shopify_trigger",
@@ -3396,7 +3688,9 @@
       "minTotalPrice",
       "currency",
       "query"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "woocommerce",
@@ -3423,7 +3717,9 @@
       "id",
       "data",
       "perPage"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "stripe",
@@ -3453,7 +3749,9 @@
       "name",
       "chargeId",
       "paymentIntentId"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "paypal",
@@ -3479,7 +3777,9 @@
       "description",
       "paymentId",
       "autoCapture"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "vercel",
@@ -3501,7 +3801,9 @@
       "operation",
       "projectName",
       "token"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "schedulewise",
@@ -3536,7 +3838,9 @@
       "retries",
       "outputFormat",
       "mockMode"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "calendly",
@@ -3558,7 +3862,9 @@
       "operation",
       "userUri",
       "eventTypeUri"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "chargebee",
@@ -3585,7 +3891,9 @@
       "email",
       "planId",
       "subscriptionId"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "typeform",
@@ -3607,7 +3915,9 @@
       "apiKey",
       "formId",
       "title"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "typeform_trigger",
@@ -3623,7 +3933,9 @@
     ],
     "optionalConfig": [
       "query"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "tally_trigger",
@@ -3639,7 +3951,9 @@
     ],
     "optionalConfig": [
       "query"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "xero",
@@ -3673,7 +3987,9 @@
       "summarizeErrors",
       "includeArchived",
       "unitdp"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "oracle_database",
@@ -3702,7 +4018,9 @@
       "table",
       "statement",
       "limit"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "sql_server",
@@ -3741,7 +4059,9 @@
       "parameters",
       "filters",
       "limit"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "timescaledb",
@@ -3779,7 +4099,9 @@
       "interval",
       "bucketColumn",
       "valueColumn"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "contentful",
@@ -3806,7 +4128,9 @@
       "contentType",
       "entryId",
       "fields"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "wordpress",
@@ -3836,7 +4160,9 @@
       "content",
       "status",
       "limit"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "zendesk",
@@ -3867,7 +4193,9 @@
       "status",
       "priority",
       "limit"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "netlify",
@@ -3893,7 +4221,9 @@
       "deployId",
       "payload",
       "limit"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "workday",
@@ -3925,7 +4255,9 @@
       "limit",
       "offset",
       "rawPath"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "pinecone",
@@ -3952,7 +4284,9 @@
       "id",
       "metadata",
       "namespace"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "qdrant",
@@ -3981,7 +4315,9 @@
       "id",
       "payload",
       "withPayload"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "cohere",
@@ -4007,7 +4343,9 @@
       "apiKey",
       "temperature",
       "maxTokens"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "langchain",
@@ -4034,7 +4372,9 @@
       "tools",
       "memory",
       "apiKey"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "lightricks",
@@ -4061,7 +4401,9 @@
       "fps",
       "resolution",
       "options"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "huggingface",
@@ -4088,7 +4430,9 @@
       "maxTokens",
       "parameters",
       "temperature"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "mistral",
@@ -4114,7 +4458,9 @@
       "prompt",
       "temperature",
       "maxTokens"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "linear",
@@ -4140,7 +4486,9 @@
       "description",
       "stateId",
       "priority"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "linear_trigger",
@@ -4161,7 +4509,9 @@
       "projectId",
       "actorId",
       "query"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "trello",
@@ -4187,7 +4537,9 @@
       "cardId",
       "cardName",
       "cardDesc"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "trello_trigger",
@@ -4209,7 +4561,9 @@
       "cardId",
       "memberId",
       "query"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   },
   {
     "type": "stripe_trigger",
@@ -4229,6 +4583,8 @@
       "currency",
       "minAmount",
       "query"
-    ]
+    ],
+    "credentialType": null,
+    "capabilities": []
   }
 ]
