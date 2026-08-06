@@ -5,8 +5,8 @@
 
 /** Slide 1 / 12 — one line; used only in WhyCtrlChecksSection. */
 export const LANDING_COMPARISON_SUMMARY =
-  "CtrlChecks does in one prompt what Zapier, Make, and n8n require hours of manual setup to achieve — with AI agents, enterprise security, and a cloud platform built to scale.";
+  "CtrlChecks turns a business request into a visible workflow, then gives technical teams the controls to inspect, connect, and scale it.";
 
 /** Bridge statement — slide 11. */
 export const LANDING_MARKET_BRIDGE =
-  "The intelligent automation platform that connects the simplicity of traditional tools with the power of next-generation AI.";
+  "Automation that normal teams can start using, with the depth technical teams need for real operations.";

@@ -7,20 +7,20 @@ const steps = [
   {
     number: "1",
     icon: Target,
-    title: "Describe what you need",
-    description: "Say it in plain language. No forms, no manual setup.",
+    title: "Tell it what should happen",
+    description: "Use plain language: the trigger, the apps involved, and the result you want.",
   },
   {
     number: "2",
     icon: Bot,
-    title: "AI builds and runs it",
-    description: "Workflows are generated, connected, and executed automatically.",
+    title: "Review the visible workflow",
+    description: "CtrlChecks turns the request into steps, branches, and app actions you can inspect.",
   },
   {
     number: "3",
     icon: Rocket,
-    title: "Results, instantly",
-    description: "Go from idea to working automation without writing a line of code.",
+    title: "Run, edit, and scale",
+    description: "Start quickly, then refine details, credentials, and logic as the workflow grows.",
   },
 ];
 
@@ -41,11 +41,11 @@ export function HowItWorks() {
             id="how-heading"
             className="text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl"
           >
-            One sentence.{" "}
-            <span className="text-gradient">A complete workflow.</span>
+            From plain English to{" "}
+            <span className="text-gradient">a working automation.</span>
           </h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            Stop configuring tools manually. Just describe the outcome you want — CtrlChecks builds and runs it for you.
+            Business users get a simple starting point. Technical teams still see the structure, data flow, and controls.
           </p>
         </motion.div>
 

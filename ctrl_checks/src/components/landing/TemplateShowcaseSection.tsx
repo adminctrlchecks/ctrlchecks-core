@@ -48,11 +48,10 @@ export function TemplateShowcaseSection() {
             id="templates-heading"
             className="text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl"
           >
-            Or start from a <span className="text-gradient">ready-made workflow</span>
+            Start faster with <span className="text-gradient">ready-made workflows</span>
           </h2>
           <p className="mt-4 text-muted-foreground">
-            Prebuilt automations you can copy into your workspace and run — then edit them in
-            plain English like anything else you build here.
+            Pick a proven workflow, run it as-is, or adjust the logic in plain English when your team needs more control.
           </p>
         </motion.div>
 

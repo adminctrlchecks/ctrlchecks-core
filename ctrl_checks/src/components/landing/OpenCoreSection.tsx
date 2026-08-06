@@ -8,16 +8,16 @@ import { SECTION_SHELL } from "@/components/landing/landing-layout";
 
 /** Slide 9 — platform capabilities for builders (embedding lives in Plugins & APIs). */
 const blocks = [
-  { title: "Automation engine", item: "Reliable cloud infrastructure that runs your workflows at any scale" },
-  { title: "Builder toolkit", item: "Everything you need to create, extend, and customize the platform" },
-  { title: "Ready-made connectors", item: "Pre-built connections for the tools and systems your team already uses" },
-  { title: "Agent blueprints", item: "Pre-built AI agent templates to launch powerful automations in minutes" },
+  { title: "Automation engine", item: "Reliable cloud infrastructure for workflows that keep running after setup" },
+  { title: "Builder toolkit", item: "Controls for teams that want to inspect, edit, and extend workflow logic" },
+  { title: "Ready-made connectors", item: "Pre-built connections for the tools your business already depends on" },
+  { title: "Agent blueprints", item: "AI agent templates for support, operations, data cleanup, and approvals" },
 ];
 
 const developerPath = [
-  "Run fully in the cloud or on your own servers. Your data stays under your control.",
-  "Connect your existing tools and expand what the platform can do — without starting from scratch.",
-  "Launch custom AI workflows and internal automations in days, not months.",
+  "Use it as a simple automation app, or connect it deeper through APIs and internal systems.",
+  "Keep workflow steps visible so operators, admins, and engineers can understand what changed.",
+  "Launch practical AI workflows for support, sales, finance, operations, and product teams.",
 ];
 
 export function OpenCoreSection() {
@@ -41,12 +41,11 @@ export function OpenCoreSection() {
               id="developer-platform-heading"
               className="text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl"
             >
-              What you can{" "}
-              <span className="text-gradient">build with CtrlChecks</span>
+              Simple for teams.{" "}
+              <span className="text-gradient">Powerful for builders.</span>
             </h2>
             <p className="mt-4 text-muted-foreground">
-              The automation engine, ready-made connectors, and AI agent blueprints that let any
-              team build powerful workflows on CtrlChecks cloud — and ship them fast.
+              CtrlChecks starts with plain English, then gives technical teams the structure, controls, and connectors needed to run real business workflows.
             </p>
 
             <ul className="mt-8 space-y-4 text-left text-sm leading-relaxed text-muted-foreground sm:text-base">

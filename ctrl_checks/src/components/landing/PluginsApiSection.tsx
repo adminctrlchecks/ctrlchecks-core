@@ -8,13 +8,13 @@ import {
 import { SECTION_PROSE, SECTION_SHELL } from "@/components/landing/landing-layout";
 
 /** Slide 10 — product embedding & document-backed workflows (distinct from the developer platform path). */
-const tags = ["CRMs", "ERPs", "SaaS platforms", "Enterprise tools"];
+const tags = ["Sales teams", "Operations", "CRMs", "ERPs", "SaaS platforms"];
 
 const rows = [
-  { title: "Scales with your business" },
-  { title: "Simple integration APIs" },
-  { title: "Plug-and-play connectors" },
-  { title: "Enterprise-ready" },
+  { title: "Plain-language workflows" },
+  { title: "API-ready integration" },
+  { title: "Connected business data" },
+  { title: "Enterprise controls" },
 ];
 
 export function PluginsApiSection() {
@@ -36,8 +36,8 @@ export function PluginsApiSection() {
             transition={reduceMotion ? { duration: 0.4 } : springSoft}
             className="text-3xl font-bold tracking-tight sm:text-4xl"
           >
-            Connect &amp; extend{" "}
-            <span className="text-gradient">anything</span>
+            Connect your work.{" "}
+            <span className="text-gradient">Extend when needed.</span>
           </motion.h2>
           <motion.p
             initial={{ opacity: 0, y: 14 }}
@@ -46,7 +46,7 @@ export function PluginsApiSection() {
             transition={reduceMotion ? { duration: 0.35, delay: 0.05 } : { ...springSoft, delay: 0.06 }}
             className="mt-3 text-lg font-medium text-primary"
           >
-            AI-powered automation embedded in the tools your team already uses
+            Start simple, then plug into the systems your technical team already manages
           </motion.p>
           <motion.p
             initial={{ opacity: 0, y: 12 }}
@@ -55,7 +55,7 @@ export function PluginsApiSection() {
             transition={reduceMotion ? { duration: 0.35, delay: 0.1 } : { ...springSoft, delay: 0.12 }}
             className="mt-4 text-muted-foreground"
           >
-            Bring CtrlChecks intelligence into your existing products — so your CRM, ERP, or internal tools can trigger workflows, process documents, and hand off tasks to AI agents, all without a separate interface.
+            Bring CtrlChecks into the systems your team already uses, so workflows can read records, process files, trigger actions, and hand work to AI agents without forcing everyone into a new tool.
           </motion.p>
         </div>
 
@@ -69,7 +69,7 @@ export function PluginsApiSection() {
           <FileText className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden />
           <p>
             <span className="font-medium text-foreground">Your data, already in the workflow.</span>{" "}
-            Connect the systems where your records and files already live. AI agents work behind the scenes — no new screens, no disruption to how your team operates.
+            Connect the systems where your records and files already live. AI agents work behind the scenes, while admins and engineers can still inspect the workflow path.
           </p>
         </motion.div>
 
@@ -105,8 +105,7 @@ export function PluginsApiSection() {
           transition={reduceMotion ? { duration: 0.4, delay: 0.15 } : { ...springSoft, delay: 0.2 }}
           className="mx-auto mt-8 max-w-2xl text-center text-sm leading-relaxed text-muted-foreground"
         >
-          Workflows that run themselves · AI agents that take action · Automation that never stops ·
-          Intelligence that gets smarter over time
+          Plain-language setup. Visible workflow logic. APIs and connectors for deeper technical control.
         </motion.p>
 
         <div className="mt-12 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

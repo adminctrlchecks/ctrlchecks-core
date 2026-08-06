@@ -46,6 +46,7 @@ const COMPACT_STAGE = {
 const STAGE_GUTTER = 8;
 const SESSION_STORAGE_KEY = 'ctrlchecks_landing_demo_session';
 const AUTO_ADVANCE_DELAY_MS = 2200;
+const AUTO_ADVANCE_ANIMATION_BUFFER_MS = 700;
 
 const iconMap = {
   ai: Bot,
@@ -145,6 +146,11 @@ function splitScript(script: LandingDemoScenario['script']) {
 
 type StageMetrics = typeof DESKTOP_STAGE;
 type DemoNodeVisual = LandingDemoNode & { id: string; delayMs: number };
+
+function getScenarioRuntimeMs(scenario: LandingDemoScenario, reduceMotion: boolean) {
+  if (reduceMotion) return 0;
+  return Math.max(...scenario.script.steps.map((step) => step.delayMs), 0) + AUTO_ADVANCE_ANIMATION_BUFFER_MS;
+}
 
 function projectNodes(nodes: DemoNodeVisual[], stage: StageMetrics) {
   const maxLogicalX = LOGICAL_STAGE_WIDTH - LOGICAL_NODE_WIDTH;
@@ -503,15 +509,15 @@ export function InteractiveDemoPreview() {
   }, [activeScenario, clearAutoplayTimer, reduceMotion]);
 
   useEffect(() => {
-    if (!activeScenario || scenarios.length <= 1 || playback.phase !== 'settled') return;
+    if (!activeScenario || scenarios.length <= 1) return;
 
     clearAutoplayTimer();
     autoplayTimerRef.current = window.setTimeout(() => {
       goToNextScenario('auto');
-    }, AUTO_ADVANCE_DELAY_MS);
+    }, getScenarioRuntimeMs(activeScenario, Boolean(reduceMotion)) + AUTO_ADVANCE_DELAY_MS);
 
     return clearAutoplayTimer;
-  }, [activeScenario, clearAutoplayTimer, goToNextScenario, playback.phase, scenarios.length]);
+  }, [activeScenario, clearAutoplayTimer, goToNextScenario, reduceMotion, scenarios.length]);
 
   useEffect(() => clearAutoplayTimer, [clearAutoplayTimer]);
 

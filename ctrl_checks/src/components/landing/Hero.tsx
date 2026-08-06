@@ -35,6 +35,15 @@ export function Hero() {
           <span className="block text-gradient drop-shadow-sm">Watch it build itself.</span>
         </motion.h1>
 
+        <motion.p
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ ...titleTransition, delay: 0.06 }}
+          className="mx-auto mt-3 max-w-3xl text-center text-sm leading-relaxed text-muted-foreground sm:text-base"
+        >
+          Tell CtrlChecks the outcome. It connects the right apps, creates the steps, and shows the logic as it runs.
+        </motion.p>
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

@@ -159,8 +159,8 @@ const columns = splitIntoColumns(normalizedIntegrations, MARQUEE_COLUMN_COUNT);
 function LogoTile({ item }: { item: IntegrationLogo }) {
   const isGoogleTile = item.name.toLowerCase() === "google";
   return (
-    <div className="flex flex-row items-center gap-3 rounded-xl bg-background/70 px-3 py-2.5 shadow-sm backdrop-blur-sm dark:bg-white/5">
-      <div className="h-10 w-10 shrink-0 rounded-lg bg-white p-1.5 shadow-sm ring-1 ring-black/5 dark:bg-white dark:ring-white/10">
+    <div className="flex flex-row items-center gap-2.5 rounded-lg bg-background/70 px-3 py-2 shadow-sm backdrop-blur-sm dark:bg-white/5">
+      <div className="h-8 w-8 shrink-0 rounded-md bg-white p-1.5 shadow-sm ring-1 ring-black/5 dark:bg-white dark:ring-white/10">
         {isGoogleTile ? (
           <GoogleLogo size="lg" className="h-full w-full [image-rendering:-webkit-optimize-contrast]" />
         ) : (
@@ -172,7 +172,7 @@ function LogoTile({ item }: { item: IntegrationLogo }) {
           />
         )}
       </div>
-      <p className="min-w-0 truncate text-sm font-medium text-muted-foreground">
+      <p className="min-w-0 truncate text-xs font-medium text-muted-foreground sm:text-sm">
         {item.name}
       </p>
     </div>
@@ -229,7 +229,7 @@ export function IntegrationsMarqueeSection() {
     <style dangerouslySetInnerHTML={{ __html: marqueeStyles }} />
     <section
       id="integrations"
-      className="relative py-6 sm:py-8"
+      className="relative py-5 sm:py-6"
       aria-labelledby="integrations-heading"
     >
       <div className={SECTION_SHELL}>
@@ -240,11 +240,11 @@ export function IntegrationsMarqueeSection() {
           transition={reduceMotion ? { duration: 0.35 } : springSoft}
           className={SECTION_PROSE}
         >
-          <h2 id="integrations-heading" className="text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
-            Integrate Instantly
+          <h2 id="integrations-heading" className="text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl">
+            Works with the tools you already use
           </h2>
-          <p className="mt-4 text-muted-foreground">
-            CtrlChecks connects with modern tools your teams already use across communication, CRM, commerce, and data.
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
+            Connect everyday apps like Gmail, Slack, Sheets, Stripe, Notion, and Jira, with API-ready depth for technical teams.
           </p>
         </motion.div>
 
@@ -253,7 +253,7 @@ export function IntegrationsMarqueeSection() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={landingViewport}
           transition={reduceMotion ? { duration: 0.35 } : { ...springSoft, delay: 0.08 }}
-          className="relative mt-10 overflow-hidden rounded-2xl border border-border/50 bg-background/10 p-4 backdrop-blur-md dark:border-white/10 dark:bg-white/5 sm:p-6"
+          className="relative mt-6 overflow-hidden rounded-xl border border-border/50 bg-background/10 p-3 backdrop-blur-md dark:border-white/10 dark:bg-white/5 sm:p-4"
         >
           <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-16 bg-gradient-to-b from-background to-transparent" />
           <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-16 bg-gradient-to-t from-background to-transparent" />
@@ -267,7 +267,7 @@ export function IntegrationsMarqueeSection() {
           ) : (
             <div
               className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6"
-              style={{ height: '332px' }}
+              style={{ height: '220px' }}
             >
               {columns.map((colItems, index) => (
                 <MarqueeColumn
