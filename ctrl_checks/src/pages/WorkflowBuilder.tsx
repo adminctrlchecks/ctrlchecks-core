@@ -481,10 +481,14 @@ export default function WorkflowBuilder() {
     let saveSucceeded = false;
     let savedWorkflowRow: unknown = null;
     try {
+      const latestWorkflowState = useWorkflowStore.getState();
+      const nodesForSave = latestWorkflowState.nodes;
+      const edgesForSave = latestWorkflowState.edges;
+
       // Validate edges before saving
-      const validEdges = edges.filter(edge => {
-        const sourceExists = nodes.some(n => n.id === edge.source);
-        const targetExists = nodes.some(n => n.id === edge.target);
+      const validEdges = edgesForSave.filter(edge => {
+        const sourceExists = nodesForSave.some(n => n.id === edge.source);
+        const targetExists = nodesForSave.some(n => n.id === edge.target);
         
         if (!sourceExists || !targetExists) {
           console.warn(`[EdgeValidation] Removing invalid edge on save: ${edge.source}->${edge.target}`);
@@ -493,14 +497,14 @@ export default function WorkflowBuilder() {
         return true;
       });
 
-      console.log(`[EdgeDebug] Saving ${validEdges.length} valid edges (from ${edges.length} total)`);
+      console.log(`[EdgeDebug] Saving ${validEdges.length} valid edges (from ${edgesForSave.length} total)`);
 
       // ✅ CRITICAL: Normalize graph before saving
       // - Deduplicate edges
       // - Normalize node configs (e.g., If/Else condition -> conditions)
       // - Remove invalid edges
       const { normalizeWorkflowGraph } = await import('@/lib/graphNormalizer');
-      const normalized = normalizeWorkflowGraph(nodes, validEdges);
+      const normalized = normalizeWorkflowGraph(nodesForSave, validEdges);
       
       if (normalized.warnings.length > 0) {
         console.warn('[WorkflowBuilder] Graph normalization warnings:', normalized.warnings);
@@ -519,7 +523,7 @@ export default function WorkflowBuilder() {
         console.error('[WorkflowBuilder] Workflow validation failed:', validation.errors);
         getWorkflowGuidanceWithSetupContext(
           { code: 'WORKFLOW_VALIDATION_FAILED', message: errorMessages, details: { errors: validation.errors } },
-          nodes as any[],
+          nodesForSave as any[],
           { operation: 'save' }
         ).then(setExecutionGuidance);
         throw new Error(`Workflow validation failed: ${errorMessages}`);
@@ -547,9 +551,9 @@ export default function WorkflowBuilder() {
       // ✅ CRITICAL: If workflow has nodes and edges, set status to 'active'
       // Don't set phase here - let attach-inputs endpoint handle phase transitions
       // This prevents phase conflicts when attach-inputs is called after save
-      const hasNodes = nodes.length > 0;
+      const hasNodes = nodesForSave.length > 0;
       const hasEdges = validEdges.length > 0;
-      const isReady = hasNodes && (hasEdges || nodes.length === 1); // Single node workflows don't need edges
+      const isReady = hasNodes && (hasEdges || nodesForSave.length === 1); // Single node workflows don't need edges
       
       if (isReady) {
         // Set status to 'active' (valid enum value) - phase will be set by attach-inputs
@@ -593,7 +597,7 @@ export default function WorkflowBuilder() {
           // Extract inputs from current nodes
           const inputsToAttach: Record<string, Record<string, any>> = {};
           
-          nodes.forEach((node: any) => {
+          nodesForSave.forEach((node: any) => {
             const nodeConfig = node.data?.config || {};
             const nodeInputs = extractNodeConfigForAttachInputs(nodeConfig as Record<string, unknown>) as Record<
               string,
@@ -649,7 +653,7 @@ export default function WorkflowBuilder() {
                       details: attachError.details || attachError,
                       operation: 'save',
                     },
-                    nodes as any[],
+                    nodesForSave as any[],
                     { operation: 'save', phase: attachError.phase || attachError.currentPhase }
                   ).then(setExecutionGuidance);
                 }
@@ -710,7 +714,7 @@ export default function WorkflowBuilder() {
             : 'Failed to save workflow';
       getWorkflowGuidanceWithSetupContext(
         { code: 'SAVE_FAILED', message: saveMsg, operation: 'save' },
-        nodes as any[],
+        useWorkflowStore.getState().nodes as any[],
         { operation: 'save' }
       ).then(setExecutionGuidance);
     } finally {
@@ -719,7 +723,7 @@ export default function WorkflowBuilder() {
       if (saveSucceeded) setIsDirty(false);
     }
     return saveSucceeded;
-  }, [nodes, edges, user, navigate, setWorkflowId, setIsDirty]);
+  }, [user, navigate, setWorkflowId, setIsDirty]);
 
   const handleCheckSetup = useCallback(async () => {
     setIsCheckingSetup(true);
