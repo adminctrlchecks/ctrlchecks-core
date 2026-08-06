@@ -1,4 +1,4 @@
-/** Named industries + one benefit line each — replace with client-final list when ready. */
+/** Named industries plus one benefit line each. */
 export type IndustryVertical = {
   id: string;
   name: string;
@@ -8,22 +8,22 @@ export type IndustryVertical = {
 export const LANDING_INDUSTRY_VERTICALS: IndustryVertical[] = [
   {
     id: "financial",
-    name: "Financial services",
-    benefit: "Automate compliance-heavy flows with auditable, prompt-built workflows.",
+    name: "Finance and compliance",
+    benefit: "Automate approval, reporting, and exception workflows with clear audit paths.",
   },
   {
     id: "healthcare",
-    name: "Healthcare & life sciences",
-    benefit: "Connect systems and documents while keeping execution traceable end to end.",
+    name: "Healthcare and life sciences",
+    benefit: "Connect systems and documents while keeping every step traceable.",
   },
   {
     id: "retail",
-    name: "Retail & logistics",
-    benefit: "Respond faster across ops, vendors, and customer touchpoints from one OS.",
+    name: "Retail and logistics",
+    benefit: "Respond faster across operations, vendors, and customer touchpoints.",
   },
   {
     id: "technology",
-    name: "Technology & SaaS",
-    benefit: "Ship product-embedded automation via APIs and plugins without rebuilding an engine.",
+    name: "Technology and SaaS",
+    benefit: "Ship product-embedded automation through APIs and integrations without rebuilding an engine.",
   },
 ];

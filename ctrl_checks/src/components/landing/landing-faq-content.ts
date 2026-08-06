@@ -16,9 +16,9 @@ export type LandingFaqGroup = {
 };
 
 export const LANDING_FAQ_INTRO = {
-  title: "Technical FAQ",
+  title: "Questions teams ask before using CtrlChecks",
   lede:
-    "Precise questions and concise engineering-oriented answers, aligned with the canvas, execution model, and security boundaries you see in the product.",
+    "Simple answers for business users, with enough technical detail for engineering and operations teams.",
   /** Matches labels in WorkflowBuilder (Node Library, Properties panel) and Executions. */
   uiAlignmentLine:
     "In the product: workflow canvas, Node Library, Properties panel, and Executions for history and run detail.",

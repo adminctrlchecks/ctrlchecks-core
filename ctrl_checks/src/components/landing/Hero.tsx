@@ -4,7 +4,7 @@ import { SECTION_SHELL } from "@/components/landing/landing-layout";
 import { springSnappy } from "@/components/landing/landing-motion";
 
 /**
- * First screen: headline straight into the live demo — example prompt, the
+ * First screen: headline straight into the live demo: example prompt, the
  * selectable prompts, then the workflow drawing itself. No explanatory
  * paragraph and no CTA row above the proof; the header keeps Sign Up reachable
  * and the demo carries its own CTA underneath the canvas.
@@ -27,7 +27,7 @@ export function Hero() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={titleTransition}
-          className="mx-auto max-w-[1500px] text-center text-3xl font-bold leading-[1.08] tracking-tight sm:text-4xl lg:text-5xl xl:whitespace-nowrap"
+          className="mx-auto max-w-[1500px] text-center text-3xl font-bold leading-[1.08] tracking-tight sm:text-4xl lg:text-4xl xl:whitespace-nowrap 2xl:text-5xl"
         >
           Describe your workflow and integrations.{" "}
           <span className="text-gradient drop-shadow-sm">Watch it build itself.</span>

@@ -7,7 +7,7 @@ import {
 } from "@/components/landing/landing-motion";
 import { SECTION_PROSE, SECTION_SHELL } from "@/components/landing/landing-layout";
 
-/** Slide 10 — product embedding & document-backed workflows (distinct from the developer platform path). */
+/** Slide 10: product embedding and document-backed workflows. */
 const tags = ["Sales teams", "Operations", "CRMs", "ERPs", "SaaS platforms"];
 
 const rows = [

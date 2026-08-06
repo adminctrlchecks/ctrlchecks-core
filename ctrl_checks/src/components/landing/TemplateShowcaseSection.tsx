@@ -18,7 +18,7 @@ type ShowcaseTemplate = {
 
 /**
  * Real templates from the live catalogue (public GET /api/templates), not
- * hand-written marketing copy — so the section stays accurate as the catalogue
+ * hand-written marketing copy, so the section stays accurate as the catalogue
  * changes. Renders nothing if the catalogue is empty or unreachable.
  */
 export function TemplateShowcaseSection() {

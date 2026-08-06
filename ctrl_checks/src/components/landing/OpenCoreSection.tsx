@@ -6,7 +6,7 @@ import {
 } from "@/components/landing/landing-motion";
 import { SECTION_SHELL } from "@/components/landing/landing-layout";
 
-/** Slide 9 — platform capabilities for builders (embedding lives in Plugins & APIs). */
+/** Slide 9: platform capabilities for builders (embedding lives in Plugins & APIs). */
 const blocks = [
   { title: "Automation engine", item: "Reliable cloud infrastructure for workflows that keep running after setup" },
   { title: "Builder toolkit", item: "Controls for teams that want to inspect, edit, and extend workflow logic" },

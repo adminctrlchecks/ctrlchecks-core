@@ -14,7 +14,7 @@ export const SECTION_SHELL = "mx-auto w-full max-w-[1600px] px-4 sm:px-6 lg:px-8
 /**
  * Centered prose column for section headings.
  *
- * Deliberately narrower than SECTION_SHELL — running headline and lede text the
+ * Deliberately narrower than SECTION_SHELL: running headline and lede text the
  * full 1440px would hurt readability. Only prose stays capped; grids, cards and
  * the demo canvas span the shell.
  */

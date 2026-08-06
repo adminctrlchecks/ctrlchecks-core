@@ -20,7 +20,7 @@ export function TrustSection() {
   const reduceMotion = useReducedMotion();
 
   return (
-    <section id="trust" className="py-12 sm:py-16" aria-labelledby="trust-heading">
+    <section id="trust" className="scroll-mt-24 py-8 sm:py-10" aria-labelledby="trust-heading">
       <div className={SECTION_SHELL}>
         <motion.div
           initial={{ opacity: 0, y: 24 }}
@@ -31,22 +31,22 @@ export function TrustSection() {
         >
           <h2
             id="trust-heading"
-            className="text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl"
+            className="text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl"
           >
             Trust & enterprise readiness
           </h2>
-          <p className="mt-4 text-muted-foreground">
-            Transparency where it matters, security by design.
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
+            Operators get clear workflow paths. Technical teams get the controls needed for production.
           </p>
         </motion.div>
 
-        <div className="mt-14 grid gap-8 lg:grid-cols-2 lg:gap-10">
+        <div className="mt-8 grid gap-3 lg:grid-cols-2">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={landingViewport}
             transition={reduceMotion ? { duration: 0.4 } : springSoft}
-            className="flex flex-col rounded-2xl border border-border/50 bg-background/10 p-6 shadow-none backdrop-blur-md dark:border-white/10 dark:bg-white/5 sm:p-8"
+            className="flex flex-col rounded-lg border border-border/50 bg-background/20 p-5 shadow-[0_14px_34px_-30px_hsl(var(--foreground)/0.45)] backdrop-blur-md dark:border-white/10 dark:bg-white/5 sm:p-6"
           >
             <div className="flex items-center gap-2 text-primary">
               <Eye className="h-5 w-5 shrink-0" aria-hidden />
@@ -55,7 +55,7 @@ export function TrustSection() {
             <p className="mt-1 text-sm font-medium text-muted-foreground">Autonomy with visibility</p>
             {/* flex-1 + even distribution so the shorter card fills its height
                 instead of leaving a block of dead space under the last bullet. */}
-            <ul className="mt-6 flex flex-1 flex-col justify-evenly gap-3 text-sm leading-relaxed text-muted-foreground">
+            <ul className="mt-5 flex flex-1 flex-col gap-3 text-sm leading-relaxed text-muted-foreground">
               {transparencyBullets.map((line, i) => (
                 <motion.li
                   key={line}
@@ -79,7 +79,7 @@ export function TrustSection() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={landingViewport}
             transition={reduceMotion ? { duration: 0.4, delay: 0.06 } : { ...springSoft, delay: 0.1 }}
-            className="flex flex-col rounded-2xl border border-border/50 bg-background/10 p-6 shadow-none backdrop-blur-md dark:border-white/10 dark:bg-white/5 sm:p-8"
+            className="flex flex-col rounded-lg border border-border/50 bg-background/20 p-5 shadow-[0_14px_34px_-30px_hsl(var(--foreground)/0.45)] backdrop-blur-md dark:border-white/10 dark:bg-white/5 sm:p-6"
           >
             <div className="flex items-center gap-2 text-primary">
               <Shield className="h-5 w-5 shrink-0" aria-hidden />
@@ -88,7 +88,7 @@ export function TrustSection() {
             <p className="mt-1 text-sm font-medium text-muted-foreground">
               Foundational, not an afterthought
             </p>
-            <ul className="mt-6 flex flex-1 flex-col justify-evenly gap-4">
+            <ul className="mt-5 flex flex-1 flex-col gap-4">
               {securityBullets.map((p, i) => (
                 <motion.li
                   key={p.title}

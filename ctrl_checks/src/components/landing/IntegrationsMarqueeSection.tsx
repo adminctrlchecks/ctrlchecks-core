@@ -136,7 +136,7 @@ const splitIntoColumns = <T,>(items: T[], columnCount: number): T[][] => {
 
 /**
  * Six columns so the marquee fills the widened section shell. Columns past the
- * breakpoint's grid width are hidden rather than wrapped — wrapping would break
+ * breakpoint's grid width are hidden rather than wrapped, which would break
  * the fixed-height scrollers. COLUMN_VISIBILITY must stay in step with the grid
  * column counts on the container below.
  */

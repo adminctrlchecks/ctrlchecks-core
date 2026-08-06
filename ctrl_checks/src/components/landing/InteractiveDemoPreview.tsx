@@ -22,7 +22,7 @@ import { ENDPOINTS } from '@/config/endpoints';
 import type { LandingDemoEdge, LandingDemoNode, LandingDemoScenario } from '@/lib/api/admin';
 
 // Coordinate space the stored scenarios author their node positions in.
-// Never change these — projectNodes() normalizes against them.
+// Never change these: projectNodes() normalizes against them.
 const LOGICAL_STAGE_WIDTH = 720;
 const LOGICAL_STAGE_HEIGHT = 380;
 const LOGICAL_NODE_WIDTH = 142;
@@ -365,8 +365,8 @@ function DemoStage({
  * Shows the prompt for the scenario currently on the canvas.
  *
  * This used to cycle through every prompt on its own 3s timer, independent of
- * the selected chip — so the card could read "Alert on negative mentions" while
- * the canvas drew the Stripe → Slack flow. It is now driven by the active
+ * the selected chip, so the card could read "Alert on negative mentions" while
+ * the canvas drew a different flow. It is now driven by the active
  * scenario so prompt, chip, and diagram always agree.
  */
 function ActivePrompt({

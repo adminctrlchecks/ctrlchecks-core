@@ -8,7 +8,7 @@ export function IndustryVerticalsSection() {
   const reduceMotion = useReducedMotion();
 
   return (
-    <section id="verticals" className="py-12 sm:py-16" aria-labelledby="verticals-heading">
+    <section id="verticals" className="scroll-mt-24 py-8 sm:py-10" aria-labelledby="verticals-heading">
       <div className={SECTION_SHELL}>
         <motion.div
           initial={{ opacity: 0, y: 24 }}
@@ -17,18 +17,15 @@ export function IndustryVerticalsSection() {
           transition={reduceMotion ? { duration: 0.45 } : springSoft}
           className={SECTION_PROSE}
         >
-          <h2
-            id="verticals-heading"
-            className="text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl"
-          >
-            Trusted across <span className="text-gradient">every industry</span>
+          <h2 id="verticals-heading" className="text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl">
+            Built for teams across <span className="text-gradient">real business functions</span>
           </h2>
-          <p className="mt-4 text-muted-foreground">
-            One powerful platform, shaped to the needs of your sector. The same AI engine — delivering outcomes that matter to your business.
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
+            Start with a plain request, connect the right integrations, and keep the workflow visible for every team.
           </p>
         </motion.div>
 
-        <ul className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <ul className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {LANDING_INDUSTRY_VERTICALS.map((v, index) => (
             <motion.li
               key={v.id}
@@ -39,9 +36,9 @@ export function IndustryVerticalsSection() {
                 reduceMotion ? { duration: 0.35, delay: index * 0.05 } : { ...springSoft, delay: index * 0.08 }
               }
               {...(reduceMotion ? {} : cardHoverTap)}
-              className="flex h-full gap-4 rounded-2xl border border-border/50 bg-background/10 p-5 shadow-none backdrop-blur-md transition-colors hover:border-primary/30 dark:border-white/10 dark:bg-white/5 sm:p-6"
+              className="flex h-full gap-3 rounded-lg border border-border/50 bg-background/20 p-4 shadow-[0_14px_34px_-30px_hsl(var(--foreground)/0.45)] backdrop-blur-md transition-colors hover:border-primary/30 dark:border-white/10 dark:bg-white/5"
             >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 text-primary">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-primary">
                 <Building2 className="h-5 w-5" aria-hidden />
               </div>
               <div>
