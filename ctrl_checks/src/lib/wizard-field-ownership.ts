@@ -339,7 +339,13 @@ function buildDeterministicFieldExample(question: Record<string, any>, fieldDoc:
         fieldDoc?.placeholder ??
         question.defaultValue ??
         fieldDoc?.defaultValue;
-    const value = raw === undefined || raw === null ? '' : String(raw).trim();
+    // Serialize structured examples as JSON. Plain String() turns an object into
+    // "[object Object]" and an array of rows into a comma-mangled string, both of which
+    // have surfaced on payload fields (Google Sheets values/data).
+    const value =
+        raw === undefined || raw === null
+            ? ''
+            : (typeof raw === 'object' ? JSON.stringify(raw) : String(raw)).trim();
     if (value) return `Example: ${value}`;
     const fieldName = String(question.fieldName || '');
     if (/spreadsheet/i.test(fieldName)) return 'Example: use the ID between /d/ and /edit in the Google Sheet URL.';

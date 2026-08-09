@@ -20,6 +20,87 @@ describe('node field intelligence', () => {
     expect(maxLength.fieldIntelligence?.safeDefaults?.[0]?.value).toBe(150);
   });
 
+  it('grounds a payload example in upstream form fields instead of a sample- placeholder', () => {
+    const arrayField = buildFieldGuidanceDescription({
+      nodeType: 'google_sheets',
+      nodeLabel: 'Google Sheets',
+      fieldName: 'values',
+      field: { type: 'array', role: 'raw_json', description: 'Data to write/append', supportsRuntimeAI: true } as any,
+      operation: 'append',
+      upstreamFields: ['name', 'email', 'phone', 'resumeLink'],
+    });
+    // Array payload → one row of {{$json.*}} cell references, not "sample-values".
+    expect(arrayField.example).toContain('{{$json.name}}');
+    expect(arrayField.example).not.toContain('sample-values');
+    expect(arrayField.actionableExample?.value).toEqual([
+      ['{{$json.name}}', '{{$json.email}}', '{{$json.phone}}', '{{$json.resumeLink}}'],
+    ]);
+
+    const objectField = buildFieldGuidanceDescription({
+      nodeType: 'google_sheets',
+      nodeLabel: 'Google Sheets',
+      fieldName: 'data',
+      field: { type: 'object', role: 'raw_json', description: 'Data object to write/append', supportsRuntimeAI: true } as any,
+      operation: 'append',
+      upstreamFields: ['name', 'email'],
+    });
+    expect(objectField.actionableExample?.value).toEqual({ name: '{{$json.name}}', email: '{{$json.email}}' });
+  });
+
+  it('falls back to the generic example when no upstream fields are known', () => {
+    const field = buildFieldGuidanceDescription({
+      nodeType: 'google_sheets',
+      nodeLabel: 'Google Sheets',
+      fieldName: 'values',
+      field: { type: 'array', role: 'raw_json', description: 'Data to write/append' } as any,
+      operation: 'append',
+      upstreamFields: [],
+    });
+    expect(field.example).toContain('sample-values');
+  });
+
+  it('never grounds a credential/secret field from upstream data', () => {
+    const field = buildFieldGuidanceDescription({
+      nodeType: 'some_api',
+      nodeLabel: 'Some API',
+      fieldName: 'apiKey',
+      field: { type: 'string', role: 'credential', ownership: 'credential', description: 'API key' } as any,
+      upstreamFields: ['name', 'email'],
+    });
+    expect(field.example).not.toContain('{{$json.');
+  });
+
+  it('recommends verifiable AI Build (not opaque AI Runtime) for a payload field that maps from upstream', () => {
+    const payloadRelevance = { fieldRole: 'payload', relevance: 'recommended', riskIfEmpty: 'medium', source: 'inferred', shouldAskUser: true, shouldShowInOwnership: true, reason: '' } as any;
+
+    const grounded = buildFieldGuidanceDescription({
+      nodeType: 'google_sheets',
+      nodeLabel: 'Google Sheets',
+      fieldName: 'values',
+      field: { type: 'array', description: 'Data to write/append', supportsRuntimeAI: true, supportsBuildtimeAI: true } as any,
+      operation: 'append',
+      fieldRelevance: payloadRelevance,
+      upstreamFields: ['name', 'email', 'phone', 'resumeLink'],
+    });
+    // A concrete template exists → recommend the owner that gives the user a value to verify.
+    expect(grounded.recommendedOwner).toBe('AI Build');
+    expect(grounded.actionableExample?.value).toEqual([
+      ['{{$json.name}}', '{{$json.email}}', '{{$json.phone}}', '{{$json.resumeLink}}'],
+    ]);
+
+    const noUpstream = buildFieldGuidanceDescription({
+      nodeType: 'google_sheets',
+      nodeLabel: 'Google Sheets',
+      fieldName: 'values',
+      field: { type: 'array', description: 'Data to write/append', supportsRuntimeAI: true, supportsBuildtimeAI: true } as any,
+      operation: 'append',
+      fieldRelevance: payloadRelevance,
+      upstreamFields: [],
+    });
+    // No derivable template → AI Runtime remains the honest recommendation.
+    expect(noUpstream.recommendedOwner).toBe('AI Runtime');
+  });
+
   it('infers bounded output risk from field semantics without node-specific metadata', () => {
     const intelligence = buildFieldIntelligence({
       nodeType: 'any_future_node',

@@ -727,10 +727,12 @@ function selectUniversalActionableValue(field: Partial<NodeInputField>, safe: un
 }
 
 function deterministicActionableValue(args: {
-  field: Partial<NodeInputField> & { supportsBuildtimeAI?: boolean };
+  field: Partial<NodeInputField> & { supportsBuildtimeAI?: boolean; supportsRuntimeAI?: boolean };
   safe: unknown;
   recommendedOwner: FieldGuidanceDescription['recommendedOwner'];
   fieldName?: string;
+  /** A `{{$json.*}}` template grounded in upstream fields; takes precedence over static candidates. */
+  groundedValue?: unknown;
 }): FieldGuidanceDescription['actionableExample'] {
   const field = args.field;
   if (isCredentialLikeField(field, args.fieldName)) {
@@ -740,6 +742,19 @@ function deterministicActionableValue(args: {
       canApply: false,
       applyMode: 'buildtime_ai_once',
       reason: 'Credential and secret values must be connected or entered by the user, not generated as fake examples.',
+      source: 'deterministic_field_guidance',
+    };
+  }
+
+  // A grounded upstream-data template is a runtime mapping the user reviews and applies,
+  // not a fabricated constant — prefer it over static example candidates when available.
+  if (args.groundedValue !== undefined && String(displayActionableValue(args.groundedValue)).trim() !== '') {
+    return {
+      value: args.groundedValue,
+      displayValue: displayActionableValue(args.groundedValue),
+      canApply: field.supportsRuntimeAI !== false || field.supportsBuildtimeAI !== false,
+      applyMode: 'buildtime_ai_once',
+      reason: 'This example maps the fields produced by earlier steps. Review it, then apply it or let AI Runtime fill it on each run.',
       source: 'deterministic_field_guidance',
     };
   }
@@ -770,6 +785,60 @@ function deterministicActionableValue(args: {
         : 'This safe example can be reviewed and applied as an AI Build setup value.',
     source: 'deterministic_field_guidance',
   };
+}
+
+/**
+ * A runtime-template example grounded in the fields the workflow actually produces upstream.
+ *
+ * Payload/content/recipient fields are meant to be filled from earlier node output, so a
+ * generic `sample-<field>` placeholder tells the user nothing. When we know the upstream
+ * output field names (e.g. a form collecting name/email/phone/resumeLink), build a concrete
+ * `{{$json.<field>}}` template shaped to the field's type:
+ *   - array payload  → [["{{$json.name}}", "{{$json.email}}", …]]   (one row of cells)
+ *   - object payload → { "name": "{{$json.name}}", … }
+ *   - scalar         → {{$json.email}}  (best-matching single field)
+ * Returns undefined when nothing can be grounded, so callers fall back to existing behavior.
+ */
+function buildGroundedExampleValue(args: {
+  fieldName: string;
+  field: Partial<NodeInputField>;
+  role: string;
+  upstreamFields: string[];
+}): unknown {
+  const fields = Array.from(new Set(args.upstreamFields.filter((name) => typeof name === 'string' && name.trim())));
+  if (fields.length === 0) return undefined;
+
+  const fieldType = String(args.field.type || '').toLowerCase();
+  const ref = (name: string) => `{{$json.${name}}}`;
+
+  if (fieldType === 'array') {
+    // One row: an array of cell values in upstream field order.
+    return [fields.map(ref)];
+  }
+  if (fieldType === 'object' || fieldType === 'json') {
+    const obj: Record<string, string> = {};
+    for (const name of fields) obj[name] = ref(name);
+    return obj;
+  }
+
+  // Scalar fields: pick the field whose name best matches the role, else the first.
+  const lower = `${args.fieldName} ${args.role}`.toLowerCase();
+  const preference: Array<{ test: RegExp; match: RegExp }> = [
+    { test: /(recipient|email|\bto\b|cc|bcc)/, match: /email|mail/i },
+    { test: /(name|title|subject)/, match: /name|title|subject/i },
+    { test: /(phone|mobile|tel)/, match: /phone|mobile|tel/i },
+  ];
+  for (const { test, match } of preference) {
+    if (test.test(lower)) {
+      const hit = fields.find((name) => match.test(name));
+      if (hit) return ref(hit);
+    }
+  }
+  return ref(fields[0]);
+}
+
+function isRuntimeMappableRole(role: string): boolean {
+  return ['payload', 'content', 'recipient', 'title', 'query'].includes(String(role || ''));
 }
 
 function humanFieldName(fieldName: string): string {
@@ -983,6 +1052,8 @@ function recommendOwner(args: {
   field: Partial<NodeInputField> & { supportsRuntimeAI?: boolean; supportsBuildtimeAI?: boolean };
   relevance?: FieldRelevanceResult;
   importance?: FieldIntelligence['importance'];
+  /** True when a concrete `{{$json.*}}` template can be derived from upstream data for this field. */
+  hasGroundedTemplate?: boolean;
 }): { recommendedOwner: FieldGuidanceDescription['recommendedOwner']; ownerReason: string } {
   const role = args.relevance?.fieldRole || args.field.role || '';
   if (args.field.ownership === 'credential' || role === 'credential') {
@@ -992,6 +1063,17 @@ function recommendOwner(args: {
     return { recommendedOwner: 'You', ownerReason: 'Use a user-provided value because this field points to a specific resource, destination, or stable workflow setting.' };
   }
   if (args.field.supportsRuntimeAI !== false && ['recipient', 'title', 'content', 'query', 'payload'].includes(String(role))) {
+    // When the value maps directly and deterministically from earlier steps (a template we can
+    // already build), prefer a VERIFIABLE setup-time owner over opaque per-run AI Runtime: the
+    // user can see and confirm the exact mapping, and it resolves the same way on every run.
+    // AI Runtime stays the recommendation only when no such template exists (the value genuinely
+    // has to be generated fresh from live content each run).
+    if (args.hasGroundedTemplate && args.field.supportsBuildtimeAI !== false) {
+      return {
+        recommendedOwner: 'AI Build',
+        ownerReason: 'This value maps directly from earlier steps, so it can be set once as a template you review now and it resolves from live data on every run.',
+      };
+    }
     return { recommendedOwner: 'AI Runtime', ownerReason: 'Use runtime AI when the value should be created from live upstream data on each execution.' };
   }
   if (args.field.supportsBuildtimeAI !== false) {
@@ -1098,6 +1180,8 @@ export function buildFieldGuidanceDescription(args: {
   workflowGoal?: string;
   operation?: string;
   fieldRelevance?: FieldRelevanceResult;
+  /** Output field names produced upstream, used to ground payload/content examples in real data. */
+  upstreamFields?: string[];
 }): FieldGuidanceDescription {
   const field = args.field;
   const intel = field.fieldIntelligence;
@@ -1108,13 +1192,31 @@ export function buildFieldGuidanceDescription(args: {
   const safeText = safe !== undefined ? ` A safe starting value is ${JSON.stringify(safe)}.` : '';
   const fieldOptions = normalizeActionableOptions(field);
   const optionExample = fieldOptions[0]?.value;
-  const example = safe !== undefined
-    ? `e.g. ${String(safe)}`
-    : field.exampleValue
-      ? `e.g. ${field.exampleValue}`
-      : optionExample
-        ? `e.g. ${optionExample}`
-        : `e.g. sample-${args.fieldName}`;
+  // Ground payload/content/recipient examples in the fields the workflow produces upstream,
+  // but never for credentials (a secret is never mapped from upstream JSON). Skipped when
+  // there is no upstream shape, so behavior is unchanged for isolated/first nodes.
+  const groundedRole = String(relevance?.fieldRole || inferPlainFieldRole(field, relevance));
+  const groundedExample =
+    !isCredentialLikeField(field, args.fieldName) &&
+    isRuntimeMappableRole(groundedRole) &&
+    Array.isArray(args.upstreamFields) &&
+    args.upstreamFields.length > 0
+      ? buildGroundedExampleValue({
+          fieldName: args.fieldName,
+          field,
+          role: groundedRole,
+          upstreamFields: args.upstreamFields,
+        })
+      : undefined;
+  const example = groundedExample !== undefined
+    ? `e.g. ${displayActionableValue(groundedExample).replace(/\s*\n\s*/g, ' ')}`
+    : safe !== undefined
+      ? `e.g. ${String(safe)}`
+      : field.exampleValue
+        ? `e.g. ${field.exampleValue}`
+        : optionExample
+          ? `e.g. ${optionExample}`
+          : `e.g. sample-${args.fieldName}`;
   const { emptyBehavior, defaultBehaviorLabel } = composeConcreteEmptyBehavior({
     nodeLabel: args.nodeLabel,
     fieldName: args.fieldName,
@@ -1130,7 +1232,7 @@ export function buildFieldGuidanceDescription(args: {
     relevance,
     emptyBehavior,
   });
-  const owner = recommendOwner({ field, relevance, importance });
+  const owner = recommendOwner({ field, relevance, importance, hasGroundedTemplate: groundedExample !== undefined });
   const needed = composeNeeded({ relevance, importance, safeText, emptyBehavior });
   const validationConfidence = validationConfidenceFor({ field, relevance, importance });
   const warnings = warningsFor({ field, relevance, importance, emptyBehavior });
@@ -1139,6 +1241,7 @@ export function buildFieldGuidanceDescription(args: {
     safe,
     recommendedOwner: owner.recommendedOwner,
     fieldName: args.fieldName,
+    groundedValue: groundedExample,
   });
   const what = composeWhat({
     nodeLabel: args.nodeLabel,

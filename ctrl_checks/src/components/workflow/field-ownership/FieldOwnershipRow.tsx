@@ -380,6 +380,13 @@ export function FieldOwnershipRow({ question, group, ctx, producedBy }: FieldOwn
                     </div>
                     {workflowPreviewText ? (
                         <pre className="text-[11px] whitespace-pre-wrap break-words max-h-40 overflow-auto font-mono text-left">{workflowPreviewText}</pre>
+                    ) : selectedMode === 'runtime_ai' && preparedOwnershipExample?.displayValue ? (
+                        // Even when AI fills this at runtime, show the mapping it will resolve from
+                        // upstream data so the user has something concrete to verify.
+                        <div className="space-y-0.5">
+                            <p className="text-[10px] text-muted-foreground/70">Resolves from earlier steps on each run:</p>
+                            <pre className="text-[11px] whitespace-pre-wrap break-words max-h-40 overflow-auto font-mono text-left">{preparedOwnershipExample.displayValue}</pre>
+                        </div>
                     ) : (
                         <p className="text-[11px] text-muted-foreground/70 italic">
                             No value to preview yet.

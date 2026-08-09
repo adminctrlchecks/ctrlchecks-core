@@ -25,6 +25,7 @@ import {
   mergeGuidanceWithDeterministic,
   type FieldGuidanceDescription,
 } from '../core/utils/node-field-intelligence';
+import { resolveUpstreamOutputFields } from '../core/utils/upstream-data-shape';
 import { runWithBuildUsageTracking, snapshotBuildAiUsage } from '../core/ai/build-usage-context';
 import {
   resolveAiEditorPrincipal,
@@ -372,6 +373,7 @@ function buildDeterministicFieldDescriptions(args: {
   workflowOverview?: string;
   operation?: string;
   fields: any[];
+  upstreamFields?: string[];
 }): Record<string, FieldGuidanceDescription> {
   const descriptions: Record<string, FieldGuidanceDescription> = {};
   for (const rawField of args.fields) {
@@ -392,6 +394,7 @@ function buildDeterministicFieldDescriptions(args: {
       workflowGoal: args.workflowOverview,
       operation: args.operation,
       fieldRelevance: rawField?.fieldRelevance,
+      upstreamFields: args.upstreamFields,
     });
   }
   return descriptions;
@@ -631,12 +634,15 @@ No bullet points. No headings. No technical jargon. Under 80 words total. Write 
 // ==================== FIELD DESCRIPTIONS ====================
 router.post('/field-descriptions', async (req: Request, res: Response) => {
   try {
-    const { nodeType, nodeLabel, nodeNarrative, workflowOverview, userPrompt, fields } = req.body as {
+    const { nodeType, nodeLabel, nodeNarrative, workflowOverview, userPrompt, fields, nodeId, nodes, edges } = req.body as {
       nodeType?: string;
       nodeLabel?: string;
       nodeNarrative?: string;
       workflowOverview?: string;
       userPrompt?: string;
+      nodeId?: string;
+      nodes?: Array<{ id?: string; type?: string; data?: { type?: string; label?: string; config?: Record<string, unknown> } }>;
+      edges?: Array<{ source?: string; target?: string }>;
       fields?: Array<{
         fieldName: string;
         label: string;
@@ -661,6 +667,23 @@ router.post('/field-descriptions', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: 'nodeType, nodeLabel, and fields are required' });
     }
 
+    // When the workflow graph is provided, ground payload/content examples in the fields
+    // produced upstream (e.g. a job-application form's name/email/phone/resumeLink) instead
+    // of generic sample- placeholders. Absent graph → unchanged behavior. Wrapped so a
+    // resolver failure can NEVER break field-guidance itself — grounding is an enhancement,
+    // not a prerequisite, and this endpoint must keep returning descriptions regardless.
+    let upstreamFields: string[] = [];
+    try {
+      if (nodeId && Array.isArray(nodes) && Array.isArray(edges)) {
+        upstreamFields = resolveUpstreamOutputFields({ nodes, edges }, nodeId);
+      }
+    } catch (upstreamError) {
+      logger.warn('[field-descriptions] upstream field resolution failed; continuing without grounding', {
+        error: upstreamError instanceof Error ? upstreamError.message : String(upstreamError),
+      });
+      upstreamFields = [];
+    }
+
     const enrichedFields = fields.map((f) => enrichFieldForGuidance(nodeType, f));
     const deterministicDescriptions = buildDeterministicFieldDescriptions({
       nodeType,
@@ -668,6 +691,7 @@ router.post('/field-descriptions', async (req: Request, res: Response) => {
       workflowOverview,
       operation: typeof (fields[0] as any)?.operation === 'string' ? String((fields[0] as any).operation) : undefined,
       fields: enrichedFields,
+      upstreamFields,
     });
 
     if (!(await hasGeminiAccess(req))) {
@@ -678,6 +702,9 @@ router.post('/field-descriptions', async (req: Request, res: Response) => {
       workflowOverview ? `Workflow goal: ${workflowOverview}` : null,
       userPrompt ? `User's original request: ${userPrompt}` : null,
       nodeNarrative ? `This node's role: ${nodeNarrative}` : null,
+      upstreamFields.length > 0
+        ? `Fields available from earlier steps (reference them in examples as {{$json.<field>}}): ${upstreamFields.join(', ')}`
+        : null,
     ]
       .filter(Boolean)
       .join('\n');

@@ -5020,7 +5020,27 @@ export function AutonomousAgentWizard() {
                 const response = await fetch(`${ENDPOINTS.itemBackend}/api/ai/field-descriptions`, {
                     method: 'POST',
                     headers,
-                    body: JSON.stringify({ nodeType, nodeLabel, nodeNarrative, workflowOverview, userPrompt: prompt, fields: fieldPayload }),
+                    // nodeId + graph let the backend ground payload/content examples in the
+                    // fields produced upstream (e.g. a form's name/email/phone) instead of
+                    // generic sample- placeholders. Send a SLIM projection — the raw canvas
+                    // nodes can carry circular / non-serializable React-Flow internals that make
+                    // JSON.stringify throw and silently kill this whole request. Only id / type /
+                    // config / edge endpoints are needed to resolve upstream fields.
+                    body: JSON.stringify({
+                        nodeType,
+                        nodeLabel,
+                        nodeNarrative,
+                        workflowOverview,
+                        userPrompt: prompt,
+                        fields: fieldPayload,
+                        nodeId,
+                        nodes: (pendingWorkflowData?.nodes || []).map((n: any) => ({
+                            id: n?.id,
+                            type: n?.type,
+                            data: { type: n?.data?.type, label: n?.data?.label, config: n?.data?.config },
+                        })),
+                        edges: (pendingWorkflowData?.edges || []).map((e: any) => ({ source: e?.source, target: e?.target })),
+                    }),
                 });
                 if (!response.ok) {
                     throw new Error(await readBackendErrorMessage(response, 'Could not load field guidance.'));
@@ -5683,16 +5703,22 @@ export function AutonomousAgentWizard() {
             overridesByNode.get(nodeId)![fieldName] = raw;
         }
 
-        if (overridesByNode.size === 0) return nodes;
-        return nodes.map((node: any) => {
-            const overrides = overridesByNode.get(String(node?.id || ''));
-            if (!overrides) return node;
-            return {
-                ...node,
-                data: { ...(node.data || {}), config: { ...(node.data?.config || {}), ...overrides } },
-            };
-        });
-    }, [pendingWorkflowData?.nodes, ownershipQuestions, inputValues]);
+        const withValues = overridesByNode.size === 0
+            ? nodes
+            : nodes.map((node: any) => {
+                const overrides = overridesByNode.get(String(node?.id || ''));
+                if (!overrides) return node;
+                return {
+                    ...node,
+                    data: { ...(node.data || {}), config: { ...(node.data?.config || {}), ...overrides } },
+                };
+            });
+        // Fold the user's ownership selections into config._fillMode so the field plan sees
+        // AI-Runtime-owned fields as runtime-owned. Without this the server never learns a
+        // field was set to AI Runtime, buckets it as required, and keeps counting it as
+        // "still needed / needs input" even though AI fills it at runtime.
+        return applyFillModesToNodes(withValues, fillModeValues);
+    }, [pendingWorkflowData?.nodes, ownershipQuestions, inputValues, fillModeValues]);
 
     /**
      * Refetch key. Includes the merged config, so choosing a different operation asks the

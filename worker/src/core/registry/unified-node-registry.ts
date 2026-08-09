@@ -678,6 +678,35 @@ export class UnifiedNodeRegistry implements INodeRegistry {
       };
     }
 
+    // Universal runtime-AI reconciliation — single source of truth for every node, applied
+    // here (post-override) so it covers node-library fields AND override-defined fields
+    // (if_else, switch, gmail, …) alike. `runtimeContract.aiGeneratable` is the authored
+    // signal that runtime AI may create this field's value; `protected` is its explicit
+    // opt-out. A field that declares aiGeneratable but leaves fillMode.supportsRuntimeAI
+    // false is internally contradictory — the wizard then greys out the "AI Runtime"
+    // ownership option even though the value is meant to come from upstream node output at
+    // run time (e.g. Google Sheets `values`, which should mirror its interchangeable twin
+    // `data`). Reconciling on the FINAL field makes the rule hold for all existing and
+    // future nodes instead of per-node patches. It only GRANTS the option (never removes
+    // it), never overrides an explicit `protected` field, and never touches credentials.
+    for (const fieldName of Object.keys(inputSchema)) {
+      const field = inputSchema[fieldName];
+      if (
+        field.runtimeContract?.aiGeneratable === true &&
+        field.runtimeContract?.protected !== true &&
+        field.ownership !== 'credential' &&
+        field.fillMode?.supportsRuntimeAI !== true
+      ) {
+        inputSchema[fieldName] = {
+          ...field,
+          fillMode: {
+            ...(field.fillMode ?? { default: 'manual_static' as FieldFillMode }),
+            supportsRuntimeAI: true,
+          },
+        };
+      }
+    }
+
     return { ...definition, inputSchema };
   }
 

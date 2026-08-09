@@ -134,6 +134,22 @@ export function normalizeProvider(provider: string): string {
   return NODE_PROVIDER[key] || key;
 }
 
+// A granted OAuth scope implies every narrower capability it strictly contains.
+// The connect flow grants broad scopes in one batch (e.g. Google requests the full
+// `.../spreadsheets` at consent, never `.../spreadsheets.readonly`), while per-operation
+// requirements are declared at least privilege (a Sheets read asks for `.readonly`).
+// Without this map, scopesCover would exact-string-miss the broad grant and report a
+// fully-capable connection as "missing scope". Only list PROVEN containment pairs — a
+// wrong row would incorrectly open the gate for an under-scoped connection.
+const SCOPE_IMPLIES: Record<string, string[]> = {
+  'https://www.googleapis.com/auth/spreadsheets': ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+  'https://www.googleapis.com/auth/drive': [
+    'https://www.googleapis.com/auth/drive.readonly',
+    'https://www.googleapis.com/auth/drive.file',
+  ],
+  'https://www.googleapis.com/auth/gmail.modify': ['https://www.googleapis.com/auth/gmail.readonly'],
+};
+
 export function scopeSet(scopes: string[]): string {
   const normalized = Array.from(new Set(scopes.map((scope) => scope.trim()).filter(Boolean)));
   normalized.sort((a, b) => a.localeCompare(b));
@@ -147,6 +163,9 @@ export function splitScopeSet(value: string | null | undefined): string[] {
 
 export function scopesCover(available: string[], required: string[]): boolean {
   const have = new Set(available);
+  for (const granted of available) {
+    for (const implied of SCOPE_IMPLIES[granted] || []) have.add(implied);
+  }
   return required.every((scope) => have.has(scope));
 }
 

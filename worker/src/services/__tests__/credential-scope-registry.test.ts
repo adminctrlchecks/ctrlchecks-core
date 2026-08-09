@@ -31,6 +31,23 @@ describe('credential-scope-registry', () => {
     expect(scopesCover(['email'], ['email', 'profile'])).toBe(false);
   });
 
+  it('treats a broad Google scope as covering its .readonly sibling', () => {
+    const SHEETS = 'https://www.googleapis.com/auth/spreadsheets';
+    const SHEETS_RO = 'https://www.googleapis.com/auth/spreadsheets.readonly';
+    const DRIVE = 'https://www.googleapis.com/auth/drive';
+    const DRIVE_RO = 'https://www.googleapis.com/auth/drive.readonly';
+    // The exact failing case: a connection granted full `spreadsheets` must satisfy a Sheets read.
+    expect(scopesCover([SHEETS], [SHEETS_RO])).toBe(true);
+    expect(scopesCover([DRIVE], [DRIVE_RO])).toBe(true);
+  });
+
+  it('does NOT treat a narrow scope as covering the broad one', () => {
+    const SHEETS = 'https://www.googleapis.com/auth/spreadsheets';
+    const SHEETS_RO = 'https://www.googleapis.com/auth/spreadsheets.readonly';
+    // Implication is one-directional: read-only must never satisfy a write requirement.
+    expect(scopesCover([SHEETS_RO], [SHEETS])).toBe(false);
+  });
+
   it('prefers explicit scopes and dedupes them before provider defaults', () => {
     expect(requiredScopesForProvider('google_gmail', ['gmail.send', 'gmail.send', 'gmail.read'])).toEqual([
       'gmail.send',
