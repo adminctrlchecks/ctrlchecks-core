@@ -88,6 +88,7 @@ export async function buildWorkflowReadinessEnvelope(input: {
   userId?: string;
   nodes: WorkflowNode[];
   includeSatisfiedConnections?: boolean;
+  preferNodeConnectionRefs?: boolean;
   additionalRuntimeIssues?: NodeReadinessIssue[];
   technicalDetails?: Record<string, unknown>;
 }): Promise<WorkflowReadinessEnvelope> {
@@ -101,6 +102,7 @@ export async function buildWorkflowReadinessEnvelope(input: {
       userId: input.userId,
       nodes: nodes as any[],
       includeSatisfied: input.includeSatisfiedConnections !== false,
+      preferNodeConnectionRefs: input.preferNodeConnectionRefs,
     });
     credentialInputs.push(...canonicalRowsToCredentialInputs(connectionReadiness.missing));
   }

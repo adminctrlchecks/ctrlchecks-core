@@ -27,6 +27,7 @@ import {
   listCanonicalConnectionsByProvider,
 } from './canonical-credential-lookup';
 import { connectorRegistry } from './connectors/connector-registry';
+import { hydrateWorkflowNodeConnectionBindings } from './workflow-node-connections';
 
 export { canonicalCredentialTypeId, canonicalProvider } from './canonical-credential-lookup';
 
@@ -504,6 +505,7 @@ export async function getWorkflowConnectionReadiness(input: {
   userId: string;
   nodes: ReadinessNode[];
   includeSatisfied?: boolean;
+  preferNodeConnectionRefs?: boolean;
 }): Promise<WorkflowConnectionReadinessResponse> {
   const { workflowId, userId, nodes } = input;
   const includeSatisfied = input.includeSatisfied !== false;
@@ -514,7 +516,14 @@ export async function getWorkflowConnectionReadiness(input: {
   const unionScopesByListKey = new Map<string, string[]>();
   const rows: ConnectionReadinessRow[] = [];
 
-  for (const node of nodes || []) {
+  const hydratedNodes = await hydrateWorkflowNodeConnectionBindings({
+    workflowId,
+    userId,
+    nodes: nodes || [],
+    overrideExisting: input.preferNodeConnectionRefs !== true,
+  });
+
+  for (const node of hydratedNodes || []) {
     const nodeType = (node.data?.type || node.type || '').trim();
     if (!nodeType) continue;
 

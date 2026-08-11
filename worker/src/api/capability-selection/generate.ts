@@ -34,6 +34,10 @@ export default async function generateCapabilityWorkflow(req: Request, res: Resp
     const userPrompt = typeof body.userPrompt === 'string' ? body.userPrompt.trim() : '';
     const selections = (body.selections ?? {}) as NodeSelectionMap;
     const containers = (body.containers ?? []) as CapabilityContainer[];
+    const connectionRefsByContainerId =
+      body.connectionRefsByContainerId && typeof body.connectionRefsByContainerId === 'object'
+        ? body.connectionRefsByContainerId as Record<string, Record<string, string>>
+        : {};
 
     if (!userPrompt) {
       res.status(400).json({ ok: false, code: 'MISSING_PROMPT', message: 'userPrompt is required', selections });
@@ -122,6 +126,8 @@ export default async function generateCapabilityWorkflow(req: Request, res: Resp
     const previewNodes: WorkflowNode[] = result.selectedNodeTypes.map((nodeType, index) => {
       const canonicalType = unifiedNodeRegistry.resolveAlias(nodeType) || nodeType;
       const def = unifiedNodeRegistry.get(canonicalType);
+      const containerId = orderedSelections[index]?.containerId;
+      const connectionRefs = containerId ? connectionRefsByContainerId[containerId] : undefined;
       return {
         id: `cap_preview_${index}_${canonicalType}`,
         type: canonicalType,
@@ -130,6 +136,7 @@ export default async function generateCapabilityWorkflow(req: Request, res: Resp
           type: canonicalType,
           category: def?.category || 'utility',
           config: { ...(unifiedNodeRegistry.getDefaultConfig(canonicalType) || {}) },
+          ...(connectionRefs && Object.keys(connectionRefs).length > 0 ? { connectionRefs } : {}),
         },
       };
     });

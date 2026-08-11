@@ -159,11 +159,23 @@ export default async function executeNodeHandler(req: Request, res: Response) {
     }
 
     // ✅ PRE-EXECUTION: Validate this node's config before running
+    const { hydrateWorkflowNodeConnectionBindings } = await import('../services/workflow-node-connections');
+    const [hydratedNode] = await hydrateWorkflowNodeConnectionBindings({
+      workflowId,
+      userId: currentUserId || userId,
+      nodes: [node as any],
+      overrideExisting: false,
+    });
+    if (hydratedNode) {
+      node.data = hydratedNode.data;
+    }
+
     const readiness = await buildWorkflowReadinessEnvelope({
       workflowId,
       userId: currentUserId || userId,
       nodes: [node as any],
       includeSatisfiedConnections: true,
+      preferNodeConnectionRefs: true,
     });
     const readinessFields = workflowReadinessResponseFields(readiness);
     if (readiness.readinessIssues.length > 0) {

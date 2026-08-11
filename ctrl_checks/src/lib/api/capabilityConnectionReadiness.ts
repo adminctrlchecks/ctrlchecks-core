@@ -12,6 +12,7 @@ import { getBackendUrl } from './getBackendUrl';
  */
 
 export interface CapabilityConnectionReadinessNode {
+  nodeId?: string;
   nodeType: string;
   nodeLabel: string;
   connected: boolean;
@@ -46,6 +47,8 @@ const EMPTY: CapabilityConnectionReadiness = { ready: true, nodes: [], blocking:
 
 export async function fetchCapabilityConnectionReadiness(
   nodeTypes: string[],
+  connectionRefsByNodeType?: Record<string, Record<string, string>>,
+  nodes?: Array<{ nodeId: string; nodeType: string; connectionRefs?: Record<string, string> }>,
 ): Promise<CapabilityConnectionReadiness> {
   if (!nodeTypes || nodeTypes.length === 0) return EMPTY;
 
@@ -62,7 +65,7 @@ export async function fetchCapabilityConnectionReadiness(
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ nodeTypes }),
+      body: JSON.stringify({ nodeTypes, connectionRefsByNodeType, nodes }),
     });
   } catch {
     return EMPTY;

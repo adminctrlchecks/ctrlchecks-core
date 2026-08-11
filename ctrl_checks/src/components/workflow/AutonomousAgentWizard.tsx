@@ -47,6 +47,7 @@ import {
 } from '@/lib/api/workflowBuildFieldPlan';
 import { runBuildNode, type RunNodeResult } from '@/lib/api/workflowBuildRunNode';
 import { fetchCapabilityConnectionReadiness, type CapabilityConnectionReadinessNode } from '@/lib/api/capabilityConnectionReadiness';
+import { upsertWorkflowNodeConnection } from '@/lib/api/workflowNodeConnections';
 import { FieldOwnershipStage, type FieldOwnershipContext } from './field-ownership';
 import {
     resolveEffectiveFieldFillMode,
@@ -766,6 +767,7 @@ export function AutonomousAgentWizard() {
     const [capNodeCorrelationId, setCapNodeCorrelationId] = useState<string>('');
     /** Selections made by the user in CapabilityStage (containerId ? nodeType) */
     const [capNodeSelections, setCapNodeSelections] = useState<NodeSelectionMap>({});
+    const [capNodeConnectionRefsByContainerId, setCapNodeConnectionRefsByContainerId] = useState<Record<string, Record<string, string>>>({});
     /** Structural prompt returned by Phase 2 (/api/capability-selection/generate) */
     const [capNodeStructuralPrompt, setCapNodeStructuralPrompt] = useState<string>('');
     /** Workflow returned by Phase 2 */
@@ -5289,6 +5291,7 @@ export function AutonomousAgentWizard() {
             setCapNodeContainers(containers);
             setCapNodeCorrelationId(data.correlationId ?? '');
             setCapNodeSelections({});
+            setCapNodeConnectionRefsByContainerId({});
             setCapNodeSelectionIssue(null);
             setOriginalPrompt(prompt);
 
@@ -5307,8 +5310,12 @@ export function AutonomousAgentWizard() {
      * Calls /api/capability-selection/generate with the user's selections.
      * Req 4.1, 7.1
      */
-    const handleCapabilityNodeSelectionGenerate = async (selections: NodeSelectionMap) => {
+    const handleCapabilityNodeSelectionGenerate = async (
+        selections: NodeSelectionMap,
+        connectionRefsByContainerId: Record<string, Record<string, string>> = {},
+    ) => {
         setCapNodeSelections(selections);
+        setCapNodeConnectionRefsByContainerId(connectionRefsByContainerId);
         setCapNodeSelectionIssue(null);
         setStep('analyzing');
         setIsSummarizeLayerProcessing(true);
@@ -5328,6 +5335,7 @@ export function AutonomousAgentWizard() {
                     userPrompt: originalPrompt || prompt,
                     selections,
                     containers: capNodeContainers,
+                    connectionRefsByContainerId,
                 }),
             });
 
@@ -5400,6 +5408,7 @@ export function AutonomousAgentWizard() {
                     userPrompt: originalPrompt || prompt,
                     structuralPrompt: capNodeStructuralPrompt || originalPrompt || prompt,
                     userId,
+                    connectionRefsByContainerId: capNodeConnectionRefsByContainerId,
                 }),
             });
 
@@ -5501,6 +5510,37 @@ export function AutonomousAgentWizard() {
             if (saveError) throw saveError;
             if (!savedWorkflow?.id) throw new Error('Workflow saved but no ID returned');
 
+            const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+            const bindingWrites = normalized.nodes.flatMap((node: any) => {
+                const refs = (node?.data?.connectionRefs || node?.data?.config?.connectionRefs || {}) as Record<string, unknown>;
+                const entries = Object.entries(refs).filter(([, value]) => typeof value === 'string' && uuidPattern.test(value));
+                const connectionIds = Array.from(new Set(entries.map(([, value]) => String(value))));
+                return connectionIds.map((connectionId) => {
+                    const keysForConnection = entries
+                        .filter(([, value]) => value === connectionId)
+                        .map(([key]) => key);
+                    const provider =
+                        keysForConnection.find((key) => !key.includes('_')) ||
+                        keysForConnection.find((key) => key.endsWith('_oauth2'))?.replace(/_oauth2$/, '') ||
+                        keysForConnection.find((key) => key.endsWith('_api_key'))?.replace(/_api_key$/, '') ||
+                        String(node?.data?.type || node?.type || '').split('_')[0];
+                    const credentialTypeId =
+                        keysForConnection.find((key) => key !== provider && key.includes('_')) ||
+                        null;
+                    return upsertWorkflowNodeConnection({
+                        workflowId: savedWorkflow.id,
+                        nodeId: String(node.id),
+                        nodeType: String(node?.data?.type || node?.type || ''),
+                        provider,
+                        credentialTypeId,
+                        connectionId,
+                    });
+                });
+            });
+            if (bindingWrites.length > 0) {
+                await Promise.allSettled(bindingWrites);
+            }
+
             setGeneratedWorkflowId(savedWorkflow.id);
             setNodes(applyFillModesToNodes(normalized.nodes as any[], fillModeValues));
             setEdges(normalized.edges as any[]);
@@ -5595,6 +5635,7 @@ export function AutonomousAgentWizard() {
         setCapNodeContainers([]);
         setCapNodeCorrelationId('');
         setCapNodeSelections({});
+        setCapNodeConnectionRefsByContainerId({});
         setCapNodeStructuralPrompt('');
         setCapNodeWorkflow(null);
         // Scroll back to top
@@ -6400,8 +6441,8 @@ export function AutonomousAgentWizard() {
                                     containers={capNodeContainers}
                                     validationIssue={capNodeSelectionIssue}
                                     initialSelections={capNodeSelections}
-                                    onComplete={(selections) => {
-                                        void handleCapabilityNodeSelectionGenerate(selections);
+                                    onComplete={(selections, connectionRefsByContainerId) => {
+                                        void handleCapabilityNodeSelectionGenerate(selections, connectionRefsByContainerId);
                                     }}
                                     onBack={() => {
                                         // Req 3.8: Go Back returns to prompt step with no state change

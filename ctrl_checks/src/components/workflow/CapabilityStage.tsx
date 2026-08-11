@@ -22,6 +22,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { NODE_LAYMAN_DESCRIPTIONS } from './nodeLaymanDescriptions';
 import { NodeConnectionChip, type NodeConnectionStatus } from './NodeConnectionChip';
 import { NodeConnectFormDialog } from './NodeConnectFormDialog';
+import { NodeCredentialSelector } from '@/components/nodes/NodeCredentialSelector';
 import { useNodeConnect } from '@/hooks/useNodeConnect';
 import type { CredentialTypeDefinition } from '@/lib/api/connections';
 import {
@@ -46,7 +47,10 @@ import type {
 
 interface CapabilityStageProps {
   containers: CapabilityContainer[];
-  onComplete: (selections: NodeSelectionMap) => void;
+  onComplete: (
+    selections: NodeSelectionMap,
+    connectionRefsByContainerId?: Record<string, Record<string, string>>,
+  ) => void;
   onBack?: () => void;
   validationIssue?: CapabilitySelectionValidationResult | null;
   initialSelections?: NodeSelectionMap;
@@ -110,6 +114,9 @@ interface CandidateConnectionState {
   provider?: string;
   providerLabel?: string;
   credentialTypeId?: string;
+  status?: string;
+  action?: string;
+  authType?: string;
   /** Readiness is still in flight for this (selected) node. */
   checking?: boolean;
   /** An OAuth popup is open for this node right now. */
@@ -131,6 +138,8 @@ interface CandidateOptionProps {
   onSelect: () => void;
   connectionState: CandidateConnectionState;
   onConnect: (candidate: CandidateNode, state: CandidateConnectionState) => void;
+  selectedConnectionId?: string;
+  onConnectionSelect: (connectionId: string) => void;
 }
 
 function CandidateOption({
@@ -139,6 +148,8 @@ function CandidateOption({
   onSelect,
   connectionState,
   onConnect,
+  selectedConnectionId,
+  onConnectionSelect,
 }: CandidateOptionProps) {
   const laymanDescription = NODE_LAYMAN_DESCRIPTIONS[candidate.nodeType];
   return (
@@ -200,6 +211,22 @@ function CandidateOption({
               {laymanDescription}
             </p>
           )}
+          {isSelected && connectionState.action === 'select_connection' && connectionState.provider && (
+            <div
+              className="pt-2"
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
+            >
+              <NodeCredentialSelector
+                credentialTypeIds={connectionState.credentialTypeId ? [connectionState.credentialTypeId] : []}
+                providers={connectionState.credentialTypeId ? [] : [connectionState.provider]}
+                logoProvider={connectionState.provider}
+                value={selectedConnectionId}
+                onChange={onConnectionSelect}
+                label={`Use existing ${connectionState.providerLabel || connectionState.provider} connection`}
+              />
+            </div>
+          )}
         </div>
 
         {/* Selected checkmark */}
@@ -224,6 +251,13 @@ interface ContainerCardProps {
     candidate: CandidateNode,
     state: CandidateConnectionState,
   ) => void;
+  selectedConnectionIdFor: (containerId: string, candidate: CandidateNode) => string | undefined;
+  onConnectionSelect: (
+    containerId: string,
+    candidate: CandidateNode,
+    state: CandidateConnectionState,
+    connectionId: string,
+  ) => void;
 }
 
 function ContainerCard({
@@ -233,6 +267,8 @@ function ContainerCard({
   index,
   connectionStateFor,
   onConnect,
+  selectedConnectionIdFor,
+  onConnectionSelect,
 }: ContainerCardProps) {
   return (
     <motion.div
@@ -267,6 +303,13 @@ function ContainerCard({
               onSelect={() => onSelect(candidate.nodeType)}
               connectionState={connectionStateFor(candidate, container.containerId)}
               onConnect={(c, state) => onConnect(container.containerId, c, state)}
+              selectedConnectionId={selectedConnectionIdFor(container.containerId, candidate)}
+              onConnectionSelect={(connectionId) => onConnectionSelect(
+                container.containerId,
+                candidate,
+                connectionStateFor(candidate, container.containerId),
+                connectionId,
+              )}
             />
           ))}
         </CardContent>
@@ -410,9 +453,26 @@ export function CapabilityStage({
     nodeType: string;
     message: string;
   } | null>(null);
+  const [selectedConnectionRefs, setSelectedConnectionRefs] = useState<
+    Record<string, { connectionId: string; provider: string; credentialTypeId?: string }>
+  >({});
 
   function candidateKey(containerId: string, nodeType: string) {
     return `${containerId}::${nodeType}`;
+  }
+
+  function connectionRefsForKey(key: string): Record<string, string> {
+    const selected = selectedConnectionRefs[key];
+    if (!selected?.connectionId) return {};
+    const refs: Record<string, string> = {};
+    if (selected.provider) {
+      refs[selected.provider] = selected.connectionId;
+      refs[`${selected.provider}_oauth2`] = selected.connectionId;
+      refs[`${selected.provider}_api_key`] = selected.connectionId;
+      refs[`${selected.provider}_token`] = selected.connectionId;
+    }
+    if (selected.credentialTypeId) refs[selected.credentialTypeId] = selected.connectionId;
+    return refs;
   }
 
   /**
@@ -511,6 +571,19 @@ export function CapabilityStage({
     new Set([...selectedNodeTypes, ...connectedNodeTypes]),
   ).sort();
   const readinessNodeTypesKey = readinessNodeTypes.join('|');
+  const selectedReadinessNodes = sortedContainers
+    .map((container) => {
+      const nodeType = selections[container.containerId];
+      if (!nodeType) return null;
+      const key = candidateKey(container.containerId, nodeType);
+      return {
+        nodeId: key,
+        nodeType,
+        connectionRefs: connectionRefsForKey(key),
+      };
+    })
+    .filter(Boolean) as Array<{ nodeId: string; nodeType: string; connectionRefs: Record<string, string> }>;
+  const selectedReadinessNodesKey = JSON.stringify(selectedReadinessNodes);
 
   /**
    * Live connection status for EVERY candidate, fetched before the user touches anything.
@@ -612,13 +685,17 @@ export function CapabilityStage({
   }, []);
 
   useEffect(() => {
-    if (!readinessNodeTypesKey) {
+    if (!readinessNodeTypesKey && selectedReadinessNodes.length === 0) {
       setReadiness(null);
       return;
     }
     let cancelled = false;
     setReadinessLoading(true);
-    fetchCapabilityConnectionReadiness(readinessNodeTypesKey.split('|'))
+    fetchCapabilityConnectionReadiness(
+      readinessNodeTypesKey ? readinessNodeTypesKey.split('|') : [],
+      undefined,
+      selectedReadinessNodes,
+    )
       .then((result) => {
         if (!cancelled) setReadiness(result);
       })
@@ -628,10 +705,13 @@ export function CapabilityStage({
     return () => {
       cancelled = true;
     };
-  }, [readinessNodeTypesKey, connectionNonce]);
+  }, [readinessNodeTypesKey, selectedReadinessNodesKey, connectionNonce]);
 
   const readinessByNodeType = new Map(
     (readiness?.nodes ?? []).map((node) => [node.nodeType, node]),
+  );
+  const readinessByNodeId = new Map(
+    (readiness?.nodes ?? []).filter((node) => node.nodeId).map((node) => [node.nodeId as string, node]),
   );
 
   /**
@@ -653,7 +733,9 @@ export function CapabilityStage({
     const readinessPending =
       readinessNodeTypes.includes(candidate.nodeType) && readinessLoading;
 
-    const authoritative = readinessByNodeType.get(candidate.nodeType);
+    const authoritative =
+      readinessByNodeId.get(candidateKey(containerId, candidate.nodeType)) ||
+      readinessByNodeType.get(candidate.nodeType);
     if (authoritative) {
       return {
         connected: authoritative.connected,
@@ -663,6 +745,9 @@ export function CapabilityStage({
         provider: authoritative.provider,
         providerLabel: authoritative.providerLabel,
         credentialTypeId: authoritative.credentialTypeId,
+        status: authoritative.status,
+        action: authoritative.action,
+        authType: authoritative.authType,
         connecting,
       };
     }
@@ -707,26 +792,41 @@ export function CapabilityStage({
   // §2.4.4 — Continue gates on every *selected* node being connected. Unselected
   // candidates are irrelevant: the user is not made to connect Gmail because it was
   // offered alongside Slack.
-  const unconnectedSelected = selectedNodeTypes.filter((nodeType) => {
-    const authoritative = readinessByNodeType.get(nodeType);
+  const selectedEntries = sortedContainers
+    .map((container) => {
+      const nodeType = selections[container.containerId];
+      if (!nodeType) return null;
+      const candidate = container.candidates.find((c) => c.nodeType === nodeType);
+      return {
+        containerId: container.containerId,
+        nodeType,
+        key: candidateKey(container.containerId, nodeType),
+        label: candidate?.label ?? nodeType,
+        candidate,
+      };
+    })
+    .filter(Boolean) as Array<{
+      containerId: string;
+      nodeType: string;
+      key: string;
+      label: string;
+      candidate?: CandidateNode;
+    }>;
+
+  const unconnectedSelected = selectedEntries.filter((entry) => {
+    const authoritative = readinessByNodeId.get(entry.key) || readinessByNodeType.get(entry.nodeType);
     if (authoritative) return !authoritative.connected;
     // Before readiness resolves, prefer the live presence check over the candidate payload,
     // which was computed at container-generation time and never revised.
-    const live = statusByNodeType.get(nodeType);
+    const live = statusByNodeType.get(entry.nodeType);
     if (live) return !live.connected;
-    const candidate = containers
-      .flatMap((container) => container.candidates)
-      .find((c) => c.nodeType === nodeType);
-    return candidate ? !candidate.hasCredentials : false;
+    return entry.candidate ? !entry.candidate.hasCredentials : false;
   });
 
-  const unconnectedLabels = unconnectedSelected.map((nodeType) => {
-    const authoritative = readinessByNodeType.get(nodeType);
+  const unconnectedLabels = unconnectedSelected.map((entry) => {
+    const authoritative = readinessByNodeId.get(entry.key) || readinessByNodeType.get(entry.nodeType);
     if (authoritative?.providerLabel) return authoritative.providerLabel;
-    const candidate = containers
-      .flatMap((container) => container.candidates)
-      .find((c) => c.nodeType === nodeType);
-    return candidate?.label ?? nodeType;
+    return entry.label;
   });
 
   const connectionsSatisfied = unconnectedSelected.length === 0;
@@ -762,9 +862,38 @@ export function CapabilityStage({
   }
 
   // Req 3.7 — Continue is the only action that triggers downstream processing
+  function selectedConnectionIdFor(containerId: string, candidate: CandidateNode): string | undefined {
+    return selectedConnectionRefs[candidateKey(containerId, candidate.nodeType)]?.connectionId;
+  }
+
+  function handleConnectionSelect(
+    containerId: string,
+    candidate: CandidateNode,
+    state: CandidateConnectionState,
+    connectionId: string,
+  ) {
+    const key = candidateKey(containerId, candidate.nodeType);
+    setSelectedConnectionRefs((prev) => ({
+      ...prev,
+      [key]: {
+        connectionId,
+        provider: state.provider || candidate.credentialProviders?.[0] || '',
+        credentialTypeId: state.credentialTypeId,
+      },
+    }));
+    setConnectionNonce((n) => n + 1);
+  }
+
   function handleContinue() {
     if (isComplete) {
-      onComplete(selections);
+      const connectionRefsByContainerId: Record<string, Record<string, string>> = {};
+      for (const entry of selectedEntries) {
+        const refs = connectionRefsForKey(entry.key);
+        if (Object.keys(refs).length > 0) {
+          connectionRefsByContainerId[entry.containerId] = refs;
+        }
+      }
+      onComplete(selections, connectionRefsByContainerId);
     }
   }
 
@@ -877,6 +1006,8 @@ export function CapabilityStage({
               index={index}
               connectionStateFor={connectionStateFor}
               onConnect={handleConnect}
+              selectedConnectionIdFor={selectedConnectionIdFor}
+              onConnectionSelect={handleConnectionSelect}
             />
           ))}
         </div>

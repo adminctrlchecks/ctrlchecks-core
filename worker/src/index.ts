@@ -344,6 +344,11 @@ import {
   testConnectionHandler,
   updateConnectionHandler,
 } from './api/credential-connections';
+import {
+  deleteWorkflowNodeConnectionHandler,
+  listWorkflowNodeConnectionsHandler,
+  upsertWorkflowNodeConnectionHandler,
+} from './api/workflow-node-connections';
 import { listMysqlTablesHandler, previewMysqlTableHandler, listMongoCollectionsHandler, previewMongoCollectionHandler, listFirestoreCollectionsHandler, previewFirestoreCollectionHandler, listSupabaseTablesHandler, previewSupabaseTableHandler, listPostgresTablesHandler, previewPostgresTableHandler } from './api/database-explorer';
 import { credentialExecutionAuthMiddleware } from './credentials-system/execution-auth-middleware';
 import workflowFieldOwnershipCatalogHandler from './api/workflow-field-ownership-catalog';
@@ -1636,6 +1641,10 @@ console.log('🧩 Workflow Setup Lifecycle API available at /api/workflows/setup
 // Get Missing Items (Credentials + Sensitive Inputs)
 app.get('/api/workflows/:workflowId/missing-items', asyncHandler(getMissingItemsRoute));
 console.log('🔍 Missing Items API available at /api/workflows/:workflowId/missing-items');
+app.get('/api/workflows/:workflowId/node-connections', asyncHandler(authenticateUser), asyncHandler(listWorkflowNodeConnectionsHandler));
+app.put('/api/workflows/:workflowId/nodes/:nodeId/connections', asyncHandler(authenticateUser), asyncHandler(upsertWorkflowNodeConnectionHandler));
+app.delete('/api/workflows/:workflowId/nodes/:nodeId/connections', asyncHandler(authenticateUser), asyncHandler(deleteWorkflowNodeConnectionHandler));
+console.log('Workflow Node Connections API available at /api/workflows/:workflowId/node-connections');
 app.get('/api/workflows/:workflowId/field-ownership-catalog', asyncHandler(workflowFieldOwnershipCatalogHandler));
 console.log('🧭 Field Ownership Catalog API available at /api/workflows/:workflowId/field-ownership-catalog');
 

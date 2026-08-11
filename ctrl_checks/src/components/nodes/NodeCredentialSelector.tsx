@@ -73,7 +73,7 @@ export function NodeCredentialSelector({
 
       {compatible.length === 0 ? (
         <div className="rounded-lg border border-dashed border-muted-foreground/30 p-3 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-muted-foreground">No connections yet</p>
+          <p className="text-sm text-muted-foreground">No saved connections for this node yet</p>
           <div className="flex items-center gap-2">
             <Button
               type="button"
@@ -87,7 +87,7 @@ export function NodeCredentialSelector({
             </Button>
             <Button size="sm" variant="outline" onClick={() => openAddModal(preferredTypeId)}>
               <Plus className="h-3.5 w-3.5 mr-1" />
-              Add
+              Add connection
             </Button>
           </div>
         </div>
@@ -101,7 +101,7 @@ export function NodeCredentialSelector({
               {selected ? (
                 <SelectedItem connection={selected} logoProvider={displayProvider} />
               ) : (
-                <span className="text-muted-foreground">Select a connection…</span>
+                <span className="text-muted-foreground">Use existing connection…</span>
               )}
               <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 ml-2" />
             </button>
@@ -126,7 +126,7 @@ export function NodeCredentialSelector({
               className="flex items-center gap-2 cursor-pointer text-primary"
             >
               <Plus className="h-4 w-4" />
-              Add new connection
+              Add another connection
             </DropdownMenuItem>
             <DropdownMenuItem
               onSelect={() => window.open('/connections', '_blank')}

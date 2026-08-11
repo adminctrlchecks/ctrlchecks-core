@@ -70,6 +70,11 @@ const FieldOwnershipToggle = lazy(() =>
 import { invalidateAfterConnectionChange } from '@/lib/queryInvalidation';
 import { shouldShowFieldForContext } from '@/lib/contextualFieldGuides';
 import { NodeCredentialSelector } from '@/components/nodes/NodeCredentialSelector';
+import {
+  listWorkflowNodeConnections,
+  upsertWorkflowNodeConnection,
+  type WorkflowNodeConnectionBinding,
+} from '@/lib/api/workflowNodeConnections';
 import { resolveFieldHelp } from '@/lib/resolve-field-help-content';
 import {
   getUsageGuideForType,
@@ -350,6 +355,25 @@ export default function PropertiesPanel({
   const { toast } = useToast();
   const { pendingExpression, clearPendingExpression } = useExpressionDropStore();
   const [guidedStatus, setGuidedStatus] = useState<GuidedStatusContent | null>(null);
+  const [nodeConnectionBindings, setNodeConnectionBindings] = useState<WorkflowNodeConnectionBinding[]>([]);
+
+  useEffect(() => {
+    if (!workflowId || workflowId === 'new') {
+      setNodeConnectionBindings([]);
+      return;
+    }
+    let cancelled = false;
+    listWorkflowNodeConnections(workflowId)
+      .then((bindings) => {
+        if (!cancelled) setNodeConnectionBindings(bindings);
+      })
+      .catch(() => {
+        if (!cancelled) setNodeConnectionBindings([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [workflowId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -688,7 +712,12 @@ export default function PropertiesPanel({
   );
 
   const handleConnectionRefChange = useCallback(
-    (credentialKey: string, connectionId: string, aliases: string[] = []) => {
+    (
+      credentialKey: string,
+      connectionId: string,
+      aliases: string[] = [],
+      binding?: { provider?: string; credentialTypeId?: string | null; role?: string },
+    ) => {
       if (!selectedNodeId || !selectedNode) return;
       const currentRefs = (
         (selectedNode.data.connectionRefs as Record<string, string> | undefined) ||
@@ -709,8 +738,41 @@ export default function PropertiesPanel({
       setNodes(nodes.map((node) => (node.id === selectedNodeId ? updatedNode : node)));
       selectNode(updatedNode);
       setIsDirty(true);
+
+      const provider = binding?.provider || aliases.find((alias) => alias && !alias.includes('_')) || credentialKey;
+      if (workflowId && workflowId !== 'new' && provider && connectionId) {
+        upsertWorkflowNodeConnection({
+          workflowId,
+          nodeId: selectedNodeId,
+          nodeType: String(selectedNode.data?.type || selectedNode.type || ''),
+          provider,
+          credentialTypeId: binding?.credentialTypeId || credentialKey,
+          connectionId,
+          role: binding?.role || 'primary',
+        })
+          .then((savedBinding) => {
+            setNodeConnectionBindings((prev) => [
+              ...prev.filter((item) => !(
+                item.workflowId === savedBinding.workflowId &&
+                item.nodeId === savedBinding.nodeId &&
+                item.provider === savedBinding.provider &&
+                item.role === savedBinding.role
+              )),
+              savedBinding,
+            ]);
+            queryClient.invalidateQueries({ queryKey: ['workflow-node-connections', workflowId] });
+            queryClient.invalidateQueries({ queryKey: ['workflow-missing-items', workflowId] });
+          })
+          .catch((error) => {
+            toast({
+              title: 'Connection selection was not saved',
+              description: error instanceof Error ? error.message : 'Try selecting the connection again.',
+              variant: 'destructive',
+            });
+          });
+      }
     },
-    [nodes, selectedNode, selectedNodeId, selectNode, setIsDirty, setNodes]
+    [nodes, queryClient, selectedNode, selectedNodeId, selectNode, setIsDirty, setNodes, toast, workflowId]
   );
 
   // Per-field enabled toggle — writes to config._fieldEnabled[fieldName]
@@ -2524,12 +2586,18 @@ export default function PropertiesPanel({
                                   ].filter(Boolean)));
                                   const refKey = requirement.credentialTypeId || credentialTypeIds[0] || requirement.provider;
                                   const providers = credentialTypeIds.length > 0 ? [] : [requirement.provider].filter(Boolean);
+                                  const dbBinding = nodeConnectionBindings.find((binding) => (
+                                    binding.nodeId === selectedNode.id &&
+                                    binding.provider === requirement.provider &&
+                                    binding.role === 'primary'
+                                  ));
                                   const value =
                                     connectionRefs[refKey] ||
                                     credentialTypeIds.map((typeId) => connectionRefs[typeId]).find(Boolean) ||
                                     connectionRefs[requirement.provider] ||
                                     connectionRefs[`${requirement.provider}_oauth2`] ||
-                                    connectionRefs[`${requirement.provider}_api_key`];
+                                    connectionRefs[`${requirement.provider}_api_key`] ||
+                                    dbBinding?.connectionId;
                                   return (
                                     <NodeCredentialSelector
                                       key={`${refKey}-${requirement.category || 'credential'}`}
@@ -2546,7 +2614,12 @@ export default function PropertiesPanel({
                                           `${requirement.provider}_oauth2`,
                                           `${requirement.provider}_api_key`,
                                           `${requirement.provider}_token`,
-                                        ].filter(Boolean)
+                                        ].filter(Boolean),
+                                        {
+                                          provider: requirement.provider,
+                                          credentialTypeId: refKey,
+                                          role: 'primary',
+                                        }
                                       )}
                                       label={requirement.label || `${String(requirement.provider || refKey).replace(/_/g, ' ')} connection`}
                                     />

@@ -18897,7 +18897,13 @@ export default async function executeWorkflowHandler(req: Request, res: Response
     // ✅ CRITICAL: Clone workflow definition before execution
     // This ensures runtime never mutates the original workflow
     const clonedWorkflow = cloneWorkflowDefinition(linearizedGraph.nodes, linearizedGraph.edges, workflowId);
-    const nodes = clonedWorkflow.nodes;
+    const { hydrateWorkflowNodeConnectionBindings } = await import('../services/workflow-node-connections');
+    const nodes = await hydrateWorkflowNodeConnectionBindings({
+      workflowId,
+      userId: workflow.user_id || currentUserId,
+      nodes: clonedWorkflow.nodes,
+      overrideExisting: true,
+    });
     const edges = clonedWorkflow.edges;
     const workflowOwnerId = workflow.user_id || currentUserId;
     if (currentUserId && workflowOwnerId && currentUserId !== workflowOwnerId) {

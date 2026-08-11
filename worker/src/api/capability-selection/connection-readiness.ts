@@ -42,6 +42,7 @@ const SYNTHETIC_WORKFLOW_ID = 'capability-selection-preview';
 const MAX_NODE_TYPES = 40;
 
 export interface CapabilityConnectionReadinessNode {
+  nodeId?: string;
   nodeType: string;
   nodeLabel: string;
   connected: boolean;
@@ -83,6 +84,42 @@ function parseNodeTypes(body: unknown): string[] {
   return Array.from(seen).slice(0, MAX_NODE_TYPES);
 }
 
+function parseConnectionRefsByNodeType(body: unknown): Record<string, Record<string, string>> {
+  const raw = (body as { connectionRefsByNodeType?: unknown })?.connectionRefsByNodeType;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const out: Record<string, Record<string, string>> = {};
+  for (const [nodeType, refs] of Object.entries(raw as Record<string, unknown>)) {
+    if (!refs || typeof refs !== 'object' || Array.isArray(refs)) continue;
+    const clean: Record<string, string> = {};
+    for (const [key, value] of Object.entries(refs as Record<string, unknown>)) {
+      if (typeof value === 'string' && value.trim()) clean[key] = value.trim();
+    }
+    if (Object.keys(clean).length > 0) out[nodeType] = clean;
+  }
+  return out;
+}
+
+function parseReadinessNodes(body: unknown): Array<{ nodeId: string; nodeType: string; connectionRefs: Record<string, string> }> {
+  const raw = (body as { nodes?: unknown })?.nodes;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((entry) => {
+      const item = entry as Record<string, unknown>;
+      const nodeType = typeof item.nodeType === 'string' ? item.nodeType.trim() : '';
+      const nodeId = typeof item.nodeId === 'string' && item.nodeId.trim() ? item.nodeId.trim() : nodeType;
+      const connectionRefs: Record<string, string> = {};
+      const rawRefs = item.connectionRefs;
+      if (rawRefs && typeof rawRefs === 'object' && !Array.isArray(rawRefs)) {
+        for (const [key, value] of Object.entries(rawRefs as Record<string, unknown>)) {
+          if (typeof value === 'string' && value.trim()) connectionRefs[key] = value.trim();
+        }
+      }
+      return { nodeId, nodeType, connectionRefs };
+    })
+    .filter((item) => item.nodeType)
+    .slice(0, MAX_NODE_TYPES);
+}
+
 export default async function capabilityConnectionReadiness(
   req: AuthenticatedRequest,
   res: Response,
@@ -93,21 +130,34 @@ export default async function capabilityConnectionReadiness(
     return;
   }
 
-  const nodeTypes = parseNodeTypes(req.body);
+  const requestedNodes = parseReadinessNodes(req.body);
+  const nodeTypes = requestedNodes.length > 0
+    ? requestedNodes.map((node) => node.nodeType)
+    : parseNodeTypes(req.body);
+  const connectionRefsByNodeType = parseConnectionRefsByNodeType(req.body);
   if (nodeTypes.length === 0) {
     const empty: CapabilityConnectionReadinessResponse = { ready: true, nodes: [], blocking: [] };
     res.json(empty);
     return;
   }
 
-  // Synthetic nodes: one per selected type, shaped as the readiness service expects.
-  const nodes: ReadinessNode[] = nodeTypes.map((nodeType) => ({
-    id: nodeType,
-    type: nodeType,
+  const syntheticNodes = requestedNodes.length > 0
+    ? requestedNodes
+    : nodeTypes.map((nodeType) => ({
+        nodeId: nodeType,
+        nodeType,
+        connectionRefs: connectionRefsByNodeType[nodeType] || {},
+      }));
+
+  // Synthetic nodes: one per selected step, shaped as the readiness service expects.
+  const nodes: ReadinessNode[] = syntheticNodes.map((node) => ({
+    id: node.nodeId,
+    type: node.nodeType,
     data: {
-      type: nodeType,
-      label: unifiedNodeRegistry.get(nodeType)?.label ?? nodeType,
+      type: node.nodeType,
+      label: unifiedNodeRegistry.get(node.nodeType)?.label ?? node.nodeType,
       config: {},
+      connectionRefs: node.connectionRefs,
     },
   }));
 
@@ -125,11 +175,13 @@ export default async function capabilityConnectionReadiness(
       if (!rowsByNodeId.has(row.nodeId)) rowsByNodeId.set(row.nodeId, row);
     }
 
-    const resultNodes: CapabilityConnectionReadinessNode[] = nodeTypes.map((nodeType) => {
-      const row = rowsByNodeId.get(nodeType);
+    const resultNodes: CapabilityConnectionReadinessNode[] = syntheticNodes.map((node) => {
+      const nodeType = node.nodeType;
+      const row = rowsByNodeId.get(node.nodeId);
       if (!row) {
         // No credential requirement for this node type — nothing to connect.
         return {
+          nodeId: node.nodeId,
           nodeType,
           nodeLabel: unifiedNodeRegistry.get(nodeType)?.label ?? nodeType,
           connected: true,
@@ -137,6 +189,7 @@ export default async function capabilityConnectionReadiness(
         };
       }
       return {
+        nodeId: node.nodeId,
         nodeType,
         nodeLabel: row.nodeLabel,
         connected: row.status === 'ready',
@@ -153,7 +206,7 @@ export default async function capabilityConnectionReadiness(
       };
     });
 
-    const blocking = resultNodes.filter((n) => !n.connected).map((n) => n.nodeType);
+    const blocking = resultNodes.filter((n) => !n.connected).map((n) => n.nodeId || n.nodeType);
     const response: CapabilityConnectionReadinessResponse = {
       ready: blocking.length === 0,
       nodes: resultNodes,
