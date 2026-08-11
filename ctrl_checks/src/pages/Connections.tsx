@@ -1,7 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Search, RefreshCw, Plus, ArrowLeft, Loader2 } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowLeft,
+  Cable,
+  CheckCircle2,
+  Clock3,
+  Database,
+  Loader2,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Search,
+  Trash2,
+} from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '@/lib/auth';
 import { awsClient } from '@/integrations/aws/client';
 import { Button } from '@/components/ui/button';
@@ -9,13 +24,19 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AppChromeHeader } from '@/components/layout/AppChromeHeader';
 import { WorkflowAuthGate } from '@/components/WorkflowAuthGate';
-import { ConnectionCard } from '@/components/connections/ConnectionCard';
 import { NewConnectionModal } from '@/components/connections/NewConnectionModal';
 import { ProviderLogo } from '@/components/connections/ProviderLogo';
+import { ConnectionStatusBadge } from '@/components/connections/ConnectionStatusBadge';
 import { isComingSoonProvider } from '@/components/connections/connectionAvailability';
-import { useConnections } from '@/hooks/useConnections';
+import {
+  useConnections,
+  useDeleteConnection,
+  useTestConnection,
+  useUpdateConnection,
+} from '@/hooks/useConnections';
 import { useCredentialTypes } from '@/hooks/useCredentialTypes';
 import { useOAuthFlow } from '@/hooks/useOAuthFlow';
+import { useToast } from '@/hooks/use-toast';
 import {
   fetchWorkflowSetupStatus,
   groupWorkflowConnectionIssues,
@@ -24,7 +45,25 @@ import {
 } from '@/hooks/useWorkflowConnectionStatus';
 import { invalidateAfterConnectionChange } from '@/lib/queryInvalidation';
 import { QUERY_KEYS } from '@/lib/queryKeys';
+import { cn } from '@/lib/utils';
 import type { ConnectionRecord, CredentialTypeDefinition } from '@/lib/api/connections';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 // ─── Provider categories ──────────────────────────────────────────────────────
 const PROVIDER_CATEGORIES: Record<string, string[]> = {
@@ -71,6 +110,37 @@ function compactScope(scope: string): string {
     .replace(/^https:\/\/www\.googleapis\.com\/auth\//, '')
     .replace(/^https:\/\/graph\.microsoft\.com\//, '')
     .replace(/^https:\/\/www\.linkedin\.com\/oauth\/v2\//, '');
+}
+
+function titleCaseProvider(provider: string): string {
+  const labels: Record<string, string> = {
+    awsClient: 'AWS',
+    discord_webhook: 'Discord Webhook',
+    google: 'Google',
+    google_gmail: 'Gmail',
+    google_sheets: 'Google Sheets',
+    mongodb: 'MongoDB',
+    openai: 'OpenAI',
+    postgresql: 'PostgreSQL',
+  };
+  return labels[provider] ?? provider
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function authLabel(authType: ConnectionRecord['authType']): string {
+  if (authType === 'oauth2') return 'OAuth';
+  if (authType === 'api_key') return 'API key';
+  if (authType === 'bearer_token') return 'Bearer token';
+  if (authType === 'basic_auth') return 'Basic auth';
+  if (authType === 'custom_header') return 'Custom header';
+  if (authType === 'query_auth') return 'Query auth';
+  return authType;
+}
+
+function relativeDate(value?: string | null): string {
+  if (!value) return 'Never';
+  return formatDistanceToNow(new Date(value), { addSuffix: true });
 }
 
 function repairVerb(group: WorkflowConnectionGroup): string {
@@ -156,20 +226,22 @@ function ServiceCatalog({
                     <button
                       key={t.id}
                       type="button"
-                      disabled={comingSoon || alreadyConnected}
+                      disabled={comingSoon}
                       title={
                         comingSoon
                           ? `${providerName} is coming soon`
                           : alreadyConnected
-                            ? `${providerName} is already connected`
+                            ? `Add another ${providerName} connection`
                             : `Connect ${providerName}`
                       }
                       onClick={() => {
-                        if (!comingSoon && !alreadyConnected) onSelect(t);
+                        if (!comingSoon) onSelect(t);
                       }}
                       className={`relative flex flex-col items-center gap-2 rounded-xl border p-3 transition-all group ${
-                        comingSoon || alreadyConnected
+                        comingSoon
                           ? 'cursor-not-allowed border-border/60 bg-muted/30 text-muted-foreground opacity-75'
+                          : alreadyConnected
+                            ? 'border-primary/20 bg-primary/5 hover:border-primary/40 hover:bg-primary/10'
                           : 'border-border/60 hover:border-primary/50 hover:bg-muted/60'
                       }`}
                     >
@@ -199,6 +271,591 @@ function ServiceCatalog({
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
+interface ProviderSummary {
+  provider: string;
+  label: string;
+  category: string;
+  credentialTypes: CredentialTypeDefinition[];
+  connections: ConnectionRecord[];
+  activeCount: number;
+}
+
+function buildProviderSummaries(
+  credentialTypes: CredentialTypeDefinition[],
+  connections: ConnectionRecord[],
+): ProviderSummary[] {
+  const byProvider = new Map<string, ProviderSummary>();
+
+  function ensure(provider: string): ProviderSummary {
+    const existing = byProvider.get(provider);
+    if (existing) return existing;
+    const summary: ProviderSummary = {
+      provider,
+      label: titleCaseProvider(provider),
+      category: categoryFor(provider),
+      credentialTypes: [],
+      connections: [],
+      activeCount: 0,
+    };
+    byProvider.set(provider, summary);
+    return summary;
+  }
+
+  for (const type of credentialTypes) {
+    const summary = ensure(type.provider);
+    summary.credentialTypes.push(type);
+    summary.label = titleCaseProvider(type.provider);
+  }
+
+  for (const connection of connections) {
+    ensure(connection.provider).connections.push(connection);
+  }
+
+  for (const summary of byProvider.values()) {
+    summary.connections.sort((a, b) => a.name.localeCompare(b.name));
+    summary.credentialTypes.sort((a, b) => a.displayName.localeCompare(b.displayName));
+    summary.activeCount = summary.connections.filter((connection) => connection.status === 'active').length;
+  }
+
+  return Array.from(byProvider.values()).sort((a, b) => {
+    if (b.connections.length !== a.connections.length) return b.connections.length - a.connections.length;
+    return a.label.localeCompare(b.label);
+  });
+}
+
+function ProviderWorkspace({
+  connections,
+  credentialTypes,
+  isLoading,
+  isFetching,
+  connSearch,
+  authFilter,
+  onSearchChange,
+  onAuthFilterChange,
+  onRefresh,
+  onAddConnection,
+}: {
+  connections: ConnectionRecord[];
+  credentialTypes: CredentialTypeDefinition[];
+  isLoading: boolean;
+  isFetching: boolean;
+  connSearch: string;
+  authFilter: 'all' | 'oauth' | 'api_key';
+  onSearchChange: (value: string) => void;
+  onAuthFilterChange: (value: 'all' | 'oauth' | 'api_key') => void;
+  onRefresh: () => void;
+  onAddConnection: (type: CredentialTypeDefinition) => void;
+}) {
+  const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
+  const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
+
+  const providerSummaries = useMemo(
+    () => buildProviderSummaries(credentialTypes, connections),
+    [credentialTypes, connections],
+  );
+
+  const filteredProviders = useMemo(() => {
+    const query = connSearch.trim().toLowerCase();
+    return providerSummaries.filter((summary) => {
+      if (
+        authFilter === 'oauth' &&
+        !summary.credentialTypes.some((type) => type.authType === 'oauth2') &&
+        !summary.connections.some((connection) => connection.authType === 'oauth2')
+      ) {
+        return false;
+      }
+      if (
+        authFilter === 'api_key' &&
+        !summary.credentialTypes.some((type) => type.authType !== 'oauth2') &&
+        !summary.connections.some((connection) => connection.authType !== 'oauth2')
+      ) {
+        return false;
+      }
+      if (!query) return true;
+      return (
+        summary.label.toLowerCase().includes(query) ||
+        summary.provider.toLowerCase().includes(query) ||
+        summary.credentialTypes.some((type) => type.displayName.toLowerCase().includes(query)) ||
+        summary.connections.some((connection) => connection.name.toLowerCase().includes(query))
+      );
+    });
+  }, [authFilter, connSearch, providerSummaries]);
+
+  useEffect(() => {
+    if (filteredProviders.length === 0) {
+      setSelectedProvider(null);
+      setSelectedConnectionId(null);
+      return;
+    }
+    if (!selectedProvider || !filteredProviders.some((summary) => summary.provider === selectedProvider)) {
+      setSelectedProvider(filteredProviders[0].provider);
+    }
+  }, [filteredProviders, selectedProvider]);
+
+  const selectedSummary = filteredProviders.find((summary) => summary.provider === selectedProvider) ?? filteredProviders[0];
+  const selectedConnection = selectedSummary?.connections.find((connection) => connection.id === selectedConnectionId)
+    ?? selectedSummary?.connections[0]
+    ?? null;
+  const primaryCredentialType = selectedSummary?.credentialTypes[0];
+
+  useEffect(() => {
+    if (!selectedSummary) return;
+    if (selectedConnectionId && selectedSummary.connections.some((connection) => connection.id === selectedConnectionId)) return;
+    setSelectedConnectionId(selectedSummary.connections[0]?.id ?? null);
+  }, [selectedConnectionId, selectedSummary]);
+
+  const totalActive = connections.filter((connection) => connection.status === 'active').length;
+  const connectedProviderCount = providerSummaries.filter((summary) => summary.connections.length > 0).length;
+
+  return (
+    <section className="mb-10">
+      <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Connections</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Encrypted credentials reused across all your workflows.
+          </p>
+        </div>
+        <Button variant="outline" size="icon" onClick={onRefresh} disabled={isFetching} title="Refresh">
+          <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+        </Button>
+      </div>
+
+      <div className="mb-5 grid gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border border-border bg-card px-4 py-3">
+          <div className="flex items-center gap-2 text-xs font-medium uppercase text-muted-foreground">
+            <Cable className="h-4 w-4" />
+            Saved
+          </div>
+          <p className="mt-2 text-2xl font-semibold">{connections.length}</p>
+        </div>
+        <div className="rounded-lg border border-border bg-card px-4 py-3">
+          <div className="flex items-center gap-2 text-xs font-medium uppercase text-muted-foreground">
+            <Database className="h-4 w-4" />
+            Providers
+          </div>
+          <p className="mt-2 text-2xl font-semibold">{connectedProviderCount}</p>
+        </div>
+        <div className="rounded-lg border border-border bg-card px-4 py-3">
+          <div className="flex items-center gap-2 text-xs font-medium uppercase text-muted-foreground">
+            <CheckCircle2 className="h-4 w-4" />
+            Active
+          </div>
+          <p className="mt-2 text-2xl font-semibold">{totalActive}</p>
+        </div>
+      </div>
+
+      <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="relative w-full lg:max-w-md">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search providers or saved connections..."
+            className="pl-9"
+            value={connSearch}
+            onChange={(event) => onSearchChange(event.target.value)}
+          />
+        </div>
+        <div className="flex items-center gap-1.5">
+          {(['all', 'oauth', 'api_key'] as const).map((filter) => (
+            <button
+              key={filter}
+              type="button"
+              onClick={() => onAuthFilterChange(filter)}
+              className={cn(
+                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                authFilter === filter
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-border bg-background text-muted-foreground hover:border-foreground/40 hover:text-foreground',
+              )}
+            >
+              {filter === 'all' ? 'All' : filter === 'oauth' ? 'OAuth' : 'API key'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {isLoading && (
+        <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+          <div className="space-y-2">
+            {Array.from({ length: 8 }).map((_, index) => (
+              <Skeleton key={index} className="h-16 rounded-lg" />
+            ))}
+          </div>
+          <Skeleton className="h-96 rounded-lg" />
+        </div>
+      )}
+
+      {!isLoading && filteredProviders.length === 0 && (
+        <div className="rounded-lg border border-dashed border-muted-foreground/25 bg-muted/20 px-6 py-8 text-center text-sm text-muted-foreground">
+          No providers match your filters.
+        </div>
+      )}
+
+      {!isLoading && filteredProviders.length > 0 && (
+        <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+          <aside className="rounded-lg border border-border bg-card">
+            <div className="border-b border-border px-4 py-3">
+              <h2 className="text-sm font-semibold">Provider Home</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">{filteredProviders.length} services</p>
+            </div>
+            <div className="max-h-[640px] overflow-y-auto p-2">
+              {filteredProviders.map((summary) => {
+                const selected = summary.provider === selectedSummary?.provider;
+                const comingSoon = isComingSoonProvider(summary.provider);
+                return (
+                  <button
+                    key={summary.provider}
+                    type="button"
+                    onClick={() => setSelectedProvider(summary.provider)}
+                    className={cn(
+                      'mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors',
+                      selected ? 'bg-primary/10 text-primary' : 'hover:bg-muted/70',
+                    )}
+                  >
+                    <ProviderLogo provider={summary.provider} size={32} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">{summary.label}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{summary.category}</span>
+                    </span>
+                    <span
+                      className={cn(
+                        'rounded-full border px-2 py-0.5 text-xs',
+                        summary.connections.length > 0
+                          ? 'border-primary/20 bg-primary/10 text-primary'
+                          : comingSoon
+                            ? 'border-border bg-muted text-muted-foreground'
+                            : 'border-border text-muted-foreground',
+                      )}
+                    >
+                      {comingSoon ? 'Soon' : summary.connections.length}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </aside>
+
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <section className="rounded-lg border border-border bg-card">
+              {selectedSummary && (
+                <>
+                  <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <ProviderLogo provider={selectedSummary.provider} size={40} />
+                      <div className="min-w-0">
+                        <h2 className="truncate text-lg font-semibold">{selectedSummary.label}</h2>
+                        <p className="text-sm text-muted-foreground">
+                          {selectedSummary.connections.length} saved {selectedSummary.connections.length === 1 ? 'connection' : 'connections'}
+                        </p>
+                      </div>
+                    </div>
+                    {primaryCredentialType ? (
+                      <Button
+                        size="sm"
+                        onClick={() => onAddConnection(primaryCredentialType)}
+                        disabled={isComingSoonProvider(selectedSummary.provider)}
+                      >
+                        <Plus className="mr-1.5 h-4 w-4" />
+                        Add another
+                      </Button>
+                    ) : null}
+                  </div>
+
+                  <div className="space-y-2 p-4">
+                    {selectedSummary.connections.length === 0 && (
+                      <div className="rounded-lg border border-dashed border-muted-foreground/25 bg-muted/20 px-6 py-8 text-center">
+                        <div className="flex justify-center">
+                          <ProviderLogo provider={selectedSummary.provider} size={44} />
+                        </div>
+                        <p className="mt-3 text-sm font-medium">No saved {selectedSummary.label} connection</p>
+                        {primaryCredentialType && !isComingSoonProvider(selectedSummary.provider) && (
+                          <Button className="mt-4" size="sm" onClick={() => onAddConnection(primaryCredentialType)}>
+                            <Plus className="mr-1.5 h-4 w-4" />
+                            Connect {selectedSummary.label}
+                          </Button>
+                        )}
+                      </div>
+                    )}
+
+                    {selectedSummary.connections.map((connection) => (
+                      <ConnectionManagementRow
+                        key={connection.id}
+                        connection={connection}
+                        credentialType={credentialTypes.find((type) => type.id === connection.credentialTypeId)}
+                        selected={selectedConnection?.id === connection.id}
+                        onSelect={() => setSelectedConnectionId(connection.id)}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+            </section>
+
+            <ConnectionDetailPanel
+              connection={selectedConnection}
+              credentialType={credentialTypes.find((type) => type.id === selectedConnection?.credentialTypeId)}
+              providerLabel={selectedSummary?.label}
+            />
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ConnectionManagementRow({
+  connection,
+  credentialType,
+  selected,
+  onSelect,
+}: {
+  connection: ConnectionRecord;
+  credentialType?: CredentialTypeDefinition;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const { toast } = useToast();
+  const updateMut = useUpdateConnection();
+  const testMut = useTestConnection();
+  const deleteMut = useDeleteConnection();
+  const oauthFlow = useOAuthFlow();
+  const [isEditing, setIsEditing] = useState(false);
+  const [draftName, setDraftName] = useState(connection.name);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  useEffect(() => {
+    setDraftName(connection.name);
+  }, [connection.name]);
+
+  async function saveName() {
+    const nextName = draftName.trim();
+    if (!nextName || nextName === connection.name) {
+      setDraftName(connection.name);
+      setIsEditing(false);
+      return;
+    }
+    try {
+      await updateMut.mutateAsync({ id: connection.id, patch: { name: nextName } });
+      toast({ title: 'Connection renamed' });
+      setIsEditing(false);
+    } catch (error) {
+      toast({
+        title: 'Rename failed',
+        description: error instanceof Error ? error.message : 'Could not rename this connection.',
+        variant: 'destructive',
+      });
+    }
+  }
+
+  async function testConnectionHealth() {
+    try {
+      const result = await testMut.mutateAsync(connection.id);
+      toast({
+        title: result.ok ? 'Connection OK' : 'Connection needs attention',
+        description: result.message || undefined,
+        variant: result.ok ? undefined : 'destructive',
+      });
+    } catch (error) {
+      toast({
+        title: 'Test failed',
+        description: error instanceof Error ? error.message : 'Could not test this connection.',
+        variant: 'destructive',
+      });
+    }
+  }
+
+  async function reconnect() {
+    try {
+      await oauthFlow.reconnect(connection.id);
+      toast({ title: 'Reconnect started' });
+    } catch (error) {
+      toast({
+        title: 'Reconnect failed',
+        description: error instanceof Error ? error.message : 'Could not reconnect this account.',
+        variant: 'destructive',
+      });
+    }
+  }
+
+  async function removeConnection() {
+    try {
+      await deleteMut.mutateAsync(connection.id);
+      toast({ title: 'Connection deleted' });
+    } catch (error) {
+      toast({
+        title: 'Delete failed',
+        description: error instanceof Error ? error.message : 'Could not delete this connection.',
+        variant: 'destructive',
+      });
+    } finally {
+      setConfirmDelete(false);
+    }
+  }
+
+  return (
+    <>
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onSelect}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') onSelect();
+        }}
+        className={cn(
+          'flex items-center gap-3 rounded-lg border p-3 transition-colors',
+          selected ? 'border-primary/50 bg-primary/5' : 'border-border hover:border-primary/25 hover:bg-muted/40',
+        )}
+      >
+        <ProviderLogo provider={connection.provider} size={36} />
+        <div className="min-w-0 flex-1">
+          {isEditing ? (
+            <div className="flex max-w-md items-center gap-2" onClick={(event) => event.stopPropagation()}>
+              <Input
+                value={draftName}
+                onChange={(event) => setDraftName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') void saveName();
+                  if (event.key === 'Escape') {
+                    setDraftName(connection.name);
+                    setIsEditing(false);
+                  }
+                }}
+                className="h-8"
+                autoFocus
+              />
+              <Button size="sm" onClick={saveName} disabled={updateMut.isPending}>
+                {updateMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
+              </Button>
+            </div>
+          ) : (
+            <div className="flex min-w-0 items-center gap-2">
+              <p className="truncate text-sm font-medium">{connection.name}</p>
+              <ConnectionStatusBadge status={connection.status} />
+            </div>
+          )}
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            {credentialType?.displayName ?? connection.credentialTypeId} · {authLabel(connection.authType)} · used {relativeDate(connection.lastUsedAt)}
+          </p>
+        </div>
+        {connection.status !== 'active' && <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild onClick={(event) => event.stopPropagation()}>
+            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+              <MoreHorizontal className="h-4 w-4" />
+              <span className="sr-only">Connection actions</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={(event) => { event.stopPropagation(); void testConnectionHealth(); }} disabled={testMut.isPending}>
+              <CheckCircle2 className="mr-2 h-4 w-4" />
+              Test connection
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={(event) => { event.stopPropagation(); setIsEditing(true); }}>
+              <Pencil className="mr-2 h-4 w-4" />
+              Rename
+            </DropdownMenuItem>
+            {connection.authType === 'oauth2' && (
+              <DropdownMenuItem onClick={(event) => { event.stopPropagation(); void reconnect(); }} disabled={oauthFlow.isLoading}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Reconnect
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onClick={(event) => { event.stopPropagation(); setConfirmDelete(true); }}
+              disabled={deleteMut.isPending}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete connection?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {connection.name} will be permanently deleted. Workflows using it will need another saved connection.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={removeConnection}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteMut.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
+function ConnectionDetailPanel({
+  connection,
+  credentialType,
+  providerLabel,
+}: {
+  connection: ConnectionRecord | null;
+  credentialType?: CredentialTypeDefinition;
+  providerLabel?: string;
+}) {
+  if (!connection) {
+    return (
+      <aside className="rounded-lg border border-border bg-card p-5">
+        <div className="flex h-full min-h-48 items-center justify-center rounded-lg border border-dashed border-muted-foreground/25 text-center text-sm text-muted-foreground">
+          Select a saved connection
+        </div>
+      </aside>
+    );
+  }
+
+  const details = [
+    ['Provider', providerLabel ?? titleCaseProvider(connection.provider)],
+    ['Type', credentialType?.displayName ?? connection.credentialTypeId],
+    ['Auth', authLabel(connection.authType)],
+    ['Last used', relativeDate(connection.lastUsedAt)],
+    ['Last tested', relativeDate(connection.lastTestedAt)],
+    ['Created', relativeDate(connection.createdAt)],
+  ];
+
+  return (
+    <aside className="rounded-lg border border-border bg-card">
+      <div className="border-b border-border px-5 py-4">
+        <div className="flex items-center gap-3">
+          <ProviderLogo provider={connection.provider} size={36} />
+          <div className="min-w-0">
+            <h3 className="truncate text-sm font-semibold">{connection.name}</h3>
+            <div className="mt-1">
+              <ConnectionStatusBadge status={connection.status} />
+            </div>
+          </div>
+        </div>
+      </div>
+      <dl className="space-y-3 p-5">
+        {details.map(([label, value]) => (
+          <div key={label} className="flex items-start justify-between gap-4 text-sm">
+            <dt className="text-muted-foreground">{label}</dt>
+            <dd className="max-w-[170px] truncate text-right font-medium">{value}</dd>
+          </div>
+        ))}
+      </dl>
+      <div className="border-t border-border px-5 py-4">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Clock3 className="h-4 w-4" />
+          Updated {relativeDate(connection.updatedAt)}
+        </div>
+      </div>
+    </aside>
+  );
+}
+
 export default function Connections() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -211,7 +868,6 @@ export default function Connections() {
   const [authFilter, setAuthFilter] = useState<'all' | 'oauth' | 'api_key'>('all');
   const [modalOpen, setModalOpen] = useState(false);
   const [modalPreset, setModalPreset] = useState<string | undefined>();
-  const [editingConnection, setEditingConnection] = useState<ConnectionRecord | null>(null);
   const [repairError, setRepairError] = useState<string | null>(null);
 
   const returnTo = searchParams.get('returnTo');
@@ -371,22 +1027,6 @@ export default function Connections() {
     setSearchParams(nextParams, { replace: true });
   }, [credentialTypes, credentialTypesLoading, requestedService, searchParams, setSearchParams]);
 
-  const visibleConnections = connections;
-  const connectedTypeIds = new Set(visibleConnections.map((connection) => connection.credentialTypeId));
-
-  const filteredConns = visibleConnections.filter((c) => {
-    if (connSearch.trim()) {
-      const q = connSearch.toLowerCase();
-      if (!c.name.toLowerCase().includes(q) && !c.provider.toLowerCase().includes(q)) return false;
-    }
-    if (authFilter === 'oauth') return c.authType === 'oauth2';
-    if (authFilter === 'api_key') return c.authType !== 'oauth2';
-    return true;
-  });
-
-  const grouped = groupByCategory(filteredConns);
-  const orderedCategories = CATEGORY_ORDER.filter((cat) => grouped[cat]?.length);
-
   if (!user) return null;
 
   return (
@@ -395,7 +1035,7 @@ export default function Connections() {
 
       {returnTo && (
         <div className="border-b border-border bg-muted/40">
-          <div className="container mx-auto px-4 max-w-5xl">
+          <div className="container mx-auto px-4 max-w-7xl">
             <button
               type="button"
               onClick={() => navigate(returnTo)}
@@ -413,7 +1053,7 @@ export default function Connections() {
         </div>
       )}
 
-      <main className="container mx-auto px-4 py-8 max-w-5xl">
+      <main className="container mx-auto px-4 py-8 max-w-7xl">
         <WorkflowAuthGate>
           {returnToWorkflowId && (
             <section className="mb-6 rounded-lg border border-amber-200 bg-amber-50/70 p-4 text-amber-950">
@@ -502,109 +1142,18 @@ export default function Connections() {
           )}
 
           {/* ── Saved connections section ── */}
-          <section className="mb-10">
-            <div className="flex items-center justify-between gap-4 mb-4">
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight">Connections</h1>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  Encrypted credentials reused across all your workflows.
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => refetch()}
-                disabled={isFetching}
-                title="Refresh"
-              >
-                <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
-              </Button>
-            </div>
-
-            {visibleConnections.length > 0 && (
-              <div className="flex flex-wrap items-center gap-3 mb-4">
-                <div className="relative max-w-sm flex-shrink-0">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search saved connections…"
-                    className="pl-9"
-                    value={connSearch}
-                    onChange={(e) => setConnSearch(e.target.value)}
-                  />
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {(['all', 'oauth', 'api_key'] as const).map((f) => (
-                    <button
-                      key={f}
-                      type="button"
-                      onClick={() => setAuthFilter(f)}
-                      className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-                        authFilter === f
-                          ? 'bg-primary text-primary-foreground border-primary'
-                          : 'bg-transparent text-muted-foreground border-border hover:border-foreground/40 hover:text-foreground'
-                      }`}
-                    >
-                      {f === 'all' ? 'All' : f === 'oauth' ? 'OAuth' : 'API Key'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {isLoading && (
-              <div className="space-y-2">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <Skeleton key={i} className="h-16 w-full rounded-lg" />
-                ))}
-              </div>
-            )}
-
-            {!isLoading && visibleConnections.length === 0 && (
-              <div className="rounded-xl border border-dashed border-muted-foreground/25 bg-muted/20 px-6 py-5 text-sm text-muted-foreground">
-                No saved connections yet — connect a service below to get started.
-              </div>
-            )}
-
-            {!isLoading && visibleConnections.length > 0 && (
-              <div className="space-y-8">
-                {orderedCategories.map((cat) => (
-                  <section key={cat} className="space-y-2">
-                    <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      {cat} <span className="font-normal">({grouped[cat].length})</span>
-                    </h2>
-                    <div className="space-y-2">
-                      {grouped[cat].map((conn) => (
-                        <ConnectionCard key={conn.id} connection={conn} onEdit={setEditingConnection} />
-                      ))}
-                    </div>
-                  </section>
-                ))}
-              </div>
-            )}
-          </section>
-
-          {/* ── Service catalog ── */}
-          <section>
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-lg font-semibold">Add a Connection</h2>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  Choose a service to connect. Supports {/* count shown below */}40+ providers.
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => { setModalPreset(undefined); setModalOpen(true); }}
-              >
-                <Plus className="h-4 w-4 mr-1.5" />
-                Custom
-              </Button>
-            </div>
-
-            <ServiceCatalog onSelect={openModalForType} connectedTypeIds={connectedTypeIds} />
-          </section>
-
+          <ProviderWorkspace
+            connections={connections}
+            credentialTypes={credentialTypes}
+            isLoading={isLoading || credentialTypesLoading}
+            isFetching={isFetching}
+            connSearch={connSearch}
+            authFilter={authFilter}
+            onSearchChange={setConnSearch}
+            onAuthFilterChange={setAuthFilter}
+            onRefresh={() => refetch()}
+            onAddConnection={openModalForType}
+          />
         </WorkflowAuthGate>
       </main>
 
@@ -616,20 +1165,6 @@ export default function Connections() {
         onSaved={handleSaved}
       />
 
-      {/* Modal: edit existing connection */}
-      {editingConnection && (
-        <NewConnectionModal
-          open
-          onOpenChange={(v) => {
-            if (!v) {
-              setEditingConnection(null);
-              refetch();
-            }
-          }}
-          preselectedCredentialTypeId={editingConnection.credentialTypeId}
-          onSaved={handleSaved}
-        />
-      )}
     </div>
   );
 }

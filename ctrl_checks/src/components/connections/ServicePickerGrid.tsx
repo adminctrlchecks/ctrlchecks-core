@@ -118,7 +118,9 @@ export function ServicePickerGrid({ onSelect, connectedTypeIds = new Set() }: Pr
                     className={`relative flex flex-col items-center gap-2 rounded-lg border p-3 transition-colors group ${
                       comingSoon
                         ? 'cursor-not-allowed border-border/60 bg-muted/30 text-muted-foreground opacity-75'
-                        : 'border-transparent hover:border-border hover:bg-muted/50'
+                        : alreadyConnected
+                          ? 'border-primary/20 bg-primary/5 hover:border-primary/40 hover:bg-primary/10'
+                          : 'border-transparent hover:border-border hover:bg-muted/50'
                     }`}
                   >
                     {(comingSoon || alreadyConnected) && (
