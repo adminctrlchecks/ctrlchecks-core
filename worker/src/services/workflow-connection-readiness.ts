@@ -262,6 +262,7 @@ function collectRefCandidates(input: {
     input.provider,
     input.credentialTypeId,
     input.vaultKey,
+    `${input.provider}_connection`,
     `${input.provider}_oauth2`,
     `${input.provider}_api_key`,
   ].filter(Boolean) as string[]));

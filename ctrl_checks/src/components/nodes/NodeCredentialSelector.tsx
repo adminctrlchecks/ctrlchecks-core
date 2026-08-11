@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Plus, ExternalLink, ChevronDown, HelpCircle } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Plus, ExternalLink, ChevronDown, HelpCircle, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -26,6 +26,8 @@ interface Props {
   value?: string;
   onChange: (connectionId: string) => void;
   label?: string;
+  /** Automatically bind the only compatible saved connection so node execution is deterministic. */
+  autoSelectSingle?: boolean;
 }
 
 function SelectedItem({ connection, logoProvider }: { connection: ConnectionRecord; logoProvider?: string }) {
@@ -33,6 +35,11 @@ function SelectedItem({ connection, logoProvider }: { connection: ConnectionReco
     <div className="flex flex-1 items-center gap-2 min-w-0">
       <ProviderLogo provider={logoProvider || connection.provider} size={20} className="shrink-0" />
       <span className="flex-1 truncate text-sm font-medium min-w-0">{connection.name}</span>
+      {connection.externalAccountEmail && (
+        <span className="hidden max-w-[120px] truncate text-xs text-muted-foreground sm:inline">
+          {connection.externalAccountEmail}
+        </span>
+      )}
       <ConnectionStatusBadge status={connection.status} className="shrink-0" />
     </div>
   );
@@ -45,6 +52,7 @@ export function NodeCredentialSelector({
   value,
   onChange,
   label = 'Connection',
+  autoSelectSingle = true,
 }: Props) {
   const { data: allConnections = [] } = useConnections();
   const [modalOpen, setModalOpen] = useState(false);
@@ -56,9 +64,18 @@ export function NodeCredentialSelector({
     if (acceptedTypeIds.size > 0) return acceptedTypeIds.has(c.credentialTypeId);
     return acceptedProviders.has(c.provider) || acceptedProviders.has(c.credentialTypeId);
   });
-  const selected = compatible.find((c) => c.id === value);
+  const selected = compatible.find((c) => c.id === value) || (!value && compatible.length === 1 ? compatible[0] : undefined);
   const preferredTypeId = credentialTypeIds[0] || compatible[0]?.credentialTypeId;
   const displayProvider = logoProvider || providers[0];
+
+  const onlyCompatibleId = compatible.length === 1 ? compatible[0].id : undefined;
+  const lastAutoSelectedId = useRef<string | undefined>();
+
+  useEffect(() => {
+    if (!autoSelectSingle || value || !onlyCompatibleId || lastAutoSelectedId.current === onlyCompatibleId) return;
+    lastAutoSelectedId.current = onlyCompatibleId;
+    onChange(onlyCompatibleId);
+  }, [autoSelectSingle, onChange, onlyCompatibleId, value]);
 
   function openAddModal(typeId?: string) {
     setModalTypeId(typeId);
@@ -116,8 +133,12 @@ export function NodeCredentialSelector({
                 <ProviderLogo provider={displayProvider || conn.provider} size={20} />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{conn.name}</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {conn.externalAccountEmail || conn.credentialTypeId}
+                  </p>
                 </div>
                 <ConnectionStatusBadge status={conn.status} />
+                {conn.id === selected?.id && <CheckCircle2 className="h-4 w-4 text-primary" />}
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />

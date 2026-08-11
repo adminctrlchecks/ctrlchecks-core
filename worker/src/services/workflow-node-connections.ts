@@ -254,6 +254,7 @@ function bindingRefKeys(binding: WorkflowNodeConnectionBinding): string[] {
   if (binding.credentialTypeId) keys.add(binding.credentialTypeId);
   if (binding.provider) {
     keys.add(binding.provider);
+    keys.add(`${binding.provider}_connection`);
     if (binding.authType === 'oauth2') keys.add(`${binding.provider}_oauth2`);
     if (binding.authType && binding.authType !== 'oauth2') keys.add(`${binding.provider}_api_key`);
     keys.add(`${binding.provider}_token`);

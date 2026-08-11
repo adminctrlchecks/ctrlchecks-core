@@ -154,6 +154,7 @@ function collectSelectedConnectionIds(
     for (const typeId of requirement.credentialTypeIds || []) candidateKeys.add(typeId);
     if (requirement.provider) {
       candidateKeys.add(requirement.provider);
+      candidateKeys.add(`${requirement.provider}_connection`);
       candidateKeys.add(`${requirement.provider}_oauth2`);
       candidateKeys.add(`${requirement.provider}_api_key`);
       candidateKeys.add(`${requirement.provider}_token`);

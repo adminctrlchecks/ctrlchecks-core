@@ -479,6 +479,7 @@ function getConnectionRefForProvider(
   };
   const candidates = [
     provider,
+    `${provider}_connection`,
     `${provider}_api_key`,
     `${provider}_oauth2`,
   ];

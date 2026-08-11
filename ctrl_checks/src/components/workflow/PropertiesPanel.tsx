@@ -2580,23 +2580,25 @@ export default function PropertiesPanel({
                             return (
                               <div className="min-w-0 max-w-full space-y-3 overflow-hidden">
                                 {credentialRequirements.map((requirement) => {
+                                  const provider = requirement.provider || '';
                                   const credentialTypeIds = Array.from(new Set([
                                     ...(requirement.credentialTypeIds || []),
                                     ...(requirement.credentialTypeId ? [requirement.credentialTypeId] : []),
                                   ].filter(Boolean)));
-                                  const refKey = requirement.credentialTypeId || credentialTypeIds[0] || requirement.provider;
-                                  const providers = credentialTypeIds.length > 0 ? [] : [requirement.provider].filter(Boolean);
+                                  const refKey = requirement.credentialTypeId || credentialTypeIds[0] || provider;
+                                  const providers = credentialTypeIds.length > 0 ? [] : [provider].filter(Boolean);
                                   const dbBinding = nodeConnectionBindings.find((binding) => (
                                     binding.nodeId === selectedNode.id &&
-                                    binding.provider === requirement.provider &&
+                                    binding.provider === provider &&
                                     binding.role === 'primary'
                                   ));
                                   const value =
                                     connectionRefs[refKey] ||
                                     credentialTypeIds.map((typeId) => connectionRefs[typeId]).find(Boolean) ||
-                                    connectionRefs[requirement.provider] ||
-                                    connectionRefs[`${requirement.provider}_oauth2`] ||
-                                    connectionRefs[`${requirement.provider}_api_key`] ||
+                                    connectionRefs[provider] ||
+                                    (provider ? connectionRefs[`${provider}_connection`] : undefined) ||
+                                    (provider ? connectionRefs[`${provider}_oauth2`] : undefined) ||
+                                    (provider ? connectionRefs[`${provider}_api_key`] : undefined) ||
                                     dbBinding?.connectionId;
                                   return (
                                     <NodeCredentialSelector
@@ -2610,18 +2612,19 @@ export default function PropertiesPanel({
                                         connectionId,
                                         [
                                           ...credentialTypeIds,
-                                          requirement.provider,
-                                          `${requirement.provider}_oauth2`,
-                                          `${requirement.provider}_api_key`,
-                                          `${requirement.provider}_token`,
+                                          provider,
+                                          provider ? `${provider}_connection` : '',
+                                          provider ? `${provider}_oauth2` : '',
+                                          provider ? `${provider}_api_key` : '',
+                                          provider ? `${provider}_token` : '',
                                         ].filter(Boolean),
                                         {
-                                          provider: requirement.provider,
-                                          credentialTypeId: refKey,
+                                          provider,
+                                          credentialTypeId: requirement.credentialTypeId || credentialTypeIds[0] || null,
                                           role: 'primary',
                                         }
                                       )}
-                                      label={requirement.label || `${String(requirement.provider || refKey).replace(/_/g, ' ')} connection`}
+                                      label={requirement.label || `${String(provider || refKey).replace(/_/g, ' ')} connection`}
                                     />
                                   );
                                 })}

@@ -127,6 +127,7 @@ function chipStatus(state: CandidateConnectionState): NodeConnectionStatus {
   if (state.connecting) return 'connecting';
   if (state.checking) return 'checking';
   if (!state.credentialRequired) return 'not-required';
+  if (state.action === 'select_connection') return 'select-connection';
   return state.connected ? 'connected' : 'needs-connection';
 }
 
@@ -211,7 +212,7 @@ function CandidateOption({
               {laymanDescription}
             </p>
           )}
-          {isSelected && connectionState.action === 'select_connection' && connectionState.provider && (
+          {isSelected && connectionState.credentialRequired && (connectionState.provider || candidate.credentialProviders?.[0]) && (
             <div
               className="pt-2"
               onClick={(event) => event.stopPropagation()}
@@ -219,11 +220,11 @@ function CandidateOption({
             >
               <NodeCredentialSelector
                 credentialTypeIds={connectionState.credentialTypeId ? [connectionState.credentialTypeId] : []}
-                providers={connectionState.credentialTypeId ? [] : [connectionState.provider]}
-                logoProvider={connectionState.provider}
+                providers={connectionState.credentialTypeId ? [] : [connectionState.provider || candidate.credentialProviders?.[0]].filter(Boolean)}
+                logoProvider={connectionState.provider || candidate.credentialProviders?.[0]}
                 value={selectedConnectionId}
                 onChange={onConnectionSelect}
-                label={`Use existing ${connectionState.providerLabel || connectionState.provider} connection`}
+                label={`Use saved ${connectionState.providerLabel || connectionState.provider || candidate.label} connection`}
               />
             </div>
           )}
@@ -467,6 +468,7 @@ export function CapabilityStage({
     const refs: Record<string, string> = {};
     if (selected.provider) {
       refs[selected.provider] = selected.connectionId;
+      refs[`${selected.provider}_connection`] = selected.connectionId;
       refs[`${selected.provider}_oauth2`] = selected.connectionId;
       refs[`${selected.provider}_api_key`] = selected.connectionId;
       refs[`${selected.provider}_token`] = selected.connectionId;

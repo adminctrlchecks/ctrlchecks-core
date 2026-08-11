@@ -25,6 +25,7 @@ import { iconForNodeType } from './node-icon';
 export type NodeConnectionStatus =
   | 'not-required'
   | 'connected'
+  | 'select-connection'
   | 'needs-connection'
   | 'connecting'
   | 'checking';
@@ -151,7 +152,26 @@ export function NodeConnectionChip({
     );
   }
 
-  // needs-connection — the only interactive state.
+  // Multiple saved accounts exist, so the user needs to pick one explicitly.
+  if (status === 'select-connection') {
+    return (
+      <span
+        className={cn(
+          CHIP_BASE,
+          'border-blue-200 bg-blue-50 text-blue-800',
+          'dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300',
+          className,
+        )}
+        data-testid="node-connection-chip"
+        data-status="select-connection"
+      >
+        <ChipIcon provider={provider} nodeType={nodeType} />
+        Select account
+      </span>
+    );
+  }
+
+  // needs-connection - the only interactive state.
   return (
     <button
       type="button"

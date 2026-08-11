@@ -428,6 +428,46 @@ describe('getWorkflowConnectionReadiness', () => {
     expect(resolveCredentialDryRun).not.toHaveBeenCalled();
   });
 
+  it('accepts provider_connection aliases as explicit saved connection references', async () => {
+    getDecryptedConnection.mockResolvedValue({
+      connection: {
+        id: CONN_UUID,
+        name: 'Google Workspace Primary',
+        provider: 'google',
+        credentialTypeId: 'google_oauth2',
+        authType: 'oauth2',
+        status: 'active',
+      },
+      source: 'connections',
+    });
+    resolveCredentialDryRun.mockResolvedValue({
+      id: 'cred-1',
+      userId: 'user-1',
+      provider: 'google',
+      scopes: [GMAIL_SEND],
+      expiresAt: null,
+      source: 'oauth_callback',
+    });
+
+    const result = await getWorkflowConnectionReadiness({
+      ...baseInput,
+      nodes: [{
+        ...gmailNode,
+        data: {
+          ...gmailNode.data,
+          connectionRefs: { google_connection: CONN_UUID },
+        },
+      }],
+    });
+
+    expect(result.ready).toBe(true);
+    expect(result.rows[0]).toMatchObject({
+      status: 'ready',
+      connectionId: CONN_UUID,
+      connectionName: 'Google Workspace Primary',
+    });
+  });
+
   it('falls back from a stale explicit UUID connection reference to one compatible provider connection', async () => {
     getDecryptedConnection.mockRejectedValue(new Error('Connection not found'));
     resolveCredentialDryRun.mockResolvedValue({
