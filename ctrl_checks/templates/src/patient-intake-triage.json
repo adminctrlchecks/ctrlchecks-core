@@ -128,7 +128,7 @@
       "type": "custom",
       "position": {
         "x": 1060,
-        "y": 300
+        "y": 205
       },
       "data": {
         "icon": "GitBranch",
@@ -227,6 +227,48 @@
           "why": "Gives routine patients a clear acknowledgment and next step without waiting for a phone call."
         }
       }
+    },
+    {
+      "id": "mongo_archive_patient_intake",
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 395
+      },
+      "data": {
+        "icon": "Box",
+        "type": "mongodb",
+        "label": "Archive Intake Document",
+        "category": "data",
+        "config": {
+          "operation": "insertOne",
+          "collection": "patient_intake_events",
+          "document": {
+            "patientName": "{{input.patientName}}",
+            "contactEmail": "{{input.contactEmail}}",
+            "symptoms": "{{input.symptoms}}",
+            "duration": "{{input.duration}}",
+            "urgency": "{{input.urgency}}",
+            "summary": "{{input.summary}}",
+            "nextStep": "{{input.nextStep}}",
+            "source": "patient-intake-triage"
+          }
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Reads from or writes to a MongoDB document database",
+          "overview": "Run MongoDB driver operations against one collection. The visible panel exposes find, insertOne, updateOne, and deleteOne; generated config can also use insertMany, updateMany, deleteMany, and aggregate.",
+          "tips": [
+            "Use Filter, not legacy Query; the runtime does not read a query field",
+            "Find and aggregate return documents/count",
+            "Insert returns insertedId or insertedIds and insertedCount",
+            "Update returns matchedCount/modifiedCount/upserted fields",
+            "Delete returns deletedCount and acknowledged"
+          ],
+          "docsHref": "/docs/nodes/mongodb",
+          "why": "Stores the structured intake and triage decision as a flexible clinical-admin document without changing the Slack or email routing path."
+        }
+      }
     }
   ],
   "edges": [
@@ -256,6 +298,11 @@
       "source": "if_urgent_triage",
       "target": "gmail_confirm_patient",
       "sourceHandle": "false"
+    },
+    {
+      "id": "e_js_parse_triage_mongo_archive_patient_intake",
+      "source": "js_parse_triage",
+      "target": "mongo_archive_patient_intake"
     }
   ],
   "difficulty": "Beginner",

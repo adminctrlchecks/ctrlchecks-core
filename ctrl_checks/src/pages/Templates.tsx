@@ -20,7 +20,9 @@ import { fetchConnectionCatalog, type ConnectionCatalogEntry } from '@/lib/conne
 import { getTemplateConnections, type TemplateConnection } from '@/lib/templateConnections';
 import ConnectionFilterInput from '@/components/templates/ConnectionFilterInput';
 import {
+  compareTemplateConnectionFit,
   collectConnectionOptions,
+  getTemplateConnectionMatchSummary,
   templateMatchesConnectionFilter,
 } from '@/lib/templateConnectionFilter';
 import { TEMPLATE_SECTOR_OPTIONS, type TemplateSectorFilter } from '@/lib/templateSectors';
@@ -162,16 +164,71 @@ export default function Templates() {
     return draft ? [...connectionTokens, draft] : connectionTokens;
   }, [connectionTokens, connectionDraft]);
 
-  const filteredTemplates = templates.filter((template) =>
-    (sectorFilter === 'All sectors' || template.category === sectorFilter)
-    &&
-    (template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    template.description?.toLowerCase().includes(searchQuery.toLowerCase()))
-    && templateMatchesConnectionFilter(
-      connectionsByTemplate.get(template.id) ?? [],
-      activeConnectionTokens,
-    )
-  );
+  const connectionMatchByTemplate = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof getTemplateConnectionMatchSummary>>();
+    for (const template of templates) {
+      map.set(
+        template.id,
+        getTemplateConnectionMatchSummary(
+          connectionsByTemplate.get(template.id) ?? [],
+          activeConnectionTokens,
+        ),
+      );
+    }
+    return map;
+  }, [templates, connectionsByTemplate, activeConnectionTokens]);
+
+  const filteredTemplates = useMemo(() => {
+    const query = searchQuery.toLowerCase();
+    const hasConnectionTokens = activeConnectionTokens.length > 0;
+
+    const matches = templates
+      .map((template, index) => ({
+        template,
+        index,
+        connectionFit: connectionMatchByTemplate.get(template.id),
+      }))
+      .filter(({ template }) =>
+        (sectorFilter === 'All sectors' || template.category === sectorFilter)
+        &&
+        (template.name.toLowerCase().includes(query) ||
+        template.description?.toLowerCase().includes(query))
+      )
+      .filter(({ template }) =>
+        templateMatchesConnectionFilter(
+          connectionsByTemplate.get(template.id) ?? [],
+          activeConnectionTokens,
+        )
+      );
+
+    if (hasConnectionTokens) {
+      matches.sort((a, b) => {
+        const emptyFit = getTemplateConnectionMatchSummary([], activeConnectionTokens);
+        const connectionDelta = compareTemplateConnectionFit(
+          a.connectionFit ?? emptyFit,
+          b.connectionFit ?? emptyFit,
+        );
+        if (connectionDelta !== 0) return connectionDelta;
+
+        const featuredDelta = Number(Boolean(b.template.is_featured)) - Number(Boolean(a.template.is_featured));
+        if (featuredDelta !== 0) return featuredDelta;
+
+        const usesDelta = (b.template.use_count || 0) - (a.template.use_count || 0);
+        if (usesDelta !== 0) return usesDelta;
+
+        return a.index - b.index;
+      });
+    }
+
+    return matches.map(({ template }) => template);
+  }, [
+    templates,
+    searchQuery,
+    sectorFilter,
+    connectionsByTemplate,
+    connectionMatchByTemplate,
+    activeConnectionTokens,
+  ]);
 
   const isSearching = searchQuery.trim().length > 0;
   const isFilteringConnections = activeConnectionTokens.length > 0;
@@ -251,8 +308,8 @@ export default function Templates() {
               options={connectionOptions}
             />
             <p className="mt-1.5 text-xs text-muted-foreground">
-              Separate services with commas. Shows only templates you could run with those
-              connections — anything needing something extra is hidden.
+              Separate services with commas. Templates using those connections stay visible
+              and are sorted by fewest extra connections needed.
             </p>
           </div>
 
@@ -274,7 +331,7 @@ export default function Templates() {
                   {filteredTemplates.length === 1 ? 'template' : 'templates'}
                   {isSearching && <> matching &ldquo;{searchQuery}&rdquo;</>}
                   {isFilteringConnections && (
-                    <> you can run with {activeConnectionTokens.join(', ')}</>
+                    <> using {activeConnectionTokens.join(', ')}, closest setup first</>
                   )}
                   {isFilteringSector && <> in {sectorFilter}</>}
                   {hasFilters && <> of {templates.length}</>}
@@ -363,6 +420,7 @@ export default function Templates() {
                             <div className="border-t border-border/50 pt-4">
                               <TemplateConnections
                                 connections={connectionsByTemplate.get(template.id) ?? []}
+                                matchSummary={connectionMatchByTemplate.get(template.id)}
                                 loading={catalogLoading}
                               />
                             </div>
@@ -396,7 +454,7 @@ export default function Templates() {
                   </p>
                   <p className="mt-1 max-w-sm text-sm text-muted-foreground">
                     {isFilteringConnections
-                      ? 'Every template needs at least one service you have not listed. Add another connection to widen the results.'
+                      ? 'No templates use those services with the current filters. Try another connection or reset filters.'
                       : isSearching
                         ? 'Try a different name, service or keyword.'
                         : 'Templates published by your workspace will appear here.'}

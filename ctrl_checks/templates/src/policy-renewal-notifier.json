@@ -1,0 +1,331 @@
+{
+  "id": "92000000-0000-4000-8000-000000000030",
+  "name": "Policy Renewal Notifier",
+  "description": "Poll one policy near expiry, notify the insured and team, then mark the renewal notice sent.",
+  "category": "Finance, Accounting & Insurance",
+  "nodes": [
+    {
+      "id": "schedule_poll",
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      },
+      "data": {
+        "icon": "Box",
+        "type": "schedule",
+        "label": "Poll One Due Record",
+        "category": "triggers",
+        "config": {
+          "cron": "*/20 * * * *",
+          "timezone": "Asia/Kolkata"
+        },
+        "notes": {
+          "family": "Triggers",
+          "what": "Works like an alarm clock — runs your workflow automatically at a specific time you set each day",
+          "overview": "Runs your workflow automatically on a schedule using a simple time picker. Select your time (HH:MM format) and timezone, and the workflow will execute daily at that time. Great for daily reports, periodic checks, or recurring tasks.",
+          "tips": [
+            "Use 24-hour format (e.g., 09:00 for 9 AM, 14:30 for 2:30 PM)",
+            "Select your timezone from the dropdown (IST, UTC, etc.)",
+            "Workflow runs daily at the specified time",
+            "Test with manual trigger first",
+            "Timezone conversion is handled automatically"
+          ],
+          "docsHref": "/docs/nodes/schedule",
+          "why": "Runs on a timer and drains one matching record per run because the current runtime does not fan out over multiple rows."
+        }
+      }
+    },
+    {
+      "id": "airtable_read_one",
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      },
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Read One Work Item",
+        "category": "data",
+        "config": {
+          "baseId": "",
+          "tableId": "Policies",
+          "operation": "read",
+          "filterByFormula": "AND({RenewalDueSoon}='Yes', {RenewalNoticeSent}='')",
+          "maxRecords": 1
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Selects a single unprocessed row and excludes rows already marked by this workflow."
+        }
+      }
+    },
+    {
+      "id": "js_prepare_record",
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      },
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Prepare Work Item",
+        "category": "data",
+        "config": {
+          "code": "const rec = (input.records || [])[0];\nconst fields = rec?.fields || {};\nreturn { ...input, recordId: rec?.id || \"\", hasWork: Boolean(rec), ...fields, name: fields.Name || fields.Patient || fields.Client || fields.Vendor || \"record\" };",
+          "timeout": 5000
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Lifts the Airtable record fields and record ID to the top level for downstream nodes."
+        }
+      }
+    },
+    {
+      "id": "if_has_work",
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      },
+      "data": {
+        "icon": "GitBranch",
+        "type": "if_else",
+        "label": "Found Work?",
+        "category": "logic",
+        "config": {
+          "conditions": [
+            {
+              "field": "$json.hasWork",
+              "operator": "equals",
+              "value": true
+            }
+          ],
+          "combineOperation": "AND"
+        },
+        "notes": {
+          "family": "Logic",
+          "what": "Makes a yes/no decision: if something is true, go one way; otherwise go another",
+          "overview": "Makes a yes/no decision from previous-step data and routes matching work through TRUE and non-matching work through FALSE.",
+          "tips": [
+            "Use the builder for normal setup; use JSON mode only when pasting prepared condition objects.",
+            "Choose AND when every row must match; choose OR when any row can match.",
+            "Use equals for statuses and categories, greater-than operators for numeric thresholds, and contains for text or lists.",
+            "Connect both TRUE and FALSE outputs so no business case silently disappears."
+          ],
+          "docsHref": "/docs/nodes/if_else",
+          "why": "Keeps empty polls quiet instead of sending blank messages or wasting AI calls."
+        }
+      }
+    },
+    {
+      "id": "gmail_notify",
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 205
+      },
+      "data": {
+        "icon": "Mail",
+        "type": "google_gmail",
+        "label": "Send Email",
+        "category": "output",
+        "config": {
+          "operation": "send",
+          "recipientSource": "manual_entry",
+          "recipientEmails": "{{input.CustomerEmail}}",
+          "subject": "Policy renewal reminder",
+          "body": "Your policy {{input.PolicyNumber}} is due for renewal. Please review the renewal details."
+        },
+        "notes": {
+          "family": "Communication",
+          "what": "Send emails from your Gmail account or read and search messages in your inbox",
+          "overview": "Send, list, get, or search Gmail messages. Send recipients can be typed manually or extracted from upstream/fallback Google Sheets rows.",
+          "tips": [
+            "Connect Google OAuth in Connections; do not paste tokens into workflow fields",
+            "Gmail search syntax: from:, subject:, is:unread, has:attachment",
+            "List/Search only return {id, threadId} per message â€” use a Get step with that id for full content",
+            "Body is plain text only",
+            "Get returns Gmail's raw API message; the body text is base64url-encoded inside message.payload.body.data",
+            "Use search to filter messages before getting details"
+          ],
+          "docsHref": "/docs/nodes/google_gmail",
+          "why": "Sends the person responsible the reminder or digest for this one selected record."
+        }
+      }
+    },
+    {
+      "id": "slack_notify",
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 300
+      },
+      "data": {
+        "icon": "Hash",
+        "type": "slack_message",
+        "label": "Post Team Alert",
+        "category": "output",
+        "config": {
+          "channel": "#insurance",
+          "message": "Policy renewal notice sent for {{input.PolicyNumber}}."
+        },
+        "notes": {
+          "family": "Communication",
+          "what": "Sends messages using a Slack app or bot connection",
+          "overview": "Send Slack bot messages to channels, direct messages, or existing threads through a saved Slack OAuth2 connection. Use it for workplace alerts, support replies, incident updates, approvals, report summaries, and deployment notifications.",
+          "tips": [
+            "Select a Slack OAuth2 connection; do not paste bot tokens into message fields",
+            "The Slack app needs chat:write, and the bot must be invited before it can post in private channels",
+            "Use {{$json.channelId}} and {{$json.threadTs}} from Slack Trigger to reply in the same conversation",
+            "Keep Message filled as readable fallback text even when Blocks contains a rich Block Kit layout",
+            "Connect downstream service accounts separately; Slack OAuth2 only authorizes the Slack send"
+          ],
+          "docsHref": "/docs/nodes/slack_message",
+          "why": "Posts the same event to the operating channel so the team can see the queue moving."
+        }
+      }
+    },
+    {
+      "id": "airtable_mark_done",
+      "type": "custom",
+      "position": {
+        "x": 2020,
+        "y": 300
+      },
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Mark Processed",
+        "category": "data",
+        "config": {
+          "baseId": "",
+          "tableId": "Policies",
+          "operation": "update",
+          "recordId": "{{input.recordId}}",
+          "fields": {
+            "RenewalNoticeSent": "Yes"
+          }
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Writes the processed marker that makes the scheduled poll idempotent across runs."
+        }
+      }
+    },
+    {
+      "id": "log_no_work",
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 395
+      },
+      "data": {
+        "icon": "Box",
+        "type": "log_output",
+        "label": "No Work Found",
+        "category": "utility",
+        "config": {
+          "level": "info",
+          "message": "Policy Renewal Notifier: no matching record this run."
+        },
+        "notes": {
+          "family": "Utility",
+          "what": "Writes a message to your workflow's log for debugging or auditing",
+          "overview": "Log data for debugging and monitoring. View logs in the execution history. This is a terminal node â€” it cannot connect to further downstream nodes.",
+          "tips": [
+            "Use different levels for filtering",
+            "This node is terminal â€” it does not forward data to further nodes",
+            "Check execution history for logs"
+          ],
+          "docsHref": "/docs/nodes/log_output",
+          "why": "Leaves a quiet execution trace when there is nothing to process."
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_1_schedule_poll_airtable_read_one",
+      "source": "schedule_poll",
+      "target": "airtable_read_one"
+    },
+    {
+      "id": "e_2_airtable_read_one_js_prepare_record",
+      "source": "airtable_read_one",
+      "target": "js_prepare_record"
+    },
+    {
+      "id": "e_3_js_prepare_record_if_has_work",
+      "source": "js_prepare_record",
+      "target": "if_has_work"
+    },
+    {
+      "id": "e_4_if_has_work_gmail_notify",
+      "source": "if_has_work",
+      "target": "gmail_notify",
+      "sourceHandle": "true"
+    },
+    {
+      "id": "e_5_if_has_work_log_no_work",
+      "source": "if_has_work",
+      "target": "log_no_work",
+      "sourceHandle": "false"
+    },
+    {
+      "id": "e_6_gmail_notify_slack_notify",
+      "source": "gmail_notify",
+      "target": "slack_notify"
+    },
+    {
+      "id": "e_7_slack_notify_airtable_mark_done",
+      "source": "slack_notify",
+      "target": "airtable_mark_done"
+    }
+  ],
+  "difficulty": "Intermediate",
+  "estimated_setup_time": 20,
+  "tags": [
+    "insurance",
+    "renewal",
+    "poll-drain",
+    "airtable",
+    "gmail"
+  ],
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2
+}

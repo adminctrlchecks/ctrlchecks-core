@@ -10,7 +10,7 @@
  *
  * Modes:
  *   --dry-run      show what would happen, write nothing
- *   (no flag)      apply: backup, run the historical no-op safety step, apply all 36
+ *   (no flag)      apply: backup, run the historical no-op safety step, apply all 86
  *   --rollback     restore every template from the backup table
  *
  * Safety: refuses to write unless a complete backup table exists. Step 00 creates
@@ -32,7 +32,7 @@ const VERIFY = process.argv.includes('--verify');
 const REACTIVATE = process.argv.includes('--reactivate');
 const ROLLBACK = process.argv.includes('--rollback');
 const BACKUP = 'templates_backup_20260731';
-const EXPECTED_TEMPLATE_COUNT = 36;
+const EXPECTED_TEMPLATE_COUNT = 86;
 const HELD_BACK = [];
 
 const STEPS = [

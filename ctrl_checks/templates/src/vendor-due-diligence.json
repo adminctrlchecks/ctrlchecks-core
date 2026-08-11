@@ -149,7 +149,7 @@
       "type": "custom",
       "position": {
         "x": 1380,
-        "y": 300
+        "y": 205
       },
       "data": {
         "icon": "Database",
@@ -252,6 +252,47 @@
           "why": "Routes high-risk vendor reviews to procurement immediately."
         }
       }
+    },
+    {
+      "id": "mongo_archive_vendor_dossier",
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 395
+      },
+      "data": {
+        "icon": "Box",
+        "type": "mongodb",
+        "label": "Archive Vendor Dossier",
+        "category": "data",
+        "config": {
+          "operation": "insertOne",
+          "collection": "vendor_risk_dossiers",
+          "document": {
+            "vendorName": "{{input.vendorName}}",
+            "website": "{{input.website}}",
+            "ownerEmail": "{{input.ownerEmail}}",
+            "risk": "{{input.risk}}",
+            "summary": "{{input.summary}}",
+            "requiresReview": "{{input.requiresReview}}",
+            "source": "vendor-due-diligence"
+          }
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Reads from or writes to a MongoDB document database",
+          "overview": "Run MongoDB driver operations against one collection. The visible panel exposes find, insertOne, updateOne, and deleteOne; generated config can also use insertMany, updateMany, deleteMany, and aggregate.",
+          "tips": [
+            "Use Filter, not legacy Query; the runtime does not read a query field",
+            "Find and aggregate return documents/count",
+            "Insert returns insertedId or insertedIds and insertedCount",
+            "Update returns matchedCount/modifiedCount/upserted fields",
+            "Delete returns deletedCount and acknowledged"
+          ],
+          "docsHref": "/docs/nodes/mongodb",
+          "why": "Captures each vendor risk assessment as a document dossier, which is useful when vendors have different enrichment fields over time."
+        }
+      }
     }
   ],
   "edges": [
@@ -285,6 +326,11 @@
       "source": "if_vendor_review",
       "target": "slack_vendor_review",
       "sourceHandle": "true"
+    },
+    {
+      "id": "e_js_parse_vendor_mongo_archive_vendor_dossier",
+      "source": "js_parse_vendor",
+      "target": "mongo_archive_vendor_dossier"
     }
   ],
   "difficulty": "Intermediate",

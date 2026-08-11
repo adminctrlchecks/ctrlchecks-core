@@ -2271,6 +2271,309 @@ addTemplate({
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
+// Investor MongoDB showcase: add document-database audit branches to workflows
+// whose payloads are naturally variable JSON records.
+// ═════════════════════════════════════════════════════════════════════════════
+
+function addMongoAuditBranch(templateName, sourceId, nodeId, label, collection, document, why) {
+  const t = T(templateName);
+  const node = mkNode(nodeId, 'mongodb', label, 'database', { operation: 'insertOne', collection, document });
+  t.nodes.push(node);
+  t.edges.push({ id: `e_${sourceId}_${nodeId}`, source: sourceId, target: nodeId });
+  generatedNodeNotes.set(`${slug(t.name)}.${nodeId}`, why);
+  log(t, 'ADD', `${nodeId} (mongodb) after ${sourceId}: ${why}`);
+  relayout(t);
+}
+
+addMongoAuditBranch(
+  'Support Ticket Triage',
+  'js_parse_ticket',
+  'mongo_archive_ticket',
+  'Archive Ticket Document',
+  'support_ticket_events',
+  {
+    customerEmail: '{{input.customerEmail}}',
+    subject: '{{input.subject}}',
+    message: '{{input.message}}',
+    priority: '{{input.priority}}',
+    category: '{{input.category}}',
+    summary: '{{input.summary}}',
+    source: 'support-ticket-triage',
+  },
+  'Keeps the full ticket payload and AI classification as one MongoDB document for analytics, replay, or downstream support tooling.',
+);
+
+addMongoAuditBranch(
+  'Patient Intake Triage',
+  'js_parse_triage',
+  'mongo_archive_patient_intake',
+  'Archive Intake Document',
+  'patient_intake_events',
+  {
+    patientName: '{{input.patientName}}',
+    contactEmail: '{{input.contactEmail}}',
+    symptoms: '{{input.symptoms}}',
+    duration: '{{input.duration}}',
+    urgency: '{{input.urgency}}',
+    summary: '{{input.summary}}',
+    nextStep: '{{input.nextStep}}',
+    source: 'patient-intake-triage',
+  },
+  'Stores the structured intake and triage decision as a flexible clinical-admin document without changing the Slack or email routing path.',
+);
+
+addMongoAuditBranch(
+  'Vendor Due Diligence',
+  'js_parse_vendor',
+  'mongo_archive_vendor_dossier',
+  'Archive Vendor Dossier',
+  'vendor_risk_dossiers',
+  {
+    vendorName: '{{input.vendorName}}',
+    website: '{{input.website}}',
+    ownerEmail: '{{input.ownerEmail}}',
+    risk: '{{input.risk}}',
+    summary: '{{input.summary}}',
+    requiresReview: '{{input.requiresReview}}',
+    source: 'vendor-due-diligence',
+  },
+  'Captures each vendor risk assessment as a document dossier, which is useful when vendors have different enrichment fields over time.',
+);
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 2026-08 expansion: 50 catalog templates, adapted to the current contract gate.
+//
+// Push triggers from docs/CTRLCHECKS_BUILDABLE_TEMPLATE_CATALOG.md are reworked
+// to form/webhook/schedule until the gate's allowed-trigger list expands.
+// ═════════════════════════════════════════════════════════════════════════════
+
+function expansionId(n) {
+  return `92000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+}
+
+function formFields(keys) {
+  return keys.map((key) => ({ key, label: key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase()), type: key.toLowerCase().includes('email') ? 'email' : 'text', required: true }));
+}
+
+const parseJsonCode = [
+  'let parsed = {};',
+  'try {',
+  '  const text = input.response || input.text || "{}";',
+  '  const match = String(text).match(/\\{[\\s\\S]*\\}/);',
+  '  parsed = match ? JSON.parse(match[0]) : {};',
+  '} catch (error) {',
+  '  parsed = {};',
+  '}',
+  'return { ...input, ...parsed };',
+].join('\n');
+
+function aiNode(prompt) {
+  return { id: 'ai_classify', type: 'openai_gpt', label: 'Classify and Draft', category: 'ai', config: { model: 'gpt-4o-mini', prompt, temperature: 0.2 }, why: 'Turns the incoming business context into structured fields the routing and message steps can trust.' };
+}
+
+function parseNode(why = 'Parses the AI JSON into real workflow fields before any branch reads those fields.') {
+  return { id: 'js_parse_ai', type: 'javascript', label: 'Parse AI JSON', category: 'data', config: { code: parseJsonCode, timeout: 5000 }, why };
+}
+
+function slackNode(id, label, channel, message, why) {
+  return { id, type: 'slack_message', label, category: 'output', config: { channel, message }, why };
+}
+
+function gmailNode(id, label, recipientEmails, subject, body, why) {
+  return { id, type: 'google_gmail', label, category: 'output', config: { operation: 'send', recipientSource: 'manual_entry', recipientEmails, subject, body }, why };
+}
+
+function airtableCreateNode(id, label, tableId, fields, why) {
+  return { id, type: 'airtable', label, category: 'database', config: { baseId: '', tableId, operation: 'create', fields }, why };
+}
+
+function postgresqlNode(id, label, query, why) {
+  return { id, type: 'postgresql', label, category: 'database', config: { query }, why };
+}
+
+function mongodbInsertNode(id, label, collection, document, why) {
+  return {
+    id,
+    type: 'mongodb',
+    label,
+    category: 'database',
+    config: { operation: 'insertOne', collection, document },
+    why,
+  };
+}
+
+function addFormAiRouteTemplate(n, spec) {
+  const triggerId = spec.trigger === 'webhook' ? 'webhook_intake' : 'form_intake';
+  const trigger = spec.trigger === 'webhook'
+    ? { id: triggerId, type: 'webhook', label: 'Receive Event Payload', category: 'triggers', config: { path: `/${slug(spec.name)}`, httpMethod: 'POST', responseMode: 'onReceived' }, why: spec.triggerWhy || 'Receives one structured event from the source system through a CtrlChecks webhook.' }
+    : { id: triggerId, type: 'form', label: 'Collect Intake Details', category: 'triggers', config: { formTitle: spec.name, fields: formFields(spec.fields || ['name', 'email', 'details']), submitButtonText: 'Submit', successMessage: 'Received.' }, why: spec.triggerWhy || 'Collects one complete request so the workflow handles a single record per run.' };
+  const nodes = [
+    trigger,
+    ...(spec.http ? [{ id: 'http_enrich', type: 'http_request', label: 'Fetch External Context', category: 'http_api', config: { url: spec.http, method: 'GET', timeout: 10000 }, why: 'Fetches static API or website context needed for the assessment; credentials stay in the connected service, not in the template.' }] : []),
+    aiNode(spec.prompt),
+    parseNode(),
+    { id: 'if_route', type: 'if_else', label: spec.branchLabel || 'Needs Attention?', category: 'logic', config: { conditions: [{ field: `$json.${spec.field || 'route'}`, operator: 'equals', value: spec.value || 'review' }], combineOperation: 'AND' }, why: spec.branchWhy || 'Splits high-attention work from routine handling using one explicit comparison.' },
+    slackNode('slack_review', spec.trueLabel || 'Notify Team', spec.channel || '#ops', spec.trueMessage || `${spec.name}: {{input.summary}}`, spec.trueWhy || 'Puts the exception in front of the team that can act on it.'),
+    gmailNode('gmail_routine', spec.falseLabel || 'Send Routine Email', spec.email || 'REPLACE_WITH_TEAM_EMAIL', spec.subject || spec.name, spec.falseMessage || '{{input.message}}', spec.falseWhy || 'Sends the routine response or acknowledgement without requiring a manual handoff.'),
+    spec.store === 'mongodb'
+      ? mongodbInsertNode('store_result', 'Archive Event Document', spec.collection || 'workflow_events', spec.document || { template: spec.name, summary: '{{input.summary}}', route: '{{input.route}}' }, 'Archives the full event-style result as one MongoDB document, which fits variable payloads better than a fixed SQL row.')
+      : spec.store === 'postgresql'
+      ? postgresqlNode('store_result', 'Store Result', spec.query || `INSERT INTO template_events (template_name, summary, route, created_at) VALUES ('${spec.name.replace(/'/g, "''")}', '{{input.summary}}', '{{input.route}}', now())`, 'Stores the decision in PostgreSQL for audit and follow-up.')
+      : airtableCreateNode('store_result', 'Log Result', spec.tableId || 'WorkflowEvents', spec.airtableFields || { Name: '{{input.name}}', Email: '{{input.email}}', Summary: '{{input.summary}}', Route: '{{input.route}}' }, 'Logs the assessment so the team has a durable queue outside the execution log.'),
+  ];
+  const preAi = spec.http ? ['http_enrich', 'ai_classify'] : [triggerId, 'ai_classify'];
+  addTemplate({
+    id: expansionId(n),
+    name: spec.name,
+    description: spec.description,
+    category: spec.category,
+    difficulty: spec.difficulty || 'Intermediate',
+    estimated_setup_time: spec.time || 18,
+    tags: spec.tags,
+    nodes,
+    edges: [[triggerId, spec.http ? 'http_enrich' : 'ai_classify'], ...(spec.http ? [preAi] : []), ['ai_classify', 'js_parse_ai'], ['js_parse_ai', 'if_route'], ['if_route', 'slack_review', 'true'], ['if_route', 'gmail_routine', 'false'], ['slack_review', 'store_result'], ['gmail_routine', 'store_result']],
+  });
+}
+
+function addScheduleDrainTemplate(n, spec) {
+  const nodes = [
+    { id: 'schedule_poll', type: 'schedule', label: 'Poll One Due Record', category: 'triggers', config: { cron: spec.cron || '*/20 * * * *', timezone: 'Asia/Kolkata' }, why: 'Runs on a timer and drains one matching record per run because the current runtime does not fan out over multiple rows.' },
+    { id: 'airtable_read_one', type: 'airtable', label: 'Read One Work Item', category: 'database', config: { baseId: '', tableId: spec.tableId, operation: 'read', filterByFormula: spec.filter, maxRecords: 1 }, why: 'Selects a single unprocessed row and excludes rows already marked by this workflow.' },
+    { id: 'js_prepare_record', type: 'javascript', label: 'Prepare Work Item', category: 'data', config: { code: spec.prepareCode || 'const rec = (input.records || [])[0];\nconst fields = rec?.fields || {};\nreturn { ...input, recordId: rec?.id || "", hasWork: Boolean(rec), ...fields, name: fields.Name || fields.Patient || fields.Client || fields.Vendor || "record" };', timeout: 5000 }, why: 'Lifts the Airtable record fields and record ID to the top level for downstream nodes.' },
+    { id: 'if_has_work', type: 'if_else', label: 'Found Work?', category: 'logic', config: { conditions: [{ field: '$json.hasWork', operator: 'equals', value: true }], combineOperation: 'AND' }, why: 'Keeps empty polls quiet instead of sending blank messages or wasting AI calls.' },
+    ...(spec.ai ? [aiNode(spec.prompt), parseNode()] : []),
+    ...(spec.needsBranch ? [{ id: 'if_action', type: 'if_else', label: spec.branchLabel || 'Action Needed?', category: 'logic', config: { conditions: [{ field: `$json.${spec.field || 'needsAction'}`, operator: 'equals', value: spec.value || true }], combineOperation: 'AND' }, why: 'Only sends the external notification when the prepared record meets the template threshold.' }] : []),
+    ...(spec.gmail ? [gmailNode('gmail_notify', 'Send Email', spec.email || '{{input.email}}', spec.subject || spec.name, spec.body || '{{input.message}}', 'Sends the person responsible the reminder or digest for this one selected record.')] : []),
+    ...(spec.slack ? [slackNode('slack_notify', 'Post Team Alert', spec.channel || '#ops', spec.slackMessage || `${spec.name}: {{input.summary}}`, 'Posts the same event to the operating channel so the team can see the queue moving.')] : []),
+    { id: 'airtable_mark_done', type: 'airtable', label: 'Mark Processed', category: 'database', config: { baseId: '', tableId: spec.tableId, operation: 'update', recordId: '{{input.recordId}}', fields: spec.markFields || { CtrlChecksProcessed: 'Yes' } }, why: 'Writes the processed marker that makes the scheduled poll idempotent across runs.' },
+    { id: 'log_no_work', type: 'log_output', label: 'No Work Found', category: 'utility', config: { level: 'info', message: `${spec.name}: no matching record this run.` }, why: 'Leaves a quiet execution trace when there is nothing to process.' },
+  ];
+  const edges = [['schedule_poll', 'airtable_read_one'], ['airtable_read_one', 'js_prepare_record'], ['js_prepare_record', 'if_has_work'], ['if_has_work', spec.ai ? 'ai_classify' : spec.needsBranch ? 'if_action' : spec.gmail ? 'gmail_notify' : 'slack_notify', 'true'], ['if_has_work', 'log_no_work', 'false']];
+  if (spec.ai) {
+    edges.push(['ai_classify', 'js_parse_ai']);
+    edges.push(['js_parse_ai', spec.needsBranch ? 'if_action' : spec.gmail ? 'gmail_notify' : 'slack_notify']);
+  }
+  if (spec.needsBranch) {
+    edges.push(['if_action', spec.gmail ? 'gmail_notify' : 'slack_notify', 'true']);
+    edges.push(['if_action', 'airtable_mark_done', 'false']);
+  }
+  if (spec.gmail && spec.slack) edges.push(['gmail_notify', 'slack_notify'], ['slack_notify', 'airtable_mark_done']);
+  else if (spec.gmail) edges.push(['gmail_notify', 'airtable_mark_done']);
+  else if (spec.slack) edges.push(['slack_notify', 'airtable_mark_done']);
+  addTemplate({
+    id: expansionId(n),
+    name: spec.name,
+    description: spec.description,
+    category: spec.category,
+    difficulty: spec.difficulty || 'Intermediate',
+    estimated_setup_time: spec.time || 20,
+    tags: spec.tags,
+    nodes,
+    edges,
+  });
+}
+
+function addSimpleFlowTemplate(n, spec) {
+  const trigger = { id: 'form_intake', type: 'form', label: 'Collect Details', category: 'triggers', config: { formTitle: spec.name, fields: formFields(spec.fields || ['name', 'email', 'details']), submitButtonText: 'Submit', successMessage: 'Received.' }, why: 'Collects the structured details this workflow needs without relying on a push trigger that the template gate does not allow yet.' };
+  addTemplate({
+    id: expansionId(n),
+    name: spec.name,
+    description: spec.description,
+    category: spec.category,
+    difficulty: spec.difficulty || 'Beginner',
+    estimated_setup_time: spec.time || 12,
+    tags: spec.tags,
+    nodes: [
+      trigger,
+      airtableCreateNode('airtable_create', 'Create Record', spec.tableId || 'Requests', spec.airtableFields || { Name: '{{input.name}}', Email: '{{input.email}}', Details: '{{input.details}}' }, 'Creates the operating record before messages go out, so later work has a durable owner and status.'),
+      gmailNode('gmail_send', spec.gmailLabel || 'Send Email', spec.email || '{{input.email}}', spec.subject || spec.name, spec.body || 'Thanks {{input.name}}. We received your request and will follow up shortly.', 'Sends the customer or requester the first useful response.'),
+      slackNode('slack_notify', 'Notify Team', spec.channel || '#ops', spec.slackMessage || `${spec.name}: {{input.name}} submitted {{input.details}}`, 'Lets the internal owner know a new record is ready to work.'),
+    ],
+    edges: [['form_intake', 'airtable_create'], ['airtable_create', 'gmail_send'], ['gmail_send', 'slack_notify']],
+  });
+}
+
+const expansionTemplates = [
+  [1, addFormAiRouteTemplate, { name: 'KYC Document Checklist Generator', category: SECTORS.verification, description: 'Create a jurisdiction-specific KYC checklist from one client intake, email the missing items, and log the request.', fields: ['clientName', 'email', 'entityType', 'jurisdiction', 'documentsOnHand'], prompt: 'Compare the submitted KYC documents against a standard checklist for {{input.entityType}} in {{input.jurisdiction}}. Return ONLY JSON: {"route":"routine|review","summary":"missing items","message":"email-ready checklist"}.', field: 'route', value: 'review', tableId: 'KYCRequests', tags: ['kyc', 'checklist', 'compliance', 'gmail', 'airtable'], email: '{{input.email}}', subject: 'Your KYC document checklist', falseMessage: '{{input.message}}', channel: '#compliance' }],
+  [2, addFormAiRouteTemplate, { name: 'Domain Age & Reputation Screener', category: SECTORS.verification, description: 'Screen one applicant domain through a static reputation API, score the risk, and alert compliance when review is needed.', fields: ['businessName', 'email', 'domain'], http: 'https://api.example.com/domain/reputation?domain={{input.domain}}', prompt: 'Assess this domain reputation response for verification risk: {{input.body}}. Business: {{input.businessName}}. Return ONLY JSON: {"risk":"low|medium|high","summary":"short reason","message":"next step email"}.', field: 'risk', value: 'high', tableId: 'DomainScreening', tags: ['domain', 'risk', 'http', 'compliance', 'airtable'], email: '{{input.email}}', subject: 'Domain screening result', falseMessage: '{{input.message}}', channel: '#compliance' }],
+  [3, addFormAiRouteTemplate, { name: 'Policy Page Presence Checker', category: SECTORS.verification, description: 'Fetch a submitted homepage, check for required policy-page signals, email the fix list, and log the result.', fields: ['businessName', 'email', 'homepageUrl'], http: '{{input.homepageUrl}}', prompt: 'Check this static homepage response for privacy policy, terms, refund, contact, and business identity signals: {{input.body}}. Return ONLY JSON: {"route":"routine|review","summary":"missing pages","message":"plain-language fix list"}.', field: 'route', value: 'review', tableId: 'PolicyChecks', tags: ['website', 'policy', 'verification', 'gmail', 'airtable'], email: '{{input.email}}', subject: 'Website policy page check', falseMessage: '{{input.message}}', channel: '#compliance' }],
+  [4, addFormAiRouteTemplate, { name: 'Verification Rejection Reason Classifier', category: SECTORS.verification, description: 'Classify one pasted rejection notice, identify the likely root cause, and send targeted remediation steps.', fields: ['clientName', 'email', 'platform', 'rejectionText'], prompt: 'Classify this verification rejection and explain the fix. Platform: {{input.platform}}. Text: {{input.rejectionText}}. Return ONLY JSON: {"route":"routine|review","summary":"root cause","message":"steps to fix"}.', field: 'route', value: 'review', tableId: 'RejectionReasons', tags: ['rejection', 'classification', 'compliance', 'gmail', 'airtable'], email: '{{input.email}}', subject: 'How to fix your verification rejection', falseMessage: '{{input.message}}', channel: '#compliance' }],
+  [5, addFormAiRouteTemplate, { name: 'Tax/GST ID Format Validator', category: SECTORS.verification, description: 'Validate one tax or GST identifier, explain format issues, and alert compliance on suspicious submissions.', fields: ['clientName', 'email', 'country', 'taxId'], prompt: 'Validate the format of this tax identifier for {{input.country}}: {{input.taxId}}. Return ONLY JSON: {"valid":true|false,"summary":"validation result","message":"clear explanation"}.', field: 'valid', value: false, tableId: 'TaxIdChecks', tags: ['tax', 'gst', 'validation', 'compliance', 'gmail'], email: '{{input.email}}', subject: 'Tax ID validation result', falseMessage: '{{input.message}}', channel: '#compliance' }],
+  [6, addScheduleDrainTemplate, { name: 'Compliance Deadline Digest', category: SECTORS.verification, description: 'Each daily run reads upcoming deadlines, summarizes the risk, emails the owner, posts to Slack, and marks the digest sent.', tableId: 'ComplianceDeadlines', filter: "AND({DueSoon}='Yes', {DigestSentAt}='')", cron: '0 9 * * *', ai: true, prompt: 'Summarize this compliance deadline row and recommend the next action. Return ONLY JSON: {"summary":"digest","message":"email body","needsAction":true}.', needsBranch: false, gmail: true, slack: true, email: '{{input.OwnerEmail}}', subject: 'Upcoming compliance deadline', body: '{{input.message}}', channel: '#compliance', slackMessage: 'Compliance deadline: {{input.summary}}', markFields: { DigestSentAt: 'Sent' }, tags: ['deadline', 'digest', 'airtable', 'gmail', 'slack'] }],
+  [7, addScheduleDrainTemplate, { name: 'Website Compliance Snapshot Logger', category: SECTORS.verification, description: 'Poll one client site per run, compare the public snapshot, alert on material changes, and write the checked marker.', tableId: 'ClientSites', filter: "AND({Website}!='', {SnapshotCheckedAt}='')", cron: '*/30 * * * *', ai: true, prompt: 'Review this client website snapshot for material compliance changes. Return ONLY JSON: {"changed":true|false,"summary":"change summary","message":"team alert"}.' , needsBranch: true, field: 'changed', value: true, slack: true, channel: '#compliance', slackMessage: 'Website compliance change: {{input.summary}}', markFields: { SnapshotCheckedAt: 'Checked' }, tags: ['website', 'poll-drain', 'compliance', 'airtable', 'slack'] }],
+  [8, addSimpleFlowTemplate, { name: 'Client Onboarding Compliance Tracker', category: SECTORS.verification, description: 'Create a client onboarding record, send the first document request, and notify the compliance team from a single intake form.', fields: ['clientName', 'email', 'entityType', 'deadline'], tableId: 'ClientOnboarding', airtableFields: { Client: '{{input.clientName}}', Email: '{{input.email}}', EntityType: '{{input.entityType}}', Deadline: '{{input.deadline}}', Status: 'Started' }, email: '{{input.email}}', subject: 'Welcome - documents needed for compliance onboarding', body: 'Hi {{input.clientName}}, we have started your onboarding and will use this checklist for {{input.entityType}}.', channel: '#compliance', tags: ['onboarding', 'compliance', 'airtable', 'gmail', 'slack'] }],
+  [9, addScheduleDrainTemplate, { name: 'Duplicate Client Detector', category: SECTORS.verification, description: 'Poll one unchecked client, compare likely duplicate fields, alert ops when a match is found, and mark the record checked.', tableId: 'Clients', filter: "AND({DuplicateCheckedAt}='', {Name}!='')", ai: true, prompt: 'Look for duplicate-client signals in this Airtable row and nearby candidate data: {{input.records}}. Return ONLY JSON: {"duplicate":true|false,"summary":"reason","message":"review note"}.' , needsBranch: true, field: 'duplicate', value: true, slack: true, channel: '#compliance', slackMessage: 'Possible duplicate client: {{input.summary}}', markFields: { DuplicateCheckedAt: 'Checked' }, tags: ['duplicates', 'poll-drain', 'airtable', 'compliance', 'slack'] }],
+
+  [10, addFormAiRouteTemplate, { name: 'AI Inbox Triage & Auto-Label', category: SECTORS.operations, description: 'Accept one inbound-email payload by webhook, classify urgency and category, archive the event in MongoDB, and alert the right team.', trigger: 'webhook', prompt: 'Classify this inbound email payload. Return ONLY JSON: {"category":"billing|support|sales|other","urgent":true|false,"summary":"short summary","message":"triage note"}.' , field: 'urgent', value: true, store: 'mongodb', collection: 'inbox_triage_events', document: { from: '{{input.from}}', subject: '{{input.subject}}', snippet: '{{input.snippet}}', category: '{{input.category}}', urgent: '{{input.urgent}}', summary: '{{input.summary}}', source: 'ai-inbox-triage-auto-label' }, tags: ['email', 'triage', 'webhook', 'slack', 'mongodb'], channel: '#support', email: 'REPLACE_WITH_INBOX_OWNER_EMAIL', subject: 'Inbox triage result', falseMessage: '{{input.message}}' }],
+  [11, addFormAiRouteTemplate, { name: 'AI Reply-Draft Assistant', category: SECTORS.operations, description: 'Turn one submitted email thread into a reviewable reply draft and notify the owner before anything is sent.', trigger: 'webhook', prompt: 'Draft a careful reply to this customer email thread. Never claim it was sent. Return ONLY JSON: {"route":"routine|review","summary":"draft summary","message":"draft reply"}.' , field: 'route', value: 'review', tableId: 'ReplyDrafts', tags: ['email', 'draft', 'webhook', 'gmail', 'slack'], channel: '#support', email: 'REPLACE_WITH_REVIEWER_EMAIL', subject: 'Reply draft ready for review', falseMessage: '{{input.message}}' }],
+  [12, addFormAiRouteTemplate, { name: 'Sheets New-Lead Pipeline', category: SECTORS.operations, description: 'Receive a new spreadsheet lead through a webhook, score fit, create a HubSpot contact for hot leads, and email nurture for the rest.', trigger: 'webhook', prompt: 'Score this new lead payload. Return ONLY JSON: {"score":0,"qualified":true|false,"summary":"why","message":"first-touch email"}.' , field: 'qualified', value: true, store: 'postgresql', query: "INSERT INTO lead_triage (email, summary, qualified, created_at) VALUES ('{{input.email}}', '{{input.summary}}', '{{input.qualified}}', now())", tags: ['leads', 'sheets', 'webhook', 'hubspot', 'gmail'], channel: '#sales', email: '{{input.email}}', subject: 'Thanks for your interest', falseMessage: '{{input.message}}' }],
+  [13, addFormAiRouteTemplate, { name: 'Telegram Support Bot', category: SECTORS.operations, description: 'Run a RAG-lite support answer from chat input over an Airtable FAQ table, answer when confident, and escalate otherwise.', fields: ['question', 'email', 'topic'], prompt: 'Answer this support question only from known FAQ context supplied in the request: {{input.question}}. Return ONLY JSON: {"confident":true|false,"summary":"answer summary","message":"answer or escalation note"}.' , field: 'confident', value: false, tableId: 'SupportBotQuestions', tags: ['support', 'chat', 'airtable', 'slack', 'faq'], channel: '#support', email: '{{input.email}}', subject: 'Support answer', falseMessage: '{{input.message}}' }],
+  [14, addFormAiRouteTemplate, { name: 'GitHub PR AI Code Review', category: SECTORS.operations, description: 'Receive one pull-request webhook, fetch the static diff URL, summarize review findings, and notify engineering.', trigger: 'webhook', http: '{{input.diffUrl}}', prompt: 'Review this pull request diff for correctness, tests, security, and maintainability. Return ONLY JSON: {"issues":true|false,"summary":"review findings","message":"review note"}.' , field: 'issues', value: true, store: 'postgresql', query: "INSERT INTO pr_reviews (repo, pr_url, summary, issues, created_at) VALUES ('{{input.repository}}', '{{input.prUrl}}', '{{input.summary}}', '{{input.issues}}', now())", tags: ['github', 'code-review', 'webhook', 'slack', 'ai'], channel: '#engineering', email: 'REPLACE_WITH_ENGINEERING_EMAIL', subject: 'PR review summary', falseMessage: '{{input.message}}' }],
+  [15, addFormAiRouteTemplate, { name: 'Calendar Meeting-Prep Brief', category: SECTORS.operations, description: 'Collect meeting details, enrich the company domain, draft a concise prep brief, and send it to the attendee owner.', fields: ['meetingTitle', 'ownerEmail', 'companyDomain', 'attendees'], http: 'https://api.example.com/company?domain={{input.companyDomain}}', prompt: 'Create a meeting prep brief from this meeting and company context. Return ONLY JSON: {"route":"routine","summary":"brief summary","message":"email-ready brief"}.' , field: 'route', value: 'review', tableId: 'MeetingBriefs', tags: ['calendar', 'meeting-prep', 'http', 'gmail', 'slack'], email: '{{input.ownerEmail}}', subject: 'Meeting prep brief: {{input.meetingTitle}}', falseMessage: '{{input.message}}', channel: '#sales' }],
+  [16, addFormAiRouteTemplate, { name: 'New Bug Auto-Classifier', category: SECTORS.operations, description: 'Receive one bug payload by webhook, classify severity and component, log it, and page engineering for high-priority issues.', trigger: 'webhook', prompt: 'Classify this bug report. Return ONLY JSON: {"priority":"low|medium|high|urgent","summary":"component and reason","message":"triage note"}.' , field: 'priority', value: 'urgent', store: 'postgresql', query: "INSERT INTO bug_triage (title, priority, summary, created_at) VALUES ('{{input.title}}', '{{input.priority}}', '{{input.summary}}', now())", tags: ['bugs', 'webhook', 'triage', 'slack', 'postgres'], channel: '#engineering', email: 'REPLACE_WITH_ENGINEERING_EMAIL', subject: 'Bug triage result', falseMessage: '{{input.message}}' }],
+  [17, addFormAiRouteTemplate, { name: 'CRM Org Enrichment on Demand', category: SECTORS.operations, description: 'Enrich one company from a static API, summarize firmographics, update HubSpot, and notify RevOps.', fields: ['companyName', 'domain', 'hubspotContactId'], http: 'https://api.example.com/company?domain={{input.domain}}', prompt: 'Summarize firmographic enrichment for {{input.companyName}} from this API response: {{input.body}}. Return ONLY JSON: {"route":"routine","summary":"firmographic summary","message":"CRM note"}.' , field: 'route', value: 'review', tableId: 'OrgEnrichment', tags: ['crm', 'enrichment', 'hubspot', 'http', 'slack'], email: 'REPLACE_WITH_REVOPS_EMAIL', subject: 'CRM enrichment complete', falseMessage: '{{input.message}}', channel: '#revops' }],
+  [18, addFormAiRouteTemplate, { name: 'Slack Message to Task Logger', category: SECTORS.operations, description: 'Turn a submitted Slack message into a structured task, create a Trello card, and confirm the logging action.', fields: ['requesterEmail', 'messageText', 'owner', 'dueDate'], prompt: 'Extract a task from this message. Return ONLY JSON: {"needsTask":true|false,"summary":"task title","message":"task description"}.' , field: 'needsTask', value: true, tableId: 'TaskRequests', tags: ['tasks', 'slack', 'trello', 'operations', 'form'], email: '{{input.requesterEmail}}', subject: 'Task logged', falseMessage: '{{input.message}}', channel: '#ops' }],
+
+  [19, addFormAiRouteTemplate, { name: 'Purchase Order Approval Router', category: SECTORS.finance, description: 'Classify one purchase order, route high-risk approvals, notify the requester, and store the audit trail.', fields: ['requesterEmail', 'vendor', 'amount', 'department', 'purpose'], prompt: 'Review this purchase order against a finance policy. Return ONLY JSON: {"requiresApproval":true|false,"summary":"risk and amount","message":"requester note"}.' , field: 'requiresApproval', value: true, store: 'postgresql', tags: ['po', 'approval', 'finance', 'postgres', 'slack'], channel: '#finance', email: '{{input.requesterEmail}}', subject: 'Purchase order review', falseMessage: '{{input.message}}' }],
+  [20, addFormAiRouteTemplate, { name: 'Expense Category Auto-Tagger', category: SECTORS.finance, description: 'Receive one expense JSON payload, assign a GL category, flag policy issues, and store the result.', trigger: 'webhook', prompt: 'Categorize this expense and flag policy concerns. Return ONLY JSON: {"overBudget":true|false,"summary":"category and reason","message":"policy note","category":"GL category"}.' , field: 'overBudget', value: true, store: 'postgresql', tags: ['expense', 'category', 'webhook', 'postgres', 'slack'], channel: '#finance', email: 'REPLACE_WITH_FINANCE_EMAIL', subject: 'Expense category result', falseMessage: '{{input.message}}' }],
+  [21, addScheduleDrainTemplate, { name: 'Budget Threshold Monitor', category: SECTORS.finance, description: 'Poll one department budget row per run, alert when spend crosses threshold, email finance, and mark the period.', tableId: 'Budgets', filter: "AND({ThresholdCrossed}='Yes', {AlertedThisPeriod}='')", ai: false, needsBranch: false, gmail: true, slack: true, email: 'REPLACE_WITH_FINANCE_EMAIL', subject: 'Budget threshold alert', body: 'Budget threshold crossed for {{input.Department}}: {{input.Spend}} of {{input.Budget}}.', channel: '#finance', slackMessage: 'Budget threshold crossed for {{input.Department}}.', markFields: { AlertedThisPeriod: 'Yes' }, tags: ['budget', 'threshold', 'poll-drain', 'airtable', 'slack'] }],
+  [22, addFormAiRouteTemplate, { name: 'Duplicate Invoice Detector', category: SECTORS.finance, description: 'Receive one invoice payload, compare against existing invoice signals, alert on likely duplicates, and log the decision.', trigger: 'webhook', prompt: 'Detect duplicate invoice risk from this invoice and prior-match context: {{input}}. Return ONLY JSON: {"duplicate":true|false,"summary":"reason","message":"review note"}.' , field: 'duplicate', value: true, store: 'postgresql', tags: ['invoice', 'duplicate', 'webhook', 'postgres', 'slack'], channel: '#finance', email: 'REPLACE_WITH_AP_EMAIL', subject: 'Invoice duplicate check', falseMessage: '{{input.message}}' }],
+  [23, addFormAiRouteTemplate, { name: 'Vendor Onboarding Risk Scorer', category: SECTORS.finance, description: 'Screen one new vendor using a static enrichment or sanctions API, score risk, and notify finance when review is needed.', fields: ['vendorName', 'email', 'domain', 'country'], http: 'https://api.example.com/vendor-risk?domain={{input.domain}}', prompt: 'Score this vendor onboarding risk from the API response and submitted data. Return ONLY JSON: {"risk":"low|medium|high","summary":"reason","message":"vendor onboarding note"}.' , field: 'risk', value: 'high', tableId: 'VendorRisk', tags: ['vendor', 'risk', 'http', 'airtable', 'slack'], channel: '#finance', email: '{{input.email}}', subject: 'Vendor onboarding status', falseMessage: '{{input.message}}' }],
+  [24, addScheduleDrainTemplate, { name: 'Subscription Renewal Reminder', category: SECTORS.finance, description: 'Poll one subscription due for renewal, notify the owner and finance channel, and mark the reminder sent.', tableId: 'Subscriptions', filter: "AND({RenewalDueSoon}='Yes', {LastReminderAt}='')", gmail: true, slack: true, email: '{{input.OwnerEmail}}', subject: 'Upcoming subscription renewal', body: '{{input.Name}} renews soon. Amount: {{input.Amount}}.', channel: '#finance', slackMessage: 'Subscription renewal: {{input.Name}} for {{input.Amount}}.', markFields: { LastReminderAt: 'Sent' }, tags: ['subscriptions', 'renewal', 'poll-drain', 'gmail', 'slack'] }],
+  [25, addScheduleDrainTemplate, { name: 'Payment Reminder Sequence', category: SECTORS.finance, description: 'Drain one overdue invoice per run, send the right reminder tone, and stamp the reminder marker to prevent repeats.', tableId: 'Invoices', filter: "AND({Status}='Overdue', {RemindedToday}='')", ai: true, prompt: 'Write a polite payment reminder for this overdue invoice row. Return ONLY JSON: {"summary":"invoice summary","message":"email body","needsAction":true}.', gmail: true, email: '{{input.CustomerEmail}}', subject: 'Payment reminder for invoice {{input.InvoiceNumber}}', body: '{{input.message}}', markFields: { RemindedToday: 'Yes' }, tags: ['ar', 'dunning', 'poll-drain', 'airtable', 'gmail'] }],
+  [26, addScheduleDrainTemplate, { name: 'AR Aging Weekly Report', category: SECTORS.finance, description: 'Summarize receivables aging weekly from PostgreSQL data, email finance leadership, and post the highlights to Slack.', tableId: 'ARAgingRuns', filter: "AND({Ready}='Yes', {ReportedAt}='')", cron: '0 9 * * 1', ai: true, prompt: 'Summarize this AR aging run data for leadership. Return ONLY JSON: {"summary":"executive summary","message":"email body","needsAction":true}.', gmail: true, slack: true, email: 'REPLACE_WITH_FINANCE_LEAD_EMAIL', subject: 'Weekly AR aging report', body: '{{input.message}}', channel: '#finance', slackMessage: 'AR aging weekly summary: {{input.summary}}', markFields: { ReportedAt: 'Sent' }, tags: ['ar', 'aging', 'weekly-report', 'gmail', 'slack'] }],
+  [27, addFormAiRouteTemplate, { name: 'Fraud Signal Alert', category: SECTORS.finance, description: 'Receive one transaction event, score fraud signals against policy rules, log it, and alert finance on suspicious activity.', trigger: 'webhook', prompt: 'Evaluate this transaction for fraud signals. Return ONLY JSON: {"suspicious":true|false,"summary":"signals","message":"finance alert"}.' , field: 'suspicious', value: true, store: 'postgresql', tags: ['fraud', 'webhook', 'finance', 'postgres', 'slack'], channel: '#finance', email: 'REPLACE_WITH_FINANCE_EMAIL', subject: 'Fraud signal review', falseMessage: '{{input.message}}' }],
+  [28, addFormAiRouteTemplate, { name: 'Refund Request Triage', category: SECTORS.finance, description: 'Classify one refund request, distinguish routine from approval-needed cases, acknowledge the customer, and log the queue item.', fields: ['customerEmail', 'orderId', 'amount', 'reason'], prompt: 'Triage this refund request. Return ONLY JSON: {"requiresApproval":true|false,"summary":"legitimacy and reason","message":"customer acknowledgement"}.' , field: 'requiresApproval', value: true, store: 'postgresql', tags: ['refund', 'triage', 'finance', 'gmail', 'slack'], channel: '#finance', email: '{{input.customerEmail}}', subject: 'Refund request received', falseMessage: '{{input.message}}' }],
+  [29, addFormAiRouteTemplate, { name: 'Insurance Claim Intake Triage', category: SECTORS.finance, description: 'Triage one structured insurance claim, archive the variable claim packet in MongoDB, notify adjusters, and acknowledge the claimant.', fields: ['claimantEmail', 'policyNumber', 'claimType', 'incidentSummary'], prompt: 'Triage this insurance claim for type, urgency, and missing information. Return ONLY JSON: {"urgent":true|false,"summary":"triage result","message":"claimant acknowledgement"}.' , field: 'urgent', value: true, store: 'mongodb', collection: 'claim_intake_events', document: { claimantEmail: '{{input.claimantEmail}}', policyNumber: '{{input.policyNumber}}', claimType: '{{input.claimType}}', incidentSummary: '{{input.incidentSummary}}', urgent: '{{input.urgent}}', summary: '{{input.summary}}', source: 'insurance-claim-intake-triage' }, tags: ['insurance', 'claims', 'triage', 'mongodb', 'gmail'], channel: '#claims', email: '{{input.claimantEmail}}', subject: 'Claim received', falseMessage: '{{input.message}}' }],
+  [30, addScheduleDrainTemplate, { name: 'Policy Renewal Notifier', category: SECTORS.finance, description: 'Poll one policy near expiry, notify the insured and team, then mark the renewal notice sent.', tableId: 'Policies', filter: "AND({RenewalDueSoon}='Yes', {RenewalNoticeSent}='')", gmail: true, slack: true, email: '{{input.CustomerEmail}}', subject: 'Policy renewal reminder', body: 'Your policy {{input.PolicyNumber}} is due for renewal. Please review the renewal details.', channel: '#insurance', slackMessage: 'Policy renewal notice sent for {{input.PolicyNumber}}.', markFields: { RenewalNoticeSent: 'Yes' }, tags: ['insurance', 'renewal', 'poll-drain', 'airtable', 'gmail'] }],
+  [31, addFormAiRouteTemplate, { name: 'Quote Request Responder', category: SECTORS.finance, description: 'Draft a fast first response to one quote request, notify sales, and log the opportunity.', fields: ['customerEmail', 'company', 'coverageNeeded', 'timeline'], prompt: 'Draft a helpful first response to this quote request. Return ONLY JSON: {"route":"routine|review","summary":"opportunity summary","message":"customer email"}.' , field: 'route', value: 'review', tableId: 'QuoteRequests', tags: ['quotes', 'insurance', 'hubspot', 'gmail', 'sales'], channel: '#sales', email: '{{input.customerEmail}}', subject: 'Your quote request', falseMessage: '{{input.message}}' }],
+  [32, addFormAiRouteTemplate, { name: 'Chargeback / Dispute Handler', category: SECTORS.finance, description: 'Receive one payment-dispute webhook, summarize recommended evidence, alert finance, and email the owner.', trigger: 'webhook', prompt: 'Summarize this dispute payload and recommend evidence to collect. Return ONLY JSON: {"needsAction":true|false,"summary":"evidence summary","message":"owner email"}.' , field: 'needsAction', value: true, store: 'postgresql', tags: ['chargeback', 'dispute', 'webhook', 'finance', 'gmail'], channel: '#finance', email: 'REPLACE_WITH_DISPUTE_OWNER_EMAIL', subject: 'Dispute evidence checklist', falseMessage: '{{input.message}}' }],
+  [33, addFormAiRouteTemplate, { name: 'Vendor Payment Approval', category: SECTORS.finance, description: 'Receive one outgoing payment request, evaluate approval need, alert approvers, and store the decision record.', trigger: 'webhook', prompt: 'Review this vendor payment request against approval policy. Return ONLY JSON: {"requiresApproval":true|false,"summary":"approval reason","message":"requester note"}.' , field: 'requiresApproval', value: true, store: 'postgresql', tags: ['vendor-payment', 'approval', 'webhook', 'postgres', 'slack'], channel: '#finance', email: 'REPLACE_WITH_AP_EMAIL', subject: 'Vendor payment review', falseMessage: '{{input.message}}' }],
+  [34, addScheduleDrainTemplate, { name: 'Tax Deadline Reminder', category: SECTORS.finance, description: 'Poll one upcoming tax deadline, alert the finance channel, and mark the reminder so it does not repeat.', tableId: 'TaxDeadlines', filter: "AND({DueSoon}='Yes', {ReminderSent}='')", gmail: false, slack: true, channel: '#finance', slackMessage: 'Tax deadline due soon: {{input.Name}} on {{input.DueDate}}.', markFields: { ReminderSent: 'Yes' }, tags: ['tax', 'deadline', 'poll-drain', 'airtable', 'slack'] }],
+
+  [35, addScheduleDrainTemplate, { name: 'Appointment No-Show Follow-up', category: SECTORS.healthcare, description: 'Poll one recent no-show, send a reschedule link, alert the front desk, and mark follow-up complete.', tableId: 'Appointments', filter: "AND({Status}='No Show', {FollowedUpAt}='')", gmail: true, slack: true, email: '{{input.PatientEmail}}', subject: 'Reschedule your appointment', body: 'We missed you for {{input.AppointmentDate}}. Please use your clinic link to reschedule.', channel: '#front-desk', slackMessage: 'No-show follow-up sent for {{input.Patient}}.', markFields: { FollowedUpAt: 'Sent' }, tags: ['clinic', 'appointments', 'no-show', 'gmail', 'airtable'] }],
+  [36, addFormAiRouteTemplate, { name: 'New Patient Registration Router', category: SECTORS.healthcare, description: 'Validate one patient registration, create the clinic record, welcome complete submissions, and route incomplete ones to staff.', fields: ['patientName', 'patientEmail', 'dateOfBirth', 'reasonForVisit', 'insurancePlan'], prompt: 'Check this patient registration for completeness. Return ONLY JSON: {"complete":true|false,"summary":"missing or ready","message":"patient email"}.' , field: 'complete', value: false, tableId: 'Patients', tags: ['patient-intake', 'registration', 'airtable', 'gmail', 'slack'], channel: '#front-desk', email: '{{input.patientEmail}}', subject: 'Registration received', falseMessage: '{{input.message}}' }],
+  [37, addScheduleDrainTemplate, { name: 'Prescription Refill Reminder', category: SECTORS.healthcare, description: 'Poll one refill due record, email the patient, and mark the reminder sent.', tableId: 'Refills', filter: "AND({RefillDue}='Yes', {ReminderSent}='')", gmail: true, email: '{{input.PatientEmail}}', subject: 'Prescription refill reminder', body: 'Your refill for {{input.Medication}} may be due soon. Contact the clinic if you need help.', markFields: { ReminderSent: 'Yes' }, tags: ['refill', 'clinic', 'poll-drain', 'airtable', 'gmail'] }],
+  [38, addFormAiRouteTemplate, { name: 'Symptom Urgency Triage Bot', category: SECTORS.healthcare, description: 'Classify one symptom intake for urgency, alert the nurse line for urgent cases, and send routine booking guidance otherwise.', fields: ['patientName', 'patientEmail', 'symptoms', 'duration'], prompt: 'Classify this symptom intake for urgency. Do not diagnose. Return ONLY JSON: {"urgent":true|false,"summary":"triage reason","message":"non-diagnostic guidance"}.' , field: 'urgent', value: true, store: 'postgresql', tags: ['symptoms', 'triage', 'clinic', 'gmail', 'slack'], channel: '#nurse-line', email: '{{input.patientEmail}}', subject: 'Your clinic intake', falseMessage: '{{input.message}}' }],
+  [39, addScheduleDrainTemplate, { name: 'Patient Satisfaction Survey Sender', category: SECTORS.healthcare, description: 'Poll one recent completed visit, send the survey link, and mark the survey as sent.', tableId: 'Visits', filter: "AND({Status}='Completed', {SurveySent}='')", gmail: true, email: '{{input.PatientEmail}}', subject: 'How was your visit?', body: 'Thank you for visiting. Please complete the survey link shared by the clinic.', markFields: { SurveySent: 'Yes' }, tags: ['survey', 'patient-feedback', 'poll-drain', 'airtable', 'gmail'] }],
+  [40, addSimpleFlowTemplate, { name: 'Referral Tracking Notifier', category: SECTORS.healthcare, description: 'Log a new referral, notify the specialist contact, and alert the referral coordinator from one form.', fields: ['patientName', 'patientEmail', 'specialistEmail', 'referralReason'], tableId: 'Referrals', airtableFields: { Patient: '{{input.patientName}}', PatientEmail: '{{input.patientEmail}}', SpecialistEmail: '{{input.specialistEmail}}', Reason: '{{input.referralReason}}', Status: 'New' }, email: '{{input.specialistEmail}}', subject: 'New patient referral', body: 'A referral has been logged for {{input.patientName}}. Reason: {{input.referralReason}}.', channel: '#referrals', tags: ['referrals', 'clinic', 'airtable', 'gmail', 'slack'] }],
+  [41, addFormAiRouteTemplate, { name: 'Insurance Eligibility Pre-Check', category: SECTORS.healthcare, description: 'Check one patient plan through a static eligibility API, summarize coverage limits, and notify billing.', fields: ['patientName', 'patientEmail', 'planId', 'memberId'], http: 'https://api.example.com/eligibility?plan={{input.planId}}&member={{input.memberId}}', prompt: 'Summarize eligibility for this patient visit from the API response. Return ONLY JSON: {"needsReview":true|false,"summary":"coverage summary","message":"billing note"}.' , field: 'needsReview', value: true, tableId: 'EligibilityChecks', tags: ['insurance', 'eligibility', 'clinic', 'http', 'airtable'], channel: '#billing', email: '{{input.patientEmail}}', subject: 'Eligibility pre-check received', falseMessage: '{{input.message}}' }],
+  [42, addSimpleFlowTemplate, { name: 'Appointment Booking Confirmation', category: SECTORS.healthcare, description: 'Confirm one appointment booking received by webhook-style intake, email the patient, notify the front desk, and log the booking.', fields: ['patientName', 'patientEmail', 'appointmentTime', 'provider'], tableId: 'Appointments', airtableFields: { Patient: '{{input.patientName}}', Email: '{{input.patientEmail}}', AppointmentTime: '{{input.appointmentTime}}', Provider: '{{input.provider}}', Status: 'Booked' }, email: '{{input.patientEmail}}', subject: 'Appointment confirmed', body: 'Your appointment with {{input.provider}} is confirmed for {{input.appointmentTime}}.', channel: '#front-desk', tags: ['appointments', 'booking', 'clinic', 'gmail', 'airtable'] }],
+  [43, addScheduleDrainTemplate, { name: 'Care-Plan Follow-up Scheduler', category: SECTORS.healthcare, description: 'Poll one due care-plan follow-up, email the patient, notify the care team, and mark contacted.', tableId: 'CarePlans', filter: "AND({FollowUpDue}='Yes', {ContactedAt}='')", gmail: true, slack: true, email: '{{input.PatientEmail}}', subject: 'Care plan follow-up', body: 'Your care team would like to check in about {{input.CarePlanName}}.', channel: '#care-team', slackMessage: 'Care-plan follow-up sent for {{input.Patient}}.', markFields: { ContactedAt: 'Sent' }, tags: ['care-plan', 'follow-up', 'poll-drain', 'airtable', 'gmail'] }],
+  [44, addScheduleDrainTemplate, { name: 'Missed Lab Result Chaser', category: SECTORS.healthcare, description: 'Poll one pending lab result, send a patient chaser, alert the care team, and stamp the record.', tableId: 'LabResults', filter: "AND({Status}='Pending', {ChasedAt}='')", gmail: true, slack: true, email: '{{input.PatientEmail}}', subject: 'Lab result follow-up', body: 'We are following up on your pending lab result: {{input.TestName}}.', channel: '#care-team', slackMessage: 'Pending lab result chased for {{input.Patient}}.', markFields: { ChasedAt: 'Sent' }, tags: ['labs', 'follow-up', 'clinic', 'airtable', 'gmail'] }],
+  [45, addScheduleDrainTemplate, { name: 'Clinic Daily Schedule Digest', category: SECTORS.healthcare, description: 'Read the day schedule summary, draft a morning huddle digest, post it to Slack, and mark the digest sent.', tableId: 'DailySchedule', filter: "AND({DigestReady}='Yes', {DigestSent}='')", cron: '0 8 * * *', ai: true, prompt: 'Summarize this clinic daily schedule for a morning huddle. Return ONLY JSON: {"summary":"huddle summary","message":"slack digest","needsAction":true}.', slack: true, channel: '#front-desk', slackMessage: '{{input.message}}', markFields: { DigestSent: 'Yes' }, tags: ['clinic', 'daily-digest', 'schedule', 'airtable', 'slack'] }],
+  [46, addScheduleDrainTemplate, { name: 'Telehealth Link Dispatcher', category: SECTORS.healthcare, description: 'Poll one upcoming virtual visit, email the join link, notify staff, and mark the link sent.', tableId: 'TelehealthVisits', filter: "AND({VirtualVisit}='Yes', {LinkSent}='')", gmail: true, slack: true, email: '{{input.PatientEmail}}', subject: 'Your telehealth visit link', body: 'Your telehealth link for {{input.AppointmentTime}} is {{input.JoinLink}}.', channel: '#front-desk', slackMessage: 'Telehealth link sent for {{input.Patient}}.', markFields: { LinkSent: 'Yes' }, tags: ['telehealth', 'appointments', 'poll-drain', 'airtable', 'gmail'] }],
+  [47, addScheduleDrainTemplate, { name: 'Vaccination Due Reminder', category: SECTORS.healthcare, description: 'Poll one vaccination due record, email the patient, and mark the recall reminder sent.', tableId: 'Vaccinations', filter: "AND({Due}='Yes', {ReminderSent}='')", gmail: true, email: '{{input.PatientEmail}}', subject: 'Vaccination reminder', body: 'Our records show {{input.Vaccine}} may be due. Please contact the clinic to schedule.', markFields: { ReminderSent: 'Yes' }, tags: ['vaccination', 'reminder', 'clinic', 'airtable', 'gmail'] }],
+  [48, addFormAiRouteTemplate, { name: 'Post-Visit Instructions Sender', category: SECTORS.healthcare, description: 'Format one set of visit notes into plain-language instructions, email the patient, and log the send.', fields: ['patientName', 'patientEmail', 'visitNotes'], prompt: 'Convert these visit notes into clear, non-diagnostic after-visit instructions. Return ONLY JSON: {"route":"routine","summary":"instruction summary","message":"patient instructions"}.' , field: 'route', value: 'review', tableId: 'PostVisitInstructions', tags: ['post-visit', 'instructions', 'clinic', 'gmail', 'airtable'], email: '{{input.patientEmail}}', subject: 'After-visit instructions', falseMessage: '{{input.message}}', channel: '#care-team' }],
+  [49, addScheduleDrainTemplate, { name: 'Waitlist Fill Notifier', category: SECTORS.healthcare, description: 'Poll one waitlisted patient when a slot opens, email the offer, notify the desk, and mark the offer sent.', tableId: 'Waitlist', filter: "AND({OpenSlotAvailable}='Yes', {OfferSent}='')", gmail: true, slack: true, email: '{{input.PatientEmail}}', subject: 'Earlier appointment available', body: 'An earlier appointment may be available: {{input.OpenSlot}}. Please reply if you would like it.', channel: '#front-desk', slackMessage: 'Waitlist offer sent to {{input.Patient}}.', markFields: { OfferSent: 'Yes' }, tags: ['waitlist', 'appointments', 'poll-drain', 'airtable', 'gmail'] }],
+  [50, addFormAiRouteTemplate, { name: 'Patient Complaint Triage', category: SECTORS.healthcare, description: 'Classify one patient complaint by seriousness and theme, alert managers for safety issues, acknowledge routine complaints, and log the case.', fields: ['patientName', 'patientEmail', 'complaintText'], prompt: 'Classify this patient complaint for safety risk and service theme. Return ONLY JSON: {"serious":true|false,"summary":"theme and risk","message":"patient acknowledgement"}.' , field: 'serious', value: true, tableId: 'PatientComplaints', tags: ['complaints', 'patient-safety', 'clinic', 'gmail', 'slack'], channel: '#clinic-management', email: '{{input.patientEmail}}', subject: 'Complaint received', falseMessage: '{{input.message}}' }],
+];
+
+for (const [n, builder, spec] of expansionTemplates) builder(n, spec);
+
+for (const [template, item, reason] of [
+  ['AI Inbox Triage & Auto-Label', 'native gmail_trigger version', 'The contract currently allows only form, schedule, interval, webhook, chat_trigger, telegram_trigger, manual_trigger, and workflow_trigger. This template ships as a webhook-fed email payload until gmail_trigger is admitted by the gate.'],
+  ['AI Reply-Draft Assistant', 'native gmail_trigger version', 'Reworked to webhook intake for the same reason; no Gmail trigger is allowed in templates yet.'],
+  ['Sheets New-Lead Pipeline', 'native google_sheets_trigger version', 'Reworked to webhook intake because google_sheets_trigger is outside the gate trigger allowlist.'],
+  ['Telegram Support Bot', 'telegram_trigger and telegram reply version', 'Reworked to form/chat-style intake and Slack/Gmail handling because telegram output is outside the verified template palette.'],
+  ['GitHub PR AI Code Review', 'github_trigger and GitHub comment version', 'Reworked to webhook plus notification because github_trigger and github action nodes are not in the verified template palette for this gate.'],
+  ['Calendar Meeting-Prep Brief', 'google_calendar_trigger version', 'Reworked to form intake because google_calendar_trigger is outside the allowed trigger list and google_calendar is outside the verified palette in this task.'],
+  ['New Bug Auto-Classifier', 'linear_trigger / jira_trigger version', 'Reworked to webhook intake and Slack/PostgreSQL output because issue-tracker triggers are outside the allowed trigger list.'],
+  ['Slack Message to Task Logger', 'slack_trigger version', 'Reworked to form intake because slack_trigger is not an allowed template trigger yet.'],
+  ['Chargeback / Dispute Handler', 'stripe_trigger / stripe node version', 'Reworked to generic webhook intake because stripe_trigger and stripe are blocked by the investor node-status gate.'],
+  ['Appointment Booking Confirmation', 'google_calendar create-event version', 'Reworked to Airtable/Gmail/Slack because google_calendar is outside the verified palette for this content pass.'],
+  ['Telehealth Link Dispatcher', 'google_calendar update-event version', 'Reworked to Airtable/Gmail/Slack because google_calendar is outside the verified palette for this content pass.'],
+]) defer(template, item, reason);
+
+for (const [key, why] of generatedNodeNotes) {
+  const [templateSlug, ...nodeParts] = key.split('.');
+  const nodeId = nodeParts.join('.');
+  INSTANCE_NOTES[templateSlug] = INSTANCE_NOTES[templateSlug] || {};
+  INSTANCE_NOTES[templateSlug][nodeId] = why;
+}
+fs.writeFileSync(path.join(HERE, 'node-notes.json'), JSON.stringify(INSTANCE_NOTES, null, 2) + '\n');
+
+// ═════════════════════════════════════════════════════════════════════════════
 // Emit
 // ═════════════════════════════════════════════════════════════════════════════
 
@@ -2427,7 +2730,7 @@ const statements = out.map((t) => {
     updated_at           = now()`;
 
   if (NEW_IDS.has(t.id)) {
-    return `-- ${t.name} (NEW — split out of "Document Vault with Smart Search")
+    return `-- ${t.name} (NEW)
 INSERT INTO templates (
   id, name, description, category, nodes, edges, difficulty,
   estimated_setup_time, tags, is_featured, is_active, use_count, version,

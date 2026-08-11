@@ -231,5 +231,605 @@
     "ai_fix_list": "Converts the technical issues into two or three plain-English actions the client can actually carry out.",
     "js_compose_results": "Assembles the score, fix list and contact details into one payload so the email has everything it needs.",
     "gmail_send_results": "Sends the score and the fix list. This is the deliverable the client came for."
+  },
+  "patient-intake-triage": {
+    "form_patient_intake": "Collects the minimum structured details a clinic needs before deciding who should respond.",
+    "ai_classify_triage": "Turns free-text symptoms into a simple urgency decision that downstream routing can use.",
+    "js_parse_triage": "Converts the AI response into real fields so the branch below is deterministic.",
+    "if_urgent_triage": "Separates patients needing staff attention now from those safe for normal follow-up.",
+    "slack_alert_clinic": "Puts urgent cases where staff see them immediately.",
+    "gmail_confirm_patient": "Gives routine patients a clear acknowledgment and next step without waiting for a phone call.",
+    "mongo_archive_patient_intake": "Stores the structured intake and triage decision as a flexible clinical-admin document without changing the Slack or email routing path."
+  },
+  "clinic-appointment-reminder": {
+    "schedule_appointment_check": "Runs daily because appointment reminders are time-based, not manually triggered.",
+    "airtable_read_appointment": "Selects one appointment that still needs a reminder so each run is safe and repeatable.",
+    "js_prepare_appointment": "Lifts the appointment row into fields used by the email and marker nodes.",
+    "if_has_appointment": "Stops empty daily checks from sending blank reminders.",
+    "gmail_send_appointment": "Delivers the reminder through Gmail, a verified working channel.",
+    "airtable_mark_appointment": "Prevents the same appointment reminder being sent again on the next scheduled run."
+  },
+  "lab-report-follow-up": {
+    "form_lab_report": "Collects the report summary and patient contact in one controlled intake.",
+    "ai_review_lab": "Classifies whether the clinic team should review before a patient message goes out.",
+    "js_parse_lab": "Makes the clinician-review flag available to the branch.",
+    "if_lab_needs_review": "Keeps sensitive or unclear report follow-ups with staff instead of auto-emailing them.",
+    "slack_lab_review": "Routes clinician-needed cases to the care team for human review.",
+    "gmail_lab_followup": "Sends clear next-step communication when staff review is not required."
+  },
+  "insurance-pre-authorization-tracker": {
+    "schedule_preauth_check": "Pre-authorization status changes are periodic, so polling is safer than manual checking.",
+    "airtable_read_preauth": "Handles one pending request per run to avoid duplicate notifications.",
+    "js_prepare_preauth": "Normalises the pre-authorization row into the status and routing fields used below.",
+    "if_has_preauth": "Stops empty polls from creating noise.",
+    "if_preauth_staff": "Separates requests that need staff intervention from simple patient updates.",
+    "slack_preauth_staff": "Gets denied or information-needed cases in front of the insurance desk.",
+    "gmail_preauth_patient": "Keeps patients informed when the request does not need immediate staff action.",
+    "airtable_mark_preauth": "Marks the request so it is not processed repeatedly."
+  },
+  "patient-feedback-classifier": {
+    "form_patient_feedback": "Provides a simple channel for structured patient feedback.",
+    "ai_classify_feedback": "Turns free-text feedback into category and review fields.",
+    "js_parse_feedback": "Creates stable fields for storage and review routing.",
+    "airtable_log_feedback": "Keeps a searchable record of feedback themes and sentiment.",
+    "if_feedback_review": "Only interrupts staff when the classification says review is needed.",
+    "slack_feedback_review": "Sends important feedback to the team that can respond."
+  },
+  "invoice-approval-triage": {
+    "form_invoice_submission": "Collects the vendor, amount and context needed for an approval decision.",
+    "ai_invoice_risk": "Adds policy/risk judgment beyond a simple amount threshold.",
+    "js_parse_invoice": "Combines AI judgment with a hard approval threshold into a reliable flag.",
+    "if_invoice_approval": "Separates invoices finance must review from those that can be filed.",
+    "postgres_log_invoice": "Creates an audit record for every invoice decision.",
+    "slack_invoice_approval": "Puts approval-required invoices in the finance queue immediately.",
+    "gmail_invoice_received": "Confirms receipt so the submitter knows the invoice is in process."
+  },
+  "expense-policy-checker": {
+    "form_expense": "Captures the expense data needed for policy review.",
+    "ai_policy_check": "Flags unusual expenses while allowing normal ones through.",
+    "js_parse_expense": "Turns the AI result into fields that can be stored and branched on.",
+    "postgres_save_expense": "Keeps every policy decision auditable.",
+    "if_expense_review": "Only sends exceptions to finance; approved expenses are simply recorded.",
+    "slack_expense_review": "Notifies finance when the policy result is not approved."
+  },
+  "vendor-due-diligence": {
+    "form_vendor": "Collects the vendor identity and internal owner before any review starts.",
+    "http_fetch_vendor_site": "Reads the live vendor website so the review uses current public information.",
+    "ai_vendor_risk": "Summarizes vendor risk using the live website rather than only the submitted name.",
+    "js_parse_vendor": "Creates fields for storage and the procurement review branch.",
+    "airtable_log_vendor": "Stores the review so procurement has an audit trail.",
+    "if_vendor_review": "Only interrupts procurement for vendors that need a closer look.",
+    "slack_vendor_review": "Routes high-risk vendor reviews to procurement immediately.",
+    "mongo_archive_vendor_dossier": "Captures each vendor risk assessment as a document dossier, which is useful when vendors have different enrichment fields over time."
+  },
+  "payment-failure-recovery": {
+    "webhook_payment_failed": "Receives payment-failure payloads from whichever billing tool the customer uses.",
+    "js_extract_payment": "Normalises common billing payload shapes into fields used by the recovery steps.",
+    "ai_recovery_message": "Produces customer-friendly recovery copy instead of a cold system error.",
+    "gmail_payment_recovery": "Sends the recovery message through a verified working email channel.",
+    "if_high_value_payment": "Separates failures worth manual finance follow-up from normal automated recovery.",
+    "slack_payment_followup": "Gets large failed payments into a human recovery queue."
+  },
+  "support-ticket-triage": {
+    "form_support_request": "Collects the customer issue in a structured form instead of an untracked inbox.",
+    "ai_classify_ticket": "Turns the request into priority and category fields.",
+    "js_parse_ticket": "Creates stable fields for database storage and priority routing.",
+    "postgres_create_ticket": "Creates a durable ticket instead of leaving support requests only in email or Slack.",
+    "if_urgent_ticket": "Only urgent tickets interrupt the team immediately.",
+    "slack_urgent_ticket": "Puts urgent requests in front of support staff fast.",
+    "gmail_ticket_ack": "Confirms the ticket was received and sets customer expectations.",
+    "mongo_archive_ticket": "Keeps the full ticket payload and AI classification as one MongoDB document for analytics, replay, or downstream support tooling."
+  },
+  "meeting-notes-to-action-items": {
+    "form_meeting_notes": "Gives the team a simple way to turn raw notes into follow-up work.",
+    "ai_extract_actions": "Finds action items and owners in unstructured notes.",
+    "js_parse_actions": "Formats the AI result for storage and Slack posting.",
+    "postgres_save_meeting": "Keeps a searchable record of meeting decisions and tasks.",
+    "slack_post_actions": "Puts the follow-up list where the team already coordinates."
+  },
+  "employee-onboarding-checklist": {
+    "schedule_onboarding": "Runs daily to pick up new hires without manual HR checks.",
+    "airtable_read_new_hire": "Selects one ready new hire that has not started onboarding.",
+    "js_prepare_onboarding": "Lifts new-hire fields into a clean payload for email, Slack and marking.",
+    "if_has_hire": "Stops empty daily checks from sending blank onboarding messages.",
+    "gmail_onboarding": "Sends a consistent welcome email to the new hire.",
+    "slack_onboarding": "Tells People Ops and the manager that onboarding has started.",
+    "airtable_mark_onboarding": "Prevents duplicate onboarding starts for the same employee."
+  },
+  "weekly-pipeline-report": {
+    "schedule_pipeline_report": "Runs weekly so leadership receives a consistent pipeline view.",
+    "airtable_read_pipeline": "Loads active deals that belong in the weekly report.",
+    "ai_summarize_pipeline": "Turns raw deal rows into an executive-readable summary.",
+    "gmail_pipeline_report": "Sends the report to leadership without requiring them to open the CRM.",
+    "slack_pipeline_report": "Shares the same summary in the sales team channel for follow-up."
+  },
+  "crm-data-cleanup-assistant": {
+    "schedule_crm_cleanup": "Runs continuously but lightly, cleaning one record per pass.",
+    "hubspot_read_contact": "Uses the real CRM node so the template works against the system sales teams use.",
+    "js_detect_missing_crm": "Finds the exact fields missing from the contact record.",
+    "if_crm_missing": "Only records with missing required fields create work for ops.",
+    "slack_crm_research": "Routes incomplete records to RevOps for human research.",
+    "hubspot_mark_reviewed": "Marks the contact as reviewed so it can be excluded from future cleanup passes."
+  },
+  "customer-churn-risk-alert": {
+    "schedule_churn_check": "Runs on a timer because churn signals appear in account data over time.",
+    "airtable_read_customer": "Selects one active customer that has not been checked yet.",
+    "ai_churn_score": "Uses account context to judge risk and recommend the next action.",
+    "js_parse_churn": "Combines the Airtable record ID with the parsed AI risk fields.",
+    "if_high_churn": "Only high-risk accounts interrupt the account team.",
+    "slack_churn_alert": "Routes the alert to the owner responsible for saving the account.",
+    "airtable_mark_churn_checked": "Prevents the same customer from being rescored on every poll."
+  },
+  "kyc-document-checklist-generator": {
+    "form_intake": "Collects one complete request so the workflow handles a single record per run.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "if_route": "Splits high-attention work from routine handling using one explicit comparison.",
+    "slack_review": "Puts the exception in front of the team that can act on it.",
+    "gmail_routine": "Sends the routine response or acknowledgement without requiring a manual handoff.",
+    "store_result": "Logs the assessment so the team has a durable queue outside the execution log."
+  },
+  "domain-age-reputation-screener": {
+    "form_intake": "Collects one complete request so the workflow handles a single record per run.",
+    "http_enrich": "Fetches static API or website context needed for the assessment; credentials stay in the connected service, not in the template.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "if_route": "Splits high-attention work from routine handling using one explicit comparison.",
+    "slack_review": "Puts the exception in front of the team that can act on it.",
+    "gmail_routine": "Sends the routine response or acknowledgement without requiring a manual handoff.",
+    "store_result": "Logs the assessment so the team has a durable queue outside the execution log."
+  },
+  "policy-page-presence-checker": {
+    "form_intake": "Collects one complete request so the workflow handles a single record per run.",
+    "http_enrich": "Fetches static API or website context needed for the assessment; credentials stay in the connected service, not in the template.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "if_route": "Splits high-attention work from routine handling using one explicit comparison.",
+    "slack_review": "Puts the exception in front of the team that can act on it.",
+    "gmail_routine": "Sends the routine response or acknowledgement without requiring a manual handoff.",
+    "store_result": "Logs the assessment so the team has a durable queue outside the execution log."
+  },
+  "verification-rejection-reason-classifier": {
+    "form_intake": "Collects one complete request so the workflow handles a single record per run.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "if_route": "Splits high-attention work from routine handling using one explicit comparison.",
+    "slack_review": "Puts the exception in front of the team that can act on it.",
+    "gmail_routine": "Sends the routine response or acknowledgement without requiring a manual handoff.",
+    "store_result": "Logs the assessment so the team has a durable queue outside the execution log."
+  },
+  "tax-gst-id-format-validator": {
+    "form_intake": "Collects one complete request so the workflow handles a single record per run.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "if_route": "Splits high-attention work from routine handling using one explicit comparison.",
+    "slack_review": "Puts the exception in front of the team that can act on it.",
+    "gmail_routine": "Sends the routine response or acknowledgement without requiring a manual handoff.",
+    "store_result": "Logs the assessment so the team has a durable queue outside the execution log."
+  },
+  "compliance-deadline-digest": {
+    "schedule_poll": "Runs on a timer and drains one matching record per run because the current runtime does not fan out over multiple rows.",
+    "airtable_read_one": "Selects a single unprocessed row and excludes rows already marked by this workflow.",
+    "js_prepare_record": "Lifts the Airtable record fields and record ID to the top level for downstream nodes.",
+    "if_has_work": "Keeps empty polls quiet instead of sending blank messages or wasting AI calls.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "gmail_notify": "Sends the person responsible the reminder or digest for this one selected record.",
+    "slack_notify": "Posts the same event to the operating channel so the team can see the queue moving.",
+    "airtable_mark_done": "Writes the processed marker that makes the scheduled poll idempotent across runs.",
+    "log_no_work": "Leaves a quiet execution trace when there is nothing to process."
+  },
+  "website-compliance-snapshot-logger": {
+    "schedule_poll": "Runs on a timer and drains one matching record per run because the current runtime does not fan out over multiple rows.",
+    "airtable_read_one": "Selects a single unprocessed row and excludes rows already marked by this workflow.",
+    "js_prepare_record": "Lifts the Airtable record fields and record ID to the top level for downstream nodes.",
+    "if_has_work": "Keeps empty polls quiet instead of sending blank messages or wasting AI calls.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "if_action": "Only sends the external notification when the prepared record meets the template threshold.",
+    "slack_notify": "Posts the same event to the operating channel so the team can see the queue moving.",
+    "airtable_mark_done": "Writes the processed marker that makes the scheduled poll idempotent across runs.",
+    "log_no_work": "Leaves a quiet execution trace when there is nothing to process."
+  },
+  "client-onboarding-compliance-tracker": {
+    "form_intake": "Collects the structured details this workflow needs without relying on a push trigger that the template gate does not allow yet.",
+    "airtable_create": "Creates the operating record before messages go out, so later work has a durable owner and status.",
+    "gmail_send": "Sends the customer or requester the first useful response.",
+    "slack_notify": "Lets the internal owner know a new record is ready to work."
+  },
+  "duplicate-client-detector": {
+    "schedule_poll": "Runs on a timer and drains one matching record per run because the current runtime does not fan out over multiple rows.",
+    "airtable_read_one": "Selects a single unprocessed row and excludes rows already marked by this workflow.",
+    "js_prepare_record": "Lifts the Airtable record fields and record ID to the top level for downstream nodes.",
+    "if_has_work": "Keeps empty polls quiet instead of sending blank messages or wasting AI calls.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "if_action": "Only sends the external notification when the prepared record meets the template threshold.",
+    "slack_notify": "Posts the same event to the operating channel so the team can see the queue moving.",
+    "airtable_mark_done": "Writes the processed marker that makes the scheduled poll idempotent across runs.",
+    "log_no_work": "Leaves a quiet execution trace when there is nothing to process."
+  },
+  "ai-inbox-triage-auto-label": {
+    "webhook_intake": "Receives one structured event from the source system through a CtrlChecks webhook.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "if_route": "Splits high-attention work from routine handling using one explicit comparison.",
+    "slack_review": "Puts the exception in front of the team that can act on it.",
+    "gmail_routine": "Sends the routine response or acknowledgement without requiring a manual handoff.",
+    "store_result": "Archives the full event-style result as one MongoDB document, which fits variable payloads better than a fixed SQL row."
+  },
+  "ai-reply-draft-assistant": {
+    "webhook_intake": "Receives one structured event from the source system through a CtrlChecks webhook.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "if_route": "Splits high-attention work from routine handling using one explicit comparison.",
+    "slack_review": "Puts the exception in front of the team that can act on it.",
+    "gmail_routine": "Sends the routine response or acknowledgement without requiring a manual handoff.",
+    "store_result": "Logs the assessment so the team has a durable queue outside the execution log."
+  },
+  "sheets-new-lead-pipeline": {
+    "webhook_intake": "Receives one structured event from the source system through a CtrlChecks webhook.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "if_route": "Splits high-attention work from routine handling using one explicit comparison.",
+    "slack_review": "Puts the exception in front of the team that can act on it.",
+    "gmail_routine": "Sends the routine response or acknowledgement without requiring a manual handoff.",
+    "store_result": "Stores the decision in PostgreSQL for audit and follow-up."
+  },
+  "telegram-support-bot": {
+    "form_intake": "Collects one complete request so the workflow handles a single record per run.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "if_route": "Splits high-attention work from routine handling using one explicit comparison.",
+    "slack_review": "Puts the exception in front of the team that can act on it.",
+    "gmail_routine": "Sends the routine response or acknowledgement without requiring a manual handoff.",
+    "store_result": "Logs the assessment so the team has a durable queue outside the execution log."
+  },
+  "github-pr-ai-code-review": {
+    "webhook_intake": "Receives one structured event from the source system through a CtrlChecks webhook.",
+    "http_enrich": "Fetches static API or website context needed for the assessment; credentials stay in the connected service, not in the template.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "if_route": "Splits high-attention work from routine handling using one explicit comparison.",
+    "slack_review": "Puts the exception in front of the team that can act on it.",
+    "gmail_routine": "Sends the routine response or acknowledgement without requiring a manual handoff.",
+    "store_result": "Stores the decision in PostgreSQL for audit and follow-up."
+  },
+  "calendar-meeting-prep-brief": {
+    "form_intake": "Collects one complete request so the workflow handles a single record per run.",
+    "http_enrich": "Fetches static API or website context needed for the assessment; credentials stay in the connected service, not in the template.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "if_route": "Splits high-attention work from routine handling using one explicit comparison.",
+    "slack_review": "Puts the exception in front of the team that can act on it.",
+    "gmail_routine": "Sends the routine response or acknowledgement without requiring a manual handoff.",
+    "store_result": "Logs the assessment so the team has a durable queue outside the execution log."
+  },
+  "new-bug-auto-classifier": {
+    "webhook_intake": "Receives one structured event from the source system through a CtrlChecks webhook.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "if_route": "Splits high-attention work from routine handling using one explicit comparison.",
+    "slack_review": "Puts the exception in front of the team that can act on it.",
+    "gmail_routine": "Sends the routine response or acknowledgement without requiring a manual handoff.",
+    "store_result": "Stores the decision in PostgreSQL for audit and follow-up."
+  },
+  "crm-org-enrichment-on-demand": {
+    "form_intake": "Collects one complete request so the workflow handles a single record per run.",
+    "http_enrich": "Fetches static API or website context needed for the assessment; credentials stay in the connected service, not in the template.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "if_route": "Splits high-attention work from routine handling using one explicit comparison.",
+    "slack_review": "Puts the exception in front of the team that can act on it.",
+    "gmail_routine": "Sends the routine response or acknowledgement without requiring a manual handoff.",
+    "store_result": "Logs the assessment so the team has a durable queue outside the execution log."
+  },
+  "slack-message-to-task-logger": {
+    "form_intake": "Collects one complete request so the workflow handles a single record per run.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "if_route": "Splits high-attention work from routine handling using one explicit comparison.",
+    "slack_review": "Puts the exception in front of the team that can act on it.",
+    "gmail_routine": "Sends the routine response or acknowledgement without requiring a manual handoff.",
+    "store_result": "Logs the assessment so the team has a durable queue outside the execution log."
+  },
+  "purchase-order-approval-router": {
+    "form_intake": "Collects one complete request so the workflow handles a single record per run.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "if_route": "Splits high-attention work from routine handling using one explicit comparison.",
+    "slack_review": "Puts the exception in front of the team that can act on it.",
+    "gmail_routine": "Sends the routine response or acknowledgement without requiring a manual handoff.",
+    "store_result": "Stores the decision in PostgreSQL for audit and follow-up."
+  },
+  "expense-category-auto-tagger": {
+    "webhook_intake": "Receives one structured event from the source system through a CtrlChecks webhook.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "if_route": "Splits high-attention work from routine handling using one explicit comparison.",
+    "slack_review": "Puts the exception in front of the team that can act on it.",
+    "gmail_routine": "Sends the routine response or acknowledgement without requiring a manual handoff.",
+    "store_result": "Stores the decision in PostgreSQL for audit and follow-up."
+  },
+  "budget-threshold-monitor": {
+    "schedule_poll": "Runs on a timer and drains one matching record per run because the current runtime does not fan out over multiple rows.",
+    "airtable_read_one": "Selects a single unprocessed row and excludes rows already marked by this workflow.",
+    "js_prepare_record": "Lifts the Airtable record fields and record ID to the top level for downstream nodes.",
+    "if_has_work": "Keeps empty polls quiet instead of sending blank messages or wasting AI calls.",
+    "gmail_notify": "Sends the person responsible the reminder or digest for this one selected record.",
+    "slack_notify": "Posts the same event to the operating channel so the team can see the queue moving.",
+    "airtable_mark_done": "Writes the processed marker that makes the scheduled poll idempotent across runs.",
+    "log_no_work": "Leaves a quiet execution trace when there is nothing to process."
+  },
+  "duplicate-invoice-detector": {
+    "webhook_intake": "Receives one structured event from the source system through a CtrlChecks webhook.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "if_route": "Splits high-attention work from routine handling using one explicit comparison.",
+    "slack_review": "Puts the exception in front of the team that can act on it.",
+    "gmail_routine": "Sends the routine response or acknowledgement without requiring a manual handoff.",
+    "store_result": "Stores the decision in PostgreSQL for audit and follow-up."
+  },
+  "vendor-onboarding-risk-scorer": {
+    "form_intake": "Collects one complete request so the workflow handles a single record per run.",
+    "http_enrich": "Fetches static API or website context needed for the assessment; credentials stay in the connected service, not in the template.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "if_route": "Splits high-attention work from routine handling using one explicit comparison.",
+    "slack_review": "Puts the exception in front of the team that can act on it.",
+    "gmail_routine": "Sends the routine response or acknowledgement without requiring a manual handoff.",
+    "store_result": "Logs the assessment so the team has a durable queue outside the execution log."
+  },
+  "subscription-renewal-reminder": {
+    "schedule_poll": "Runs on a timer and drains one matching record per run because the current runtime does not fan out over multiple rows.",
+    "airtable_read_one": "Selects a single unprocessed row and excludes rows already marked by this workflow.",
+    "js_prepare_record": "Lifts the Airtable record fields and record ID to the top level for downstream nodes.",
+    "if_has_work": "Keeps empty polls quiet instead of sending blank messages or wasting AI calls.",
+    "gmail_notify": "Sends the person responsible the reminder or digest for this one selected record.",
+    "slack_notify": "Posts the same event to the operating channel so the team can see the queue moving.",
+    "airtable_mark_done": "Writes the processed marker that makes the scheduled poll idempotent across runs.",
+    "log_no_work": "Leaves a quiet execution trace when there is nothing to process."
+  },
+  "payment-reminder-sequence": {
+    "schedule_poll": "Runs on a timer and drains one matching record per run because the current runtime does not fan out over multiple rows.",
+    "airtable_read_one": "Selects a single unprocessed row and excludes rows already marked by this workflow.",
+    "js_prepare_record": "Lifts the Airtable record fields and record ID to the top level for downstream nodes.",
+    "if_has_work": "Keeps empty polls quiet instead of sending blank messages or wasting AI calls.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "gmail_notify": "Sends the person responsible the reminder or digest for this one selected record.",
+    "airtable_mark_done": "Writes the processed marker that makes the scheduled poll idempotent across runs.",
+    "log_no_work": "Leaves a quiet execution trace when there is nothing to process."
+  },
+  "ar-aging-weekly-report": {
+    "schedule_poll": "Runs on a timer and drains one matching record per run because the current runtime does not fan out over multiple rows.",
+    "airtable_read_one": "Selects a single unprocessed row and excludes rows already marked by this workflow.",
+    "js_prepare_record": "Lifts the Airtable record fields and record ID to the top level for downstream nodes.",
+    "if_has_work": "Keeps empty polls quiet instead of sending blank messages or wasting AI calls.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "gmail_notify": "Sends the person responsible the reminder or digest for this one selected record.",
+    "slack_notify": "Posts the same event to the operating channel so the team can see the queue moving.",
+    "airtable_mark_done": "Writes the processed marker that makes the scheduled poll idempotent across runs.",
+    "log_no_work": "Leaves a quiet execution trace when there is nothing to process."
+  },
+  "fraud-signal-alert": {
+    "webhook_intake": "Receives one structured event from the source system through a CtrlChecks webhook.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "if_route": "Splits high-attention work from routine handling using one explicit comparison.",
+    "slack_review": "Puts the exception in front of the team that can act on it.",
+    "gmail_routine": "Sends the routine response or acknowledgement without requiring a manual handoff.",
+    "store_result": "Stores the decision in PostgreSQL for audit and follow-up."
+  },
+  "refund-request-triage": {
+    "form_intake": "Collects one complete request so the workflow handles a single record per run.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "if_route": "Splits high-attention work from routine handling using one explicit comparison.",
+    "slack_review": "Puts the exception in front of the team that can act on it.",
+    "gmail_routine": "Sends the routine response or acknowledgement without requiring a manual handoff.",
+    "store_result": "Stores the decision in PostgreSQL for audit and follow-up."
+  },
+  "insurance-claim-intake-triage": {
+    "form_intake": "Collects one complete request so the workflow handles a single record per run.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "if_route": "Splits high-attention work from routine handling using one explicit comparison.",
+    "slack_review": "Puts the exception in front of the team that can act on it.",
+    "gmail_routine": "Sends the routine response or acknowledgement without requiring a manual handoff.",
+    "store_result": "Archives the full event-style result as one MongoDB document, which fits variable payloads better than a fixed SQL row."
+  },
+  "policy-renewal-notifier": {
+    "schedule_poll": "Runs on a timer and drains one matching record per run because the current runtime does not fan out over multiple rows.",
+    "airtable_read_one": "Selects a single unprocessed row and excludes rows already marked by this workflow.",
+    "js_prepare_record": "Lifts the Airtable record fields and record ID to the top level for downstream nodes.",
+    "if_has_work": "Keeps empty polls quiet instead of sending blank messages or wasting AI calls.",
+    "gmail_notify": "Sends the person responsible the reminder or digest for this one selected record.",
+    "slack_notify": "Posts the same event to the operating channel so the team can see the queue moving.",
+    "airtable_mark_done": "Writes the processed marker that makes the scheduled poll idempotent across runs.",
+    "log_no_work": "Leaves a quiet execution trace when there is nothing to process."
+  },
+  "quote-request-responder": {
+    "form_intake": "Collects one complete request so the workflow handles a single record per run.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "if_route": "Splits high-attention work from routine handling using one explicit comparison.",
+    "slack_review": "Puts the exception in front of the team that can act on it.",
+    "gmail_routine": "Sends the routine response or acknowledgement without requiring a manual handoff.",
+    "store_result": "Logs the assessment so the team has a durable queue outside the execution log."
+  },
+  "chargeback-dispute-handler": {
+    "webhook_intake": "Receives one structured event from the source system through a CtrlChecks webhook.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "if_route": "Splits high-attention work from routine handling using one explicit comparison.",
+    "slack_review": "Puts the exception in front of the team that can act on it.",
+    "gmail_routine": "Sends the routine response or acknowledgement without requiring a manual handoff.",
+    "store_result": "Stores the decision in PostgreSQL for audit and follow-up."
+  },
+  "vendor-payment-approval": {
+    "webhook_intake": "Receives one structured event from the source system through a CtrlChecks webhook.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "if_route": "Splits high-attention work from routine handling using one explicit comparison.",
+    "slack_review": "Puts the exception in front of the team that can act on it.",
+    "gmail_routine": "Sends the routine response or acknowledgement without requiring a manual handoff.",
+    "store_result": "Stores the decision in PostgreSQL for audit and follow-up."
+  },
+  "tax-deadline-reminder": {
+    "schedule_poll": "Runs on a timer and drains one matching record per run because the current runtime does not fan out over multiple rows.",
+    "airtable_read_one": "Selects a single unprocessed row and excludes rows already marked by this workflow.",
+    "js_prepare_record": "Lifts the Airtable record fields and record ID to the top level for downstream nodes.",
+    "if_has_work": "Keeps empty polls quiet instead of sending blank messages or wasting AI calls.",
+    "slack_notify": "Posts the same event to the operating channel so the team can see the queue moving.",
+    "airtable_mark_done": "Writes the processed marker that makes the scheduled poll idempotent across runs.",
+    "log_no_work": "Leaves a quiet execution trace when there is nothing to process."
+  },
+  "appointment-no-show-follow-up": {
+    "schedule_poll": "Runs on a timer and drains one matching record per run because the current runtime does not fan out over multiple rows.",
+    "airtable_read_one": "Selects a single unprocessed row and excludes rows already marked by this workflow.",
+    "js_prepare_record": "Lifts the Airtable record fields and record ID to the top level for downstream nodes.",
+    "if_has_work": "Keeps empty polls quiet instead of sending blank messages or wasting AI calls.",
+    "gmail_notify": "Sends the person responsible the reminder or digest for this one selected record.",
+    "slack_notify": "Posts the same event to the operating channel so the team can see the queue moving.",
+    "airtable_mark_done": "Writes the processed marker that makes the scheduled poll idempotent across runs.",
+    "log_no_work": "Leaves a quiet execution trace when there is nothing to process."
+  },
+  "new-patient-registration-router": {
+    "form_intake": "Collects one complete request so the workflow handles a single record per run.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "if_route": "Splits high-attention work from routine handling using one explicit comparison.",
+    "slack_review": "Puts the exception in front of the team that can act on it.",
+    "gmail_routine": "Sends the routine response or acknowledgement without requiring a manual handoff.",
+    "store_result": "Logs the assessment so the team has a durable queue outside the execution log."
+  },
+  "prescription-refill-reminder": {
+    "schedule_poll": "Runs on a timer and drains one matching record per run because the current runtime does not fan out over multiple rows.",
+    "airtable_read_one": "Selects a single unprocessed row and excludes rows already marked by this workflow.",
+    "js_prepare_record": "Lifts the Airtable record fields and record ID to the top level for downstream nodes.",
+    "if_has_work": "Keeps empty polls quiet instead of sending blank messages or wasting AI calls.",
+    "gmail_notify": "Sends the person responsible the reminder or digest for this one selected record.",
+    "airtable_mark_done": "Writes the processed marker that makes the scheduled poll idempotent across runs.",
+    "log_no_work": "Leaves a quiet execution trace when there is nothing to process."
+  },
+  "symptom-urgency-triage-bot": {
+    "form_intake": "Collects one complete request so the workflow handles a single record per run.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "if_route": "Splits high-attention work from routine handling using one explicit comparison.",
+    "slack_review": "Puts the exception in front of the team that can act on it.",
+    "gmail_routine": "Sends the routine response or acknowledgement without requiring a manual handoff.",
+    "store_result": "Stores the decision in PostgreSQL for audit and follow-up."
+  },
+  "patient-satisfaction-survey-sender": {
+    "schedule_poll": "Runs on a timer and drains one matching record per run because the current runtime does not fan out over multiple rows.",
+    "airtable_read_one": "Selects a single unprocessed row and excludes rows already marked by this workflow.",
+    "js_prepare_record": "Lifts the Airtable record fields and record ID to the top level for downstream nodes.",
+    "if_has_work": "Keeps empty polls quiet instead of sending blank messages or wasting AI calls.",
+    "gmail_notify": "Sends the person responsible the reminder or digest for this one selected record.",
+    "airtable_mark_done": "Writes the processed marker that makes the scheduled poll idempotent across runs.",
+    "log_no_work": "Leaves a quiet execution trace when there is nothing to process."
+  },
+  "referral-tracking-notifier": {
+    "form_intake": "Collects the structured details this workflow needs without relying on a push trigger that the template gate does not allow yet.",
+    "airtable_create": "Creates the operating record before messages go out, so later work has a durable owner and status.",
+    "gmail_send": "Sends the customer or requester the first useful response.",
+    "slack_notify": "Lets the internal owner know a new record is ready to work."
+  },
+  "insurance-eligibility-pre-check": {
+    "form_intake": "Collects one complete request so the workflow handles a single record per run.",
+    "http_enrich": "Fetches static API or website context needed for the assessment; credentials stay in the connected service, not in the template.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "if_route": "Splits high-attention work from routine handling using one explicit comparison.",
+    "slack_review": "Puts the exception in front of the team that can act on it.",
+    "gmail_routine": "Sends the routine response or acknowledgement without requiring a manual handoff.",
+    "store_result": "Logs the assessment so the team has a durable queue outside the execution log."
+  },
+  "appointment-booking-confirmation": {
+    "form_intake": "Collects the structured details this workflow needs without relying on a push trigger that the template gate does not allow yet.",
+    "airtable_create": "Creates the operating record before messages go out, so later work has a durable owner and status.",
+    "gmail_send": "Sends the customer or requester the first useful response.",
+    "slack_notify": "Lets the internal owner know a new record is ready to work."
+  },
+  "care-plan-follow-up-scheduler": {
+    "schedule_poll": "Runs on a timer and drains one matching record per run because the current runtime does not fan out over multiple rows.",
+    "airtable_read_one": "Selects a single unprocessed row and excludes rows already marked by this workflow.",
+    "js_prepare_record": "Lifts the Airtable record fields and record ID to the top level for downstream nodes.",
+    "if_has_work": "Keeps empty polls quiet instead of sending blank messages or wasting AI calls.",
+    "gmail_notify": "Sends the person responsible the reminder or digest for this one selected record.",
+    "slack_notify": "Posts the same event to the operating channel so the team can see the queue moving.",
+    "airtable_mark_done": "Writes the processed marker that makes the scheduled poll idempotent across runs.",
+    "log_no_work": "Leaves a quiet execution trace when there is nothing to process."
+  },
+  "missed-lab-result-chaser": {
+    "schedule_poll": "Runs on a timer and drains one matching record per run because the current runtime does not fan out over multiple rows.",
+    "airtable_read_one": "Selects a single unprocessed row and excludes rows already marked by this workflow.",
+    "js_prepare_record": "Lifts the Airtable record fields and record ID to the top level for downstream nodes.",
+    "if_has_work": "Keeps empty polls quiet instead of sending blank messages or wasting AI calls.",
+    "gmail_notify": "Sends the person responsible the reminder or digest for this one selected record.",
+    "slack_notify": "Posts the same event to the operating channel so the team can see the queue moving.",
+    "airtable_mark_done": "Writes the processed marker that makes the scheduled poll idempotent across runs.",
+    "log_no_work": "Leaves a quiet execution trace when there is nothing to process."
+  },
+  "clinic-daily-schedule-digest": {
+    "schedule_poll": "Runs on a timer and drains one matching record per run because the current runtime does not fan out over multiple rows.",
+    "airtable_read_one": "Selects a single unprocessed row and excludes rows already marked by this workflow.",
+    "js_prepare_record": "Lifts the Airtable record fields and record ID to the top level for downstream nodes.",
+    "if_has_work": "Keeps empty polls quiet instead of sending blank messages or wasting AI calls.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "slack_notify": "Posts the same event to the operating channel so the team can see the queue moving.",
+    "airtable_mark_done": "Writes the processed marker that makes the scheduled poll idempotent across runs.",
+    "log_no_work": "Leaves a quiet execution trace when there is nothing to process."
+  },
+  "telehealth-link-dispatcher": {
+    "schedule_poll": "Runs on a timer and drains one matching record per run because the current runtime does not fan out over multiple rows.",
+    "airtable_read_one": "Selects a single unprocessed row and excludes rows already marked by this workflow.",
+    "js_prepare_record": "Lifts the Airtable record fields and record ID to the top level for downstream nodes.",
+    "if_has_work": "Keeps empty polls quiet instead of sending blank messages or wasting AI calls.",
+    "gmail_notify": "Sends the person responsible the reminder or digest for this one selected record.",
+    "slack_notify": "Posts the same event to the operating channel so the team can see the queue moving.",
+    "airtable_mark_done": "Writes the processed marker that makes the scheduled poll idempotent across runs.",
+    "log_no_work": "Leaves a quiet execution trace when there is nothing to process."
+  },
+  "vaccination-due-reminder": {
+    "schedule_poll": "Runs on a timer and drains one matching record per run because the current runtime does not fan out over multiple rows.",
+    "airtable_read_one": "Selects a single unprocessed row and excludes rows already marked by this workflow.",
+    "js_prepare_record": "Lifts the Airtable record fields and record ID to the top level for downstream nodes.",
+    "if_has_work": "Keeps empty polls quiet instead of sending blank messages or wasting AI calls.",
+    "gmail_notify": "Sends the person responsible the reminder or digest for this one selected record.",
+    "airtable_mark_done": "Writes the processed marker that makes the scheduled poll idempotent across runs.",
+    "log_no_work": "Leaves a quiet execution trace when there is nothing to process."
+  },
+  "post-visit-instructions-sender": {
+    "form_intake": "Collects one complete request so the workflow handles a single record per run.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "if_route": "Splits high-attention work from routine handling using one explicit comparison.",
+    "slack_review": "Puts the exception in front of the team that can act on it.",
+    "gmail_routine": "Sends the routine response or acknowledgement without requiring a manual handoff.",
+    "store_result": "Logs the assessment so the team has a durable queue outside the execution log."
+  },
+  "waitlist-fill-notifier": {
+    "schedule_poll": "Runs on a timer and drains one matching record per run because the current runtime does not fan out over multiple rows.",
+    "airtable_read_one": "Selects a single unprocessed row and excludes rows already marked by this workflow.",
+    "js_prepare_record": "Lifts the Airtable record fields and record ID to the top level for downstream nodes.",
+    "if_has_work": "Keeps empty polls quiet instead of sending blank messages or wasting AI calls.",
+    "gmail_notify": "Sends the person responsible the reminder or digest for this one selected record.",
+    "slack_notify": "Posts the same event to the operating channel so the team can see the queue moving.",
+    "airtable_mark_done": "Writes the processed marker that makes the scheduled poll idempotent across runs.",
+    "log_no_work": "Leaves a quiet execution trace when there is nothing to process."
+  },
+  "patient-complaint-triage": {
+    "form_intake": "Collects one complete request so the workflow handles a single record per run.",
+    "ai_classify": "Turns the incoming business context into structured fields the routing and message steps can trust.",
+    "js_parse_ai": "Parses the AI JSON into real workflow fields before any branch reads those fields.",
+    "if_route": "Splits high-attention work from routine handling using one explicit comparison.",
+    "slack_review": "Puts the exception in front of the team that can act on it.",
+    "gmail_routine": "Sends the routine response or acknowledgement without requiring a manual handoff.",
+    "store_result": "Logs the assessment so the team has a durable queue outside the execution log."
   }
 }

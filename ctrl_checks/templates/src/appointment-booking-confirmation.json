@@ -1,0 +1,206 @@
+{
+  "id": "92000000-0000-4000-8000-000000000042",
+  "name": "Appointment Booking Confirmation",
+  "description": "Confirm one appointment booking received by webhook-style intake, email the patient, notify the front desk, and log the booking.",
+  "category": "Healthcare & Clinics",
+  "nodes": [
+    {
+      "id": "form_intake",
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      },
+      "data": {
+        "icon": "Box",
+        "type": "form",
+        "label": "Collect Details",
+        "category": "triggers",
+        "config": {
+          "formTitle": "Appointment Booking Confirmation",
+          "fields": [
+            {
+              "key": "patientName",
+              "label": "Patient Name",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "patientEmail",
+              "label": "Patient Email",
+              "type": "email",
+              "required": true
+            },
+            {
+              "key": "appointmentTime",
+              "label": "Appointment Time",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "provider",
+              "label": "Provider",
+              "type": "text",
+              "required": true
+            }
+          ],
+          "submitButtonText": "Submit",
+          "successMessage": "Received."
+        },
+        "notes": {
+          "family": "Triggers",
+          "what": "Starts your workflow when someone fills out and submits a web form you built",
+          "overview": "Build a public CtrlChecks form and start the workflow when someone submits structured answers, files, or intake details.",
+          "tips": [
+            "Use friendly labels for submitters and stable internal names for workflow mapping.",
+            "Map answers with {{$json.customer_email}} or {{$json.data.customer_email}} after checking a test execution.",
+            "Use select or radio options for values that drive routing, approvals, reporting, or branch conditions.",
+            "Turn CAPTCHA on for public forms that can create tickets, leads, or notifications.",
+            "Require authentication only for internal or sensitive forms.",
+            "Changing an internal name after downstream nodes are mapped requires updating those mappings too."
+          ],
+          "docsHref": "/docs/nodes/form",
+          "why": "Collects the structured details this workflow needs without relying on a push trigger that the template gate does not allow yet."
+        }
+      }
+    },
+    {
+      "id": "airtable_create",
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      },
+      "data": {
+        "icon": "Database",
+        "type": "airtable",
+        "label": "Create Record",
+        "category": "data",
+        "config": {
+          "baseId": "",
+          "tableId": "Appointments",
+          "operation": "create",
+          "fields": {
+            "Patient": "{{input.patientName}}",
+            "Email": "{{input.patientEmail}}",
+            "AppointmentTime": "{{input.appointmentTime}}",
+            "Provider": "{{input.provider}}",
+            "Status": "Booked"
+          }
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Reads rows from an Airtable base or adds new records — like a smarter spreadsheet",
+          "overview": "List, get, create, update, upsert, and delete Airtable records. The resource dropdown is visual only; runtime implements record operations, not table-management APIs.",
+          "tips": [
+            "Use a Personal Access Token with data.records scopes or a saved Airtable connection",
+            "Base ID plus table/tableId are required for every operation",
+            "Create/update/upsert return records/count",
+            "Upsert also returns created and updated counts",
+            "Delete returns deletedRecords/count, not top-level deleted:true"
+          ],
+          "docsHref": "/docs/nodes/airtable",
+          "why": "Creates the operating record before messages go out, so later work has a durable owner and status."
+        }
+      }
+    },
+    {
+      "id": "gmail_send",
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      },
+      "data": {
+        "icon": "Mail",
+        "type": "google_gmail",
+        "label": "Send Email",
+        "category": "output",
+        "config": {
+          "operation": "send",
+          "recipientSource": "manual_entry",
+          "recipientEmails": "{{input.patientEmail}}",
+          "subject": "Appointment confirmed",
+          "body": "Your appointment with {{input.provider}} is confirmed for {{input.appointmentTime}}."
+        },
+        "notes": {
+          "family": "Communication",
+          "what": "Send emails from your Gmail account or read and search messages in your inbox",
+          "overview": "Send, list, get, or search Gmail messages. Send recipients can be typed manually or extracted from upstream/fallback Google Sheets rows.",
+          "tips": [
+            "Connect Google OAuth in Connections; do not paste tokens into workflow fields",
+            "Gmail search syntax: from:, subject:, is:unread, has:attachment",
+            "List/Search only return {id, threadId} per message â€” use a Get step with that id for full content",
+            "Body is plain text only",
+            "Get returns Gmail's raw API message; the body text is base64url-encoded inside message.payload.body.data",
+            "Use search to filter messages before getting details"
+          ],
+          "docsHref": "/docs/nodes/google_gmail",
+          "why": "Sends the customer or requester the first useful response."
+        }
+      }
+    },
+    {
+      "id": "slack_notify",
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      },
+      "data": {
+        "icon": "Hash",
+        "type": "slack_message",
+        "label": "Notify Team",
+        "category": "output",
+        "config": {
+          "channel": "#front-desk",
+          "message": "Appointment Booking Confirmation: {{input.name}} submitted {{input.details}}"
+        },
+        "notes": {
+          "family": "Communication",
+          "what": "Sends messages using a Slack app or bot connection",
+          "overview": "Send Slack bot messages to channels, direct messages, or existing threads through a saved Slack OAuth2 connection. Use it for workplace alerts, support replies, incident updates, approvals, report summaries, and deployment notifications.",
+          "tips": [
+            "Select a Slack OAuth2 connection; do not paste bot tokens into message fields",
+            "The Slack app needs chat:write, and the bot must be invited before it can post in private channels",
+            "Use {{$json.channelId}} and {{$json.threadTs}} from Slack Trigger to reply in the same conversation",
+            "Keep Message filled as readable fallback text even when Blocks contains a rich Block Kit layout",
+            "Connect downstream service accounts separately; Slack OAuth2 only authorizes the Slack send"
+          ],
+          "docsHref": "/docs/nodes/slack_message",
+          "why": "Lets the internal owner know a new record is ready to work."
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_1_form_intake_airtable_create",
+      "source": "form_intake",
+      "target": "airtable_create"
+    },
+    {
+      "id": "e_2_airtable_create_gmail_send",
+      "source": "airtable_create",
+      "target": "gmail_send"
+    },
+    {
+      "id": "e_3_gmail_send_slack_notify",
+      "source": "gmail_send",
+      "target": "slack_notify"
+    }
+  ],
+  "difficulty": "Beginner",
+  "estimated_setup_time": 12,
+  "tags": [
+    "appointments",
+    "booking",
+    "clinic",
+    "gmail",
+    "airtable"
+  ],
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2
+}

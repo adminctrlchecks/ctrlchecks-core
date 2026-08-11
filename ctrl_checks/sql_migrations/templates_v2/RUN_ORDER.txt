@@ -14,9 +14,20 @@ Or run the files by hand, in this order:
 
   00_backup_current_templates.sql    REQUIRED FIRST. Preserves the current live
                                      template table before replacing the active
-                                     library with the corrected 36.
+                                     library with the corrected 86.
   01_deactivate_unsafe_templates.sql Historical no-op kept for runbook safety.
-  02_apply_templates_v2.sql          Applies the corrected graphs to all 36.
+  02_apply_templates_v2.sql          Applies the corrected graphs to all 86.
 
 Still outstanding after this migration — see DEFERRED.md:
   - Finance / Compliance Agent: webhook_finance_1 has no auth
+  - AI Inbox Triage & Auto-Label: native gmail_trigger version
+  - AI Reply-Draft Assistant: native gmail_trigger version
+  - Sheets New-Lead Pipeline: native google_sheets_trigger version
+  - Telegram Support Bot: telegram_trigger and telegram reply version
+  - GitHub PR AI Code Review: github_trigger and GitHub comment version
+  - Calendar Meeting-Prep Brief: google_calendar_trigger version
+  - New Bug Auto-Classifier: linear_trigger / jira_trigger version
+  - Slack Message to Task Logger: slack_trigger version
+  - Chargeback / Dispute Handler: stripe_trigger / stripe node version
+  - Appointment Booking Confirmation: google_calendar create-event version
+  - Telehealth Link Dispatcher: google_calendar update-event version

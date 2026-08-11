@@ -1,0 +1,282 @@
+{
+  "id": "92000000-0000-4000-8000-000000000022",
+  "name": "Duplicate Invoice Detector",
+  "description": "Receive one invoice payload, compare against existing invoice signals, alert on likely duplicates, and log the decision.",
+  "category": "Finance, Accounting & Insurance",
+  "nodes": [
+    {
+      "id": "webhook_intake",
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      },
+      "data": {
+        "icon": "Box",
+        "type": "webhook",
+        "label": "Receive Event Payload",
+        "category": "triggers",
+        "config": {
+          "path": "/duplicate-invoice-detector",
+          "httpMethod": "POST",
+          "responseMode": "onReceived"
+        },
+        "notes": {
+          "family": "Triggers",
+          "what": "Starts your workflow the moment another app sends it data — like a doorbell for your automation",
+          "overview": "Starts a workflow when an external app, website form, payment system, or internal service sends data to the generated CtrlChecks webhook URL. Captures the request body, headers, query values, and method for the next node.",
+          "tips": [],
+          "docsHref": "/docs/nodes/webhook",
+          "why": "Receives one structured event from the source system through a CtrlChecks webhook."
+        }
+      }
+    },
+    {
+      "id": "ai_classify",
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      },
+      "data": {
+        "icon": "Box",
+        "type": "openai_gpt",
+        "label": "Classify and Draft",
+        "category": "ai",
+        "config": {
+          "model": "gpt-4o-mini",
+          "prompt": "Detect duplicate invoice risk from this invoice and prior-match context: {{input}}. Return ONLY JSON: {\"duplicate\":true|false,\"summary\":\"reason\",\"message\":\"review note\"}.",
+          "temperature": 0.2
+        },
+        "notes": {
+          "family": "AI",
+          "what": "Sends your prompt to OpenAI's ChatGPT and gets back an AI-written response",
+          "overview": "Calls OpenAI through the legacy LLM adapter. Prompt is the main input; Messages is only a fallback when Prompt is blank. Temperature and Memory are visible legacy fields ignored by the current executor.",
+          "tips": [],
+          "docsHref": "/docs/nodes/openai_gpt",
+          "why": "Turns the incoming business context into structured fields the routing and message steps can trust."
+        }
+      }
+    },
+    {
+      "id": "js_parse_ai",
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      },
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Parse AI JSON",
+        "category": "data",
+        "config": {
+          "code": "let parsed = {};\ntry {\n  const text = input.response || input.text || \"{}\";\n  const match = String(text).match(/\\{[\\s\\S]*\\}/);\n  parsed = match ? JSON.parse(match[0]) : {};\n} catch (error) {\n  parsed = {};\n}\nreturn { ...input, ...parsed };",
+          "timeout": 5000
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Parses the AI JSON into real workflow fields before any branch reads those fields."
+        }
+      }
+    },
+    {
+      "id": "if_route",
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      },
+      "data": {
+        "icon": "GitBranch",
+        "type": "if_else",
+        "label": "Needs Attention?",
+        "category": "logic",
+        "config": {
+          "conditions": [
+            {
+              "field": "$json.duplicate",
+              "operator": "equals",
+              "value": true
+            }
+          ],
+          "combineOperation": "AND"
+        },
+        "notes": {
+          "family": "Logic",
+          "what": "Makes a yes/no decision: if something is true, go one way; otherwise go another",
+          "overview": "Makes a yes/no decision from previous-step data and routes matching work through TRUE and non-matching work through FALSE.",
+          "tips": [
+            "Use the builder for normal setup; use JSON mode only when pasting prepared condition objects.",
+            "Choose AND when every row must match; choose OR when any row can match.",
+            "Use equals for statuses and categories, greater-than operators for numeric thresholds, and contains for text or lists.",
+            "Connect both TRUE and FALSE outputs so no business case silently disappears."
+          ],
+          "docsHref": "/docs/nodes/if_else",
+          "why": "Splits high-attention work from routine handling using one explicit comparison."
+        }
+      }
+    },
+    {
+      "id": "slack_review",
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 205
+      },
+      "data": {
+        "icon": "Hash",
+        "type": "slack_message",
+        "label": "Notify Team",
+        "category": "output",
+        "config": {
+          "channel": "#finance",
+          "message": "Duplicate Invoice Detector: {{input.summary}}"
+        },
+        "notes": {
+          "family": "Communication",
+          "what": "Sends messages using a Slack app or bot connection",
+          "overview": "Send Slack bot messages to channels, direct messages, or existing threads through a saved Slack OAuth2 connection. Use it for workplace alerts, support replies, incident updates, approvals, report summaries, and deployment notifications.",
+          "tips": [
+            "Select a Slack OAuth2 connection; do not paste bot tokens into message fields",
+            "The Slack app needs chat:write, and the bot must be invited before it can post in private channels",
+            "Use {{$json.channelId}} and {{$json.threadTs}} from Slack Trigger to reply in the same conversation",
+            "Keep Message filled as readable fallback text even when Blocks contains a rich Block Kit layout",
+            "Connect downstream service accounts separately; Slack OAuth2 only authorizes the Slack send"
+          ],
+          "docsHref": "/docs/nodes/slack_message",
+          "why": "Puts the exception in front of the team that can act on it."
+        }
+      }
+    },
+    {
+      "id": "gmail_routine",
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 395
+      },
+      "data": {
+        "icon": "Mail",
+        "type": "google_gmail",
+        "label": "Send Routine Email",
+        "category": "output",
+        "config": {
+          "operation": "send",
+          "recipientSource": "manual_entry",
+          "recipientEmails": "REPLACE_WITH_AP_EMAIL",
+          "subject": "Invoice duplicate check",
+          "body": "{{input.message}}"
+        },
+        "notes": {
+          "family": "Communication",
+          "what": "Send emails from your Gmail account or read and search messages in your inbox",
+          "overview": "Send, list, get, or search Gmail messages. Send recipients can be typed manually or extracted from upstream/fallback Google Sheets rows.",
+          "tips": [
+            "Connect Google OAuth in Connections; do not paste tokens into workflow fields",
+            "Gmail search syntax: from:, subject:, is:unread, has:attachment",
+            "List/Search only return {id, threadId} per message â€” use a Get step with that id for full content",
+            "Body is plain text only",
+            "Get returns Gmail's raw API message; the body text is base64url-encoded inside message.payload.body.data",
+            "Use search to filter messages before getting details"
+          ],
+          "docsHref": "/docs/nodes/google_gmail",
+          "why": "Sends the routine response or acknowledgement without requiring a manual handoff."
+        }
+      }
+    },
+    {
+      "id": "store_result",
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 300
+      },
+      "data": {
+        "icon": "Box",
+        "type": "postgresql",
+        "label": "Store Result",
+        "category": "data",
+        "config": {
+          "query": "INSERT INTO template_events (template_name, summary, route, created_at) VALUES ('Duplicate Invoice Detector', '{{input.summary}}', '{{input.route}}', now())"
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Connects to a PostgreSQL database to run queries or insert data",
+          "overview": "Run PostgreSQL executeQuery, insert, update, or delete through the real database executor. The visual panel now uses runtime operation values and Parameters maps to the executor parameter array.",
+          "tips": [
+            "Use executeQuery for raw SQL with $1, $2 placeholders and Parameters as a JSON array.",
+            "Insert returns inserted/count; update and delete return rows/rowsAffected because PostgreSQL uses RETURNING *.",
+            "The backend schema still lists connectionString, but the executor validates host, username, password, database, port, and ssl.",
+            "Update and delete require Where; the executor refuses missing where clauses.",
+            "Store database passwords in Connections rather than ordinary workflow fields."
+          ],
+          "docsHref": "/docs/nodes/postgresql",
+          "why": "Stores the decision in PostgreSQL for audit and follow-up."
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_1_webhook_intake_ai_classify",
+      "source": "webhook_intake",
+      "target": "ai_classify"
+    },
+    {
+      "id": "e_2_ai_classify_js_parse_ai",
+      "source": "ai_classify",
+      "target": "js_parse_ai"
+    },
+    {
+      "id": "e_3_js_parse_ai_if_route",
+      "source": "js_parse_ai",
+      "target": "if_route"
+    },
+    {
+      "id": "e_4_if_route_slack_review",
+      "source": "if_route",
+      "target": "slack_review",
+      "sourceHandle": "true"
+    },
+    {
+      "id": "e_5_if_route_gmail_routine",
+      "source": "if_route",
+      "target": "gmail_routine",
+      "sourceHandle": "false"
+    },
+    {
+      "id": "e_6_slack_review_store_result",
+      "source": "slack_review",
+      "target": "store_result"
+    },
+    {
+      "id": "e_7_gmail_routine_store_result",
+      "source": "gmail_routine",
+      "target": "store_result"
+    }
+  ],
+  "difficulty": "Intermediate",
+  "estimated_setup_time": 18,
+  "tags": [
+    "invoice",
+    "duplicate",
+    "webhook",
+    "postgres",
+    "slack"
+  ],
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2
+}

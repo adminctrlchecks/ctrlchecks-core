@@ -1,15 +1,11 @@
 import type { TemplateConnection } from './templateConnections';
 
 /**
- * "Only what I can run" filtering for the Templates gallery.
+ * Connection-fit helpers for the Templates gallery.
  *
- * The user names the services they have (comma separated) and the gallery narrows to
- * templates whose *entire* connection list fits inside that set. A template needing
- * Airtable + WhatsApp + Google is hidden when the user only named Airtable and WhatsApp,
- * because they still could not run it.
- *
- * A template that needs nothing connected always passes — the empty set is a subset of
- * everything, and "runnable with no accounts at all" is exactly what the user is after.
+ * Search and sector are hard filters. Connection chips are a relevance filter plus
+ * a "fewest extra connections first" sort signal, so useful templates stay visible
+ * even when the user needs one or two more services before running them.
  */
 
 /** Lowercase and drop punctuation so "Google Sheets" reaches "google_sheets". */
@@ -54,18 +50,81 @@ export function connectionMatchesToken(connection: TemplateConnection, token: st
   return haystacks.some((value) => value && normalize(value).includes(needle));
 }
 
+export interface TemplateConnectionMatchSummary {
+  hasTokens: boolean;
+  matchedConnections: TemplateConnection[];
+  missingConnections: TemplateConnection[];
+  matchedCount: number;
+  missingCount: number;
+  totalCount: number;
+  hasSelectedConnectionMatch: boolean;
+  isReadyWithListedConnections: boolean;
+}
+
+export function getTemplateConnectionMatchSummary(
+  connections: TemplateConnection[],
+  tokens: string[],
+): TemplateConnectionMatchSummary {
+  const activeTokens = tokens.filter((token) => normalize(token).length > 0);
+  const hasTokens = activeTokens.length > 0;
+
+  if (!hasTokens) {
+    return {
+      hasTokens: false,
+      matchedConnections: [],
+      missingConnections: [],
+      matchedCount: 0,
+      missingCount: 0,
+      totalCount: connections.length,
+      hasSelectedConnectionMatch: false,
+      isReadyWithListedConnections: false,
+    };
+  }
+
+  const matchedConnections = connections.filter((connection) =>
+    activeTokens.some((token) => connectionMatchesToken(connection, token)),
+  );
+  const missingConnections = connections.filter(
+    (connection) => !matchedConnections.includes(connection),
+  );
+
+  return {
+    hasTokens,
+    matchedConnections,
+    missingConnections,
+    matchedCount: matchedConnections.length,
+    missingCount: missingConnections.length,
+    totalCount: connections.length,
+    hasSelectedConnectionMatch: matchedConnections.length > 0,
+    isReadyWithListedConnections: connections.length > 0 && missingConnections.length === 0,
+  };
+}
+
 /**
- * Subset test: every connection the template needs must be covered by something the
- * user typed. No tokens means no filtering at all.
+ * Relevance test: with no tokens, do not filter. With tokens, show templates that use
+ * at least one listed service even when they need more setup.
  */
 export function templateMatchesConnectionFilter(
   connections: TemplateConnection[],
   tokens: string[],
 ): boolean {
   if (tokens.length === 0) return true;
-  return connections.every((connection) =>
-    tokens.some((token) => connectionMatchesToken(connection, token)),
-  );
+  return getTemplateConnectionMatchSummary(connections, tokens).hasSelectedConnectionMatch;
+}
+
+export function compareTemplateConnectionFit(
+  a: TemplateConnectionMatchSummary,
+  b: TemplateConnectionMatchSummary,
+): number {
+  if (!a.hasTokens || !b.hasTokens) return 0;
+
+  const missingDelta = a.missingCount - b.missingCount;
+  if (missingDelta !== 0) return missingDelta;
+
+  const matchedDelta = b.matchedCount - a.matchedCount;
+  if (matchedDelta !== 0) return matchedDelta;
+
+  return a.totalCount - b.totalCount;
 }
 
 export interface ConnectionOption {

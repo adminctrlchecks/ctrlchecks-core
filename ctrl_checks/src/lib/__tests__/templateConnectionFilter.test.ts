@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   collectConnectionOptions,
+  compareTemplateConnectionFit,
   connectionMatchesToken,
+  getTemplateConnectionMatchSummary,
   parseConnectionFilterTokens,
   suggestConnectionOptions,
   templateMatchesConnectionFilter,
@@ -35,8 +37,6 @@ describe('parseConnectionFilterTokens', () => {
   });
 
   it('de-duplicates ignoring case, spacing and punctuation', () => {
-    // "air table" normalises to the same key as "Airtable", so it is the same service
-    // typed twice — the first spelling the user used is the one kept.
     expect(parseConnectionFilterTokens('Airtable, air table, AIRTABLE')).toEqual(['Airtable']);
     expect(parseConnectionFilterTokens('google-sheets, Google Sheets')).toEqual(['google-sheets']);
   });
@@ -67,7 +67,6 @@ describe('connectionMatchesToken', () => {
   });
 
   it('matches a collapsed sub-service through its node types', () => {
-    // The whole point: "Google" is the only visible label, but users think in Gmail.
     expect(connectionMatchesToken(GOOGLE, 'gmail')).toBe(true);
     expect(connectionMatchesToken(GOOGLE, 'sheets')).toBe(true);
     expect(connectionMatchesToken(GOOGLE, 'google sheets')).toBe(true);
@@ -86,7 +85,7 @@ describe('connectionMatchesToken', () => {
   });
 });
 
-describe('templateMatchesConnectionFilter — subset semantics', () => {
+describe('templateMatchesConnectionFilter - relevance semantics', () => {
   const tokens = ['airtable', 'whatsapp'];
 
   it('shows a template needing a strict subset of what was typed', () => {
@@ -98,14 +97,18 @@ describe('templateMatchesConnectionFilter — subset semantics', () => {
     expect(templateMatchesConnectionFilter([AIRTABLE, WHATSAPP], tokens)).toBe(true);
   });
 
-  it('hides a template needing anything extra', () => {
-    expect(templateMatchesConnectionFilter([AIRTABLE, WHATSAPP, GOOGLE], tokens)).toBe(false);
+  it('keeps related templates visible even when they need extra services', () => {
+    expect(templateMatchesConnectionFilter([AIRTABLE, WHATSAPP, GOOGLE], tokens)).toBe(true);
+    expect(templateMatchesConnectionFilter([GOOGLE, OPENAI], ['google'])).toBe(true);
+  });
+
+  it('hides templates that do not use any listed service', () => {
     expect(templateMatchesConnectionFilter([OPENAI], tokens)).toBe(false);
   });
 
-  it('always shows templates that need no connections at all', () => {
-    expect(templateMatchesConnectionFilter([], tokens)).toBe(true);
-    expect(templateMatchesConnectionFilter([], ['anything'])).toBe(true);
+  it('does not show no-connection templates when browsing by a specific service', () => {
+    expect(templateMatchesConnectionFilter([], tokens)).toBe(false);
+    expect(templateMatchesConnectionFilter([], ['anything'])).toBe(false);
   });
 
   it('does no filtering when nothing is typed', () => {
@@ -113,10 +116,54 @@ describe('templateMatchesConnectionFilter — subset semantics', () => {
   });
 
   it('lets a sub-service token satisfy its collapsed parent', () => {
-    // Typing "gmail" should make a Google-only template runnable.
     expect(templateMatchesConnectionFilter([GOOGLE], ['gmail'])).toBe(true);
-    expect(templateMatchesConnectionFilter([GOOGLE, AIRTABLE], ['gmail'])).toBe(false);
+    expect(templateMatchesConnectionFilter([GOOGLE, AIRTABLE], ['gmail'])).toBe(true);
     expect(templateMatchesConnectionFilter([GOOGLE, AIRTABLE], ['gmail', 'airtable'])).toBe(true);
+  });
+});
+
+describe('getTemplateConnectionMatchSummary', () => {
+  it('splits listed and still-needed connections', () => {
+    const summary = getTemplateConnectionMatchSummary(
+      [GOOGLE, AIRTABLE, OPENAI],
+      ['gmail'],
+    );
+
+    expect(summary.matchedConnections.map((c) => c.label)).toEqual(['Google']);
+    expect(summary.missingConnections.map((c) => c.label)).toEqual(['Airtable', 'OpenAI']);
+    expect(summary.matchedCount).toBe(1);
+    expect(summary.missingCount).toBe(2);
+    expect(summary.hasSelectedConnectionMatch).toBe(true);
+    expect(summary.isReadyWithListedConnections).toBe(false);
+  });
+
+  it('marks a template ready when all required services were listed', () => {
+    const summary = getTemplateConnectionMatchSummary(
+      [GOOGLE, AIRTABLE],
+      ['Google', 'airtable'],
+    );
+
+    expect(summary.missingConnections).toEqual([]);
+    expect(summary.isReadyWithListedConnections).toBe(true);
+  });
+});
+
+describe('compareTemplateConnectionFit', () => {
+  const summary = (connections: TemplateConnection[], tokens: string[]) =>
+    getTemplateConnectionMatchSummary(connections, tokens);
+
+  it('sorts related templates by fewest missing connections first', () => {
+    const oneMore = summary([GOOGLE, OPENAI], ['google']);
+    const twoMore = summary([GOOGLE, OPENAI, AIRTABLE], ['google']);
+
+    expect(compareTemplateConnectionFit(oneMore, twoMore)).toBeLessThan(0);
+  });
+
+  it('breaks ties by templates that use more listed services', () => {
+    const usesBoth = summary([GOOGLE, AIRTABLE, OPENAI], ['google', 'airtable']);
+    const usesOne = summary([GOOGLE, OPENAI], ['google', 'airtable']);
+
+    expect(compareTemplateConnectionFit(usesBoth, usesOne)).toBeLessThan(0);
   });
 });
 
