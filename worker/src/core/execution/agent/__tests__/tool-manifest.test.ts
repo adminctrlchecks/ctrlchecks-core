@@ -120,6 +120,23 @@ describe('AI Agent tool manifest', () => {
     expect(properties.range.items).toBeUndefined();
   });
 
+  it('adds operation + target to the description so identical tools are distinguishable', () => {
+    const registry = makeRegistry([makeDefinition({ type: 'google_sheets', label: 'Google Sheets', category: 'google' })]);
+    const readNode = makeNode('read', 'google_sheets', { operation: 'read', sheetName: 'Business_Knowledge' });
+    const writeNode = makeNode('write', 'google_sheets', { operation: 'append', sheetName: 'Customer_Leads' });
+
+    const manifest = buildToolManifest({ attachedNodes: [readNode, writeNode], registry, agentNodeType: 'agent_under_test' });
+
+    const read = manifest.find((t) => t.nodeId === 'read')!;
+    const write = manifest.find((t) => t.nodeId === 'write')!;
+    expect(read.description).toContain('Configured operation: read');
+    expect(read.description).toContain('Configured sheetName: Business_Knowledge');
+    expect(write.description).toContain('Configured operation: append');
+    expect(write.description).toContain('Configured sheetName: Customer_Leads');
+    // The two tools now carry distinct descriptions.
+    expect(read.description).not.toBe(write.description);
+  });
+
   it('excludes triggers, internal nodes, and the agent itself by metadata', () => {
     const registry = makeRegistry([
       makeDefinition({ type: 'triggerish', category: 'trigger' }),

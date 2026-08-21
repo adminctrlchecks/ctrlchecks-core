@@ -195,10 +195,21 @@ function isCredentialField(fieldName: string, field: NodeInputField): boolean {
 }
 
 function buildDescription(definition: UnifiedNodeDefinition | undefined, node: WorkflowNode): string {
+  // Surface the configured operation and the human-meaningful target (sheet/tab, table,
+  // channel, resource, path, …) so the model can tell otherwise-identical tools apart —
+  // e.g. two "Google Sheets" tools where one reads "Business_Knowledge" and another appends
+  // to "Customer_Leads". Without this the tools look the same and the model picks wrong.
+  const config = (node.data?.config || {}) as Record<string, unknown>;
+  const targetKeys = ['sheetName', 'tableName', 'table', 'channel', 'resource', 'collection', 'path', 'database', 'index', 'bucket'];
+  const targetKey = targetKeys.find((key) => typeof config[key] === 'string' && (config[key] as string).trim().length > 0);
+  const operation = typeof config.operation === 'string' ? config.operation.trim() : '';
+
   const parts = [
     definition?.description,
     definition?.aiSelectionCriteria?.whenToUse?.join('; '),
     node.data?.label ? `Attached node label: ${node.data.label}` : undefined,
+    operation ? `Configured operation: ${operation}` : undefined,
+    targetKey ? `Configured ${targetKey}: ${config[targetKey] as string}` : undefined,
   ].filter((part): part is string => Boolean(part && part.trim()));
   return parts.join('\n');
 }
