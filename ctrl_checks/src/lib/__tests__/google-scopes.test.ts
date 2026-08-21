@@ -35,8 +35,8 @@ describe('INTEGRATION_SCOPES', () => {
     expect(INTEGRATION_SCOPES).not.toContain('\n');
   });
 
-  it('contains exactly 9 scope URLs', () => {
-    expect(INTEGRATION_SCOPES.split(' ')).toHaveLength(9);
+  it('contains exactly 1 scope URL', () => {
+    expect(INTEGRATION_SCOPES.split(' ')).toHaveLength(1);
   });
 
   it('all scopes start with https://www.googleapis.com/', () => {
@@ -52,52 +52,14 @@ describe('INTEGRATION_SCOPES', () => {
     );
   });
 
-  it('contains documents scope', () => {
-    expect(INTEGRATION_SCOPES.split(' ')).toContain(
-      'https://www.googleapis.com/auth/documents'
-    );
-  });
-
-  it('contains drive scope', () => {
-    expect(INTEGRATION_SCOPES.split(' ')).toContain(
-      'https://www.googleapis.com/auth/drive'
-    );
-  });
-
-  it('contains calendar scope', () => {
-    expect(INTEGRATION_SCOPES.split(' ')).toContain(
-      'https://www.googleapis.com/auth/calendar'
-    );
-  });
-
-  it('contains gmail.send scope', () => {
-    expect(INTEGRATION_SCOPES.split(' ')).toContain(
-      'https://www.googleapis.com/auth/gmail.send'
-    );
-  });
-
-  it('contains gmail.readonly scope', () => {
-    expect(INTEGRATION_SCOPES.split(' ')).toContain(
-      'https://www.googleapis.com/auth/gmail.readonly'
-    );
-  });
-
-  it('contains bigquery scope', () => {
-    expect(INTEGRATION_SCOPES.split(' ')).toContain(
-      'https://www.googleapis.com/auth/bigquery'
-    );
-  });
-
-  it('contains tasks scope', () => {
-    expect(INTEGRATION_SCOPES.split(' ')).toContain(
-      'https://www.googleapis.com/auth/tasks'
-    );
-  });
-
-  it('contains contacts scope', () => {
-    expect(INTEGRATION_SCOPES.split(' ')).toContain(
-      'https://www.googleapis.com/auth/contacts'
-    );
+  it('does not request unrelated Google product scopes by default', () => {
+    expect(INTEGRATION_SCOPES).not.toContain('gmail');
+    expect(INTEGRATION_SCOPES).not.toContain('documents');
+    expect(INTEGRATION_SCOPES).not.toContain('drive');
+    expect(INTEGRATION_SCOPES).not.toContain('calendar');
+    expect(INTEGRATION_SCOPES).not.toContain('bigquery');
+    expect(INTEGRATION_SCOPES).not.toContain('tasks');
+    expect(INTEGRATION_SCOPES).not.toContain('contacts');
   });
 });
 
@@ -116,8 +78,8 @@ describe('GOOGLE_CONNECTOR_SCOPES', () => {
     expect(GOOGLE_CONNECTOR_SCOPES.endsWith(INTEGRATION_SCOPES)).toBe(true);
   });
 
-  it('contains exactly 12 scopes (3 identity + 9 integration)', () => {
-    expect(GOOGLE_CONNECTOR_SCOPES.split(' ')).toHaveLength(12);
+  it('contains exactly 4 scopes (3 identity + Sheets)', () => {
+    expect(GOOGLE_CONNECTOR_SCOPES.split(' ')).toHaveLength(4);
   });
 
   it('has no duplicate scopes', () => {

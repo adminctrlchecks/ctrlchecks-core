@@ -55,6 +55,15 @@ describe('credential-scope-registry', () => {
     ]);
   });
 
+  it('uses a Sheets-only default for generic Google provider checks', () => {
+    expect(requiredScopesForProvider('google')).toEqual([
+      'openid',
+      'email',
+      'profile',
+      'https://www.googleapis.com/auth/spreadsheets',
+    ]);
+  });
+
   it('derives credential requirements from known node type aliases', () => {
     const gmailRequirement = credentialRequirementForNode(' GOOGLE_GMAIL ');
 

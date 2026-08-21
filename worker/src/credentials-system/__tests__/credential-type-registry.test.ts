@@ -38,6 +38,19 @@ describe('credential type registry', () => {
     });
   });
 
+  it('keeps generic Google OAuth default consent scoped to Sheets', () => {
+    const google = getCredentialType('google_oauth2');
+    const defaultScopes = google?.oauth2?.defaultScopes || [];
+
+    expect(defaultScopes).toEqual([
+      'openid',
+      'email',
+      'profile',
+      'https://www.googleapis.com/auth/spreadsheets',
+    ]);
+    expect(defaultScopes.join(' ')).not.toMatch(/gmail|drive|documents|calendar|contacts|tasks|bigquery/);
+  });
+
   it('provides in-app credential guide metadata for every credential type and required field', () => {
     for (const definition of credentialTypeDefinitions) {
       expect(definition.guide.summary).toEqual(expect.any(String));
