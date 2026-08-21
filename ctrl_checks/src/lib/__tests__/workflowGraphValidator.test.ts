@@ -198,6 +198,47 @@ describe('validateWorkflowGraph', () => {
     expect(result.errors).toEqual([]);
   });
 
+  it('keeps agent sidecars out of execution even when spurious sidecar-to-sidecar edges chain them (live ee1c59d2 shape)', () => {
+    // Regression: a real chatbot workflow persisted canonical attachment edges AND a
+    // parallel chain of plain "input" edges linking the sidecars to each other
+    // (chat_model -> memory -> sheet -> sheet). That chain made every sidecar incident to
+    // an execution edge, so they were wrongly kept in the execution graph and reported as
+    // "not reachable from trigger" / "has no incoming edges".
+    const chatTrigger = node('chat', 'chat_trigger', 'triggers');
+    const agent = node('agent', 'ai_agent', 'ai');
+    const model = node('model', 'ai_chat_model', 'ai');
+    model.data = { ...model.data, agentAttachmentRole: 'chat_model' };
+    const memory = node('memory', 'memory', 'ai');
+    memory.data = { ...memory.data, agentAttachmentRole: 'memory' };
+    const sheetA = node('sheetA', 'google_sheets', 'google');
+    sheetA.data = { ...sheetA.data, agentAttachmentRole: 'tool' };
+    const sheetB = node('sheetB', 'google_sheets', 'google');
+    sheetB.data = { ...sheetB.data, agentAttachmentRole: 'tool' };
+    const chatSend = node('send', 'chat_send', 'output');
+
+    const result = validateWorkflowGraph(
+      [chatTrigger, agent, model, memory, sheetA, sheetB, chatSend],
+      [
+        { ...edge('chat', 'agent'), sourceHandle: 'output', targetHandle: 'userInput' },
+        // Canonical AI Agent attachment edges (what renders as dotted sidecars).
+        agentAttachmentEdge('model', 'agent', 'chat_model'),
+        agentAttachmentEdge('memory', 'agent', 'memory'),
+        agentAttachmentEdge('sheetA', 'agent', 'tool'),
+        agentAttachmentEdge('sheetB', 'agent', 'tool'),
+        // Spurious plain execution edges chaining the sidecars together.
+        { ...edge('model', 'memory'), sourceHandle: 'output', targetHandle: 'input' },
+        { ...edge('memory', 'sheetA'), sourceHandle: 'output', targetHandle: 'input' },
+        { ...edge('sheetA', 'sheetB'), sourceHandle: 'output', targetHandle: 'input' },
+        { ...edge('agent', 'send'), sourceHandle: 'success', targetHandle: 'input' },
+      ],
+    );
+
+    expect(result.errors.some(e => e.code === 'UNREACHABLE_NODE')).toBe(false);
+    expect(result.errors.some(e => e.code === 'NO_INCOMING')).toBe(false);
+    expect(result.errors).toEqual([]);
+    expect(result.valid).toBe(true);
+  });
+
   it('treats reversed AI Agent attachment edges as sidecars', () => {
     const chatTrigger = node('chat', 'chat_trigger', 'triggers');
     const agent = node('agent', 'ai_agent', 'ai');
