@@ -2,6 +2,7 @@
 import { Node, Edge } from '@xyflow/react';
 import { NODE_TYPES } from '@/components/workflow/nodeTypes';
 import { coerceReactFlowPosition } from '@/lib/node-type-normalizer';
+import { splitAgentAttachmentEdges } from './agentAttachmentEdges';
 
 export interface WorkflowValidationError {
     nodeId?: string;
@@ -656,9 +657,19 @@ export function validateAndFixWorkflow(
                 primaryTrigger = preferredFormTrigger;
             }
 
-            // Keep primary trigger and all non-trigger nodes; drop extra triggers
+            // Identify AI Agent attachment sidecars (chat_model / memory / tool nodes attached
+            // to an agent). They supply capabilities to the agent and are NOT linear execution
+            // steps — they must be excluded from chain ordering, otherwise linearization folds
+            // them into the sequence and fabricates bogus sidecar -> sidecar execution edges
+            // (which then read as "not reachable from trigger").
+            const { attachmentEdges: agentAttachmentEdges, attachmentOnlyNodeIds } =
+                splitAgentAttachmentEdges(regeneratedNodes, regeneratedEdges);
+            const sidecarNodes = regeneratedNodes.filter((n: any) => attachmentOnlyNodeIds.has(n.id));
+
+            // Keep primary trigger and all non-trigger, non-sidecar nodes; drop extra triggers
             const keptNodes = regeneratedNodes.filter(
-                (n: any) => !detectTrigger(n) || n.id === primaryTrigger.id
+                (n: any) =>
+                    (!detectTrigger(n) || n.id === primaryTrigger.id) && !attachmentOnlyNodeIds.has(n.id)
             );
 
             // Build adjacency from existing edges
@@ -758,6 +769,20 @@ export function validateAndFixWorkflow(
 
                 linearNodes = ordered;
                 linearEdges = chainEdges;
+            }
+
+            // Re-attach the AI Agent sidecars we held out of the linear chain: keep the sidecar
+            // nodes and their canonical attachment edges, but never their fabricated
+            // sidecar -> sidecar chain edges (those were dropped by excluding sidecars above).
+            if (sidecarNodes.length > 0) {
+                const linearNodeIds = new Set(linearNodes.map((n: any) => n.id));
+                for (const sidecar of sidecarNodes) {
+                    if (!linearNodeIds.has(sidecar.id)) linearNodes.push(sidecar);
+                }
+                const linearEdgeIds = new Set(linearEdges.map((e: any) => e.id));
+                for (const attEdge of agentAttachmentEdges) {
+                    if (!attEdge.id || !linearEdgeIds.has(attEdge.id)) linearEdges.push(attEdge);
+                }
             }
         } else {
             linearNodes = regeneratedNodes;
