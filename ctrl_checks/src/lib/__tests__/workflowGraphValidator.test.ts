@@ -239,6 +239,33 @@ describe('validateWorkflowGraph', () => {
     expect(result.valid).toBe(true);
   });
 
+  it('keeps a sidecar out of execution when a linearizer wires chat_send -> ai_chat_model', () => {
+    // Live ee1c59d2 follow-up: the worker linearizer added chat_send -> ai_chat_model, giving
+    // the chat model an incoming execution edge from a non-sidecar. It must still be treated
+    // as a sidecar (not a reachable stray step with a spurious incoming edge).
+    const chatTrigger = node('chat', 'chat_trigger', 'triggers');
+    const agent = node('agent', 'ai_agent', 'ai');
+    const model = node('model', 'ai_chat_model', 'ai');
+    model.data = { ...model.data, agentAttachmentRole: 'chat_model' };
+    const chatSend = node('send', 'chat_send', 'output');
+
+    const result = validateWorkflowGraph(
+      [chatTrigger, agent, model, chatSend],
+      [
+        { ...edge('chat', 'agent'), sourceHandle: 'output', targetHandle: 'userInput' },
+        agentAttachmentEdge('model', 'agent', 'chat_model'),
+        { ...edge('agent', 'send'), sourceHandle: 'success', targetHandle: 'input' },
+        // Spurious linearizer edge feeding a non-sidecar into the chat model sidecar.
+        { ...edge('send', 'model'), sourceHandle: 'output', targetHandle: 'input' },
+      ],
+    );
+
+    expect(result.errors.some(e => e.code === 'UNREACHABLE_NODE')).toBe(false);
+    expect(result.errors.some(e => e.code === 'NO_INCOMING')).toBe(false);
+    expect(result.errors).toEqual([]);
+    expect(result.valid).toBe(true);
+  });
+
   it('treats reversed AI Agent attachment edges as sidecars', () => {
     const chatTrigger = node('chat', 'chat_trigger', 'triggers');
     const agent = node('agent', 'ai_agent', 'ai');

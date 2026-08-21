@@ -111,10 +111,11 @@ export function splitAgentAttachmentEdges<TNode extends MinimalNode, TEdge exten
 
   // An AI Agent sidecar is any node attached to an agent (attachment source) or that
   // explicitly carries an attachment role. Sidecars supply context/capabilities to the
-  // agent — they are never linear execution steps. Any edge that runs purely between two
-  // sidecars (e.g. an accidental chat_model -> memory -> tool chain produced by generation
-  // or auto-linking) is therefore not an execution edge; treating it as one wrongly keeps
-  // the sidecars in the execution graph and flags them as unreachable / missing-input.
+  // agent — they are never linear execution steps. Any non-attachment edge touching a
+  // sidecar (an accidental chat_model -> memory chain, or a linearizer wiring
+  // chat_send -> ai_chat_model) is therefore not an execution edge; treating it as one
+  // wrongly keeps the sidecar in the execution graph, where it runs as a stray step and
+  // is flagged as unreachable / disconnected.
   const sidecarNodeIds = new Set<string>(attachmentSourceIds);
   for (const node of nodes) {
     if (nodeAttachmentRole(node)) sidecarNodeIds.add(node.id);
@@ -123,7 +124,8 @@ export function splitAgentAttachmentEdges<TNode extends MinimalNode, TEdge exten
   const executionEdges = safeEdges.filter(
     (edge) =>
       !attachmentEdgeSet.has(edge) &&
-      !(sidecarNodeIds.has(edge.source) && sidecarNodeIds.has(edge.target))
+      !sidecarNodeIds.has(edge.source) &&
+      !sidecarNodeIds.has(edge.target)
   );
   const executionIncidentNodeIds = new Set<string>();
 

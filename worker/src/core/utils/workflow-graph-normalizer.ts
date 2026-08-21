@@ -18,6 +18,7 @@ import { validateAndFixEdgeHandles, getDefaultSourceHandle, getDefaultTargetHand
 import { logger } from '../logger';
 import { coerceWorkflowNodePosition } from './workflow-node-position';
 import { extractSwitchCasePortNames } from './branching-node-ports';
+import { splitAgentAttachmentEdges } from './agent-attachment-edges';
 import { unifiedNodeRegistry } from '../registry/unified-node-registry';
 
 export interface NormalizedWorkflowGraph {
@@ -450,8 +451,18 @@ export function normalizeWorkflowGraph(
           logger.warn(`[NormalizeWorkflowGraph] ⚠️ Multiple triggers found (${triggerNodes.length}), using first: ${primaryTrigger.id}. This should not happen - graph builder should check before creating triggers.`);
         }
         
-        // Only non-trigger nodes are linearized after the single primary trigger.
-        const nonTriggerNodes = normalizedNodes.filter((n: any) => !isTriggerNode(n));
+        // AI Agent attachment sidecars (chat_model / memory / tool) are the agent's
+        // capabilities, not linear execution steps. Hold them out of the chain so the
+        // linearizer never wires them (e.g. chat_send -> ai_chat_model); re-attach the
+        // sidecar nodes and their canonical attachment edges to the result afterward.
+        const { attachmentEdges: agentAttachmentEdges, attachmentOnlyNodeIds } =
+          splitAgentAttachmentEdges(normalizedNodes as any[], normalizedEdges as any[]);
+        const agentSidecarNodes = normalizedNodes.filter((n: any) => attachmentOnlyNodeIds.has(n.id));
+
+        // Only non-trigger, non-sidecar nodes are linearized after the single primary trigger.
+        const nonTriggerNodes = normalizedNodes.filter(
+          (n: any) => !isTriggerNode(n) && !attachmentOnlyNodeIds.has(n.id)
+        );
 
         // Build adjacency from existing edges to infer ordering
         const outgoingMap = new Map<string, string[]>();
@@ -473,7 +484,8 @@ export function normalizeWorkflowGraph(
 
         while (true) {
           const outs = outgoingMap.get(currentId) || [];
-          const nextId = outs.find(id => !visited.has(id));
+          // Never walk into an attachment sidecar (e.g. a stray chat_send -> ai_chat_model edge).
+          const nextId = outs.find(id => !visited.has(id) && !attachmentOnlyNodeIds.has(id));
           if (!nextId) break;
           const nextNode = normalizedNodes.find(n => n.id === nextId);
           if (!nextNode) break;
@@ -511,10 +523,16 @@ export function normalizeWorkflowGraph(
           );
           
           logger.debug(`[NormalizeWorkflowGraph] 🔀 Preserving branching structure - keeping ${preservedEdges.length} edge(s) (skipping linearization)`);
-          
+
+          const branchingEdgeIds = new Set(preservedEdges.map((e: any) => e.id));
+          const branchingEdges = [
+            ...preservedEdges,
+            ...agentAttachmentEdges.filter((e: any) => !e.id || !branchingEdgeIds.has(e.id)),
+          ];
+
           return {
-            nodes: ordered,
-            edges: preservedEdges,
+            nodes: [...ordered, ...agentSidecarNodes],
+            edges: branchingEdges,
             migrationsApplied: [],
             metadata: {
               version: parsed.metadata?.version || '1.0',
@@ -587,9 +605,15 @@ export function normalizeWorkflowGraph(
         // ✅ FIXED: Removed post-normalization trigger cleanup logging
         // Edges are filtered for valid nodes only, but triggers are not removed
 
+        const linearEdgeIds = new Set(linearEdges.map((e: any) => e.id));
+        const finalLinearEdges = [
+          ...linearEdges,
+          ...agentAttachmentEdges.filter((e: any) => !e.id || !linearEdgeIds.has(e.id)),
+        ];
+
         return {
-          nodes: ordered,
-          edges: linearEdges,
+          nodes: [...ordered, ...agentSidecarNodes],
+          edges: finalLinearEdges,
           migrationsApplied: [],
           metadata: {
             version: parsed.metadata?.version || '1.0',

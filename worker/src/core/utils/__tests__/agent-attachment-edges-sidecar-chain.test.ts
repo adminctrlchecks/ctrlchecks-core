@@ -38,6 +38,21 @@ describe('splitAgentAttachmentEdges — spurious sidecar-to-sidecar chain', () =
     { id: 'e_send', source: 'ai_agent_x', target: 'chat_send_x', sourceHandle: 'success', targetHandle: 'input' },
   ];
 
+  it('excludes a sidecar even when a linearizer wires a non-sidecar into it (chat_send -> ai_chat_model)', () => {
+    // Live ee1c59d2 case: the worker linearizer added edge_linear chat_send -> ai_chat_model.
+    // chat_send is NOT a sidecar, so a "both endpoints" rule would keep the edge and run the
+    // chat model as a stray step. Any non-attachment edge touching a sidecar must be dropped.
+    const linearEdge = { id: 'edge_linear_chat_send_x_ai_chat_model_x', source: 'chat_send_x', target: 'ai_chat_model_x', sourceHandle: 'output', targetHandle: 'input' };
+    const { executionNodes, executionEdges, attachmentOnlyNodeIds } = splitAgentAttachmentEdges(
+      nodes,
+      [...edges, linearEdge]
+    );
+
+    expect(executionNodes.map((n) => n.id).sort()).toEqual(['ai_agent_x', 'chat_send_x', 'chat_trigger_x']);
+    expect(executionEdges.map((e) => e.id).sort()).toEqual(['e_send', 'e_trigger']);
+    expect([...attachmentOnlyNodeIds]).toContain('ai_chat_model_x');
+  });
+
   it('excludes the sidecars from the execution graph and drops the spurious chain', () => {
     const { executionNodes, executionEdges, attachmentEdges, attachmentOnlyNodeIds } =
       splitAgentAttachmentEdges(nodes, edges);
