@@ -51,4 +51,46 @@ describe('WorkflowNode AI Agent ports', () => {
     expect(html).toContain('data-handle="error"');
     expect(html).toContain('data-handle="output"');
   });
+
+  it('renders placement controls for agent attachments', () => {
+    const props: any = {
+      id: 'agent_1',
+      selected: false,
+      data: {
+        type: 'ai_agent',
+        label: 'AI Agent',
+        category: 'ai',
+        icon: 'Bot',
+        config: {},
+      },
+    };
+
+    const html = renderToString(<WorkflowNode {...props} />);
+
+    expect(html).toContain('Model');
+    expect(html).toContain('Memory');
+    expect(html).toContain('Tools');
+    expect(html).toContain('Place');
+  });
+
+  it('renders attached tool nodes as compact circular source nodes', () => {
+    const props: any = {
+      id: 'google_sheets_1',
+      selected: false,
+      data: {
+        type: 'google_sheets',
+        label: 'Google Sheets',
+        category: 'google',
+        icon: 'Table',
+        config: {},
+        agentAttachmentRole: 'tool',
+      },
+    };
+
+    const html = renderToString(<WorkflowNode {...props} />);
+
+    expect(html).toContain('Google Sheets');
+    expect(html).toContain('data-handle="output"');
+    expect(html).not.toContain('data-handle="input"');
+  });
 });

@@ -7,6 +7,7 @@ import { useDebugStore } from '@/stores/debugStore';
 import { useTheme } from '@/hooks/useTheme';
 import { ThemedBorderGlow } from '@/components/ui/themed-border-glow';
 import { getIntegrationLogo } from '@/lib/integrationLogos';
+import AgentAttachmentControls from './AgentAttachmentControls';
 import {
   Play, Webhook, Clock, Globe, Brain, Sparkles, Gem, Link, GitBranch,
   GitMerge, Repeat, Timer, ShieldAlert, Code, Braces, Table, Type,
@@ -28,6 +29,14 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
 };
 
 type WorkflowNodeProps = Node<NodeData>;
+type AgentAttachmentRole = 'chat_model' | 'memory' | 'tool';
+
+const agentAttachmentRoles = new Set<AgentAttachmentRole>(['chat_model', 'memory', 'tool']);
+const agentAttachmentColors: Record<AgentAttachmentRole, string> = {
+  chat_model: '#6366f1',
+  memory: '#f59e0b',
+  tool: '#10b981',
+};
 
 const WorkflowNode = memo(({ data, selected, id }: NodeProps<WorkflowNodeProps>) => {
   const { openDebug } = useDebugStore();
@@ -93,6 +102,74 @@ const WorkflowNode = memo(({ data, selected, id }: NodeProps<WorkflowNodeProps>)
   const isIfElseNode = nodeType === 'if_else';
   const isSwitchNode = nodeType === 'switch';
   const isAIAgentNode = nodeType === 'ai_agent';
+  const attachmentRole =
+    typeof data.agentAttachmentRole === 'string' && agentAttachmentRoles.has(data.agentAttachmentRole as AgentAttachmentRole)
+      ? (data.agentAttachmentRole as AgentAttachmentRole)
+      : null;
+
+  if (attachmentRole && !isAIAgentNode) {
+    const attachmentColor = agentAttachmentColors[attachmentRole];
+    return (
+      <div className="relative flex w-[96px] flex-col items-center">
+        <Handle
+          type="source"
+          id="output"
+          position={Position.Top}
+          isConnectable={true}
+          className="!h-3.5 !w-3.5 !border-2 !border-background"
+          style={{ backgroundColor: attachmentColor }}
+        />
+        <ThemedBorderGlow
+          variant="canvas-node"
+          borderRadius={999}
+          glowRadius={32}
+          className="shadow-sm transition-all"
+          style={{ width: 72, height: 72 }}
+          colors={[attachmentColor, '#0ea5e9', '#14b8a6']}
+          glowColor={isLight ? '174 58 38' : '174 62 72'}
+          glowIntensity={selected ? 1.55 : 1.08}
+          animated={status === 'running'}
+        >
+          <div
+            className={cn(
+              'relative flex h-[72px] w-[72px] items-center justify-center rounded-full bg-card',
+              selected && 'ring-2 ring-teal-500/70 ring-offset-2 ring-offset-background',
+              status === 'running' && 'motion-safe:animate-pulse'
+            )}
+            title={nodeLabel}
+          >
+            <div
+              className="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-background"
+              style={{ color: category?.color || attachmentColor }}
+            >
+              {logoSrc ? (
+                <img src={logoSrc} alt={nodeLabel} className="h-8 w-8 object-contain" />
+              ) : (
+                <IconComponent className="h-6 w-6" />
+              )}
+            </div>
+            {status === 'running' && (
+              <Loader2 className="absolute -right-1 -top-1 h-4 w-4 animate-spin rounded-full bg-background text-blue-500" />
+            )}
+            {status === 'success' && (
+              <CheckCircle className="absolute -right-1 -top-1 h-4 w-4 rounded-full bg-background text-green-500" />
+            )}
+            {status === 'error' && (
+              <XCircle className="absolute -right-1 -top-1 h-4 w-4 rounded-full bg-background text-red-500" />
+            )}
+          </div>
+        </ThemedBorderGlow>
+        <div className="mt-2 w-[110px] text-center">
+          <div className="truncate text-xs font-medium leading-tight text-foreground" title={nodeLabel}>
+            {nodeLabel}
+          </div>
+          <div className="truncate text-[10px] leading-tight text-muted-foreground" title={nodeType}>
+            {nodeType}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const parseSwitchCases = (raw: unknown): Array<{ value: string; label?: string }> => {
     if (!raw) return [];
@@ -138,8 +215,8 @@ const WorkflowNode = memo(({ data, selected, id }: NodeProps<WorkflowNodeProps>)
     ? JSON.stringify(switchCases.map(c => c.value).sort())
     : '';
 
-  const nodeWidth = 240;
-  const nodeMinHeight = 70;
+  const nodeWidth = isAIAgentNode ? 336 : 240;
+  const nodeMinHeight = isAIAgentNode ? 126 : 70;
 
   return (
     <ThemedBorderGlow
@@ -272,6 +349,8 @@ const WorkflowNode = memo(({ data, selected, id }: NodeProps<WorkflowNodeProps>)
           <Bug className="h-3.5 w-3.5" />
         </button>
       </div>
+
+      {isAIAgentNode && <AgentAttachmentControls agentId={id} />}
 
       {isIfElseNode ? (
         <>

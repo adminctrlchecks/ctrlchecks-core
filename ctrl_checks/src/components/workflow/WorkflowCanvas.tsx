@@ -36,6 +36,22 @@ const nodeTypes = (() => {
 // We'll normalize all edge types to "default" in the styledEdges useMemo
 const edgeTypes = {};
 
+type AgentAttachmentHandle = 'chat_model' | 'memory' | 'tool';
+
+const AGENT_ATTACHMENT_COLORS: Record<AgentAttachmentHandle, string> = {
+  chat_model: '#6366f1',
+  memory: '#f59e0b',
+  tool: '#10b981',
+};
+
+function normalizeAgentAttachmentHandle(handle: unknown): AgentAttachmentHandle | null {
+  const value = String(handle || '').toLowerCase();
+  if (value === 'chat_model' || value === 'chatmodel') return 'chat_model';
+  if (value === 'memory') return 'memory';
+  if (value === 'tool') return 'tool';
+  return null;
+}
+
 function WorkflowCanvasInner() {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition, fitView } = useReactFlow();
@@ -283,15 +299,56 @@ function WorkflowCanvasInner() {
   // These keys are memoized and only recalculate when edges/nodes content changes (not just reference)
   const edgesKey = useMemo(() => {
     if (edges.length === 0) return '';
-    return edges.map(e => `${e.id}:${e.source}:${e.target}`).sort().join('|');
+    return edges.map(e => `${e.id}:${e.source}:${e.target}:${e.sourceHandle || ''}:${e.targetHandle || ''}`).sort().join('|');
   }, [edges]);
 
   const nodesKey = useMemo(() => {
     if (nodes.length === 0) return '';
-    return nodes.map(n => `${n.id}:${n.data?.executionStatus || 'idle'}`).sort().join('|');
+    return nodes.map(n => `${n.id}:${n.data?.type || n.type}:${n.data?.executionStatus || 'idle'}`).sort().join('|');
   }, [nodes]);
 
   const selectedEdgeId = selectedEdge?.id || '';
+
+  const renderNodes = useMemo(() => {
+    if (nodes.length === 0) return nodes;
+
+    const nodeById = new Map(nodes.map((node) => [node.id, node]));
+    const attachmentRoleByNodeId = new Map<string, AgentAttachmentHandle>();
+
+    for (const edge of edges) {
+      const targetNode = nodeById.get(edge.target);
+      const targetNodeType = targetNode?.data?.type || targetNode?.type;
+      if (targetNodeType !== 'ai_agent') continue;
+
+      const attachmentRole = normalizeAgentAttachmentHandle(edge.targetHandle);
+      if (attachmentRole) {
+        attachmentRoleByNodeId.set(edge.source, attachmentRole);
+      }
+    }
+
+    return nodes.map((node) => {
+      const attachmentRole = attachmentRoleByNodeId.get(node.id);
+      if (attachmentRole) {
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            agentAttachmentRole: attachmentRole,
+          },
+        };
+      }
+
+      if (node.data && 'agentAttachmentRole' in node.data) {
+        const { agentAttachmentRole: _agentAttachmentRole, ...dataWithoutRole } = node.data;
+        return {
+          ...node,
+          data: dataWithoutRole as NodeData,
+        };
+      }
+
+      return node;
+    });
+  }, [edges, nodes]);
 
   // Add edge styling based on execution status (green for success, red for error)
   // MANDATORY: Ensure all edges are visible and properly rendered
@@ -364,6 +421,10 @@ function WorkflowCanvasInner() {
         normalizedTargetHandle = targetNodeType === 'ai_agent' ? 'userInput' : 'input';
       }
 
+      const agentAttachmentRole =
+        targetNodeType === 'ai_agent' ? normalizeAgentAttachmentHandle(normalizedTargetHandle) : null;
+      const isAgentAttachmentEdge = agentAttachmentRole !== null;
+
       if (String(sourceNodeType || '') === 'switch') {
         const validSwitchHandles = parseSwitchCaseValues(sourceNode);
         if (validSwitchHandles.length > 0 && !validSwitchHandles.includes(normalizedSourceHandle)) {
@@ -412,6 +473,11 @@ function WorkflowCanvasInner() {
         edgeColor = '#1e293b'; // Very dark slate for selected
       }
 
+      if (isAgentAttachmentEdge) {
+        edgeColor = AGENT_ATTACHMENT_COLORS[agentAttachmentRole];
+        strokeWidth = isSelected ? 3.5 : 2.5;
+      }
+
       // MANDATORY: Force visibility with strong styling
       const edgeStyle: React.CSSProperties = {
         stroke: edgeColor,
@@ -428,6 +494,11 @@ function WorkflowCanvasInner() {
         opacity: 1, // Fully visible - MANDATORY (set after spread to override any opacity from edge.style)
       };
 
+      if (isAgentAttachmentEdge) {
+        edgeStyle.strokeDasharray = '7 6';
+        edgeStyle.opacity = 0.9;
+      }
+
       // Determine if edge represents success or error path
       const isSuccess = sourceNode?.data?.executionStatus === 'success' && targetNode?.data?.executionStatus !== 'error';
       const isError = sourceNode?.data?.executionStatus === 'error' || targetNode?.data?.executionStatus === 'error';
@@ -443,20 +514,22 @@ function WorkflowCanvasInner() {
         // This ensures all edges use the registered default type, avoiding "edge type not found" errors
         type: 'default', // Always use default type regardless of edge.type value
         style: edgeStyle,
-        animated: sourceNode?.data?.executionStatus === 'running',
+        animated: !isAgentAttachmentEdge && sourceNode?.data?.executionStatus === 'running',
         selected: isSelected,
         data: {
           ...edge.data,
           success: isSuccess,
           error: isError,
         },
-        zIndex: isSelected ? 10 : 2, // Higher z-index to ensure visibility
-        markerEnd: {
-          type: 'arrowclosed' as const,
-          color: edgeColor,
-          width: isSelected ? 22 : 20, // Larger arrows for visibility
-          height: isSelected ? 22 : 20,
-        },
+        zIndex: isSelected ? 10 : isAgentAttachmentEdge ? 1 : 2, // Higher z-index to ensure visibility
+        markerEnd: isAgentAttachmentEdge
+          ? undefined
+          : {
+              type: 'arrowclosed' as const,
+              color: edgeColor,
+              width: isSelected ? 22 : 20, // Larger arrows for visibility
+              height: isSelected ? 22 : 20,
+            },
       };
     });
 
@@ -588,7 +661,7 @@ function WorkflowCanvasInner() {
     >
       <ReactFlow
         key={workflowKey}
-        nodes={nodes}
+        nodes={renderNodes}
         edges={styledEdges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}

@@ -18,6 +18,18 @@ Legacy compatibility:
 
 Attachment edges are persisted in the workflow graph, but the runtime planning path filters `chat_model`, `memory`, and `tool` attachment edges out of normal dependency/topological execution. The agent receives the full persisted graph through `NodeExecutionContext.agentGraph`.
 
+## Canvas Placement UX
+
+The AI Agent node now exposes first-class placement slots on the node card:
+
+- `Model` places one chat/model node on the `chat_model` attachment handle.
+- `Memory` places one memory node on the `memory` attachment handle.
+- `Tools` places any eligible non-trigger node on the `tool` attachment handle.
+
+Click `Place` on a slot to open the searchable node picker. Choosing a node creates it near the agent, renders it as a compact circular attached node, and automatically saves the correct attachment edge. Users do not need to drag a node from the library or manually choose the technical handle for common agent setup.
+
+The circular attached nodes are visual sugar over normal workflow nodes: selecting the circle still opens that node's configuration, and the persisted edge still uses `chat_model`, `memory`, or `tool` so backend execution behaves exactly like manually connected attachments.
+
 ## Tool Eligibility
 
 Attached tools are discovered dynamically from the unified node registry. A node is eligible when it:
