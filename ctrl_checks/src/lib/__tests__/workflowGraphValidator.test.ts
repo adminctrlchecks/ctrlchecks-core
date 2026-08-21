@@ -155,6 +155,42 @@ describe('validateWorkflowGraph', () => {
     expect(result.errors.some(e => e.code === 'TOO_MANY_OUTGOING')).toBe(false);
   });
 
+  it('allows AI Agent reply and error outputs as distinct semantic ports', () => {
+    const chatTrigger = node('chat', 'chat_trigger', 'triggers');
+    const agent = node('agent', 'ai_agent', 'ai');
+    const chatSend = node('send', 'chat_send', 'output');
+    const errorLog = node('err', 'log_output', 'output');
+
+    const result = validateWorkflowGraph(
+      [chatTrigger, agent, chatSend, errorLog],
+      [
+        { ...edge('chat', 'agent'), sourceHandle: 'output', targetHandle: 'userInput' },
+        { ...edge('agent', 'send'), sourceHandle: 'success', targetHandle: 'input' },
+        { ...edge('agent', 'err'), sourceHandle: 'error', targetHandle: 'input' },
+      ]
+    );
+
+    expect(result.errors.some(e => e.code === 'TOO_MANY_OUTGOING' && e.nodeId === 'agent')).toBe(false);
+  });
+
+  it('keeps duplicate AI Agent reply outputs invalid', () => {
+    const chatTrigger = node('chat', 'chat_trigger', 'triggers');
+    const agent = node('agent', 'ai_agent', 'ai');
+    const sendOne = node('send_one', 'chat_send', 'output');
+    const sendTwo = node('send_two', 'chat_send', 'output');
+
+    const result = validateWorkflowGraph(
+      [chatTrigger, agent, sendOne, sendTwo],
+      [
+        { ...edge('chat', 'agent'), sourceHandle: 'output', targetHandle: 'userInput' },
+        { ...edge('agent', 'send_one'), sourceHandle: 'success', targetHandle: 'input' },
+        { ...edge('agent', 'send_two'), sourceHandle: 'output', targetHandle: 'input' },
+      ]
+    );
+
+    expect(result.errors.some(e => e.code === 'TOO_MANY_OUTGOING' && e.nodeId === 'agent')).toBe(true);
+  });
+
   it('unreachable node produces UNREACHABLE_NODE error and warning', () => {
     const orphan = node('orphan', 'http_request');
     const result = validateWorkflowGraph([trigger(), orphan], []);

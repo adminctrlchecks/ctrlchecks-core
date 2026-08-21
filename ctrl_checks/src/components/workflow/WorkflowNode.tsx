@@ -434,21 +434,27 @@ const WorkflowNode = memo(({ data, selected, id }: NodeProps<WorkflowNodeProps>)
             className="!w-3 !h-3 !bg-emerald-500 !border-2 !border-background"
             style={{ left: '50%', transform: 'translateX(-50%)' }}
           />
+          <div className="pointer-events-none absolute right-[-42px] top-[36%] flex items-center gap-1 text-[10px] font-medium text-sky-600">
+            <span>Reply</span>
+          </div>
           <Handle
             type="source"
             id="success"
-            position={Position.Bottom}
+            position={Position.Right}
             isConnectable={true}
-            className="!w-3 !h-3 !bg-green-500 !border-2 !border-background"
-            style={{ left: '70%', transform: 'translateX(-50%)' }}
+            className="!w-3.5 !h-3.5 !bg-sky-500 !border-2 !border-background"
+            style={{ top: '42%' }}
           />
+          <div className="pointer-events-none absolute right-[-38px] top-[58%] flex items-center gap-1 text-[10px] font-medium text-red-500">
+            <span>Error</span>
+          </div>
           <Handle
             type="source"
             id="error"
-            position={Position.Bottom}
+            position={Position.Right}
             isConnectable={true}
-            className="!w-3 !h-3 !bg-red-500 !border-2 !border-background"
-            style={{ left: '86%', transform: 'translateX(-50%)' }}
+            className="!w-3.5 !h-3.5 !bg-red-500 !border-2 !border-background"
+            style={{ top: '64%' }}
           />
           <Handle
             type="source"

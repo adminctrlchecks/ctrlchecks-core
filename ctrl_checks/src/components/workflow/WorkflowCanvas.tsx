@@ -44,6 +44,11 @@ const AGENT_ATTACHMENT_COLORS: Record<AgentAttachmentHandle, string> = {
   tool: '#10b981',
 };
 
+const AI_AGENT_OUTPUT_COLORS: Record<'success' | 'error', string> = {
+  success: '#0ea5e9',
+  error: '#ef4444',
+};
+
 function normalizeAgentAttachmentHandle(handle: unknown): AgentAttachmentHandle | null {
   const value = String(handle || '').toLowerCase();
   if (value === 'chat_model' || value === 'chatmodel') return 'chat_model';
@@ -255,6 +260,7 @@ function WorkflowCanvasInner() {
     if (nodeTypeLower === 'ai_agent') {
       if (isSource) {
         if (handleIdLower === 'success') return 'success';
+        if (handleIdLower === 'reply') return 'success';
         if (handleIdLower === 'error') return 'error';
         return 'output';
       } else {
@@ -424,6 +430,10 @@ function WorkflowCanvasInner() {
       const agentAttachmentRole =
         targetNodeType === 'ai_agent' ? normalizeAgentAttachmentHandle(normalizedTargetHandle) : null;
       const isAgentAttachmentEdge = agentAttachmentRole !== null;
+      const aiAgentOutputHandle =
+        sourceNodeType === 'ai_agent' && (normalizedSourceHandle === 'success' || normalizedSourceHandle === 'error')
+          ? normalizedSourceHandle
+          : null;
 
       if (String(sourceNodeType || '') === 'switch') {
         const validSwitchHandles = parseSwitchCaseValues(sourceNode);
@@ -476,6 +486,9 @@ function WorkflowCanvasInner() {
       if (isAgentAttachmentEdge) {
         edgeColor = AGENT_ATTACHMENT_COLORS[agentAttachmentRole];
         strokeWidth = isSelected ? 3.5 : 2.5;
+      } else if (aiAgentOutputHandle) {
+        edgeColor = AI_AGENT_OUTPUT_COLORS[aiAgentOutputHandle];
+        strokeWidth = isSelected ? 4 : 3.25;
       }
 
       // MANDATORY: Force visibility with strong styling

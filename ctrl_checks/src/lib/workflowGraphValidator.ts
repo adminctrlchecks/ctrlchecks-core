@@ -31,6 +31,36 @@ export interface ValidationResult {
   warnings: string[];
 }
 
+function getNodeType(node: Node): string {
+  return String(node.data?.type || node.type || '').toLowerCase();
+}
+
+function semanticOutgoingHandle(edge: Edge, sourceType: string): string {
+  const raw = String(edge.sourceHandle || '').trim().toLowerCase();
+
+  if (sourceType === 'ai_agent') {
+    if (raw === 'error') return 'error';
+    // "output" is the legacy success alias for saved AI Agent workflows.
+    return 'success';
+  }
+
+  return raw || 'output';
+}
+
+function hasOneEdgePerSemanticOutput(outgoing: Edge[], sourceType: string): boolean {
+  if (outgoing.length <= 1) return true;
+
+  const handles = outgoing.map((edge) => semanticOutgoingHandle(edge, sourceType));
+  const uniqueHandles = new Set(handles);
+  if (uniqueHandles.size !== handles.length) return false;
+
+  if (sourceType === 'ai_agent') {
+    return handles.every((handle) => handle === 'success' || handle === 'error');
+  }
+
+  return handles.every((handle) => handle !== 'output' && handle !== 'default' && handle !== 'main');
+}
+
 /**
  * Validate workflow graph topology
  */
@@ -216,9 +246,9 @@ export function validateWorkflowGraph(nodes: Node[], edges: Edge[]): ValidationR
   // - Other nodes can have 1 outgoing edge
   executionNodes.forEach(node => {
     const outgoing = outgoingEdges.get(node.id) || [];
-    const nodeType = node.data?.type || '';
-    const isIfElse = nodeType === 'if_else';
-    const isSwitch = nodeType === 'switch';
+    const type = getNodeType(node);
+    const isIfElse = type === 'if_else';
+    const isSwitch = type === 'switch';
 
     if (isSwitch) {
       // Switch nodes can have multiple outgoing edges (one per case)
@@ -233,7 +263,7 @@ export function validateWorkflowGraph(nodes: Node[], edges: Edge[]): ValidationR
       }
     } else {
       // Other nodes can have at most 1 outgoing edge
-      if (outgoing.length > 1) {
+      if (outgoing.length > 1 && !hasOneEdgePerSemanticOutput(outgoing, type)) {
         errors.push({
           code: 'TOO_MANY_OUTGOING',
           message: `Node "${node.data?.label || node.id}" has ${outgoing.length} outgoing edges, but maximum is 1 (for this node type)`,

@@ -3,7 +3,7 @@ import { renderToString } from 'react-dom/server';
 import WorkflowNode from '../WorkflowNode';
 
 vi.mock('@xyflow/react', () => ({
-  Handle: (props: any) => <div data-handle={props?.id || 'default'} data-type={props?.type} />,
+  Handle: (props: any) => <div data-handle={props?.id || 'default'} data-type={props?.type} data-position={props?.position} />,
   Position: {
     Left: 'left',
     Right: 'right',
@@ -48,8 +48,11 @@ describe('WorkflowNode AI Agent ports', () => {
     expect(html).toContain('data-handle="memory"');
     expect(html).toContain('data-handle="tool"');
     expect(html).toContain('data-handle="success"');
+    expect(html).toContain('data-position="right"');
     expect(html).toContain('data-handle="error"');
     expect(html).toContain('data-handle="output"');
+    expect(html).toContain('Reply');
+    expect(html).toContain('Error');
   });
 
   it('renders placement controls for agent attachments', () => {
