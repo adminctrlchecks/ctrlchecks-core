@@ -161,6 +161,26 @@ export const AiAgentNodeConfigSchema = BaseNodeConfigSchema.extend({
     .min(1, 'Max tokens must be at least 1')
     .max(100000, 'Max tokens cannot exceed 100,000'))
     .optional(),
+  maxIterations: numStr(z.number()
+    .int('Max iterations must be an integer')
+    .min(1, 'Max iterations must be at least 1')
+    .max(25, 'Max iterations cannot exceed 25'))
+    .optional()
+    .default(10),
+  timeoutMs: numStr(z.number()
+    .int('Timeout must be an integer')
+    .min(1000, 'Timeout must be at least 1 second')
+    .max(300000, 'Timeout cannot exceed 5 minutes'))
+    .optional()
+    .default(60000),
+  maxToolResultChars: numStr(z.number()
+    .int('Tool result size must be an integer')
+    .min(1000, 'Tool result size must be at least 1,000 characters')
+    .max(50000, 'Tool result size cannot exceed 50,000 characters'))
+    .optional()
+    .default(8000),
+  memoryScope: z.enum(['none', 'conversation', 'user']).optional().default('none'),
+  requireApprovalFor: z.enum(['none', 'destructive', 'write_and_destructive']).optional().default('destructive'),
 });
 
 export type AiAgentNodeConfig = z.infer<typeof AiAgentNodeConfigSchema>;

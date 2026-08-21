@@ -41,6 +41,8 @@ describe('Handle Aliasing', () => {
     it('should preserve valid handles', () => {
       expect(normalizeTargetHandle('ai_agent', 'userInput')).toBe('userInput');
       expect(normalizeTargetHandle('ai_agent', 'chat_model')).toBe('chat_model');
+      expect(normalizeTargetHandle('ai_agent', 'memory')).toBe('memory');
+      expect(normalizeTargetHandle('ai_agent', 'tool')).toBe('tool');
     });
     
     it('should use default handle for unknown field names', () => {
@@ -67,7 +69,11 @@ describe('Handle Aliasing', () => {
       const contract = getNodeHandleContract('ai_agent');
       expect(contract.inputs).toContain('userInput');
       expect(contract.inputs).toContain('chat_model');
+      expect(contract.inputs).toContain('memory');
+      expect(contract.inputs).toContain('tool');
       expect(contract.outputs).toContain('output');
+      expect(contract.outputs).toContain('success');
+      expect(contract.outputs).toContain('error');
     });
     
     it('should return default contract for unknown node types', () => {

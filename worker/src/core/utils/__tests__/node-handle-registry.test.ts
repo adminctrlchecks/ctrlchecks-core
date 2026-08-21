@@ -4,6 +4,7 @@ import {
   normalizeHandleId,
   validateAndFixEdgeHandles,
   getDynamicOutputHandles,
+  isValidHandle,
 } from '../node-handle-registry';
 
 // Mock registry — getAllTypes returns [] so the lazy cache only has the 'default' entry.
@@ -101,6 +102,23 @@ describe('node-handle-registry', () => {
   });
 
   // ── getDynamicOutputHandles ────────────────────────────────────────────────
+
+  describe('ai_agent attachment handles', () => {
+    test('validates canonical attachment target handles and legacy output', () => {
+      mockGet.mockReturnValue({
+        incomingPorts: ['userInput', 'input', 'chat_model', 'memory', 'tool'],
+        outgoingPorts: ['success', 'error', 'output'],
+        isBranching: false,
+      });
+
+      expect(isValidHandle('ai_agent', 'chat_model', false)).toBe(true);
+      expect(isValidHandle('ai_agent', 'memory', false)).toBe(true);
+      expect(isValidHandle('ai_agent', 'tool', false)).toBe(true);
+      expect(isValidHandle('ai_agent', 'output', true)).toBe(true);
+      expect(isValidHandle('ai_agent', 'success', true)).toBe(true);
+      expect(isValidHandle('ai_agent', 'error', true)).toBe(true);
+    });
+  });
 
   describe('getDynamicOutputHandles', () => {
     test('returns contract outputs for a non-branching node', () => {

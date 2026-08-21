@@ -96,10 +96,25 @@ export function buildExecutionPlan(
 ): ExecutionPlan {
   const validationErrors: string[] = [];
   const validationWarnings: string[] = [];
+  const nodesById = new Map(nodes.map((node) => [node.id, node]));
+  const attachmentHandles = new Set(['chat_model', 'chatModel', 'memory', 'tool']);
+  const attachmentEdges = edges.filter((edge) => {
+    const target = nodesById.get(edge.target);
+    const targetType = target?.data?.type || target?.type || '';
+    return targetType === 'ai_agent' && attachmentHandles.has(edge.targetHandle || '');
+  });
+  const attachmentSourceIds = new Set(attachmentEdges.map((edge) => edge.source));
+  const planningNodes = nodes.filter((node) => !attachmentSourceIds.has(node.id));
+  const planningNodeIds = new Set(planningNodes.map((node) => node.id));
+  const planningEdges = edges.filter((edge) =>
+    !attachmentEdges.includes(edge) &&
+    planningNodeIds.has(edge.source) &&
+    planningNodeIds.has(edge.target)
+  );
 
   // 1. Validate single trigger
   // Use isTriggerNodeInline to recognize ALL nodes from triggers category
-  const triggerNodes = nodes.filter(n => isTriggerNodeInline(n));
+  const triggerNodes = planningNodes.filter(n => isTriggerNodeInline(n));
 
   if (triggerNodes.length === 0) {
     validationErrors.push('Workflow must have exactly one trigger node');
@@ -110,11 +125,11 @@ export function buildExecutionPlan(
   const triggerNode = triggerNodes.length === 1 ? triggerNodes[0] : null;
 
   // 2. Topological sort for execution order
-  const executionOrder = topologicalSort(nodes, edges);
+  const executionOrder = topologicalSort(planningNodes, planningEdges);
 
   // 3. Validate graph structure
-  const nodeIds = new Set(nodes.map(n => n.id));
-  const invalidEdges = edges.filter(e => 
+  const nodeIds = new Set(planningNodes.map(n => n.id));
+  const invalidEdges = planningEdges.filter(e =>
     !nodeIds.has(e.source) || !nodeIds.has(e.target)
   );
 
@@ -123,13 +138,13 @@ export function buildExecutionPlan(
   }
 
   // 4. Validate no cycles (topological sort should handle this, but double-check)
-  if (executionOrder.length !== nodes.length) {
-    validationWarnings.push(`Execution order has ${executionOrder.length} nodes but workflow has ${nodes.length} - possible cycle or disconnected nodes`);
+  if (executionOrder.length !== planningNodes.length) {
+    validationWarnings.push(`Execution order has ${executionOrder.length} nodes but workflow has ${planningNodes.length} executable nodes - possible cycle or disconnected nodes`);
   }
 
   return {
-    nodes,
-    edges: edges.filter(e => nodeIds.has(e.source) && nodeIds.has(e.target)),
+    nodes: planningNodes,
+    edges: planningEdges.filter(e => nodeIds.has(e.source) && nodeIds.has(e.target)),
     executionOrder,
     triggerNode,
     validationErrors,

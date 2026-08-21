@@ -1093,6 +1093,12 @@
       "frequencyPenalty",
       "presencePenalty",
       "timeoutLimit",
+      "timeoutMs",
+      "maxIterations",
+      "maxToolResultChars",
+      "maxRepeatedToolCalls",
+      "memoryScope",
+      "requireApprovalFor",
       "retryCount",
       "outputFormat",
       "includeReasoning"

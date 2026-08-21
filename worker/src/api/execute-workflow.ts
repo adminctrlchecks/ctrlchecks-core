@@ -19744,8 +19744,9 @@ export default async function executeWorkflowHandler(req: Request, res: Response
 
     // ✅ PRE-EXECUTION: Validate all node configs before any node runs
     const { validateWorkflowConfig } = await import('../core/utils/pre-execution-validator');
+    const executionNodeIdsForConfig = new Set(executionPlan.executionOrder.map((n) => n.id));
     const configCheck = validateWorkflowConfig(
-      nodes.map((n) => ({
+      nodes.filter((n) => executionNodeIdsForConfig.has(n.id)).map((n) => ({
         id: n.id,
         type: String(n.data?.type || n.type || ''),
         data: {
@@ -20680,11 +20681,21 @@ export default async function executeWorkflowHandler(req: Request, res: Response
             try {
               // Execute node
               const providerKey = getProviderCircuitKeyFromNodeType(nodeType);
+              const nodeForExecution = nodeType === 'ai_agent'
+                ? {
+                    ...node,
+                    data: {
+                      ...node.data,
+                      __agentGraph: { nodes, edges },
+                      __agentNodeOutputs: nodeOutputs,
+                    },
+                  }
+                : node;
               output = await circuitBreakerManager.execute(
                 providerKey,
                 async () =>
                   await executeNode(
-                    node,
+                    nodeForExecution,
                     nodeInput,
                     nodeOutputs, // Keep for backward compatibility, but also use centralState
                     db,

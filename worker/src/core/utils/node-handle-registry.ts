@@ -10,7 +10,7 @@
  * - Most nodes: `input` (target) and `output` (source)
  * - If/Else: `true` and `false` (source handles)
  * - Switch: case values (source handles)
- * - AI Agent: standard single `input` (target), `output` (source)
+ * - AI Agent: `userInput` plus attachment targets, `success`/`error` plus legacy `output`
  */
 
 export interface NodeHandleContract {
@@ -494,6 +494,13 @@ export function normalizeHandleId(
     // Default to first valid output handle
     return contract.outputs[0] || 'output';
   } else {
+    if (nodeType === 'ai_agent' && (handleIdLower === 'input' || handleIdLower === 'default' || handleIdLower === 'user_input' || handleIdLower === 'userinput')) {
+      return 'userInput';
+    }
+
+    if (contract.inputs.includes(handleId)) {
+      return handleId;
+    }
     // ✅ ENHANCED: Extended target handle mappings (inputs)
     // Maps common backend field names to React handle IDs
     const targetMappings: Record<string, string> = {
@@ -505,10 +512,10 @@ export function normalizeHandleId(
       'content': 'input',
       'userinput': 'input',
       'user_input': 'input',
-      'chatmodel': 'input',
-      'chat_model': 'input',
-      'memory': 'input',
-      'tool': 'input',
+      'chatmodel': 'chat_model',
+      'chat_model': 'chat_model',
+      'memory': 'memory',
+      'tool': 'tool',
       'values': 'input',
       'json': 'input',
       'template': 'input',
@@ -524,11 +531,6 @@ export function normalizeHandleId(
     const mapped = targetMappings[handleIdLower];
     if (mapped && contract.inputs.includes(mapped)) {
       return mapped;
-    }
-
-    // If handle is already valid, return it
-    if (contract.inputs.includes(handleId)) {
-      return handleId;
     }
 
     // Default to first valid input handle

@@ -238,6 +238,8 @@ function WorkflowCanvasInner() {
     // AI Agent special handles (must match exactly)
     if (nodeTypeLower === 'ai_agent') {
       if (isSource) {
+        if (handleIdLower === 'success') return 'success';
+        if (handleIdLower === 'error') return 'error';
         return 'output';
       } else {
         if (handleIdLower === 'chat_model' || handleIdLower === 'chatmodel') return 'chat_model';

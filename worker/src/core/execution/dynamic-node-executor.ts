@@ -1342,6 +1342,13 @@ export async function executeNodeDynamically(context: DynamicExecutionContext): 
     currentUserId,
     db,
   };
+  const extraNodeData = (node.data || {}) as Record<string, any>;
+  if (extraNodeData.__agentGraph) {
+    (execContext as any).agentGraph = extraNodeData.__agentGraph;
+  }
+  if (extraNodeData.__agentNodeOutputs) {
+    (execContext as any).agentNodeOutputs = extraNodeData.__agentNodeOutputs;
+  }
 
   // Populate upstreamOutputs map
   const allUpstreamOutputs = nodeOutputs.getAll();

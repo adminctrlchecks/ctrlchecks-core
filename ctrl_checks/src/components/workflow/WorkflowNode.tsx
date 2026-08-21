@@ -329,6 +329,56 @@ const WorkflowNode = memo(({ data, selected, id }: NodeProps<WorkflowNodeProps>)
             className="!w-3 !h-3 !bg-muted-foreground !border-2 !border-background"
           />
         )
+      ) : isAIAgentNode ? (
+        <>
+          <Handle
+            type="target"
+            id="chat_model"
+            position={Position.Bottom}
+            isConnectable={true}
+            className="!w-3 !h-3 !bg-indigo-500 !border-2 !border-background"
+            style={{ left: '18%', transform: 'translateX(-50%)' }}
+          />
+          <Handle
+            type="target"
+            id="memory"
+            position={Position.Bottom}
+            isConnectable={true}
+            className="!w-3 !h-3 !bg-amber-500 !border-2 !border-background"
+            style={{ left: '34%', transform: 'translateX(-50%)' }}
+          />
+          <Handle
+            type="target"
+            id="tool"
+            position={Position.Bottom}
+            isConnectable={true}
+            className="!w-3 !h-3 !bg-emerald-500 !border-2 !border-background"
+            style={{ left: '50%', transform: 'translateX(-50%)' }}
+          />
+          <Handle
+            type="source"
+            id="success"
+            position={Position.Bottom}
+            isConnectable={true}
+            className="!w-3 !h-3 !bg-green-500 !border-2 !border-background"
+            style={{ left: '70%', transform: 'translateX(-50%)' }}
+          />
+          <Handle
+            type="source"
+            id="error"
+            position={Position.Bottom}
+            isConnectable={true}
+            className="!w-3 !h-3 !bg-red-500 !border-2 !border-background"
+            style={{ left: '86%', transform: 'translateX(-50%)' }}
+          />
+          <Handle
+            type="source"
+            id="output"
+            position={Position.Bottom}
+            isConnectable={true}
+            style={{ opacity: 0, pointerEvents: 'none', width: 0, height: 0 }}
+          />
+        </>
       ) : (
         <Handle
           type="source"

@@ -22,6 +22,11 @@ export interface LLMOptions {
     mimeType?: 'application/json' | 'text/plain';
     schema?: Record<string, unknown>;
   };
+  tools?: Array<{
+    name: string;
+    description?: string;
+    parameters?: Record<string, unknown>;
+  }>;
   /** When build-time tracking is active (`runWithBuildUsageTracking`), labels this call in snapshots. */
   usageStage?: string;
 }
@@ -35,6 +40,10 @@ export interface LLMResponse {
   };
   model?: string;
   finishReason?: string;
+  toolCalls?: Array<{
+    name: string;
+    args: Record<string, unknown>;
+  }>;
 }
 
 export interface EmbeddingResponse {
@@ -401,6 +410,17 @@ export class LLMAdapter {
           systemInstruction: systemInstruction ? {
             parts: [{ text: systemInstruction }],
           } : undefined,
+          ...(options.tools && options.tools.length > 0
+            ? {
+                tools: [{
+                  functionDeclarations: options.tools.map((tool) => ({
+                    name: tool.name,
+                    description: tool.description || '',
+                    parameters: tool.parameters || { type: 'object', properties: {} },
+                  })),
+                }],
+              }
+            : {}),
           generationConfig: {
             temperature: options.temperature ?? 0.7,
             maxOutputTokens: options.maxTokens,
@@ -439,7 +459,20 @@ export class LLMAdapter {
         throw new Error(`Gemini API: Invalid response format. Expected candidates array.`);
       }
       
-      const content = data.candidates[0]?.content?.parts?.[0]?.text || '';
+      const parts = data.candidates[0]?.content?.parts || [];
+      const content = parts
+        .map((part: any) => typeof part?.text === 'string' ? part.text : '')
+        .filter((text: string) => text.length > 0)
+        .join('');
+      const toolCalls = parts
+        .map((part: any) => part?.functionCall)
+        .filter((call: any) => call && typeof call.name === 'string')
+        .map((call: any) => ({
+          name: call.name,
+          args: call.args && typeof call.args === 'object' && !Array.isArray(call.args)
+            ? call.args
+            : {},
+        }));
       const usageInfo = data.usageMetadata;
 
       return {
@@ -451,6 +484,7 @@ export class LLMAdapter {
         } : undefined,
         model: data.model || model,
         finishReason: data.candidates?.[0]?.finishReason,
+        toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
       };
     } catch (error) {
       if (error instanceof Error) {
