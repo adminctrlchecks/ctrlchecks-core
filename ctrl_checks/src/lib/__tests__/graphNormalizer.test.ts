@@ -189,6 +189,42 @@ describe('normalizeWorkflowGraph — edge deduplication', () => {
     const result = run([n1, n2], [e1, e2]);
     expect(result.edges[0].id).toBe('e1');
   });
+
+  it('canonicalizes duplicate AI Agent reply aliases before save', () => {
+    const trigger = makeNode('trigger', 'chat_trigger');
+    const agent = makeNode('agent', 'ai_agent');
+    const send = makeNode('send', 'chat_send');
+    const result = run(
+      [trigger, agent, send],
+      [
+        makeEdge('e1', 'trigger', 'agent', 'output', 'userInput'),
+        makeEdge('e2', 'agent', 'send', 'success', 'input'),
+        makeEdge('e3', 'agent', 'send', 'output', 'input'),
+      ],
+    );
+
+    const replyEdges = result.edges.filter((edge) => edge.source === 'agent' && edge.target === 'send');
+    expect(replyEdges).toHaveLength(1);
+    expect(replyEdges[0].sourceHandle).toBe('success');
+    expect(result.warnings).toContain('Removed 1 duplicate edge(s)');
+  });
+
+  it('keeps AI Agent reply and error as separate output handles', () => {
+    const agent = makeNode('agent', 'ai_agent');
+    const send = makeNode('send', 'chat_send');
+    const err = makeNode('err', 'log_output');
+    const result = run(
+      [agent, send, err],
+      [
+        makeEdge('e1', 'agent', 'send', 'reply', 'input'),
+        makeEdge('e2', 'agent', 'err', 'error', 'input'),
+      ],
+    );
+
+    expect(result.edges).toHaveLength(2);
+    expect(result.edges.find((edge) => edge.target === 'send')?.sourceHandle).toBe('success');
+    expect(result.edges.find((edge) => edge.target === 'err')?.sourceHandle).toBe('error');
+  });
 });
 
 // ---------------------------------------------------------------------------

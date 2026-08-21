@@ -4879,7 +4879,7 @@ export class NodeLibrary {
           message: {
             type: 'string',
             description: 'Message to send to the chat interface. Supports template variables from previous nodes.',
-            default: '',
+            default: '{{$json.response_text || $json.output || $json.message}}',
             examples: ['{{$json.response_text}}', '{{$json.body}}', 'Hello! How can I help you?'],
             fillMode: { default: 'runtime_ai', supportsRuntimeAI: true, supportsBuildtimeAI: true },
             runtimeContract: {
@@ -4891,7 +4891,7 @@ export class NodeLibrary {
           sessionId: {
             type: 'string',
             description: 'Chat session ID. Leave empty to use the upstream Chat Trigger sessionId.',
-            default: '',
+            default: '{{$json.sessionId}}',
             examples: ['{{chat_trigger.sessionId}}', '{{$json.sessionId}}', '{{executionId}}'],
             fillMode: { default: 'manual_static', supportsRuntimeAI: true, supportsBuildtimeAI: true },
             runtimeContract: {

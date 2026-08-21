@@ -3206,8 +3206,8 @@ Output:
     icon: 'Send',
     description: 'Send message to chat interface',
     defaultConfig: {
-      message: '',
-      sessionId: '',
+      message: '{{$json.response_text || $json.output || $json.message}}',
+      sessionId: '{{$json.sessionId}}',
     },
     configFields: [
       { 

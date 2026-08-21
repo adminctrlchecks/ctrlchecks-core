@@ -46,6 +46,24 @@ export interface NodeData {
 
 export type WorkflowNode = Node<NodeData>;
 
+function getWorkflowNodeType(node: WorkflowNode | undefined): string {
+  return String(node?.data?.type || node?.type || '').toLowerCase();
+}
+
+function normalizeAiAgentSourceHandle(handle: unknown): string {
+  const value = String(handle || '').trim().toLowerCase();
+  if (value === 'error') return 'error';
+  if (value === 'reply' || value === 'success' || value === 'output' || !value) return 'success';
+  return value;
+}
+
+function shouldReplaceAiAgentOutgoingEdge(edge: Edge, sourceNode: WorkflowNode | undefined, sourceHandle: string): boolean {
+  if (getWorkflowNodeType(sourceNode) !== 'ai_agent') return false;
+  if (edge.source !== sourceNode?.id) return false;
+  const existingHandle = normalizeAiAgentSourceHandle(edge.sourceHandle);
+  return existingHandle === normalizeAiAgentSourceHandle(sourceHandle);
+}
+
 interface WorkflowState {
   nodes: WorkflowNode[];
   edges: Edge[];
@@ -182,6 +200,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       sourceHandle = 'output';
     }
     
+    if (getWorkflowNodeType(sourceNode) === 'ai_agent') {
+      sourceHandle = normalizeAiAgentSourceHandle(sourceHandle);
+    }
+
     const connectionWithHandles = {
       ...connection,
       sourceHandle,
@@ -195,7 +217,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     });
     
     set({
-      edges: addEdge(connectionWithHandles, get().edges),
+      edges: addEdge(
+        connectionWithHandles,
+        get().edges.filter((edge) => !shouldReplaceAiAgentOutgoingEdge(edge, sourceNode, sourceHandle))
+      ),
       isDirty: true,
     });
   },
@@ -219,6 +244,11 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       sourceHandle = 'output';
     }
 
+    const sourceNode = nodes.find(n => n.id === newConnection.source);
+    if (getWorkflowNodeType(sourceNode) === 'ai_agent') {
+      sourceHandle = normalizeAiAgentSourceHandle(sourceHandle);
+    }
+
     const connectionWithHandles = {
       ...newConnection,
       sourceHandle,
@@ -226,7 +256,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     };
 
     set({
-      edges: addEdge(connectionWithHandles, edges.filter((e) => e.id !== oldEdge.id)),
+      edges: addEdge(
+        connectionWithHandles,
+        edges.filter((e) => e.id !== oldEdge.id && !shouldReplaceAiAgentOutgoingEdge(e, sourceNode, sourceHandle))
+      ),
       isDirty: true,
       undoStack: newUndoStack,
       redoStack: [],

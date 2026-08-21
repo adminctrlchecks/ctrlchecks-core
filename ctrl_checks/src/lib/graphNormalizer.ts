@@ -37,18 +37,33 @@ function normalizeIfElseNode(node: Node): Node {
   };
 }
 
+function nodeTypeById(nodes: Node[]): Map<string, string> {
+  return new Map(nodes.map((node) => [node.id, String(node.data?.type || node.type || '').toLowerCase()]));
+}
+
+function normalizeAiAgentOutputHandle(edge: Edge, sourceType: string): Edge {
+  if (sourceType !== 'ai_agent') return edge;
+
+  const raw = String(edge.sourceHandle || '').trim().toLowerCase();
+  if (raw === 'error') return { ...edge, sourceHandle: 'error' };
+  return { ...edge, sourceHandle: 'success' };
+}
+
 /**
  * Deduplicate edges by (source, target, sourceHandle, targetHandle)
  */
-function deduplicateEdges(edges: Edge[]): Edge[] {
+function deduplicateEdges(nodes: Node[], edges: Edge[]): Edge[] {
   const seen = new Set<string>();
   const unique: Edge[] = [];
+  const typesById = nodeTypeById(nodes);
 
   for (const edge of edges) {
-    const key = `${edge.source}::${edge.target}::${edge.sourceHandle || 'default'}::${edge.targetHandle || 'default'}`;
+    const sourceType = typesById.get(edge.source) || '';
+    const normalizedEdge = normalizeAiAgentOutputHandle(edge, sourceType);
+    const key = `${normalizedEdge.source}::${normalizedEdge.target}::${normalizedEdge.sourceHandle || 'default'}::${normalizedEdge.targetHandle || 'default'}`;
     if (!seen.has(key)) {
       seen.add(key);
-      unique.push(edge);
+      unique.push(normalizedEdge);
     }
   }
 
@@ -86,7 +101,7 @@ export function normalizeWorkflowGraph(nodes: Node[], edges: Edge[]): Normalized
 
   // 3. Deduplicate edges
   const beforeDedup = validEdges.length;
-  validEdges = deduplicateEdges(validEdges);
+  validEdges = deduplicateEdges(normalizedNodes, validEdges);
   const dupCount = beforeDedup - validEdges.length;
   if (dupCount > 0) {
     warnings.push(`Removed ${dupCount} duplicate edge(s)`);
