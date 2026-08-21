@@ -102,6 +102,60 @@ vi.mock('@/components/workflow/nodeTypes', () => ({
       configFields: [],
     },
     {
+      type: 'chat_trigger',
+      label: 'Chat Trigger',
+      category: 'triggers',
+      icon: '',
+      description: '',
+      defaultConfig: {},
+      configFields: [],
+    },
+    {
+      type: 'ai_agent',
+      label: 'AI Agent',
+      category: 'ai',
+      icon: '',
+      description: '',
+      defaultConfig: {},
+      configFields: [],
+    },
+    {
+      type: 'ai_chat_model',
+      label: 'AI Chat Model',
+      category: 'ai',
+      icon: '',
+      description: '',
+      defaultConfig: {},
+      configFields: [],
+    },
+    {
+      type: 'memory',
+      label: 'Memory',
+      category: 'ai',
+      icon: '',
+      description: '',
+      defaultConfig: {},
+      configFields: [],
+    },
+    {
+      type: 'google_sheets',
+      label: 'Google Sheets',
+      category: 'google',
+      icon: '',
+      description: '',
+      defaultConfig: {},
+      configFields: [],
+    },
+    {
+      type: 'chat_send',
+      label: 'Chat Send',
+      category: 'communication',
+      icon: '',
+      description: '',
+      defaultConfig: {},
+      configFields: [],
+    },
+    {
       type: 'send_email',
       label: 'Send Email',
       category: 'actions',
@@ -141,6 +195,23 @@ function mkNode(
 
 function mkEdge(source: string, target: string, sourceHandle?: string): Edge {
   return { id: `${source}-${target}`, source, target, sourceHandle } as unknown as Edge;
+}
+
+function mkHandledEdge(
+  source: string,
+  target: string,
+  sourceHandle?: string,
+  targetHandle?: string,
+  data?: Record<string, unknown>
+): Edge {
+  return {
+    id: `${source}-${target}-${targetHandle || sourceHandle || 'edge'}`,
+    source,
+    target,
+    sourceHandle,
+    targetHandle,
+    data,
+  } as unknown as Edge;
 }
 
 function triggerNode(id = 't1'): Node {
@@ -336,6 +407,44 @@ describe('validateWorkflowComprehensive — data flow', () => {
       i => i.category === 'data_flow' && (i.message.includes('TRUE output') || i.message.includes('FALSE output'))
     );
     expect(pathIssues).toHaveLength(0);
+  });
+
+  it('does not report AI Agent sidecar attachments as disconnected normal workflow nodes', () => {
+    const chat = mkNode('chat', 'chat_trigger', {}, 'triggers');
+    const agent = mkNode('agent', 'ai_agent', {}, 'ai');
+    const output = mkNode('reply', 'chat_send', {}, 'communication');
+    const model = mkNode('model', 'ai_chat_model', {}, 'ai');
+    const memory = mkNode('memory', 'memory', {}, 'ai');
+    const readSheet = mkNode('read_sheet', 'google_sheets', {}, 'google');
+    const writeSheet = mkNode('write_sheet', 'google_sheets', {}, 'google');
+
+    model.data = { ...model.data, agentAttachmentRole: 'chat_model' };
+    memory.data = { ...memory.data, agentAttachmentRole: 'memory' };
+    readSheet.data = { ...readSheet.data, agentAttachmentRole: 'tool' };
+    writeSheet.data = { ...writeSheet.data, agentAttachmentRole: 'tool' };
+
+    const result = validateWorkflowComprehensive(
+      [chat, agent, output, model, memory, readSheet, writeSheet],
+      [
+        mkHandledEdge('chat', 'agent', 'output', 'userInput'),
+        mkHandledEdge('agent', 'reply', 'success', 'input'),
+        mkHandledEdge('model', 'agent', 'output', 'chat_model', { agentAttachment: true, role: 'chat_model' }),
+        mkHandledEdge('memory', 'agent', 'output', 'memory', { agentAttachment: true, role: 'memory' }),
+        mkHandledEdge('read_sheet', 'agent', 'output', 'tool', { agentAttachment: true, role: 'tool' }),
+        mkHandledEdge('write_sheet', 'agent', 'output', 'tool', { agentAttachment: true, role: 'tool' }),
+      ]
+    );
+
+    const attachmentNodeIds = new Set(['model', 'memory', 'read_sheet', 'write_sheet']);
+    const attachmentFlowIssues = result.issues.filter(
+      issue =>
+        issue.category === 'data_flow' &&
+        issue.nodeId &&
+        attachmentNodeIds.has(issue.nodeId)
+    );
+
+    expect(attachmentFlowIssues).toEqual([]);
+    expect(result.issues.map(issue => issue.message).join('\n')).not.toMatch(/not reachable from trigger/i);
   });
 });
 

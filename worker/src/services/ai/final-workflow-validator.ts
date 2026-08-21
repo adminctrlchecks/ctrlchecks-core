@@ -24,6 +24,7 @@ import { isValidHandle } from '../../core/utils/node-handle-registry';
 import { transformationDetector, detectTransformations } from './transformation-detector';
 import { executionOrderEnforcer } from './execution-order-enforcer';
 import { unifiedNodeCategorizer } from './unified-node-categorizer';
+import { splitAgentAttachmentEdges } from '../../core/utils/agent-attachment-edges';
 
 export interface FinalValidationResult {
   valid: boolean;
@@ -178,9 +179,10 @@ export class FinalWorkflowValidator {
   ): { valid: boolean; errors: string[]; disconnectedNodeIds: string[] } {
     const errors: string[] = [];
     const disconnectedNodeIds: string[] = [];
+    const { executionNodes, executionEdges } = splitAgentAttachmentEdges(nodes, edges);
     
     // Find trigger nodes
-    const triggerNodes = getTriggerNodes(nodes);
+    const triggerNodes = getTriggerNodes(executionNodes);
     if (triggerNodes.length === 0) {
       errors.push('No trigger node found in workflow');
       return { valid: false, errors, disconnectedNodeIds };
@@ -188,14 +190,14 @@ export class FinalWorkflowValidator {
     
     // Find output nodes (nodes with no outgoing edges, excluding triggers)
     const outgoingEdgesMap = new Map<string, WorkflowEdge[]>();
-    edges.forEach(edge => {
+    executionEdges.forEach(edge => {
       if (!outgoingEdgesMap.has(edge.source)) {
         outgoingEdgesMap.set(edge.source, []);
       }
       outgoingEdgesMap.get(edge.source)!.push(edge);
     });
     
-    const outputNodes = nodes.filter(node => {
+    const outputNodes = executionNodes.filter(node => {
       const nodeType = unifiedNormalizeNodeType(node);
       const nodeTypeLower = (nodeType || '').toLowerCase();
 
@@ -242,7 +244,7 @@ export class FinalWorkflowValidator {
     
     // Build reverse adjacency list (for backward traversal from outputs)
     const reverseAdj = new Map<string, string[]>();
-    edges.forEach(edge => {
+    executionEdges.forEach(edge => {
       if (!reverseAdj.has(edge.target)) {
         reverseAdj.set(edge.target, []);
       }
@@ -266,7 +268,7 @@ export class FinalWorkflowValidator {
     }
     
     // Check if all nodes are reachable from outputs
-    for (const node of nodes) {
+    for (const node of executionNodes) {
       if (!reachableFromOutput.has(node.id) && !isTriggerNode(node)) {
         const nodeType = unifiedNormalizeNodeType(node);
 
@@ -317,9 +319,10 @@ export class FinalWorkflowValidator {
   ): { valid: boolean; errors: string[]; orphanNodeIds: string[] } {
     const errors: string[] = [];
     const orphanNodeIds: string[] = [];
+    const { executionNodes, executionEdges } = splitAgentAttachmentEdges(nodes, edges);
     
     // Find trigger nodes
-    const triggerNodes = getTriggerNodes(nodes);
+    const triggerNodes = getTriggerNodes(executionNodes);
     if (triggerNodes.length === 0) {
       errors.push('No trigger node found - cannot check for orphan nodes');
       return { valid: false, errors, orphanNodeIds };
@@ -327,7 +330,7 @@ export class FinalWorkflowValidator {
     
     // Build adjacency list (for forward traversal from trigger)
     const adj = new Map<string, string[]>();
-    edges.forEach(edge => {
+    executionEdges.forEach(edge => {
       if (!adj.has(edge.source)) {
         adj.set(edge.source, []);
       }
@@ -351,7 +354,7 @@ export class FinalWorkflowValidator {
     }
     
     // Check for orphan nodes
-    for (const node of nodes) {
+    for (const node of executionNodes) {
       if (!reachableFromTrigger.has(node.id)) {
         const nodeType = unifiedNormalizeNodeType(node);
         errors.push(`Orphan node "${nodeType}" (${node.id}) is not reachable from trigger`);
@@ -411,9 +414,10 @@ export class FinalWorkflowValidator {
     const errors: string[] = [];
     const warnings: string[] = [];
     const issues: string[] = [];
+    const { executionNodes, executionEdges } = splitAgentAttachmentEdges(nodes, edges);
     
     // Use type system to validate data flow
-    const typeValidation = validateWorkflowTypes(nodes, edges);
+    const typeValidation = validateWorkflowTypes(executionNodes, executionEdges);
     
     if (!typeValidation.valid) {
       errors.push(...typeValidation.errors);
@@ -425,20 +429,20 @@ export class FinalWorkflowValidator {
     warnings.push(...typeValidation.warnings);
     
     // Check for cycles (data should flow forward)
-    if (this.hasCycle(nodes, edges)) {
+    if (this.hasCycle(executionNodes, executionEdges)) {
       errors.push('Workflow contains a cycle - data flow must be acyclic');
       issues.push('Cycle detected in workflow graph');
     }
     
     // Check execution order (producer → transformer → output)
-    const orderIssues = this.checkExecutionOrder(nodes, edges);
+    const orderIssues = this.checkExecutionOrder(executionNodes, executionEdges);
     if (orderIssues.length > 0) {
       warnings.push(...orderIssues);
       issues.push(...orderIssues);
     }
 
     // ✅ AI SAFETY: Warn if AI nodes can receive array/bulk data without an upstream `limit`
-    const aiSafety = this.checkAiLimitSafety(nodes, edges);
+    const aiSafety = this.checkAiLimitSafety(executionNodes, executionEdges);
     if (aiSafety.warnings.length > 0) {
       warnings.push(...aiSafety.warnings);
       issues.push(...aiSafety.issues);
@@ -581,10 +585,11 @@ export class FinalWorkflowValidator {
     const errors: string[] = [];
     const warnings: string[] = [];
     const missingInputs: Array<{ nodeId: string; nodeType: string; reason: string }> = [];
+    const { executionNodes, executionEdges } = splitAgentAttachmentEdges(nodes, edges);
     
     // Build incoming edges map
     const incomingEdgesMap = new Map<string, WorkflowEdge[]>();
-    edges.forEach(edge => {
+    executionEdges.forEach(edge => {
       if (!incomingEdgesMap.has(edge.target)) {
         incomingEdgesMap.set(edge.target, []);
       }
@@ -592,7 +597,7 @@ export class FinalWorkflowValidator {
     });
     
     // Check each node
-    for (const node of nodes) {
+    for (const node of executionNodes) {
       const nodeType = unifiedNormalizeNodeType(node);
       
       // Triggers don't need inputs
@@ -632,10 +637,11 @@ export class FinalWorkflowValidator {
   ): { valid: boolean; warnings: string[]; issues: string[] } {
     const warnings: string[] = [];
     const issues: string[] = [];
+    const { executionNodes, executionEdges } = splitAgentAttachmentEdges(nodes, edges);
     
     // Check for duplicate nodes (same type used multiple times unnecessarily)
     const nodeTypeCount = new Map<string, number>();
-    nodes.forEach(node => {
+    executionNodes.forEach(node => {
       const nodeType = unifiedNormalizeNodeType(node);
       nodeTypeCount.set(nodeType, (nodeTypeCount.get(nodeType) || 0) + 1);
     });
@@ -648,14 +654,14 @@ export class FinalWorkflowValidator {
     });
     
     // Check for parallel paths (may indicate non-minimal workflow)
-    const parallelPaths = this.findParallelPaths(nodes, edges);
+    const parallelPaths = this.findParallelPaths(executionNodes, executionEdges);
     if (parallelPaths.length > 0) {
       warnings.push(`Parallel paths detected (may indicate non-minimal workflow)`);
       issues.push(...parallelPaths);
     }
     
     // Check for unnecessary transform nodes
-    const unnecessaryTransforms = this.findUnnecessaryTransforms(nodes, edges);
+    const unnecessaryTransforms = this.findUnnecessaryTransforms(executionNodes, executionEdges);
     if (unnecessaryTransforms.length > 0) {
       warnings.push(`Unnecessary transform nodes detected`);
       issues.push(...unnecessaryTransforms);
@@ -847,9 +853,10 @@ export class FinalWorkflowValidator {
     const errors: string[] = [];
     const warnings: string[] = [];
     const issues: string[] = [];
+    const { executionNodes, executionEdges } = splitAgentAttachmentEdges(nodes, edges);
     
     // Use execution order enforcer to check order
-    const orderResult = executionOrderEnforcer.enforceOrdering(nodes, edges);
+    const orderResult = executionOrderEnforcer.enforceOrdering(executionNodes, executionEdges);
     
     if (orderResult.reordered) {
       // If workflow was reordered, it means original order was incorrect
@@ -868,7 +875,7 @@ export class FinalWorkflowValidator {
     
     // Additional validation: check category order in edges
     const nodeCategoryMap = new Map<string, string>();
-    nodes.forEach(node => {
+    executionNodes.forEach(node => {
       const nodeType = unifiedNormalizeNodeType(node);
       if (this.isDataProducer(nodeType)) {
         nodeCategoryMap.set(node.id, 'producer');
@@ -888,7 +895,7 @@ export class FinalWorkflowValidator {
       'output': 3,
     };
     
-    edges.forEach(edge => {
+    executionEdges.forEach(edge => {
       const sourceCategory = nodeCategoryMap.get(edge.source);
       const targetCategory = nodeCategoryMap.get(edge.target);
       

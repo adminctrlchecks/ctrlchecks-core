@@ -12,6 +12,7 @@
 import { Node, Edge } from '@xyflow/react';
 import { NODE_TYPES, NodeTypeDefinition } from '@/components/workflow/nodeTypes';
 import { WorkflowNode } from '@/stores/workflowStore';
+import { splitAgentAttachmentEdges } from '@/lib/agentAttachmentEdges';
 
 export interface ValidationIssue {
   nodeId?: string;
@@ -176,6 +177,7 @@ function validateConfiguration(
   edges: Edge[]
 ): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
+  const { executionEdges } = splitAgentAttachmentEdges(nodes, edges);
 
   nodes.forEach(node => {
     const nodeData = node.data as WorkflowNode['data'];
@@ -258,7 +260,7 @@ function validateConfiguration(
   });
 
   // Check for circular dependencies
-  const cycles = detectCycles(nodes, edges);
+  const cycles = detectCycles(nodes, executionEdges);
   if (cycles.length > 0) {
     issues.push({
       category: 'configuration',
@@ -276,15 +278,19 @@ function validateConfiguration(
  */
 function validateDataFlow(nodes: Node[], edges: Edge[]): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
+  const {
+    executionNodes,
+    executionEdges,
+  } = splitAgentAttachmentEdges(nodes, edges);
 
   // Check for orphan nodes (except triggers)
-  nodes.forEach(node => {
+  executionNodes.forEach(node => {
     const nodeType = (node.data as WorkflowNode['data']).type;
     if (isTriggerNode(node)) {
       return; // Triggers don't need inputs
     }
 
-    const hasIncoming = edges.some(e => e.target === node.id);
+    const hasIncoming = executionEdges.some(e => e.target === node.id);
     if (!hasIncoming) {
       issues.push({
         nodeId: node.id,
@@ -299,8 +305,8 @@ function validateDataFlow(nodes: Node[], edges: Edge[]): ValidationIssue[] {
   });
 
   // Check for nodes with no outputs (dead ends)
-  const nodesWithOutputs = new Set(edges.map(e => e.source));
-  nodes.forEach(node => {
+  const nodesWithOutputs = new Set(executionEdges.map(e => e.source));
+  executionNodes.forEach(node => {
     if (!nodesWithOutputs.has(node.id) && !isTriggerNode(node)) {
       issues.push({
         nodeId: node.id,
@@ -314,10 +320,10 @@ function validateDataFlow(nodes: Node[], edges: Edge[]): ValidationIssue[] {
   });
 
   // Validate If/Else node outputs
-  nodes.forEach(node => {
+  executionNodes.forEach(node => {
     const nodeType = (node.data as WorkflowNode['data']).type;
     if (nodeType === 'if_else') {
-      const outputs = edges.filter(e => e.source === node.id);
+      const outputs = executionEdges.filter(e => e.source === node.id);
       const hasTrue = outputs.some(e => e.sourceHandle === 'true');
       const hasFalse = outputs.some(e => e.sourceHandle === 'false');
 
@@ -440,9 +446,10 @@ function validateSecurity(nodes: Node[]): ValidationIssue[] {
  */
 function validatePerformance(nodes: Node[], edges: Edge[]): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
+  const { executionNodes, executionEdges } = splitAgentAttachmentEdges(nodes, edges);
 
   // Check for large batch operations without pagination
-  nodes.forEach(node => {
+  executionNodes.forEach(node => {
     const nodeType = (node.data as WorkflowNode['data']).type;
     if (nodeType === 'database_read') {
       const config = (node.data as WorkflowNode['data']).config || {};
@@ -462,7 +469,7 @@ function validatePerformance(nodes: Node[], edges: Edge[]): ValidationIssue[] {
   });
 
   // Check for unnecessary transformations
-  const transformationChains = detectLongTransformationChains(nodes, edges);
+  const transformationChains = detectLongTransformationChains(executionNodes, executionEdges);
   if (transformationChains.length > 0) {
     transformationChains.forEach(chain => {
       issues.push({
@@ -486,8 +493,9 @@ function validateSpecificNodes(
   nodeDefinitions: Map<string, NodeTypeDefinition>
 ): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
+  const { executionNodes } = splitAgentAttachmentEdges(nodes, edges);
 
-  nodes.forEach(node => {
+  executionNodes.forEach(node => {
     const nodeData = node.data as WorkflowNode['data'];
     const nodeType = nodeData.type;
     const config = nodeData.config || {};

@@ -369,6 +369,11 @@ export class GraphConnectivityValidationLayer extends ValidationLayer {
     }
     
     const { nodes, edges } = context.workflow;
+    const {
+      executionNodes,
+      executionEdges,
+      attachmentOnlyNodeIds,
+    } = splitAgentAttachmentEdges(nodes, edges);
     
     // Validate nodes exist
     if (!nodes || nodes.length === 0) {
@@ -378,7 +383,7 @@ export class GraphConnectivityValidationLayer extends ValidationLayer {
     
     // ✅ UNIVERSAL FIX: Use registry-based trigger detection (not hardcoded)
     // This ensures ALL trigger types are recognized (webhook, manual_trigger, schedule, chat_trigger, etc.)
-    const triggerNodes = nodes.filter(node => isTriggerNode(node));
+    const triggerNodes = executionNodes.filter(node => isTriggerNode(node));
     
     if (triggerNodes.length === 0) {
       errors.push('Workflow must have at least one trigger node');
@@ -392,7 +397,7 @@ export class GraphConnectivityValidationLayer extends ValidationLayer {
     const incomingEdges = new Map<string, WorkflowEdge[]>();
     const outgoingEdges = new Map<string, WorkflowEdge[]>();
     
-    edges.forEach(edge => {
+    executionEdges.forEach(edge => {
       if (!incomingEdges.has(edge.target)) {
         incomingEdges.set(edge.target, []);
       }
@@ -406,7 +411,7 @@ export class GraphConnectivityValidationLayer extends ValidationLayer {
     
     // Find orphan nodes (no incoming or outgoing edges, excluding triggers)
     const orphanNodes: string[] = [];
-    nodes.forEach(node => {
+    executionNodes.forEach(node => {
       const nodeId = node.id;
       const hasIncoming = incomingEdges.has(nodeId) && incomingEdges.get(nodeId)!.length > 0;
       const hasOutgoing = outgoingEdges.has(nodeId) && outgoingEdges.get(nodeId)!.length > 0;
@@ -440,7 +445,7 @@ export class GraphConnectivityValidationLayer extends ValidationLayer {
         }
       }
       
-      const disconnectedNodes = nodes
+      const disconnectedNodes = executionNodes
         .filter(node => !visited.has(node.id))
         .map(node => node.id);
       
@@ -472,7 +477,10 @@ export class GraphConnectivityValidationLayer extends ValidationLayer {
     
     details.connectivity = {
       totalNodes: nodes.length,
+      executionNodes: executionNodes.length,
       totalEdges: edges.length,
+      executionEdges: executionEdges.length,
+      attachmentOnlyNodes: attachmentOnlyNodeIds.size,
       triggerNodes: triggerNodes.length,
       orphanNodes: orphanNodes.length,
       disconnectedNodes: details.disconnectedNodes?.length || 0,
@@ -873,9 +881,10 @@ export class StructuralDAGValidationLayer extends ValidationLayer {
     
     const workflow = context.workflow;
     const { nodes, edges } = workflow;
+    const { executionNodes, executionEdges } = splitAgentAttachmentEdges(nodes, edges);
     
     // Find all trigger nodes
-    const triggerNodes = nodes.filter(n => {
+    const triggerNodes = executionNodes.filter(n => {
       const type = unifiedNormalizeNodeTypeString(n.type || n.data?.type || '');
       return type === 'manual_trigger' || type.includes('trigger') || type === 'webhook' || type === 'form';
     });
@@ -887,7 +896,7 @@ export class StructuralDAGValidationLayer extends ValidationLayer {
     
     // Build outgoing edges map
     const outgoingEdges = new Map<string, WorkflowEdge[]>();
-    edges.forEach(edge => {
+    executionEdges.forEach(edge => {
       if (!outgoingEdges.has(edge.source)) {
         outgoingEdges.set(edge.source, []);
       }
@@ -906,7 +915,7 @@ export class StructuralDAGValidationLayer extends ValidationLayer {
     }
     
     // ✅ RULE 2: NORMAL NODES MUST HAVE EXACTLY 1 OUTGOING EDGE (unless if_else/switch/merge)
-    nodes.forEach(node => {
+    executionNodes.forEach(node => {
       const nodeType = unifiedNormalizeNodeTypeString(node.type || node.data?.type || '');
       const isConditional = nodeType === 'if_else' || nodeType === 'switch' || nodeType === 'merge';
       
@@ -957,6 +966,11 @@ export class FinalIntegrityValidationLayer extends ValidationLayer {
     }
     
     const { nodes, edges } = context.workflow;
+    const {
+      executionNodes,
+      executionEdges,
+      attachmentOnlyNodeIds,
+    } = splitAgentAttachmentEdges(nodes, edges);
     
     // Check 1: Duplicate nodes (duplicate IDs)
     const nodeIdMap = new Map<string, WorkflowNode[]>();
@@ -976,13 +990,13 @@ export class FinalIntegrityValidationLayer extends ValidationLayer {
 
     // Check 1b: Non-merge nodes with multiple incoming edges mixing branch ports (true/false/case_*) and main-like edges
     const incomingByTarget = new Map<string, WorkflowEdge[]>();
-    edges.forEach(edge => {
+    executionEdges.forEach(edge => {
       if (!incomingByTarget.has(edge.target)) incomingByTarget.set(edge.target, []);
       incomingByTarget.get(edge.target)!.push(edge);
     });
     incomingByTarget.forEach((ins, targetId) => {
       if (ins.length < 2) return;
-      const targetNode = nodes.find(n => n.id === targetId);
+      const targetNode = executionNodes.find(n => n.id === targetId);
       if (!targetNode) return;
       const nt = unifiedNormalizeNodeTypeString(targetNode.type || targetNode.data?.type || '');
       const ntDef = unifiedNodeRegistry.get(nt);
@@ -1006,7 +1020,7 @@ export class FinalIntegrityValidationLayer extends ValidationLayer {
 
     // Check 1c: log_output terminals must be single-input and branch flows must not collapse to one log_output.
     const branchingNodeIds = new Set(
-      nodes
+      executionNodes
         .filter((n) => {
           const nt = unifiedNormalizeNodeTypeString(n.type || n.data?.type || '');
           return !!unifiedNodeRegistry.get(nt)?.isBranching;
@@ -1014,9 +1028,9 @@ export class FinalIntegrityValidationLayer extends ValidationLayer {
         .map((n) => n.id)
     );
     const branchTargetIds = new Set(
-      edges.filter((e) => branchingNodeIds.has(e.source)).map((e) => e.target)
+      executionEdges.filter((e) => branchingNodeIds.has(e.source)).map((e) => e.target)
     );
-    const logOutputNodes = nodes.filter((n) => {
+    const logOutputNodes = executionNodes.filter((n) => {
       const nt = unifiedNormalizeNodeTypeString(n.type || n.data?.type || '');
       return nt === 'log_output';
     });
@@ -1026,7 +1040,7 @@ export class FinalIntegrityValidationLayer extends ValidationLayer {
       );
     }
     for (const logNode of logOutputNodes) {
-      const incoming = edges.filter((e) => e.target === logNode.id);
+      const incoming = executionEdges.filter((e) => e.target === logNode.id);
       const uniqueSources = new Set(incoming.map((e) => e.source));
       if (uniqueSources.size > 1) {
         errors.push(
@@ -1040,13 +1054,13 @@ export class FinalIntegrityValidationLayer extends ValidationLayer {
     // This works for ALL output nodes (CRM, email, social media, log_output, etc.) automatically
     // ✅ IMPORTANT: Check for ANY output node in the workflow, not just terminal ones
     // An output node can exist even if it's not yet connected (will be connected by edge reconciliation)
-    const allOutputNodes = nodes.filter(node => {
+    const allOutputNodes = executionNodes.filter(node => {
       return !isTriggerNode(node) && isOutputNode(node);
     });
     
     // Terminal output nodes (no outgoing edges) - these are the final sinks
     const terminalOutputNodes = allOutputNodes.filter(node => {
-      const outgoing = edges.filter(e => e.source === node.id);
+      const outgoing = executionEdges.filter(e => e.source === node.id);
       return !outgoing.length;
     });
     
@@ -1065,7 +1079,7 @@ export class FinalIntegrityValidationLayer extends ValidationLayer {
     
     // Build reverse adjacency list (for backward traversal from outputs)
     const reverseAdj = new Map<string, string[]>();
-    edges.forEach(edge => {
+    executionEdges.forEach(edge => {
       if (!reverseAdj.has(edge.target)) {
         reverseAdj.set(edge.target, []);
       }
@@ -1088,7 +1102,7 @@ export class FinalIntegrityValidationLayer extends ValidationLayer {
       }
     }
     
-    const disconnectedNodes = nodes.filter(node => !visited.has(node.id)).map(n => n.id);
+    const disconnectedNodes = executionNodes.filter(node => !visited.has(node.id)).map(n => n.id);
     if (disconnectedNodes.length > 0) {
       warnings.push(`Found ${disconnectedNodes.length} node(s) not connected to any output`);
       details.disconnectedNodes = disconnectedNodes;
@@ -1096,14 +1110,14 @@ export class FinalIntegrityValidationLayer extends ValidationLayer {
     
     // Check 3: Required inputs
     const incomingEdgesMap = new Map<string, WorkflowEdge[]>();
-    edges.forEach(edge => {
+    executionEdges.forEach(edge => {
       if (!incomingEdgesMap.has(edge.target)) {
         incomingEdgesMap.set(edge.target, []);
       }
       incomingEdgesMap.get(edge.target)!.push(edge);
     });
     
-    nodes.forEach(node => {
+    executionNodes.forEach(node => {
       const nodeType = unifiedNormalizeNodeTypeString(node.data?.type || node.type || '');
       if (isTriggerNode(node)) {
         return; // Triggers don't need inputs
@@ -1119,6 +1133,7 @@ export class FinalIntegrityValidationLayer extends ValidationLayer {
         });
       }
     });
+    details.attachmentOnlyNodes = attachmentOnlyNodeIds.size;
     
     // Check 4: Edge handles validation
     edges.forEach(edge => {
