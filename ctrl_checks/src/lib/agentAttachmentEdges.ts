@@ -11,6 +11,7 @@ type MinimalNode = {
 type MinimalEdge = {
   source: string;
   target: string;
+  sourceHandle?: string | null;
   targetHandle?: string | null;
   data?: Record<string, unknown> | null;
 };
@@ -27,11 +28,27 @@ function nodeType(node: MinimalNode | undefined): string {
   return String(node?.data?.type || node?.type || '').toLowerCase();
 }
 
-function edgeAttachmentRole(edge: MinimalEdge): AgentAttachmentHandle | null {
+function edgeAttachmentRole(edge: MinimalEdge, direction: 'into_agent' | 'out_of_agent'): AgentAttachmentHandle | null {
+  const handle = direction === 'into_agent' ? edge.targetHandle : edge.sourceHandle;
   return (
-    normalizeAgentAttachmentHandle(edge.targetHandle) ||
+    normalizeAgentAttachmentHandle(handle) ||
     normalizeAgentAttachmentHandle(edge.data?.role)
   );
+}
+
+function attachmentNodeId(edge: MinimalEdge, nodesById: Map<string, MinimalNode>): string | null {
+  const source = nodesById.get(edge.source);
+  const target = nodesById.get(edge.target);
+
+  if (nodeType(target) === 'ai_agent' && edgeAttachmentRole(edge, 'into_agent')) {
+    return edge.source;
+  }
+
+  if (nodeType(source) === 'ai_agent' && edgeAttachmentRole(edge, 'out_of_agent')) {
+    return edge.target;
+  }
+
+  return null;
 }
 
 export function isAgentAttachmentEdge(
@@ -39,10 +56,29 @@ export function isAgentAttachmentEdge(
   nodesById: Map<string, MinimalNode>
 ): boolean {
   if (!edge?.source || !edge?.target) return false;
-  const target = nodesById.get(edge.target);
-  if (nodeType(target) !== 'ai_agent') return false;
+  if (edge.data?.agentAttachment === true) return attachmentNodeId(edge, nodesById) !== null;
 
-  return edgeAttachmentRole(edge) !== null || edge.data?.agentAttachment === true;
+  return attachmentNodeId(edge, nodesById) !== null;
+}
+
+export function getAgentAttachmentEdgeRole(
+  edge: MinimalEdge,
+  nodesById: Map<string, MinimalNode>
+): AgentAttachmentHandle | null {
+  const target = nodesById.get(edge.target);
+  if (nodeType(target) === 'ai_agent') return edgeAttachmentRole(edge, 'into_agent');
+
+  const source = nodesById.get(edge.source);
+  if (nodeType(source) === 'ai_agent') return edgeAttachmentRole(edge, 'out_of_agent');
+
+  return null;
+}
+
+export function getAgentAttachmentNodeId(
+  edge: MinimalEdge,
+  nodesById: Map<string, MinimalNode>
+): string | null {
+  return attachmentNodeId(edge, nodesById);
 }
 
 export function splitAgentAttachmentEdges<TNode extends MinimalNode, TEdge extends MinimalEdge>(
@@ -60,7 +96,11 @@ export function splitAgentAttachmentEdges<TNode extends MinimalNode, TEdge exten
   const attachmentEdges = safeEdges.filter((edge) => isAgentAttachmentEdge(edge, nodesById));
   const attachmentEdgeSet = new Set(attachmentEdges);
   const executionEdges = safeEdges.filter((edge) => !attachmentEdgeSet.has(edge));
-  const attachmentSourceIds = new Set(attachmentEdges.map((edge) => edge.source));
+  const attachmentSourceIds = new Set(
+    attachmentEdges
+      .map((edge) => getAgentAttachmentNodeId(edge, nodesById))
+      .filter((nodeId): nodeId is string => typeof nodeId === 'string' && nodeId.length > 0)
+  );
   const executionIncidentNodeIds = new Set<string>();
 
   for (const edge of executionEdges) {

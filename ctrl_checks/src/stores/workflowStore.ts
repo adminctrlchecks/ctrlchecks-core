@@ -57,6 +57,14 @@ function normalizeAiAgentSourceHandle(handle: unknown): string {
   return value;
 }
 
+function normalizeAgentAttachmentRole(handle: unknown): 'chat_model' | 'memory' | 'tool' | null {
+  const value = String(handle || '').trim().toLowerCase();
+  if (value === 'chat_model' || value === 'chatmodel') return 'chat_model';
+  if (value === 'memory') return 'memory';
+  if (value === 'tool') return 'tool';
+  return null;
+}
+
 function shouldReplaceAiAgentOutgoingEdge(edge: Edge, sourceNode: WorkflowNode | undefined, sourceHandle: string): boolean {
   if (getWorkflowNodeType(sourceNode) !== 'ai_agent') return false;
   if (edge.source !== sourceNode?.id) return false;
@@ -199,6 +207,35 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     if (!sourceHandle) {
       sourceHandle = 'output';
     }
+
+    const attachmentRoleFromSource = getWorkflowNodeType(sourceNode) === 'ai_agent'
+      ? normalizeAgentAttachmentRole(sourceHandle)
+      : null;
+
+    if (attachmentRoleFromSource && targetNode) {
+      const connectionWithHandles = {
+        ...connection,
+        source: connection.target,
+        target: connection.source,
+        sourceHandle: 'output',
+        targetHandle: attachmentRoleFromSource,
+        data: { ...(connection as any).data, agentAttachment: true, role: attachmentRoleFromSource },
+      };
+
+      const singletonSlot = attachmentRoleFromSource !== 'tool';
+      set({
+        edges: addEdge(
+          connectionWithHandles,
+          get().edges.filter((edge) =>
+            !singletonSlot ||
+            edge.target !== sourceNode?.id ||
+            normalizeAgentAttachmentRole(edge.targetHandle) !== attachmentRoleFromSource
+          )
+        ),
+        isDirty: true,
+      });
+      return;
+    }
     
     if (getWorkflowNodeType(sourceNode) === 'ai_agent') {
       sourceHandle = normalizeAiAgentSourceHandle(sourceHandle);
@@ -245,6 +282,38 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     }
 
     const sourceNode = nodes.find(n => n.id === newConnection.source);
+    const attachmentRoleFromSource = getWorkflowNodeType(sourceNode) === 'ai_agent'
+      ? normalizeAgentAttachmentRole(sourceHandle)
+      : null;
+
+    if (attachmentRoleFromSource && targetNode) {
+      const connectionWithHandles = {
+        ...newConnection,
+        source: newConnection.target,
+        target: newConnection.source,
+        sourceHandle: 'output',
+        targetHandle: attachmentRoleFromSource,
+        data: { ...(newConnection as any).data, agentAttachment: true, role: attachmentRoleFromSource },
+      };
+
+      const singletonSlot = attachmentRoleFromSource !== 'tool';
+      set({
+        edges: addEdge(
+          connectionWithHandles,
+          edges.filter((e) =>
+            e.id !== oldEdge.id &&
+            (!singletonSlot ||
+              e.target !== sourceNode?.id ||
+              normalizeAgentAttachmentRole(e.targetHandle) !== attachmentRoleFromSource)
+          )
+        ),
+        isDirty: true,
+        undoStack: newUndoStack,
+        redoStack: [],
+      });
+      return;
+    }
+
     if (getWorkflowNodeType(sourceNode) === 'ai_agent') {
       sourceHandle = normalizeAiAgentSourceHandle(sourceHandle);
     }

@@ -173,6 +173,55 @@ describe('validateWorkflowGraph', () => {
     expect(result.errors.some(e => e.code === 'TOO_MANY_OUTGOING' && e.nodeId === 'agent')).toBe(false);
   });
 
+  it('allows chatbot agent flow with model, memory, tools, and Chat Send reply', () => {
+    const chatTrigger = node('chat', 'chat_trigger', 'triggers');
+    const agent = node('agent', 'ai_agent', 'ai');
+    const model = node('model', 'ai_chat_model', 'ai');
+    const memory = node('memory', 'memory', 'ai');
+    const readSheet = node('read_sheet', 'google_sheets', 'google');
+    const writeSheet = node('write_sheet', 'google_sheets', 'google');
+    const chatSend = node('send', 'chat_send', 'output');
+
+    const result = validateWorkflowGraph(
+      [chatTrigger, agent, model, memory, readSheet, writeSheet, chatSend],
+      [
+        { ...edge('chat', 'agent'), sourceHandle: 'output', targetHandle: 'userInput' },
+        agentAttachmentEdge('model', 'agent', 'chat_model'),
+        agentAttachmentEdge('memory', 'agent', 'memory'),
+        agentAttachmentEdge('read_sheet', 'agent', 'tool'),
+        agentAttachmentEdge('write_sheet', 'agent', 'tool'),
+        { ...edge('agent', 'send'), sourceHandle: 'success', targetHandle: 'input' },
+      ],
+    );
+
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it('treats reversed AI Agent attachment edges as sidecars', () => {
+    const chatTrigger = node('chat', 'chat_trigger', 'triggers');
+    const agent = node('agent', 'ai_agent', 'ai');
+    const sheet = node('sheet', 'google_sheets', 'google');
+    const chatSend = node('send', 'chat_send', 'output');
+
+    const result = validateWorkflowGraph(
+      [chatTrigger, agent, sheet, chatSend],
+      [
+        { ...edge('chat', 'agent'), sourceHandle: 'output', targetHandle: 'userInput' },
+        {
+          ...edge('agent', 'sheet'),
+          sourceHandle: 'tool',
+          targetHandle: 'input',
+          data: { agentAttachment: true, role: 'tool' },
+        } as Edge,
+        { ...edge('agent', 'send'), sourceHandle: 'success', targetHandle: 'input' },
+      ],
+    );
+
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
   it('keeps duplicate AI Agent reply outputs invalid', () => {
     const chatTrigger = node('chat', 'chat_trigger', 'triggers');
     const agent = node('agent', 'ai_agent', 'ai');

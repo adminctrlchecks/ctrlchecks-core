@@ -9,6 +9,7 @@
 
 import { Node, Edge } from 'reactflow';
 import { normalizeIfElseConfig } from './ifElseConditions';
+import { normalizeAgentAttachmentHandle } from './agentAttachmentEdges';
 
 export interface NormalizedGraph {
   nodes: Node[];
@@ -49,6 +50,39 @@ function normalizeAiAgentOutputHandle(edge: Edge, sourceType: string): Edge {
   return { ...edge, sourceHandle: 'success' };
 }
 
+function canonicalizeAiAgentEdge(edge: Edge, typesById: Map<string, string>): Edge {
+  const sourceType = typesById.get(edge.source) || '';
+  const targetType = typesById.get(edge.target) || '';
+
+  if (targetType === 'ai_agent') {
+    const role = normalizeAgentAttachmentHandle(edge.targetHandle) || normalizeAgentAttachmentHandle(edge.data?.role);
+    if (role) {
+      return {
+        ...edge,
+        sourceHandle: edge.sourceHandle || 'output',
+        targetHandle: role,
+        data: { ...(edge.data || {}), agentAttachment: true, role },
+      };
+    }
+  }
+
+  if (sourceType === 'ai_agent') {
+    const role = normalizeAgentAttachmentHandle(edge.sourceHandle) || normalizeAgentAttachmentHandle(edge.data?.role);
+    if (role && targetType !== 'ai_agent') {
+      return {
+        ...edge,
+        source: edge.target,
+        target: edge.source,
+        sourceHandle: 'output',
+        targetHandle: role,
+        data: { ...(edge.data || {}), agentAttachment: true, role },
+      };
+    }
+  }
+
+  return normalizeAiAgentOutputHandle(edge, sourceType);
+}
+
 /**
  * Deduplicate edges by (source, target, sourceHandle, targetHandle)
  */
@@ -58,8 +92,7 @@ function deduplicateEdges(nodes: Node[], edges: Edge[]): Edge[] {
   const typesById = nodeTypeById(nodes);
 
   for (const edge of edges) {
-    const sourceType = typesById.get(edge.source) || '';
-    const normalizedEdge = normalizeAiAgentOutputHandle(edge, sourceType);
+    const normalizedEdge = canonicalizeAiAgentEdge(edge, typesById);
     const key = `${normalizedEdge.source}::${normalizedEdge.target}::${normalizedEdge.sourceHandle || 'default'}::${normalizedEdge.targetHandle || 'default'}`;
     if (!seen.has(key)) {
       seen.add(key);

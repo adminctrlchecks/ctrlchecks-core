@@ -72,4 +72,29 @@ describe('workflowStore AI Agent edge normalization', () => {
     expect(edges).toHaveLength(2);
     expect(edges.map((edge) => edge.sourceHandle).sort()).toEqual(['error', 'success']);
   });
+
+  it('canonicalizes reversed AI Agent attachment connections', () => {
+    const store = useWorkflowStore.getState();
+    store.resetWorkflow();
+
+    useWorkflowStore.setState({
+      nodes: [node('agent', 'ai_agent'), node('sheet', 'google_sheets')],
+      edges: [],
+    });
+
+    useWorkflowStore.getState().onConnect({
+      source: 'agent',
+      target: 'sheet',
+      sourceHandle: 'tool',
+      targetHandle: 'input',
+    });
+
+    expect(useWorkflowStore.getState().edges).toContainEqual(expect.objectContaining({
+      source: 'sheet',
+      target: 'agent',
+      sourceHandle: 'output',
+      targetHandle: 'tool',
+      data: expect.objectContaining({ agentAttachment: true, role: 'tool' }),
+    }));
+  });
 });

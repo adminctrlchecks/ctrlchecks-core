@@ -14,7 +14,7 @@
 
 import { Node, Edge } from 'reactflow';
 import {
-  normalizeAgentAttachmentHandle,
+  getAgentAttachmentEdgeRole,
   splitAgentAttachmentEdges,
 } from './agentAttachmentEdges';
 
@@ -273,14 +273,19 @@ export function validateWorkflowGraph(nodes: Node[], edges: Edge[]): ValidationR
     }
   });
 
+  const nodesById = new Map(nodes.map((node) => [node.id, node]));
   const attachmentsByAgent = new Map<string, Record<'chat_model' | 'memory' | 'tool', Edge[]>>();
   for (const edge of attachmentEdges) {
-    const role = normalizeAgentAttachmentHandle(edge.targetHandle) || normalizeAgentAttachmentHandle(edge.data?.role);
+    const role = getAgentAttachmentEdgeRole(edge, nodesById);
     if (!role) continue;
-    if (!attachmentsByAgent.has(edge.target)) {
-      attachmentsByAgent.set(edge.target, { chat_model: [], memory: [], tool: [] });
+    const sourceType = getNodeType(nodesById.get(edge.source) as Node);
+    const targetType = getNodeType(nodesById.get(edge.target) as Node);
+    const agentId = targetType === 'ai_agent' ? edge.target : sourceType === 'ai_agent' ? edge.source : null;
+    if (!agentId) continue;
+    if (!attachmentsByAgent.has(agentId)) {
+      attachmentsByAgent.set(agentId, { chat_model: [], memory: [], tool: [] });
     }
-    attachmentsByAgent.get(edge.target)![role].push(edge);
+    attachmentsByAgent.get(agentId)![role].push(edge);
   }
 
   attachmentsByAgent.forEach((byRole, agentId) => {

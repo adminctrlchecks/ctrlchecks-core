@@ -23,6 +23,7 @@ type TEdge = {
   target: string;
   sourceHandle?: string | null;
   targetHandle?: string | null;
+  data?: Record<string, unknown>;
 };
 
 function makeNode(id: string, type = 'some_action', config: Record<string, unknown> = {}): TNode {
@@ -224,6 +225,29 @@ describe('normalizeWorkflowGraph — edge deduplication', () => {
     expect(result.edges).toHaveLength(2);
     expect(result.edges.find((edge) => edge.target === 'send')?.sourceHandle).toBe('success');
     expect(result.edges.find((edge) => edge.target === 'err')?.sourceHandle).toBe('error');
+  });
+
+  it('canonicalizes reversed AI Agent attachment edges before save', () => {
+    const agent = makeNode('agent', 'ai_agent');
+    const sheet = makeNode('sheet', 'google_sheets');
+    const result = run(
+      [agent, sheet],
+      [
+        {
+          ...makeEdge('e1', 'agent', 'sheet', 'tool', 'input'),
+          data: { agentAttachment: true, role: 'tool' },
+        } as TEdge,
+      ],
+    );
+
+    expect(result.edges).toHaveLength(1);
+    expect(result.edges[0]).toMatchObject({
+      source: 'sheet',
+      target: 'agent',
+      sourceHandle: 'output',
+      targetHandle: 'tool',
+      data: { agentAttachment: true, role: 'tool' },
+    });
   });
 });
 

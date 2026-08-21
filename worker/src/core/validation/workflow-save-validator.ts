@@ -21,7 +21,7 @@ import { isEmptyConfigValue } from './registry-field-contract';
 import { validateIfElseConditionsAgainstUpstreamForm } from '../orchestration/form-ifelse-binding';
 import { extractSwitchCasePortNames } from '../utils/branching-node-ports';
 import { validateWorkflowNodeIntelligence } from '../utils/node-field-intelligence';
-import { splitAgentAttachmentEdges } from '../utils/agent-attachment-edges';
+import { normalizeAgentAttachmentHandle, splitAgentAttachmentEdges } from '../utils/agent-attachment-edges';
 
 // Workflow types (inline to avoid circular dependencies)
 interface WorkflowNode {
@@ -97,6 +97,7 @@ interface WorkflowEdge {
   target: string;
   sourceHandle?: string;
   targetHandle?: string;
+  data?: Record<string, unknown>;
 }
 
 /** full: legacy save-time fixes; configOnly: preserve topology (attach-inputs / attach-credentials) */
@@ -139,6 +140,43 @@ function hasDirectedCycle(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean
     }
   }
   return false;
+}
+
+function canonicalizeAiAgentEdge(edge: WorkflowEdge, nodeTypeById: Map<string, string>): WorkflowEdge {
+  const sourceType = (nodeTypeById.get(edge.source) || '').toLowerCase();
+  const targetType = (nodeTypeById.get(edge.target) || '').toLowerCase();
+
+  if (targetType === 'ai_agent') {
+    const role = normalizeAgentAttachmentHandle(edge.targetHandle) || normalizeAgentAttachmentHandle(edge.data?.role);
+    if (role) {
+      return {
+        ...edge,
+        sourceHandle: edge.sourceHandle || 'output',
+        targetHandle: role,
+        data: { ...(edge.data || {}), agentAttachment: true, role },
+      };
+    }
+  }
+
+  if (sourceType === 'ai_agent') {
+    const role = normalizeAgentAttachmentHandle(edge.sourceHandle) || normalizeAgentAttachmentHandle(edge.data?.role);
+    if (role && targetType !== 'ai_agent') {
+      return {
+        ...edge,
+        source: edge.target,
+        target: edge.source,
+        sourceHandle: 'output',
+        targetHandle: role,
+        data: { ...(edge.data || {}), agentAttachment: true, role },
+      };
+    }
+
+    const raw = String(edge.sourceHandle || '').trim().toLowerCase();
+    if (raw === 'error') return { ...edge, sourceHandle: 'error' };
+    return { ...edge, sourceHandle: 'success' };
+  }
+
+  return edge;
 }
 
 export interface SaveValidationResult {
@@ -743,6 +781,9 @@ export function normalizeWorkflowForSave(
   // ✅ STEP 6: Deduplicate and validate edges
   const edgeMap = new Map<string, WorkflowEdge>();
   const invalidEdges: string[] = [];
+  const normalizedNodeTypeById = new Map<string, string>(
+    normalizedNodes.map((n) => [n.id, String(n.data?.type || n.type || '')])
+  );
   
   for (const edge of edges) {
     // Validate edge references valid nodes
@@ -752,10 +793,12 @@ export function normalizeWorkflowForSave(
       continue;
     }
     
+    const canonicalEdge = canonicalizeAiAgentEdge(edge, normalizedNodeTypeById);
+
     // Deduplicate edges by source, target, and handles
-    const key = `${edge.source}::${edge.target}::${edge.sourceHandle || 'default'}::${edge.targetHandle || 'default'}`;
+    const key = `${canonicalEdge.source}::${canonicalEdge.target}::${canonicalEdge.sourceHandle || 'default'}::${canonicalEdge.targetHandle || 'default'}`;
     if (!edgeMap.has(key)) {
-      edgeMap.set(key, edge);
+      edgeMap.set(key, canonicalEdge);
     } else {
       console.warn(`[NormalizeWorkflow] Removing duplicate edge: ${edge.id} (same as ${edgeMap.get(key)?.id})`);
     }
