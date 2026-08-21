@@ -166,10 +166,19 @@ function toJsonSchema(
 }
 
 function fieldToJsonSchema(field: NodeInputField): Record<string, unknown> {
+  const jsonType = field.type === 'json' || field.type === 'expression' ? 'string' : field.type;
   const schema: Record<string, unknown> = {
-    type: field.type === 'json' || field.type === 'expression' ? 'string' : field.type,
+    type: jsonType,
     description: field.fieldIntelligence?.purpose || field.description,
   };
+  // Gemini function-calling (and JSON Schema) reject an `array` parameter that does not
+  // declare the shape of its items. NodeInputField carries no item type, so default to a
+  // string item — valid for any current/future tool node with an array field, and enough
+  // for the model to fill list values. Without this the whole GenerateContentRequest 400s
+  // ("...properties[<field>].items: missing field").
+  if (jsonType === 'array') {
+    schema.items = { type: 'string' };
+  }
   if (field.ui?.options && field.ui.options.length > 0) {
     schema.enum = field.ui.options.map((option) => option.value);
   }

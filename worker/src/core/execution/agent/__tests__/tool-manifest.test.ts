@@ -92,6 +92,34 @@ describe('AI Agent tool manifest', () => {
     expect((manifest[0].parameters.properties as Record<string, unknown>).apiKey).toBeUndefined();
   });
 
+  it('emits items for array parameters so Gemini function-calling accepts the schema', () => {
+    // Regression: a Google Sheets tool exposing an array `values` field produced
+    // { type: 'array' } with no items, which Gemini rejects with a 400
+    // ("...function_declarations[0].parameters.properties[values].items: missing field").
+    const registry = makeRegistry([
+      makeDefinition({
+        type: 'array_tool',
+        inputSchema: {
+          values: { type: 'array', description: 'Row values to write', required: true },
+          range: { type: 'string', description: 'A1 range', required: false },
+        },
+        requiredInputs: ['values'],
+      }),
+    ]);
+
+    const manifest = buildToolManifest({
+      attachedNodes: [makeNode('tool-array', 'array_tool')],
+      registry,
+      agentNodeType: 'agent_under_test',
+    });
+
+    const properties = manifest[0].parameters.properties as Record<string, Record<string, unknown>>;
+    expect(properties.values.type).toBe('array');
+    expect(properties.values.items).toEqual({ type: 'string' });
+    // Non-array fields must not gain a spurious items key.
+    expect(properties.range.items).toBeUndefined();
+  });
+
   it('excludes triggers, internal nodes, and the agent itself by metadata', () => {
     const registry = makeRegistry([
       makeDefinition({ type: 'triggerish', category: 'trigger' }),
