@@ -13,6 +13,10 @@
  */
 
 import { Node, Edge } from 'reactflow';
+import {
+  normalizeAgentAttachmentHandle,
+  splitAgentAttachmentEdges,
+} from './agentAttachmentEdges';
 
 export interface ValidationError {
   code: string;
@@ -42,9 +46,15 @@ export function validateWorkflowGraph(nodes: Node[], edges: Edge[]): ValidationR
     return { valid: false, errors, warnings };
   }
 
+  const {
+    executionNodes,
+    executionEdges,
+    attachmentEdges,
+  } = splitAgentAttachmentEdges(nodes, edges);
+
   // 1. Exactly 1 trigger node
   // ✅ Use category-based detection to recognize ANY node from triggers category
-  const triggerNodes = nodes.filter(n => {
+  const triggerNodes = executionNodes.filter(n => {
     const type = n.data?.type || n.type || '';
     const category = n.data?.category || '';
     
@@ -118,8 +128,8 @@ export function validateWorkflowGraph(nodes: Node[], edges: Edge[]): ValidationR
   const outgoingEdges = new Map<string, Edge[]>();
   const nodeMap = new Map<string, Node>();
 
-  nodes.forEach(node => nodeMap.set(node.id, node));
-  edges.forEach(edge => {
+  executionNodes.forEach(node => nodeMap.set(node.id, node));
+  executionEdges.forEach(edge => {
     if (!incomingEdges.has(edge.target)) {
       incomingEdges.set(edge.target, []);
     }
@@ -148,7 +158,7 @@ export function validateWorkflowGraph(nodes: Node[], edges: Edge[]): ValidationR
   }
 
   // Check for unreachable nodes
-  const unreachable = nodes.filter(n => !reachable.has(n.id));
+  const unreachable = executionNodes.filter(n => !reachable.has(n.id));
   if (unreachable.length > 0) {
     warnings.push(`${unreachable.length} node(s) are not reachable from trigger`);
     unreachable.forEach(node => {
@@ -163,12 +173,12 @@ export function validateWorkflowGraph(nodes: Node[], edges: Edge[]): ValidationR
   // 4. Each node (except trigger and merge nodes) must have exactly 1 incoming edge.
   // Exception: in branching workflows (switch/if_else), terminal/output nodes may
   // legitimately converge inputs from multiple branches as long as each source is distinct.
-  const hasBranchingNode = nodes.some(n => {
+  const hasBranchingNode = executionNodes.some(n => {
     const t = n.data?.type || '';
     return t === 'switch' || t === 'if_else';
   });
 
-  nodes.forEach(node => {
+  executionNodes.forEach(node => {
     if (node.id === triggerNode.id) {
       return; // Trigger has no incoming
     }
@@ -204,7 +214,7 @@ export function validateWorkflowGraph(nodes: Node[], edges: Edge[]): ValidationR
   // - If/Else nodes can have exactly 2 outgoing edges (true/false)
   // - Switch nodes can have multiple outgoing edges (one per case)
   // - Other nodes can have 1 outgoing edge
-  nodes.forEach(node => {
+  executionNodes.forEach(node => {
     const outgoing = outgoingEdges.get(node.id) || [];
     const nodeType = node.data?.type || '';
     const isIfElse = nodeType === 'if_else';
@@ -233,6 +243,34 @@ export function validateWorkflowGraph(nodes: Node[], edges: Edge[]): ValidationR
     }
   });
 
+  const attachmentsByAgent = new Map<string, Record<'chat_model' | 'memory' | 'tool', Edge[]>>();
+  for (const edge of attachmentEdges) {
+    const role = normalizeAgentAttachmentHandle(edge.targetHandle) || normalizeAgentAttachmentHandle(edge.data?.role);
+    if (!role) continue;
+    if (!attachmentsByAgent.has(edge.target)) {
+      attachmentsByAgent.set(edge.target, { chat_model: [], memory: [], tool: [] });
+    }
+    attachmentsByAgent.get(edge.target)![role].push(edge);
+  }
+
+  attachmentsByAgent.forEach((byRole, agentId) => {
+    const agent = nodes.find((node) => node.id === agentId);
+    if (byRole.chat_model.length > 1) {
+      errors.push({
+        code: 'MULTIPLE_AGENT_MODELS',
+        message: `AI Agent "${agent?.data?.label || agentId}" has ${byRole.chat_model.length} chat model attachments, but should have at most one`,
+        nodeId: agentId,
+      });
+    }
+    if (byRole.memory.length > 1) {
+      errors.push({
+        code: 'MULTIPLE_AGENT_MEMORY',
+        message: `AI Agent "${agent?.data?.label || agentId}" has ${byRole.memory.length} memory attachments, but should have at most one`,
+        nodeId: agentId,
+      });
+    }
+  });
+
   // 6. Check for cycles using DFS
   const visited = new Set<string>();
   const recursionStack = new Set<string>();
@@ -256,7 +294,7 @@ export function validateWorkflowGraph(nodes: Node[], edges: Edge[]): ValidationR
     return false;
   }
 
-  for (const node of nodes) {
+  for (const node of executionNodes) {
     if (!visited.has(node.id)) {
       if (hasCycle(node.id)) {
         errors.push({
@@ -328,19 +366,21 @@ function isTriggerNodeForOrder(node: OrderableNode): boolean {
  */
 export function computeExecutionOrderRank(
   nodes: OrderableNode[],
-  edges: Array<{ source: string; target: string }>
+  edges: Array<{ source: string; target: string; targetHandle?: string | null; data?: Record<string, unknown> | null }>
 ): Map<string, number> {
   const rank = new Map<string, number>();
   if (!Array.isArray(nodes) || nodes.length === 0) return rank;
 
-  const trigger = nodes.find(isTriggerNodeForOrder);
+  const { executionNodes, executionEdges } = splitAgentAttachmentEdges(nodes, edges || []);
+
+  const trigger = executionNodes.find(isTriggerNodeForOrder);
   if (!trigger) {
     nodes.forEach((n, i) => rank.set(n.id, i));
     return rank;
   }
 
   const outgoing = new Map<string, string[]>();
-  for (const e of edges || []) {
+  for (const e of executionEdges || []) {
     if (!e?.source || !e?.target) continue;
     if (!outgoing.has(e.source)) outgoing.set(e.source, []);
     outgoing.get(e.source)!.push(e.target);

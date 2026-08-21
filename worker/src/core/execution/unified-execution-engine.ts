@@ -16,6 +16,7 @@ import { shouldSkipForSwitchIncomingEdge } from './switch-branch-router';
 import { ExecutionContext, createExecutionContext, setNodeOutput } from './typed-execution-context';
 import { LRUNodeOutputsCache } from '../cache/lru-node-outputs-cache';
 import { preserveOutputContextForDownstream } from './context-preserving-output';
+import { splitAgentAttachmentEdges } from '../utils/agent-attachment-edges';
 
 export interface ExecutionPlan {
   nodes: WorkflowNode[];
@@ -96,21 +97,10 @@ export function buildExecutionPlan(
 ): ExecutionPlan {
   const validationErrors: string[] = [];
   const validationWarnings: string[] = [];
-  const nodesById = new Map(nodes.map((node) => [node.id, node]));
-  const attachmentHandles = new Set(['chat_model', 'chatModel', 'memory', 'tool']);
-  const attachmentEdges = edges.filter((edge) => {
-    const target = nodesById.get(edge.target);
-    const targetType = target?.data?.type || target?.type || '';
-    return targetType === 'ai_agent' && attachmentHandles.has(edge.targetHandle || '');
-  });
-  const attachmentSourceIds = new Set(attachmentEdges.map((edge) => edge.source));
-  const planningNodes = nodes.filter((node) => !attachmentSourceIds.has(node.id));
-  const planningNodeIds = new Set(planningNodes.map((node) => node.id));
-  const planningEdges = edges.filter((edge) =>
-    !attachmentEdges.includes(edge) &&
-    planningNodeIds.has(edge.source) &&
-    planningNodeIds.has(edge.target)
-  );
+  const {
+    executionNodes: planningNodes,
+    executionEdges: planningEdges,
+  } = splitAgentAttachmentEdges(nodes, edges);
 
   // 1. Validate single trigger
   // Use isTriggerNodeInline to recognize ALL nodes from triggers category

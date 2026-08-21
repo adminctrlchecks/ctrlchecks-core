@@ -17,6 +17,17 @@ function edge(source: string, target: string): Edge {
   return { id: `${source}->${target}`, source, target } as Edge;
 }
 
+function agentAttachmentEdge(source: string, target: string, role: 'chat_model' | 'memory' | 'tool'): Edge {
+  return {
+    id: `${source}->${target}:${role}`,
+    source,
+    target,
+    sourceHandle: 'output',
+    targetHandle: role,
+    data: { agentAttachment: true, role },
+  } as Edge;
+}
+
 const trigger = () => node('t1', 'manual_trigger', 'triggers');
 const action = (id = 'a1') => node(id, 'http_request');
 
@@ -75,6 +86,73 @@ describe('validateWorkflowGraph', () => {
     const result = validateWorkflowGraph([trigger(), action()], [edge('t1', 'a1')]);
     expect(result.valid).toBe(true);
     expect(result.errors).toHaveLength(0);
+  });
+
+  it('treats AI Agent model, memory, and tool attachments as sidecar edges', () => {
+    const chatTrigger = node('chat', 'chat_trigger', 'triggers');
+    const agent = node('agent', 'ai_agent', 'ai');
+    const model = node('model', 'ai_chat_model', 'ai');
+    const memory = node('memory', 'memory', 'ai');
+    const readSheet = node('read_sheet', 'google_sheets', 'spreadsheets');
+    const writeSheet = node('write_sheet', 'google_sheets', 'spreadsheets');
+
+    const result = validateWorkflowGraph(
+      [chatTrigger, agent, model, memory, readSheet, writeSheet],
+      [
+        { ...edge('chat', 'agent'), sourceHandle: 'output', targetHandle: 'userInput' },
+        agentAttachmentEdge('model', 'agent', 'chat_model'),
+        agentAttachmentEdge('memory', 'agent', 'memory'),
+        agentAttachmentEdge('read_sheet', 'agent', 'tool'),
+        agentAttachmentEdge('write_sheet', 'agent', 'tool'),
+      ]
+    );
+
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('keeps legacy agentAttachment marker sidecars out of reachability even if a handle was damaged', () => {
+    const result = validateWorkflowGraph(
+      [trigger(), node('agent', 'ai_agent', 'ai'), node('memory', 'memory', 'ai')],
+      [
+        { ...edge('t1', 'agent'), sourceHandle: 'output', targetHandle: 'userInput' },
+        {
+          ...edge('memory', 'agent'),
+          sourceHandle: 'output',
+          targetHandle: 'input',
+          data: { agentAttachment: true, role: 'memory' },
+        } as Edge,
+      ]
+    );
+
+    expect(result.errors.some(e => e.code === 'UNREACHABLE_NODE')).toBe(false);
+    expect(result.errors.some(e => e.code === 'MULTIPLE_INCOMING')).toBe(false);
+    expect(result.valid).toBe(true);
+  });
+
+  it('allows many tool attachments but rejects duplicate singleton attachments', () => {
+    const result = validateWorkflowGraph(
+      [
+        trigger(),
+        node('agent', 'ai_agent', 'ai'),
+        node('model1', 'ai_chat_model', 'ai'),
+        node('model2', 'ai_chat_model', 'ai'),
+        node('tool1', 'google_sheets', 'spreadsheets'),
+        node('tool2', 'notion', 'productivity'),
+      ],
+      [
+        { ...edge('t1', 'agent'), sourceHandle: 'output', targetHandle: 'userInput' },
+        agentAttachmentEdge('model1', 'agent', 'chat_model'),
+        agentAttachmentEdge('model2', 'agent', 'chat_model'),
+        agentAttachmentEdge('tool1', 'agent', 'tool'),
+        agentAttachmentEdge('tool2', 'agent', 'tool'),
+      ]
+    );
+
+    expect(result.errors.some(e => e.code === 'MULTIPLE_AGENT_MODELS')).toBe(true);
+    expect(result.errors.some(e => e.code === 'MULTIPLE_INCOMING')).toBe(false);
+    expect(result.errors.some(e => e.code === 'TOO_MANY_OUTGOING')).toBe(false);
   });
 
   it('unreachable node produces UNREACHABLE_NODE error and warning', () => {
@@ -238,6 +316,25 @@ describe('computeExecutionOrderRank', () => {
     const rank = computeExecutionOrderRank(nodes, []);
     expect(rank.get('t1')).toBe(0);
     expect(rank.get('orphan')).toBe(9999);
+  });
+
+  it('does not rank AI Agent attachment nodes as execution steps', () => {
+    const nodes = [
+      { id: 'chat', data: { type: 'chat_trigger', category: 'triggers' } },
+      { id: 'agent', data: { type: 'ai_agent' } },
+      { id: 'model', data: { type: 'ai_chat_model' } },
+      { id: 'sheet', data: { type: 'google_sheets' } },
+    ];
+    const rank = computeExecutionOrderRank(nodes, [
+      { source: 'chat', target: 'agent', targetHandle: 'userInput' },
+      { source: 'model', target: 'agent', targetHandle: 'chat_model' },
+      { source: 'sheet', target: 'agent', targetHandle: 'tool' },
+    ]);
+
+    expect(rank.get('chat')).toBe(0);
+    expect(rank.get('agent')).toBe(1);
+    expect(rank.get('model')).toBe(9999);
+    expect(rank.get('sheet')).toBe(9999);
   });
 
   it('produces stable sorted order for parallel branches', () => {

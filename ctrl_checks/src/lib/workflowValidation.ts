@@ -903,9 +903,12 @@ export function validateAndFixWorkflow(
             }
         }
 
+        const targetNodeForHandle = nodes.find((n: any) => n.id === edge.target);
+        const targetNodeTypeForHandle = targetNodeForHandle?.data?.type || targetNodeForHandle?.type || '';
+
         // Normalize target handle (input)
         if (!normalizedTargetHandle) {
-            normalizedTargetHandle = 'input'; // Standard input handle
+            normalizedTargetHandle = targetNodeTypeForHandle === 'ai_agent' ? 'userInput' : 'input';
         } else {
             // Map common backend field names to React handle IDs
             const targetLower = normalizedTargetHandle.toLowerCase();
@@ -916,12 +919,13 @@ export function validateAndFixWorkflow(
                 'text': 'input',
                 'body': 'input',
                 'content': 'input',
+                'default': targetNodeTypeForHandle === 'ai_agent' ? 'userInput' : 'input',
                 'userinput': 'userInput',
                 'user_input': 'userInput',
-                'chatmodel': 'input',
-                'chat_model': 'input',
-                'memory': 'input',
-                'tool': 'input',
+                'chatmodel': targetNodeTypeForHandle === 'ai_agent' ? 'chat_model' : 'input',
+                'chat_model': targetNodeTypeForHandle === 'ai_agent' ? 'chat_model' : 'input',
+                'memory': targetNodeTypeForHandle === 'ai_agent' ? 'memory' : 'input',
+                'tool': targetNodeTypeForHandle === 'ai_agent' ? 'tool' : 'input',
                 'values': 'input',
                 'json': 'input',
                 'template': 'input',
@@ -929,9 +933,11 @@ export function validateAndFixWorkflow(
             normalizedTargetHandle = targetMappings[targetLower] || normalizedTargetHandle;
             
             // Validate against node type — preserve 'userInput' for ai_agent
-            const targetNodeForHandle = nodes.find((n: any) => n.id === edge.target);
-            const targetNodeTypeForHandle = targetNodeForHandle?.data?.type || targetNodeForHandle?.type || '';
-            if (normalizedTargetHandle !== 'input' && normalizedTargetHandle !== 'userInput') {
+            if (
+                targetNodeTypeForHandle !== 'ai_agent' &&
+                normalizedTargetHandle !== 'input' &&
+                normalizedTargetHandle !== 'userInput'
+            ) {
                 normalizedTargetHandle = 'input';
             }
             // ai_agent uses 'userInput' as its primary input handle

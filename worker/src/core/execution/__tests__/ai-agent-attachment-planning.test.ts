@@ -24,4 +24,29 @@ describe('AI Agent attachment planning', () => {
     expect(plan.executionOrder.map((node) => node.id)).toEqual(['trigger-1', 'agent-1', 'log-1']);
     expect(plan.edges.map((edge) => edge.id)).toEqual(['e-trigger-agent', 'e-agent-log']);
   });
+
+  it('recognizes marked attachment edges even when the target handle was normalized incorrectly', () => {
+    const nodes = [
+      { id: 'trigger-1', type: 'manual_trigger', data: { type: 'manual_trigger', category: 'triggers' } },
+      { id: 'agent-1', type: 'ai_agent', data: { type: 'ai_agent', category: 'ai' } },
+      { id: 'memory-1', type: 'memory', data: { type: 'memory', category: 'ai' } },
+    ] as any[];
+    const edges = [
+      { id: 'e-trigger-agent', source: 'trigger-1', target: 'agent-1', sourceHandle: 'output', targetHandle: 'userInput' },
+      {
+        id: 'e-memory-agent',
+        source: 'memory-1',
+        target: 'agent-1',
+        sourceHandle: 'output',
+        targetHandle: 'input',
+        data: { agentAttachment: true, role: 'memory' },
+      },
+    ] as any[];
+
+    const plan = buildExecutionPlan(nodes, edges);
+
+    expect(plan.validationErrors).toEqual([]);
+    expect(plan.executionOrder.map((node) => node.id)).toEqual(['trigger-1', 'agent-1']);
+    expect(plan.edges.map((edge) => edge.id)).toEqual(['e-trigger-agent']);
+  });
 });

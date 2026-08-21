@@ -21,6 +21,7 @@ import { isEmptyConfigValue } from './registry-field-contract';
 import { validateIfElseConditionsAgainstUpstreamForm } from '../orchestration/form-ifelse-binding';
 import { extractSwitchCasePortNames } from '../utils/branching-node-ports';
 import { validateWorkflowNodeIntelligence } from '../utils/node-field-intelligence';
+import { splitAgentAttachmentEdges } from '../utils/agent-attachment-edges';
 
 // Workflow types (inline to avoid circular dependencies)
 interface WorkflowNode {
@@ -176,6 +177,8 @@ export function validateEditorOpenReadiness(
     };
   }
 
+  const { executionNodes, executionEdges } = splitAgentAttachmentEdges(nodes, edges);
+
   if (nodes.length === 0) {
     errors.push('Workflow graph has no nodes');
   }
@@ -197,7 +200,7 @@ export function validateEditorOpenReadiness(
     }
   });
 
-  const triggerNodes = nodes.filter(n => isTriggerNode(n));
+  const triggerNodes = executionNodes.filter(n => isTriggerNode(n));
   if (nodes.length > 0 && triggerNodes.length === 0) {
     errors.push('Workflow graph must include a trigger node');
   } else if (triggerNodes.length > 1) {
@@ -224,7 +227,7 @@ export function validateEditorOpenReadiness(
     }
   });
 
-  if (hasDirectedCycle(nodes, edges)) {
+  if (hasDirectedCycle(nodes, executionEdges)) {
     errors.push('Workflow graph contains a cycle. Keep DAG structure and use loop node semantics for repetition.');
   }
 
@@ -291,6 +294,11 @@ export function validateWorkflowForSave(
 ): SaveValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
+  const {
+    executionNodes,
+    executionEdges,
+    attachmentOnlyNodeIds,
+  } = splitAgentAttachmentEdges(nodes, edges);
 
   // 1. CRITICAL: Single trigger validation
   // Use isTriggerNode helper to recognize ALL nodes from triggers category
@@ -325,7 +333,7 @@ export function validateWorkflowForSave(
       .map((n) => n.id)
   );
   const branchTargets = new Set(
-    edges.filter((e) => branchingNodeIds.has(e.source)).map((e) => e.target)
+    executionEdges.filter((e) => branchingNodeIds.has(e.source)).map((e) => e.target)
   );
   const logNodeIds = nodes
     .filter((n) => String(n.data?.type || n.type || '') === 'log_output')
@@ -336,7 +344,7 @@ export function validateWorkflowForSave(
     );
   }
   for (const logNodeId of logNodeIds) {
-    const incoming = edges.filter((e) => e.target === logNodeId);
+    const incoming = executionEdges.filter((e) => e.target === logNodeId);
     const uniqueSources = new Set(incoming.map((e) => e.source));
     if (uniqueSources.size > 1) {
       errors.push(
@@ -344,7 +352,7 @@ export function validateWorkflowForSave(
       );
     }
     // Soft warning when source is non-merge and log is not a leaf terminal pattern.
-    const outgoingFromLog = edges.filter((e) => e.source === logNodeId);
+    const outgoingFromLog = executionEdges.filter((e) => e.source === logNodeId);
     if (outgoingFromLog.length > 0) {
       warnings.push(`log_output node "${logNodeId}" has outgoing edges; terminal logs should be sinks.`);
     }
@@ -412,7 +420,7 @@ export function validateWorkflowForSave(
       const caseNames = extractSwitchCasePortNames(config as Record<string, any>);
       const nCases = caseNames.length;
       if (nCases >= 2) {
-        const outgoing = edges.filter((e) => e.source === node.id);
+        const outgoing = executionEdges.filter((e) => e.source === node.id);
         const branchOut = outgoing.filter((e) => {
           const t = String((e as { type?: string }).type ?? '');
           return t.length > 0 && t !== 'main';
@@ -462,7 +470,7 @@ export function validateWorkflowForSave(
 
   const ifElseFormBinding = validateIfElseConditionsAgainstUpstreamForm({
     nodes,
-    edges,
+    edges: executionEdges,
     metadata: {},
   } as Workflow);
   errors.push(...ifElseFormBinding.errors);
@@ -478,10 +486,11 @@ export function validateWorkflowForSave(
   }
 
   // 4. Check for cycles (basic check - full cycle detection would require DFS)
-  const hasIncomingEdges = new Set(edges.map(e => e.target));
-  const hasOutgoingEdges = new Set(edges.map(e => e.source));
-  const isolatedNodes = nodes.filter(n => 
+  const hasIncomingEdges = new Set(executionEdges.map(e => e.target));
+  const hasOutgoingEdges = new Set(executionEdges.map(e => e.source));
+  const isolatedNodes = executionNodes.filter(n =>
     !hasIncomingEdges.has(n.id) && !hasOutgoingEdges.has(n.id) && 
+    !attachmentOnlyNodeIds.has(n.id) &&
     !isTriggerNode(n) // Use helper to check if node is a trigger
   );
 
@@ -491,7 +500,7 @@ export function validateWorkflowForSave(
 
   // 4.5 Strict DAG policy: workflow graph must remain acyclic.
   // Repetition must be represented via loop node semantics, not graph back-edges.
-  if (hasDirectedCycle(nodes, edges)) {
+  if (hasDirectedCycle(executionNodes, executionEdges)) {
     errors.push('Workflow graph contains a cycle. Keep DAG structure and use loop node semantics for repetition.');
   }
 
