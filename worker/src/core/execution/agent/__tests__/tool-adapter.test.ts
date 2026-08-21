@@ -70,4 +70,50 @@ describe('tool-adapter', () => {
     });
     expect(nodeArg.data.connectionRefs).toEqual({ future_provider: 'conn-1' });
   });
+
+  it('never lets the model override configured identity fields (spreadsheetId/sheetName)', async () => {
+    const descriptor = {
+      toolId: 'sheet-1',
+      functionName: 'google_sheets_sheet_1',
+      nodeId: 'sheet-1',
+      nodeType: 'google_sheets',
+      label: 'Google Sheets',
+      description: 'Read a sheet',
+      parameters: {},
+      required: [],
+      firstRunClass: 'read',
+      node: {
+        id: 'sheet-1',
+        type: 'google_sheets',
+        data: {
+          label: 'Google Sheets',
+          type: 'google_sheets',
+          category: 'google',
+          config: {
+            spreadsheetId: '15uvopMfFpFaMjjSjldJ6F9vUp7lME2eEyA0_BcTbShw',
+            sheetName: 'Business_Knowledge',
+            operation: 'read',
+          },
+        },
+      },
+    } as AgentToolDescriptor;
+
+    const context = { nodeOutputs: {}, db: {}, workflowId: 'wf', userId: 'u', currentUserId: 'a' } as AgentRunContext;
+
+    // The model hallucinates a human-readable spreadsheetId/sheetName from the system prompt.
+    await executeAttachedTool(
+      descriptor,
+      { spreadsheetId: 'Business Knowledge', sheetName: 'Business Knowledge', values: [['x']] },
+      context,
+    );
+
+    const [nodeArg] = executeNodeMock.mock.calls[0] as [
+      { data: { config: Record<string, unknown> } },
+    ];
+    // Identity fields keep the configured values; the fabricated ones are ignored.
+    expect(nodeArg.data.config.spreadsheetId).toBe('15uvopMfFpFaMjjSjldJ6F9vUp7lME2eEyA0_BcTbShw');
+    expect(nodeArg.data.config.sheetName).toBe('Business_Knowledge');
+    // Non-identity data the model supplies still flows through.
+    expect(nodeArg.data.config.values).toEqual([['x']]);
+  });
 });
