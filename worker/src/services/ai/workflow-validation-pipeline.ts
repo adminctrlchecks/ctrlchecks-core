@@ -28,6 +28,7 @@ import { transformationDetector } from './transformation-detector';
 import { unifiedNodeCategorizer } from './unified-node-categorizer';
 import { nodeLibrary } from '../nodes/node-library';
 import { unifiedNodeRegistry } from '../../core/registry/unified-node-registry';
+import { splitAgentAttachmentEdges } from '../../core/utils/agent-attachment-edges';
 
 /**
  * Base validation result interface
@@ -1273,13 +1274,22 @@ export class WorkflowValidationPipeline {
    * @returns Validation result (compatible with old interface)
    */
   validateWorkflow(workflow: Workflow, originalPrompt?: string): ValidationPipelineResult {
+    const {
+      executionNodes,
+      executionEdges,
+    } = splitAgentAttachmentEdges(workflow.nodes || [], workflow.edges || []);
+    const workflowForValidation: Workflow = {
+      ...workflow,
+      nodes: executionNodes,
+      edges: executionEdges,
+    };
     const context: ValidationContext = {
       intent: {
         trigger: 'manual_trigger',
         actions: [],
         requires_credentials: [],
       },
-      workflow,
+      workflow: workflowForValidation,
       originalPrompt,
     };
     

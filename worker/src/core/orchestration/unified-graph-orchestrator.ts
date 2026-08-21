@@ -21,6 +21,7 @@ import { unifiedNormalizeNodeType, unifiedNormalizeNodeTypeString } from '../uti
 import { validateIfElseConditionsAgainstUpstreamForm } from './form-ifelse-binding';
 import { evaluateTerminalMode } from './terminal-mode-policy';
 import type { CaseNodeMapping } from '../types/unified-node-contract';
+import { splitAgentAttachmentEdges } from '../utils/agent-attachment-edges';
 
 /**
  * Optional switch context for wiring case edges during initializeWorkflow.
@@ -591,7 +592,15 @@ class UnifiedGraphOrchestratorImpl implements UnifiedGraphOrchestrator {
   ): WorkflowValidationResult {
     const errors: string[] = [];
     const warnings: string[] = [];
-    let currentWorkflow: Workflow = workflow;
+    const {
+      executionNodes,
+      executionEdges,
+    } = splitAgentAttachmentEdges(workflow.nodes || [], workflow.edges || []);
+    let currentWorkflow: Workflow = {
+      ...workflow,
+      nodes: executionNodes,
+      edges: executionEdges,
+    };
     
     // Check if workflow has nodes
     if (!currentWorkflow.nodes || currentWorkflow.nodes.length === 0) {

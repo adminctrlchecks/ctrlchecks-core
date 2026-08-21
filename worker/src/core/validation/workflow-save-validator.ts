@@ -302,7 +302,7 @@ export function validateWorkflowForSave(
 
   // 1. CRITICAL: Single trigger validation
   // Use isTriggerNode helper to recognize ALL nodes from triggers category
-  const triggerNodes = nodes.filter(n => isTriggerNode(n));
+  const triggerNodes = executionNodes.filter(n => isTriggerNode(n));
 
   if (triggerNodes.length === 0) {
     errors.push('Workflow must have exactly one trigger node');
