@@ -17,13 +17,17 @@ export async function executeAttachedTool(
   // The model may fill data/query fields, but it must NEVER set an identity field
   // (spreadsheetId, sheetName, range, url, *_id, …). Identifiers come only from the user's
   // configuration — a fabricated one (e.g. the model inventing spreadsheetId:"Business
-  // Knowledge" from the system prompt) looks valid and silently hits the wrong/missing
-  // entity (404). Universal across every attached tool node; non-identity args still win.
-  const mergedConfig: Record<string, unknown> = { ...baseConfig };
+  // Knowledge" from the system prompt, or range:"read") looks valid and silently hits the
+  // wrong/missing entity. Strip identity fields from the model's args entirely, so they can
+  // reach the node neither through config nor through the input param (which the executor's
+  // input resolution can otherwise merge back into empty config fields). Universal across
+  // every attached tool node; non-identity args still flow through.
+  const safeArgs: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(args)) {
     if (isIdentityField(key)) continue;
-    mergedConfig[key] = value;
+    safeArgs[key] = value;
   }
+  const mergedConfig: Record<string, unknown> = { ...baseConfig, ...safeArgs };
 
   const syntheticNode = {
     ...sourceNode,
@@ -38,7 +42,7 @@ export async function executeAttachedTool(
   };
   return executeNode(
     syntheticNode as Parameters<typeof executeNode>[0],
-    args,
+    safeArgs,
     context.nodeOutputs,
     context.db,
     context.workflowId,

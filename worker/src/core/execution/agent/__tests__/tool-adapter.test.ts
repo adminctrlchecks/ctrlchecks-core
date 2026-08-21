@@ -107,13 +107,42 @@ describe('tool-adapter', () => {
       context,
     );
 
-    const [nodeArg] = executeNodeMock.mock.calls[0] as [
+    const [nodeArg, inputArg] = executeNodeMock.mock.calls[0] as [
       { data: { config: Record<string, unknown> } },
+      Record<string, unknown>,
     ];
     // Identity fields keep the configured values; the fabricated ones are ignored.
     expect(nodeArg.data.config.spreadsheetId).toBe('15uvopMfFpFaMjjSjldJ6F9vUp7lME2eEyA0_BcTbShw');
     expect(nodeArg.data.config.sheetName).toBe('Business_Knowledge');
     // Non-identity data the model supplies still flows through.
     expect(nodeArg.data.config.values).toEqual([['x']]);
+    // The input param must also be free of identity fields, so the executor's input
+    // resolution can't merge a fabricated identifier (e.g. range:"read") back into config.
+    expect(inputArg).toEqual({ values: [['x']] });
+    expect(inputArg.spreadsheetId).toBeUndefined();
+    expect(inputArg.sheetName).toBeUndefined();
+  });
+
+  it('drops a hallucinated range from both config and input (range is identity)', async () => {
+    const descriptor = {
+      toolId: 'sheet-2', functionName: 'google_sheets_sheet_2', nodeId: 'sheet-2',
+      nodeType: 'google_sheets', label: 'Google Sheets', description: 'Read', parameters: {}, required: [],
+      firstRunClass: 'read',
+      node: {
+        id: 'sheet-2', type: 'google_sheets',
+        data: { label: 'Google Sheets', type: 'google_sheets', category: 'google',
+          config: { spreadsheetId: '15uvo', sheetName: 'Business_Knowledge', range: '', operation: 'read' } },
+      },
+    } as AgentToolDescriptor;
+    const context = { nodeOutputs: {}, db: {}, workflowId: 'wf', userId: 'u', currentUserId: 'a' } as AgentRunContext;
+
+    await executeAttachedTool(descriptor, { operation: 'read', range: 'read' }, context);
+
+    const [nodeArg, inputArg] = executeNodeMock.mock.calls[0] as [
+      { data: { config: Record<string, unknown> } }, Record<string, unknown>,
+    ];
+    expect(nodeArg.data.config.range).toBe('');       // config range stays empty (all cells)
+    expect(inputArg.range).toBeUndefined();           // and never leaks via input
+    expect(nodeArg.data.config.operation).toBe('read');
   });
 });
