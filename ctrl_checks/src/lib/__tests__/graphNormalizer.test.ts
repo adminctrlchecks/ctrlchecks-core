@@ -249,6 +249,29 @@ describe('normalizeWorkflowGraph — edge deduplication', () => {
       data: { agentAttachment: true, role: 'tool' },
     });
   });
+
+  it('restores flattened AI Agent attachment handles from sidecar node metadata', () => {
+    const agent = makeNode('agent', 'ai_agent');
+    const model = makeNode('model', 'ai_chat_model');
+    model.data.agentAttachmentRole = 'chat_model';
+    const result = run(
+      [agent, model],
+      [
+        {
+          ...makeEdge('e1', 'model', 'agent', 'output', 'input'),
+        } as TEdge,
+      ],
+    );
+
+    expect(result.edges).toHaveLength(1);
+    expect(result.edges[0]).toMatchObject({
+      source: 'model',
+      target: 'agent',
+      sourceHandle: 'output',
+      targetHandle: 'chat_model',
+      data: { agentAttachment: true, role: 'chat_model' },
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

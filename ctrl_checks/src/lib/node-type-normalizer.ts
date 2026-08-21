@@ -12,6 +12,7 @@
 import { Node, Edge } from '@xyflow/react';
 import { NODE_TYPES } from '@/components/workflow/nodeTypes';
 import { normalizeNodeTypeForLookup } from '@/lib/node-inspector-metadata';
+import { getAgentAttachmentEdgeRole } from '@/lib/agentAttachmentEdges';
 
 /** Coerce React Flow position from DB/JSON (numeric strings break strict typeof checks in layout). */
 export function coerceReactFlowPosition(position: unknown): { x: number; y: number } | null {
@@ -202,6 +203,16 @@ export function normalizeBackendWorkflow(backendWorkflow: {
     const base = normalizeBackendEdge(edge);
     // ai_agent uses 'userInput' as its React Flow target handle
     const targetType = nodeTypeById.get(base.target) || '';
+    const attachmentRole = getAgentAttachmentEdgeRole(base as any, nodeById as any);
+    if (targetType === 'ai_agent' && attachmentRole) {
+      return {
+        ...base,
+        sourceHandle: base.sourceHandle || 'output',
+        targetHandle: attachmentRole,
+        data: { ...(base.data || {}), agentAttachment: true, role: attachmentRole },
+      };
+    }
+
     if (targetType === 'ai_agent' && base.targetHandle === 'input') {
       return { ...base, targetHandle: 'userInput' };
     }

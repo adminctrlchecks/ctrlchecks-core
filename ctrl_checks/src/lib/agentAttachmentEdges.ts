@@ -36,15 +36,19 @@ function edgeAttachmentRole(edge: MinimalEdge, direction: 'into_agent' | 'out_of
   );
 }
 
+function nodeAttachmentRole(node: MinimalNode | undefined): AgentAttachmentHandle | null {
+  return normalizeAgentAttachmentHandle(node?.data?.agentAttachmentRole);
+}
+
 function attachmentNodeId(edge: MinimalEdge, nodesById: Map<string, MinimalNode>): string | null {
   const source = nodesById.get(edge.source);
   const target = nodesById.get(edge.target);
 
-  if (nodeType(target) === 'ai_agent' && edgeAttachmentRole(edge, 'into_agent')) {
+  if (nodeType(target) === 'ai_agent' && (edgeAttachmentRole(edge, 'into_agent') || nodeAttachmentRole(source))) {
     return edge.source;
   }
 
-  if (nodeType(source) === 'ai_agent' && edgeAttachmentRole(edge, 'out_of_agent')) {
+  if (nodeType(source) === 'ai_agent' && (edgeAttachmentRole(edge, 'out_of_agent') || nodeAttachmentRole(target))) {
     return edge.target;
   }
 
@@ -66,10 +70,14 @@ export function getAgentAttachmentEdgeRole(
   nodesById: Map<string, MinimalNode>
 ): AgentAttachmentHandle | null {
   const target = nodesById.get(edge.target);
-  if (nodeType(target) === 'ai_agent') return edgeAttachmentRole(edge, 'into_agent');
+  if (nodeType(target) === 'ai_agent') {
+    return edgeAttachmentRole(edge, 'into_agent') || nodeAttachmentRole(nodesById.get(edge.source));
+  }
 
   const source = nodesById.get(edge.source);
-  if (nodeType(source) === 'ai_agent') return edgeAttachmentRole(edge, 'out_of_agent');
+  if (nodeType(source) === 'ai_agent') {
+    return edgeAttachmentRole(edge, 'out_of_agent') || nodeAttachmentRole(nodesById.get(edge.target));
+  }
 
   return null;
 }

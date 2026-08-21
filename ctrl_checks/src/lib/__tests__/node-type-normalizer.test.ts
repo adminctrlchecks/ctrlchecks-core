@@ -9,6 +9,7 @@ vi.mock('@/components/workflow/nodeTypes', () => ({
     { type: 'http_request', label: 'HTTP Request', category: 'action', icon: 'Globe' },
     { type: 'switch', label: 'Switch', category: 'logic', icon: 'GitBranch' },
     { type: 'ai_agent', label: 'AI Agent', category: 'ai', icon: 'Bot' },
+    { type: 'ai_chat_model', label: 'AI Chat Model', category: 'ai', icon: 'Sparkles' },
   ],
 }));
 
@@ -253,6 +254,28 @@ describe('normalizeBackendWorkflow', () => {
     };
     const result = normalizeBackendWorkflow(wf);
     expect(result.edges[0].targetHandle).toBe('userInput');
+  });
+
+  it('restores AI Agent attachment targetHandle from sidecar metadata on reload', () => {
+    const wf = {
+      nodes: [
+        {
+          id: 'model',
+          data: { type: 'ai_chat_model', agentAttachmentRole: 'chat_model' },
+          position: { x: 0, y: 0 },
+        },
+        { id: 'agent', data: { type: 'ai_agent' }, position: { x: 200, y: 0 } },
+      ],
+      edges: [{ id: 'e1', source: 'model', target: 'agent', sourceHandle: 'output', targetHandle: 'input' }],
+    };
+    const result = normalizeBackendWorkflow(wf);
+    expect(result.edges[0]).toMatchObject({
+      source: 'model',
+      target: 'agent',
+      sourceHandle: 'output',
+      targetHandle: 'chat_model',
+      data: { agentAttachment: true, role: 'chat_model' },
+    });
   });
 
   it('does not remap targetHandle for non-ai_agent targets', () => {

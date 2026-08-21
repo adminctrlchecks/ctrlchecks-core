@@ -21,7 +21,11 @@ import { isEmptyConfigValue } from './registry-field-contract';
 import { validateIfElseConditionsAgainstUpstreamForm } from '../orchestration/form-ifelse-binding';
 import { extractSwitchCasePortNames } from '../utils/branching-node-ports';
 import { validateWorkflowNodeIntelligence } from '../utils/node-field-intelligence';
-import { normalizeAgentAttachmentHandle, splitAgentAttachmentEdges } from '../utils/agent-attachment-edges';
+import {
+  getAgentAttachmentEdgeRole,
+  normalizeAgentAttachmentHandle,
+  splitAgentAttachmentEdges,
+} from '../utils/agent-attachment-edges';
 
 // Workflow types (inline to avoid circular dependencies)
 interface WorkflowNode {
@@ -142,12 +146,17 @@ function hasDirectedCycle(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean
   return false;
 }
 
-function canonicalizeAiAgentEdge(edge: WorkflowEdge, nodeTypeById: Map<string, string>): WorkflowEdge {
+function canonicalizeAiAgentEdge(
+  edge: WorkflowEdge,
+  nodeTypeById: Map<string, string>,
+  nodeById: Map<string, WorkflowNode>
+): WorkflowEdge {
   const sourceType = (nodeTypeById.get(edge.source) || '').toLowerCase();
   const targetType = (nodeTypeById.get(edge.target) || '').toLowerCase();
+  const inferredRole = getAgentAttachmentEdgeRole(edge, nodeById);
 
   if (targetType === 'ai_agent') {
-    const role = normalizeAgentAttachmentHandle(edge.targetHandle) || normalizeAgentAttachmentHandle(edge.data?.role);
+    const role = normalizeAgentAttachmentHandle(edge.targetHandle) || normalizeAgentAttachmentHandle(edge.data?.role) || inferredRole;
     if (role) {
       return {
         ...edge,
@@ -159,7 +168,7 @@ function canonicalizeAiAgentEdge(edge: WorkflowEdge, nodeTypeById: Map<string, s
   }
 
   if (sourceType === 'ai_agent') {
-    const role = normalizeAgentAttachmentHandle(edge.sourceHandle) || normalizeAgentAttachmentHandle(edge.data?.role);
+    const role = normalizeAgentAttachmentHandle(edge.sourceHandle) || normalizeAgentAttachmentHandle(edge.data?.role) || inferredRole;
     if (role && targetType !== 'ai_agent') {
       return {
         ...edge,
@@ -784,6 +793,9 @@ export function normalizeWorkflowForSave(
   const normalizedNodeTypeById = new Map<string, string>(
     normalizedNodes.map((n) => [n.id, String(n.data?.type || n.type || '')])
   );
+  const normalizedNodeById = new Map<string, WorkflowNode>(
+    normalizedNodes.map((n) => [n.id, n])
+  );
   
   for (const edge of edges) {
     // Validate edge references valid nodes
@@ -793,7 +805,7 @@ export function normalizeWorkflowForSave(
       continue;
     }
     
-    const canonicalEdge = canonicalizeAiAgentEdge(edge, normalizedNodeTypeById);
+    const canonicalEdge = canonicalizeAiAgentEdge(edge, normalizedNodeTypeById, normalizedNodeById);
 
     // Deduplicate edges by source, target, and handles
     const key = `${canonicalEdge.source}::${canonicalEdge.target}::${canonicalEdge.sourceHandle || 'default'}::${canonicalEdge.targetHandle || 'default'}`;

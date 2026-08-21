@@ -48,4 +48,52 @@ describe('AI Agent attachment save normalization', () => {
     }));
     expect(validateWorkflowForSave(normalized.nodes as any, normalized.edges as any).canSave).toBe(true);
   });
+
+  it('restores flattened AI Agent attachment handles from sidecar node metadata', () => {
+    const nodes: any[] = [
+      { id: 't1', type: 'manual_trigger', data: { label: 'Trigger', type: 'manual_trigger', category: 'trigger', config: {} } },
+      { id: 'agent', type: 'ai_agent', data: { label: 'AI Agent', type: 'ai_agent', category: 'ai', config: {} } },
+      {
+        id: 'model',
+        type: 'ai_chat_model',
+        data: {
+          label: 'AI Chat Model',
+          type: 'ai_chat_model',
+          category: 'ai',
+          agentAttachmentRole: 'chat_model',
+          config: { prompt: '{{$json.message}}' },
+        },
+      },
+      {
+        id: 'send',
+        type: 'chat_send',
+        data: {
+          label: 'Chat Send',
+          type: 'chat_send',
+          category: 'output',
+          config: {
+            message: '{{$json.response_text || $json.output || $json.message}}',
+            sessionId: '{{$json.sessionId}}',
+          },
+        },
+      },
+    ];
+    const edges: any[] = [
+      { id: 'e1', source: 't1', target: 'agent', sourceHandle: 'output', targetHandle: 'userInput' },
+      { id: 'e2', source: 'model', target: 'agent', sourceHandle: 'output', targetHandle: 'input' },
+      { id: 'e3', source: 'agent', target: 'send', sourceHandle: 'success', targetHandle: 'input' },
+    ];
+
+    const normalized = normalizeWorkflowForSave(nodes as any, edges as any);
+
+    expect(normalized.edges).toContainEqual(expect.objectContaining({
+      id: 'e2',
+      source: 'model',
+      target: 'agent',
+      sourceHandle: 'output',
+      targetHandle: 'chat_model',
+      data: expect.objectContaining({ agentAttachment: true, role: 'chat_model' }),
+    }));
+    expect(validateWorkflowForSave(normalized.nodes as any, normalized.edges as any).canSave).toBe(true);
+  });
 });

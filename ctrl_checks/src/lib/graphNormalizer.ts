@@ -9,7 +9,10 @@
 
 import { Node, Edge } from 'reactflow';
 import { normalizeIfElseConfig } from './ifElseConditions';
-import { normalizeAgentAttachmentHandle } from './agentAttachmentEdges';
+import {
+  getAgentAttachmentEdgeRole,
+  normalizeAgentAttachmentHandle,
+} from './agentAttachmentEdges';
 
 export interface NormalizedGraph {
   nodes: Node[];
@@ -50,12 +53,13 @@ function normalizeAiAgentOutputHandle(edge: Edge, sourceType: string): Edge {
   return { ...edge, sourceHandle: 'success' };
 }
 
-function canonicalizeAiAgentEdge(edge: Edge, typesById: Map<string, string>): Edge {
+function canonicalizeAiAgentEdge(edge: Edge, typesById: Map<string, string>, nodesById: Map<string, Node>): Edge {
   const sourceType = typesById.get(edge.source) || '';
   const targetType = typesById.get(edge.target) || '';
+  const inferredRole = getAgentAttachmentEdgeRole(edge, nodesById);
 
   if (targetType === 'ai_agent') {
-    const role = normalizeAgentAttachmentHandle(edge.targetHandle) || normalizeAgentAttachmentHandle(edge.data?.role);
+    const role = normalizeAgentAttachmentHandle(edge.targetHandle) || normalizeAgentAttachmentHandle(edge.data?.role) || inferredRole;
     if (role) {
       return {
         ...edge,
@@ -67,7 +71,7 @@ function canonicalizeAiAgentEdge(edge: Edge, typesById: Map<string, string>): Ed
   }
 
   if (sourceType === 'ai_agent') {
-    const role = normalizeAgentAttachmentHandle(edge.sourceHandle) || normalizeAgentAttachmentHandle(edge.data?.role);
+    const role = normalizeAgentAttachmentHandle(edge.sourceHandle) || normalizeAgentAttachmentHandle(edge.data?.role) || inferredRole;
     if (role && targetType !== 'ai_agent') {
       return {
         ...edge,
@@ -90,9 +94,10 @@ function deduplicateEdges(nodes: Node[], edges: Edge[]): Edge[] {
   const seen = new Set<string>();
   const unique: Edge[] = [];
   const typesById = nodeTypeById(nodes);
+  const nodesById = new Map(nodes.map((node) => [node.id, node]));
 
   for (const edge of edges) {
-    const normalizedEdge = canonicalizeAiAgentEdge(edge, typesById);
+    const normalizedEdge = canonicalizeAiAgentEdge(edge, typesById, nodesById);
     const key = `${normalizedEdge.source}::${normalizedEdge.target}::${normalizedEdge.sourceHandle || 'default'}::${normalizedEdge.targetHandle || 'default'}`;
     if (!seen.has(key)) {
       seen.add(key);

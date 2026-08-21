@@ -222,6 +222,30 @@ describe('validateWorkflowGraph', () => {
     expect(result.errors).toEqual([]);
   });
 
+  it('infers AI Agent attachment edges from sidecar node metadata when handle was flattened', () => {
+    const chatTrigger = node('chat', 'chat_trigger', 'triggers');
+    const agent = node('agent', 'ai_agent', 'ai');
+    const model = node('model', 'ai_chat_model', 'ai');
+    model.data = { ...model.data, agentAttachmentRole: 'chat_model' };
+    const chatSend = node('send', 'chat_send', 'output');
+
+    const result = validateWorkflowGraph(
+      [chatTrigger, agent, model, chatSend],
+      [
+        { ...edge('chat', 'agent'), sourceHandle: 'output', targetHandle: 'userInput' },
+        {
+          ...edge('model', 'agent'),
+          sourceHandle: 'output',
+          targetHandle: 'input',
+        } as Edge,
+        { ...edge('agent', 'send'), sourceHandle: 'success', targetHandle: 'input' },
+      ],
+    );
+
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
   it('keeps duplicate AI Agent reply outputs invalid', () => {
     const chatTrigger = node('chat', 'chat_trigger', 'triggers');
     const agent = node('agent', 'ai_agent', 'ai');
