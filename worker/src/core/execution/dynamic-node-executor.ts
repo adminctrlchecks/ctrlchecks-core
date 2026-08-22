@@ -17,6 +17,7 @@
  */
 
 import { unifiedNodeRegistry } from '../registry/unified-node-registry';
+import { isIdentityField } from '../registry/identity-field-policy';
 import type { UnifiedNodeDefinition } from '../types/unified-node-contract';
 import { NodeExecutionContext, NodeExecutionResult, FieldFillMode, NodeInputField, RuntimeInputSource } from '../types/unified-node-contract';
 import { WorkflowNode, Workflow } from '../../core/types/ai-types';
@@ -77,6 +78,35 @@ export const EXECUTION_OBSERVABILITY_KEYS = {
   selfValidation: (nodeId: string) => `__self_validation__:${nodeId}`,
   acknowledgement: (nodeId: string) => `__acknowledgement__:${nodeId}`,
 } as const;
+
+/**
+ * Remove inferred values for static IDENTITY fields (spreadsheetId, sheetName, range, url,
+ * *_id, …) from resolved inputs. Such identifiers must come only from the user's config — a
+ * fuzzy/embedding-inferred value silently hijacks them (e.g. the operation "read" mapped into
+ * an empty `range`). A field left blank stays blank; a configured field is pinned to its
+ * config value. Only an explicit runtime_ai / buildtime_ai_once opt-in lets a resolved value
+ * through. Returns the same reference/type so downstream typing is unaffected.
+ */
+function stripInferredIdentityInputs<T>(
+  resolved: T,
+  inputSchema: Record<string, any> | undefined,
+  effectiveFillModes: Record<string, string>,
+  config: Record<string, unknown>
+): T {
+  if (!resolved || typeof resolved !== 'object' || Array.isArray(resolved)) return resolved;
+  const ri = resolved as Record<string, unknown>;
+  for (const fieldName of Object.keys(ri)) {
+    const fillMode = effectiveFillModes[fieldName];
+    if (fillMode === 'runtime_ai' || fillMode === 'buildtime_ai_once') continue;
+    if (!isIdentityField(fieldName, inputSchema?.[fieldName])) continue;
+    const configured = config[fieldName];
+    const hasConfigured =
+      configured !== undefined && configured !== null && String(configured).trim() !== '';
+    if (hasConfigured) ri[fieldName] = configured;
+    else delete ri[fieldName];
+  }
+  return resolved;
+}
 
 /** API response envelope keys that are integration metadata, never business content. */
 const INTEGRATION_METADATA_KEYS = new Set<string>([
@@ -956,7 +986,18 @@ export async function executeNodeDynamically(context: DynamicExecutionContext): 
     upstreamPayload,
   });
 
-  let resolvedInputs = contractResult.resolvedInputs;
+  // Identity fields (spreadsheetId, sheetName, range, url, *_id, …) that are static must come
+  // ONLY from the user's config — never from an inferred/fuzzy-matched runtime value. When the
+  // user leaves such a field blank it must STAY blank, not be auto-filled (e.g. the operation
+  // value "read" fuzzy-mapped into an empty `range` -> "Business_Knowledge!read" -> 404). Done
+  // at the source so the bad value can't propagate into $json, the provider config, or any
+  // authoritative-input merge. Only an explicit runtime_ai / buildtime_ai_once opt-in lets one through.
+  let resolvedInputs = stripInferredIdentityInputs(
+    contractResult.resolvedInputs,
+    definition.inputSchema,
+    effectiveFillModes,
+    (migratedConfig || {}) as Record<string, unknown>
+  );
   const runtimeInputSchema = pickActiveInputSchema(definition.inputSchema, runtimeFieldPolicy);
 
   // Strict runtime_ai enforcement for registry-required runtime fields only.
