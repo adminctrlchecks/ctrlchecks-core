@@ -14,6 +14,23 @@ import { NODE_TYPES } from '@/components/workflow/nodeTypes';
 import { normalizeNodeTypeForLookup } from '@/lib/node-inspector-metadata';
 import { getAgentAttachmentEdgeRole } from '@/lib/agentAttachmentEdges';
 
+/**
+ * AI Agent's real source (output) ports are only 'success' and 'error' (rendered as the
+ * "Reply"/"Error" handles). A legacy/generic 'output' (or 'reply', or missing) sourceHandle on
+ * an ai_agent-sourced execution edge is not a real port on the node — React Flow falls back to
+ * rendering it from the hidden legacy 'output' handle, which sits at the same bottom-center
+ * position as the "Tools" attachment handle, making the edge visually (but not logically)
+ * appear connected to Tools. Mirrors the same normalization already applied live in
+ * workflowStore.ts's onConnect/onReconnect so a load from any backend-persisted shape
+ * self-heals to the same canonical value.
+ */
+function normalizeAiAgentSourceHandle(handle: unknown): string {
+  const value = String(handle || '').trim().toLowerCase();
+  if (value === 'error') return 'error';
+  if (value === 'reply' || value === 'success' || value === 'output' || !value) return 'success';
+  return value;
+}
+
 /** Coerce React Flow position from DB/JSON (numeric strings break strict typeof checks in layout). */
 export function coerceReactFlowPosition(position: unknown): { x: number; y: number } | null {
   if (!position || typeof position !== 'object') return null;
@@ -218,6 +235,18 @@ export function normalizeBackendWorkflow(backendWorkflow: {
     }
 
     const sourceType = nodeTypeById.get(base.source) || '';
+
+    // Self-heal an ai_agent-sourced execution edge (e.g. AI Agent -> Chat Send) whose
+    // sourceHandle isn't one of the agent's real output ports ('success'/'error'). Attachment
+    // edges are excluded via `attachmentRole` (already computed above, based on either
+    // direction) so reversed/legacy attachment shapes are left to their existing handling.
+    if (sourceType === 'ai_agent' && !attachmentRole) {
+      const normalized = normalizeAiAgentSourceHandle(base.sourceHandle);
+      if (normalized !== base.sourceHandle) {
+        return { ...base, sourceHandle: normalized };
+      }
+    }
+
     if (sourceType === 'switch') {
       const sourceNode = nodeById.get(base.source);
       const caseValues = parseSwitchCaseValues((sourceNode?.data as any)?.config || {});

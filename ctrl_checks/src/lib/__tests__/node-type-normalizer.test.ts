@@ -290,6 +290,54 @@ describe('normalizeBackendWorkflow', () => {
     expect(result.edges[0].targetHandle).toBe('input');
   });
 
+  it('self-heals an ai_agent execution edge with a legacy "output" sourceHandle to "success" (live ee1c59d2 shape)', () => {
+    // Regression: the AI Agent -> Chat Send edge was persisted with sourceHandle "output"
+    // (a generic default written by a backend edge-repair path, not the agent's real
+    // 'success'/'error' ports). On load this rendered from the hidden legacy 'output' handle,
+    // which sits at the same position as the "Tools" attachment handle — visually making the
+    // reply edge look connected to Tools even though it logically targeted Chat Send.
+    const wf = {
+      nodes: [
+        { id: 'agent', data: { type: 'ai_agent' }, position: { x: 0, y: 0 } },
+        { id: 'send', data: { type: 'chat_send' }, position: { x: 200, y: 0 } },
+      ],
+      edges: [{ id: 'e1', source: 'agent', target: 'send', sourceHandle: 'output', targetHandle: 'input' }],
+    };
+    const result = normalizeBackendWorkflow(wf);
+    expect(result.edges[0].sourceHandle).toBe('success');
+    expect(result.edges[0].targetHandle).toBe('input');
+  });
+
+  it('preserves the "error" sourceHandle on an ai_agent execution edge', () => {
+    const wf = {
+      nodes: [
+        { id: 'agent', data: { type: 'ai_agent' }, position: { x: 0, y: 0 } },
+        { id: 'errlog', data: { type: 'log_output' }, position: { x: 200, y: 0 } },
+      ],
+      edges: [{ id: 'e1', source: 'agent', target: 'errlog', sourceHandle: 'error', targetHandle: 'input' }],
+    };
+    const result = normalizeBackendWorkflow(wf);
+    expect(result.edges[0].sourceHandle).toBe('error');
+  });
+
+  it('does not touch sourceHandle on an ai_agent attachment edge (agent as attachment source)', () => {
+    // Sanity: the self-heal must only apply to genuine execution edges, never to attachment
+    // edges (already handled by the earlier attachmentRole branch).
+    const wf = {
+      nodes: [
+        { id: 'agent', data: { type: 'ai_agent' }, position: { x: 0, y: 0 } },
+        { id: 'sheet', data: { type: 'google_sheets', agentAttachmentRole: 'tool' }, position: { x: 200, y: 0 } },
+      ],
+      edges: [{ id: 'e1', source: 'sheet', target: 'agent', sourceHandle: 'output', targetHandle: 'tool' }],
+    };
+    const result = normalizeBackendWorkflow(wf);
+    expect(result.edges[0]).toMatchObject({
+      sourceHandle: 'output',
+      targetHandle: 'tool',
+      data: { agentAttachment: true, role: 'tool' },
+    });
+  });
+
   it('maps positional case_1 handle to semantic value for switch source', () => {
     const wf = {
       nodes: [
