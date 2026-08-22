@@ -432,7 +432,19 @@ export async function executeGoogleCalendarOperation(
   } catch (error: any) {
     const errorMessage = error instanceof Error ? error.message : 'Google Calendar operation failed';
     const statusCode = error?.response?.status || error?.code || 'unknown';
-    throw new Error(`Google Calendar ${resource}.${operation}: ${errorMessage} (status: ${statusCode})`);
+    // The googleapis client's top-level `.message` is often just the generic HTTP status text
+    // ("Bad Request") — Google's actual reason lives in the response body. Surface it (both to
+    // the caller and to our own logs) instead of silently discarding it; without this every
+    // 4xx from Google looks identical regardless of what was actually wrong with the request.
+    const apiError = error?.response?.data?.error || error?.errors?.[0];
+    const detail =
+      apiError?.message ||
+      (Array.isArray(apiError?.errors) ? apiError.errors.map((e: any) => e?.message).filter(Boolean).join('; ') : '') ||
+      '';
+    // eslint-disable-next-line no-console
+    console.error('[GoogleCalendar] API error detail:', JSON.stringify({ resource, operation, statusCode, detail, params }));
+    const suffix = detail && detail !== errorMessage ? ` — ${detail}` : '';
+    throw new Error(`Google Calendar ${resource}.${operation}: ${errorMessage}${suffix} (status: ${statusCode})`);
   }
 }
 
