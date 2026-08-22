@@ -2,6 +2,29 @@ import { config } from '../../config';
 import { HybridMemoryService } from '../../../shared/memory';
 import type { AgentMessage } from './agent-types';
 
+/**
+ * Attaching a Memory node to the agent turns conversation memory ON (n8n parity): when a Memory
+ * node is present and the agent hasn't explicitly chosen a scope, default to 'conversation'. An
+ * explicit non-'none' scope on the agent always wins.
+ */
+export function resolveAgentMemoryScope(
+  hasMemoryNode: boolean,
+  configuredScope: 'none' | 'conversation' | 'user'
+): 'none' | 'conversation' | 'user' {
+  return hasMemoryNode && configuredScope === 'none' ? 'conversation' : configuredScope;
+}
+
+/** How many past messages the agent recalls, taken from the Memory node's config (1..50, default 10). */
+export function resolveAgentMemoryWindow(memoryNodeConfig: Record<string, unknown>): number {
+  const raw =
+    memoryNodeConfig.maxMessages ??
+    memoryNodeConfig.contextWindowLength ??
+    memoryNodeConfig.contextWindow;
+  const parsed = Number.parseInt(String(raw ?? ''), 10);
+  const value = Number.isFinite(parsed) ? parsed : 10;
+  return Math.min(Math.max(value, 1), 50);
+}
+
 export function resolveMemorySessionKey(args: {
   scope: 'none' | 'conversation' | 'user';
   workflowId: string;

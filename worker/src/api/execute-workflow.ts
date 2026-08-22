@@ -20912,8 +20912,15 @@ export default async function executeWorkflowHandler(req: Request, res: Response
                 const nType = n.data?.type || n.type;
                 return nType === 'chat_trigger';
               });
-              
-              if (chatTriggerNode) {
+              // If the workflow has an explicit Chat Send (or other chat delivery) node, it is
+              // the sender-of-record — the agent must NOT also auto-forward, or the user sees the
+              // reply twice. Auto-forward is only a fallback for workflows with no delivery node.
+              const hasChatDeliveryNode = nodes.some(n => {
+                const nType = String(n.data?.type || n.type || '');
+                return nType === 'chat_send';
+              });
+
+              if (chatTriggerNode && !hasChatDeliveryNode) {
                 // Use static sessionId format: ${workflowId}_${nodeId}
                 const chatSessionId = `${workflowId}_${chatTriggerNode.id}`;
                 

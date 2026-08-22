@@ -140,6 +140,16 @@ export function overrideChatSend(
           };
         }
 
+        // If an upstream node already delivered this reply to the chat UI (the AI Agent's
+        // fallback auto-forward sets _chatSent), do NOT send again — that duplicates the
+        // message for the user. Chat Send stays the sender-of-record in the normal case.
+        if ((inputObj as Record<string, unknown>)?._chatSent === true) {
+          return {
+            success: true,
+            output: { ...inputObj, status: 'skipped_duplicate_delivery' },
+          };
+        }
+
         const { getChatServer } = await import('../../../services/chat/chat-server');
         const chatServer = getChatServer();
         const sent = chatServer.sendToSession(resolvedSessionId, {

@@ -8,6 +8,8 @@ import { logger } from '../../logger';
 import {
   appendAgentMemory,
   loadAgentMemory,
+  resolveAgentMemoryScope,
+  resolveAgentMemoryWindow,
   resolveMemorySessionKey,
 } from './agent-memory';
 import {
@@ -55,7 +57,15 @@ export async function runAgent(context: NodeExecutionContext): Promise<NodeExecu
   const provider = LLMAdapter.detectProvider(model);
   const limits = resolveAgentLimits(config);
   const requireApprovalFor = resolveApprovalPolicy(config.requireApprovalFor);
-  const memoryScope = resolveMemoryScope(config.memoryScope);
+
+  // Conversation memory. Like n8n, attaching a Memory node to the agent turns memory ON: when a
+  // Memory node is present we default the scope to 'conversation' (keyed by the chat sessionId)
+  // so the agent recalls prior turns. An explicit non-'none' scope on the agent still wins. How
+  // many past messages to recall comes from the Memory node's config (context window).
+  const memoryNode = getAttachedNodeForHandle(context.nodeId, graph, 'memory');
+  const memoryNodeConfig = (memoryNode?.data?.config || {}) as Record<string, unknown>;
+  const memoryScope = resolveAgentMemoryScope(Boolean(memoryNode), resolveMemoryScope(config.memoryScope));
+  const memoryWindow = resolveAgentMemoryWindow(memoryNodeConfig);
   const runContext: AgentRunContext = {
     nodeContext: context,
     graph,
@@ -99,7 +109,7 @@ export async function runAgent(context: NodeExecutionContext): Promise<NodeExecu
     userId: context.userId,
     input: inputRecord,
   });
-  const memoryMessages = await loadAgentMemory(memoryKey, 10);
+  const memoryMessages = await loadAgentMemory(memoryKey, memoryWindow);
   const messages: AgentMessage[] = [
     ...memoryMessages,
     { role: 'user', content: userInput },
