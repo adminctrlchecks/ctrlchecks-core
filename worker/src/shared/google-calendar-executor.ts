@@ -67,6 +67,19 @@ export interface GoogleCalendarOperationParams {
 }
 
 /**
+ * Google Calendar's events.list API rejects `orderBy: "startTime"` unless `singleEvents: true`
+ * is also set — expanding recurring events into single instances is a prerequisite for
+ * time-ordering them, so the two options were never independent in the first place. Passing
+ * `orderBy: "startTime"` with the API's default `singleEvents: false` always 400s. Encode the
+ * real constraint here, at the point of the actual API call, so it protects every caller
+ * (present or future) rather than relying on each caller to remember to set both correctly.
+ */
+export function resolveGoogleCalendarSingleEvents(orderBy: string | undefined, singleEvents: boolean | undefined): boolean {
+  if (orderBy === 'startTime') return true;
+  return Boolean(singleEvents);
+}
+
+/**
  * Initialize Google Calendar API client with OAuth token
  */
 function getCalendarClient(accessToken: string): calendar_v3.Calendar {
@@ -194,7 +207,7 @@ export async function executeGoogleCalendarOperation(
           maxResults: params.maxResults,
           pageToken: params.pageToken,
           q: params.q,
-          singleEvents: params.singleEvents,
+          singleEvents: resolveGoogleCalendarSingleEvents(params.orderBy, params.singleEvents),
           orderBy: params.orderBy as any,
           showDeleted: params.showDeleted,
           updatedMin: params.updatedMin,
