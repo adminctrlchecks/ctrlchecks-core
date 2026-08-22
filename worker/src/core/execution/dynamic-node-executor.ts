@@ -44,6 +44,7 @@ import { applyInputAliasesFromSchema } from './apply-input-aliases';
 import { applyDeterministicFieldContracts } from './field-contract-engine';
 import {
   enforceRuntimeFieldContracts,
+  isFieldDisabledByOwner,
   isRuntimeEmptyValue,
   RuntimeFieldAuditEntry,
 } from './runtime-field-contract';
@@ -2255,7 +2256,7 @@ function mapResolvedValueToSchema(
 /**
  * Fallback: Resolve inputs from config (backward compatibility)
  */
-function resolveInputsFromConfig(
+export function resolveInputsFromConfig(
   inputSchema: any,
   config: Record<string, any>,
   nodeOutputs: LRUNodeOutputsCache
@@ -2264,7 +2265,13 @@ function resolveInputsFromConfig(
   // For each field in input schema, resolve from config
   for (const [fieldName, fieldDef] of Object.entries(inputSchema)) {
     const field = fieldDef as any;
-    const configValue = config[fieldName];
+    // A field the user explicitly turned off (Field Ownership toggle) must never contribute
+    // its stored value to execution — the toggle only ever wrote a `_fieldEnabled` flag and
+    // never cleared the underlying config value (see PropertiesPanel.tsx), so a value from
+    // any earlier state (AI generation, a template import, a prior edit) can otherwise
+    // silently survive under a UI that shows the field as blank. Treat it exactly as if the
+    // field were never set — same branch as "absent from config" below.
+    const configValue = isFieldDisabledByOwner(fieldName, config) ? undefined : config[fieldName];
     if (configValue === undefined || configValue === null) {
       // Use default if available
       if (field.default !== undefined) {

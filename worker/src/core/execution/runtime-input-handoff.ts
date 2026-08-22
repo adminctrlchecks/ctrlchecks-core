@@ -11,7 +11,6 @@ import { fieldAllowsEmptyValue, fieldRequiredByOperationContract } from '../oper
 import type { ResolvedOperationFieldPolicy } from '../operations/field-policy-resolver';
 import { isCredentialOwnership } from '../utils/field-ownership';
 import { isRuntimeEmptyValue } from './runtime-field-contract';
-import { isIdentityField } from '../registry/identity-field-policy';
 
 const RUNTIME_AUTHORITY_SOURCES = new Set<RuntimeInputSource>([
   'runtime_ai',
@@ -96,21 +95,7 @@ export function buildFinalProviderConfig(params: {
     if (value === undefined) continue;
     if (params.fieldPolicy?.fields[fieldName]?.active === false) continue;
 
-    // Identity fields (spreadsheetId, sheetName, range, url, *_id, …) that are configured
-    // as static must come ONLY from the user's config — never from a resolved/inferred
-    // runtime value. Otherwise an inferred value silently hijacks an identifier (e.g. the
-    // operation value "read" leaking into `range` -> "Business_Knowledge!read" -> 404, or a
-    // fabricated spreadsheetId). Only an explicit runtime_ai / buildtime_ai_once opt-in on an
-    // identity field allows a resolved value through.
     const fillMode = params.effectiveFillModes[fieldName];
-    if (
-      isIdentityField(fieldName, params.inputSchema[fieldName]) &&
-      fillMode !== 'runtime_ai' &&
-      fillMode !== 'buildtime_ai_once'
-    ) {
-      continue;
-    }
-
     const source = params.inputSources[fieldName];
     const shouldOwn = shouldResolvedValueOwnProviderInput(
       fieldName,
@@ -124,6 +109,14 @@ export function buildFinalProviderConfig(params: {
       appliedFields.push(fieldName);
       continue;
     }
+
+    // A field the user owns as static (no explicit runtime_ai / buildtime_ai_once opt-in) must
+    // never be silently filled from a resolved/inferred value, even when it's currently blank
+    // in config — for ANY field, not only identity ones (spreadsheetId, range, url, *_id, …
+    // were the first instance found: the operation value "read" leaking into `range` ->
+    // "Business_Knowledge!read" -> 404). A blank user-owned field must stay blank until the
+    // user, or an explicit AI-fill opt-in, sets it — never auto-filled by inference.
+    if (fillMode !== 'runtime_ai' && fillMode !== 'buildtime_ai_once') continue;
 
     if (!Object.prototype.hasOwnProperty.call(config, fieldName) || isRuntimeEmptyValue(config[fieldName])) {
       config[fieldName] = value;

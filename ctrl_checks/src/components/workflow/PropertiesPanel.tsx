@@ -775,14 +775,24 @@ export default function PropertiesPanel({
     [nodes, queryClient, selectedNode, selectedNodeId, selectNode, setIsDirty, setNodes, toast, workflowId]
   );
 
-  // Per-field enabled toggle — writes to config._fieldEnabled[fieldName]
+  // Per-field enabled toggle — writes to config._fieldEnabled[fieldName].
+  // When disabling a field, also clear its stored value. The toggle previously only ever
+  // wrote the `_fieldEnabled` flag, leaving whatever value the field held (from an earlier
+  // AI-generation pass, a template import, or a prior edit) untouched underneath — the UI
+  // showed "Not configured" while execution could still read and use that stale value,
+  // since disabling a field only ever affected readiness/validation, never the config value
+  // itself. Clearing it here keeps the persisted data honest with what the UI shows.
   const handleFieldEnabledChange = useCallback(
     (fieldKey: string, enabled: boolean) => {
       if (!selectedNodeId || !selectedNode) return;
-      const current = (selectedNode.data.config?._fieldEnabled as Record<string, boolean> | undefined) ?? {};
-      updateNodeConfig(selectedNodeId, {
-        _fieldEnabled: { ...current, [fieldKey]: enabled },
-      });
+      const currentEnabled = (selectedNode.data.config?._fieldEnabled as Record<string, boolean> | undefined) ?? {};
+      const patch: Record<string, unknown> = {
+        _fieldEnabled: { ...currentEnabled, [fieldKey]: enabled },
+      };
+      if (!enabled) {
+        patch[fieldKey] = undefined;
+      }
+      updateNodeConfig(selectedNodeId, patch);
     },
     [selectedNodeId, selectedNode, updateNodeConfig]
   );

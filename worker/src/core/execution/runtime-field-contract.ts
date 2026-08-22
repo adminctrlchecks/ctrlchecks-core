@@ -111,7 +111,7 @@ function conditionMatches(
   return true;
 }
 
-function isFieldDisabledByOwner(fieldName: string, config: Record<string, unknown>): boolean {
+export function isFieldDisabledByOwner(fieldName: string, config: Record<string, unknown>): boolean {
   const fieldEnabled = (config as any)?._fieldEnabled;
   return Boolean(fieldEnabled && typeof fieldEnabled === 'object' && fieldEnabled[fieldName] === false);
 }
