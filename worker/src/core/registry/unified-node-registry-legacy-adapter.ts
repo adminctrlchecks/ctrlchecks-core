@@ -1,6 +1,7 @@
 import type { NodeExecutionContext, NodeExecutionResult } from '../types/unified-node-contract';
 import type { NodeSchema } from '../../services/nodes/node-library';
 import { stripSystemKeys } from '../execution/system-key-filter';
+import { isFieldDisabledByOwner } from '../execution/runtime-field-contract';
 
 export type LegacyAdapterPrepared = {
   nodeOutputs: any;
@@ -21,6 +22,45 @@ export type LegacyAdapterHooks = {
 
 function isEmptyCredentialValue(value: any): boolean {
   return value === undefined || value === null || (typeof value === 'string' && value.trim() === '');
+}
+
+/**
+ * Merges resolved inputs into a legacy-path node's config, mutating `mergedConfig` in place.
+ * Runtime-owned fields (runtime_ai / field_directive_ai / deterministic_runtime source)
+ * override config; static fields only fill in when currently blank.
+ *
+ * A field the user explicitly disabled (Field Ownership toggle, config._fieldEnabled[field]
+ * === false) is excluded from BOTH branches — never overridden, never used to fill a blank
+ * slot — regardless of what source resolved a value for it. This is the legacy-path sibling
+ * of resolveInputsFromConfig (dynamic-node-executor.ts): every node in this codebase runs
+ * through exactly one of these two resolution pipelines, and both must honor the same
+ * invariant — a disabled field's stored value never reaches execution.
+ */
+export function mergeLegacyResolvedInputs(
+  mergedConfig: Record<string, any>,
+  finalResolvedInputs: Record<string, any>,
+  inputSources: Record<string, string>
+): void {
+  for (const [fieldName, value] of Object.entries(finalResolvedInputs)) {
+    if (isFieldDisabledByOwner(fieldName, mergedConfig)) continue;
+
+    if (
+      inputSources[fieldName] === 'runtime_ai' ||
+      inputSources[fieldName] === 'field_directive_ai' ||
+      inputSources[fieldName] === 'deterministic_runtime'
+    ) {
+      mergedConfig[fieldName] = value;
+      continue;
+    }
+    const current = mergedConfig[fieldName];
+    const isEmptyCurrent =
+      current === undefined ||
+      current === null ||
+      (typeof current === 'string' && current.trim() === '');
+    if (isEmptyCurrent) {
+      mergedConfig[fieldName] = value;
+    }
+  }
 }
 
 function parseStoredCredential(value: string): Record<string, any> | null {
@@ -157,24 +197,7 @@ export async function executeViaLegacyExecutor(args: {
         ? ((context as any).resolvedInputSources as Record<string, string>)
         : {};
     const finalResolvedInputs = ((context as any).finalResolvedInputs || context.inputs || {}) as Record<string, any>;
-    for (const [fieldName, value] of Object.entries(finalResolvedInputs)) {
-      if (
-        inputSources[fieldName] === 'runtime_ai' ||
-        inputSources[fieldName] === 'field_directive_ai' ||
-        inputSources[fieldName] === 'deterministic_runtime'
-      ) {
-        mergedConfig[fieldName] = value;
-        continue;
-      }
-      const current = mergedConfig[fieldName];
-      const isEmptyCurrent =
-        current === undefined ||
-        current === null ||
-        (typeof current === 'string' && current.trim() === '');
-      if (isEmptyCurrent) {
-        mergedConfig[fieldName] = value;
-      }
-    }
+    mergeLegacyResolvedInputs(mergedConfig, finalResolvedInputs, inputSources);
 
     // Default execution input is resolved inputs
     let prepared: LegacyAdapterPrepared = {
