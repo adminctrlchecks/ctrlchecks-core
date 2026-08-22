@@ -64,6 +64,59 @@ describe('runtime-input-handoff', () => {
     expect(config.subject).toBe('Application submitted successfully');
   });
 
+  it('never lets a resolved value populate a static identity field (range / spreadsheetId)', () => {
+    const sheetSchema: NodeInputSchema = {
+      operation: { type: 'string', description: 'op', required: false },
+      spreadsheetId: { type: 'string', description: 'id', required: false },
+      sheetName: { type: 'string', description: 'tab', required: false },
+      range: { type: 'string', description: 'range', required: false },
+      values: { type: 'array', description: 'rows', required: false },
+    };
+
+    const { config, appliedFields } = buildFinalProviderConfig({
+      baseConfig: { operation: 'read', spreadsheetId: '15uvo', sheetName: 'Business_Knowledge', range: '' },
+      // The runtime resolution inferred junk for the identity fields (operation value "read"
+      // leaking into range; a human name into spreadsheetId). These must be ignored.
+      finalResolvedInputs: { range: 'read', spreadsheetId: 'Business Knowledge', values: [['x']] },
+      inputSources: { range: 'static_config', spreadsheetId: 'static_config', values: 'runtime_ai' },
+      inputSchema: sheetSchema,
+      effectiveFillModes: {
+        operation: 'manual_static',
+        spreadsheetId: 'manual_static',
+        sheetName: 'manual_static',
+        range: 'manual_static',
+        values: 'runtime_ai',
+      },
+    });
+
+    expect(config.range).toBe('');                         // stays empty → node reads all cells
+    expect(config.spreadsheetId).toBe('15uvo');            // keeps the user's configured id
+    expect(config.values).toEqual([['x']]);                // non-identity data still applied
+    expect(appliedFields).not.toContain('range');
+    expect(appliedFields).not.toContain('spreadsheetId');
+  });
+
+  it('allows a resolved value on an identity field explicitly set to runtime_ai (opt-in)', () => {
+    const sheetSchema: NodeInputSchema = {
+      spreadsheetId: {
+        type: 'string',
+        description: 'id',
+        required: false,
+        fillMode: { default: 'runtime_ai', supportsRuntimeAI: true },
+      },
+    };
+
+    const { config } = buildFinalProviderConfig({
+      baseConfig: { spreadsheetId: '' },
+      finalResolvedInputs: { spreadsheetId: 'abc123' },
+      inputSources: { spreadsheetId: 'runtime_ai' },
+      inputSchema: sheetSchema,
+      effectiveFillModes: { spreadsheetId: 'runtime_ai' },
+    });
+
+    expect(config.spreadsheetId).toBe('abc123');
+  });
+
   it('blocks when a runtime-owned value is resolved but not delivered to provider config', () => {
     const result = validateRuntimeInputHandoff({
       nodeId: 'gmail_1',
