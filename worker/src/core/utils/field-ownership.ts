@@ -27,7 +27,7 @@ const STRICT_CREDENTIAL_CATEGORIES = new Set<FieldHelpCategory>([
 
 export function classifyFieldOwnership(
   fieldName: string,
-  field: Pick<NodeInputField, 'fillMode' | 'role' | 'helpCategory'>
+  field: Pick<NodeInputField, 'fillMode' | 'role' | 'helpCategory'> & { type?: string }
 ): FieldOwnershipClass {
   const helpCategory = field.helpCategory;
 
@@ -35,6 +35,14 @@ export function classifyFieldOwnership(
   // This guard takes priority over STRICT_CREDENTIAL_CATEGORIES to prevent future regressions
   const URL_CONFIG_CATEGORIES = new Set(['webhook_url', 'base_url', 'api_endpoint', 'callback_url', 'redirect_url']);
   if (helpCategory && URL_CONFIG_CATEGORIES.has(helpCategory)) return 'value';
+
+  // A credential (API key, bearer token, secret, password) is always textual — never a
+  // number or boolean. This structurally rules out the whole class of "field name happens
+  // to contain a credential-ish substring" false positives (e.g. `maxTokens`, a numeric
+  // response-length limit, was being misclassified as a `generic_token` credential purely
+  // because its name contains "token"). Takes priority over STRICT_CREDENTIAL_CATEGORIES so
+  // no future name-based helpCategory rule can misfire on a non-string field again.
+  if (field.type === 'number' || field.type === 'boolean') return 'value';
 
   if (helpCategory && STRICT_CREDENTIAL_CATEGORIES.has(helpCategory)) {
     return 'credential';

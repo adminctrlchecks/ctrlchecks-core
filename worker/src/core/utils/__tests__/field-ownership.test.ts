@@ -22,6 +22,30 @@ describe('classifyFieldOwnership', () => {
     expect(classifyFieldOwnership('privateKey', { helpCategory: 'private_key' })).toBe('credential');
   });
 
+  it('never returns credential for a number field, even with a credential helpCategory (maxTokens regression)', () => {
+    // Regression: ai_agent's `maxTokens` (a numeric response-length limit) was being classified
+    // as helpCategory 'generic_token' purely because its name contains "token", which then
+    // made classifyFieldOwnership return 'credential' — the registry believed the AI Agent
+    // required a bearer_token connection for a field that's just an integer setting. A
+    // credential (API key, bearer token, secret, password) is always textual; a number/boolean
+    // field can never legitimately be one, regardless of what its helpCategory says.
+    expect(classifyFieldOwnership('maxTokens', { helpCategory: 'generic_token', type: 'number' })).toBe('value');
+    expect(classifyFieldOwnership('maxTokens', { helpCategory: 'bearer_token', type: 'number' })).toBe('value');
+  });
+
+  it('never returns credential for a boolean field with a credential helpCategory', () => {
+    expect(classifyFieldOwnership('enableAuth', { helpCategory: 'api_key', type: 'boolean' })).toBe('value');
+  });
+
+  it('still returns credential for a string field with a credential helpCategory (no regression on real credentials)', () => {
+    expect(classifyFieldOwnership('apiKey', { helpCategory: 'api_key', type: 'string' })).toBe('credential');
+    expect(classifyFieldOwnership('botToken', { helpCategory: 'generic_token', type: 'string' })).toBe('credential');
+  });
+
+  it('still returns credential when type is unspecified (existing name/helpCategory-only contract preserved)', () => {
+    expect(classifyFieldOwnership('apiKey', { helpCategory: 'api_key' })).toBe('credential');
+  });
+
   it('returns value for role raw_json because payload shapes are user-editable config', () => {
     expect(classifyFieldOwnership('body', { role: 'raw_json' })).toBe('value');
   });
