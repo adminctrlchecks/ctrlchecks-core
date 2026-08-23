@@ -4,16 +4,16 @@
 
 BEGIN;
 
-DROP TABLE IF EXISTS templates_backup_20260731;
-CREATE TABLE templates_backup_20260731 AS SELECT * FROM templates;
+DROP TABLE IF EXISTS templates_backup_20260823_ai_agent_category;
+CREATE TABLE templates_backup_20260823_ai_agent_category AS SELECT * FROM templates;
 
 -- Expect: 550
-SELECT count(*) AS backed_up FROM templates_backup_20260731;
+SELECT count(*) AS backed_up FROM templates_backup_20260823_ai_agent_category;
 
 COMMIT;
 
 -- To restore everything:
 --   BEGIN;
 --   DELETE FROM templates;
---   INSERT INTO templates SELECT * FROM templates_backup_20260731;
+--   INSERT INTO templates SELECT * FROM templates_backup_20260823_ai_agent_category;
 --   COMMIT;

@@ -103,6 +103,7 @@ export async function loadDocsSearchIndex(): Promise<DocsSearchIndexItem[]> {
     import('./search/text_summarizer').then((mod) => mod.textSummarizerSearchIndex),
     import('./search/sentiment_analyzer').then((mod) => mod.sentimentAnalyzerSearchIndex),
     import('./search/chat_model').then((mod) => mod.chatModelSearchIndex),
+    import('./search/chat_send').then((mod) => mod.chatSendSearchIndex),
     import('./search/cohere').then((mod) => mod.cohereSearchIndex),
     import('./search/huggingface').then((mod) => mod.huggingfaceSearchIndex),
     import('./search/memory').then((mod) => mod.memorySearchIndex),

@@ -1996,6 +1996,13 @@ Output:
         helpText: 'Maximum sanitized tool-result characters returned to the model per call.',
       },
       {
+        key: 'maxRepeatedToolCalls',
+        label: 'Repeated Tool Call Limit',
+        type: 'number',
+        defaultValue: 3,
+        helpText: 'How many times the same tool can be called with identical arguments in a row before the run is stopped as a loop. Only applies when a Tool is attached.',
+      },
+      {
         key: 'memoryScope',
         label: 'Memory Scope',
         type: 'select',
@@ -5372,14 +5379,21 @@ Output:
         label: 'OAuth2 / Bearer Token',
         type: 'text',
         placeholder: 'your-oauth2-bearer-token',
-        helpText: 'OAuth2 or SAML bearer token for SAP authentication. If provided, Basic Auth fields are ignored.',
+        helpText: 'OAuth2 or SAML bearer token for SAP authentication. If provided, API Key and Basic Auth fields are ignored.',
+      },
+      {
+        key: 'apiKey',
+        label: 'API Key',
+        type: 'text',
+        placeholder: 'your-sap-sandbox-api-key',
+        helpText: 'Custom APIKey header value for systems that authenticate that way instead of OAuth2 or Basic Auth (most commonly the SAP Business Accelerator Hub sandbox at api.sap.com). Used only when OAuth2 / Bearer Token is empty; ignored for real SAP tenants using OAuth2 or Basic Auth.',
       },
       {
         key: 'username',
         label: 'Basic Auth Username',
         type: 'text',
         placeholder: 'SAP_USER',
-        helpText: 'SAP Basic Auth username. Used only when no OAuth2 token is provided.',
+        helpText: 'SAP Basic Auth username. Used only when neither OAuth2 / Bearer Token nor API Key is provided.',
       },
       {
         key: 'password',

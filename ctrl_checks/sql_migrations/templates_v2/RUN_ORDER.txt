@@ -14,9 +14,9 @@ Or run the files by hand, in this order:
 
   00_backup_current_templates.sql    REQUIRED FIRST. Preserves the current live
                                      template table before replacing the active
-                                     library with the corrected 86.
+                                     library with the corrected 116.
   01_deactivate_unsafe_templates.sql Historical no-op kept for runbook safety.
-  02_apply_templates_v2.sql          Applies the corrected graphs to all 86.
+  02_apply_templates_v2.sql          Applies the corrected graphs to all 116.
 
 Still outstanding after this migration — see DEFERRED.md:
   - Finance / Compliance Agent: webhook_finance_1 has no auth
@@ -31,3 +31,22 @@ Still outstanding after this migration — see DEFERRED.md:
   - Chargeback / Dispute Handler: stripe_trigger / stripe node version
   - Appointment Booking Confirmation: google_calendar create-event version
   - Telehealth Link Dispatcher: google_calendar update-event version
+  - Multi-Channel Customer Support Agent: Zendesk ticketing version
+  - Shopify Email Order Support Agent: WhatsApp order-reply version
+  - Discord Community FAQ Agent: native discord_trigger version
+  - RAG Document Q&A Agent: google_drive_trigger ingestion-side version
+  - Company Policy Chatbot: slack_trigger version
+  - Lead Qualification & Nurturing Agent: typeform_trigger version
+  - Inbound Email Sales Agent: gmail_trigger version
+  - GitHub Issue to Engineering Triage Agent: github_trigger plus Jira-write version
+  - GitHub PR Review Summary Agent: github_trigger and GitHub action version
+  - Invoice Data Extraction Agent: gmail_trigger plus Xero version
+  - Meeting Notes & Action-Item Agent: per-item Google Tasks creation version
+  - HR New-Hire Provisioning Agent: typeform_trigger version
+  - Resume Screening Agent: gmail_trigger version
+  - Social Media Repurposing Agent: Twitter and Instagram publish legs
+  - Social Post Approval Agent: Twitter publish leg
+  - Review Site Sentiment Monitoring Agent: Twitter-only brand sentiment source
+  - Shopify Inventory & Order Assistant: slack_trigger version
+  - Subscription Dunning Recovery Agent: stripe_trigger plus Chargebee version
+  - Financial Reporting Digest Agent: Stripe and PayPal provider version

@@ -203,7 +203,7 @@
         "y": 300
       },
       "data": {
-        "icon": "Box",
+        "icon": "Database",
         "type": "postgresql",
         "label": "Store Result",
         "category": "data",

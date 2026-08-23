@@ -3,7 +3,14 @@
     "allow": [
       "PowerShell(Remove-Item -Path \"c:\\\\Users\\\\user\\\\Desktop\\\\ctrlchecks-ai-workflow-os\\\\ctrl_checks\\\\src\\\\integrations\\\\supabase\" -Recurse -Force -Confirm:$false)",
       "Bash(ssh -i \"C:/Users/user/Desktop/ctrlchecks-ai-workflow-os/Guide/Worker/ctrlchecks-backend.pem\" -o StrictHostKeyChecking=no ubuntu@3.7.115.58 \"grep -n 'transfer\\\\|connections/status' /opt/ctrlchecks-worker/src/index.ts | head -10\")",
-      "Bash(ssh -i C:/Users/user/Desktop/ctrlchecks-ai-workflow-os/Guide/Worker/ctrlchecks-backend.pem -o StrictHostKeyChecking=no ubuntu@3.7.115.58 ' *)"
+      "Bash(ssh -i C:/Users/user/Desktop/ctrlchecks-ai-workflow-os/Guide/Worker/ctrlchecks-backend.pem -o StrictHostKeyChecking=no ubuntu@3.7.115.58 ' *)",
+      "WebSearch",
+      "WebFetch(domain:n8n.io)",
+      "Read(//tmp/**)",
+      "Bash(xargs grep -ln \"overrides/zoho\\\\|from './overrides/zoho'\")",
+      "Bash(python3 -c ' *)",
+      "PowerShell($out = \"C:\\\\Users\\\\user\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-user-Desktop-ctrlchecks-hostinger\\\\3ee4a2aa-f218-4acd-91f5-35b1e96583c6\\\\scratchpad\\\\live_templates.json\"; try { $r = Invoke-RestMethod -Uri \"https://worker.ctrlchecks.ai/api/templates\" -Method GET -TimeoutSec 60; $r | ConvertTo-Json -Depth 40 | Out-File -FilePath $out -Encoding utf8; Write-Output \"OK count=$\\($r.templates.Count\\)\"; Write-Output \"File size bytes: $\\(\\(Get-Item $out\\).Length\\)\" } catch { Write-Output \"ERROR: $\\($_.Exception.Message\\)\" })",
+      "PowerShell($in = \"C:\\\\Users\\\\user\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-user-Desktop-ctrlchecks-hostinger\\\\3ee4a2aa-f218-4acd-91f5-35b1e96583c6\\\\scratchpad\\\\live_templates.json\"; $j = Get-Content $in -Raw | ConvertFrom-Json; $t = $j.templates; Write-Output \"TOTAL: $\\($t.Count\\)\"; Write-Output \"=== CATEGORIES ===\"; $t | Group-Object category | Sort-Object Count -Descending | ForEach-Object { Write-Output \\(\"{0,-45} {1}\" -f $_.Name, $_.Count\\) }; Write-Output \"\"; Write-Output \"=== ACTIVE/FEATURED ===\"; Write-Output \\(\"is_active true: {0}\" -f \\($t | Where-Object {$_.is_active -eq $true}\\).Count\\); Write-Output \\(\"is_featured true: {0}\" -f \\($t | Where-Object {$_.is_featured -eq $true}\\).Count\\))"
     ]
   }
 }

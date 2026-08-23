@@ -1,422 +1,274 @@
-Workflow Templates
-Browse pre-built workflow templates. Copy any template to start customizing.
+Understood — analysis only, no changes. You've got two separate things to diagnose: (1) the response appearing twice while the workflow runs once, and (2) the Memory node not actually remembering anything. Let me trace both end-to-end in the live logs and code before proposing anything.
 
-Search templates...
-Filter by connections — e.g. airtable, whatsapp
-Separate services with commas. Shows only templates you could run with those connections — anything needing something extra is hidden.
 
-21 templates
 
-Business Verification & Compliance
-Advanced
-12 min
-Document Vault — Smart Search
-Ask for any stored client document in plain English over chat and get the file link back. Reads the tagged vault built by "Document Vault — Intake & Auto-Tagging".
+First, note the good news in this run: the read now works perfectly (range: "Business_Knowledge!A1:Z1000", real data, despite the model again sending junk spreadsheetId: "spreadsheetId") — so the identity-field fixes held. Now the two open issues.
 
-ai-agent
-document-management
-search
-+2
-Needs 2 connections
 
-airtable logo
-Airtable
-whatsapp logo
-WhatsApp
-0 uses
-Use Template
-Business Verification & Compliance
-Intermediate
-24 min
-Business Details Matcher
-Catches the silent rejection cause: a business name or address that's written slightly differently on the website vs. the GST filing vs. the bank account. Checks every client every 15 minutes, cross-references every version of the business identity, and emails a match/mismatch report. (No instant Airtable-update trigger exists yet, so this polls every 15 minutes and checks one client per run, marking each as checked so it is never re-reported.)
 
-verification
-compliance
-ai
-+2
-Needs 3 connections
+Traced chat response emission count
 
-airtable logo
-Airtable
-openai logo
-OpenAI
-google logo
-Google
-0 uses
-Use Template
-Business Verification & Compliance
-Beginner
-15 min
-License Renewal Reminder
-Licenses and registrations expire quietly — this workflow checks your stored expiry dates every day and sends escalating WhatsApp and email reminders at the 90, 30, and 7-day marks, so nothing lapses without warning.
 
-compliance
-reminders
-whatsapp
-+2
-Needs 3 connections
 
-airtable logo
-Airtable
-whatsapp logo
-WhatsApp
-google logo
-Google
-0 uses
-Use Template
-Business Verification & Compliance
-Beginner
-18 min
-Missing Document Finder
-Stop chasing clients for 'one more document.' Upload whatever paperwork a client has sent so far, in any order, and this workflow figures out exactly which required documents are still missing and messages the client a specific checklist on WhatsApp.
+The workflow ran once (one Chat Send at 14:57:51) — so the duplicate is in delivery to the chat UI, not execution. Let me find the chat WebSocket delivery paths (there are likely two).
 
-verification
-onboarding
-documents
-+3
-Needs 3 connections
 
-airtable logo
-Airtable
-openai logo
-OpenAI
-whatsapp logo
-WhatsApp
-0 uses
-Use Template
-Business Verification & Compliance
-Advanced
-21 min
-Smart Alert Co-Pilot
-Move from 'checking on a schedule' to 'getting told the moment something's wrong.' An AI judgment layer watches your client records, pulls related context before deciding, and sends a targeted alert to the right person only when a change is actually worth interrupting someone for. (No instant Airtable-update trigger exists yet, so this polls every 10 minutes instead of firing immediately.)
 
-ai-agent
-alerts
-monitoring
-+3
-Needs 2 connections
+Ran 2 commands, read chat-server.ts
 
-airtable logo
-Airtable
-whatsapp logo
-WhatsApp
-0 uses
-Use Template
-Business Verification & Compliance
-Intermediate
-21 min
-Submission Package Builder
-Once a client's readiness score clears the bar, this workflow automatically gathers the homepage/policy screenshots, live policy text, and already-uploaded documents a verification submission needs, and emails you all the pieces. Simplification: since this platform has no PDF-merge node, the pieces are delivered as individual links rather than one combined PDF.
 
-verification
-compliance
-google-drive
-+2
-Needs 2 connections
 
-airtable logo
-Airtable
-google logo
-Google
-1 uses
-Use Template
-Business Verification & Compliance
-Beginner
-27 min
-Verification Readiness Checker
-Know whether your business will pass Meta or Google verification before you apply. This workflow scores your website and documents against the checks verifiers actually run — privacy policy, terms, matching business details — then emails and WhatsApps you a fix list so you can pass on the first try.
+The WS message handler triggers the workflow via the chat-trigger API. The response must be delivered by sendToSession. A ~14s-apart duplicate suggests two delivery paths both firing. Let me check the chat_send node and the chat-trigger endpoint for sendToSession calls.
 
-verification
-compliance
-ai
-+3
-Needs 4 connections
 
-airtable logo
-Airtable
-openai logo
-OpenAI
-google logo
-Google
-whatsapp logo
-WhatsApp
-0 uses
-Use Template
-Business Verification & Compliance
-Beginner
-15 min
-FAQ Answering Assistant
-Let clients ask their own questions instead of pinging your team every time. This chat assistant answers strictly from your own FAQ records and automatically hands the question to a human in Slack whenever it isn't confident in the answer.
 
-support
-ai
-chatbot
-+3
-Needs 4 connections
+Found all chat reply delivery call sites
 
-airtable logo
-Airtable
-openai logo
-OpenAI
-whatsapp logo
-WhatsApp
-slack logo
-Slack
-1 uses
-Use Template
-Business Verification & Compliance
-Intermediate
-21 min
-New Client Risk Checker
-Judge new business signups on real signals instead of gut feeling. This workflow checks domain age, runs an AI risk read, scores the result, and alerts your compliance team in Slack the moment a new client crosses your risk threshold.
 
-risk
-fraud-prevention
-ai
-+3
-Needs 3 connections
 
-openai logo
-OpenAI
-airtable logo
-Airtable
-slack logo
-Slack
-2 uses
-Use Template
-Business Verification & Compliance
-Beginner
-15 min
-Overdue Task Tracker
-Requests shouldn't sit untouched until a client complains. This workflow checks open items every hour, flags anything past its expected turnaround, alerts the responsible person, and escalates to their manager once it's gone very overdue.
+Three delivery points: the Chat Send node (chat-send.ts:145) and two in execute-workflow.ts (6954, 20924). If two fire per run, that's the duplicate. Let me read both execute-workflow sites.
 
-sla
-slack
-operations
-+2
-Needs 2 connections
 
-airtable logo
-Airtable
-slack logo
-Slack
-1 uses
-Use Template
-Business Verification & Compliance
-Intermediate
-15 min
-Client Priority Ranker
-With limited account-management time, this workflow runs every week, reviews every client’s history of delays and issues, estimates who is likely to need help, and sends your team a ranked list so attention goes to the accounts that need it most.
 
-account-management
-ai
-slack
-+2
-Needs 3 connections
+Read
 
-airtable logo
-Airtable
-openai logo
-OpenAI
-slack logo
-Slack
-3 uses
-Use Template
-Business Verification & Compliance
-Advanced
-24 min
-Verification Co-Pilot Chat
-Answer 'what's the status of X?' without anyone manually digging through records. Ask in plain English over WhatsApp or Slack and an AI co-pilot pulls the live client record — and optionally a platform status API — to give a grounded, current answer, with no app-switching required.
+execute-workflow.ts
 
-ai-agent
-chatbot
-whatsapp
-+2
-Needs 2 connections
 
-airtable logo
-Airtable
-whatsapp logo
-WhatsApp
-1 uses
-Use Template
-Business Verification & Compliance
-Advanced
-12 min
-Document Vault — Intake & Auto-Tagging
-Client documents scattered across email, WhatsApp and Drive make "find that PAN card from March" take forever. This workflow tags every document the moment it arrives through a simple upload form, so it can be found later. Pairs with "Document Vault — Smart Search". (No native Drive file-watch trigger exists yet, so intake happens via the upload form rather than a watched folder.)
 
-document-management
-airtable
-ai
-+2
-Needs 1 connection
+Found the duplicate's root cause. execute-workflow.ts:6948-6957 — the AI Agent node auto-sends its response_text to the chat UI. And the Chat Send node (chat-send.ts:145) also sends it. Two deliveries per run → the duplicate, ~14s apart (AI Agent finishes, then Chat Send finishes). Let me confirm both fired in the logs, and analyze the Memory node.
 
-airtable logo
-Airtable
-1 uses
-Use Template
-Business Verification & Compliance
-Beginner
-12 min
-Live Status Lookup Bot
-The simplest way to check where a client stands without opening Airtable or asking someone else to look it up. Type a client name or order number in chat and get back a clean, formatted status straight from the live record.
 
-chatbot
-lookup
-airtable
-+2
-Needs 2 connections
 
-airtable logo
-Airtable
-slack logo
-Slack
-0 uses
-Use Template
-Business Verification & Compliance
-Intermediate
-18 min
-Cross-Platform Sync Engine
-Keep client data in Airtable, your CRM and a shared spreadsheet from drifting apart. Every 15 minutes this workflow picks up one client record that has changed since it was last synced, pushes it to HubSpot and Google Sheets, then stamps it as synced so it is never pushed twice. Requires a HubSpotId column on your Airtable table. (No instant Airtable-update trigger exists yet, so this polls.)
+Confirmed dual delivery + locate memory node impl
 
-sync
-hubspot
-google-sheets
-+3
-Needs 4 connections
 
-airtable logo
-Airtable
-hubspot logo
-HubSpot
-google logo
-Google
-slack logo
-Slack
-0 uses
-Use Template
-Business Verification & Compliance
-Beginner
-21 min
-Approval Chance Predictor
-Get a realistic percentage chance of approval before you submit a verification application, based on the same details reviewers use to reject applications. Built for businesses applying for verification and for agencies managing many client applications at once.
 
-verification
-compliance
-ai
-+3
-Needs 4 connections
+Confirmed the duplicate: the log shows "✅ Auto-forwarded AI agent response to chat UI" (the AI Agent's built-in auto-send) at 14:57:39 — and the Chat Send node delivers again at 14:57:51 (~12s later, matching your two bubbles). Now the Memory analysis.
 
-airtable logo
-Airtable
-openai logo
-OpenAI
-slack logo
-Slack
-google logo
-Google
-0 uses
-Use Template
-Customer Support
-Advanced
-15 min
-Customer Support Agent
-Intelligent customer support agent that handles FAQs, checks order status, and escalates complex issues to human agents. Fully working with intent detection, data fetching, and confidence-based routing.
 
-customer-support
-ai-agent
-intent-detection
-+2
-Needs 3 connections
 
-postgresql logo
-PostgreSQL
-openai logo
-OpenAI
-slack_webhook logo
-Slack
-3 uses
-Use Template
-Finance & Accounting
-Advanced
-15 min
-Finance / Compliance Agent
-Automated finance operations agent that processes invoices and expenses, categorizes transactions, performs compliance checks, and triggers alerts for anomalies. Reduces manual finance workload.
+Inspected memory node + agent memory usage
 
-finance
-compliance
-invoicing
-+3
-Needs 4 connections
 
-openai logo
-OpenAI
-postgresql logo
-PostgreSQL
-slack_webhook logo
-Slack
-google logo
-Google
-2 uses
-Use Template
-Human Resources
-Advanced
-15 min
-HR / Hiring Workflow Agent
-Automated resume processing agent that extracts skills, matches candidates against job requirements, scores applications, and automatically schedules interviews for shortlisted candidates.
 
-hr
-hiring
-resume
-+2
-Needs 3 connections
+Let me read agent-memory.ts — this reveals how (and whether) the agent actually remembers, and how it relates to the attached Memory node.
 
-openai logo
-OpenAI
-postgresql logo
-PostgreSQL
-google logo
-Google
-2 uses
-Use Template
-Internal Operations
-Advanced
-10 min
-Internal Knowledge / Ops Agent
-Internal knowledge base assistant that searches company documentation, answers employee questions with source citations, and escalates when information is not found. Perfect for employee self-service.
 
-knowledge-base
-internal-ops
-documentation
-+2
-Needs 3 connections
 
-postgresql logo
-PostgreSQL
-openai logo
-OpenAI
-slack_webhook logo
-Slack
-0 uses
-Use Template
-Sales & Marketing
-Advanced
-12 min
-Sales & Lead Qualification Agent
-Automated lead qualification agent that captures lead information, asks qualifying questions, scores leads, and routes qualified leads to CRM with meeting booking. Unqualified leads receive automated follow-up.
+Read
 
-sales
-lead-qualification
-crm
-+2
-Needs 3 connections
+agent-memory.ts
 
-openai logo
-OpenAI
-hubspot logo
-HubSpot
-google logo
-Google
-5 uses
+
+
+Now the memory picture is clear. Let me confirm how the agent decides memoryScope (does it read the attached Memory node, or only its own config?).
+
+
+
+Read
+
+agent-executor.ts
+
+
+
+I've traced both issues end-to-end in the live logs and code. No changes made — here's the detailed root cause for each, as you asked.
+
+
+
+Issue 1 — Response appears twice (workflow runs once)
+
+This is a real system bug. The workflow executes once, but the reply is delivered to the chat twice, by two independent senders:
+
+
+
+
+
+The AI Agent node auto-sends its answer to the chat UI. Live log at 14:57:39:
+
+✅ Auto-forwarded AI agent response to chat UI (sessionId: …): Hello Vusala…
+Code: execute-workflow.ts:6949-6957 — inside the AI Agent execution, chatServer.sendToSession(...).
+
+
+
+The Chat Send node also sends the same answer. Code: chat-send.ts:145 — chatServer.sendToSession(...). It ran at 14:57:51.
+
+So one execution → two deliveries, ~12s apart (AI Agent finishes → auto-send; then Chat Send finishes → send). That exactly matches your two bubbles ~14s apart.
+
+Why it exists: the AI Agent has a built-in "auto-forward to chat" convenience (meant for workflows that have no Chat Send node). But your workflow does have a Chat Send node, so both fire and you get a duplicate. It's a design conflict between the agent's auto-send and the explicit Chat Send node.
+
+Issue 2 — Memory isn't working
+
+The AI Agent has no working conversation memory, and the attached "Memory" node is ignored. Two disconnected problems:
+
+
+
+
+
+Memory is driven only by the agent's own memoryScope config — which is "none". agent-executor.ts:58: resolveMemoryScope(config.memoryScope). With none, agent-memory.ts:12 returns a null session key → loadAgentMemory returns [], appendAgentMemory does nothing → every turn is stateless (memory_written: false in every run).
+
+
+
+The attached "Memory" sidecar node is never consulted. The agent reads the attached Chat Model node (agent-executor.ts:52 getAttachedNodeForHandle(..., 'chat_model')), but there is no equivalent call for 'memory'. And the Memory node's own description says it plainly: "Passthrough AI context node… it does not persist or search memory today." So attaching Memory does literally nothing.
+
+So to answer your question directly: the agent doesn't "have" the lead details from memory — it only sees the current message. When you sent your name/phone/email, it echoed them back from that same message, not from remembered history. If you ask a follow-up in a new turn, it won't recall anything.
+
+In n8n: attaching a Conversation Memory sub-node (Session ID + Context Window Length) is what enables memory — the agent loads the last N turns for that session and appends each exchange. Ours has the backend for this already (HybridMemoryService + loadAgentMemory/appendAgentMemory work) — it's just not wired to the attached Memory node, and the scope defaults to none.
+
+Proposed fixes (not applied yet — your call)
+
+A. Stop the duplicate (small): make the AI Agent's auto-forward skip when a Chat Send (or other terminal chat node) exists downstream — so Chat Send is the single sender. (Alternatively, suppress Chat Send's send when the agent already auto-forwarded. Sender-of-record should be exactly one.)
+
+B. Make Memory actually work (matches n8n): in agent-executor, read the attached Memory node like it reads Chat Model:
+
+
+
+
+
+If a Memory node is attached → enable conversation memory (don't require the user to flip memoryScope).
+
+
+
+Derive the session key from the chat sessionId (already present in the input), and the context window (how many past turns) from the Memory node's config (maxMessages / Context Window).
+
+
+
+loadAgentMemory before the loop, appendAgentMemory after — the backend already supports this.
+
+Both are universal (not specific to this workflow). Want me to implement A (kill the duplicate) and B (real attached-memory) now? I'd do A first (quick, high-impact), then B.
+
+
+
+perfect imple ment does this universal or get the issue any time ?
+
+
+
+On it — and yes, both fixes are universal (they change agent/chat-delivery behavior for every workflow, not just this one). Let me first read the auto-forward site that actually fired (it logged "[Workflow …] Auto-forwarded"), which is the main-loop one — it has graph access to do this cleanly.
+
+
+
+Read
+
+execute-workflow.ts
+
+This auto-forward site has access to nodes — so I can cleanly skip it when a Chat Send node exists. Let me check the other auto-forward site (6949) to see if it needs the same guard and what's in scope there.
+
+
+
+Read
+
+execute-workflow.ts
+
+The 6949 site can't see the workflow nodes (it says so), and the logs confirm only the main-loop site (20905) fired. My fix: make the Chat Send node the sole sender — the agent auto-forward becomes a pure fallback that skips when a chat_send node exists. I'll guard the main site with the node check, and add a belt-and-suspenders skip in Chat Send for the other path.
+
+
+
+Fix A — part 1 (skip agent auto-forward when a Chat Send node exists):
+
+
+
+Edited
+
+execute-workflow.ts
+
++9
+
+-2
+
+Fix A — part 2 (Chat Send skips if the reply was already auto-forwarded via the other path). Let me read the chat-send delivery.
+
+
+
+
+
+Read and edited chat-send.ts
+
++10
+
+-0
+
+Fix B — make the attached Memory node actually work. Let me read the full memory flow in the agent-executor.
+
+
+
+Read
+
+agent-executor.ts
+
+Now the memory flow is clear: it loads history via loadAgentMemory(memoryKey, 10) but memoryScope comes only from the agent config (none), and the attached Memory node is never read. Let me confirm where it saves (appendAgentMemory), then wire the attached node.
+
+
+
+appendAgentMemory (save) is at line 141 with the same memoryKey — so enabling the scope makes both load and save work. Now wiring the attached Memory node:
+
+
+
+Edited
+
+agent-executor.ts
+
++22
+
+-2
+
+
+
+Type-check to catch any issues:
+
+
+
+Type-check both fixes
+
+
+
+Clean. Let me check for existing tests to extend for both fixes.
+
+
+
+Found agent/chat-send tests
+
+
+
+Testing runAgent end-to-end is heavy. Let me extract the two memory decisions into small pure helpers (cleaner + testable) and add focused tests.
+
+
+
+Edited
+
+agent-memory.ts
+
++23
+
+-0
+
+
+
+Now use the helpers in agent-executor and import them:
+
+
+
+Read and edited agent-executor.ts
+
++4
+
+-14
+
+
+
+Now a focused test for the memory helpers:
+
+
+
+Created agent-memory.test.ts, ran a command
+
++35
+
+-0
+
+
+
+All pass. Type-check + build:
+
+
+
+Ran 3 commands

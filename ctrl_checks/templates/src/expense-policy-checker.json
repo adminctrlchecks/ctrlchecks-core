@@ -130,7 +130,7 @@
         "y": 300
       },
       "data": {
-        "icon": "Box",
+        "icon": "Database",
         "type": "postgresql",
         "label": "Save Expense Review",
         "category": "data",

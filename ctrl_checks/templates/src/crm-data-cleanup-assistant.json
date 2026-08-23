@@ -44,7 +44,7 @@
         "y": 300
       },
       "data": {
-        "icon": "Box",
+        "icon": "Zap",
         "type": "hubspot",
         "label": "Find Contact to Clean",
         "category": "crm",
@@ -174,7 +174,7 @@
         "y": 300
       },
       "data": {
-        "icon": "Box",
+        "icon": "Zap",
         "type": "hubspot",
         "label": "Mark Reviewed",
         "category": "crm",

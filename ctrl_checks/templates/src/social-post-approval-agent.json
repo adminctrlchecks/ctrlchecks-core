@@ -1,0 +1,230 @@
+{
+  "id": "93000000-0000-4000-8000-000000000025",
+  "name": "Social Post Approval Agent",
+  "description": "Draft social copy from a brief, request Slack approval, and publish only the verified LinkedIn leg while preserving X as a manual draft.",
+  "category": "AI Agent",
+  "nodes": [
+    {
+      "id": "form_intake",
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      },
+      "data": {
+        "icon": "Box",
+        "type": "form",
+        "label": "Collect Request",
+        "category": "triggers",
+        "config": {
+          "formTitle": "Social Post Approval Agent",
+          "fields": [
+            {
+              "key": "campaignName",
+              "label": "Campaign Name",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "brief",
+              "label": "Brief",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "brandVoice",
+              "label": "Brand Voice",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "reviewerEmail",
+              "label": "Reviewer Email",
+              "type": "email",
+              "required": true
+            }
+          ],
+          "submitButtonText": "Submit",
+          "successMessage": "Received."
+        },
+        "notes": {
+          "family": "Triggers",
+          "what": "Starts your workflow when someone fills out and submits a web form you built",
+          "overview": "Build a public CtrlChecks form and start the workflow when someone submits structured answers, files, or intake details.",
+          "tips": [
+            "Use friendly labels for submitters and stable internal names for workflow mapping.",
+            "Map answers with {{$json.customer_email}} or {{$json.data.customer_email}} after checking a test execution.",
+            "Use select or radio options for values that drive routing, approvals, reporting, or branch conditions.",
+            "Turn CAPTCHA on for public forms that can create tickets, leads, or notifications.",
+            "Require authentication only for internal or sensitive forms.",
+            "Changing an internal name after downstream nodes are mapped requires updating those mappings too."
+          ],
+          "docsHref": "/docs/nodes/form",
+          "why": "Collects one complete request through the native Form trigger, which is allowed by the template gate."
+        }
+      }
+    },
+    {
+      "id": "ai_agent",
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      },
+      "data": {
+        "icon": "Bot",
+        "type": "ai_agent",
+        "label": "AI Agent",
+        "category": "ai",
+        "config": {
+          "model": "gemini-3.5-flash",
+          "temperature": 0.2,
+          "userInput": "Process this workflow input and any attached tool results: {{input}}",
+          "systemPrompt": "Draft LinkedIn and X posts from this content brief in the requested brand voice. Return approved false by default, linkedin, xDraft, and summary. Return ONLY JSON with the fields named in this workflow.",
+          "outputFormat": "json",
+          "memoryScope": "none",
+          "requireApprovalFor": "destructive"
+        },
+        "notes": {
+          "family": "AI",
+          "what": "An autonomous AI brain that reasons, makes decisions, and uses tools on your behalf",
+          "overview": "Runs one prompt-driven AI step. The runtime extracts userInput from this node or upstream message-like fields, infers the provider from Model, calls the LLM adapter, and packages response_text plus optional structured fields.",
+          "tips": [],
+          "docsHref": "/docs/nodes/ai_agent",
+          "why": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps."
+        }
+      }
+    },
+    {
+      "id": "js_parse_agent",
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      },
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Parse Agent JSON",
+        "category": "data",
+        "config": {
+          "code": "const raw = input.response_text || input.output || input.response || input.text || input.content || \"\";\nlet parsed = {};\ntry {\n  const match = String(raw).match(/\\{[\\s\\S]*\\}/);\n  parsed = match ? JSON.parse(match[0]) : {};\n} catch (error) {\n  parsed = {};\n}\nconst message = parsed.message || parsed.reply || parsed.emailBody || parsed.body || parsed.summary || String(raw);\nreturn { ...input, ...parsed, responseText: String(raw), message };",
+          "timeout": 5000
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Turns the agent response into top-level fields before any branch or output node reads it."
+        }
+      }
+    },
+    {
+      "id": "slack_content_review",
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      },
+      "data": {
+        "icon": "Hash",
+        "type": "slack_message",
+        "label": "Request Content Review",
+        "category": "output",
+        "config": {
+          "channel": "#content-review",
+          "message": "Review social drafts for {{input.campaignName}}:\nLinkedIn: {{input.linkedin}}\nX draft: {{input.xDraft}}"
+        },
+        "notes": {
+          "family": "Communication",
+          "what": "Sends messages using a Slack app or bot connection",
+          "overview": "Send Slack bot messages to channels, direct messages, or existing threads through a saved Slack OAuth2 connection. Use it for workplace alerts, support replies, incident updates, approvals, report summaries, and deployment notifications.",
+          "tips": [
+            "Select a Slack OAuth2 connection; do not paste bot tokens into message fields",
+            "The Slack app needs chat:write, and the bot must be invited before it can post in private channels",
+            "Use {{$json.channelId}} and {{$json.threadTs}} from Slack Trigger to reply in the same conversation",
+            "Keep Message filled as readable fallback text even when Blocks contains a rich Block Kit layout",
+            "Connect downstream service accounts separately; Slack OAuth2 only authorizes the Slack send"
+          ],
+          "docsHref": "/docs/nodes/slack_message",
+          "why": "Creates the human review step before any publishing action."
+        }
+      }
+    },
+    {
+      "id": "linkedin_publish_approved",
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 300
+      },
+      "data": {
+        "icon": "Linkedin",
+        "type": "linkedin",
+        "label": "Publish LinkedIn After Approval",
+        "category": "output",
+        "config": {
+          "operation": "create_post",
+          "text": "{{input.linkedin}}"
+        },
+        "notes": {
+          "family": "Communication",
+          "what": "Posts updates to LinkedIn or reads professional network content",
+          "overview": "Use LinkedIn OAuth to get your profile, read recent posts, publish personal/company/article/media posts, delete posts, or dry-run a simulated API request before publishing.",
+          "tips": [
+            "Connect LinkedIn in Connections; accessToken is only a legacy fallback",
+            "Get My Profile verifies OAuth and returns profile.personUrn",
+            "Create Post (Media) requires a public Media URL; text can be empty only for media posts",
+            "Company Page posts require Organization ID and page/admin permission",
+            "Dry Run returns simulatedRequest and does not publish, upload, or delete"
+          ],
+          "docsHref": "/docs/nodes/linkedin",
+          "why": "Keeps the verified LinkedIn publishing path; X remains manual because Twitter is blocked."
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_1_form_intake_ai_agent",
+      "source": "form_intake",
+      "target": "ai_agent",
+      "targetHandle": "userInput"
+    },
+    {
+      "id": "e_2_ai_agent_js_parse_agent",
+      "source": "ai_agent",
+      "target": "js_parse_agent"
+    },
+    {
+      "id": "e_3_js_parse_agent_slack_content_review",
+      "source": "js_parse_agent",
+      "target": "slack_content_review"
+    },
+    {
+      "id": "e_4_slack_content_review_linkedin_publish_approved",
+      "source": "slack_content_review",
+      "target": "linkedin_publish_approved"
+    }
+  ],
+  "difficulty": "Intermediate",
+  "estimated_setup_time": 20,
+  "tags": [
+    "marketing",
+    "ai-agent",
+    "approval",
+    "slack"
+  ],
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2
+}

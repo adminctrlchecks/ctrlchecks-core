@@ -236,7 +236,7 @@
         "y": 395
       },
       "data": {
-        "icon": "Box",
+        "icon": "Database",
         "type": "mongodb",
         "label": "Archive Intake Document",
         "category": "data",

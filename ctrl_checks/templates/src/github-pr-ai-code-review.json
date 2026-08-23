@@ -39,7 +39,7 @@
         "y": 300
       },
       "data": {
-        "icon": "Box",
+        "icon": "Globe",
         "type": "http_request",
         "label": "Fetch External Context",
         "category": "http_api",
@@ -230,7 +230,7 @@
         "y": 300
       },
       "data": {
-        "icon": "Box",
+        "icon": "Database",
         "type": "postgresql",
         "label": "Store Result",
         "category": "data",

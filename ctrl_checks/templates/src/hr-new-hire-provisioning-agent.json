@@ -1,0 +1,312 @@
+{
+  "id": "93000000-0000-4000-8000-000000000022",
+  "name": "HR New-Hire Provisioning Agent",
+  "description": "Use native Form intake for new hires, query Notion onboarding templates, create the onboarding page, and notify the team.",
+  "category": "AI Agent",
+  "nodes": [
+    {
+      "id": "form_intake",
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      },
+      "data": {
+        "icon": "Box",
+        "type": "form",
+        "label": "Collect Request",
+        "category": "triggers",
+        "config": {
+          "formTitle": "HR New-Hire Provisioning Agent",
+          "fields": [
+            {
+              "key": "newHireName",
+              "label": "New Hire Name",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "newHireEmail",
+              "label": "New Hire Email",
+              "type": "email",
+              "required": true
+            },
+            {
+              "key": "role",
+              "label": "Role",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "team",
+              "label": "Team",
+              "type": "text",
+              "required": true
+            },
+            {
+              "key": "managerEmail",
+              "label": "Manager Email",
+              "type": "email",
+              "required": true
+            }
+          ],
+          "submitButtonText": "Submit",
+          "successMessage": "Received."
+        },
+        "notes": {
+          "family": "Triggers",
+          "what": "Starts your workflow when someone fills out and submits a web form you built",
+          "overview": "Build a public CtrlChecks form and start the workflow when someone submits structured answers, files, or intake details.",
+          "tips": [
+            "Use friendly labels for submitters and stable internal names for workflow mapping.",
+            "Map answers with {{$json.customer_email}} or {{$json.data.customer_email}} after checking a test execution.",
+            "Use select or radio options for values that drive routing, approvals, reporting, or branch conditions.",
+            "Turn CAPTCHA on for public forms that can create tickets, leads, or notifications.",
+            "Require authentication only for internal or sensitive forms.",
+            "Changing an internal name after downstream nodes are mapped requires updating those mappings too."
+          ],
+          "docsHref": "/docs/nodes/form",
+          "why": "Collects one complete request through the native Form trigger, which is allowed by the template gate."
+        }
+      }
+    },
+    {
+      "id": "tool_notion_template",
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      },
+      "data": {
+        "icon": "BookOpen",
+        "type": "notion",
+        "label": "Read Role Template",
+        "category": "data",
+        "config": {
+          "operation": "query_database",
+          "databaseId": "REPLACE_WITH_ONBOARDING_TEMPLATE_DB",
+          "filter": "{{input.role}}"
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Creates, reads, or updates pages and databases in Notion",
+          "overview": "Read, create, update, archive, restore, query, search, and manage Notion pages, databases, blocks, users, and comments. The runtime resolves Notion OAuth from Connections and returns raw Notion data under data.",
+          "tips": [],
+          "docsHref": "/docs/nodes/notion",
+          "why": "Preserves the source Notion template lookup while replacing Typeform Trigger with Form."
+        }
+      }
+    },
+    {
+      "id": "ai_agent",
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      },
+      "data": {
+        "icon": "Bot",
+        "type": "ai_agent",
+        "label": "AI Agent",
+        "category": "ai",
+        "config": {
+          "model": "gemini-3.5-flash",
+          "temperature": 0.2,
+          "userInput": "Process this workflow input and any attached tool results: {{input}}",
+          "systemPrompt": "Draft a warm welcome package and first-week checklist for this new hire based on role and team. Return ONLY JSON with the fields named in this workflow.",
+          "outputFormat": "json",
+          "memoryScope": "none",
+          "requireApprovalFor": "destructive"
+        },
+        "notes": {
+          "family": "AI",
+          "what": "An autonomous AI brain that reasons, makes decisions, and uses tools on your behalf",
+          "overview": "Runs one prompt-driven AI step. The runtime extracts userInput from this node or upstream message-like fields, infers the provider from Model, calls the LLM adapter, and packages response_text plus optional structured fields.",
+          "tips": [],
+          "docsHref": "/docs/nodes/ai_agent",
+          "why": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps."
+        }
+      }
+    },
+    {
+      "id": "js_parse_agent",
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      },
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Parse Agent JSON",
+        "category": "data",
+        "config": {
+          "code": "const raw = input.response_text || input.output || input.response || input.text || input.content || \"\";\nlet parsed = {};\ntry {\n  const match = String(raw).match(/\\{[\\s\\S]*\\}/);\n  parsed = match ? JSON.parse(match[0]) : {};\n} catch (error) {\n  parsed = {};\n}\nconst message = parsed.message || parsed.reply || parsed.emailBody || parsed.body || parsed.summary || String(raw);\nreturn { ...input, ...parsed, responseText: String(raw), message };",
+          "timeout": 5000
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Turns the agent response into top-level fields before any branch or output node reads it."
+        }
+      }
+    },
+    {
+      "id": "notion_create_onboarding",
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 300
+      },
+      "data": {
+        "icon": "BookOpen",
+        "type": "notion",
+        "label": "Create Onboarding Page",
+        "category": "data",
+        "config": {
+          "operation": "create_page",
+          "databaseId": "REPLACE_WITH_ONBOARDING_DB",
+          "title": "{{input.newHireName}} onboarding",
+          "content": "{{input.message}}"
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Creates, reads, or updates pages and databases in Notion",
+          "overview": "Read, create, update, archive, restore, query, search, and manage Notion pages, databases, blocks, users, and comments. The runtime resolves Notion OAuth from Connections and returns raw Notion data under data.",
+          "tips": [],
+          "docsHref": "/docs/nodes/notion",
+          "why": "Creates the onboarding page as the durable workspace for the new hire."
+        }
+      }
+    },
+    {
+      "id": "gmail_welcome_hire",
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 300
+      },
+      "data": {
+        "icon": "Mail",
+        "type": "google_gmail",
+        "label": "Email New Hire",
+        "category": "output",
+        "config": {
+          "operation": "send",
+          "recipientSource": "manual_entry",
+          "recipientEmails": "{{input.newHireEmail}}",
+          "subject": "Welcome to the team",
+          "body": "{{input.message}}"
+        },
+        "notes": {
+          "family": "Communication",
+          "what": "Send emails from your Gmail account or read and search messages in your inbox",
+          "overview": "Send, list, get, or search Gmail messages. Send recipients can be typed manually or extracted from upstream/fallback Google Sheets rows.",
+          "tips": [
+            "Connect Google OAuth in Connections; do not paste tokens into workflow fields",
+            "Gmail search syntax: from:, subject:, is:unread, has:attachment",
+            "List/Search only return {id, threadId} per message â€” use a Get step with that id for full content",
+            "Body is plain text only",
+            "Get returns Gmail's raw API message; the body text is base64url-encoded inside message.payload.body.data",
+            "Use search to filter messages before getting details"
+          ],
+          "docsHref": "/docs/nodes/google_gmail",
+          "why": "Sends the welcome package to the new hire."
+        }
+      }
+    },
+    {
+      "id": "slack_new_hire",
+      "type": "custom",
+      "position": {
+        "x": 2020,
+        "y": 300
+      },
+      "data": {
+        "icon": "Hash",
+        "type": "slack_message",
+        "label": "Notify People Ops",
+        "category": "output",
+        "config": {
+          "channel": "#new-hires",
+          "message": "New hire onboarding created for {{input.newHireName}}"
+        },
+        "notes": {
+          "family": "Communication",
+          "what": "Sends messages using a Slack app or bot connection",
+          "overview": "Send Slack bot messages to channels, direct messages, or existing threads through a saved Slack OAuth2 connection. Use it for workplace alerts, support replies, incident updates, approvals, report summaries, and deployment notifications.",
+          "tips": [
+            "Select a Slack OAuth2 connection; do not paste bot tokens into message fields",
+            "The Slack app needs chat:write, and the bot must be invited before it can post in private channels",
+            "Use {{$json.channelId}} and {{$json.threadTs}} from Slack Trigger to reply in the same conversation",
+            "Keep Message filled as readable fallback text even when Blocks contains a rich Block Kit layout",
+            "Connect downstream service accounts separately; Slack OAuth2 only authorizes the Slack send"
+          ],
+          "docsHref": "/docs/nodes/slack_message",
+          "why": "Notifies the team that onboarding has started."
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_1_form_intake_tool_notion_template",
+      "source": "form_intake",
+      "target": "tool_notion_template"
+    },
+    {
+      "id": "e_2_tool_notion_template_ai_agent",
+      "source": "tool_notion_template",
+      "target": "ai_agent",
+      "targetHandle": "tool"
+    },
+    {
+      "id": "e_3_form_intake_ai_agent",
+      "source": "form_intake",
+      "target": "ai_agent",
+      "targetHandle": "userInput"
+    },
+    {
+      "id": "e_4_ai_agent_js_parse_agent",
+      "source": "ai_agent",
+      "target": "js_parse_agent"
+    },
+    {
+      "id": "e_5_js_parse_agent_notion_create_onboarding",
+      "source": "js_parse_agent",
+      "target": "notion_create_onboarding"
+    },
+    {
+      "id": "e_6_notion_create_onboarding_gmail_welcome_hire",
+      "source": "notion_create_onboarding",
+      "target": "gmail_welcome_hire"
+    },
+    {
+      "id": "e_7_gmail_welcome_hire_slack_new_hire",
+      "source": "gmail_welcome_hire",
+      "target": "slack_new_hire"
+    }
+  ],
+  "difficulty": "Intermediate",
+  "estimated_setup_time": 20,
+  "tags": [
+    "hr",
+    "onboarding",
+    "notion",
+    "form",
+    "ai-agent"
+  ],
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2
+}

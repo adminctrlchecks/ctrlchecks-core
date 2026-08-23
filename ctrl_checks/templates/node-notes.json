@@ -831,5 +831,264 @@
     "slack_review": "Puts the exception in front of the team that can act on it.",
     "gmail_routine": "Sends the routine response or acknowledgement without requiring a manual handoff.",
     "store_result": "Logs the assessment so the team has a durable queue outside the execution log."
+  },
+  "multi-channel-customer-support-agent": {
+    "webhook_intake": "Receives one normalized payload from the source system through an allowed webhook trigger.",
+    "memory_context": "Provides the agent a stable session key and recent-context window for multi-turn conversations.",
+    "tool_ticket_history": "Replaces the blocked Zendesk lookup with a verified ticket-history table the agent can consult before answering.",
+    "ai_agent": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps.",
+    "js_parse_agent": "Turns the agent response into top-level fields before any branch or output node reads it.",
+    "if_needs_human": "Separates cases that should not be answered automatically from safe support replies.",
+    "slack_escalate": "Routes low-confidence or angry customer issues to a human support queue.",
+    "hubspot_log_reply": "Uses verified HubSpot instead of blocked Zendesk so the response history lands in a CRM record."
+  },
+  "shopify-email-order-support-agent": {
+    "webhook_intake": "Receives one normalized payload from the source system through an allowed webhook trigger.",
+    "memory_context": "Provides the agent a stable session key and recent-context window for multi-turn conversations.",
+    "tool_shopify_order": "Keeps the source template Shopify lookup, but only as verified order context for the agent.",
+    "ai_agent": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps.",
+    "js_parse_agent": "Turns the agent response into top-level fields before any branch or output node reads it.",
+    "gmail_order_reply": "Replaces the blocked WhatsApp reply with verified Gmail customer notification.",
+    "slack_order_followup": "Gives support a handoff when Shopify context is missing or ambiguous."
+  },
+  "website-chat-widget-support-agent": {
+    "chat_intake": "Starts the agent from one chat message and preserves the session data for replies.",
+    "memory_context": "Provides the agent a stable session key and recent-context window for multi-turn conversations.",
+    "tool_kb_lookup": "Gives the agent current website FAQ context before it answers the visitor.",
+    "ai_agent": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps.",
+    "js_parse_agent": "Turns the agent response into top-level fields before any branch or output node reads it.",
+    "chat_reply": "Returns the answer to the same chat session that asked the question."
+  },
+  "telegram-long-term-memory-assistant": {
+    "webhook_intake": "Receives one normalized payload from the source system through an allowed webhook trigger.",
+    "memory_context": "Provides the agent a stable session key and recent-context window for multi-turn conversations.",
+    "tool_notes_doc": "Lets the agent consult the user notes document before deciding what to remember or answer.",
+    "ai_agent": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps.",
+    "js_parse_agent": "Turns the agent response into top-level fields before any branch or output node reads it.",
+    "google_doc_append_note": "Persists explicit remember-this requests into the user notes document.",
+    "telegram_reply": "Sends the assistant response back to the Telegram chat."
+  },
+  "discord-community-faq-agent": {
+    "webhook_intake": "Receives one normalized payload from the source system through an allowed webhook trigger.",
+    "memory_context": "Provides the agent a stable session key and recent-context window for multi-turn conversations.",
+    "tool_faq_doc": "Replaces a native Discord trigger with webhook intake while preserving the FAQ-document grounding.",
+    "ai_agent": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps.",
+    "js_parse_agent": "Turns the agent response into top-level fields before any branch or output node reads it.",
+    "if_discord_handoff": "Keeps moderation-sensitive questions out of automated replies.",
+    "slack_mod_handoff": "Alerts moderators when the FAQ bot should not answer directly.",
+    "discord_reply": "Sends FAQ-safe answers back to the Discord channel."
+  },
+  "google-calendar-scheduling-assistant": {
+    "chat_intake": "Starts the agent from one chat message and preserves the session data for replies.",
+    "memory_context": "Provides the agent a stable session key and recent-context window for multi-turn conversations.",
+    "tool_calendar_read": "Google Calendar is verified working; this read context lets the agent reason about availability before drafting a booking.",
+    "ai_agent": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps.",
+    "js_parse_agent": "Turns the agent response into top-level fields before any branch or output node reads it.",
+    "if_ready_to_book": "Prevents calendar writes until the agent sees explicit confirmation.",
+    "calendar_create_event": "Creates the confirmed calendar event using the verified Google Calendar action node.",
+    "chat_schedule_reply": "Confirms the proposed or booked time in the same chat session."
+  },
+  "personal-daily-digest-assistant": {
+    "schedule_intake": "Runs the agent on a predictable schedule so the workflow does not depend on an unsupported vendor trigger.",
+    "tool_unread_gmail": "Supplies unread-mail context for the morning digest.",
+    "tool_today_calendar": "Supplies calendar context for the morning schedule section.",
+    "ai_agent": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps.",
+    "js_parse_agent": "Turns the agent response into top-level fields before any branch or output node reads it.",
+    "slack_daily_digest": "Publishes the daily briefing to the personal digest channel."
+  },
+  "ai-data-analyst-chatbot": {
+    "chat_intake": "Starts the agent from one chat message and preserves the session data for replies.",
+    "memory_context": "Provides the agent a stable session key and recent-context window for multi-turn conversations.",
+    "tool_sql_read": "Provides read-only warehouse context; production users should connect a role that cannot mutate data.",
+    "ai_agent": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps.",
+    "js_parse_agent": "Turns the agent response into top-level fields before any branch or output node reads it.",
+    "chat_data_answer": "Returns the analysis to the analyst in chat."
+  },
+  "rag-document-q-a-agent": {
+    "chat_intake": "Starts the agent from one chat message and preserves the session data for replies.",
+    "memory_context": "Provides the agent a stable session key and recent-context window for multi-turn conversations.",
+    "tool_pinecone_query": "Uses Pinecone as the verified vector lookup tool for the Q&A side of the RAG pattern.",
+    "ai_agent": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps.",
+    "js_parse_agent": "Turns the agent response into top-level fields before any branch or output node reads it.",
+    "chat_rag_answer": "Returns the grounded RAG answer in the active chat session."
+  },
+  "company-policy-chatbot": {
+    "form_intake": "Collects one complete request through the native Form trigger, which is allowed by the template gate.",
+    "memory_context": "Provides the agent a stable session key and recent-context window for multi-turn conversations.",
+    "tool_qdrant_policy": "Preserves the policy-RAG design while replacing the unsupported Slack trigger with native form intake.",
+    "ai_agent": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps.",
+    "js_parse_agent": "Turns the agent response into top-level fields before any branch or output node reads it.",
+    "gmail_policy_answer": "Sends the policy answer to the employee without relying on an unsupported Slack trigger."
+  },
+  "multi-platform-sales-agent": {
+    "webhook_intake": "Receives one normalized payload from the source system through an allowed webhook trigger.",
+    "memory_context": "Provides the agent a stable session key and recent-context window for multi-turn conversations.",
+    "tool_pipedrive_lookup": "Gives the agent CRM context before it drafts qualification and next steps.",
+    "tool_calendar_slots": "Lets the agent offer realistic booking windows without using an unverified calendar substitute.",
+    "ai_agent": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps.",
+    "js_parse_agent": "Turns the agent response into top-level fields before any branch or output node reads it.",
+    "pipedrive_log_note": "Logs the sales conversation in the CRM as a guaranteed downstream write.",
+    "slack_sales_notify": "Alerts sales that the conversation was qualified and logged."
+  },
+  "lead-qualification-nurturing-agent": {
+    "form_intake": "Collects one complete request through the native Form trigger, which is allowed by the template gate.",
+    "tool_hubspot_contact": "Replaces Typeform Trigger with Form while preserving the HubSpot history lookup.",
+    "ai_agent": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps.",
+    "js_parse_agent": "Turns the agent response into top-level fields before any branch or output node reads it.",
+    "hubspot_upsert_lead": "Writes the score and tier to the CRM exactly once after the agent decides.",
+    "gmail_nurture_lead": "Sends the tier-appropriate follow-up to the lead."
+  },
+  "inbound-email-sales-agent": {
+    "webhook_intake": "Receives one normalized payload from the source system through an allowed webhook trigger.",
+    "memory_context": "Provides the agent a stable session key and recent-context window for multi-turn conversations.",
+    "tool_salesforce_lookup": "Keeps the source Salesforce history lookup while replacing the unsupported Gmail trigger with webhook intake.",
+    "ai_agent": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps.",
+    "js_parse_agent": "Turns the agent response into top-level fields before any branch or output node reads it.",
+    "if_hot_lead": "Hot leads need immediate human follow-up while other replies can be logged silently.",
+    "slack_hot_lead": "Alerts reps only for high-intent sales replies.",
+    "salesforce_log_activity": "Logs every inbound sales interaction in Salesforce after classification."
+  },
+  "linkedin-outreach-personalization-agent": {
+    "schedule_intake": "Runs the agent on a predictable schedule so the workflow does not depend on an unsupported vendor trigger.",
+    "tool_outreach_queue": "Feeds the agent one queue of leads to personalize against.",
+    "ai_agent": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps.",
+    "js_parse_agent": "Turns the agent response into top-level fields before any branch or output node reads it.",
+    "linkedin_send_note": "Keeps the verified LinkedIn leg from the source marketing/sales pattern.",
+    "slack_outreach_log": "Gives sales a visible audit trail for automated outreach."
+  },
+  "github-issue-to-engineering-triage-agent": {
+    "webhook_intake": "Receives one normalized payload from the source system through an allowed webhook trigger.",
+    "tool_related_issues": "Avoids blocked GitHub Trigger and avoids a direct issue-tracker write while still letting the agent inspect related issue context.",
+    "ai_agent": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps.",
+    "js_parse_agent": "Turns the agent response into top-level fields before any branch or output node reads it.",
+    "postgres_log_issue": "Stores the triage result instead of creating Jira directly, matching the existing GitHub-trigger rework precedent.",
+    "slack_issue_triage": "Alerts engineering with the classified issue summary."
+  },
+  "incident-triage-sla-agent": {
+    "webhook_intake": "Receives one normalized payload from the source system through an allowed webhook trigger.",
+    "tool_incident_history": "Uses Jira as read-side incident context before the agent assigns severity.",
+    "ai_agent": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps.",
+    "js_parse_agent": "Turns the agent response into top-level fields before any branch or output node reads it.",
+    "sheets_log_sla": "Creates the SLA audit row for every incident triage.",
+    "if_critical_incident": "Separates paging incidents from normal incident notifications.",
+    "slack_page_incident": "Pages the team only for critical incidents.",
+    "slack_incident_notice": "Posts a quieter notice for non-critical alerts."
+  },
+  "security-bug-alert-triage-agent": {
+    "webhook_intake": "Receives one normalized payload from the source system through an allowed webhook trigger.",
+    "tool_security_dedupe": "Checks for existing security tickets before downstream ticket creation.",
+    "ai_agent": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps.",
+    "js_parse_agent": "Turns the agent response into top-level fields before any branch or output node reads it.",
+    "jira_security_ticket": "Creates a Jira ticket for triaged security findings after dedupe context is considered.",
+    "slack_security_alert": "Notifies the security channel after the ticket is created."
+  },
+  "github-pr-review-summary-agent": {
+    "webhook_intake": "Receives one normalized payload from the source system through an allowed webhook trigger.",
+    "tool_pr_diff": "Copies the existing safe PR-review approach: webhook plus diff URL fetch instead of GitHub Trigger/GitHub action nodes.",
+    "ai_agent": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps.",
+    "js_parse_agent": "Turns the agent response into top-level fields before any branch or output node reads it.",
+    "postgres_log_pr_review": "Stores the review summary for audit without posting back through the GitHub node.",
+    "slack_pr_summary": "Delivers the summary to reviewers through the verified Slack node."
+  },
+  "invoice-data-extraction-agent": {
+    "webhook_intake": "Receives one normalized payload from the source system through an allowed webhook trigger.",
+    "tool_invoice_history": "Provides existing invoice-log context for duplicate detection while replacing the unsupported Gmail Trigger.",
+    "ai_agent": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps.",
+    "js_parse_agent": "Turns the agent response into top-level fields before any branch or output node reads it.",
+    "sheets_log_invoice": "Ends at the verified Google Sheets log because Xero is blocked by the investor audit.",
+    "slack_invoice_review": "Notifies AP that a new invoice row was created."
+  },
+  "expense-receipt-tracker-agent": {
+    "webhook_intake": "Receives one normalized payload from the source system through an allowed webhook trigger.",
+    "memory_context": "Provides the agent a stable session key and recent-context window for multi-turn conversations.",
+    "tool_expense_sheet": "Lets the agent compare against recent expenses when extracting a new receipt.",
+    "ai_agent": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps.",
+    "js_parse_agent": "Turns the agent response into top-level fields before any branch or output node reads it.",
+    "sheets_append_expense": "Stores the structured receipt in the shared expense sheet.",
+    "telegram_expense_ack": "Confirms the logged receipt back to the employee."
+  },
+  "meeting-notes-action-item-agent": {
+    "webhook_intake": "Receives one normalized payload from the source system through an allowed webhook trigger.",
+    "ai_agent": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps.",
+    "js_parse_agent": "Turns the agent response into top-level fields before any branch or output node reads it.",
+    "google_doc_meeting_notes": "Stores all action items as one document block, avoiding the forbidden per-item fan-out pattern.",
+    "slack_meeting_recap": "Shares the meeting summary and action block with the team in one message."
+  },
+  "hr-new-hire-provisioning-agent": {
+    "form_intake": "Collects one complete request through the native Form trigger, which is allowed by the template gate.",
+    "tool_notion_template": "Preserves the source Notion template lookup while replacing Typeform Trigger with Form.",
+    "ai_agent": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps.",
+    "js_parse_agent": "Turns the agent response into top-level fields before any branch or output node reads it.",
+    "notion_create_onboarding": "Creates the onboarding page as the durable workspace for the new hire.",
+    "gmail_welcome_hire": "Sends the welcome package to the new hire.",
+    "slack_new_hire": "Notifies the team that onboarding has started."
+  },
+  "resume-screening-agent": {
+    "webhook_intake": "Receives one normalized payload from the source system through an allowed webhook trigger.",
+    "tool_role_requirements": "Replaces Gmail Trigger with webhook intake while preserving role-requirement context.",
+    "ai_agent": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps.",
+    "js_parse_agent": "Turns the agent response into top-level fields before any branch or output node reads it.",
+    "sheets_log_candidate": "Logs every screened candidate in the recruiting tracker.",
+    "if_strong_candidate": "Only strong candidate matches alert recruiters immediately.",
+    "slack_recruiting_ping": "Alerts recruiting for high-scoring resumes."
+  },
+  "social-media-repurposing-agent": {
+    "schedule_intake": "Runs the agent on a predictable schedule so the workflow does not depend on an unsupported vendor trigger.",
+    "tool_latest_content": "Fetches the content source for repurposing without relying on social-listening nodes.",
+    "ai_agent": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps.",
+    "js_parse_agent": "Turns the agent response into top-level fields before any branch or output node reads it.",
+    "linkedin_publish_post": "Keeps the verified LinkedIn publishing leg from the source template.",
+    "slack_manual_social_drafts": "Replaces blocked Twitter and Instagram publishing with reviewable manual-posting drafts."
+  },
+  "social-post-approval-agent": {
+    "form_intake": "Collects one complete request through the native Form trigger, which is allowed by the template gate.",
+    "ai_agent": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps.",
+    "js_parse_agent": "Turns the agent response into top-level fields before any branch or output node reads it.",
+    "slack_content_review": "Creates the human review step before any publishing action.",
+    "linkedin_publish_approved": "Keeps the verified LinkedIn publishing path; X remains manual because Twitter is blocked."
+  },
+  "review-site-sentiment-monitoring-agent": {
+    "schedule_intake": "Runs the agent on a predictable schedule so the workflow does not depend on an unsupported vendor trigger.",
+    "tool_review_feed": "Replaces Twitter social listening with a generic review/RSS source because Twitter, Instagram and Facebook are blocked.",
+    "ai_agent": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps.",
+    "js_parse_agent": "Turns the agent response into top-level fields before any branch or output node reads it.",
+    "sentiment_score_summary": "Applies deterministic sentiment scoring to the agent summary before the alert gate.",
+    "if_negative_spike": "Alerts only when the monitoring result indicates real reputation risk.",
+    "slack_brand_watch": "Sends review-site reputation risks to the brand/support team."
+  },
+  "competitor-price-monitoring-agent": {
+    "schedule_intake": "Runs the agent on a predictable schedule so the workflow does not depend on an unsupported vendor trigger.",
+    "tool_competitor_page": "Fetches current competitor page content for extraction.",
+    "tool_price_history": "Gives the agent last-known prices for comparison.",
+    "ai_agent": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps.",
+    "js_parse_agent": "Turns the agent response into top-level fields before any branch or output node reads it.",
+    "sheets_log_price_change": "Writes the detected price changes to the price-history sheet as one append operation.",
+    "if_price_changed": "Only notifies the pricing channel when there is an actual change.",
+    "slack_price_alert": "Alerts pricing when the agent detects meaningful changes."
+  },
+  "shopify-inventory-order-assistant": {
+    "chat_intake": "Starts the agent from one chat message and preserves the session data for replies.",
+    "memory_context": "Provides the agent a stable session key and recent-context window for multi-turn conversations.",
+    "tool_shopify_lookup": "Keeps Shopify as the verified read-side tool while replacing the unsupported Slack trigger with Chat Trigger.",
+    "ai_agent": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps.",
+    "js_parse_agent": "Turns the agent response into top-level fields before any branch or output node reads it.",
+    "chat_shopify_reply": "Returns the Shopify answer in the internal chat session."
+  },
+  "subscription-dunning-recovery-agent": {
+    "webhook_intake": "Receives one normalized payload from the source system through an allowed webhook trigger.",
+    "tool_billing_history": "Replaces blocked Chargebee with a verified billing-history sheet lookup.",
+    "ai_agent": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps.",
+    "js_parse_agent": "Turns the agent response into top-level fields before any branch or output node reads it.",
+    "gmail_dunning_email": "Sends the tailored dunning email through verified Gmail instead of Stripe/Chargebee nodes.",
+    "postgres_log_dunning": "Stores the recovery event for finance follow-up."
+  },
+  "financial-reporting-digest-agent": {
+    "schedule_intake": "Runs the agent on a predictable schedule so the workflow does not depend on an unsupported vendor trigger.",
+    "tool_finance_sheet": "Uses a verified finance tracking sheet as the payment-source substitute.",
+    "tool_finance_sql": "Provides database-sourced finance rollup context without blocked Stripe or PayPal nodes.",
+    "ai_agent": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps.",
+    "js_parse_agent": "Turns the agent response into top-level fields before any branch or output node reads it.",
+    "sheets_log_finance_digest": "Logs the weekly digest in the finance sheet using verified Google Sheets.",
+    "slack_finance_digest": "Posts the plain-language weekly finance recap to the finance channel."
   }
 }

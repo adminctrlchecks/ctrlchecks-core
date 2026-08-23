@@ -1,0 +1,235 @@
+{
+  "id": "93000000-0000-4000-8000-000000000018",
+  "name": "GitHub PR Review Summary Agent",
+  "description": "Receive pull-request webhooks, fetch the diff URL, summarize review risk, and notify engineering without using GitHub action nodes.",
+  "category": "AI Agent",
+  "nodes": [
+    {
+      "id": "webhook_intake",
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      },
+      "data": {
+        "icon": "Box",
+        "type": "webhook",
+        "label": "Receive Event Payload",
+        "category": "triggers",
+        "config": {
+          "path": "/github-pr-review-summary-agent",
+          "httpMethod": "POST",
+          "responseMode": "onReceived"
+        },
+        "notes": {
+          "family": "Triggers",
+          "what": "Starts your workflow the moment another app sends it data — like a doorbell for your automation",
+          "overview": "Starts a workflow when an external app, website form, payment system, or internal service sends data to the generated CtrlChecks webhook URL. Captures the request body, headers, query values, and method for the next node.",
+          "tips": [],
+          "docsHref": "/docs/nodes/webhook",
+          "why": "Receives one normalized payload from the source system through an allowed webhook trigger."
+        }
+      }
+    },
+    {
+      "id": "tool_pr_diff",
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      },
+      "data": {
+        "icon": "Globe",
+        "type": "http_request",
+        "label": "Fetch PR Diff",
+        "category": "http_api",
+        "config": {
+          "url": "{{input.diffUrl}}",
+          "method": "GET",
+          "timeout": 10000
+        },
+        "notes": {
+          "family": "HTTP & API",
+          "what": "Calls any web URL and gets data back — your universal connector to the internet",
+          "overview": "Call an external API or webhook, optionally adding headers, query parameters, body data, and a timeout.",
+          "tips": [],
+          "docsHref": "/docs/nodes/http_request",
+          "why": "Copies the existing safe PR-review approach: webhook plus diff URL fetch instead of GitHub Trigger/GitHub action nodes."
+        }
+      }
+    },
+    {
+      "id": "ai_agent",
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      },
+      "data": {
+        "icon": "Bot",
+        "type": "ai_agent",
+        "label": "AI Agent",
+        "category": "ai",
+        "config": {
+          "model": "claude-3-5-sonnet",
+          "temperature": 0.2,
+          "userInput": "Process this workflow input and any attached tool results: {{input}}",
+          "systemPrompt": "Summarize this pull request for reviewers: what changed, why it matters, and risk areas. Keep it under 200 words. Return ONLY JSON with the fields named in this workflow.",
+          "outputFormat": "json",
+          "memoryScope": "none",
+          "requireApprovalFor": "destructive"
+        },
+        "notes": {
+          "family": "AI",
+          "what": "An autonomous AI brain that reasons, makes decisions, and uses tools on your behalf",
+          "overview": "Runs one prompt-driven AI step. The runtime extracts userInput from this node or upstream message-like fields, infers the provider from Model, calls the LLM adapter, and packages response_text plus optional structured fields.",
+          "tips": [],
+          "docsHref": "/docs/nodes/ai_agent",
+          "why": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps."
+        }
+      }
+    },
+    {
+      "id": "js_parse_agent",
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      },
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Parse Agent JSON",
+        "category": "data",
+        "config": {
+          "code": "const raw = input.response_text || input.output || input.response || input.text || input.content || \"\";\nlet parsed = {};\ntry {\n  const match = String(raw).match(/\\{[\\s\\S]*\\}/);\n  parsed = match ? JSON.parse(match[0]) : {};\n} catch (error) {\n  parsed = {};\n}\nconst message = parsed.message || parsed.reply || parsed.emailBody || parsed.body || parsed.summary || String(raw);\nreturn { ...input, ...parsed, responseText: String(raw), message };",
+          "timeout": 5000
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Turns the agent response into top-level fields before any branch or output node reads it."
+        }
+      }
+    },
+    {
+      "id": "postgres_log_pr_review",
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 300
+      },
+      "data": {
+        "icon": "Database",
+        "type": "postgresql",
+        "label": "Log PR Review Summary",
+        "category": "data",
+        "config": {
+          "query": "INSERT INTO pr_review_summaries (repo, pr_url, summary, created_at) VALUES ('{{input.repository}}', '{{input.prUrl}}', '{{input.summary}}', now())"
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Connects to a PostgreSQL database to run queries or insert data",
+          "overview": "Run PostgreSQL executeQuery, insert, update, or delete through the real database executor. The visual panel now uses runtime operation values and Parameters maps to the executor parameter array.",
+          "tips": [
+            "Use executeQuery for raw SQL with $1, $2 placeholders and Parameters as a JSON array.",
+            "Insert returns inserted/count; update and delete return rows/rowsAffected because PostgreSQL uses RETURNING *.",
+            "The backend schema still lists connectionString, but the executor validates host, username, password, database, port, and ssl.",
+            "Update and delete require Where; the executor refuses missing where clauses.",
+            "Store database passwords in Connections rather than ordinary workflow fields."
+          ],
+          "docsHref": "/docs/nodes/postgresql",
+          "why": "Stores the review summary for audit without posting back through the GitHub node."
+        }
+      }
+    },
+    {
+      "id": "slack_pr_summary",
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 300
+      },
+      "data": {
+        "icon": "Hash",
+        "type": "slack_message",
+        "label": "Notify Engineering",
+        "category": "output",
+        "config": {
+          "channel": "#engineering",
+          "message": "PR review summary for {{input.prUrl}}:\n{{input.summary}}"
+        },
+        "notes": {
+          "family": "Communication",
+          "what": "Sends messages using a Slack app or bot connection",
+          "overview": "Send Slack bot messages to channels, direct messages, or existing threads through a saved Slack OAuth2 connection. Use it for workplace alerts, support replies, incident updates, approvals, report summaries, and deployment notifications.",
+          "tips": [
+            "Select a Slack OAuth2 connection; do not paste bot tokens into message fields",
+            "The Slack app needs chat:write, and the bot must be invited before it can post in private channels",
+            "Use {{$json.channelId}} and {{$json.threadTs}} from Slack Trigger to reply in the same conversation",
+            "Keep Message filled as readable fallback text even when Blocks contains a rich Block Kit layout",
+            "Connect downstream service accounts separately; Slack OAuth2 only authorizes the Slack send"
+          ],
+          "docsHref": "/docs/nodes/slack_message",
+          "why": "Delivers the summary to reviewers through the verified Slack node."
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_1_webhook_intake_tool_pr_diff",
+      "source": "webhook_intake",
+      "target": "tool_pr_diff"
+    },
+    {
+      "id": "e_2_tool_pr_diff_ai_agent",
+      "source": "tool_pr_diff",
+      "target": "ai_agent",
+      "targetHandle": "tool"
+    },
+    {
+      "id": "e_3_webhook_intake_ai_agent",
+      "source": "webhook_intake",
+      "target": "ai_agent",
+      "targetHandle": "userInput"
+    },
+    {
+      "id": "e_4_ai_agent_js_parse_agent",
+      "source": "ai_agent",
+      "target": "js_parse_agent"
+    },
+    {
+      "id": "e_5_js_parse_agent_postgres_log_pr_review",
+      "source": "js_parse_agent",
+      "target": "postgres_log_pr_review"
+    },
+    {
+      "id": "e_6_postgres_log_pr_review_slack_pr_summary",
+      "source": "postgres_log_pr_review",
+      "target": "slack_pr_summary"
+    }
+  ],
+  "difficulty": "Intermediate",
+  "estimated_setup_time": 20,
+  "tags": [
+    "github",
+    "pull-request",
+    "webhook",
+    "slack",
+    "ai-agent"
+  ],
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2
+}

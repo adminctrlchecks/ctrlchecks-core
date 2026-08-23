@@ -1,0 +1,254 @@
+{
+  "id": "93000000-0000-4000-8000-000000000007",
+  "name": "Personal Daily Digest Assistant",
+  "description": "Build a weekday morning digest from unread Gmail and calendar context, then post it to Slack.",
+  "category": "AI Agent",
+  "nodes": [
+    {
+      "id": "schedule_intake",
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      },
+      "data": {
+        "icon": "Box",
+        "type": "schedule",
+        "label": "Scheduled Run",
+        "category": "triggers",
+        "config": {
+          "cron": "0 7 * * 1-5",
+          "timezone": "Asia/Kolkata"
+        },
+        "notes": {
+          "family": "Triggers",
+          "what": "Works like an alarm clock — runs your workflow automatically at a specific time you set each day",
+          "overview": "Runs your workflow automatically on a schedule using a simple time picker. Select your time (HH:MM format) and timezone, and the workflow will execute daily at that time. Great for daily reports, periodic checks, or recurring tasks.",
+          "tips": [
+            "Use 24-hour format (e.g., 09:00 for 9 AM, 14:30 for 2:30 PM)",
+            "Select your timezone from the dropdown (IST, UTC, etc.)",
+            "Workflow runs daily at the specified time",
+            "Test with manual trigger first",
+            "Timezone conversion is handled automatically"
+          ],
+          "docsHref": "/docs/nodes/schedule",
+          "why": "Runs the agent on a predictable schedule so the workflow does not depend on an unsupported vendor trigger."
+        }
+      }
+    },
+    {
+      "id": "tool_unread_gmail",
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 205
+      },
+      "data": {
+        "icon": "Mail",
+        "type": "google_gmail",
+        "label": "Read Unread Gmail",
+        "category": "output",
+        "config": {
+          "operation": "search",
+          "query": "is:unread newer_than:1d"
+        },
+        "notes": {
+          "family": "Communication",
+          "what": "Send emails from your Gmail account or read and search messages in your inbox",
+          "overview": "Send, list, get, or search Gmail messages. Send recipients can be typed manually or extracted from upstream/fallback Google Sheets rows.",
+          "tips": [
+            "Connect Google OAuth in Connections; do not paste tokens into workflow fields",
+            "Gmail search syntax: from:, subject:, is:unread, has:attachment",
+            "List/Search only return {id, threadId} per message â€” use a Get step with that id for full content",
+            "Body is plain text only",
+            "Get returns Gmail's raw API message; the body text is base64url-encoded inside message.payload.body.data",
+            "Use search to filter messages before getting details"
+          ],
+          "docsHref": "/docs/nodes/google_gmail",
+          "why": "Supplies unread-mail context for the morning digest."
+        }
+      }
+    },
+    {
+      "id": "tool_today_calendar",
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 395
+      },
+      "data": {
+        "icon": "Calendar",
+        "type": "google_calendar",
+        "label": "Read Today Calendar",
+        "category": "data",
+        "config": {
+          "resource": "event",
+          "operation": "list",
+          "calendarId": "primary",
+          "maxResults": 10
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Read, create, update, or delete events in your Google Calendar",
+          "overview": "Create, list, update, or delete Google Calendar events. Manage your calendar programmatically. Runtime also supports get, quickAdd, and move for events, plus non-event resources, when set directly in workflow JSON.",
+          "tips": [
+            "Use \"primary\" for main calendar",
+            "Times must be ISO 8601 format (UTC) â€” Start Time/End Time are converted automatically",
+            "The new/updated event ID is returned as id, not eventId",
+            "List returns events in the Time Min/Time Max window, with no date filtering by default"
+          ],
+          "docsHref": "/docs/nodes/google_calendar",
+          "why": "Supplies calendar context for the morning schedule section."
+        }
+      }
+    },
+    {
+      "id": "ai_agent",
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      },
+      "data": {
+        "icon": "Bot",
+        "type": "ai_agent",
+        "label": "AI Agent",
+        "category": "ai",
+        "config": {
+          "model": "gemini-3.5-flash",
+          "temperature": 0.2,
+          "userInput": "Process this workflow input and any attached tool results: {{input}}",
+          "systemPrompt": "Summarize today in a concise morning briefing: three email highlights and the day schedule. Return ONLY JSON with the fields named in this workflow.",
+          "outputFormat": "json",
+          "memoryScope": "none",
+          "requireApprovalFor": "none"
+        },
+        "notes": {
+          "family": "AI",
+          "what": "An autonomous AI brain that reasons, makes decisions, and uses tools on your behalf",
+          "overview": "Runs one prompt-driven AI step. The runtime extracts userInput from this node or upstream message-like fields, infers the provider from Model, calls the LLM adapter, and packages response_text plus optional structured fields.",
+          "tips": [],
+          "docsHref": "/docs/nodes/ai_agent",
+          "why": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps."
+        }
+      }
+    },
+    {
+      "id": "js_parse_agent",
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      },
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Parse Agent JSON",
+        "category": "data",
+        "config": {
+          "code": "const raw = input.response_text || input.output || input.response || input.text || input.content || \"\";\nlet parsed = {};\ntry {\n  const match = String(raw).match(/\\{[\\s\\S]*\\}/);\n  parsed = match ? JSON.parse(match[0]) : {};\n} catch (error) {\n  parsed = {};\n}\nconst message = parsed.message || parsed.reply || parsed.emailBody || parsed.body || parsed.summary || String(raw);\nreturn { ...input, ...parsed, responseText: String(raw), message };",
+          "timeout": 5000
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Turns the agent response into top-level fields before any branch or output node reads it."
+        }
+      }
+    },
+    {
+      "id": "slack_daily_digest",
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 300
+      },
+      "data": {
+        "icon": "Hash",
+        "type": "slack_message",
+        "label": "Post Daily Digest",
+        "category": "output",
+        "config": {
+          "channel": "#daily-digest",
+          "message": "{{input.message}}"
+        },
+        "notes": {
+          "family": "Communication",
+          "what": "Sends messages using a Slack app or bot connection",
+          "overview": "Send Slack bot messages to channels, direct messages, or existing threads through a saved Slack OAuth2 connection. Use it for workplace alerts, support replies, incident updates, approvals, report summaries, and deployment notifications.",
+          "tips": [
+            "Select a Slack OAuth2 connection; do not paste bot tokens into message fields",
+            "The Slack app needs chat:write, and the bot must be invited before it can post in private channels",
+            "Use {{$json.channelId}} and {{$json.threadTs}} from Slack Trigger to reply in the same conversation",
+            "Keep Message filled as readable fallback text even when Blocks contains a rich Block Kit layout",
+            "Connect downstream service accounts separately; Slack OAuth2 only authorizes the Slack send"
+          ],
+          "docsHref": "/docs/nodes/slack_message",
+          "why": "Publishes the daily briefing to the personal digest channel."
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_1_schedule_intake_tool_unread_gmail",
+      "source": "schedule_intake",
+      "target": "tool_unread_gmail"
+    },
+    {
+      "id": "e_2_tool_unread_gmail_ai_agent",
+      "source": "tool_unread_gmail",
+      "target": "ai_agent",
+      "targetHandle": "tool"
+    },
+    {
+      "id": "e_3_schedule_intake_tool_today_calendar",
+      "source": "schedule_intake",
+      "target": "tool_today_calendar"
+    },
+    {
+      "id": "e_4_tool_today_calendar_ai_agent",
+      "source": "tool_today_calendar",
+      "target": "ai_agent",
+      "targetHandle": "tool"
+    },
+    {
+      "id": "e_5_schedule_intake_ai_agent",
+      "source": "schedule_intake",
+      "target": "ai_agent",
+      "targetHandle": "userInput"
+    },
+    {
+      "id": "e_6_ai_agent_js_parse_agent",
+      "source": "ai_agent",
+      "target": "js_parse_agent"
+    },
+    {
+      "id": "e_7_js_parse_agent_slack_daily_digest",
+      "source": "js_parse_agent",
+      "target": "slack_daily_digest"
+    }
+  ],
+  "difficulty": "Intermediate",
+  "estimated_setup_time": 20,
+  "tags": [
+    "daily-digest",
+    "gmail",
+    "calendar",
+    "slack",
+    "ai-agent"
+  ],
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2
+}

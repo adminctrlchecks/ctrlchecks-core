@@ -1,0 +1,293 @@
+{
+  "id": "93000000-0000-4000-8000-000000000030",
+  "name": "Financial Reporting Digest Agent",
+  "description": "Generate a weekly finance digest from Google Sheets/PostgreSQL data instead of blocked Stripe and PayPal provider tools.",
+  "category": "AI Agent",
+  "nodes": [
+    {
+      "id": "schedule_intake",
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      },
+      "data": {
+        "icon": "Box",
+        "type": "schedule",
+        "label": "Scheduled Run",
+        "category": "triggers",
+        "config": {
+          "cron": "0 8 * * 1",
+          "timezone": "Asia/Kolkata"
+        },
+        "notes": {
+          "family": "Triggers",
+          "what": "Works like an alarm clock — runs your workflow automatically at a specific time you set each day",
+          "overview": "Runs your workflow automatically on a schedule using a simple time picker. Select your time (HH:MM format) and timezone, and the workflow will execute daily at that time. Great for daily reports, periodic checks, or recurring tasks.",
+          "tips": [
+            "Use 24-hour format (e.g., 09:00 for 9 AM, 14:30 for 2:30 PM)",
+            "Select your timezone from the dropdown (IST, UTC, etc.)",
+            "Workflow runs daily at the specified time",
+            "Test with manual trigger first",
+            "Timezone conversion is handled automatically"
+          ],
+          "docsHref": "/docs/nodes/schedule",
+          "why": "Runs the agent on a predictable schedule so the workflow does not depend on an unsupported vendor trigger."
+        }
+      }
+    },
+    {
+      "id": "tool_finance_sheet",
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 205
+      },
+      "data": {
+        "icon": "Table",
+        "type": "google_sheets",
+        "label": "Read Weekly Finance Sheet",
+        "category": "data",
+        "config": {
+          "operation": "read",
+          "spreadsheetId": "REPLACE_WITH_YOUR_GOOGLE_SHEET_ID",
+          "range": "Weekly Finance!A:Z"
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Read rows from a Google Sheet or write new data into one — like Excel, but automated",
+          "overview": "Read, write, append, or update data in Google Sheets. Connect your spreadsheets to workflows for data extraction, logging, and automation.",
+          "tips": [
+            "Get Spreadsheet ID from URL: /d/SPREADSHEET_ID/edit",
+            "Leave range empty to read all used cells",
+            "Use key-value or text Output Format for easier AI processing",
+            "Allow Write Access has no runtime effect â€” write/append/update run regardless of this checkbox",
+            "Data is checked before Values when both are filled",
+            "Authenticate with Google account first"
+          ],
+          "docsHref": "/docs/nodes/google_sheets",
+          "why": "Uses a verified finance tracking sheet as the payment-source substitute."
+        }
+      }
+    },
+    {
+      "id": "tool_finance_sql",
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 395
+      },
+      "data": {
+        "icon": "Database",
+        "type": "postgresql",
+        "label": "Read Finance Rollup",
+        "category": "data",
+        "config": {
+          "query": "SELECT current_date AS report_date, 'Replace with weekly revenue/refund/net query' AS summary"
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Connects to a PostgreSQL database to run queries or insert data",
+          "overview": "Run PostgreSQL executeQuery, insert, update, or delete through the real database executor. The visual panel now uses runtime operation values and Parameters maps to the executor parameter array.",
+          "tips": [
+            "Use executeQuery for raw SQL with $1, $2 placeholders and Parameters as a JSON array.",
+            "Insert returns inserted/count; update and delete return rows/rowsAffected because PostgreSQL uses RETURNING *.",
+            "The backend schema still lists connectionString, but the executor validates host, username, password, database, port, and ssl.",
+            "Update and delete require Where; the executor refuses missing where clauses.",
+            "Store database passwords in Connections rather than ordinary workflow fields."
+          ],
+          "docsHref": "/docs/nodes/postgresql",
+          "why": "Provides database-sourced finance rollup context without blocked Stripe or PayPal nodes."
+        }
+      }
+    },
+    {
+      "id": "ai_agent",
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      },
+      "data": {
+        "icon": "Bot",
+        "type": "ai_agent",
+        "label": "AI Agent",
+        "category": "ai",
+        "config": {
+          "model": "gemini-3.5-flash",
+          "temperature": 0.2,
+          "userInput": "Process this workflow input and any attached tool results: {{input}}",
+          "systemPrompt": "Summarize weekly finance totals: revenue, refunds, net, and week-over-week change if context provides it. Return ONLY JSON with the fields named in this workflow.",
+          "outputFormat": "json",
+          "memoryScope": "none",
+          "requireApprovalFor": "destructive"
+        },
+        "notes": {
+          "family": "AI",
+          "what": "An autonomous AI brain that reasons, makes decisions, and uses tools on your behalf",
+          "overview": "Runs one prompt-driven AI step. The runtime extracts userInput from this node or upstream message-like fields, infers the provider from Model, calls the LLM adapter, and packages response_text plus optional structured fields.",
+          "tips": [],
+          "docsHref": "/docs/nodes/ai_agent",
+          "why": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps."
+        }
+      }
+    },
+    {
+      "id": "js_parse_agent",
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      },
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Parse Agent JSON",
+        "category": "data",
+        "config": {
+          "code": "const raw = input.response_text || input.output || input.response || input.text || input.content || \"\";\nlet parsed = {};\ntry {\n  const match = String(raw).match(/\\{[\\s\\S]*\\}/);\n  parsed = match ? JSON.parse(match[0]) : {};\n} catch (error) {\n  parsed = {};\n}\nconst message = parsed.message || parsed.reply || parsed.emailBody || parsed.body || parsed.summary || String(raw);\nreturn { ...input, ...parsed, responseText: String(raw), message };",
+          "timeout": 5000
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Turns the agent response into top-level fields before any branch or output node reads it."
+        }
+      }
+    },
+    {
+      "id": "sheets_log_finance_digest",
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 300
+      },
+      "data": {
+        "icon": "Table",
+        "type": "google_sheets",
+        "label": "Append Finance Digest Row",
+        "category": "data",
+        "config": {
+          "operation": "append",
+          "spreadsheetId": "REPLACE_WITH_YOUR_GOOGLE_SHEET_ID",
+          "range": "Weekly Finance!A:Z",
+          "values": "{{input.summary}}"
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Read rows from a Google Sheet or write new data into one — like Excel, but automated",
+          "overview": "Read, write, append, or update data in Google Sheets. Connect your spreadsheets to workflows for data extraction, logging, and automation.",
+          "tips": [
+            "Get Spreadsheet ID from URL: /d/SPREADSHEET_ID/edit",
+            "Leave range empty to read all used cells",
+            "Use key-value or text Output Format for easier AI processing",
+            "Allow Write Access has no runtime effect â€” write/append/update run regardless of this checkbox",
+            "Data is checked before Values when both are filled",
+            "Authenticate with Google account first"
+          ],
+          "docsHref": "/docs/nodes/google_sheets",
+          "why": "Logs the weekly digest in the finance sheet using verified Google Sheets."
+        }
+      }
+    },
+    {
+      "id": "slack_finance_digest",
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 300
+      },
+      "data": {
+        "icon": "Hash",
+        "type": "slack_message",
+        "label": "Post Finance Digest",
+        "category": "output",
+        "config": {
+          "channel": "#finance",
+          "message": "{{input.message}}"
+        },
+        "notes": {
+          "family": "Communication",
+          "what": "Sends messages using a Slack app or bot connection",
+          "overview": "Send Slack bot messages to channels, direct messages, or existing threads through a saved Slack OAuth2 connection. Use it for workplace alerts, support replies, incident updates, approvals, report summaries, and deployment notifications.",
+          "tips": [
+            "Select a Slack OAuth2 connection; do not paste bot tokens into message fields",
+            "The Slack app needs chat:write, and the bot must be invited before it can post in private channels",
+            "Use {{$json.channelId}} and {{$json.threadTs}} from Slack Trigger to reply in the same conversation",
+            "Keep Message filled as readable fallback text even when Blocks contains a rich Block Kit layout",
+            "Connect downstream service accounts separately; Slack OAuth2 only authorizes the Slack send"
+          ],
+          "docsHref": "/docs/nodes/slack_message",
+          "why": "Posts the plain-language weekly finance recap to the finance channel."
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_1_schedule_intake_tool_finance_sheet",
+      "source": "schedule_intake",
+      "target": "tool_finance_sheet"
+    },
+    {
+      "id": "e_2_tool_finance_sheet_ai_agent",
+      "source": "tool_finance_sheet",
+      "target": "ai_agent",
+      "targetHandle": "tool"
+    },
+    {
+      "id": "e_3_schedule_intake_tool_finance_sql",
+      "source": "schedule_intake",
+      "target": "tool_finance_sql"
+    },
+    {
+      "id": "e_4_tool_finance_sql_ai_agent",
+      "source": "tool_finance_sql",
+      "target": "ai_agent",
+      "targetHandle": "tool"
+    },
+    {
+      "id": "e_5_schedule_intake_ai_agent",
+      "source": "schedule_intake",
+      "target": "ai_agent",
+      "targetHandle": "userInput"
+    },
+    {
+      "id": "e_6_ai_agent_js_parse_agent",
+      "source": "ai_agent",
+      "target": "js_parse_agent"
+    },
+    {
+      "id": "e_7_js_parse_agent_sheets_log_finance_digest",
+      "source": "js_parse_agent",
+      "target": "sheets_log_finance_digest"
+    },
+    {
+      "id": "e_8_sheets_log_finance_digest_slack_finance_digest",
+      "source": "sheets_log_finance_digest",
+      "target": "slack_finance_digest"
+    }
+  ],
+  "difficulty": "Intermediate",
+  "estimated_setup_time": 20,
+  "tags": [
+    "finance",
+    "weekly-report",
+    "google-sheets",
+    "postgresql",
+    "ai-agent"
+  ],
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2
+}

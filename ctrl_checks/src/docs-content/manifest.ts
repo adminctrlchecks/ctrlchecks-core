@@ -687,6 +687,13 @@ export const nodeDocManifest = [
     "logoUrl": "/icons/nodes/huggingface.svg"
   },
   {
+    "slug": "chat_send",
+    "displayName": "Chat Send",
+    "category": "AI",
+    "description": "Sends a reply back into the live chat conversation a Chat Trigger started; not offered for new placements but still executes in existing chat workflows.",
+    "logoUrl": "/icons/nodes/chat_send.svg"
+  },
+  {
     "slug": "memory",
     "displayName": "Memory",
     "category": "AI",

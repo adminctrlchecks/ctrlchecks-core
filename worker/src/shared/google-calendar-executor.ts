@@ -79,6 +79,12 @@ export function resolveGoogleCalendarSingleEvents(orderBy: string | undefined, s
   return Boolean(singleEvents);
 }
 
+function compactCalendarParams<T extends Record<string, any>>(params: T): T {
+  return Object.fromEntries(
+    Object.entries(params).filter(([, value]) => !(typeof value === 'string' && value.trim() === ''))
+  ) as T;
+}
+
 /**
  * Initialize Google Calendar API client with OAuth token
  */
@@ -200,7 +206,7 @@ export async function executeGoogleCalendarOperation(
         return response.data;
       } else if (operation === 'list') {
         if (!params.calendarId) throw new Error('calendarId is required');
-        const response = await calendar.events.list({
+        const response = await calendar.events.list(compactCalendarParams({
           calendarId: params.calendarId,
           timeMin: params.timeMin,
           timeMax: params.timeMax,
@@ -211,7 +217,7 @@ export async function executeGoogleCalendarOperation(
           orderBy: params.orderBy as any,
           showDeleted: params.showDeleted,
           updatedMin: params.updatedMin,
-        });
+        }));
         return params.returnAll ? await getAllPages(calendar.events.list.bind(calendar.events) as any, response) : response.data;
       } else if (operation === 'create') {
         if (!params.calendarId || !params.start || !params.end) {

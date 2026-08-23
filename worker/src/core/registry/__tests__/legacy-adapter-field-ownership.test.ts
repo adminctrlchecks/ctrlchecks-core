@@ -55,13 +55,50 @@ describe('mergeLegacyResolvedInputs — respects the Field Ownership disabled fl
     expect(mergedConfig.summary).toBe('Real title');
   });
 
-  it('still fills a genuinely blank field for a node that never used the toggle (no regression)', () => {
+  it('does not infer-fill a blank manual_static field from resolved inputs', () => {
     const mergedConfig: Record<string, any> = { calendarId: '' };
     const finalResolvedInputs = { calendarId: 'primary' };
     const inputSources = { calendarId: 'static_config' };
 
     mergeLegacyResolvedInputs(mergedConfig, finalResolvedInputs, inputSources);
 
-    expect(mergedConfig.calendarId).toBe('primary');
+    expect(mergedConfig.calendarId).toBe('');
+  });
+
+  it('still fills a blank buildtime_ai_once field from resolved inputs', () => {
+    const mergedConfig: Record<string, any> = { operation: '' };
+    const finalResolvedInputs = { operation: 'list' };
+    const inputSources = { operation: 'static_config' };
+
+    mergeLegacyResolvedInputs(mergedConfig, finalResolvedInputs, inputSources, {
+      operation: 'buildtime_ai_once',
+    });
+
+    expect(mergedConfig.operation).toBe('list');
+  });
+
+  it('removes stale persisted config values for disabled fields before legacy execution', () => {
+    const mergedConfig: Record<string, any> = {
+      description: 'event',
+      timeMin: 'event',
+      timeMax: 'event',
+      q: 'event',
+      maxResults: 1,
+      _fieldEnabled: {
+        description: false,
+        timeMin: false,
+        timeMax: false,
+        q: false,
+        maxResults: true,
+      },
+    };
+
+    mergeLegacyResolvedInputs(mergedConfig, {}, {});
+
+    expect(mergedConfig).not.toHaveProperty('description');
+    expect(mergedConfig).not.toHaveProperty('timeMin');
+    expect(mergedConfig).not.toHaveProperty('timeMax');
+    expect(mergedConfig).not.toHaveProperty('q');
+    expect(mergedConfig.maxResults).toBe(1);
   });
 });

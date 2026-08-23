@@ -3,6 +3,7 @@ export const TEMPLATE_SECTORS = [
   'Healthcare & Clinics',
   'Finance, Accounting & Insurance',
   'Sales, Support & Internal Operations',
+  'AI Agent',
 ] as const;
 
 export type TemplateSector = (typeof TEMPLATE_SECTORS)[number];

@@ -1,0 +1,244 @@
+{
+  "id": "93000000-0000-4000-8000-000000000017",
+  "name": "Security Bug Alert Triage Agent",
+  "description": "Triage scanner findings, dedupe against Jira context, create a security ticket, and alert Slack.",
+  "category": "AI Agent",
+  "nodes": [
+    {
+      "id": "webhook_intake",
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      },
+      "data": {
+        "icon": "Box",
+        "type": "webhook",
+        "label": "Receive Event Payload",
+        "category": "triggers",
+        "config": {
+          "path": "/security-bug-alert-triage-agent",
+          "httpMethod": "POST",
+          "responseMode": "onReceived"
+        },
+        "notes": {
+          "family": "Triggers",
+          "what": "Starts your workflow the moment another app sends it data — like a doorbell for your automation",
+          "overview": "Starts a workflow when an external app, website form, payment system, or internal service sends data to the generated CtrlChecks webhook URL. Captures the request body, headers, query values, and method for the next node.",
+          "tips": [],
+          "docsHref": "/docs/nodes/webhook",
+          "why": "Receives one normalized payload from the source system through an allowed webhook trigger."
+        }
+      }
+    },
+    {
+      "id": "tool_security_dedupe",
+      "type": "custom",
+      "position": {
+        "x": 420,
+        "y": 300
+      },
+      "data": {
+        "icon": "Bug",
+        "type": "jira",
+        "label": "Search Existing Security Tickets",
+        "category": "devops",
+        "config": {
+          "operation": "search_issues",
+          "jql": "labels = security AND text ~ '{{input.ruleId}}'"
+        },
+        "notes": {
+          "family": "DevOps",
+          "what": "Creates or updates issues, sprints, and projects in Jira",
+          "overview": "Create, read, update, delete, search, transition, and comment on Jira Cloud issues. The node uses a Jira API-token connection and preserves incoming fields while adding operation-specific Jira fields.",
+          "tips": [
+            "Domain is the Atlassian host such as acme.atlassian.net; the runtime also accepts baseUrl aliases",
+            "Email and API token usually come from the saved Jira connection",
+            "Create Issue requires projectKey and summary",
+            "Search Issues requires jql and calls the Jira Cloud /rest/api/3/search/jql endpoint",
+            "Description and comments are converted to Atlassian Document Format before sending"
+          ],
+          "docsHref": "/docs/nodes/jira",
+          "why": "Checks for existing security tickets before downstream ticket creation."
+        }
+      }
+    },
+    {
+      "id": "ai_agent",
+      "type": "custom",
+      "position": {
+        "x": 740,
+        "y": 300
+      },
+      "data": {
+        "icon": "Bot",
+        "type": "ai_agent",
+        "label": "AI Agent",
+        "category": "ai",
+        "config": {
+          "model": "gemini-3.5-flash",
+          "temperature": 0.2,
+          "userInput": "Process this workflow input and any attached tool results: {{input}}",
+          "systemPrompt": "Assess this security scanner finding for true-positive likelihood and severity. Return truePositive, severity, summary, and ticketTitle. Return ONLY JSON with the fields named in this workflow.",
+          "outputFormat": "json",
+          "memoryScope": "none",
+          "requireApprovalFor": "destructive"
+        },
+        "notes": {
+          "family": "AI",
+          "what": "An autonomous AI brain that reasons, makes decisions, and uses tools on your behalf",
+          "overview": "Runs one prompt-driven AI step. The runtime extracts userInput from this node or upstream message-like fields, infers the provider from Model, calls the LLM adapter, and packages response_text plus optional structured fields.",
+          "tips": [],
+          "docsHref": "/docs/nodes/ai_agent",
+          "why": "Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps."
+        }
+      }
+    },
+    {
+      "id": "js_parse_agent",
+      "type": "custom",
+      "position": {
+        "x": 1060,
+        "y": 300
+      },
+      "data": {
+        "icon": "Code",
+        "type": "javascript",
+        "label": "Parse Agent JSON",
+        "category": "data",
+        "config": {
+          "code": "const raw = input.response_text || input.output || input.response || input.text || input.content || \"\";\nlet parsed = {};\ntry {\n  const match = String(raw).match(/\\{[\\s\\S]*\\}/);\n  parsed = match ? JSON.parse(match[0]) : {};\n} catch (error) {\n  parsed = {};\n}\nconst message = parsed.message || parsed.reply || parsed.emailBody || parsed.body || parsed.summary || String(raw);\nreturn { ...input, ...parsed, responseText: String(raw), message };",
+          "timeout": 5000
+        },
+        "notes": {
+          "family": "Data",
+          "what": "Writes and runs any JavaScript you like to transform or process your data",
+          "overview": "Run sandboxed JavaScript once against the current workflow data and return the transformed value for downstream nodes.",
+          "tips": [
+            "Always return the value the next node should receive",
+            "Default timeout is 5000ms and runtime caps at 30000ms",
+            "Use Output Schema such as {\"type\":\"object\"} only as a top-level shape hint",
+            "JavaScript has no credentials; connect downstream service node accounts separately",
+            "Do not paste API keys, tokens, or passwords into code"
+          ],
+          "docsHref": "/docs/nodes/javascript",
+          "why": "Turns the agent response into top-level fields before any branch or output node reads it."
+        }
+      }
+    },
+    {
+      "id": "jira_security_ticket",
+      "type": "custom",
+      "position": {
+        "x": 1380,
+        "y": 300
+      },
+      "data": {
+        "icon": "Bug",
+        "type": "jira",
+        "label": "Create Security Ticket",
+        "category": "devops",
+        "config": {
+          "operation": "create_issue",
+          "projectKey": "SEC",
+          "issueType": "Bug",
+          "summary": "{{input.ticketTitle}}",
+          "description": "{{input.summary}}"
+        },
+        "notes": {
+          "family": "DevOps",
+          "what": "Creates or updates issues, sprints, and projects in Jira",
+          "overview": "Create, read, update, delete, search, transition, and comment on Jira Cloud issues. The node uses a Jira API-token connection and preserves incoming fields while adding operation-specific Jira fields.",
+          "tips": [
+            "Domain is the Atlassian host such as acme.atlassian.net; the runtime also accepts baseUrl aliases",
+            "Email and API token usually come from the saved Jira connection",
+            "Create Issue requires projectKey and summary",
+            "Search Issues requires jql and calls the Jira Cloud /rest/api/3/search/jql endpoint",
+            "Description and comments are converted to Atlassian Document Format before sending"
+          ],
+          "docsHref": "/docs/nodes/jira",
+          "why": "Creates a Jira ticket for triaged security findings after dedupe context is considered."
+        }
+      }
+    },
+    {
+      "id": "slack_security_alert",
+      "type": "custom",
+      "position": {
+        "x": 1700,
+        "y": 300
+      },
+      "data": {
+        "icon": "Hash",
+        "type": "slack_message",
+        "label": "Alert Security",
+        "category": "output",
+        "config": {
+          "channel": "#security-alerts",
+          "message": "Security finding {{input.severity}}: {{input.summary}}"
+        },
+        "notes": {
+          "family": "Communication",
+          "what": "Sends messages using a Slack app or bot connection",
+          "overview": "Send Slack bot messages to channels, direct messages, or existing threads through a saved Slack OAuth2 connection. Use it for workplace alerts, support replies, incident updates, approvals, report summaries, and deployment notifications.",
+          "tips": [
+            "Select a Slack OAuth2 connection; do not paste bot tokens into message fields",
+            "The Slack app needs chat:write, and the bot must be invited before it can post in private channels",
+            "Use {{$json.channelId}} and {{$json.threadTs}} from Slack Trigger to reply in the same conversation",
+            "Keep Message filled as readable fallback text even when Blocks contains a rich Block Kit layout",
+            "Connect downstream service accounts separately; Slack OAuth2 only authorizes the Slack send"
+          ],
+          "docsHref": "/docs/nodes/slack_message",
+          "why": "Notifies the security channel after the ticket is created."
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_1_webhook_intake_tool_security_dedupe",
+      "source": "webhook_intake",
+      "target": "tool_security_dedupe"
+    },
+    {
+      "id": "e_2_tool_security_dedupe_ai_agent",
+      "source": "tool_security_dedupe",
+      "target": "ai_agent",
+      "targetHandle": "tool"
+    },
+    {
+      "id": "e_3_webhook_intake_ai_agent",
+      "source": "webhook_intake",
+      "target": "ai_agent",
+      "targetHandle": "userInput"
+    },
+    {
+      "id": "e_4_ai_agent_js_parse_agent",
+      "source": "ai_agent",
+      "target": "js_parse_agent"
+    },
+    {
+      "id": "e_5_js_parse_agent_jira_security_ticket",
+      "source": "js_parse_agent",
+      "target": "jira_security_ticket"
+    },
+    {
+      "id": "e_6_jira_security_ticket_slack_security_alert",
+      "source": "jira_security_ticket",
+      "target": "slack_security_alert"
+    }
+  ],
+  "difficulty": "Intermediate",
+  "estimated_setup_time": 20,
+  "tags": [
+    "security",
+    "jira",
+    "webhook",
+    "slack",
+    "ai-agent"
+  ],
+  "is_featured": false,
+  "is_active": true,
+  "use_count": 0,
+  "version": 2
+}

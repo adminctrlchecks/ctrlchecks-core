@@ -93,6 +93,7 @@ import { ollamaDoc } from './nodes/ollama.doc';
 import { textSummarizerDoc } from './nodes/text_summarizer.doc';
 import { sentimentAnalyzerDoc } from './nodes/sentiment_analyzer.doc';
 import { chatModelDoc } from './nodes/chat_model.doc';
+import { chatSendDoc } from './nodes/chat_send.doc';
 import { cohereDoc } from './nodes/cohere.doc';
 import { huggingfaceDoc } from './nodes/huggingface.doc';
 import { memoryDoc } from './nodes/memory.doc';
@@ -270,6 +271,7 @@ export const allNodes: NodeDoc[] = [
   textSummarizerDoc,
   sentimentAnalyzerDoc,
   chatModelDoc,
+  chatSendDoc,
   cohereDoc,
   huggingfaceDoc,
   memoryDoc,

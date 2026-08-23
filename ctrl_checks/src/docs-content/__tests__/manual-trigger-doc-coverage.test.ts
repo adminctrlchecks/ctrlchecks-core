@@ -107,6 +107,7 @@ import { mathDoc } from '../nodes/math.doc';
 import { manualTriggerDoc } from '../nodes/manual_trigger.doc';
 import { mergeDoc } from '../nodes/merge.doc';
 import { mergeDataDoc } from '../nodes/merge_data.doc';
+import { chatSendDoc } from '../nodes/chat_send.doc';
 import { memoryDoc } from '../nodes/memory.doc';
 import { noopDoc } from '../nodes/noop.doc';
 import { stopAndErrorDoc } from '../nodes/stop_and_error.doc';
@@ -344,7 +345,7 @@ const AUDITED_NODE_DOCS: Array<{
     troubleshootingTerms: [
       'SAP node: endpoint is required (e.g. /sap/opu/odata/sap/API_SALES_ORDER_SRV/A_SalesOrder)',
       'SAP node: baseUrl is required (e.g. https://your-sap-host:44300)',
-      'SAP node: authentication required — provide accessToken (OAuth2) or username + password (Basic Auth)',
+      'SAP node: authentication required — provide accessToken (OAuth2), apiKey, or username + password (Basic Auth)',
       'SAP: DELETE failed (<status>): <details>',
       'SAP: <OPERATION> failed (<status>): <details>',
     ],
@@ -992,6 +993,17 @@ const AUDITED_NODE_DOCS: Array<{
       'Next node cannot find upstream fields',
     ],
     credentialKind: 'langchain_provider',
+  },
+  {
+    doc: chatSendDoc,
+    usageInputKeys: ['message', 'sessionId'],
+    outputDescriptionTerms: ['status', 'sessionId', 'message'],
+    troubleshootingTerms: [
+      'Chat Send node: Message is required',
+      'Chat Send node: Session ID is required. Connect this node to a Chat Trigger node to get the session ID, or provide it in the Session ID field.',
+      'Chat Send node: Failed to send message. Chat session <id> may not be connected.',
+      'Message appears twice in the chat',
+    ],
   },
   {
     doc: memoryDoc,
@@ -3602,7 +3614,7 @@ describe('audited node documentation coverage', () => {
           expect(connectionGuide).toMatch(/expires/i);
         } else if (credentialKind === 'odoo') {
           expect(connectionGuide).toMatch(/Odoo Credentials/i);
-          expect(connectionGuide).toMatch(/does not currently auto-fill|not currently wired/i);
+          expect(connectionGuide).toMatch(/auto-fill/i);
           expect(connectionGuide).toMatch(/API [Kk]ey/i);
           expect(connectionGuide).toMatch(/Database/i);
         } else if (credentialKind === 'pipedrive') {

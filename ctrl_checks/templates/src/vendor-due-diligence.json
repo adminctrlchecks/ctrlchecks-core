@@ -65,7 +65,7 @@
         "y": 300
       },
       "data": {
-        "icon": "Box",
+        "icon": "Globe",
         "type": "http_request",
         "label": "Fetch Vendor Website",
         "category": "http_api",
@@ -261,7 +261,7 @@
         "y": 395
       },
       "data": {
-        "icon": "Box",
+        "icon": "Database",
         "type": "mongodb",
         "label": "Archive Vendor Dossier",
         "category": "data",

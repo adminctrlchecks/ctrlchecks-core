@@ -1,7 +1,9 @@
 import type { NodeExecutionContext, NodeExecutionResult } from '../types/unified-node-contract';
+import type { FieldFillMode } from '../types/unified-node-contract';
 import type { NodeSchema } from '../../services/nodes/node-library';
 import { stripSystemKeys } from '../execution/system-key-filter';
 import { isFieldDisabledByOwner } from '../execution/runtime-field-contract';
+import { buildEffectiveFillModes } from '../utils/fill-mode-resolver';
 
 export type LegacyAdapterPrepared = {
   nodeOutputs: any;
@@ -24,6 +26,25 @@ function isEmptyCredentialValue(value: any): boolean {
   return value === undefined || value === null || (typeof value === 'string' && value.trim() === '');
 }
 
+function stripLegacyDisabledOwnerFields(config: Record<string, any>): void {
+  const fieldEnabled = config?._fieldEnabled;
+  if (!fieldEnabled || typeof fieldEnabled !== 'object' || Array.isArray(fieldEnabled)) return;
+
+  for (const [fieldName, enabled] of Object.entries(fieldEnabled)) {
+    if (enabled === false) {
+      delete config[fieldName];
+    }
+  }
+}
+
+function getLegacyInputSchema(context: NodeExecutionContext, schema: NodeSchema): Record<string, any> {
+  const contextSchema = (context as any).fieldContracts;
+  if (contextSchema && typeof contextSchema === 'object') {
+    return contextSchema;
+  }
+  return (schema as any).inputSchema || schema.configSchema?.optional || {};
+}
+
 /**
  * Merges resolved inputs into a legacy-path node's config, mutating `mergedConfig` in place.
  * Runtime-owned fields (runtime_ai / field_directive_ai / deterministic_runtime source)
@@ -39,8 +60,11 @@ function isEmptyCredentialValue(value: any): boolean {
 export function mergeLegacyResolvedInputs(
   mergedConfig: Record<string, any>,
   finalResolvedInputs: Record<string, any>,
-  inputSources: Record<string, string>
+  inputSources: Record<string, string>,
+  effectiveFillModes: Record<string, FieldFillMode> = {}
 ): void {
+  stripLegacyDisabledOwnerFields(mergedConfig);
+
   for (const [fieldName, value] of Object.entries(finalResolvedInputs)) {
     if (isFieldDisabledByOwner(fieldName, mergedConfig)) continue;
 
@@ -52,6 +76,10 @@ export function mergeLegacyResolvedInputs(
       mergedConfig[fieldName] = value;
       continue;
     }
+
+    const fillMode = effectiveFillModes[fieldName] || 'manual_static';
+    if (fillMode !== 'runtime_ai' && fillMode !== 'buildtime_ai_once') continue;
+
     const current = mergedConfig[fieldName];
     const isEmptyCurrent =
       current === undefined ||
@@ -197,7 +225,8 @@ export async function executeViaLegacyExecutor(args: {
         ? ((context as any).resolvedInputSources as Record<string, string>)
         : {};
     const finalResolvedInputs = ((context as any).finalResolvedInputs || context.inputs || {}) as Record<string, any>;
-    mergeLegacyResolvedInputs(mergedConfig, finalResolvedInputs, inputSources);
+    const effectiveFillModes = buildEffectiveFillModes(getLegacyInputSchema(context, schema), context.config || {});
+    mergeLegacyResolvedInputs(mergedConfig, finalResolvedInputs, inputSources, effectiveFillModes);
 
     // Default execution input is resolved inputs
     let prepared: LegacyAdapterPrepared = {
@@ -220,6 +249,7 @@ export async function executeViaLegacyExecutor(args: {
       ...prepared,
       mergedConfig: await injectDashboardCredential(context, prepared.mergedConfig),
     };
+    stripLegacyDisabledOwnerFields(prepared.mergedConfig);
 
     // Convert context to legacy node shape
     const node = {

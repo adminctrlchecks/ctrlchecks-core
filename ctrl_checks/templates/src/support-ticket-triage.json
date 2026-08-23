@@ -124,7 +124,7 @@
         "y": 205
       },
       "data": {
-        "icon": "Box",
+        "icon": "Database",
         "type": "postgresql",
         "label": "Create Support Ticket",
         "category": "data",
@@ -260,7 +260,7 @@
         "y": 395
       },
       "data": {
-        "icon": "Box",
+        "icon": "Database",
         "type": "mongodb",
         "label": "Archive Ticket Document",
         "category": "data",

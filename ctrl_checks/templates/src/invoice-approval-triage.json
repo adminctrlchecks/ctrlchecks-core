@@ -167,7 +167,7 @@
         "y": 300
       },
       "data": {
-        "icon": "Box",
+        "icon": "Database",
         "type": "postgresql",
         "label": "Log Invoice Decision",
         "category": "data",

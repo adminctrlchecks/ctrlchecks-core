@@ -72,13 +72,38 @@ const newTemplateIds = new Set();
 // ─────────────────────────────────────────────────────────────────────────────
 
 const ICONS = {
+  ai_agent: 'Bot',
+  ai_chat_model: 'Sparkles',
   javascript: 'Code',
   if_else: 'GitBranch',
   merge: 'GitMerge',
   airtable: 'Database',
+  postgresql: 'Database',
+  mongodb: 'Database',
+  google_sheets: 'Table',
+  google_doc: 'FileText',
+  google_drive: 'HardDrive',
+  google_gmail: 'Mail',
+  google_calendar: 'Calendar',
+  google_tasks: 'CheckSquare',
+  hubspot: 'Zap',
+  salesforce: 'Cloud',
+  pipedrive: 'CircleDollarSign',
+  shopify: 'ShoppingBag',
+  linkedin: 'Linkedin',
+  notion: 'BookOpen',
+  pinecone: 'Database',
+  qdrant: 'Database',
+  jira: 'Bug',
+  github: 'Github',
+  memory: 'Brain',
+  http_request: 'Globe',
+  sentiment_analyzer: 'Smile',
+  email: 'Mail',
+  telegram: 'Send',
+  discord: 'MessageCircle',
   loop: 'Repeat',
   chat_send: 'Send',
-  google_gmail: 'Mail',
   slack_message: 'Hash',
 };
 
@@ -222,6 +247,7 @@ const SECTORS = {
   healthcare: 'Healthcare & Clinics',
   finance: 'Finance, Accounting & Insurance',
   operations: 'Sales, Support & Internal Operations',
+  aiAgent: 'AI Agent',
 };
 
 function setSector(templateName, sector) {
@@ -244,11 +270,12 @@ function addTemplate(def) {
       generatedNodeNotes.set(`${s}.${n.id}`, n.why);
       return mkNode(n.id, n.type, n.label, n.category, n.config || {});
     }),
-    edges: def.edges.map(([source, target, sourceHandle], i) => ({
+    edges: def.edges.map(([source, target, sourceHandle, targetHandle], i) => ({
       id: `e_${i + 1}_${source}_${target}`,
       source,
       target,
       ...(sourceHandle ? { sourceHandle } : {}),
+      ...(targetHandle ? { targetHandle } : {}),
     })),
     difficulty: def.difficulty,
     estimated_setup_time: def.estimated_setup_time,
@@ -2551,6 +2578,625 @@ const expansionTemplates = [
 
 for (const [n, builder, spec] of expansionTemplates) builder(n, spec);
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// 2026-08 AI Agent workflow templates from docs/AI_AGENT_WORKFLOW_TEMPLATES.md.
+//
+// Source file was found in the active Claude worktree:
+// .claude/worktrees/frosty-chatelet-9e7a4f/docs/AI_AGENT_WORKFLOW_TEMPLATES.md
+//
+// The source sketches use true AI Agent tool/memory concepts. Templates below keep
+// writes as ordinary downstream nodes and attach only read-side context tools to
+// the agent, because attachment-source nodes are still ordinary executable graph
+// nodes in execute-workflow.ts. That preserves the documented agent behavior
+// without causing premature Slack/CRM/payment side effects.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function aiAgentExpansionId(n) {
+  return `93000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+}
+
+function aiTrigger(spec) {
+  if (spec.trigger === 'chat_trigger') {
+    return { id: 'chat_intake', type: 'chat_trigger', label: spec.triggerLabel || 'Receive Chat Message', category: 'triggers', config: {}, why: spec.triggerWhy || 'Starts the agent from one chat message and preserves the session data for replies.' };
+  }
+  if (spec.trigger === 'schedule') {
+    return { id: 'schedule_intake', type: 'schedule', label: spec.triggerLabel || 'Scheduled Run', category: 'triggers', config: { cron: spec.cron || '0 9 * * *', timezone: 'Asia/Kolkata' }, why: spec.triggerWhy || 'Runs the agent on a predictable schedule so the workflow does not depend on an unsupported vendor trigger.' };
+  }
+  if (spec.trigger === 'form') {
+    return { id: 'form_intake', type: 'form', label: spec.triggerLabel || 'Collect Request', category: 'triggers', config: { formTitle: spec.name, fields: formFields(spec.fields || ['name', 'email', 'details']), submitButtonText: 'Submit', successMessage: 'Received.' }, why: spec.triggerWhy || 'Collects one complete request through the native Form trigger, which is allowed by the template gate.' };
+  }
+  return { id: 'webhook_intake', type: 'webhook', label: spec.triggerLabel || 'Receive Event Payload', category: 'triggers', config: { path: `/${slug(spec.name)}`, httpMethod: 'POST', responseMode: 'onReceived' }, why: spec.triggerWhy || 'Receives one normalized payload from the source system through an allowed webhook trigger.' };
+}
+
+const parseAgentJsonCode = [
+  'const raw = input.response_text || input.output || input.response || input.text || input.content || "";',
+  'let parsed = {};',
+  'try {',
+  '  const match = String(raw).match(/\\{[\\s\\S]*\\}/);',
+  '  parsed = match ? JSON.parse(match[0]) : {};',
+  '} catch (error) {',
+  '  parsed = {};',
+  '}',
+  'const message = parsed.message || parsed.reply || parsed.emailBody || parsed.body || parsed.summary || String(raw);',
+  'return { ...input, ...parsed, responseText: String(raw), message };',
+].join('\n');
+
+function aiAgentNode(spec) {
+  return {
+    id: 'ai_agent',
+    type: 'ai_agent',
+    label: spec.agentLabel || 'AI Agent',
+    category: 'ai',
+    config: {
+      model: spec.model || 'gemini-3.5-flash',
+      temperature: spec.temperature ?? 0.2,
+      userInput: spec.userInput || 'Process this workflow input and any attached tool results: {{input}}',
+      systemPrompt: `${spec.systemPrompt} Return ONLY JSON with the fields named in this workflow.`,
+      outputFormat: 'json',
+      memoryScope: spec.memory ? (spec.memoryScope || 'conversation') : 'none',
+      requireApprovalFor: spec.requireApprovalFor || 'destructive',
+    },
+    why: spec.agentWhy || 'Applies the source AI-agent prompt to the current request and attached read-side context, returning structured JSON for deterministic downstream steps.',
+  };
+}
+
+function parseAgentNode() {
+  return { id: 'js_parse_agent', type: 'javascript', label: 'Parse Agent JSON', category: 'data', config: { code: parseAgentJsonCode, timeout: 5000 }, why: 'Turns the agent response into top-level fields before any branch or output node reads it.' };
+}
+
+function memoryForAgent(spec) {
+  return {
+    id: 'memory_context',
+    type: 'memory',
+    label: 'Conversation Memory',
+    category: 'ai',
+    config: { sessionId: spec.memorySession || '{{input.sessionId}}', maxMessages: spec.maxMessages || 20 },
+    why: spec.memoryWhy || 'Provides the agent a stable session key and recent-context window for multi-turn conversations.',
+  };
+}
+
+function sheetsReadTool(id, label, range, why) {
+  return { id, type: 'google_sheets', label, category: 'database', config: { operation: 'read', spreadsheetId: 'REPLACE_WITH_YOUR_GOOGLE_SHEET_ID', range }, why };
+}
+
+function airtableReadTool(id, label, tableId, filterByFormula, why) {
+  return { id, type: 'airtable', label, category: 'database', config: { baseId: '', tableId, operation: 'read', filterByFormula, maxRecords: 10 }, why };
+}
+
+function addAiAgentTemplate(n, spec) {
+  const trigger = aiTrigger(spec);
+  const tools = spec.tools || [];
+  const nodes = [
+    trigger,
+    ...(spec.memory ? [memoryForAgent(spec)] : []),
+    ...tools,
+    aiAgentNode(spec),
+    parseAgentNode(),
+    ...spec.steps,
+  ];
+  const edges = [
+    ...(spec.memory ? [[trigger.id, 'memory_context'], ['memory_context', 'ai_agent', undefined, 'memory']] : []),
+    ...tools.flatMap((tool) => [[trigger.id, tool.id], [tool.id, 'ai_agent', undefined, 'tool']]),
+    [trigger.id, 'ai_agent', undefined, 'userInput'],
+    ['ai_agent', 'js_parse_agent'],
+    ...spec.edges,
+  ];
+  addTemplate({
+    id: aiAgentExpansionId(n),
+    name: spec.name,
+    description: spec.description,
+    category: SECTORS.aiAgent,
+    difficulty: spec.difficulty || 'Intermediate',
+    estimated_setup_time: spec.time || 20,
+    tags: spec.tags,
+    nodes,
+    edges,
+  });
+}
+
+const supportCategory = SECTORS.operations;
+const marketingTags = ['marketing', 'ai-agent', 'approval', 'slack'];
+
+[
+  {
+    n: 1,
+    name: 'Multi-Channel Customer Support Agent',
+    category: supportCategory,
+    description: 'Receive support payloads from any channel, ground the answer in a verified ticket log, reply through HubSpot, and escalate uncertain cases to Slack.',
+    trigger: 'webhook',
+    memory: true,
+    memorySession: '{{input.customerId}}',
+    tools: [airtableReadTool('tool_ticket_history', 'Read Ticket History', 'SupportTickets', "SEARCH('{{input.customerEmail}}', {Email})", 'Replaces the blocked Zendesk lookup with a verified ticket-history table the agent can consult before answering.')],
+    systemPrompt: 'You are a support agent. Use the ticket-history tool result before drafting a reply. If the customer is angry, the issue is unsafe, or confidence is low, set needsHuman true.',
+    steps: [
+      { id: 'if_needs_human', type: 'if_else', label: 'Needs Human?', category: 'logic', config: { conditions: [{ field: '$json.needsHuman', operator: 'equals', value: true }], combineOperation: 'AND' }, why: 'Separates cases that should not be answered automatically from safe support replies.' },
+      slackNode('slack_escalate', 'Escalate to Support', '#support-escalations', 'Support escalation for {{input.customerEmail}}: {{input.summary}}', 'Routes low-confidence or angry customer issues to a human support queue.'),
+      { id: 'hubspot_log_reply', type: 'hubspot', label: 'Log Support Reply in HubSpot', category: 'crm', config: { resource: 'contact', operation: 'update', id: '{{input.customerId}}', properties: { last_support_summary: '{{input.summary}}', last_support_reply: '{{input.message}}' } }, why: 'Uses verified HubSpot instead of blocked Zendesk so the response history lands in a CRM record.' },
+    ],
+    edges: [['js_parse_agent', 'if_needs_human'], ['if_needs_human', 'slack_escalate', 'true'], ['if_needs_human', 'hubspot_log_reply', 'false']],
+    tags: ['support', 'ai-agent', 'hubspot', 'slack', 'webhook'],
+  },
+  {
+    n: 2,
+    name: 'Shopify Email Order Support Agent',
+    category: supportCategory,
+    description: 'Answer order-status requests from a webhook-fed support channel using Shopify lookup context and verified Gmail notifications.',
+    trigger: 'webhook',
+    memory: true,
+    memorySession: '{{input.customerEmail}}',
+    tools: [{ id: 'tool_shopify_order', type: 'shopify', label: 'Look Up Shopify Order', category: 'ecommerce', config: { resource: 'order', operation: 'get', id: '{{input.orderId}}' }, why: 'Keeps the source template Shopify lookup, but only as verified order context for the agent.' }],
+    systemPrompt: 'You are an order-status assistant for a Shopify store. Use the Shopify order context, give status and tracking if available, and never guess.',
+    steps: [
+      gmailNode('gmail_order_reply', 'Email Order Status', '{{input.customerEmail}}', 'Order status update', '{{input.message}}', 'Replaces the blocked WhatsApp reply with verified Gmail customer notification.'),
+      slackNode('slack_order_followup', 'Notify Support on Missing Order', '#support', 'Order lookup needs human follow-up: {{input.summary}}', 'Gives support a handoff when Shopify context is missing or ambiguous.'),
+    ],
+    edges: [['js_parse_agent', 'gmail_order_reply'], ['gmail_order_reply', 'slack_order_followup']],
+    tags: ['shopify', 'support', 'email', 'ai-agent', 'webhook'],
+  },
+  {
+    n: 3,
+    name: 'Website Chat Widget Support Agent',
+    category: supportCategory,
+    description: 'Answer website chat questions with a lightweight knowledge-base lookup and reply in the active chat session.',
+    trigger: 'chat_trigger',
+    memory: true,
+    memorySession: '{{input.sessionId}}',
+    tools: [{ id: 'tool_kb_lookup', type: 'http_request', label: 'Search Knowledge Base', category: 'http_api', config: { url: 'https://api.example.com/kb/search?q={{input.message}}', method: 'GET', timeout: 10000 }, why: 'Gives the agent current website FAQ context before it answers the visitor.' }],
+    systemPrompt: 'You are a concise website assistant. Use the knowledge-base lookup for product or pricing questions and keep answers under 100 words.',
+    steps: [ { id: 'chat_reply', type: 'chat_send', label: 'Reply in Chat', category: 'output', config: { message: '{{input.message}}' }, why: 'Returns the answer to the same chat session that asked the question.' } ],
+    edges: [['js_parse_agent', 'chat_reply']],
+    tags: ['chat', 'support', 'ai-agent', 'http', 'knowledge-base'],
+  },
+  {
+    n: 4,
+    name: 'Telegram Long-Term Memory Assistant',
+    category: supportCategory,
+    description: 'Run a personal Telegram assistant that remembers context and appends remembered notes to a Google Doc.',
+    trigger: 'telegram_trigger',
+    memory: true,
+    memoryScope: 'user',
+    memorySession: '{{input.userId}}',
+    tools: [{ id: 'tool_notes_doc', type: 'google_doc', label: 'Read Notes Doc', category: 'database', config: { operation: 'read', documentId: 'REPLACE_WITH_NOTES_DOC_ID', format: 'markdown' }, why: 'Lets the agent consult the user notes document before deciding what to remember or answer.' }],
+    systemPrompt: 'You are a personal assistant with long-term memory. If the user asks you to remember something, include a noteToSave field; otherwise answer naturally.',
+    steps: [
+      { id: 'google_doc_append_note', type: 'google_doc', label: 'Append Note if Needed', category: 'database', config: { operation: 'append', documentId: 'REPLACE_WITH_NOTES_DOC_ID', content: '{{input.noteToSave}}' }, why: 'Persists explicit remember-this requests into the user notes document.' },
+      { id: 'telegram_reply', type: 'telegram', label: 'Reply in Telegram', category: 'output', config: { chatId: '{{input.chatId}}', text: '{{input.message}}' }, why: 'Sends the assistant response back to the Telegram chat.' },
+    ],
+    edges: [['js_parse_agent', 'google_doc_append_note'], ['google_doc_append_note', 'telegram_reply']],
+    tags: ['telegram', 'memory', 'google-docs', 'assistant', 'ai-agent'],
+  },
+  {
+    n: 5,
+    name: 'Discord Community FAQ Agent',
+    category: supportCategory,
+    description: 'Accept Discord support-channel payloads by webhook, consult a pinned FAQ doc, and answer in Discord with moderation-sensitive guardrails.',
+    trigger: 'webhook',
+    memory: true,
+    memorySession: '{{input.threadId}}',
+    tools: [{ id: 'tool_faq_doc', type: 'google_doc', label: 'Read FAQ Doc', category: 'database', config: { operation: 'read', documentId: 'REPLACE_WITH_FAQ_DOC_ID', format: 'markdown' }, why: 'Replaces a native Discord trigger with webhook intake while preserving the FAQ-document grounding.' }],
+    systemPrompt: 'You are a community FAQ bot. Answer only from the FAQ context. For moderation, bans, or account-specific issues, set needsHuman true.',
+    steps: [
+      { id: 'if_discord_handoff', type: 'if_else', label: 'Needs Moderator?', category: 'logic', config: { conditions: [{ field: '$json.needsHuman', operator: 'equals', value: true }], combineOperation: 'AND' }, why: 'Keeps moderation-sensitive questions out of automated replies.' },
+      slackNode('slack_mod_handoff', 'Notify Moderators', '#community-mods', 'Discord FAQ handoff: {{input.summary}}', 'Alerts moderators when the FAQ bot should not answer directly.'),
+      { id: 'discord_reply', type: 'discord', label: 'Reply in Discord', category: 'output', config: { channelId: '{{input.channelId}}', message: '{{input.message}}' }, why: 'Sends FAQ-safe answers back to the Discord channel.' },
+    ],
+    edges: [['js_parse_agent', 'if_discord_handoff'], ['if_discord_handoff', 'slack_mod_handoff', 'true'], ['if_discord_handoff', 'discord_reply', 'false']],
+    tags: ['discord', 'faq', 'webhook', 'community', 'ai-agent'],
+  },
+  {
+    n: 6,
+    name: 'Google Calendar Scheduling Assistant',
+    category: supportCategory,
+    description: 'Let a user ask for scheduling help in chat, check calendar context, and draft a booking confirmation for approval-safe calendar handling.',
+    trigger: 'chat_trigger',
+    memory: true,
+    memorySession: '{{input.sessionId}}',
+    requireApprovalFor: 'write_and_destructive',
+    tools: [{ id: 'tool_calendar_read', type: 'google_calendar', label: 'Read Calendar Availability', category: 'database', config: { resource: 'event', operation: 'list', calendarId: 'primary', maxResults: 10 }, why: 'Google Calendar is verified working; this read context lets the agent reason about availability before drafting a booking.' }],
+    systemPrompt: 'You are a scheduling assistant. Check availability context, propose a final time, and set readyToBook true only when the user has clearly confirmed.',
+    steps: [
+      { id: 'if_ready_to_book', type: 'if_else', label: 'Ready to Book?', category: 'logic', config: { conditions: [{ field: '$json.readyToBook', operator: 'equals', value: true }], combineOperation: 'AND' }, why: 'Prevents calendar writes until the agent sees explicit confirmation.' },
+      { id: 'calendar_create_event', type: 'google_calendar', label: 'Create Calendar Event', category: 'database', config: { resource: 'event', operation: 'create', calendarId: 'primary', summary: '{{input.summary}}', start: '{{input.startTime}}', end: '{{input.endTime}}' }, why: 'Creates the confirmed calendar event using the verified Google Calendar action node.' },
+      { id: 'chat_schedule_reply', type: 'chat_send', label: 'Reply in Chat', category: 'output', config: { message: '{{input.message}}' }, why: 'Confirms the proposed or booked time in the same chat session.' },
+    ],
+    edges: [['js_parse_agent', 'if_ready_to_book'], ['if_ready_to_book', 'calendar_create_event', 'true'], ['if_ready_to_book', 'chat_schedule_reply', 'false'], ['calendar_create_event', 'chat_schedule_reply']],
+    tags: ['calendar', 'scheduling', 'chat', 'ai-agent', 'google'],
+  },
+  {
+    n: 7,
+    name: 'Personal Daily Digest Assistant',
+    category: supportCategory,
+    description: 'Build a weekday morning digest from unread Gmail and calendar context, then post it to Slack.',
+    trigger: 'schedule',
+    cron: '0 7 * * 1-5',
+    requireApprovalFor: 'none',
+    tools: [
+      { id: 'tool_unread_gmail', type: 'google_gmail', label: 'Read Unread Gmail', category: 'output', config: { operation: 'search', query: 'is:unread newer_than:1d' }, why: 'Supplies unread-mail context for the morning digest.' },
+      { id: 'tool_today_calendar', type: 'google_calendar', label: 'Read Today Calendar', category: 'database', config: { resource: 'event', operation: 'list', calendarId: 'primary', maxResults: 10 }, why: 'Supplies calendar context for the morning schedule section.' },
+    ],
+    systemPrompt: 'Summarize today in a concise morning briefing: three email highlights and the day schedule.',
+    steps: [slackNode('slack_daily_digest', 'Post Daily Digest', '#daily-digest', '{{input.message}}', 'Publishes the daily briefing to the personal digest channel.')],
+    edges: [['js_parse_agent', 'slack_daily_digest']],
+    tags: ['daily-digest', 'gmail', 'calendar', 'slack', 'ai-agent'],
+  },
+  {
+    n: 8,
+    name: 'AI Data Analyst Chatbot',
+    category: supportCategory,
+    description: 'Answer analyst questions in chat using read-only PostgreSQL query context and return a plain-language explanation.',
+    trigger: 'chat_trigger',
+    memory: true,
+    tools: [{ id: 'tool_sql_read', type: 'postgresql', label: 'Run Read-Only SQL Context', category: 'database', config: { query: "SELECT 'Use a read-only analytics role and replace this with a safe SELECT for {{input.message}}' AS guidance" }, why: 'Provides read-only warehouse context; production users should connect a role that cannot mutate data.' }],
+    systemPrompt: 'You are a data analyst. Use only read-only SQL context, explain numbers plainly, and set needsFollowup true if the question cannot be answered from available rows.',
+    steps: [
+      { id: 'chat_data_answer', type: 'chat_send', label: 'Reply with Analysis', category: 'output', config: { message: '{{input.message}}' }, why: 'Returns the analysis to the analyst in chat.' },
+    ],
+    edges: [['js_parse_agent', 'chat_data_answer']],
+    tags: ['data', 'postgresql', 'chat', 'analytics', 'ai-agent'],
+  },
+  {
+    n: 9,
+    name: 'RAG Document Q&A Agent',
+    category: supportCategory,
+    description: 'Answer document questions from a Pinecone knowledge base; Drive ingestion is handled by a scheduled poll variant instead of an unsupported Drive trigger.',
+    trigger: 'chat_trigger',
+    memory: true,
+    tools: [{ id: 'tool_pinecone_query', type: 'pinecone', label: 'Query Pinecone Knowledge Base', category: 'database', config: { operation: 'query', index: 'REPLACE_WITH_PINECONE_INDEX', vector: '{{input.embedding}}', topK: 5 }, why: 'Uses Pinecone as the verified vector lookup tool for the Q&A side of the RAG pattern.' }],
+    systemPrompt: 'Answer only from the Pinecone knowledge-base context. Cite the source chunk when possible, and say you do not know if nothing relevant is present.',
+    steps: [{ id: 'chat_rag_answer', type: 'chat_send', label: 'Reply with Cited Answer', category: 'output', config: { message: '{{input.message}}' }, why: 'Returns the grounded RAG answer in the active chat session.' }],
+    edges: [['js_parse_agent', 'chat_rag_answer']],
+    tags: ['rag', 'pinecone', 'chat', 'knowledge-base', 'ai-agent'],
+  },
+  {
+    n: 10,
+    name: 'Company Policy Chatbot',
+    category: supportCategory,
+    description: 'Let employees submit policy questions through a form, query Qdrant policy context, and return an HR-safe answer by email.',
+    trigger: 'form',
+    fields: ['employeeEmail', 'question', 'department'],
+    memory: true,
+    tools: [{ id: 'tool_qdrant_policy', type: 'qdrant', label: 'Query Policy Collection', category: 'database', config: { operation: 'query', url: 'https://REPLACE_WITH_QDRANT_ENDPOINT', collection: 'company_policy', vector: '{{input.embedding}}', limit: 5 }, why: 'Preserves the policy-RAG design while replacing the unsupported Slack trigger with native form intake.' }],
+    systemPrompt: 'You are the HR policy assistant. Answer only from policy context. For pay, disciplinary matters, or individual leave balances, route to HR.',
+    steps: [gmailNode('gmail_policy_answer', 'Email Policy Answer', '{{input.employeeEmail}}', 'Policy assistant response', '{{input.message}}', 'Sends the policy answer to the employee without relying on an unsupported Slack trigger.')],
+    edges: [['js_parse_agent', 'gmail_policy_answer']],
+    tags: ['policy', 'qdrant', 'hr', 'form', 'ai-agent'],
+  },
+  {
+    n: 11,
+    name: 'Multi-Platform Sales Agent',
+    category: supportCategory,
+    description: 'Handle inbound sales payloads, use CRM and calendar context, log the conversation in Pipedrive, and notify sales.',
+    trigger: 'webhook',
+    memory: true,
+    memorySession: '{{input.contactId}}',
+    tools: [
+      { id: 'tool_pipedrive_lookup', type: 'pipedrive', label: 'Read Pipedrive Lead Context', category: 'crm', config: { resource: 'deals', operation: 'search', data: { term: '{{input.email}}' } }, why: 'Gives the agent CRM context before it drafts qualification and next steps.' },
+      { id: 'tool_calendar_slots', type: 'google_calendar', label: 'Read Booking Availability', category: 'database', config: { resource: 'event', operation: 'list', calendarId: 'primary', maxResults: 10 }, why: 'Lets the agent offer realistic booking windows without using an unverified calendar substitute.' },
+    ],
+    systemPrompt: 'You are a sales development rep. Answer product questions, qualify intent, and recommend booking only when the lead shows real intent.',
+    steps: [
+      { id: 'pipedrive_log_note', type: 'pipedrive', label: 'Log Sales Note', category: 'crm', config: { resource: 'deals', operation: 'update', id: '{{input.dealId}}', data: { note: '{{input.summary}}' } }, why: 'Logs the sales conversation in the CRM as a guaranteed downstream write.' },
+      slackNode('slack_sales_notify', 'Notify Sales', '#sales', 'Sales agent handled {{input.email}}: {{input.summary}}', 'Alerts sales that the conversation was qualified and logged.'),
+    ],
+    edges: [['js_parse_agent', 'pipedrive_log_note'], ['pipedrive_log_note', 'slack_sales_notify']],
+    tags: ['sales', 'pipedrive', 'calendar', 'webhook', 'ai-agent'],
+  },
+  {
+    n: 12,
+    name: 'Lead Qualification & Nurturing Agent',
+    category: supportCategory,
+    description: 'Use a native form intake for BANT qualification, update HubSpot, and send tier-appropriate nurture email.',
+    trigger: 'form',
+    fields: ['name', 'email', 'company', 'budget', 'timeline', 'need'],
+    tools: [{ id: 'tool_hubspot_contact', type: 'hubspot', label: 'Read Existing HubSpot Contact', category: 'crm', config: { resource: 'contact', operation: 'get', properties: { email: '{{input.email}}' } }, why: 'Replaces Typeform Trigger with Form while preserving the HubSpot history lookup.' }],
+    systemPrompt: 'Score this lead 0-100 from Budget, Authority, Need, and Timeline. Return score, tier hot/warm/cold, reasoning, and follow-up copy.',
+    steps: [
+      { id: 'hubspot_upsert_lead', type: 'hubspot', label: 'Update HubSpot Lead', category: 'crm', config: { resource: 'contact', operation: 'create', properties: { email: '{{input.email}}', firstname: '{{input.name}}', company: '{{input.company}}', lead_score: '{{input.score}}', lead_tier: '{{input.tier}}' } }, why: 'Writes the score and tier to the CRM exactly once after the agent decides.' },
+      gmailNode('gmail_nurture_lead', 'Send Nurture Email', '{{input.email}}', 'Thanks for your interest', '{{input.message}}', 'Sends the tier-appropriate follow-up to the lead.'),
+    ],
+    edges: [['js_parse_agent', 'hubspot_upsert_lead'], ['hubspot_upsert_lead', 'gmail_nurture_lead']],
+    tags: ['lead-qualification', 'hubspot', 'form', 'sales', 'ai-agent'],
+  },
+  {
+    n: 13,
+    name: 'Inbound Email Sales Agent',
+    category: supportCategory,
+    description: 'Receive sales-email payloads by webhook, score intent with Salesforce context, and alert reps for hot leads.',
+    trigger: 'webhook',
+    memory: true,
+    memorySession: '{{input.threadId}}',
+    tools: [{ id: 'tool_salesforce_lookup', type: 'salesforce', label: 'Search Salesforce Opportunities', category: 'crm', config: { operation: 'query', soql: "SELECT Id, Name, StageName FROM Opportunity WHERE ContactEmail__c = '{{input.from}}' LIMIT 5" }, why: 'Keeps the source Salesforce history lookup while replacing the unsupported Gmail trigger with webhook intake.' }],
+    systemPrompt: 'Read this inbound sales email. Score intent hot/warm/cold, draft a reply, and include opportunity_id if context provides one.',
+    steps: [
+      { id: 'if_hot_lead', type: 'if_else', label: 'Hot Lead?', category: 'logic', config: { conditions: [{ field: '$json.tier', operator: 'equals', value: 'hot' }], combineOperation: 'AND' }, why: 'Hot leads need immediate human follow-up while other replies can be logged silently.' },
+      slackNode('slack_hot_lead', 'Alert Sales Rep', '#hot-leads', 'Hot sales email from {{input.from}}: {{input.summary}}\nDraft: {{input.message}}', 'Alerts reps only for high-intent sales replies.'),
+      { id: 'salesforce_log_activity', type: 'salesforce', label: 'Log Sales Activity', category: 'crm', config: { operation: 'create', resource: 'Task', fields: { Subject: 'Inbound email handled by CtrlChecks', Description: '{{input.summary}}' } }, why: 'Logs every inbound sales interaction in Salesforce after classification.' },
+    ],
+    edges: [['js_parse_agent', 'if_hot_lead'], ['if_hot_lead', 'slack_hot_lead', 'true'], ['if_hot_lead', 'salesforce_log_activity', 'false'], ['slack_hot_lead', 'salesforce_log_activity']],
+    tags: ['sales-email', 'salesforce', 'webhook', 'slack', 'ai-agent'],
+  },
+  {
+    n: 14,
+    name: 'LinkedIn Outreach Personalization Agent',
+    category: supportCategory,
+    description: 'Read one outreach lead from Sheets, draft a personalized LinkedIn note, send it through LinkedIn, and mark the row handled.',
+    trigger: 'schedule',
+    cron: '0 9 * * 1-5',
+    tools: [sheetsReadTool('tool_outreach_queue', 'Read Outreach Queue', 'Outreach Queue!A:Z', 'Feeds the agent one queue of leads to personalize against.')],
+    systemPrompt: 'Write a short LinkedIn connection note under 300 characters using profile and company clues from the outreach queue.',
+    steps: [
+      { id: 'linkedin_send_note', type: 'linkedin', label: 'Send LinkedIn Note', category: 'output', config: { operation: 'create_post', text: '{{input.message}}' }, why: 'Keeps the verified LinkedIn leg from the source marketing/sales pattern.' },
+      slackNode('slack_outreach_log', 'Log Outreach', '#sales', 'LinkedIn outreach drafted/sent: {{input.summary}}', 'Gives sales a visible audit trail for automated outreach.'),
+    ],
+    edges: [['js_parse_agent', 'linkedin_send_note'], ['linkedin_send_note', 'slack_outreach_log']],
+    tags: ['linkedin', 'outreach', 'sales', 'google-sheets', 'ai-agent'],
+  },
+  {
+    n: 15,
+    name: 'GitHub Issue to Engineering Triage Agent',
+    category: supportCategory,
+    description: 'Receive GitHub issue webhooks, classify severity and category, log the triage in PostgreSQL, and alert engineering.',
+    trigger: 'webhook',
+    tools: [{ id: 'tool_related_issues', type: 'http_request', label: 'Fetch Related Issue Context', category: 'http_api', config: { url: '{{input.relatedIssuesUrl}}', method: 'GET', timeout: 10000 }, why: 'Avoids blocked GitHub Trigger and avoids a direct issue-tracker write while still letting the agent inspect related issue context.' }],
+    systemPrompt: 'Classify this issue as bug, feature, docs, or question with priority critical/high/medium/low and a one-line engineering summary.',
+    steps: [
+      postgresqlNode('postgres_log_issue', 'Log Issue Triage', "INSERT INTO issue_triage (source, title, priority, category, summary, created_at) VALUES ('github', '{{input.title}}', '{{input.priority}}', '{{input.category}}', '{{input.summary}}', now())", 'Stores the triage result instead of creating Jira directly, matching the existing GitHub-trigger rework precedent.'),
+      slackNode('slack_issue_triage', 'Notify Engineering', '#engineering', 'Issue triage: {{input.priority}} / {{input.category}} - {{input.summary}}', 'Alerts engineering with the classified issue summary.'),
+    ],
+    edges: [['js_parse_agent', 'postgres_log_issue'], ['postgres_log_issue', 'slack_issue_triage']],
+    tags: ['github', 'issues', 'webhook', 'postgresql', 'slack'],
+  },
+  {
+    n: 16,
+    name: 'Incident Triage & SLA Agent',
+    category: supportCategory,
+    description: 'Assess monitoring alerts, log SLA expectations to Sheets, and page Slack only for critical incidents.',
+    trigger: 'webhook',
+    tools: [{ id: 'tool_incident_history', type: 'jira', label: 'Search Incident History', category: 'devops', config: { operation: 'search_issues', jql: "project = OPS AND text ~ '{{input.alertName}}'" }, why: 'Uses Jira as read-side incident context before the agent assigns severity.' }],
+    systemPrompt: 'Assess this monitoring alert severity and SLA deadline. Return severity, slaMinutes, summary, and message.',
+    steps: [
+      { id: 'sheets_log_sla', type: 'google_sheets', label: 'Log SLA Row', category: 'database', config: { operation: 'append', spreadsheetId: 'REPLACE_WITH_YOUR_GOOGLE_SHEET_ID', range: 'SLA Tracker!A:E', values: '{{input.summary}}' }, why: 'Creates the SLA audit row for every incident triage.' },
+      { id: 'if_critical_incident', type: 'if_else', label: 'Critical Incident?', category: 'logic', config: { conditions: [{ field: '$json.severity', operator: 'equals', value: 'critical' }], combineOperation: 'AND' }, why: 'Separates paging incidents from normal incident notifications.' },
+      slackNode('slack_page_incident', 'Page Incident Channel', '#incidents', '<!here> Critical incident: {{input.summary}}', 'Pages the team only for critical incidents.'),
+      slackNode('slack_incident_notice', 'Post Incident Notice', '#incidents', 'Incident triage: {{input.severity}} - {{input.summary}}', 'Posts a quieter notice for non-critical alerts.'),
+    ],
+    edges: [['js_parse_agent', 'sheets_log_sla'], ['sheets_log_sla', 'if_critical_incident'], ['if_critical_incident', 'slack_page_incident', 'true'], ['if_critical_incident', 'slack_incident_notice', 'false']],
+    tags: ['incident', 'sla', 'jira', 'sheets', 'ai-agent'],
+  },
+  {
+    n: 17,
+    name: 'Security Bug Alert Triage Agent',
+    category: supportCategory,
+    description: 'Triage scanner findings, dedupe against Jira context, create a security ticket, and alert Slack.',
+    trigger: 'webhook',
+    tools: [{ id: 'tool_security_dedupe', type: 'jira', label: 'Search Existing Security Tickets', category: 'devops', config: { operation: 'search_issues', jql: "labels = security AND text ~ '{{input.ruleId}}'" }, why: 'Checks for existing security tickets before downstream ticket creation.' }],
+    systemPrompt: 'Assess this security scanner finding for true-positive likelihood and severity. Return truePositive, severity, summary, and ticketTitle.',
+    steps: [
+      { id: 'jira_security_ticket', type: 'jira', label: 'Create Security Ticket', category: 'devops', config: { operation: 'create_issue', projectKey: 'SEC', issueType: 'Bug', summary: '{{input.ticketTitle}}', description: '{{input.summary}}' }, why: 'Creates a Jira ticket for triaged security findings after dedupe context is considered.' },
+      slackNode('slack_security_alert', 'Alert Security', '#security-alerts', 'Security finding {{input.severity}}: {{input.summary}}', 'Notifies the security channel after the ticket is created.'),
+    ],
+    edges: [['js_parse_agent', 'jira_security_ticket'], ['jira_security_ticket', 'slack_security_alert']],
+    tags: ['security', 'jira', 'webhook', 'slack', 'ai-agent'],
+  },
+  {
+    n: 18,
+    name: 'GitHub PR Review Summary Agent',
+    category: supportCategory,
+    description: 'Receive pull-request webhooks, fetch the diff URL, summarize review risk, and notify engineering without using GitHub action nodes.',
+    trigger: 'webhook',
+    model: 'claude-3-5-sonnet',
+    tools: [{ id: 'tool_pr_diff', type: 'http_request', label: 'Fetch PR Diff', category: 'http_api', config: { url: '{{input.diffUrl}}', method: 'GET', timeout: 10000 }, why: 'Copies the existing safe PR-review approach: webhook plus diff URL fetch instead of GitHub Trigger/GitHub action nodes.' }],
+    systemPrompt: 'Summarize this pull request for reviewers: what changed, why it matters, and risk areas. Keep it under 200 words.',
+    steps: [
+      postgresqlNode('postgres_log_pr_review', 'Log PR Review Summary', "INSERT INTO pr_review_summaries (repo, pr_url, summary, created_at) VALUES ('{{input.repository}}', '{{input.prUrl}}', '{{input.summary}}', now())", 'Stores the review summary for audit without posting back through the GitHub node.'),
+      slackNode('slack_pr_summary', 'Notify Engineering', '#engineering', 'PR review summary for {{input.prUrl}}:\n{{input.summary}}', 'Delivers the summary to reviewers through the verified Slack node.'),
+    ],
+    edges: [['js_parse_agent', 'postgres_log_pr_review'], ['postgres_log_pr_review', 'slack_pr_summary']],
+    tags: ['github', 'pull-request', 'webhook', 'slack', 'ai-agent'],
+  },
+  {
+    n: 19,
+    name: 'Invoice Data Extraction Agent',
+    category: SECTORS.finance,
+    description: 'Receive invoice email payloads by webhook, extract structured invoice fields, and append the result to Google Sheets without Xero.',
+    trigger: 'webhook',
+    model: 'gpt-4o',
+    temperature: 0.1,
+    tools: [sheetsReadTool('tool_invoice_history', 'Read Invoice Log', 'Invoice Log!A:Z', 'Provides existing invoice-log context for duplicate detection while replacing the unsupported Gmail Trigger.')],
+    systemPrompt: 'Extract vendor, invoice number, date, subtotal, tax, total, currency, and duplicate risk from this invoice payload. Use null for missing fields.',
+    steps: [
+      { id: 'sheets_log_invoice', type: 'google_sheets', label: 'Append Invoice Row', category: 'database', config: { operation: 'append', spreadsheetId: 'REPLACE_WITH_YOUR_GOOGLE_SHEET_ID', range: 'Invoice Log!A:H', values: '{{input.summary}}' }, why: 'Ends at the verified Google Sheets log because Xero is blocked by the investor audit.' },
+      slackNode('slack_invoice_review', 'Notify AP', '#finance', 'Invoice extracted: {{input.summary}}', 'Notifies AP that a new invoice row was created.'),
+    ],
+    edges: [['js_parse_agent', 'sheets_log_invoice'], ['sheets_log_invoice', 'slack_invoice_review']],
+    tags: ['invoice', 'webhook', 'google-sheets', 'finance', 'ai-agent'],
+  },
+  {
+    n: 20,
+    name: 'Expense Receipt Tracker Agent',
+    category: SECTORS.finance,
+    description: 'Extract receipt details from Telegram submissions, append them to an expense sheet, and confirm in Telegram.',
+    trigger: 'telegram_trigger',
+    memory: true,
+    memoryScope: 'user',
+    memorySession: '{{input.userId}}',
+    tools: [sheetsReadTool('tool_expense_sheet', 'Read Recent Expenses', 'Expenses!A:Z', 'Lets the agent compare against recent expenses when extracting a new receipt.')],
+    systemPrompt: 'Extract merchant, amount, currency, category, and date from this receipt text or payload. Return a concise confirmation message.',
+    steps: [
+      { id: 'sheets_append_expense', type: 'google_sheets', label: 'Append Expense Row', category: 'database', config: { operation: 'append', spreadsheetId: 'REPLACE_WITH_YOUR_GOOGLE_SHEET_ID', range: 'Expenses!A:F', values: '{{input.summary}}' }, why: 'Stores the structured receipt in the shared expense sheet.' },
+      { id: 'telegram_expense_ack', type: 'telegram', label: 'Confirm in Telegram', category: 'output', config: { chatId: '{{input.chatId}}', text: '{{input.message}}' }, why: 'Confirms the logged receipt back to the employee.' },
+    ],
+    edges: [['js_parse_agent', 'sheets_append_expense'], ['sheets_append_expense', 'telegram_expense_ack']],
+    tags: ['telegram', 'expenses', 'google-sheets', 'finance', 'ai-agent'],
+  },
+  {
+    n: 21,
+    name: 'Meeting Notes & Action-Item Agent',
+    category: supportCategory,
+    description: 'Turn a meeting transcript into one Google Doc notes block and a Slack recap, avoiding per-item Google Tasks fan-out.',
+    trigger: 'webhook',
+    systemPrompt: 'Summarize this meeting transcript into key decisions, a discussion summary, and one formatted action-items block with owners and due dates. Do not return an array.',
+    steps: [
+      { id: 'google_doc_meeting_notes', type: 'google_doc', label: 'Create Meeting Notes Doc', category: 'database', config: { operation: 'create', title: 'Meeting Notes - {{input.meetingTitle}}', content: '{{input.message}}' }, why: 'Stores all action items as one document block, avoiding the forbidden per-item fan-out pattern.' },
+      slackNode('slack_meeting_recap', 'Post Meeting Recap', '#team-updates', '{{input.summary}}', 'Shares the meeting summary and action block with the team in one message.'),
+    ],
+    edges: [['js_parse_agent', 'google_doc_meeting_notes'], ['google_doc_meeting_notes', 'slack_meeting_recap']],
+    tags: ['meetings', 'google-docs', 'slack', 'productivity', 'ai-agent'],
+  },
+  {
+    n: 22,
+    name: 'HR New-Hire Provisioning Agent',
+    category: supportCategory,
+    description: 'Use native Form intake for new hires, query Notion onboarding templates, create the onboarding page, and notify the team.',
+    trigger: 'form',
+    fields: ['newHireName', 'newHireEmail', 'role', 'team', 'managerEmail'],
+    tools: [{ id: 'tool_notion_template', type: 'notion', label: 'Read Role Template', category: 'database', config: { operation: 'query_database', databaseId: 'REPLACE_WITH_ONBOARDING_TEMPLATE_DB', filter: '{{input.role}}' }, why: 'Preserves the source Notion template lookup while replacing Typeform Trigger with Form.' }],
+    systemPrompt: 'Draft a warm welcome package and first-week checklist for this new hire based on role and team.',
+    steps: [
+      { id: 'notion_create_onboarding', type: 'notion', label: 'Create Onboarding Page', category: 'database', config: { operation: 'create_page', databaseId: 'REPLACE_WITH_ONBOARDING_DB', title: '{{input.newHireName}} onboarding', content: '{{input.message}}' }, why: 'Creates the onboarding page as the durable workspace for the new hire.' },
+      gmailNode('gmail_welcome_hire', 'Email New Hire', '{{input.newHireEmail}}', 'Welcome to the team', '{{input.message}}', 'Sends the welcome package to the new hire.'),
+      slackNode('slack_new_hire', 'Notify People Ops', '#new-hires', 'New hire onboarding created for {{input.newHireName}}', 'Notifies the team that onboarding has started.'),
+    ],
+    edges: [['js_parse_agent', 'notion_create_onboarding'], ['notion_create_onboarding', 'gmail_welcome_hire'], ['gmail_welcome_hire', 'slack_new_hire']],
+    tags: ['hr', 'onboarding', 'notion', 'form', 'ai-agent'],
+  },
+  {
+    n: 23,
+    name: 'Resume Screening Agent',
+    category: supportCategory,
+    description: 'Receive resume payloads by webhook, score fit against role requirements, log candidates, and alert recruiters for strong matches.',
+    trigger: 'webhook',
+    model: 'gpt-4o',
+    temperature: 0.1,
+    tools: [sheetsReadTool('tool_role_requirements', 'Read Role Requirements', 'Role Requirements!A:Z', 'Replaces Gmail Trigger with webhook intake while preserving role-requirement context.')],
+    systemPrompt: 'Screen this resume against the role requirements. Return score, rationale, standout skills, and strongMatch true when score is at least 80.',
+    steps: [
+      { id: 'sheets_log_candidate', type: 'google_sheets', label: 'Append Candidate Row', category: 'database', config: { operation: 'append', spreadsheetId: 'REPLACE_WITH_YOUR_GOOGLE_SHEET_ID', range: 'Candidates!A:F', values: '{{input.summary}}' }, why: 'Logs every screened candidate in the recruiting tracker.' },
+      { id: 'if_strong_candidate', type: 'if_else', label: 'Strong Match?', category: 'logic', config: { conditions: [{ field: '$json.strongMatch', operator: 'equals', value: true }], combineOperation: 'AND' }, why: 'Only strong candidate matches alert recruiters immediately.' },
+      slackNode('slack_recruiting_ping', 'Ping Recruiter', '#recruiting', 'Strong candidate: {{input.summary}}', 'Alerts recruiting for high-scoring resumes.'),
+    ],
+    edges: [['js_parse_agent', 'sheets_log_candidate'], ['sheets_log_candidate', 'if_strong_candidate'], ['if_strong_candidate', 'slack_recruiting_ping', 'true']],
+    tags: ['resume', 'recruiting', 'webhook', 'google-sheets', 'ai-agent'],
+  },
+  {
+    n: 24,
+    name: 'Social Media Repurposing Agent',
+    category: supportCategory,
+    description: 'Repurpose a latest content feed item into LinkedIn copy and manual-posting drafts for blocked X/Instagram channels.',
+    trigger: 'schedule',
+    cron: '0 8 * * *',
+    tools: [{ id: 'tool_latest_content', type: 'http_request', label: 'Fetch Latest Content', category: 'http_api', config: { url: 'https://example.com/feed/latest', method: 'GET', timeout: 10000 }, why: 'Fetches the content source for repurposing without relying on social-listening nodes.' }],
+    systemPrompt: 'Repurpose this article into LinkedIn copy plus X and Instagram draft copy for manual posting. Return linkedin, xDraft, instagramDraft, and summary.',
+    steps: [
+      { id: 'linkedin_publish_post', type: 'linkedin', label: 'Publish LinkedIn Post', category: 'output', config: { operation: 'create_post', text: '{{input.linkedin}}' }, why: 'Keeps the verified LinkedIn publishing leg from the source template.' },
+      slackNode('slack_manual_social_drafts', 'Send Manual Social Drafts', '#content-review', 'Manual X/Instagram drafts:\nX: {{input.xDraft}}\nInstagram: {{input.instagramDraft}}', 'Replaces blocked Twitter and Instagram publishing with reviewable manual-posting drafts.'),
+    ],
+    edges: [['js_parse_agent', 'linkedin_publish_post'], ['linkedin_publish_post', 'slack_manual_social_drafts']],
+    tags: ['social', 'linkedin', 'manual-posting', 'marketing', 'ai-agent'],
+  },
+  {
+    n: 25,
+    name: 'Social Post Approval Agent',
+    category: supportCategory,
+    description: 'Draft social copy from a brief, request Slack approval, and publish only the verified LinkedIn leg while preserving X as a manual draft.',
+    trigger: 'form',
+    fields: ['campaignName', 'brief', 'brandVoice', 'reviewerEmail'],
+    systemPrompt: 'Draft LinkedIn and X posts from this content brief in the requested brand voice. Return approved false by default, linkedin, xDraft, and summary.',
+    steps: [
+      slackNode('slack_content_review', 'Request Content Review', '#content-review', 'Review social drafts for {{input.campaignName}}:\nLinkedIn: {{input.linkedin}}\nX draft: {{input.xDraft}}', 'Creates the human review step before any publishing action.'),
+      { id: 'linkedin_publish_approved', type: 'linkedin', label: 'Publish LinkedIn After Approval', category: 'output', config: { operation: 'create_post', text: '{{input.linkedin}}' }, why: 'Keeps the verified LinkedIn publishing path; X remains manual because Twitter is blocked.' },
+    ],
+    edges: [['js_parse_agent', 'slack_content_review'], ['slack_content_review', 'linkedin_publish_approved']],
+    tags: marketingTags,
+  },
+  {
+    n: 26,
+    name: 'Review Site Sentiment Monitoring Agent',
+    category: supportCategory,
+    description: 'Substitute blocked Twitter brand monitoring with scheduled review-site/RSS monitoring, sentiment scoring, and Slack escalation.',
+    trigger: 'schedule',
+    cron: '0 9,17 * * *',
+    tools: [{ id: 'tool_review_feed', type: 'http_request', label: 'Fetch Review Feed', category: 'http_api', config: { url: 'https://example.com/reviews/feed', method: 'GET', timeout: 10000 }, why: 'Replaces Twitter social listening with a generic review/RSS source because Twitter, Instagram and Facebook are blocked.' }],
+    systemPrompt: 'Summarize the tone and recurring themes across these review mentions. Set negativeSpike true for PR risk or recurring complaint patterns.',
+    steps: [
+      { id: 'sentiment_score_summary', type: 'sentiment_analyzer', label: 'Score Sentiment', category: 'ai', config: { text: '{{input.summary}}' }, why: 'Applies deterministic sentiment scoring to the agent summary before the alert gate.' },
+      { id: 'if_negative_spike', type: 'if_else', label: 'Negative Spike?', category: 'logic', config: { conditions: [{ field: '$json.negativeSpike', operator: 'equals', value: true }], combineOperation: 'AND' }, why: 'Alerts only when the monitoring result indicates real reputation risk.' },
+      slackNode('slack_brand_watch', 'Alert Brand Watch', '#brand-watch', 'Negative review trend: {{input.summary}}', 'Sends review-site reputation risks to the brand/support team.'),
+    ],
+    edges: [['js_parse_agent', 'sentiment_score_summary'], ['sentiment_score_summary', 'if_negative_spike'], ['if_negative_spike', 'slack_brand_watch', 'true']],
+    tags: ['reviews', 'sentiment', 'marketing', 'slack', 'ai-agent'],
+  },
+  {
+    n: 27,
+    name: 'Competitor Price Monitoring Agent',
+    category: supportCategory,
+    description: 'Fetch competitor product pages, compare against a price-history sheet, log changes, and alert Slack.',
+    trigger: 'schedule',
+    cron: '0 3 * * *',
+    tools: [
+      { id: 'tool_competitor_page', type: 'http_request', label: 'Fetch Competitor Page', category: 'http_api', config: { url: 'https://example.com/competitor-products', method: 'GET', timeout: 10000 }, why: 'Fetches current competitor page content for extraction.' },
+      sheetsReadTool('tool_price_history', 'Read Price History', 'Price History!A:Z', 'Gives the agent last-known prices for comparison.'),
+    ],
+    systemPrompt: 'Extract current prices and compare them against price history. Return hasChanges true when any SKU changed, plus summary and rowsToAppend as text.',
+    steps: [
+      { id: 'sheets_log_price_change', type: 'google_sheets', label: 'Append Price Changes', category: 'database', config: { operation: 'append', spreadsheetId: 'REPLACE_WITH_YOUR_GOOGLE_SHEET_ID', range: 'Price History!A:Z', values: '{{input.rowsToAppend}}' }, why: 'Writes the detected price changes to the price-history sheet as one append operation.' },
+      { id: 'if_price_changed', type: 'if_else', label: 'Price Changed?', category: 'logic', config: { conditions: [{ field: '$json.hasChanges', operator: 'equals', value: true }], combineOperation: 'AND' }, why: 'Only notifies the pricing channel when there is an actual change.' },
+      slackNode('slack_price_alert', 'Alert Pricing Team', '#pricing-alerts', 'Competitor price change: {{input.summary}}', 'Alerts pricing when the agent detects meaningful changes.'),
+    ],
+    edges: [['js_parse_agent', 'sheets_log_price_change'], ['sheets_log_price_change', 'if_price_changed'], ['if_price_changed', 'slack_price_alert', 'true']],
+    tags: ['pricing', 'competitor', 'google-sheets', 'slack', 'ai-agent'],
+  },
+  {
+    n: 28,
+    name: 'Shopify Inventory & Order Assistant',
+    category: supportCategory,
+    description: 'Answer internal inventory/order lookup questions from chat using verified Shopify read context.',
+    trigger: 'chat_trigger',
+    memory: true,
+    memorySession: '{{input.sessionId}}',
+    tools: [{ id: 'tool_shopify_lookup', type: 'shopify', label: 'Read Shopify Inventory or Order', category: 'ecommerce', config: { resource: 'order', operation: 'get', id: '{{input.orderId}}' }, why: 'Keeps Shopify as the verified read-side tool while replacing the unsupported Slack trigger with Chat Trigger.' }],
+    systemPrompt: 'Help ops staff look up Shopify inventory and order status. Use Shopify context for every factual answer and never estimate stock.',
+    steps: [{ id: 'chat_shopify_reply', type: 'chat_send', label: 'Reply to Ops Chat', category: 'output', config: { message: '{{input.message}}' }, why: 'Returns the Shopify answer in the internal chat session.' }],
+    edges: [['js_parse_agent', 'chat_shopify_reply']],
+    tags: ['shopify', 'inventory', 'chat', 'ecommerce', 'ai-agent'],
+  },
+  {
+    n: 29,
+    name: 'Subscription Dunning Recovery Agent',
+    category: SECTORS.finance,
+    description: 'Receive generic failed-payment webhooks, read billing history from Google Sheets, and email a tailored recovery note.',
+    trigger: 'webhook',
+    model: 'gpt-4o',
+    tools: [sheetsReadTool('tool_billing_history', 'Read Billing History', 'Billing History!A:Z', 'Replaces blocked Chargebee with a verified billing-history sheet lookup.')],
+    systemPrompt: 'A payment failed. Use billing history context to draft a recovery email: gentle for first miss, firmer but polite for repeat failures.',
+    steps: [
+      gmailNode('gmail_dunning_email', 'Send Recovery Email', '{{input.customerEmail}}', '{{input.subject}}', '{{input.message}}', 'Sends the tailored dunning email through verified Gmail instead of Stripe/Chargebee nodes.'),
+      postgresqlNode('postgres_log_dunning', 'Log Dunning Event', "INSERT INTO dunning_events (customer_email, summary, created_at) VALUES ('{{input.customerEmail}}', '{{input.summary}}', now())", 'Stores the recovery event for finance follow-up.'),
+    ],
+    edges: [['js_parse_agent', 'gmail_dunning_email'], ['gmail_dunning_email', 'postgres_log_dunning']],
+    tags: ['dunning', 'billing', 'webhook', 'gmail', 'ai-agent'],
+  },
+  {
+    n: 30,
+    name: 'Financial Reporting Digest Agent',
+    category: SECTORS.finance,
+    description: 'Generate a weekly finance digest from Google Sheets/PostgreSQL data instead of blocked Stripe and PayPal provider tools.',
+    trigger: 'schedule',
+    cron: '0 8 * * 1',
+    tools: [
+      sheetsReadTool('tool_finance_sheet', 'Read Weekly Finance Sheet', 'Weekly Finance!A:Z', 'Uses a verified finance tracking sheet as the payment-source substitute.'),
+      postgresqlNode('tool_finance_sql', 'Read Finance Rollup', "SELECT current_date AS report_date, 'Replace with weekly revenue/refund/net query' AS summary", 'Provides database-sourced finance rollup context without blocked Stripe or PayPal nodes.'),
+    ],
+    systemPrompt: 'Summarize weekly finance totals: revenue, refunds, net, and week-over-week change if context provides it.',
+    steps: [
+      { id: 'sheets_log_finance_digest', type: 'google_sheets', label: 'Append Finance Digest Row', category: 'database', config: { operation: 'append', spreadsheetId: 'REPLACE_WITH_YOUR_GOOGLE_SHEET_ID', range: 'Weekly Finance!A:Z', values: '{{input.summary}}' }, why: 'Logs the weekly digest in the finance sheet using verified Google Sheets.' },
+      slackNode('slack_finance_digest', 'Post Finance Digest', '#finance', '{{input.message}}', 'Posts the plain-language weekly finance recap to the finance channel.'),
+    ],
+    edges: [['js_parse_agent', 'sheets_log_finance_digest'], ['sheets_log_finance_digest', 'slack_finance_digest']],
+    tags: ['finance', 'weekly-report', 'google-sheets', 'postgresql', 'ai-agent'],
+  },
+].forEach((spec) => addAiAgentTemplate(spec.n, spec));
+
 for (const [template, item, reason] of [
   ['AI Inbox Triage & Auto-Label', 'native gmail_trigger version', 'The contract currently allows only form, schedule, interval, webhook, chat_trigger, telegram_trigger, manual_trigger, and workflow_trigger. This template ships as a webhook-fed email payload until gmail_trigger is admitted by the gate.'],
   ['AI Reply-Draft Assistant', 'native gmail_trigger version', 'Reworked to webhook intake for the same reason; no Gmail trigger is allowed in templates yet.'],
@@ -2563,6 +3209,25 @@ for (const [template, item, reason] of [
   ['Chargeback / Dispute Handler', 'stripe_trigger / stripe node version', 'Reworked to generic webhook intake because stripe_trigger and stripe are blocked by the investor node-status gate.'],
   ['Appointment Booking Confirmation', 'google_calendar create-event version', 'Reworked to Airtable/Gmail/Slack because google_calendar is outside the verified palette for this content pass.'],
   ['Telehealth Link Dispatcher', 'google_calendar update-event version', 'Reworked to Airtable/Gmail/Slack because google_calendar is outside the verified palette for this content pass.'],
+  ['Multi-Channel Customer Support Agent', 'Zendesk ticketing version', 'Zendesk remains on the investor blocked list for vendor/account status reasons. This template ships with Airtable ticket history plus HubSpot logging and Slack escalation instead.'],
+  ['Shopify Email Order Support Agent', 'WhatsApp order-reply version', 'WhatsApp is blocked by Meta Business verification/app-review status. The scenario is reframed as Shopify email support with Gmail customer notification and Slack follow-up.'],
+  ['Discord Community FAQ Agent', 'native discord_trigger version', 'discord_trigger is outside the eight allowed entry-trigger types. This template accepts Discord payloads through webhook intake and keeps Discord only as the reply action.'],
+  ['RAG Document Q&A Agent', 'google_drive_trigger ingestion-side version', 'google_drive_trigger is outside the allowed trigger list. The shipped template is the chat query-side agent; Drive ingestion should be a separate scheduled poll workflow if needed.'],
+  ['Company Policy Chatbot', 'slack_trigger version', 'slack_trigger is not an allowed template trigger. The workflow uses native Form intake, mirroring the existing Slack Message to Task Logger precedent.'],
+  ['Lead Qualification & Nurturing Agent', 'typeform_trigger version', 'typeform_trigger is outside the trigger allowlist, so the workflow uses the native Form trigger.'],
+  ['Inbound Email Sales Agent', 'gmail_trigger version', 'gmail_trigger is outside the trigger allowlist. The shipped template follows the existing webhook-fed email payload precedent.'],
+  ['GitHub Issue to Engineering Triage Agent', 'github_trigger plus Jira-write version', 'github_trigger is not allowed and direct issue-tracker actions remain outside this content pass. The workflow uses webhook intake, HTTP context, PostgreSQL logging, and Slack notification.'],
+  ['GitHub PR Review Summary Agent', 'github_trigger and GitHub action version', 'The existing PR-review precedent uses webhook intake plus HTTP diff fetch and Slack/PostgreSQL outputs instead of GitHub trigger/action nodes; this template mirrors that pattern.'],
+  ['Invoice Data Extraction Agent', 'gmail_trigger plus Xero version', 'gmail_trigger is outside the trigger allowlist and Xero is blocked. The workflow accepts email payloads by webhook and ends at Google Sheets plus AP notification.'],
+  ['Meeting Notes & Action-Item Agent', 'per-item Google Tasks creation version', 'The runtime does not fan out arrays through downstream nodes. Action items ship as one Google Doc block and Slack recap instead of N Google Tasks writes.'],
+  ['HR New-Hire Provisioning Agent', 'typeform_trigger version', 'typeform_trigger is outside the trigger allowlist, so the workflow uses native Form intake.'],
+  ['Resume Screening Agent', 'gmail_trigger version', 'gmail_trigger is outside the trigger allowlist. The workflow receives resume payloads by webhook.'],
+  ['Social Media Repurposing Agent', 'Twitter and Instagram publish legs', 'Twitter and Instagram are blocked by the investor audit. The workflow keeps LinkedIn publishing and sends X/Instagram drafts to Slack for manual posting.'],
+  ['Social Post Approval Agent', 'Twitter publish leg', 'Twitter is blocked. The workflow keeps the verified LinkedIn publishing path and sends the X copy as a Slack-reviewed manual draft.'],
+  ['Review Site Sentiment Monitoring Agent', 'Twitter-only brand sentiment source', 'The original source depended entirely on Twitter social listening, but Twitter/Instagram/Facebook are blocked and no verified social-listening source exists. It is replaced with review-site/RSS monitoring.'],
+  ['Shopify Inventory & Order Assistant', 'slack_trigger version', 'slack_trigger is not an allowed entry trigger. The workflow uses chat_trigger while keeping the verified Shopify action/tool node.'],
+  ['Subscription Dunning Recovery Agent', 'stripe_trigger plus Chargebee version', 'stripe_trigger and Stripe are blocked, and Chargebee is also blocked. The workflow uses generic webhook intake plus a Google Sheets billing-history read.'],
+  ['Financial Reporting Digest Agent', 'Stripe and PayPal provider version', 'Stripe and PayPal are both blocked, so the finance digest is sourced from Google Sheets and PostgreSQL instead.'],
 ]) defer(template, item, reason);
 
 for (const [key, why] of generatedNodeNotes) {
@@ -2661,18 +3326,18 @@ fs.writeFileSync(
 
 BEGIN;
 
-DROP TABLE IF EXISTS templates_backup_20260731;
-CREATE TABLE templates_backup_20260731 AS SELECT * FROM templates;
+DROP TABLE IF EXISTS templates_backup_20260823_ai_agent_category;
+CREATE TABLE templates_backup_20260823_ai_agent_category AS SELECT * FROM templates;
 
 -- Expect: 550
-SELECT count(*) AS backed_up FROM templates_backup_20260731;
+SELECT count(*) AS backed_up FROM templates_backup_20260823_ai_agent_category;
 
 COMMIT;
 
 -- To restore everything:
 --   BEGIN;
 --   DELETE FROM templates;
---   INSERT INTO templates SELECT * FROM templates_backup_20260731;
+--   INSERT INTO templates SELECT * FROM templates_backup_20260823_ai_agent_category;
 --   COMMIT;
 `,
 );
@@ -2705,7 +3370,7 @@ fs.writeFileSync(
   `-- Template Library v2 - step 1: historical safety step.
 -- Earlier drafts used this step to temporarily hide unsafe templates before the
 -- corrected graphs were applied. The current migration inserts/updates the full
--- corrected 36-template library directly, so this step intentionally does not
+-- corrected ${out.length}-template library directly, so this step intentionally does not
 -- change live data.
 
 BEGIN;
