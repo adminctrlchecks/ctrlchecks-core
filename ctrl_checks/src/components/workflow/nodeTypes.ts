@@ -1916,12 +1916,11 @@ Output:
         options: [
           { label: 'Gemini 3.5 Flash', value: 'gemini-3.5-flash' },
           { label: 'Gemini 3.1 Pro Preview', value: 'gemini-3.1-pro-preview' },
-          { label: 'Claude 3.5 Sonnet', value: 'claude-3-5-sonnet' },
-          { label: 'GPT-4o', value: 'gpt-4o' },
+          { label: 'Gemini 3.1 Flash-Lite', value: 'gemini-3.1-flash-lite' },
         ],
         defaultValue: 'gemini-3.5-flash',
         required: true,
-        helpText: 'Select the AI model used by this node. This works like the standard model dropdown on other AI nodes.',
+        helpText: 'Gemini model used when no Chat Model node is attached to this Agent\'s Chat Model slot. For OpenAI or Claude, attach an OpenAI GPT or Anthropic Claude node to the Chat Model slot instead — its model and API key take priority over this field.',
       },
       {
         key: 'systemPrompt',
@@ -2475,7 +2474,7 @@ Output:
         { label: 'Gemini 3.5 Flash', value: 'gemini-3.5-flash' },
         { label: 'Gemini 3.1 Pro Preview', value: 'gemini-3.1-pro-preview' },
         { label: 'Gemini 3.1 Flash-Lite', value: 'gemini-3.1-flash-lite' },
-      ], defaultValue: 'gemini-3.5-flash', helpText: 'Visible Gemini model selector. Current runtime still hardcodes AI Chat Model execution to gemini-3.5-flash, so leave this at the default until the worker honors it.' },
+      ], defaultValue: 'gemini-3.5-flash', helpText: 'Which Gemini model runs this call. Gemini only — for OpenAI or Claude, use an AI Agent with an OpenAI GPT or Anthropic Claude node attached to its Chat Model slot instead.' },
       { key: 'responseFormat', label: 'Response Format', type: 'select', options: [
         { label: 'Text', value: 'text' },
         { label: 'JSON', value: 'json' },

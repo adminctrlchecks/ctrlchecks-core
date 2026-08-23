@@ -1,5 +1,5 @@
 /**
- * AWS RDS type shim — replaces legacy @db/db-js type imports across the worker.
+ * Database type shim — replaces legacy @db/db-js type imports across the worker.
  * Mapped via tsconfig paths so `import type { DbClient } from '@db/db-js'`
  * resolves here at compile time (no actual external DB SDK required at runtime).
  *
@@ -23,6 +23,6 @@ export type SupabaseClientOptions = DbClientOptions;
 
 export function createClient(_url: string, _key: string, _opts?: any): DbClient {
   throw new Error(
-    'createClient (db-shim): Use the RDS-backed db-pool or the dynamic third-party node executor instead.'
+    'createClient (db-shim): Use the db-pool or the dynamic third-party node executor instead.'
   );
 }

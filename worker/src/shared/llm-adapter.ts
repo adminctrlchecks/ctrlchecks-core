@@ -568,11 +568,22 @@ export class LLMAdapter {
     throw new Error('Gemini embeddings not yet implemented. Use OpenAI or Ollama for embeddings.');
   }
 
+  /**
+   * Infers the provider from a model name. Throws on an unrecognized model rather than
+   * silently defaulting to Gemini — a model string like 'mistral-small-latest' or
+   * 'command-r-08-2024' has no real provider branch in this adapter, so defaulting would
+   * silently execute the request on Gemini using the wrong model/credentials with no error.
+   * Callers should default `model` to a known Gemini model (e.g. 'gemini-3.5-flash') before
+   * calling this if they want a Gemini fallback — don't rely on this method to do it.
+   */
   static detectProvider(model: string): LLMProvider {
     if (model.startsWith('gpt-') || model.includes('openai')) return 'openai';
     if (model.startsWith('claude-') || model.includes('anthropic')) return 'claude';
     if (model.startsWith('gemini-') || model.includes('gemini')) return 'gemini';
-    return 'gemini';
+    throw new Error(
+      `Unsupported model "${model}": no provider is implemented for it. ` +
+      `Supported prefixes: gpt- (OpenAI), claude- (Anthropic), gemini- (Gemini).`
+    );
   }
 
   static getAvailableModels(provider: LLMProvider): string[] {

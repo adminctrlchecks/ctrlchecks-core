@@ -4,6 +4,7 @@ import { getAuthoritativeInputs } from '../../execution/runtime-input-handoff';
 import { executeViaLegacyExecutor } from '../unified-node-registry-legacy-adapter';
 import { isAgentAttachmentHandle } from '../../execution/agent/agent-types';
 import { runAgent } from '../../execution/agent/agent-executor';
+import { getAttachedNodeForHandle } from '../../execution/agent/tool-manifest';
 
 export function overrideAiAgent(def: UnifiedNodeDefinition, schema: NodeSchema): UnifiedNodeDefinition {
   const nextInputSchema = { ...def.inputSchema };
@@ -91,10 +92,31 @@ export function overrideAiAgent(def: UnifiedNodeDefinition, schema: NodeSchema):
         userInput: resolvedUserInput,
       };
 
+      // An attached Chat Model sidecar must win here too, not just in runAgent()'s tool
+      // loop above. Without this, an agent with a Chat Model attached but no Tool attached
+      // (a very common "just answer with GPT-4o/Claude, no tools" setup) silently falls
+      // through to this legacy path and ignores the sidecar entirely, using the node's own
+      // inline `model`/`apiKey` (or the Gemini default) instead — the same class of gap
+      // already fixed once for a different legacy path (see git history: "Fix the SECOND
+      // resolution pipeline"). Reuses agent-executor.ts's own lookup helper so there's one
+      // definition of "how to find the attached Chat Model node", not two.
+      const chatModelNode = graph && Array.isArray(graph.nodes) && Array.isArray(graph.edges)
+        ? getAttachedNodeForHandle(context.nodeId, graph, 'chat_model')
+        : undefined;
+      const chatModelConfig = (chatModelNode?.data?.config || {}) as Record<string, unknown>;
+      const configOverrides: Record<string, unknown> = {};
+      if (typeof chatModelConfig.model === 'string' && chatModelConfig.model.trim()) {
+        configOverrides.model = chatModelConfig.model;
+      }
+      if (typeof chatModelConfig.apiKey === 'string' && chatModelConfig.apiKey.trim()) {
+        configOverrides.apiKey = chatModelConfig.apiKey;
+      }
+
       return await executeViaLegacyExecutor({
         context: {
           ...context,
           inputs: mergedInputs,
+          config: { ...context.config, ...configOverrides },
         },
         schema,
       });

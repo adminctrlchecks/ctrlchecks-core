@@ -13,7 +13,7 @@ const requireEnv = (key: string, defaultValue?: string): string => {
 };
 
 export const config: any = {
-  // Database — AWS RDS PostgreSQL
+  // Database — self-hosted PostgreSQL on the production server (not AWS RDS)
   databaseUrl: process.env.DATABASE_URL,
 
   // AWS Cognito

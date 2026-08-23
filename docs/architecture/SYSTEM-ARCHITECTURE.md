@@ -34,7 +34,7 @@ it to become a true service architecture.
 | notification-service | `services/notification-service/` | 3005 | 34 files | Email, in-app, webhook notifications |
 | trigger-service | `services/trigger-service/` | 3006 | 26 files | Webhook / form / chat / schedule trigger intake |
 | workflow-crud-service | `services/workflow-crud-service/` | 3007 | 38 files | Workflow CRUD + versioning/rollback |
-| **frontend** | `ctrl_checks/` | 5173 dev | React + Vite SPA | Talks to **one** backend URL |
+| **frontend** | `ctrl_checks/` | 8080 dev (fixed in `vite.config.ts`) | React + Vite SPA | Talks to **one** backend URL |
 
 ### The frontend addresses exactly one backend
 
@@ -85,10 +85,16 @@ hop left the worker; the bounded context did not.
 
 ### One PostgreSQL database, shared by everything
 
-Read from each `.env` / `.env.example`:
+**As of Aug 2026, this database was migrated off AWS RDS onto the Hostinger production
+server itself — confirmed live via SSH (`DATABASE_URL=postgresql://ctrlchecks_app:***@
+localhost:5432/ctrlchecks` in `/opt/ctrlchecks-worker/.env`; `postgres` listening on
+`127.0.0.1:5432` on the box, 69 tables present). All AWS RDS infrastructure for the
+database was deleted. This is one of the few facts in this document that *is* verified
+against the live box, not just the deploy definitions — see the caveat at the top of this
+file.**
 
 ```
-worker                 → ctrlchecks-db.<...>.ap-south-1.rds.amazonaws.com:5432/ctrlchecks
+worker                 → localhost:5432/ctrlchecks (self-hosted Postgres, same server as the app)
 credential-service     → (same host, same database)
 execution-engine       → (same)
 notification-service   → (same)
@@ -130,7 +136,7 @@ worker :3001 ──────────────────────�
    ├─ CREDENTIAL_SERVICE_URL?    → credential-service :3004 (else in-process)
    ├─ WORKFLOW_CRUD_SERVICE_URL? → workflow-crud-service :3007 (else 503/in-process)
    │
-   ├─ PostgreSQL (shared, RDS ap-south-1)
+   ├─ PostgreSQL (shared, self-hosted on the Hostinger server — not AWS RDS)
    └─ Redis (cache / rate limit / queues / WS bridge)
 
 Real-time: GET /ws/chat, GET /ws/executions — served by the worker.

@@ -1,5 +1,17 @@
 # CtrlChecks Live Microservices: End-to-End Architecture
 
+> **⚠️ SUPERSEDED — infrastructure has moved since this was written.** This document
+> describes a **2026-06-20 single-EC2 + AWS RDS** deployment. As of Aug 2026, production
+> has been migrated off AWS entirely for the database: the app now runs on a **Hostinger
+> VPS**, and PostgreSQL is **self-hosted on that same server** (`localhost:5432`), not AWS
+> RDS. Every "RDS" reference below (including the `RDS` nodes in the diagrams) refers to
+> that old AWS RDS instance and should be read as "the shared PostgreSQL database" —
+> co-located on the Hostinger box today, not a separate managed AWS service. AWS Cognito is
+> still in use for auth; that part of this document is unaffected. For the current,
+> live-verified topology see [SYSTEM-ARCHITECTURE.md](./SYSTEM-ARCHITECTURE.md) §4 and
+> [DEPLOYMENT.md](./DEPLOYMENT.md) §5 — treat those, not this file, as the source of truth
+> on where the database lives.
+
 **Production baseline:** 2026-06-20, after T10 full-pass smoke testing and the T9 retirement-gate flip. This document describes the live single-EC2 deployment, not the removed monolith topology. The React 18/Vite frontend is served at `https://www.ctrlchecks.ai`; `https://worker.ctrlchecks.ai` is the sole public API boundary, with TLS terminated by Nginx before traffic reaches the worker on port 3001.
 
 The normal production path delegates at 100% to the six internal services on ports 3002-3007. Those services are reachable only on EC2 loopback and are never called by browser code. AWS Cognito authenticates user-facing worker routes, while service-to-service requests use shared internal keys.

@@ -1,8 +1,13 @@
 /**
- * AWS RDS database client — backed by pg.Pool → AWS RDS PostgreSQL.
+ * Database client — backed by pg.Pool → PostgreSQL.
+ *
+ * NOTE: filename/class name ("RDSClient") are a historical holdover from when the
+ * database was AWS RDS. As of Aug 2026 it's self-hosted PostgreSQL directly on the
+ * production server (not AWS) — this file was not renamed to avoid a wide, purely
+ * cosmetic refactor; treat "RDS" here as a legacy label, not a live infra claim.
  *
  * Exports getDbClient() and createDbClient().
- * Internally uses pg.Pool → AWS RDS — no external DB SDK required at runtime.
+ * Internally uses pg.Pool — no external DB SDK required at runtime.
  *
  * Supported patterns:
  *   .from(table).select(cols).eq(col, val).single()
@@ -489,8 +494,8 @@ class RDSClient {
 let _client: RDSClient | null = null;
 
 /**
- * Returns the singleton AWS RDS database client.
- * Backed by pg.Pool → AWS RDS PostgreSQL.
+ * Returns the singleton database client.
+ * Backed by pg.Pool → PostgreSQL (self-hosted on the production server).
  */
 export function getDbClient(): any {
   if (!_client) {

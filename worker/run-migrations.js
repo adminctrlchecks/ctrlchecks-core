@@ -2,7 +2,19 @@ const { Client } = require('pg');
 const fs = require('fs');
 const path = require('path');
 
-const DATABASE_URL = 'postgresql://ctrlchecks_admin:CtrlChecks2026@ctrlchecks-db.cxm8gymyysvy.ap-south-1.rds.amazonaws.com:5432/ctrlchecks';
+// The database was migrated off AWS RDS onto the Hostinger server itself (Aug 2026); the
+// old hardcoded RDS connection string (and the credential baked into it) is dead and has
+// been removed. Read DATABASE_URL from the environment instead — never hardcode a live
+// connection string (with credentials) into a committed script again.
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+  console.error('DATABASE_URL is not set. Export it before running this script, e.g.:');
+  console.error('  DATABASE_URL=postgresql://user:pass@localhost:5432/ctrlchecks node run-migrations.js');
+  process.exit(1);
+}
+// Local/self-hosted Postgres (the current setup) typically has no TLS listener; only
+// request SSL when the connection string explicitly asks for it.
+const useSsl = /\bsslmode=require\b/.test(DATABASE_URL);
 
 const MIGRATIONS_DIR = path.join(__dirname, 'migrations');
 
@@ -136,11 +148,11 @@ function splitStatements(sql) {
 }
 
 async function run() {
-  const client = new Client({ connectionString: DATABASE_URL, ssl: { rejectUnauthorized: false } });
+  const client = new Client({ connectionString: DATABASE_URL, ssl: useSsl ? { rejectUnauthorized: false } : false });
 
   try {
     await client.connect();
-    console.log('Connected to AWS RDS database\n');
+    console.log('Connected to database\n');
 
     // Tracking table
     await client.query(`

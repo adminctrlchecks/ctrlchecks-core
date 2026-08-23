@@ -1,7 +1,8 @@
 /**
  * Database Migration Checker
  * 
- * Checks for missing AWS RDS PostgreSQL migrations on server startup.
+ * Checks for missing PostgreSQL migrations on server startup (self-hosted on the
+ * production server as of Aug 2026, previously AWS RDS).
  * This ensures the database schema is always up-to-date.
  */
 
@@ -20,7 +21,7 @@ export async function checkWorkflowsSchemaColumns(): Promise<MigrationCheckResul
   try {
     const db = getDbClient();
     
-    // Check required columns by attempting to query them through the RDS client.
+    // Check required columns by attempting to query them through the db client.
     const { error: checkError } = await db
       .from('workflows')
       .select('settings, graph, metadata, setup_completed, setup_stage, setup_completed_at')
@@ -45,12 +46,12 @@ export async function checkWorkflowsSchemaColumns(): Promise<MigrationCheckResul
       if (checkError.message.includes('setup_completed_at')) missingColumns.push('setup_completed_at');
       
       console.log(`[MigrationChecker] Missing columns detected: ${missingColumns.join(', ')}`);
-      console.warn('[MigrationChecker] Apply the AWS RDS SQL migrations in ctrl_checks/sql_migrations/');
+      console.warn('[MigrationChecker] Apply the SQL migrations in ctrl_checks/sql_migrations/');
       
       return {
         applied: false,
         message: `Migration check completed - missing columns: ${missingColumns.join(', ')}`,
-        error: 'AWS RDS schema is missing required columns. Apply the SQL files in ctrl_checks/sql_migrations/.',
+        error: 'Database schema is missing required columns. Apply the SQL files in ctrl_checks/sql_migrations/.',
       };
     }
     
@@ -85,11 +86,11 @@ export async function checkConnectionsSchemaColumns(): Promise<MigrationCheckRes
     }
 
     if (checkError.message?.includes('column')) {
-      console.warn('[MigrationChecker] Apply AWS RDS SQL migration 30_harden_connection_lifecycle.sql');
+      console.warn('[MigrationChecker] Apply SQL migration 30_harden_connection_lifecycle.sql');
       return {
         applied: false,
         message: 'Connection lifecycle migration is missing',
-        error: 'AWS RDS schema is missing connection lifecycle columns. Apply ctrl_checks/sql_migrations/30_harden_connection_lifecycle.sql.',
+        error: 'Database schema is missing connection lifecycle columns. Apply ctrl_checks/sql_migrations/30_harden_connection_lifecycle.sql.',
       };
     }
 

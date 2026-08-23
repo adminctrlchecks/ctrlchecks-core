@@ -76,6 +76,7 @@ import {
   type WorkflowNodeConnectionBinding,
 } from '@/lib/api/workflowNodeConnections';
 import { resolveFieldHelp } from '@/lib/resolve-field-help-content';
+import { normalizeAgentAttachmentHandle } from '@/lib/agentAttachmentEdges';
 import {
   getUsageGuideForType,
   normalizeNodeTypeForLookup,
@@ -1582,6 +1583,35 @@ export default function PropertiesPanel({
           )}
         </div>
       );
+    }
+
+    // An AI Agent's own inline "model" field is overridden at runtime by an attached Chat
+    // Model sidecar (see worker/src/core/registry/overrides/ai-agent.ts and
+    // agent-executor.ts) — surface that here instead of leaving the field editable with no
+    // indication it's being ignored.
+    const selectedNodeType = String(selectedNode.data?.type || selectedNode.type || '');
+    if (selectedNodeType === 'ai_agent' && field.key === 'model') {
+      const chatModelAttached = edges.some((edge) =>
+        edge.target === selectedNode.id &&
+        normalizeAgentAttachmentHandle(edge.targetHandle) === 'chat_model'
+      );
+      if (chatModelAttached) {
+        return (
+          <div
+            className="min-w-0 max-w-full text-xs text-muted-foreground border border-dashed border-border/60 rounded px-3 py-2.5 bg-muted/40 overflow-hidden"
+            role="status"
+            aria-label="Model overridden by attached Chat Model node"
+            data-testid="model-overridden-by-sidecar"
+          >
+            <p className="font-medium text-foreground/80 leading-snug break-words">
+              Using the attached Chat Model node&apos;s model
+            </p>
+            <p className="mt-1 leading-relaxed break-words">
+              Disconnect it from this Agent&apos;s Chat Model slot to choose a model here instead.
+            </p>
+          </div>
+        );
+      }
     }
 
     switch (field.type) {

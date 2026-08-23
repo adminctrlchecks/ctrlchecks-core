@@ -26,14 +26,17 @@ const SLOT_META: Record<AgentSlot, { label: string; shortLabel: string; icon: ty
   tool: { label: 'Knowledge & Tools', shortLabel: 'Tools', icon: Table, color: '#10b981' },
 };
 
+// Only providers LLMAdapter.detectProvider() (worker/src/shared/llm-adapter.ts) actually
+// routes to real API calls belong here. Mistral/Cohere are deliberately excluded: their
+// model names don't match any prefix detectProvider() recognizes, so attaching one would
+// silently execute the agent request on Gemini instead — a wrong answer with no error,
+// not an unsupported-provider error. Re-add them once LLMAdapter has real provider branches.
 const MODEL_NODE_TYPES = new Set([
   'chat_model',
   'ai_chat_model',
   'google_gemini',
   'openai_gpt',
   'anthropic_claude',
-  'mistral',
-  'cohere',
 ]);
 
 const TOOL_EXCLUDED_TYPES = new Set(['ai_agent', 'chat_model', 'ai_chat_model', 'memory', 'tool']);

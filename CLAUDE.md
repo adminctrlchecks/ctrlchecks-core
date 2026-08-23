@@ -10,10 +10,10 @@ Two independently runnable services:
 
 | Directory | Role | Port |
 |---|---|---|
-| `ctrl_checks/` | React + Vite SPA (frontend) | 5173 (dev) |
+| `ctrl_checks/` | React + Vite SPA (frontend) | 8080 (dev, fixed in `vite.config.ts`) |
 | `worker/` | Node + Express backend (AI engine, execution) | 3001 |
 
-Both must run simultaneously during development. The frontend talks to the worker via `VITE_API_URL`. Auth is handled by **AWS Cognito** (frontend: `aws-amplify`, worker: `aws-jwt-verify`). The database is **AWS RDS PostgreSQL** accessed via `pg.Pool` in the worker.
+Both must run simultaneously during development. The frontend talks to the worker via `VITE_API_URL`. Auth is handled by **AWS Cognito** (frontend: `aws-amplify`, worker: `aws-jwt-verify`) — this is still AWS-backed. The database is **PostgreSQL, self-hosted on the production Hostinger server** (`localhost:5432` from the worker's point of view — migrated off AWS RDS as of Aug 2026) accessed via `pg.Pool` in the worker. Redis is also self-hosted on the same server (`localhost:6379`), not a managed service.
 
 ---
 
@@ -48,13 +48,15 @@ npm run export:schemas      # Regenerate node schema JSON files
 ## Environment Setup
 
 **Worker** (`worker/.env`):
-- `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
-- `DATABASE_URL` — AWS RDS PostgreSQL connection string
+- `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` — still used for Cognito auth only; no longer used for the database
+- `DATABASE_URL` — self-hosted PostgreSQL connection string (production: `postgresql://ctrlchecks_app:***@localhost:5432/ctrlchecks` on the Hostinger box itself, since the DB runs on the same server as the worker)
 - `COGNITO_USER_POOL_ID`, `COGNITO_CLIENT_ID`, `COGNITO_DOMAIN`, `COGNITO_ISSUER`
 - `COGNITO_ADMIN_CLIENT_ID`, `COGNITO_CLIENT_SECRET`
 - `GEMINI_API_KEY` — primary LLM (Google Gemini)
-- `REDIS_URL` — caching and rate limiting
+- `REDIS_URL` — self-hosted Redis on the same server (`redis://127.0.0.1:6379` in production), used for caching and rate limiting
 - OAuth redirect URIs for each provider (Google, GitHub, LinkedIn, Facebook, Notion, Twitter, etc.)
+
+Note: a developer's local `worker/.env` may still point `DATABASE_URL` at an old tunnel (e.g. `127.0.0.1:15432`) left over from the AWS RDS era — that will fail to connect now that production has moved to a local, non-tunneled Postgres. Point local dev at your own local Postgres instance, or coordinate a tunnel to the Hostinger box; don't point local dev directly at the production database.
 
 **Frontend** (`ctrl_checks/.env.local`):
 - `VITE_AWS_REGION`, `VITE_COGNITO_USER_POOL_ID`, `VITE_COGNITO_CLIENT_ID`, `VITE_COGNITO_DOMAIN`
@@ -168,7 +170,8 @@ See `NODE_ADDITION_CHECKLIST.md` and `ADDING_NEW_NODES_GUIDE.md` at the repo roo
 
 ## Database
 
-- **Primary:** AWS RDS PostgreSQL. DB client: `worker/src/core/database/aws-db-client.ts` (canonical entry via `db-client.ts`). Migrations live in `worker/prisma/migrations/`.
-- **Cache / rate-limit / queues:** Redis (`REDIS_URL`)
+- **Primary:** Self-hosted PostgreSQL, running directly on the Hostinger production server (not AWS RDS — migrated off RDS as of Aug 2026; all AWS infrastructure for the database was deleted). DB client: `worker/src/core/database/aws-db-client.ts` (canonical entry via `db-client.ts`) — the filename is a historical holdover from the RDS era and does **not** indicate the DB is AWS-hosted; treat it as the generic Postgres client.
+- **Cache / rate-limit / queues:** Redis, also self-hosted on the same Hostinger server (`REDIS_URL`) — not a managed service.
 - Run `npm run prisma:migrate` inside `worker/` after pulling new migrations.
-- The worker uses `getDbClient()` from `db-client.ts` — backed by `pg.Pool` connecting to AWS RDS. Never expose `DATABASE_URL` or AWS credentials to the frontend.
+- The worker uses `getDbClient()` from `db-client.ts` — backed by `pg.Pool` connecting to the local Postgres instance on the production server. Never expose `DATABASE_URL` or credentials to the frontend.
+- Auth (Cognito) is the only piece of this stack still on AWS; `AWS_REGION`/`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` exist solely for that, not for database access.

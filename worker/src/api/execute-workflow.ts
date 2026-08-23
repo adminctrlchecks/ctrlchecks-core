@@ -6078,11 +6078,16 @@ export async function executeNodeLegacy(
     }
 
     case 'ai_chat_model': {
-      // ✅ MIGRATED: Direct AI chat model call (defaults to Gemini 3.5 Flash)
-      // Uses GEMINI_API_KEY from config - no provider/model selection needed
+      // ✅ MIGRATED: Direct AI chat model call (Gemini only — uses GEMINI_API_KEY)
+      // Honors whichever supported Gemini model the user picked in the node's Model
+      // dropdown; previously this ignored config.model entirely and always ran
+      // gemini-3.5-flash regardless of the selection shown in the UI.
       const prompt = getStringProperty(config, 'prompt', '');
-      const provider = 'gemini' as any; // Always use Gemini
-      const model = 'gemini-3.5-flash'; // Default to Gemini 3.5 Flash
+      const provider = 'gemini' as any; // Gemini only — see AgentAttachmentControls.tsx MODEL_NODE_TYPES for why
+      // llmAdapter.chat()'s Gemini path normalizes this via normalizeGeminiModel()
+      // (worker/src/services/ai/gemini-models.ts) — that's the single source of truth for
+      // valid/alias Gemini model names, so just pass the configured value through.
+      const model = getStringProperty(config, 'model', 'gemini-3.5-flash');
       const systemPrompt = getStringProperty(config, 'systemPrompt', '');
       const responseFormat = getStringProperty(config, 'responseFormat', 'text');
       const temperatureRaw = getStringProperty(config, 'temperature', '0.7');
@@ -6744,11 +6749,16 @@ export async function executeNodeLegacy(
         userInput = typeof userInput === 'object' ? JSON.stringify(userInput) : String(userInput);
       }
       
-      // Model is selected via the node's `model` field; provider is inferred from the model name.
+      // Model is selected via the node's `model` field (which the ai_agent registry override
+      // pre-fills from an attached Chat Model sidecar's own model/apiKey when one is present —
+      // see overrides/ai-agent.ts); provider is inferred from the model name.
       // Defaults to Gemini (GEMINI_API_KEY) when the model name doesn't match another provider.
       const model = getStringProperty(config, 'model', 'gemini-3.5-flash');
       const provider: 'openai' | 'claude' | 'gemini' | 'ollama' = LLMAdapter.detectProvider(model);
-      let apiKey: string | undefined = process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY || process.env.GEMINI_API_KEY;
+      // Prefer an explicit key on the node/config (e.g. injected from an attached sidecar)
+      // over environment fallbacks — env keys are a last resort, not the default source.
+      const configApiKey = getStringProperty(config, 'apiKey', '').trim();
+      let apiKey: string | undefined = configApiKey || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY || process.env.GEMINI_API_KEY;
       const geminiResolvedForAgent = provider === 'gemini'
         ? await resolveGeminiApiKeyForNode({ node, config, userId, currentUserId })
         : null;

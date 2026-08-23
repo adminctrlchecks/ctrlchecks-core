@@ -209,7 +209,7 @@ in `/opt/ctrlchecks-ai-generator/.env`, or the equivalent in its `app.listen()` 
 
 ## 5. Database and migrations
 
-One PostgreSQL (AWS RDS, `ap-south-1`), shared by the worker and five services
+One PostgreSQL (self-hosted directly on the Hostinger production server — migrated off AWS RDS as of Aug 2026), shared by the worker and five services
 (SYSTEM-ARCHITECTURE §4). Migrations live in `worker/prisma/migrations/` and are applied
 **only** by the worker's deploy.
 
