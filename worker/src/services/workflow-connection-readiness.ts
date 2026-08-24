@@ -124,7 +124,6 @@ interface PreparedConnectionRequirement {
   node: ReadinessNode;
   base: WorkflowConnectionRequirement;
   provider: string;
-  authTypes: AuthType[];
   listKey: string;
   credentialType: {
     credentialTypeId: string;
@@ -305,7 +304,6 @@ async function resolveExplicitConnection(input: {
   canFallbackFromInvalidRef?: boolean;
   legacyRef?: string;
 }> {
-  const authTypes = [input.authType as AuthType];
   for (const ref of input.refs) {
     if (!isUuid(ref.value)) {
       if (valueLooksLikeProviderAlias(ref.value, input.provider, input.credentialTypeId)) {
@@ -361,10 +359,15 @@ async function resolveExplicitConnection(input: {
           },
         };
       }
-      if (
-        canonicalProvider(connection.provider) !== canonicalProvider(input.provider) ||
-        (authTypes.length > 0 && connection.authType !== authTypes[0])
-      ) {
+      // Validate an explicitly-selected connection on PROVIDER ONLY — never on a derived
+      // authType. A provider legitimately supports more than one auth method (e.g. HubSpot:
+      // OAuth2 or a Private App token), the user deliberately picked this one, and execution
+      // matches connections by provider only (resolveCredential + withFreshOAuthCredentials,
+      // which inject based on the connection's own authType). Vetoing a user's explicit,
+      // active, right-provider selection because its authType differs from a single guessed
+      // requirement is a false positive with no runtime counterpart. Active/expired/revoked is
+      // still enforced downstream (connectionStatusIssue) and scopes via the dry-run.
+      if (canonicalProvider(connection.provider) !== canonicalProvider(input.provider)) {
         return {
           invalid: {
             workflowId: '',
@@ -553,13 +556,15 @@ export async function getWorkflowConnectionReadiness(input: {
       requiredScopes,
     };
 
-    const authTypes = [credentialType.authType as AuthType];
-    const listKey = `${provider}::${authTypes.join('+')}`;
+    // Key the connection-list cache and scope-union by PROVIDER only. authType no longer
+    // partitions connections (the gate accepts any auth method the user connected with, to
+    // match how execution resolves credentials), so a single provider must map to a single
+    // list/scope bucket regardless of the authType this node's contract happens to derive.
+    const listKey = provider;
     preparedRequirements.push({
       node,
       base,
       provider,
-      authTypes,
       listKey,
       credentialType,
       vaultKey: connector?.credentialContract.vaultKey,
@@ -577,7 +582,6 @@ export async function getWorkflowConnectionReadiness(input: {
       node,
       base,
       provider,
-      authTypes,
       listKey,
       credentialType,
       vaultKey,
@@ -585,7 +589,9 @@ export async function getWorkflowConnectionReadiness(input: {
     if (!connectionListCache.has(listKey)) {
       connectionListCache.set(
         listKey,
-        listCanonicalConnectionsByProvider(userId, provider, authTypes)
+        // No authType filter: return every active connection for the provider, whatever auth
+        // method it uses. Matches execution, which selects a connection by provider only.
+        listCanonicalConnectionsByProvider(userId, provider)
           .catch(() => ({ connections: [], source: 'none' as const })),
       );
     }

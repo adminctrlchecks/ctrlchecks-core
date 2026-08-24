@@ -658,4 +658,65 @@ describe('getWorkflowConnectionReadiness', () => {
     });
     expect(resolveCredentialDryRun).not.toHaveBeenCalled();
   });
+
+  // Regression: a provider that supports more than one auth method (HubSpot: OAuth2 or a
+  // Private App token) must accept whichever the user actually connected with. The readiness
+  // gate previously derived a single expected authType from the connector contract
+  // (hubspot → api_key → bearer_token) and vetoed a valid, active, explicitly-selected OAuth2
+  // connection with "Selected connection is for hubspot, but this node needs hubspot." Runtime
+  // matches by provider only, so the gate must too.
+  it('accepts an explicitly-selected connection whose authType differs from the derived requirement', async () => {
+    getDecryptedConnection.mockResolvedValue({
+      connection: { id: CONN_UUID, name: 'HubSpot OAuth2', provider: 'hubspot', authType: 'oauth2', status: 'active' },
+      source: 'connections',
+    });
+
+    const result = await getWorkflowConnectionReadiness({
+      workflowId: 'wf-1',
+      userId: 'user-1',
+      nodes: [{
+        id: 'hs-1',
+        type: 'custom',
+        data: {
+          type: 'hubspot',
+          label: 'HubSpot Search',
+          config: { operation: 'search' },
+          connectionRefs: { hubspot_oauth2: CONN_UUID },
+        },
+      }],
+    });
+
+    expect(result.ready).toBe(true);
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]).toMatchObject({
+      status: 'ready',
+      provider: 'hubspot',
+      connectionId: CONN_UUID,
+    });
+  });
+
+  // Regression: with no explicit selection, an active connection for the provider must be
+  // discovered regardless of its auth method. The list lookup must be called WITHOUT an
+  // authType filter (provider only), matching how execution resolves credentials.
+  it('discovers a provider connection of any authType when none is explicitly selected', async () => {
+    listCanonicalConnectionsByProvider.mockResolvedValue({
+      connections: [{ id: 'hs-oauth', name: 'HubSpot OAuth2', provider: 'hubspot', authType: 'oauth2', status: 'active' }],
+      source: 'connections',
+    });
+
+    const result = await getWorkflowConnectionReadiness({
+      workflowId: 'wf-1',
+      userId: 'user-1',
+      nodes: [{
+        id: 'hs-2',
+        type: 'custom',
+        data: { type: 'hubspot', label: 'HubSpot Update', config: { operation: 'update' } },
+      }],
+    });
+
+    expect(result.ready).toBe(true);
+    expect(result.rows[0]).toMatchObject({ status: 'ready', provider: 'hubspot', connectionId: 'hs-oauth' });
+    // Provider-only lookup: no authType filter argument.
+    expect(listCanonicalConnectionsByProvider).toHaveBeenCalledWith('user-1', 'hubspot');
+  });
 });
