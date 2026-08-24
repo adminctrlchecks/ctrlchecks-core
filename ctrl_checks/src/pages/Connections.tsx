@@ -966,19 +966,21 @@ export default function Connections() {
     }
     // Reconnect the credential type the readiness row actually reports — it now reflects the
     // real matched connection (e.g. the node's expired HubSpot OAuth2 connection), not a guess.
-    // When the row doesn't pin a type and the provider offers more than one auth method, open
-    // the method chooser and let the user pick, instead of silently committing to one.
     const candidatesForProvider = credentialTypes.filter((type) => type.provider === group.provider);
+
+    // Multi-method providers (HubSpot: OAuth2 + Private App token) always open the method
+    // chooser on Reconnect — identical to "Add another" — so the user explicitly picks which
+    // auth method to (re)connect instead of being dropped into whichever single form the row's
+    // type happened to resolve to.
+    if (candidatesForProvider.length > 1) {
+      openModalForProvider(group.provider);
+      return;
+    }
+
     const credentialType = group.credentialTypeId
       ? credentialTypes.find((type) => type.id === group.credentialTypeId)
-      : candidatesForProvider.length === 1
-        ? candidatesForProvider[0]
-        : undefined;
+      : candidatesForProvider[0];
     if (!credentialType) {
-      if (candidatesForProvider.length > 1) {
-        openModalForProvider(group.provider);
-        return;
-      }
       setConnSearch(group.displayName || group.provider);
       setRepairError(`No connection type was found for ${group.displayName}.`);
       return;
