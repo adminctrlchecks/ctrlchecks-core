@@ -44,6 +44,7 @@ import {
   type WorkflowConnectionGroup,
 } from '@/hooks/useWorkflowConnectionStatus';
 import { invalidateAfterConnectionChange } from '@/lib/queryInvalidation';
+import { upsertWorkflowNodeConnection } from '@/lib/api/workflowNodeConnections';
 import { QUERY_KEYS } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
 import type { ConnectionRecord, CredentialTypeDefinition } from '@/lib/api/connections';
@@ -860,6 +861,7 @@ function ConnectionDetailPanel({
 
 export default function Connections() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { data: connections = [], isLoading, refetch, isFetching } = useConnections();
@@ -960,6 +962,39 @@ export default function Connections() {
   async function handleRepairGroup(group: WorkflowConnectionGroup) {
     setRepairError(null);
     if (group.action === 'select_connection') {
+      const candidateIds = group.candidateConnectionIds || [];
+      const activeCandidates = candidateIds
+        .map((id) => connections.find((connection) => connection.id === id))
+        .filter((connection): connection is ConnectionRecord => !!connection && connection.status === 'active');
+
+      // Exactly one active alternative → bind it to every affected node in one click, so
+      // "Select connection" actually resolves the issue instead of only filtering the list.
+      if (activeCandidates.length === 1 && returnToWorkflowId) {
+        const candidate = activeCandidates[0];
+        const targets = group.issues.filter((issue) => issue.nodeId && issue.nodeType);
+        try {
+          await Promise.all(targets.map((issue) => upsertWorkflowNodeConnection({
+            workflowId: returnToWorkflowId,
+            nodeId: issue.nodeId as string,
+            nodeType: issue.nodeType as string,
+            provider: group.provider,
+            credentialTypeId: candidate.credentialTypeId,
+            connectionId: candidate.id,
+          })));
+          invalidateAfterConnectionChange(qc);
+          await refetch();
+          const latest = await workflowReadinessQuery.refetch();
+          toast({ title: 'Connection selected', description: `${candidate.name} is now used by these ${group.displayName} nodes.` });
+          if (returnTo && (latest.data?.missingConnections ?? []).length === 0) {
+            navigate(returnTo);
+          }
+        } catch (error) {
+          setRepairError(error instanceof Error ? error.message : 'Could not select the connection for these nodes.');
+        }
+        return;
+      }
+
+      // Zero or multiple active candidates → let the user choose on the node itself.
       setConnSearch(group.displayName || group.provider);
       setRepairError('Multiple saved accounts can satisfy this requirement. Select the intended saved connection on the affected workflow nodes instead of creating a duplicate connection.');
       return;
