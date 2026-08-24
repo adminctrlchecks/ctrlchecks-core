@@ -665,9 +665,9 @@ describe('getWorkflowConnectionReadiness', () => {
   // (hubspot → api_key → bearer_token) and vetoed a valid, active, explicitly-selected OAuth2
   // connection with "Selected connection is for hubspot, but this node needs hubspot." Runtime
   // matches by provider only, so the gate must too.
-  it('accepts an explicitly-selected connection whose authType differs from the derived requirement', async () => {
+  it('accepts an explicitly-selected connection whose authType differs from the derived requirement, and reports the connection\'s real identity', async () => {
     getDecryptedConnection.mockResolvedValue({
-      connection: { id: CONN_UUID, name: 'HubSpot OAuth2', provider: 'hubspot', authType: 'oauth2', status: 'active' },
+      connection: { id: CONN_UUID, name: 'HubSpot OAuth2', provider: 'hubspot', credentialTypeId: 'hubspot_oauth2', authType: 'oauth2', status: 'active' },
       source: 'connections',
     });
 
@@ -692,7 +692,55 @@ describe('getWorkflowConnectionReadiness', () => {
       status: 'ready',
       provider: 'hubspot',
       connectionId: CONN_UUID,
+      // Row reflects the ACTUAL matched connection (OAuth2), not the contract-derived guess
+      // (bearer_token / hubspot_private_app). This is what the reconnect/repair UI keys off.
+      credentialTypeId: 'hubspot_oauth2',
+      authType: 'oauth2',
     });
+  });
+
+  // Regression: when the node's selected connection is dead (expired/revoked) but another
+  // active connection for the same provider exists — even a different auth method — offer to
+  // switch to it (select_connection with candidates) rather than forcing a reconnect of the
+  // dead one.
+  it('offers to switch to an active alternative when the selected connection is expired', async () => {
+    getDecryptedConnection.mockResolvedValue({
+      connection: { id: CONN_UUID, name: 'HubSpot OAuth2', provider: 'hubspot', credentialTypeId: 'hubspot_oauth2', authType: 'oauth2', status: 'expired' },
+      source: 'connections',
+    });
+    listCanonicalConnectionsByProvider.mockResolvedValue({
+      connections: [
+        { id: CONN_UUID, name: 'HubSpot OAuth2', provider: 'hubspot', credentialTypeId: 'hubspot_oauth2', authType: 'oauth2', status: 'expired' },
+        { id: 'hs-token', name: 'HubSpot Private App', provider: 'hubspot', credentialTypeId: 'hubspot_private_app', authType: 'bearer_token', status: 'active' },
+      ],
+      source: 'connections',
+    });
+
+    const result = await getWorkflowConnectionReadiness({
+      workflowId: 'wf-1',
+      userId: 'user-1',
+      nodes: [{
+        id: 'hs-3',
+        type: 'custom',
+        data: {
+          type: 'hubspot',
+          label: 'HubSpot Create',
+          config: { operation: 'create' },
+          connectionRefs: { hubspot_oauth2: CONN_UUID },
+        },
+      }],
+    });
+
+    expect(result.ready).toBe(false);
+    expect(result.rows[0]).toMatchObject({
+      status: 'invalid_ref',
+      action: 'select_connection',
+      candidateConnectionIds: ['hs-token'],
+      // Row advertises the active alternative's type so the UI can guide selection.
+      credentialTypeId: 'hubspot_private_app',
+      authType: 'bearer_token',
+    });
+    expect(result.rows[0].reason).toMatch(/expired/i);
   });
 
   // Regression: with no explicit selection, an active connection for the provider must be

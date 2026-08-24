@@ -2626,7 +2626,12 @@ export default function PropertiesPanel({
                                     ...(requirement.credentialTypeId ? [requirement.credentialTypeId] : []),
                                   ].filter(Boolean)));
                                   const refKey = requirement.credentialTypeId || credentialTypeIds[0] || provider;
-                                  const providers = credentialTypeIds.length > 0 ? [] : [provider].filter(Boolean);
+                                  // Always pass the provider so the connection dropdown offers every
+                                  // active connection for it, regardless of auth method. credentialTypeIds
+                                  // stays as a preference hint, not a hard filter that hides the other
+                                  // method's connections (e.g. a HubSpot OAuth2 connection when the node's
+                                  // derived type is the Private App token).
+                                  const providers = [provider].filter(Boolean);
                                   const dbBinding = nodeConnectionBindings.find((binding) => (
                                     binding.nodeId === selectedNode.id &&
                                     binding.provider === provider &&

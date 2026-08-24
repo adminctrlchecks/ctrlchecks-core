@@ -56,16 +56,26 @@ export function NodeCredentialSelector({
 }: Props) {
   const { data: allConnections = [] } = useConnections();
   const [modalOpen, setModalOpen] = useState(false);
-  const [modalTypeId, setModalTypeId] = useState<string | undefined>();
 
   const acceptedTypeIds = new Set(credentialTypeIds);
-  const acceptedProviders = new Set(providers);
-  const compatible = allConnections.filter((c) => {
-    if (acceptedTypeIds.size > 0) return acceptedTypeIds.has(c.credentialTypeId);
-    return acceptedProviders.has(c.provider) || acceptedProviders.has(c.credentialTypeId);
-  });
+  // Match connections at the PROVIDER level, not a single credential type. A provider can have
+  // more than one auth method (HubSpot: OAuth2 or Private App token), and execution resolves a
+  // credential by provider — so any active connection for this node's provider is usable here.
+  // credentialTypeIds becomes a preference (sorted first), never a hard filter that hides the
+  // other method's connections.
+  const acceptedProviders = new Set([...providers, ...(logoProvider ? [logoProvider] : [])]);
+  const compatible = allConnections
+    .filter((c) => (
+      acceptedProviders.has(c.provider) ||
+      acceptedProviders.has(c.credentialTypeId) ||
+      acceptedTypeIds.has(c.credentialTypeId)
+    ))
+    .sort((a, b) => {
+      const aPref = acceptedTypeIds.has(a.credentialTypeId) ? 0 : 1;
+      const bPref = acceptedTypeIds.has(b.credentialTypeId) ? 0 : 1;
+      return aPref - bPref;
+    });
   const selected = compatible.find((c) => c.id === value) || (!value && compatible.length === 1 ? compatible[0] : undefined);
-  const preferredTypeId = credentialTypeIds[0] || compatible[0]?.credentialTypeId;
   const displayProvider = logoProvider || providers[0];
 
   const onlyCompatibleId = compatible.length === 1 ? compatible[0].id : undefined;
@@ -77,8 +87,9 @@ export function NodeCredentialSelector({
     onChange(onlyCompatibleId);
   }, [autoSelectSingle, onChange, onlyCompatibleId, value]);
 
-  function openAddModal(typeId?: string) {
-    setModalTypeId(typeId);
+  // Open the connect modal at the PROVIDER level so a multi-method provider (e.g. HubSpot)
+  // shows the auth-method chooser; single-method providers jump straight to their form.
+  function openAddModal() {
     setModalOpen(true);
   }
 
@@ -96,13 +107,13 @@ export function NodeCredentialSelector({
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() => openAddModal(preferredTypeId)}
+              onClick={() => openAddModal()}
               className="h-8 px-2 text-xs font-medium text-muted-foreground hover:text-primary"
             >
               <HelpCircle className="mr-1 h-3 w-3" />
               Guide
             </Button>
-            <Button size="sm" variant="outline" onClick={() => openAddModal(preferredTypeId)}>
+            <Button size="sm" variant="outline" onClick={() => openAddModal()}>
               <Plus className="h-3.5 w-3.5 mr-1" />
               Add connection
             </Button>
@@ -143,7 +154,7 @@ export function NodeCredentialSelector({
             ))}
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              onSelect={() => openAddModal(preferredTypeId)}
+              onSelect={() => openAddModal()}
               className="flex items-center gap-2 cursor-pointer text-primary"
             >
               <Plus className="h-4 w-4" />
@@ -166,7 +177,7 @@ export function NodeCredentialSelector({
             type="button"
             variant="ghost"
             size="sm"
-            onClick={() => openAddModal(preferredTypeId)}
+            onClick={() => openAddModal()}
             className="h-auto px-1 py-0 text-xs font-medium text-muted-foreground hover:text-primary"
           >
             <HelpCircle className="mr-1 h-3 w-3" />
@@ -178,7 +189,7 @@ export function NodeCredentialSelector({
       <NewConnectionModal
         open={modalOpen}
         onOpenChange={setModalOpen}
-        preselectedCredentialTypeId={modalTypeId}
+        preselectedProvider={displayProvider}
       />
     </div>
   );

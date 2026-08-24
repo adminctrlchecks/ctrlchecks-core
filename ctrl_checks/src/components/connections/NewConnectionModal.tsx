@@ -24,16 +24,30 @@ import { GuidedStatusCard } from '@/components/ui/guided-status-card';
 import { getAIGuidance } from '@/lib/ai-error-guidance';
 import type { GuidedStatusContent } from '@/lib/workflow-guidance';
 
-type Step = 'pick' | 'form';
+type Step = 'pick' | 'choose' | 'form';
+
+function titleCaseProviderLabel(provider: string | null): string {
+  if (!provider) return 'service';
+  return provider
+    .replace(/[_-]+/g, ' ')
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   preselectedCredentialTypeId?: string;
+  /** Provider-level entry: opens the auth-method chooser when the provider has >1 method,
+   *  or jumps straight to the form when it has exactly one. Ignored if a specific
+   *  preselectedCredentialTypeId is given. */
+  preselectedProvider?: string;
   onSaved?: () => void;
 }
 
-export function NewConnectionModal({ open, onOpenChange, preselectedCredentialTypeId, onSaved }: Props) {
+export function NewConnectionModal({ open, onOpenChange, preselectedCredentialTypeId, preselectedProvider, onSaved }: Props) {
   const { toast } = useToast();
   const { data: types = [] } = useCredentialTypes();
   const { data: connections = [] } = useConnections();
@@ -41,12 +55,23 @@ export function NewConnectionModal({ open, onOpenChange, preselectedCredentialTy
 
   const [step, setStep] = useState<Step>('pick');
   const [selectedType, setSelectedType] = useState<CredentialTypeDefinition | null>(null);
+  const [chosenProvider, setChosenProvider] = useState<string | null>(null);
   const [connectionName, setConnectionName] = useState('');
   const [activeFieldName, setActiveFieldName] = useState<string | null>(null);
   const [saveGuidance, setSaveGuidance] = useState<GuidedStatusContent | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // When types load and a preset is given, jump straight to the form step
+  // All credential types registered for a given provider (e.g. HubSpot → OAuth2 + Private App).
+  const typesForProvider = (provider: string) => types.filter((t) => t.provider === provider);
+
+  function goToForm(type: CredentialTypeDefinition) {
+    setSelectedType(type);
+    setConnectionName(`My ${type.displayName}`);
+    setActiveFieldName(type.inputFields[0]?.name ?? null);
+    setStep('form');
+  }
+
+  // When types load and a specific credential type is preset, jump straight to its form.
   useEffect(() => {
     if (!open || !preselectedCredentialTypeId || types.length === 0) return;
     const found = types.find((t) => t.id === preselectedCredentialTypeId);
@@ -59,12 +84,30 @@ export function NewConnectionModal({ open, onOpenChange, preselectedCredentialTy
         onOpenChange(false);
         return;
       }
-      setSelectedType(found);
-      setConnectionName(`My ${found.displayName}`);
-      setActiveFieldName(found.inputFields[0]?.name ?? null);
-      setStep('form');
+      goToForm(found);
     }
   }, [open, onOpenChange, preselectedCredentialTypeId, step, toast, types]);
+
+  // Provider-level entry: show the auth-method chooser when the provider has >1 method,
+  // or jump straight to the form for a single-method provider.
+  useEffect(() => {
+    if (!open || preselectedCredentialTypeId || !preselectedProvider || types.length === 0) return;
+    if (step !== 'pick') return;
+    const providerTypes = typesForProvider(preselectedProvider);
+    if (providerTypes.length === 0) return;
+    if (isComingSoonProvider(preselectedProvider)) {
+      toast({ title: 'Coming soon', description: `${preselectedProvider} connections are not available yet.` });
+      onOpenChange(false);
+      return;
+    }
+    if (providerTypes.length === 1) {
+      goToForm(providerTypes[0]);
+    } else {
+      setChosenProvider(preselectedProvider);
+      setStep('choose');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, preselectedCredentialTypeId, preselectedProvider, step, types]);
 
   function handleSelect(type: CredentialTypeDefinition) {
     if (isComingSoonProvider(type.provider)) {
@@ -74,15 +117,34 @@ export function NewConnectionModal({ open, onOpenChange, preselectedCredentialTy
       });
       return;
     }
-    setSelectedType(type);
-    setConnectionName(`My ${type.displayName}`);
-    setActiveFieldName(type.inputFields[0]?.name ?? null);
-    setStep('form');
+    // If this provider offers more than one auth method, let the user choose it explicitly
+    // rather than silently committing to whichever type the picker surfaced.
+    const providerTypes = typesForProvider(type.provider);
+    if (providerTypes.length > 1) {
+      setChosenProvider(type.provider);
+      setStep('choose');
+      return;
+    }
+    goToForm(type);
+  }
+
+  function handleChooseMethod(type: CredentialTypeDefinition) {
+    goToForm(type);
   }
 
   function handleBack() {
+    // From the form, step back to the method chooser when the provider had multiple methods;
+    // otherwise return to the service picker.
+    if (step === 'form' && chosenProvider && typesForProvider(chosenProvider).length > 1) {
+      setSelectedType(null);
+      setConnectionName('');
+      setActiveFieldName(null);
+      setStep('choose');
+      return;
+    }
     setStep('pick');
     setSelectedType(null);
+    setChosenProvider(null);
     setConnectionName('');
     setActiveFieldName(null);
   }
@@ -127,6 +189,7 @@ export function NewConnectionModal({ open, onOpenChange, preselectedCredentialTy
   function reset() {
     setStep('pick');
     setSelectedType(null);
+    setChosenProvider(null);
     setConnectionName('');
     setActiveFieldName(null);
     setIsSubmitting(false);
@@ -154,19 +217,28 @@ export function NewConnectionModal({ open, onOpenChange, preselectedCredentialTy
       <DialogContent className={step === 'form' ? 'max-w-4xl max-h-[90vh] overflow-y-auto' : 'max-w-lg max-h-[90vh] overflow-y-auto'}>
         <DialogHeader>
           <div className="flex items-center gap-3">
-            {step === 'form' && !preselectedCredentialTypeId && (
+            {((step === 'form' && (!preselectedCredentialTypeId || (chosenProvider && typesForProvider(chosenProvider).length > 1))) ||
+              (step === 'choose' && !preselectedProvider)) && (
               <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={handleBack}>
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             )}
-            {selectedType && <ProviderLogo provider={selectedType.provider} size={28} />}
+            {(selectedType || (step === 'choose' && chosenProvider)) && (
+              <ProviderLogo provider={selectedType?.provider ?? chosenProvider ?? ''} size={28} />
+            )}
             <DialogTitle>
-              {step === 'pick' ? 'Choose a service' : `Connect ${selectedType?.displayName ?? ''}`}
+              {step === 'pick'
+                ? 'Choose a service'
+                : step === 'choose'
+                  ? `Connect ${titleCaseProviderLabel(chosenProvider)}`
+                  : `Connect ${selectedType?.displayName ?? ''}`}
             </DialogTitle>
             <DialogDescription className="sr-only">
               {step === 'pick'
                 ? 'Choose a service to create a new connection.'
-                : `Authorize or configure ${selectedType?.displayName ?? 'this service'} for workflow use.`}
+                : step === 'choose'
+                  ? `Choose how to connect ${titleCaseProviderLabel(chosenProvider)}.`
+                  : `Authorize or configure ${selectedType?.displayName ?? 'this service'} for workflow use.`}
             </DialogDescription>
           </div>
           {saveGuidance && (
@@ -184,6 +256,46 @@ export function NewConnectionModal({ open, onOpenChange, preselectedCredentialTy
         </DialogHeader>
 
         {step === 'pick' && <ServicePickerGrid onSelect={handleSelect} connectedTypeIds={connectedTypeIds} />}
+
+        {step === 'choose' && chosenProvider && (
+          <div className="space-y-3 pt-1">
+            <p className="text-sm text-muted-foreground">
+              {titleCaseProviderLabel(chosenProvider)} supports more than one way to connect. Pick the method you want to use.
+            </p>
+            <div className="space-y-2">
+              {typesForProvider(chosenProvider).map((type) => {
+                const alreadyConnected = connectedTypeIds.has(type.id);
+                return (
+                  <button
+                    key={type.id}
+                    type="button"
+                    onClick={() => handleChooseMethod(type)}
+                    className="flex w-full items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:border-primary/40 hover:bg-accent/40"
+                  >
+                    <ProviderLogo provider={type.provider} size={28} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="truncate text-sm font-medium">{type.displayName}</p>
+                        <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                          {type.authType === 'oauth2' ? 'OAuth' : 'API key'}
+                        </span>
+                        {alreadyConnected && (
+                          <span className="shrink-0 rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-primary">
+                            Connected
+                          </span>
+                        )}
+                      </div>
+                      {type.guide?.summary && (
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">{type.guide.summary}</p>
+                      )}
+                    </div>
+                    <ArrowLeft className="h-4 w-4 rotate-180 shrink-0 text-muted-foreground" />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {step === 'form' && selectedType && (
           <div className="grid gap-5 pt-1 lg:grid-cols-[minmax(0,1fr)_360px]">

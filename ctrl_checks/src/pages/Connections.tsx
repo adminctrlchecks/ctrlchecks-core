@@ -334,6 +334,7 @@ function ProviderWorkspace({
   onAuthFilterChange,
   onRefresh,
   onAddConnection,
+  onAddProvider,
 }: {
   connections: ConnectionRecord[];
   credentialTypes: CredentialTypeDefinition[];
@@ -345,6 +346,7 @@ function ProviderWorkspace({
   onAuthFilterChange: (value: 'all' | 'oauth' | 'api_key') => void;
   onRefresh: () => void;
   onAddConnection: (type: CredentialTypeDefinition) => void;
+  onAddProvider: (provider: string) => void;
 }) {
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
@@ -552,7 +554,7 @@ function ProviderWorkspace({
                     {primaryCredentialType ? (
                       <Button
                         size="sm"
-                        onClick={() => onAddConnection(primaryCredentialType)}
+                        onClick={() => onAddProvider(selectedSummary.provider)}
                         disabled={isComingSoonProvider(selectedSummary.provider)}
                       >
                         <Plus className="mr-1.5 h-4 w-4" />
@@ -569,7 +571,7 @@ function ProviderWorkspace({
                         </div>
                         <p className="mt-3 text-sm font-medium">No saved {selectedSummary.label} connection</p>
                         {primaryCredentialType && !isComingSoonProvider(selectedSummary.provider) && (
-                          <Button className="mt-4" size="sm" onClick={() => onAddConnection(primaryCredentialType)}>
+                          <Button className="mt-4" size="sm" onClick={() => onAddProvider(selectedSummary.provider)}>
                             <Plus className="mr-1.5 h-4 w-4" />
                             Connect {selectedSummary.label}
                           </Button>
@@ -868,6 +870,7 @@ export default function Connections() {
   const [authFilter, setAuthFilter] = useState<'all' | 'oauth' | 'api_key'>('all');
   const [modalOpen, setModalOpen] = useState(false);
   const [modalPreset, setModalPreset] = useState<string | undefined>();
+  const [modalProviderPreset, setModalProviderPreset] = useState<string | undefined>();
   const [repairError, setRepairError] = useState<string | null>(null);
 
   const returnTo = searchParams.get('returnTo');
@@ -926,7 +929,16 @@ export default function Connections() {
   }, [qc, user?.id]);
 
   function openModalForType(t: CredentialTypeDefinition) {
+    setModalProviderPreset(undefined);
     setModalPreset(t.id);
+    setModalOpen(true);
+  }
+
+  // Open the connect modal at the PROVIDER level: the modal shows the auth-method chooser when
+  // the provider has more than one credential type, or jumps straight to the form for one.
+  function openModalForProvider(provider: string) {
+    setModalPreset(undefined);
+    setModalProviderPreset(provider);
     setModalOpen(true);
   }
 
@@ -934,6 +946,7 @@ export default function Connections() {
     setModalOpen(v);
     if (!v) {
       setModalPreset(undefined);
+      setModalProviderPreset(undefined);
       refetch();
     }
   }
@@ -951,18 +964,21 @@ export default function Connections() {
       setRepairError('Multiple saved accounts can satisfy this requirement. Select the intended saved connection on the affected workflow nodes instead of creating a duplicate connection.');
       return;
     }
-    // When the readiness check didn't pin down which credential type a node needs (e.g. a
-    // stale/unresolvable connection ref), providers with more than one registered credential
-    // type (Mailchimp has both mailchimp_api_key and mailchimp_oauth2) previously always fell
-    // back to "the first OAuth option for this provider" — even when that OAuth app was never
-    // configured (no CLIENT_ID/CLIENT_SECRET) and a working API-key type existed for the same
-    // provider. Prefer the non-OAuth option when ambiguous: it only needs the user's own
-    // credentials, not a CtrlChecks-side app registration, so it's far more likely to work.
+    // Reconnect the credential type the readiness row actually reports — it now reflects the
+    // real matched connection (e.g. the node's expired HubSpot OAuth2 connection), not a guess.
+    // When the row doesn't pin a type and the provider offers more than one auth method, open
+    // the method chooser and let the user pick, instead of silently committing to one.
     const candidatesForProvider = credentialTypes.filter((type) => type.provider === group.provider);
     const credentialType = group.credentialTypeId
       ? credentialTypes.find((type) => type.id === group.credentialTypeId)
-      : candidatesForProvider.find((type) => type.authType !== 'oauth2') || candidatesForProvider[0];
+      : candidatesForProvider.length === 1
+        ? candidatesForProvider[0]
+        : undefined;
     if (!credentialType) {
+      if (candidatesForProvider.length > 1) {
+        openModalForProvider(group.provider);
+        return;
+      }
       setConnSearch(group.displayName || group.provider);
       setRepairError(`No connection type was found for ${group.displayName}.`);
       return;
@@ -1153,6 +1169,7 @@ export default function Connections() {
             onAuthFilterChange={setAuthFilter}
             onRefresh={() => refetch()}
             onAddConnection={openModalForType}
+            onAddProvider={openModalForProvider}
           />
         </WorkflowAuthGate>
       </main>
@@ -1162,6 +1179,7 @@ export default function Connections() {
         open={modalOpen}
         onOpenChange={handleModalClose}
         preselectedCredentialTypeId={modalPreset}
+        preselectedProvider={modalProviderPreset}
         onSaved={handleSaved}
       />
 

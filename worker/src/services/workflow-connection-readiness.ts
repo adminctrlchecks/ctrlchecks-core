@@ -504,6 +504,25 @@ function rowWithBase(base: WorkflowConnectionRequirement, patch: Partial<Connect
   };
 }
 
+/**
+ * Stamp a row's identity fields from the ACTUAL matched connection rather than the
+ * contract-derived guess. A provider can have several credential types (HubSpot: OAuth2 or
+ * Private App token); the row must report the type/authType of the connection that was really
+ * resolved, so the frontend reconnect/repair opens the correct form and the node dropdown
+ * highlights the right method. Falls back to the derived base values when the connection omits
+ * a field.
+ */
+function withConnectionIdentity(
+  base: WorkflowConnectionRequirement,
+  connection: ConnectionRecord,
+): WorkflowConnectionRequirement {
+  return {
+    ...base,
+    credentialTypeId: connection.credentialTypeId || base.credentialTypeId,
+    authType: (connection.authType as ConnectionReadinessAuthType) || base.authType,
+  };
+}
+
 export async function getWorkflowConnectionReadiness(input: {
   workflowId: string;
   userId: string;
@@ -661,7 +680,26 @@ export async function getWorkflowConnectionReadiness(input: {
 
     const connectionIssue = connectionStatusIssue(connection);
     if (connectionIssue) {
-      rows.push(rowWithBase(base, {
+      // The selected connection is dead (expired/revoked). If another active connection for
+      // the same provider exists — even a different auth method — offer to switch to it rather
+      // than forcing a reconnect of the dead one. Execution resolves credentials by provider,
+      // so any active provider connection is usable; the user shouldn't have to revive a
+      // specific stale connection when a working one is already available.
+      const activeAlternatives = listResult.connections.filter(
+        (candidate) => candidate.id !== connection!.id && connectionIsUsable(candidate),
+      );
+      if (activeAlternatives.length > 0) {
+        rows.push(rowWithBase(withConnectionIdentity(base, activeAlternatives[0]), {
+          status: 'invalid_ref',
+          action: 'select_connection',
+          source,
+          legacyRef,
+          candidateConnectionIds: activeAlternatives.map((candidate) => candidate.id),
+          reason: `This node's ${provider} connection ${connectionIssue.status === 'revoked' ? 'was revoked' : 'expired'}, but another active ${provider} connection is available — select it for this node.`,
+        }, checkedAt));
+        continue;
+      }
+      rows.push(rowWithBase(withConnectionIdentity(base, connection), {
         ...connectionIssue,
         connectionId: connection.id,
         connectionName: connection.name,
@@ -675,7 +713,7 @@ export async function getWorkflowConnectionReadiness(input: {
     const unionRequiredScopes = unionScopesByListKey.get(listKey) || requiredScopes;
 
     if (unionRequiredScopes.length === 0 && connectionIsUsable(connection)) {
-      rows.push(rowWithBase(base, {
+      rows.push(rowWithBase(withConnectionIdentity(base, connection), {
         status: 'ready',
         action: 'none',
         connectionId: connection.id,
@@ -694,7 +732,7 @@ export async function getWorkflowConnectionReadiness(input: {
     }
     const outcome = await dryRunCache.get(dryRunKey)!;
 
-    rows.push(rowWithBase(base, {
+    rows.push(rowWithBase(withConnectionIdentity(base, connection), {
       status: outcome.status,
       action: outcome.action,
       connectionId: connection.id,
