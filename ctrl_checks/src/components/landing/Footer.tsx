@@ -77,7 +77,22 @@ export function Footer() {
           ))}
         </div>
 
-        <div className="mt-8 flex flex-col items-center justify-between gap-3 border-t border-border pt-6 sm:flex-row">
+        {/* ALCOR GROUP branding */}
+        <div className="mt-8 flex flex-col items-center gap-2 border-t border-border pt-6">
+          <img
+            src="/ALCOR_GROUP_logo.jpeg"
+            alt="ALCOR GROUP"
+            className="h-14 w-auto object-contain"
+          />
+          <p className="text-sm font-medium text-muted-foreground">
+            An Automation Platform By ALCOR GROUP
+          </p>
+          <p className="text-xs tracking-widest text-muted-foreground/70">
+            USA &nbsp;|&nbsp; KSA &nbsp;|&nbsp; SINGAPORE
+          </p>
+        </div>
+
+        <div className="mt-4 flex flex-col items-center justify-between gap-3 border-t border-border pt-6 sm:flex-row">
           <p className="text-sm text-muted-foreground">
             &copy; {new Date().getFullYear()} CtrlChecks. All rights reserved.
           </p>
