@@ -85,7 +85,7 @@ export function Footer() {
             className="h-14 w-auto object-contain"
           />
           <p className="text-sm font-medium text-muted-foreground">
-            An Automation Platform By ALCOR GROUP
+            An Automation AI Platform by ALCOR GROUP
           </p>
           <p className="text-xs tracking-widest text-muted-foreground/70">
             USA &nbsp;|&nbsp; KSA &nbsp;|&nbsp; SINGAPORE
