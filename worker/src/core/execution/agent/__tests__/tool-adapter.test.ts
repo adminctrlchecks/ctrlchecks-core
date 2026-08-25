@@ -123,6 +123,38 @@ describe('tool-adapter', () => {
     expect(inputArg.sheetName).toBeUndefined();
   });
 
+  it('lets the model supply a record id when the field is absent from config (CRM search→update)', async () => {
+    // The AI Agent searches HubSpot, gets a contact with id "12345", then calls the
+    // update tool with that id. The id field is NOT in the node's config (it's a runtime
+    // value obtained from the search result), so the model's value must flow through.
+    const descriptor = {
+      toolId: 'hubspot-1', functionName: 'hubspot_hubspot_1', nodeId: 'hubspot-1',
+      nodeType: 'hubspot', label: 'HubSpot', description: 'Update contact', parameters: {}, required: [],
+      firstRunClass: 'write',
+      node: {
+        id: 'hubspot-1', type: 'hubspot',
+        data: { label: 'HubSpot', type: 'hubspot', category: 'crm',
+          config: { resource: 'contact', operation: 'update' } },
+      },
+    } as AgentToolDescriptor;
+    const context = { nodeOutputs: {}, db: {}, workflowId: 'wf', userId: 'u', currentUserId: 'a' } as AgentRunContext;
+
+    await executeAttachedTool(
+      descriptor,
+      { id: '12345', properties: { firstname: 'Vusala', email: 'test@example.com' } },
+      context,
+    );
+
+    const [nodeArg, inputArg] = executeNodeMock.mock.calls[0] as [
+      { data: { config: Record<string, unknown> } }, Record<string, unknown>,
+    ];
+    // The model-supplied id must reach the node — it came from a prior search result.
+    expect(nodeArg.data.config.id).toBe('12345');
+    expect(inputArg.id).toBe('12345');
+    // Data fields flow through too.
+    expect(nodeArg.data.config.properties).toEqual({ firstname: 'Vusala', email: 'test@example.com' });
+  });
+
   it('drops a hallucinated range from both config and input (range is identity)', async () => {
     const descriptor = {
       toolId: 'sheet-2', functionName: 'google_sheets_sheet_2', nodeId: 'sheet-2',

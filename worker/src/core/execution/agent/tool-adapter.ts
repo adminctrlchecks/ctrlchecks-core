@@ -14,17 +14,26 @@ export async function executeAttachedTool(
     ...(((sourceNode.data as Record<string, unknown>)?.connectionRefs || {}) as Record<string, unknown>),
   };
 
-  // The model may fill data/query fields, but it must NEVER set an identity field
-  // (spreadsheetId, sheetName, range, url, *_id, …). Identifiers come only from the user's
-  // configuration — a fabricated one (e.g. the model inventing spreadsheetId:"Business
-  // Knowledge" from the system prompt, or range:"read") looks valid and silently hits the
-  // wrong/missing entity. Strip identity fields from the model's args entirely, so they can
-  // reach the node neither through config nor through the input param (which the executor's
-  // input resolution can otherwise merge back into empty config fields). Universal across
-  // every attached tool node; non-identity args still flow through.
+  // The model may fill data/query fields, but it must not override an identity field
+  // (spreadsheetId, sheetName, range, url, *_id, …) that the USER already configured.
+  // A fabricated one (e.g. the model inventing spreadsheetId:"Business Knowledge" from
+  // the system prompt, or range:"read") looks valid and silently hits the wrong entity.
+  //
+  // However, when an identity field is ABSENT from the user's config, the model must be
+  // allowed to supply it. This is the core CRM search→update/delete pattern: the agent
+  // searches for a record, obtains its `id` from the result, and passes that `id` to the
+  // update/delete tool. Stripping it unconditionally breaks every agent workflow that
+  // chains a search to a mutation on the found record.
+  //
+  // Rule: strip an identity-field arg only when the user/builder already placed a
+  // non-nullish value for it in config (even empty string — `range: ''` means "all
+  // cells" and must be protected). When the key is absent or explicitly null/undefined,
+  // the model's value flows through.
   const safeArgs: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(args)) {
-    if (isIdentityField(key)) continue;
+    if (isIdentityField(key) && key in baseConfig && baseConfig[key] != null) {
+      continue;                             // user's config wins — drop the model's arg
+    }
     safeArgs[key] = value;
   }
   const mergedConfig: Record<string, unknown> = { ...baseConfig, ...safeArgs };
