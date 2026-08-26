@@ -14797,9 +14797,35 @@ export async function executeNodeLegacy(
     case 'zoho_crm': {
       // Zoho API node - supports all Zoho services (CRM, Books, Creator, Sheets, Tasks, Billing, Email, Tables)
       const service = getStringProperty(config, 'service', 'crm').toLowerCase();
-      const resource = getStringProperty(config, 'resource', 'record');
-      const operation = getStringProperty(config, 'operation', 'list');
-      const region = (getStringProperty(config, 'region', 'US') || 'US') as 'US' | 'EU' | 'IN' | 'AU' | 'CN' | 'JP';
+      const configuredModule = getStringProperty(config, 'module', '');
+      const customModule = getStringProperty(config, 'customModule', '');
+      const rawResource = getStringProperty(config, 'resource', configuredModule || 'Contacts');
+      const resource = rawResource === 'custom' && customModule ? customModule : rawResource;
+      const rawOperation = getStringProperty(config, 'operation', 'list');
+      const operation = rawOperation === 'getMany' ? 'list' : rawOperation;
+      const configuredRegion = getStringProperty(config, 'region', '');
+      const apiDomain = getStringProperty(config, 'apiDomain', '');
+      type ZohoRegion = 'US' | 'EU' | 'IN' | 'AU' | 'CN' | 'JP';
+      const normalizeZohoRegion = (value: string): ZohoRegion => {
+        const normalized = value.toUpperCase();
+        return ['US', 'EU', 'IN', 'AU', 'CN', 'JP'].includes(normalized)
+          ? normalized as ZohoRegion
+          : 'IN';
+      };
+      const inferZohoRegion = (domain: string): ZohoRegion => {
+        const lowerDomain = domain.toLowerCase();
+        if (lowerDomain.includes('zohoapis.eu')) return 'EU';
+        if (lowerDomain.includes('zohoapis.in')) return 'IN';
+        if (lowerDomain.includes('zohoapis.com.au')) return 'AU';
+        if (lowerDomain.includes('zohoapis.com.cn')) return 'CN';
+        if (lowerDomain.includes('zohoapis.jp')) return 'JP';
+        return 'US';
+      };
+      const region = configuredRegion
+        ? normalizeZohoRegion(configuredRegion)
+        : apiDomain
+          ? inferZohoRegion(apiDomain)
+          : normalizeZohoRegion(process.env.ZOHO_DEFAULT_REGION || 'IN');
 
       // ✅ REFACTORED: Zoho with typed resolution
       const execContext = createTypedContext();

@@ -7240,6 +7240,26 @@ export class NodeLibrary {
             description: 'Credential ID reference to stored Zoho CRM credentials',
             examples: ['cred_123'],
           },
+          apiDomain: {
+            type: 'string',
+            description: 'Zoho CRM API data-center domain. Match this to the Zoho account region used for OAuth.',
+            examples: ['https://www.zohoapis.in'],
+            default: 'https://www.zohoapis.in',
+            options: [
+              { label: 'India', value: 'https://www.zohoapis.in' },
+              { label: 'United States', value: 'https://www.zohoapis.com' },
+              { label: 'Europe', value: 'https://www.zohoapis.eu' },
+              { label: 'Australia', value: 'https://www.zohoapis.com.au' },
+              { label: 'China', value: 'https://www.zohoapis.com.cn' },
+              { label: 'Japan', value: 'https://www.zohoapis.jp' },
+            ],
+            fillMode: {
+              default: 'manual_static',
+              supportsRuntimeAI: false,
+              supportsBuildtimeAI: true,
+            },
+            ownership: 'structural',
+          },
           resource: {
             type: 'string',
             description: 'Zoho CRM module: Leads, Contacts, Accounts, Deals, etc.',

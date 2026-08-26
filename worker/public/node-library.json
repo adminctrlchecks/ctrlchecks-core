@@ -1531,6 +1531,7 @@
       "accessToken",
       "refreshToken",
       "credentialId",
+      "apiDomain",
       "resource",
       "operation",
       "recordId",
