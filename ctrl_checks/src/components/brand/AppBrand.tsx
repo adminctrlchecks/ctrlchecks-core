@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 
-const LOGO_PRIMARY = '/brand/logo.svg';
-const LOGO_FALLBACK = '/favicon.ico';
+const LOGO_PRIMARY = '/favicon.ico';
+const LOGO_FALLBACK = '/brand/logo.svg';
 
 export type AppBrandContext = 'app' | 'admin' | 'marketing';
 
